@@ -1,0 +1,40 @@
+name: macOS
+run-name: LifeOS Folio · macOS · ${{ github.sha }}
+# No one working on Folio has a Mac, so this machine is where the Mac build is
+# made and tried: the suite, the app built, and the package a tester installs.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: folio-macos-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Testler
+        # Measured, not yet required: what fails here is the Mac work left.
+        continue-on-error: true
+        run: flutter test -r failures-only
+      - name: macOS uygulamasını derle
+        run: flutter build macos --release
+      - name: Paketle
+        run: |
+          app="build/macos/Build/Products/Release/LifeOS Folio.app"
+          ls -la "$app/Contents/MacOS" "$app/Contents/Frameworks" | head -60
+          codesign -dv "$app" 2>&1 | head -5 || true
+          ditto -c -k --keepParent "$app" LifeOS-Folio-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LifeOS-Folio-macOS
+          path: LifeOS-Folio-macOS.zip
+          retention-days: 7
