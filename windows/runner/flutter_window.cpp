@@ -1,5 +1,7 @@
 #include "flutter_window.h"
 
+#include <dwmapi.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -38,6 +40,28 @@ bool FlutterWindow::OnCreate() {
   quick_search_ = std::make_unique<QuickSearch>(flutter_controller_->engine()->messenger(), GetHandle());
   spell_check_ = std::make_unique<SpellCheck>(flutter_controller_->engine()->messenger());
   rich_clipboard_ = std::make_unique<RichClipboard>(flutter_controller_->engine()->messenger(), GetHandle());
+  window_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(), "com.erkanoz.folio/window",
+      &flutter::StandardMethodCodec::GetInstance());
+  window_channel_->SetMethodCallHandler([this](const auto& call, auto result) {
+    if (call.method_name() == "showMaximized") {
+      // One step from hidden to maximized. window_manager's maximize posts
+      // SC_MAXIMIZE and its show runs before that is handled, so the window
+      // appeared at its restored size, then grew, and the page settled late.
+      // Without the transition, too: Windows otherwise zooms it in from the
+      // restored rectangle, half transparent, for about 200 ms.
+      const BOOL off = TRUE, on = FALSE;
+      ::DwmSetWindowAttribute(GetHandle(), DWMWA_TRANSITIONS_FORCEDISABLED,
+                              &off, sizeof(off));
+      ::ShowWindow(GetHandle(), SW_SHOWMAXIMIZED);
+      ::DwmSetWindowAttribute(GetHandle(), DWMWA_TRANSITIONS_FORCEDISABLED,
+                              &on, sizeof(on));
+      ::SetForegroundWindow(GetHandle());
+      result->Success();
+    } else {
+      result->NotImplemented();
+    }
+  });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   // Dart shows the window after configuring the custom chrome and saved bounds.
@@ -52,6 +76,7 @@ void FlutterWindow::ReleaseFlutter() {
   // this window as WM_PARENTNOTIFY while the engine is already gone. The flag
   // is raised first so MessageHandler stops forwarding before that happens.
   shutting_down_ = true;
+  window_channel_.reset();
   rich_clipboard_.reset();
   spell_check_.reset();
   quick_search_.reset();

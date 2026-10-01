@@ -3,6 +3,8 @@
 
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include <memory>
 
@@ -40,6 +42,10 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<QuickSearch> quick_search_;
   std::unique_ptr<SpellCheck> spell_check_;
   std::unique_ptr<RichClipboard> rich_clipboard_;
+
+  // Showing the window in a state window_manager has no single call for.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      window_channel_;
 
   // The project to run.
   flutter::DartProject project_;

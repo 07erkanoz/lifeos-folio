@@ -26,6 +26,8 @@ import 'ui/widgets/notice.dart';
 
 export 'services/platform/editor_window.dart' show editorFlag;
 
+/// The Windows runner's own window calls (windows/runner/flutter_window.cpp).
+const _window = MethodChannel('com.erkanoz.folio/window');
 
 /// LifeOS Editör: the editor on its own, in a window of its own.
 ///
@@ -67,8 +69,14 @@ Future<void> runEditorApp(List<String> arguments) async {
     await windowManager.waitUntilReadyToShow(options, () async {
       // A document is written across the whole screen: the editor always
       // opens maximized, its size above only what un-maximizing returns to.
-      await windowManager.maximize();
-      await windowManager.show();
+      // On Windows the runner shows it maximized in one step; maximize then
+      // show let the window appear at its restored size and grow after.
+      if (Platform.isWindows) {
+        await _window.invokeMethod<void>('showMaximized');
+      } else {
+        await windowManager.maximize();
+        await windowManager.show();
+      }
       await windowManager.focus();
     });
   }
