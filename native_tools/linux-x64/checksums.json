@@ -1,0 +1,8 @@
+{
+  "bin/jpegtran": "213782d4c6b1269afcddbe79a3ea8c88a4d6a5ab9a1759f532f6831e315c3965",
+  "bin/qpdf": "b98167511f171487f16ddcea667bd6b6b1dd59a75fba42547a3c3c7166ff5af7",
+  "bin/tesseract": "fc9d39d31d937cc42f6fa67e87268c890d0168282c6f1e9cac020166c1d1a7f8",
+  "bin/tiffcp": "d27a224485c4837e8b26e7c31c69a5c6ec4beca6861baa2799939d5af7a379aa",
+  "tessdata/tur.traineddata": "7393381111e1152420fc4092cb44eef4237580d21b92bf30d7d221aad192c6b7",
+  "tessdata/tur_best.traineddata": "e0c3338dc17503dc7d335a507c9ae01b2b46cfd07561171e1e1ac55d85e8e438"
+}

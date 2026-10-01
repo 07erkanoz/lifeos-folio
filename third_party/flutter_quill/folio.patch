@@ -1,0 +1,1893 @@
+diff --git a/lib/flutter_quill.dart b/lib/flutter_quill.dart
+index 81e19fa..f9cad27 100644
+--- a/lib/flutter_quill.dart
++++ b/lib/flutter_quill.dart
+@@ -28,6 +28,7 @@ export 'src/editor/widgets/cursor.dart';
+ export 'src/editor/widgets/default_styles.dart';
+ export 'src/editor/widgets/link.dart';
+ export 'src/editor/widgets/text/magnifier.dart';
++export 'src/editor/widgets/page_geometry.dart';
+ export 'src/editor/widgets/text/utils/text_block_utils.dart';
+ export 'src/editor_toolbar_controller_shared/copy_cut_service/copy_cut_service.dart';
+ export 'src/editor_toolbar_controller_shared/copy_cut_service/copy_cut_service_provider.dart';
+diff --git a/lib/src/editor/config/editor_config.dart b/lib/src/editor/config/editor_config.dart
+index 68526c3..9db74a7 100644
+--- a/lib/src/editor/config/editor_config.dart
++++ b/lib/src/editor/config/editor_config.dart
+@@ -1,6 +1,7 @@
+ /// @docImport '../../rules/insert.dart';
+ library;
+ 
++import '../widgets/page_geometry.dart';
+ import 'dart:ui' as ui;
+ 
+ import 'package:flutter/cupertino.dart';
+@@ -46,6 +47,7 @@ class QuillEditorConfig {
+     this.minHeight,
+     this.maxHeight,
+     this.maxContentWidth,
++    this.pages,
+     this.customStyles,
+     this.textCapitalization = TextCapitalization.sentences,
+     this.keyboardAppearance,
+@@ -60,6 +62,7 @@ class QuillEditorConfig {
+     this.enableAlwaysIndentOnTab = false,
+     this.embedBuilders,
+     this.textSpanBuilder = defaultSpanBuilder,
++    this.lineLayoutBuilder,
+     this.quillMagnifierBuilder,
+     this.unknownEmbedBuilder,
+     @experimental this.searchConfig = const QuillSearchConfig(),
+@@ -288,6 +291,9 @@ class QuillEditorConfig {
+   /// horizontally centered. This is mostly useful on devices with wide screens.
+   final double? maxContentWidth;
+ 
++  /// FOLIO PATCH: lay the lines out on these pages; see [QuillPageGeometry].
++  final QuillPageGeometry? pages;
++
+   /// Allows to override [DefaultStyles].
+   final DefaultStyles? customStyles;
+ 
+@@ -372,6 +378,9 @@ class QuillEditorConfig {
+ 
+   final TextSpanBuilder textSpanBuilder;
+ 
++  /// FOLIO PATCH: per-line indents and spacing.
++  final QuillLineLayoutBuilder? lineLayoutBuilder;
++
+   /// To add a magnifier when selecting, specify a builder that returns the magnfier widget
+   ///
+   /// The default is no magnifier
+@@ -497,6 +506,7 @@ class QuillEditorConfig {
+     double? minHeight,
+     double? maxHeight,
+     double? maxContentWidth,
++    QuillPageGeometry? pages,
+     DefaultStyles? customStyles,
+     bool? expands,
+     TextCapitalization? textCapitalization,
+@@ -509,6 +519,7 @@ class QuillEditorConfig {
+         onTapUp,
+     Iterable<EmbedBuilder>? embedBuilders,
+     TextSpanBuilder? textSpanBuilder,
++    QuillLineLayoutBuilder? lineLayoutBuilder,
+     EmbedBuilder? unknownEmbedBuilder,
+     CustomStyleBuilder? customStyleBuilder,
+     CustomRecognizerBuilder? customRecognizerBuilder,
+@@ -560,6 +571,7 @@ class QuillEditorConfig {
+       minHeight: minHeight ?? this.minHeight,
+       maxHeight: maxHeight ?? this.maxHeight,
+       maxContentWidth: maxContentWidth ?? this.maxContentWidth,
++      pages: pages ?? this.pages,
+       customStyles: customStyles ?? this.customStyles,
+       expands: expands ?? this.expands,
+       textCapitalization: textCapitalization ?? this.textCapitalization,
+@@ -570,6 +582,7 @@ class QuillEditorConfig {
+       onTapDown: onTapDown ?? this.onTapDown,
+       embedBuilders: embedBuilders ?? this.embedBuilders,
+       textSpanBuilder: textSpanBuilder ?? this.textSpanBuilder,
++      lineLayoutBuilder: lineLayoutBuilder ?? this.lineLayoutBuilder,
+       unknownEmbedBuilder: unknownEmbedBuilder ?? this.unknownEmbedBuilder,
+       customStyleBuilder: customStyleBuilder ?? this.customStyleBuilder,
+       customRecognizerBuilder:
+diff --git a/lib/src/editor/editor.dart b/lib/src/editor/editor.dart
+index f1b23db..6c3bf3f 100644
+--- a/lib/src/editor/editor.dart
++++ b/lib/src/editor/editor.dart
+@@ -23,6 +23,7 @@ import 'widgets/box.dart';
+ import 'widgets/cursor.dart';
+ import 'widgets/delegate.dart';
+ import 'widgets/float_cursor.dart';
++import 'widgets/page_geometry.dart';
+ import 'widgets/text/text_selection.dart';
+ 
+ /// Base interface for editable render objects.
+@@ -299,6 +300,7 @@ class QuillEditorState extends State<QuillEditor>
+         minHeight: config.minHeight,
+         maxHeight: config.maxHeight,
+         maxContentWidth: config.maxContentWidth,
++        pages: config.pages,
+         customStyles: config.customStyles,
+         expands: config.expands,
+         autoFocus: config.autoFocus,
+@@ -309,6 +311,7 @@ class QuillEditorState extends State<QuillEditor>
+         scrollPhysics: config.scrollPhysics,
+         embedBuilder: _getEmbedBuilder,
+         textSpanBuilder: config.textSpanBuilder,
++        lineLayoutBuilder: config.lineLayoutBuilder,
+         quillMagnifierBuilder: config.quillMagnifierBuilder,
+         linkActionPickerDelegate: config.linkActionPickerDelegate,
+         customStyleBuilder: config.customStyleBuilder,
+@@ -827,6 +830,16 @@ class RenderEditor extends RenderEditableContainerBox
+ 
+   double? _maxContentWidth;
+ 
++  /// FOLIO PATCH: the pages the lines are laid out on; none, one endless
++  /// column.
++  QuillPageGeometry? _pages;
++  QuillPageGeometry? get pages => _pages;
++  set pages(QuillPageGeometry? value) {
++    if (_pages == value) return;
++    _pages = value;
++    markNeedsLayout();
++  }
++
+   set maxContentWidth(double? value) {
+     if (_maxContentWidth == value) return;
+     _maxContentWidth = value;
+@@ -1131,6 +1144,9 @@ class RenderEditor extends RenderEditableContainerBox
+ 
+     var mainAxisExtent = resolvedPadding!.top;
+     var child = firstChild;
++    // FOLIO PATCH: an editor inside a table cell has no pages of its own; it
++    // is laid out on those of the page it is drawn on, from where it sits.
++    final pages = _pages ?? pagesFromHost(this);
+     final innerConstraints = BoxConstraints.tightFor(
+             width: math.min(
+                 _maxContentWidth ?? double.infinity, constraints.maxWidth))
+@@ -1139,13 +1155,24 @@ class RenderEditor extends RenderEditableContainerBox
+         ? 0.0
+         : math.max((constraints.maxWidth - _maxContentWidth!) / 2, 0);
+     while (child != null) {
+-      child.layout(innerConstraints, parentUsesSize: true);
++      child.layout(
++          pages == null
++              ? innerConstraints
++              : PagedBoxConstraints.from(innerConstraints,
++                  pages: pages, top: mainAxisExtent),
++          parentUsesSize: true);
+       final childParentData = child.parentData as EditableContainerParentData
+         ..offset = Offset(resolvedPadding!.left + leftOffset, mainAxisExtent);
+       mainAxisExtent += child.size.height;
+       assert(child.parentData == childParentData);
+       child = childParentData.nextSibling;
+     }
++    // FOLIO PATCH: on pages, the editor ends where its last page's text
++    // area does, so the sheets behind it are whole.
++    if (_pages != null) {
++      mainAxisExtent = pages!.bottomOf(pages.pageOf(
++          math.max(0, mainAxisExtent - resolvedPadding!.top - .01)));
++    }
+     mainAxisExtent += resolvedPadding!.bottom;
+     size = constraints.constrain(Size(constraints.maxWidth, mainAxisExtent));
+ 
+@@ -1690,14 +1717,12 @@ class RenderEditableContainerBox extends RenderBox
+       return lastChild!;
+     }
+ 
++    // FOLIO PATCH: by where each child is, not by adding up heights: on
++    // pages there is room between children.
+     var child = firstChild;
+-    final dx = -offset.dx;
+-    var dy = _resolvedPadding!.top;
+     while (child != null) {
+-      if (child.size.contains(offset.translate(dx, -dy))) {
+-        return child;
+-      }
+-      dy += child.size.height;
++      final top = (child.parentData as BoxParentData).offset.dy;
++      if (offset.dy < top + child.size.height) return child;
+       child = childAfter(child);
+     }
+ 
+@@ -1726,8 +1751,17 @@ class RenderEditableContainerBox extends RenderBox
+     final innerConstraints =
+         BoxConstraints.tightFor(width: constraints.maxWidth)
+             .deflate(_resolvedPadding!);
++    // FOLIO PATCH: a block on pages tells each of its lines where it starts.
++    final paged = constraints is PagedBoxConstraints
++        ? constraints as PagedBoxConstraints
++        : null;
+     while (child != null) {
+-      child.layout(innerConstraints, parentUsesSize: true);
++      child.layout(
++          paged == null
++              ? innerConstraints
++              : PagedBoxConstraints.from(innerConstraints,
++                  pages: paged.pages, top: paged.top + mainAxisExtent),
++          parentUsesSize: true);
+       final childParentData = (child.parentData as EditableContainerParentData)
+         ..offset = Offset(_resolvedPadding!.left, mainAxisExtent);
+       mainAxisExtent += child.size.height;
+diff --git a/lib/src/editor/raw_editor/config/raw_editor_config.dart b/lib/src/editor/raw_editor/config/raw_editor_config.dart
+index f7f9df7..3a7c9c5 100644
+--- a/lib/src/editor/raw_editor/config/raw_editor_config.dart
++++ b/lib/src/editor/raw_editor/config/raw_editor_config.dart
+@@ -1,3 +1,4 @@
++import '../../widgets/page_geometry.dart';
+ import 'dart:ui' as ui;
+ 
+ import 'package:flutter/material.dart';
+@@ -29,6 +30,7 @@ class QuillRawEditorConfig {
+     required this.embedBuilder,
+     required this.textSpanBuilder,
+     required this.autoFocus,
++    this.lineLayoutBuilder,
+     this.characterShortcutEvents = const [],
+     this.spaceShortcutEvents = const [],
+     @experimental this.onKeyPressed,
+@@ -46,6 +48,7 @@ class QuillRawEditorConfig {
+     this.maxHeight,
+     this.minHeight,
+     this.maxContentWidth,
++    this.pages,
+     this.customStyles,
+     this.customShortcuts,
+     this.customActions,
+@@ -281,6 +284,9 @@ class QuillRawEditorConfig {
+   /// horizontally centered. This is mostly useful on devices with wide screens.
+   final double? maxContentWidth;
+ 
++  /// FOLIO PATCH: see [QuillEditorConfig.pages].
++  final QuillPageGeometry? pages;
++
+   /// Allows to override [DefaultStyles].
+   final DefaultStyles? customStyles;
+ 
+@@ -367,6 +373,9 @@ class QuillRawEditorConfig {
+   /// Used to build the [InlineSpan]s containing text content.
+   final TextSpanBuilder textSpanBuilder;
+ 
++  /// FOLIO PATCH: per-line indents and spacing.
++  final QuillLineLayoutBuilder? lineLayoutBuilder;
++
+   /// Configures the dialog theme.
+   final QuillDialogTheme? dialogTheme;
+ 
+diff --git a/lib/src/editor/raw_editor/raw_editor.dart b/lib/src/editor/raw_editor/raw_editor.dart
+index edfaecf..347eca3 100644
+--- a/lib/src/editor/raw_editor/raw_editor.dart
++++ b/lib/src/editor/raw_editor/raw_editor.dart
+@@ -99,4 +99,8 @@ abstract class EditorState extends State<QuillRawEditor>
+   bool showToolbar();
+ 
+   void requestKeyboard();
++
++  /// FOLIO PATCH: where a right click asked for the context menu, in global
++  /// coordinates. Taken by the next [showToolbar].
++  Offset? contextMenuRequestPosition;
+ }
+diff --git a/lib/src/editor/raw_editor/raw_editor_render_object.dart b/lib/src/editor/raw_editor/raw_editor_render_object.dart
+index d795362..325cb8d 100644
+--- a/lib/src/editor/raw_editor/raw_editor_render_object.dart
++++ b/lib/src/editor/raw_editor/raw_editor_render_object.dart
+@@ -4,6 +4,7 @@ import 'package:flutter/rendering.dart' show ViewportOffset;
+ import '../../document/document.dart';
+ import '../editor.dart';
+ import '../widgets/cursor.dart';
++import '../widgets/page_geometry.dart';
+ 
+ class QuillRawEditorMultiChildRenderObject
+     extends MultiChildRenderObjectWidget {
+@@ -24,6 +25,7 @@ class QuillRawEditorMultiChildRenderObject
+     super.key,
+     this.padding = EdgeInsets.zero,
+     this.maxContentWidth,
++    this.pages,
+     this.offset,
+   });
+ 
+@@ -40,6 +42,7 @@ class QuillRawEditorMultiChildRenderObject
+   final double scrollBottomInset;
+   final EdgeInsetsGeometry padding;
+   final double? maxContentWidth;
++  final QuillPageGeometry? pages;
+   final CursorCont cursorController;
+   final bool floatingCursorDisabled;
+ 
+@@ -61,7 +64,7 @@ class QuillRawEditorMultiChildRenderObject
+       maxContentWidth: maxContentWidth,
+       scrollBottomInset: scrollBottomInset,
+       floatingCursorDisabled: floatingCursorDisabled,
+-    );
++    )..pages = pages;
+   }
+ 
+   @override
+@@ -81,6 +84,7 @@ class QuillRawEditorMultiChildRenderObject
+       ..onSelectionChanged = onSelectionChanged
+       ..setScrollBottomInset(scrollBottomInset)
+       ..setPadding(padding)
+-      ..maxContentWidth = maxContentWidth;
++      ..maxContentWidth = maxContentWidth
++      ..pages = pages;
+   }
+ }
+diff --git a/lib/src/editor/raw_editor/raw_editor_state.dart b/lib/src/editor/raw_editor/raw_editor_state.dart
+index 98905c2..7386e1d 100644
+--- a/lib/src/editor/raw_editor/raw_editor_state.dart
++++ b/lib/src/editor/raw_editor/raw_editor_state.dart
+@@ -4,7 +4,8 @@ import 'dart:math' as math;
+ import 'dart:ui' as ui hide TextStyle;
+ 
+ import 'package:collection/collection.dart';
+-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
++import 'package:flutter/foundation.dart'
++    show clampDouble, defaultTargetPlatform, kIsWeb;
+ import 'package:flutter/material.dart';
+ import 'package:flutter/rendering.dart' show RenderAbstractViewport;
+ import 'package:flutter/scheduler.dart' show SchedulerBinding;
+@@ -249,17 +250,45 @@ class QuillRawEditorState extends EditorState
+   ///
+   /// Copied from [EditableTextState].
+   TextSelectionToolbarAnchors get contextMenuAnchors {
++    // FOLIO PATCH: a menu opened by a right click sits at the click.
++    final at = _contextMenuAt;
++    if (at != null) return TextSelectionToolbarAnchors(primaryAnchor: at);
++    // FOLIO PATCH: otherwise at the selection, with every point taken through
++    // the editor's whole transform. TextSelectionToolbarAnchors.fromSelection
++    // adds the selection's local offsets, unscaled, to the editor's global
++    // corner, so on a page zoomed to 200% the menu came up at half the
++    // distance — near the top — and at 50% below the screen, out of sight.
+     final glyphHeights = _getGlyphHeights();
+     final selection = textEditingValue.selection;
+-    final points = renderEditor.getEndpointsForSelection(selection);
+-    return TextSelectionToolbarAnchors.fromSelection(
+-      renderBox: renderEditor,
+-      startGlyphHeight: glyphHeights.startGlyphHeight,
+-      endGlyphHeight: glyphHeights.endGlyphHeight,
+-      selectionEndpoints: points,
++    final box = renderEditor;
++    final points = box.getEndpointsForSelection(selection);
++    final first = points.first.point;
++    final last = points.last.point;
++    final region = Rect.fromPoints(
++      box.localToGlobal(Offset.zero),
++      box.localToGlobal(box.size.bottomRight(Offset.zero)),
++    );
++    final multiline = last.dy - first.dy > glyphHeights.endGlyphHeight / 2;
++    final left = multiline ? region.left : box.localToGlobal(first).dx;
++    final right = multiline ? region.right : box.localToGlobal(last).dx;
++    final top = box
++        .localToGlobal(first - Offset(0, glyphHeights.startGlyphHeight))
++        .dy;
++    final bottom = box.localToGlobal(last).dy;
++    final x = (left + right) / 2;
++    return TextSelectionToolbarAnchors(
++      primaryAnchor: Offset(x, clampDouble(top, region.top, region.bottom)),
++      secondaryAnchor: Offset(
++        x,
++        clampDouble(bottom, region.top, region.bottom),
++      ),
+     );
+   }
+ 
++  /// FOLIO PATCH: the right-click position of the menu now showing, if a right
++  /// click opened it.
++  Offset? _contextMenuAt;
++
+   /// Gets the line heights at the start and end of the selection for the given
+   /// [QuillRawEditorState].
+   ///
+@@ -423,6 +452,7 @@ class QuillRawEditorState extends EditorState
+                     scrollBottomInset: widget.config.scrollBottomInset,
+                     padding: widget.config.padding,
+                     maxContentWidth: widget.config.maxContentWidth,
++                    pages: widget.config.pages,
+                     cursorController: _cursorCont,
+                     floatingCursorDisabled:
+                         widget.config.floatingCursorDisabled,
+@@ -456,6 +486,7 @@ class QuillRawEditorState extends EditorState
+                 scrollBottomInset: widget.config.scrollBottomInset,
+                 padding: widget.config.padding,
+                 maxContentWidth: widget.config.maxContentWidth,
++                    pages: widget.config.pages,
+                 floatingCursorDisabled: widget.config.floatingCursorDisabled,
+                 children: _buildChildren(doc, context),
+               ),
+@@ -609,6 +640,7 @@ class QuillRawEditorState extends EditorState
+               : null,
+           embedBuilder: widget.config.embedBuilder,
+           textSpanBuilder: widget.config.textSpanBuilder,
++          lineLayoutBuilder: widget.config.lineLayoutBuilder,
+           linkActionPicker: _linkActionPicker,
+           onLaunchUrl: widget.config.onLaunchUrl,
+           cursorCont: _cursorCont,
+@@ -641,7 +673,15 @@ class QuillRawEditorState extends EditorState
+ 
+   EditableTextLine _getEditableTextLineFromNode(
+       Line node, BuildContext context, Map<String, Attribute<dynamic>> attrs) {
++    // FOLIO PATCH: the line's own indents and spacing, when it carries any.
++    final layout = widget.config.lineLayoutBuilder?.call(node);
++    final vertical = _getVerticalSpacingForLine(node, _styles);
+     final textLine = TextLine(
++      firstLineIndent: layout?.firstLine ?? 0,
++      hangingIndent: layout?.hanging ?? 0,
++      layoutWidth: layout?.width,
++      rowStarts: layout?.rows,
++      rowHeight: layout?.rowHeight,
+       line: node,
+       textDirection: _textDirection,
+       embedBuilder: widget.config.embedBuilder,
+@@ -660,8 +700,11 @@ class QuillRawEditorState extends EditorState
+         node,
+         null,
+         textLine,
+-        _getHorizontalSpacingForLine(node, _styles),
+-        _getVerticalSpacingForLine(node, _styles),
++        layout?.horizontal ?? _getHorizontalSpacingForLine(node, _styles),
++        layout == null
++            ? vertical
++            : VerticalSpacing(
++                vertical.top + layout.top, vertical.bottom + layout.bottom),
+         _textDirection,
+         controller.selection,
+         widget.config.selectionColor,
+@@ -1136,6 +1179,34 @@ class QuillRawEditorState extends EditorState
+ 
+     _showCaretOnScreenScheduled = true;
+     SchedulerBinding.instance.addPostFrameCallback((_) {
++      if (!widget.config.scrollable && !_scrollController.hasClients) {
++        // FOLIO PATCH: an editor that does not scroll itself sits in a view
++        // that does. Nothing asked that view to follow the caret, so arrowing
++        // down ran the caret off the bottom of the page and out of sight. Ask
++        // every enclosing viewport, through any zoom between, to keep the
++        // caret's line and a line either side of it on screen.
++        _showCaretOnScreenScheduled = false;
++        if (!mounted || !_hasFocus) return;
++        try {
++          final caret = renderEditor.getLocalRectForCaret(
++            controller.selection.extent,
++          );
++          renderEditor.showOnScreen(
++            rect: Rect.fromLTRB(
++              caret.left,
++              caret.top - caret.height,
++              caret.right,
++              caret.bottom + caret.height,
++            ),
++            duration: const Duration(milliseconds: 100),
++            curve: Curves.fastOutSlowIn,
++          );
++        } catch (_) {
++          // A selection past a document that just shrank; the next change
++          // brings the caret back.
++        }
++        return;
++      }
+       if (widget.config.scrollable || _scrollController.hasClients) {
+         _showCaretOnScreenScheduled = false;
+ 
+@@ -1231,6 +1302,10 @@ class QuillRawEditorState extends EditorState
+       return false;
+     }
+ 
++    // FOLIO PATCH: taken here, so a menu opened later by other means does
++    // not reuse an old click.
++    _contextMenuAt = contextMenuRequestPosition;
++    contextMenuRequestPosition = null;
+     _selectionOverlay!.update(textEditingValue);
+     _selectionOverlay!.showToolbar();
+     return true;
+diff --git a/lib/src/editor/widgets/delegate.dart b/lib/src/editor/widgets/delegate.dart
+index 20216df..ac6d426 100644
+--- a/lib/src/editor/widgets/delegate.dart
++++ b/lib/src/editor/widgets/delegate.dart
+@@ -200,6 +200,8 @@ class EditorTextSelectionGestureDetectorBuilder {
+   /// onSingleTapUp for mouse right click
+   @protected
+   void onSecondarySingleTapUp(TapUpDetails details) {
++    // FOLIO PATCH: the menu opens where the mouse was, as desktop menus do.
++    editor?.contextMenuRequestPosition = details.globalPosition;
+     SchedulerBinding.instance.addPostFrameCallback((_) {
+       // added to show toolbar by right click
+       if (checkSelectionToolbarShouldShow(isAdditionalAction: true)) {
+@@ -312,6 +314,14 @@ class EditorTextSelectionGestureDetectorBuilder {
+   ///  which triggers this callback.
+   @protected
+   void onDragSelectionStart(DragStartDetails details) {
++    // FOLIO PATCH: selecting with the mouse takes the keyboard, as it does in
++    // Flutter's own text fields. Only a tap asked for it before, so text
++    // dragged over in an editor that had lost the focus was highlighted but
++    // Delete and Ctrl+B reached nothing.
++    final state = editor;
++    if (state != null && !state.widget.config.focusNode.hasFocus) {
++      state.requestKeyboard();
++    }
+     renderEditor!.handleDragStart(details);
+   }
+ 
+diff --git a/lib/src/editor/widgets/page_geometry.dart b/lib/src/editor/widgets/page_geometry.dart
+new file mode 100644
+index 0000000..fb87d4b
+--- /dev/null
++++ b/lib/src/editor/widgets/page_geometry.dart
+@@ -0,0 +1,158 @@
++// FOLIO PATCH: pages.
++//
++// The editor lays its lines out on pages of a fixed text height, the way
++// UYAP and the printed page do: a row that does not fit on what is left of
++// a page starts the next one, and space above a paragraph goes with its
++// first row. Where each child of the editor starts is passed down with its
++// constraints, so a line is laid out again only when the place it starts
++// at changes.
++
++import 'package:flutter/foundation.dart' show immutable, protected;
++import 'package:flutter/rendering.dart';
++
++/// Where the pages of an editor are, in its own coordinates: page `k`'s
++/// text area runs from `k * stride - offset` to `k * stride - offset +
++/// height`.
++@immutable
++class QuillPageGeometry {
++  const QuillPageGeometry({
++    required this.height,
++    required this.stride,
++    this.offset = 0,
++  }) : assert(height > 0 && stride >= height);
++
++  /// How tall the text area of one page is.
++  final double height;
++
++  /// From the top of one page's text area to the top of the next: the text
++  /// area, then the bottom margin, the room between sheets and the next
++  /// page's top margin.
++  final double stride;
++
++  /// How far below the top of the first page's text area the coordinates
++  /// start: something laid out on the pages further down, such as a table
++  /// cell, sees them from where it is.
++  final double offset;
++
++  /// The same pages seen from [by] further down.
++  QuillPageGeometry shifted(double by) => by == 0
++      ? this
++      : QuillPageGeometry(height: height, stride: stride, offset: offset + by);
++
++  /// A tolerance for rows that end a hair past the text area, as a row laid
++  /// out in fractional pixels can when UYAP's would end on it exactly.
++  static const _epsilon = .01;
++
++  /// The page [y] is on; a [y] in the room between two pages counts as the
++  /// earlier one.
++  int pageOf(double y) => y + offset < 0 ? 0 : ((y + offset) / stride).floor();
++
++  double topOf(int page) => page * stride - offset;
++  double bottomOf(int page) => page * stride - offset + height;
++
++  /// How far a row from [top] to [bottom] has to move down to start the
++  /// next page, or 0 where it fits. One taller than a whole page is left
++  /// where it is when it already starts a page.
++  double push(double top, double bottom) {
++    final page = pageOf(top);
++    if (bottom <= bottomOf(page) + _epsilon) return 0;
++    if (top <= topOf(page) + _epsilon) return 0;
++    return topOf(page + 1) - top;
++  }
++
++  @override
++  bool operator ==(Object other) =>
++      other is QuillPageGeometry &&
++      other.height == height &&
++      other.stride == stride &&
++      other.offset == offset;
++
++  @override
++  int get hashCode => Object.hash(height, stride, offset);
++}
++
++/// Something that lays out on pages what it holds, where no constraints can
++/// say so: a line holding a table, and a table holding cells. What is laid
++/// out below it asks for its pages with [pagesFromHost], and is laid out
++/// again whenever where it sits on them changes.
++mixin QuillPagedHost on RenderObject {
++  /// The pages as seen from the top of [child], one of this object's own
++  /// children, or null when it is not laid out on pages.
++  QuillPageGeometry? pagesFor(RenderObject child);
++
++  final Map<RenderObject, RenderObject> _dependents = {};
++
++  /// Whether something below asked for its pages, and so breaks its own.
++  bool get hasPagedDependents {
++    _dependents.removeWhere((dependent, _) => !dependent.attached);
++    return _dependents.isNotEmpty;
++  }
++
++  /// Lays out again what asked for its pages below [under], or below any
++  /// child: called from [performLayout] when where it sits has changed.
++  @protected
++  void relayoutPagedDependents({RenderObject? under}) {
++    if (_dependents.isEmpty) return;
++    invokeLayoutCallback<Constraints>((_) {
++      _dependents.removeWhere((dependent, _) => !dependent.attached);
++      for (final MapEntry(key: dependent, value: child)
++          in _dependents.entries) {
++        if (under == null || identical(child, under)) {
++          dependent.markNeedsLayout();
++        }
++      }
++    });
++  }
++}
++
++/// The pages [object] is laid out on, from the nearest [QuillPagedHost]
++/// above it, which then lays it out again when they move.
++QuillPageGeometry? pagesFromHost(RenderObject object) {
++  var child = object;
++  var node = object.parent;
++  while (node != null) {
++    if (node is QuillPagedHost) {
++      node._dependents[object] = child;
++      return node.pagesFor(child);
++    }
++    child = node;
++    node = node.parent;
++  }
++  return null;
++}
++
++/// Box constraints that also say where on the pages a child starts.
++class PagedBoxConstraints extends BoxConstraints {
++  const PagedBoxConstraints({
++    required this.pages,
++    required this.top,
++    super.minWidth,
++    super.maxWidth,
++    super.minHeight,
++    super.maxHeight,
++  });
++
++  PagedBoxConstraints.from(BoxConstraints box,
++      {required this.pages, required this.top})
++      : super(
++          minWidth: box.minWidth,
++          maxWidth: box.maxWidth,
++          minHeight: box.minHeight,
++          maxHeight: box.maxHeight,
++        );
++
++  final QuillPageGeometry pages;
++
++  /// Where the child's top is, in the editor's coordinates.
++  final double top;
++
++  @override
++  bool operator ==(Object other) =>
++      other is PagedBoxConstraints &&
++      super == other &&
++      other.pages == pages &&
++      other.top == top;
++
++  @override
++  int get hashCode => Object.hash(super.hashCode, pages, top);
++}
+diff --git a/lib/src/editor/widgets/proxy.dart b/lib/src/editor/widgets/proxy.dart
+index 9504a11..9d96818 100644
+--- a/lib/src/editor/widgets/proxy.dart
++++ b/lib/src/editor/widgets/proxy.dart
+@@ -1,9 +1,11 @@
+ import 'dart:ui';
+ 
++import 'package:flutter/foundation.dart' show listEquals;
+ import 'package:flutter/rendering.dart';
+ import 'package:flutter/widgets.dart';
+ 
+ import 'box.dart';
++import 'text/hanging_indent.dart';
+ 
+ class BaselineProxy extends SingleChildRenderObjectWidget {
+   const BaselineProxy({
+@@ -145,22 +147,34 @@ class RichTextProxy extends SingleChildRenderObjectWidget {
+     required this.textScaler,
+     this.textWidthBasis = TextWidthBasis.parent,
+     this.textHeightBehavior,
++    this.leadingPlaceholders = 0,
++    this.insertions = const [],
+     super.key,
+   });
+ 
++  /// FOLIO PATCH: placeholders the line drew ahead of its own text (a first
++  /// line indent), which the document's offsets do not count.
++  final int leadingPlaceholders;
++
++  /// FOLIO PATCH: characters the line put into its text — joins, and the room
++  /// of a hanging indent; see [HangingIndent].
++  final List<LineInsertion> insertions;
++
+   final TextStyle textStyle;
+   final TextAlign textAlign;
+   final TextDirection textDirection;
+   final TextScaler textScaler;
+   final Locale locale;
+-  final StrutStyle strutStyle;
++  final StrutStyle? strutStyle;
+   final TextWidthBasis textWidthBasis;
+   final TextHeightBehavior? textHeightBehavior;
+ 
+   @override
+   RenderParagraphProxy createRenderObject(BuildContext context) {
+     return RenderParagraphProxy(null, textStyle, textAlign, textDirection,
+-        textScaler, strutStyle, locale, textWidthBasis, textHeightBehavior);
++        textScaler, strutStyle, locale, textWidthBasis, textHeightBehavior)
++      ..leadingPlaceholders = leadingPlaceholders
++      ..insertions = insertions;
+   }
+ 
+   @override
+@@ -174,7 +188,9 @@ class RichTextProxy extends SingleChildRenderObjectWidget {
+       ..locale = locale
+       ..strutStyle = strutStyle
+       ..textWidthBasis = textWidthBasis
+-      ..textHeightBehavior = textHeightBehavior;
++      ..textHeightBehavior = textHeightBehavior
++      ..leadingPlaceholders = leadingPlaceholders
++      ..insertions = insertions;
+   }
+ }
+ 
+@@ -186,7 +202,7 @@ class RenderParagraphProxy extends RenderProxyBox
+     TextAlign textAlign,
+     TextDirection textDirection,
+     TextScaler textScaler,
+-    StrutStyle strutStyle,
++    StrutStyle? strutStyle,
+     Locale locale,
+     TextWidthBasis textWidthBasis,
+     TextHeightBehavior? textHeightBehavior,
+@@ -235,7 +251,7 @@ class RenderParagraphProxy extends RenderProxyBox
+     markNeedsLayout();
+   }
+ 
+-  set strutStyle(StrutStyle value) {
++  set strutStyle(StrutStyle? value) {
+     if (_prototypePainter.strutStyle == value) {
+       return;
+     }
+@@ -267,31 +283,182 @@ class RenderParagraphProxy extends RenderProxyBox
+     markNeedsLayout();
+   }
+ 
++  /// FOLIO PATCH: placeholders ahead of the line's own text. Every position
++  /// crossing into the paragraph is moved past them, and every position
++  /// coming out is moved back, so the rest of Quill never sees them.
++  int _leading = 0;
++  set leadingPlaceholders(int value) {
++    if (_leading == value) return;
++    _leading = value;
++    markNeedsLayout();
++  }
++
++  /// FOLIO PATCH: characters the line put into its text, which the document
++  /// does not have.
++  List<LineInsertion> _insertions = const [];
++  set insertions(List<LineInsertion> value) {
++    if (listEquals(_insertions, value)) return;
++    _insertions = value;
++    markNeedsLayout();
++  }
++
++  bool get _shifted => _leading != 0 || _insertions.isNotEmpty;
++
++  TextPosition _in(TextPosition position) => !_shifted
++      ? position
++      : TextPosition(
++          offset: HangingIndent.toRender(position.offset, _leading, _insertions),
++          affinity: position.affinity);
++
++  int _out(int offset) => !_shifted
++      ? offset
++      : HangingIndent.toDocument(offset, _leading, _insertions);
++
+   @override
+   RenderParagraph? get child => super.child as RenderParagraph?;
+ 
++  /// FOLIO PATCH: pages. Where rows were moved down to start the next page:
++  /// from each `from` (a y in the paragraph as laid out) on, everything is
++  /// drawn `shift` lower, the shifts adding up. Set by the line once it
++  /// knows where on the page it is; it moves painting and every position,
++  /// not the paragraph's own layout, and the room it opens is the line's.
++  List<({double from, double shift, double cut})> _pageGaps = const [];
++  List<({double from, double shift, double cut})> get pageGaps => _pageGaps;
++  set pageGaps(List<({double from, double shift, double cut})> value) {
++    if (listEquals(_pageGaps, value)) return;
++    _pageGaps = value;
++    markNeedsPaint();
++  }
++
++  /// Where a point of the paragraph laid out at [y] is drawn, and back.
++  double drawnY(double y) => y + _shiftAt(y);
++  double laidY(double y) => _unshift(y);
++
++  /// All the room the gaps open, which the line adds to its height.
++  double get pageGapHeight => _pageGaps.isEmpty ? 0 : _pageGaps.last.shift;
++
++  /// How much lower a point of the paragraph at [y] is drawn.
++  double _shiftAt(double y) {
++    var shift = 0.0;
++    for (final gap in _pageGaps) {
++      if (y < gap.from - .01) break;
++      shift = gap.shift;
++    }
++    return shift;
++  }
++
++  /// The paragraph's own y for a [y] as drawn; one in a gap goes to the
++  /// nearer of the row above and the row below it.
++  double _unshift(double y) {
++    var before = 0.0;
++    for (final gap in _pageGaps) {
++      final start = gap.from + before; // where the room opens, drawn
++      if (y < start) break;
++      final end = gap.from + gap.shift; // where the next row is drawn
++      if (y < end) return y - start < end - y ? gap.from - .5 : gap.from;
++      before = gap.shift;
++    }
++    return y - before;
++  }
++
++  /// The rows of the paragraph as laid out: the top and bottom of each,
++  /// and where its letters are drawn — a descender can reach past the
++  /// bottom of its row, so a page is cut between two rows' letters, not
++  /// between the rows.
++  List<({double top, double bottom, double inkTop, double inkBottom})>
++      get rows {
++    final paragraph = child;
++    if (paragraph == null) return const [];
++    final length =
++        paragraph.text.toPlainText(includeSemanticsLabels: false).length;
++    final all = TextSelection(baseOffset: 0, extentOffset: length);
++    final boxes = length == 0
++        ? const <TextBox>[]
++        : paragraph.getBoxesForSelection(all,
++            boxHeightStyle: BoxHeightStyle.max);
++    final rows =
++        <({double top, double bottom, double inkTop, double inkBottom})>[];
++    for (final box in boxes) {
++      if (rows.isNotEmpty && box.top < rows.last.bottom - .5) continue;
++      rows.add((
++        top: box.top,
++        bottom: box.bottom,
++        inkTop: box.bottom,
++        inkBottom: box.top
++      ));
++    }
++    if (rows.isEmpty) {
++      return [(top: 0, bottom: size.height, inkTop: 0, inkBottom: size.height)];
++    }
++    final ink = paragraph.getBoxesForSelection(all,
++        boxHeightStyle: BoxHeightStyle.tight);
++    for (final box in ink) {
++      final middle = (box.top + box.bottom) / 2;
++      for (var i = 0; i < rows.length; i++) {
++        final row = rows[i];
++        if (middle < row.top || middle > row.bottom) continue;
++        rows[i] = (
++          top: row.top,
++          bottom: row.bottom,
++          inkTop: box.top < row.inkTop ? box.top : row.inkTop,
++          inkBottom: box.bottom > row.inkBottom ? box.bottom : row.inkBottom,
++        );
++        break;
++      }
++    }
++    return rows;
++  }
++
+   @override
+   double get preferredLineHeight => _prototypePainter.preferredLineHeight;
+ 
+   @override
+-  Offset getOffsetForCaret(TextPosition position, Rect caretPrototype) =>
+-      child!.getOffsetForCaret(position, caretPrototype);
++  Offset getOffsetForCaret(TextPosition position, Rect caretPrototype) {
++    final at = child!.getOffsetForCaret(_in(position), caretPrototype);
++    return _pageGaps.isEmpty ? at : at.translate(0, _shiftAt(at.dy));
++  }
+ 
+   @override
+-  TextPosition getPositionForOffset(Offset offset) =>
+-      child!.getPositionForOffset(offset);
++  TextPosition getPositionForOffset(Offset offset) {
++    if (_pageGaps.isNotEmpty) offset = Offset(offset.dx, _unshift(offset.dy));
++    final position = child!.getPositionForOffset(offset);
++    if (!_shifted) return position;
++    return TextPosition(
++        offset: _out(position.offset), affinity: position.affinity);
++  }
+ 
+   @override
+   double? getFullHeightForCaret(TextPosition position) =>
+-      child!.getFullHeightForCaret(position);
++      child!.getFullHeightForCaret(_in(position));
+ 
+   @override
+-  TextRange getWordBoundary(TextPosition position) =>
+-      child!.getWordBoundary(position);
++  TextRange getWordBoundary(TextPosition position) {
++    final range = child!.getWordBoundary(_in(position));
++    if (!_shifted) return range;
++    return TextRange(start: _out(range.start), end: _out(range.end));
++  }
+ 
+   @override
+-  List<TextBox> getBoxesForSelection(TextSelection selection) => child!
+-      .getBoxesForSelection(selection, boxHeightStyle: BoxHeightStyle.max);
++  List<TextBox> getBoxesForSelection(TextSelection selection) {
++    final boxes = _boxesForSelection(selection);
++    if (_pageGaps.isEmpty) return boxes;
++    return [
++      for (final box in boxes)
++        TextBox.fromLTRBD(box.left, box.top + _shiftAt(box.top), box.right,
++            box.bottom + _shiftAt(box.top), box.direction),
++    ];
++  }
++
++  List<TextBox> _boxesForSelection(TextSelection selection) =>
++      child!.getBoxesForSelection(
++          !_shifted
++              ? selection
++              : selection.copyWith(
++                  baseOffset: HangingIndent.toRender(
++                      selection.baseOffset, _leading, _insertions),
++                  extentOffset: HangingIndent.toRender(
++                      selection.extentOffset, _leading, _insertions)),
++          boxHeightStyle: BoxHeightStyle.max);
+ 
+   @override
+   void performLayout() {
+@@ -300,6 +467,51 @@ class RenderParagraphProxy extends RenderProxyBox
+         minWidth: constraints.minWidth, maxWidth: constraints.maxWidth);
+   }
+ 
++  /// FOLIO PATCH: pages. With gaps, the paragraph is painted in slices, one
++  /// per page, each clipped to its rows and moved down by its gap.
++  @override
++  void paint(PaintingContext context, Offset offset) {
++    final paragraph = child;
++    if (_pageGaps.isEmpty || paragraph == null) {
++      super.paint(context, offset);
++      return;
++    }
++    var from = double.negativeInfinity;
++    var shift = 0.0;
++    for (final gap in [
++      ..._pageGaps,
++      (from: double.infinity, shift: 0.0, cut: double.infinity)
++    ]) {
++      final top = from, bottom = gap.cut;
++      final at = offset.translate(0, shift);
++      context.pushClipRect(
++        needsCompositing,
++        at,
++        Rect.fromLTRB(-1e5, top.isFinite ? top : -1e5, 1e5,
++            bottom.isFinite ? bottom : size.height + 1e5),
++        (context, offset) => context.paintChild(paragraph, offset),
++      );
++      from = gap.cut;
++      shift = gap.shift;
++    }
++  }
++
++  @override
++  bool hitTest(BoxHitTestResult result, {required Offset position}) {
++    if (_pageGaps.isEmpty) return super.hitTest(result, position: position);
++    final bounds = Size(size.width, size.height + pageGapHeight);
++    if (!bounds.contains(position)) return false;
++    final y = _unshift(position.dy);
++    final hit = result.addWithPaintOffset(
++      offset: Offset(0, _shiftAt(y)),
++      position: position,
++      hitTest: (result, transformed) =>
++          child?.hitTest(result, position: transformed) ?? false,
++    );
++    if (hit) result.add(BoxHitTestEntry(this, position));
++    return hit;
++  }
++
+   @override
+   void dispose() {
+     super.dispose();
+diff --git a/lib/src/editor/widgets/text/hanging_indent.dart b/lib/src/editor/widgets/text/hanging_indent.dart
+new file mode 100644
+index 0000000..4fd2759
+--- /dev/null
++++ b/lib/src/editor/widgets/text/hanging_indent.dart
+@@ -0,0 +1,443 @@
++// FOLIO PATCH: characters put into a line that the document does not have:
++// the room of a hanging indent, and marks that make a line break where UYAP
++// breaks it.
++// See third_party/flutter_quill/FOLIO_PATCH.md.
++import 'package:flutter/widgets.dart';
++
++/// Characters put into a line's laid-out text: where, as a document offset,
++/// and how many. The paragraph proxy hides them from every offset the editor
++/// sees; see [HangingIndent.toRender] and [HangingIndent.toDocument].
++typedef LineInsertion = ({int offset, int length});
++
++/// A single character put into a line: a word joiner or a zero-width space.
++typedef LineMark = ({int offset, String mark});
++
++/// What is put in at one place, in the order things at one place go in.
++enum _Kind { indent, mark, room, end }
++
++typedef _Item = ({int offset, _Kind kind, String mark});
++
++/// Room ahead of every visual line of a paragraph but the first, and joins
++/// after slashes and dashes.
++///
++/// Flutter lays a paragraph out at one width and starts every line at the
++/// same place, so a hanging indent cannot be asked of it. It is drawn instead
++/// by laying the line out once, finding where each visual line after the
++/// first begins, and putting there a box as wide as the indent. Each box
++/// comes with a no-break space too small to see, which ties it to the text
++/// after it: a line may break before a box and after one, and it must not
++/// end on one.
++///
++/// Flutter also breaks lines by other rules than UYAP, which breaks at spaces
++/// and nowhere else (see ParagraphRows). It will end a line after a slash or
++/// a dash inside a word — "Manavgat/" above "Antalya" — or before a bracket
++/// that follows a comma, where UYAP moves the word down whole; a word joiner
++/// there, drawn as nothing, takes that break away. And it will not break at a space before a slash, a colon
++/// or a closing bracket, so "No:33 /Z01" and "NEDENLER :" move down as one;
++/// a zero-width space there gives the break back.
++class HangingIndent {
++  HangingIndent._();
++
++  /// Characters put ahead of each line after the first.
++  static const width = 2;
++
++  static const _glue = '\u00a0';
++  static const _join = '\u2060';
++  static const _break = '\u200b';
++
++  /// The marks [text] needs to break where UYAP does: a join just after a
++  /// slash, dash or `!?` with more of the word after it, and before an
++  /// opening bracket that follows more of the word ("ettiği,(Sanıklar"); and
++  /// a break just before a slash, colon, stop or closing bracket that follows
++  /// a space.
++  static List<LineMark> marks(String text) {
++    final out = <LineMark>[];
++    for (var i = 0; i < text.length; i++) {
++      final c = text.codeUnitAt(i);
++      final after = i > 0 ? text.codeUnitAt(i - 1) : 0x20;
++      if (_space(after) && _heldToPrevious(c)) {
++        out.add((offset: i, mark: _break));
++      } else if (!_space(after) && _opens(c) && !_breaksAfter(after)) {
++        out.add((offset: i, mark: _join));
++      }
++      if (i + 1 < text.length &&
++          _breaksAfter(c) &&
++          !_space(text.codeUnitAt(i + 1))) {
++        out.add((offset: i + 1, mark: _join));
++      }
++      if (_opens(c) && i + 1 < text.length && text.codeUnitAt(i + 1) == 0x20) {
++        // Nor after an opening bracket and its spaces: "Kiracı ( taahhüt…"
++        // went down whole.
++        var j = i + 1;
++        while (j < text.length && text.codeUnitAt(j) == 0x20) {
++          j++;
++        }
++        if (j < text.length && !_space(text.codeUnitAt(j))) {
++          out.add((offset: j, mark: _break));
++        }
++      }
++    }
++    out.sort((a, b) => a.offset.compareTo(b.offset));
++    return out;
++  }
++
++  /// Marks that let [text] break where [rows] start and nowhere else: a
++  /// join before every word or tab that follows a space or a tab, before
++  /// every tab and before every space that follows a dash, unless a row
++  /// starts there, and a break where each row starts. The joins [marks] puts inside words stay.
++  static List<LineMark> rowMarks(String text, List<int> rows) {
++    final starts = rows.toSet();
++    final at = <int, String>{
++      for (final m in marks(text))
++        if (m.mark == _join && !starts.contains(m.offset)) m.offset: m.mark,
++    };
++    for (var i = 1; i < text.length; i++) {
++      if (starts.contains(i)) continue;
++      final c = text.codeUnitAt(i);
++      final before = text.codeUnitAt(i - 1);
++      final opens = (before == 0x20 || before == 0x09) && c != 0x20;
++      // A space after a dash may be drawn as a no-break space, to hold the
++      // word before it down (see EditorTabSpans), and a line may still break
++      // between a dash and a no-break space.
++      final held = c == 0x20 && _breaksAfter(before);
++      if (opens || held || c == 0x09) at[i] = _join;
++    }
++    for (final start in starts) {
++      if (start > 0 && start < text.length) at[start] = _break;
++    }
++    return [
++      for (final e in at.entries) (offset: e.key, mark: e.value),
++    ]..sort((a, b) => a.offset.compareTo(b.offset));
++  }
++
++  static bool _space(int c) =>
++      c == 0x20 || c == 0x09 || c == 0x0a || c == 0x2028;
++
++  static bool _breaksAfter(int c) =>
++      c == 0x2f ||
++      c == 0x2d ||
++      c == 0x21 ||
++      c == 0x3f ||
++      (c >= 0x2010 && c <= 0x2014);
++
++  static bool _opens(int c) => c == 0x28 || c == 0x5b || c == 0x7b;
++
++  /// Characters Unicode keeps on the line before them even across a space
++  /// (UAX #14, LB13 and LB16): closing brackets, `!`, `?`, `/` and the infix
++  /// separators `,` `.` `:` `;`.
++  static bool _heldToPrevious(int c) =>
++      c == 0x2f ||
++      c == 0x3a ||
++      c == 0x3b ||
++      c == 0x2c ||
++      c == 0x2e ||
++      c == 0x21 ||
++      c == 0x3f ||
++      c == 0x29 ||
++      c == 0x5d ||
++      c == 0x7d;
++
++  /// [span] with its first line indent, [marks] and, where [hanging] and
++  /// [width] allow, the room of a hanging indent put in; every insertion made,
++  /// for the proxy; and the lines the room went ahead of, which [breaks] takes
++  /// back to skip finding them again. Where a line holds something whose
++  /// width is not known before it is laid out, it gets no hanging indent.
++  ///
++  /// A [paragraphMark] offset puts there a join in the line's own style, so
++  /// the row it is on is at least as tall as that style's.
++  ///
++  /// The first line indent goes after the spaces [text] opens with, not
++  /// before them. UYAP counts those spaces when it fills the first row and
++  /// then, spreading a justified row, gives them no room; Flutter does the
++  /// same with spaces at the very start of a line, and only there.
++  static ({
++    InlineSpan span,
++    List<LineInsertion> insertions,
++    List<int> breaks,
++  })
++  apply({
++    required InlineSpan span,
++    required String text,
++    required List<LineMark> marks,
++    required double firstLine,
++    required double hanging,
++    required double? width,
++    required TextDirection textDirection,
++    required TextScaler textScaler,
++    required StrutStyle? strutStyle,
++    List<int>? breaks,
++    Locale? locale,
++    int? paragraphMark,
++  }) {
++    var opening = 0;
++    if (firstLine > 0) {
++      while (opening < text.length && text.codeUnitAt(opening) == 0x20) {
++        opening++;
++      }
++    }
++    List<_Item> items(List<int> rows) => [
++          if (firstLine > 0) (offset: opening, kind: _Kind.indent, mark: ''),
++          for (final m in marks)
++            (offset: m.offset, kind: _Kind.mark, mark: m.mark),
++          for (final at in rows) (offset: at, kind: _Kind.room, mark: ''),
++          if (paragraphMark != null)
++            (offset: paragraphMark, kind: _Kind.end, mark: _join),
++        ]..sort((a, b) => a.offset != b.offset
++            ? a.offset.compareTo(b.offset)
++            : a.kind.index.compareTo(b.kind.index));
++    ({InlineSpan span, List<LineInsertion> insertions, List<int> breaks})
++        done(List<int> rows) {
++      final all = items(rows);
++      return (
++        span: _insert(span, all, firstLine, hanging),
++        insertions: List.unmodifiable(_insertions(all)),
++        breaks: List.unmodifiable(rows),
++      );
++    }
++
++    if (breaks != null) return done(breaks);
++    if (hanging <= 0 || width == null || !width.isFinite || width <= 0) {
++      return done(const []);
++    }
++    final rows = <int>[];
++    // Each round finds one more line to indent; indenting it can only move
++    // the lines after it.
++    for (var round = 0; round < 256; round++) {
++      final all = items(rows);
++      final built = _insert(span, all, firstLine, hanging);
++      final dimensions = _dimensions(built);
++      if (dimensions == null) return done(const []);
++      final painter = TextPainter(
++        text: built,
++        textDirection: textDirection,
++        textScaler: textScaler,
++        strutStyle: strutStyle,
++        locale: locale,
++      )
++        ..setPlaceholderDimensions(dimensions)
++        ..layout(maxWidth: width);
++      int? next;
++      final inserted = _insertions(all);
++      final lines = painter.computeLineMetrics();
++      for (var i = 1; i < lines.length && next == null; i++) {
++        final line = lines[i];
++        final at = painter
++            .getPositionForOffset(Offset(0, line.baseline - line.ascent / 2))
++            .offset;
++        final start = painter.getLineBoundary(TextPosition(offset: at)).start;
++        final offset = toDocument(start, 0, inserted);
++        if (offset > 0 && !rows.contains(offset)) next = offset;
++      }
++      painter.dispose();
++      if (next == null) return done(rows);
++      rows
++        ..add(next)
++        ..sort();
++    }
++    return done(const []);
++  }
++
++  static List<LineInsertion> _insertions(List<_Item> items) => [
++        for (final item in items)
++          (offset: item.offset, length: item.kind == _Kind.room ? width : 1),
++      ];
++
++  /// Everything in [span] that decides where its lines break: its text, the
++  /// font, size, weight, slant and spacing of each run, and the width of each
++  /// box. Two spans with one key are laid out alike.
++  static String layoutKey(InlineSpan span) {
++    final key = StringBuffer();
++    void style(TextStyle? s) {
++      if (s == null) return;
++      key
++        ..write(s.fontFamily)
++        ..write(',')
++        ..write(s.fontSize)
++        ..write(',')
++        ..write(s.fontWeight?.value)
++        ..write(',')
++        ..write(s.fontStyle?.index)
++        ..write(',')
++        ..write(s.height)
++        ..write(',')
++        ..write(s.letterSpacing)
++        ..write(',')
++        ..write(s.wordSpacing)
++        ..write(',')
++        ..write(s.fontFeatures?.length);
++    }
++
++    void walk(InlineSpan node) {
++      key.write('{');
++      style(node.style);
++      if (node is WidgetSpan) {
++        final box = node.child;
++        key.write(box is SizedBox ? '|${box.width}' : '|?');
++      } else if (node is TextSpan) {
++        key
++          ..write('|')
++          ..write(node.text ?? '');
++        for (final child in node.children ?? const <InlineSpan>[]) {
++          walk(child);
++        }
++      }
++      key.write('}');
++    }
++
++    walk(span);
++    return key.toString();
++  }
++
++  /// The document offset of [render], a position in text laid out with
++  /// [leading] placeholders ahead of it and [items] put in. A position inside
++  /// an insertion is the offset it was put before.
++  static int toDocument(int render, int leading, List<LineInsertion> items) {
++    final position = render - leading;
++    if (position <= 0) return 0;
++    var added = 0;
++    for (final item in items) {
++      final at = item.offset + added;
++      if (position < at) break;
++      if (position < at + item.length) return item.offset;
++      added += item.length;
++    }
++    return position - added;
++  }
++
++  /// Where the document offset [offset] is in the laid out text.
++  static int toRender(int offset, int leading, List<LineInsertion> items) {
++    var render = offset + leading;
++    for (final item in items) {
++      if (item.offset > offset) break;
++      render += item.length;
++    }
++    return render;
++  }
++
++  /// [span] with each of [items], in order, put before the character at its
++  /// offset: a first line indent [firstLine] wide, a mark, or the room of a
++  /// hanging indent [hanging] wide. One at the very end goes after the text.
++  static InlineSpan _insert(
++    InlineSpan span,
++    List<_Item> items,
++    double firstLine,
++    double hanging,
++  ) {
++    if (items.isEmpty) return span;
++    var offset = 0;
++    var next = 0;
++    List<InlineSpan> room(_Item item) => switch (item.kind) {
++          _Kind.indent => [WidgetSpan(child: SizedBox(width: firstLine))],
++          _Kind.mark => [TextSpan(text: item.mark)],
++          _Kind.room => [
++              WidgetSpan(
++                alignment: PlaceholderAlignment.baseline,
++                baseline: TextBaseline.alphabetic,
++                child: SizedBox(width: hanging),
++              ),
++              const TextSpan(text: _glue, style: TextStyle(fontSize: .01)),
++            ],
++          _Kind.end => [TextSpan(text: item.mark, style: span.style)],
++        };
++
++    InlineSpan walk(InlineSpan node) {
++      if (node is WidgetSpan) {
++        // Something put before a box goes ahead of it.
++        final before = <InlineSpan>[];
++        while (next < items.length && items[next].offset <= offset) {
++          before.addAll(room(items[next]));
++          next++;
++        }
++        offset += 1;
++        return before.isEmpty
++            ? node
++            : TextSpan(children: [...before, node]);
++      }
++      if (node is! TextSpan) return node;
++      final text = node.text;
++      final parts = <InlineSpan>[];
++      if (text != null && text.isNotEmpty) {
++        var from = 0;
++        while (next < items.length &&
++            items[next].offset < offset + text.length) {
++          final item = items[next];
++          final at = item.offset - offset;
++          next++;
++          if (at < from) continue;
++          if (at > from) parts.add(_piece(node, text.substring(from, at)));
++          parts.addAll(room(item));
++          from = at;
++        }
++        if (parts.isNotEmpty && from < text.length) {
++          parts.add(_piece(node, text.substring(from)));
++        }
++        offset += text.length;
++      }
++      final children = node.children;
++      final walked = children == null
++          ? null
++          : [for (final child in children) walk(child)];
++      if (parts.isEmpty) {
++        if (walked == null) return node;
++        return TextSpan(
++          text: text,
++          style: node.style,
++          recognizer: node.recognizer,
++          mouseCursor: node.mouseCursor,
++          semanticsLabel: node.semanticsLabel,
++          locale: node.locale,
++          spellOut: node.spellOut,
++          children: walked,
++        );
++      }
++      return TextSpan(
++        style: node.style,
++        locale: node.locale,
++        spellOut: node.spellOut,
++        children: [...parts, ...?walked],
++      );
++    }
++
++    final walked = walk(span);
++    if (next >= items.length) return walked;
++    return TextSpan(
++      style: walked.style,
++      children: [
++        walked,
++        for (final item in items.skip(next)) ...room(item),
++      ],
++    );
++  }
++
++  /// A stretch of [node]'s own text, keeping what makes it pressable.
++  static TextSpan _piece(TextSpan node, String text) => TextSpan(
++        text: text,
++        recognizer: node.recognizer,
++        mouseCursor: node.mouseCursor,
++      );
++
++  /// The size of every box in [span], in order, or null if one is not a box
++  /// of known width.
++  static List<PlaceholderDimensions>? _dimensions(InlineSpan span) {
++    final out = <PlaceholderDimensions>[];
++    var known = true;
++    span.visitChildren((child) {
++      if (child is! WidgetSpan) return true;
++      final box = child.child;
++      if (box is! SizedBox || box.width == null || box.child != null) {
++        known = false;
++        return false;
++      }
++      out.add(PlaceholderDimensions(
++        size: Size(box.width!, box.height ?? 0),
++        alignment: child.alignment,
++        baseline: child.baseline,
++        baselineOffset: child.alignment == PlaceholderAlignment.baseline
++            ? box.height ?? 0
++            : null,
++      ));
++      return true;
++    });
++    return known ? out : null;
++  }
++}
+diff --git a/lib/src/editor/widgets/text/text_block.dart b/lib/src/editor/widgets/text/text_block.dart
+index 47b5e01..7beb18d 100644
+--- a/lib/src/editor/widgets/text/text_block.dart
++++ b/lib/src/editor/widgets/text/text_block.dart
+@@ -84,6 +84,7 @@ class EditableTextBlock extends StatelessWidget {
+     this.customStyleBuilder,
+     this.customLinkPrefixes = const <String>[],
+     this.customLeadingBlockBuilder,
++    this.lineLayoutBuilder,
+     super.key,
+   });
+ 
+@@ -102,6 +103,9 @@ class EditableTextBlock extends StatelessWidget {
+   final EdgeInsets? contentPadding;
+   final EmbedsBuilder embedBuilder;
+   final TextSpanBuilder textSpanBuilder;
++
++  /// FOLIO PATCH: per-line indents and spacing.
++  final QuillLineLayoutBuilder? lineLayoutBuilder;
+   final LinkActionPicker linkActionPicker;
+   final ValueChanged<String>? onLaunchUrl;
+   final CustomRecognizerBuilder? customRecognizerBuilder;
+@@ -175,17 +179,26 @@ class EditableTextBlock extends StatelessWidget {
+     var index = 0;
+     for (final line in Iterable.castFrom<dynamic, Line>(block.children)) {
+       index++;
++      // FOLIO PATCH: the line's own indents and spacing, when it carries any.
++      final layout = lineLayoutBuilder?.call(line);
++      final vertical = _getSpacingForLine(line, index, count, defaultStyles);
+       final editableTextLine = EditableTextLine(
+           line,
+-          _buildLeading(
+-            context: context,
+-            line: line,
+-            index: index,
+-            indentLevelCounts: indentLevelCounts,
+-            count: count,
+-          ),
++          layout?.leading ??
++              _buildLeading(
++                context: context,
++                line: line,
++                index: index,
++                indentLevelCounts: indentLevelCounts,
++                count: count,
++              ),
+           TextLine(
+             line: line,
++            firstLineIndent: layout?.firstLine ?? 0,
++            hangingIndent: layout?.hanging ?? 0,
++            layoutWidth: layout?.width,
++            rowStarts: layout?.rows,
++            rowHeight: layout?.rowHeight,
+             textDirection: textDirection,
+             embedBuilder: embedBuilder,
+             textSpanBuilder: textSpanBuilder,
+@@ -199,8 +212,13 @@ class EditableTextBlock extends StatelessWidget {
+             customRecognizerBuilder: customRecognizerBuilder,
+             composingRange: composingRange,
+           ),
+-          indentWidthBuilder(block, context, count, numberPointWidthBuilder),
+-          _getSpacingForLine(line, index, count, defaultStyles),
++          layout?.horizontal ??
++              indentWidthBuilder(
++                  block, context, count, numberPointWidthBuilder),
++          layout == null
++              ? vertical
++              : VerticalSpacing(
++                  vertical.top + layout.top, vertical.bottom + layout.bottom),
+           textDirection,
+           textSelection,
+           color,
+diff --git a/lib/src/editor/widgets/text/text_line.dart b/lib/src/editor/widgets/text/text_line.dart
+index ee09dcc..1e72586 100644
+--- a/lib/src/editor/widgets/text/text_line.dart
++++ b/lib/src/editor/widgets/text/text_line.dart
+@@ -18,7 +18,9 @@ import '../../../document/nodes/leaf.dart' as leaf;
+ import '../box.dart';
+ import '../delegate.dart';
+ import '../keyboard_listener.dart';
++import '../page_geometry.dart';
+ import '../proxy.dart';
++import 'hanging_indent.dart';
+ import 'text_selection.dart';
+ 
+ class TextLine extends StatefulWidget {
+@@ -36,9 +38,28 @@ class TextLine extends StatefulWidget {
+     this.customStyleBuilder,
+     this.customRecognizerBuilder,
+     this.customLinkPrefixes = const <String>[],
++    this.firstLineIndent = 0,
++    this.rowHeight,
++    this.hangingIndent = 0,
++    this.layoutWidth,
++    this.rowStarts,
+     super.key,
+   });
+ 
++  /// FOLIO PATCH: room before the first visual line only, in logical pixels.
++  final double firstLineIndent;
++
++  /// FOLIO PATCH: room before every visual line but the first, drawn when
++  /// [layoutWidth], the width the text is laid out in, is known.
++  final double hangingIndent;
++  final double? layoutWidth;
++
++  /// FOLIO PATCH: where the rows start; see [QuillLineLayout.rows].
++  final List<int>? rowStarts;
++
++  /// FOLIO PATCH: see [QuillLineLayout.rowHeight].
++  final double? rowHeight;
++
+   final Line line;
+   final TextDirection? textDirection;
+   final EmbedsBuilder embedBuilder;
+@@ -58,6 +79,11 @@ class TextLine extends StatefulWidget {
+ }
+ 
+ class _TextLineState extends State<TextLine> {
++  /// FOLIO PATCH: where a hanging indent's room went, and what the line was
++  /// when it was found; see build.
++  String? _roomKey;
++  List<int>? _roomBreaks;
++
+   bool _metaOrControlPressed = false;
+ 
+   UniqueKey _richTextKey = UniqueKey();
+@@ -169,9 +195,85 @@ class _TextLineState extends State<TextLine> {
+         );
+       }
+     }
+-    final textSpan = _getTextSpanForWholeLine();
+-    final strutStyle =
+-        StrutStyle.fromTextStyle(textSpan.style ?? const TextStyle());
++    var textSpan = _getTextSpanForWholeLine();
++    // FOLIO PATCH: the line's own row height, for an empty line and for
++    // whatever run does not set one.
++    final rowHeight = widget.rowHeight;
++    final lineHeight = rowHeight == null
++        ? null
++        : rowHeight / (textSpan.style?.fontSize ?? kDefaultFontSize);
++    if (lineHeight != null && textSpan is TextSpan) {
++      textSpan = TextSpan(
++        text: textSpan.text,
++        children: textSpan.children,
++        style: (textSpan.style ?? const TextStyle()).copyWith(height: lineHeight),
++        recognizer: textSpan.recognizer,
++        mouseCursor: textSpan.mouseCursor,
++        semanticsLabel: textSpan.semanticsLabel,
++        locale: textSpan.locale,
++        spellOut: textSpan.spellOut,
++      );
++    }
++    // FOLIO PATCH: marks that make the line break where UYAP breaks it, and a
++    // hanging indent as room put ahead of each line after the first, found by
++    // laying the line out as it will be drawn. The proxy below keeps document
++    // offsets blind to both.
++    final lineText = widget.line.toPlainText();
++    final rowStarts = widget.rowStarts;
++    // Nothing goes among the spaces the line ends on: after a mark they
++    // would no longer hang past the edge, and would take a row of their own.
++    var trail = lineText.endsWith('\n')
++        ? lineText.length - 1
++        : lineText.length;
++    while (trail > 0 && lineText.codeUnitAt(trail - 1) == 0x20) {
++      trail--;
++    }
++    final marks = [
++      for (final m in rowStarts == null
++          ? HangingIndent.marks(lineText)
++          : HangingIndent.rowMarks(lineText, rowStarts))
++        if (m.offset <= trail) m,
++    ];
++    // FOLIO PATCH: with a row height of its own the line has no strut at
++    // all. StrutStyle.disabled is not that: it keeps a 14 px font's row as
++    // a floor, which a row laid out in points (12 pt, 14 px) was raised to
++    // 15 by; and a strut of one pixel, which sets no floor, is what the
++    // caret then takes its height and place from.
++    final strut = lineHeight != null
++        ? null
++        : StrutStyle.fromTextStyle(textSpan.style ?? const TextStyle());
++    final textScaler = MediaQuery.textScalerOf(context);
++    // Finding the room takes a layout per row, and Quill builds every line
++    // again at each keystroke; where it went is kept for as long as nothing
++    // that decides the line's layout has changed.
++    final roomKey = widget.hangingIndent > 0 && widget.layoutWidth != null
++        ? '${widget.layoutWidth}|${widget.hangingIndent}|'
++            '${widget.firstLineIndent}|$textScaler|'
++            '${HangingIndent.layoutKey(textSpan)}'
++        : null;
++    final kept = roomKey != null && roomKey == _roomKey ? _roomBreaks : null;
++    final room = HangingIndent.apply(
++      span: textSpan,
++      text: lineText,
++      marks: marks,
++      firstLine: widget.firstLineIndent,
++      hanging: widget.hangingIndent,
++      width: widget.layoutWidth,
++      breaks: rowStarts != null && widget.hangingIndent > 0 ? rowStarts : kept,
++      textDirection: widget.textDirection ?? TextDirection.ltr,
++      textScaler: textScaler,
++      strutStyle: strut,
++      locale: Localizations.localeOf(context),
++      // FOLIO PATCH: the paragraph mark, which sets the last row as a run
++      // does, drawn in the line's own style: the row of [rowHeight].
++      paragraphMark: rowHeight == null ? null : trail,
++    );
++    _roomKey = roomKey;
++    _roomBreaks = roomKey == null ? null : room.breaks;
++    textSpan = room.span;
++    final strutStyle = lineHeight != null
++        ? null
++        : StrutStyle.fromTextStyle(textSpan.style ?? const TextStyle());
+     final textAlign = _getTextAlign();
+     final child = RichText(
+       key: _richTextKey,
+@@ -188,6 +290,7 @@ class _TextLineState extends State<TextLine> {
+       strutStyle: strutStyle,
+       locale: Localizations.localeOf(context),
+       textScaler: MediaQuery.textScalerOf(context),
++      insertions: room.insertions,
+       child: child,
+     );
+   }
+@@ -805,7 +908,7 @@ class EditableTextLine extends RenderObjectWidget {
+ 
+ enum TextLineSlot { leading, body }
+ 
+-class RenderEditableTextLine extends RenderEditableBox {
++class RenderEditableTextLine extends RenderEditableBox with QuillPagedHost {
+   /// Creates new editable paragraph render box.
+   RenderEditableTextLine(
+     this.line,
+@@ -1089,13 +1192,18 @@ class RenderEditableTextLine extends RenderEditableBox {
+ 
+   TextPosition? _getPosition(TextPosition textPosition, double dyScale) {
+     assert(textPosition.offset < line.length);
+-    final offset = getOffsetForCaret(textPosition)
+-        .translate(0, dyScale * preferredLineHeight(textPosition));
+-    if (_body!.size
+-        .contains(offset - (_body!.parentData as BoxParentData).offset)) {
+-      return getPositionForOffset(offset);
+-    }
+-    return null;
++    // FOLIO PATCH: pages. Moved a row at a time as the paragraph is laid
++    // out, so a step down from the last row of a page lands on the first
++    // row of the next, not in the room between them.
++    final body = _body!;
++    final bodyOffset = (body.parentData as BoxParentData).offset;
++    var local = getOffsetForCaret(textPosition) - bodyOffset;
++    final proxy = body is RenderParagraphProxy ? body : null;
++    if (proxy != null) local = Offset(local.dx, proxy.laidY(local.dy));
++    local = local.translate(0, dyScale * preferredLineHeight(textPosition));
++    if (!body.size.contains(local)) return null;
++    if (proxy != null) local = Offset(local.dx, proxy.drawnY(local.dy));
++    return getPositionForOffset(local + bodyOffset);
+   }
+ 
+   @override
+@@ -1276,6 +1384,71 @@ class RenderEditableTextLine extends RenderEditableBox {
+         _resolvedPadding!.top;
+   }
+ 
++  /// FOLIO PATCH: pages. Where the line's rows fall on the pages it is
++  /// laid out on: returns how far the whole line moves down, when its first
++  /// row, with the space above it, does not fit on what is left of a page,
++  /// and hands the paragraph the gaps before any later row that does not.
++  /// The space below the line counts for neither, as in UYAP.
++  double _pageBreaks() {
++    final body = _body;
++    final paged = constraints is PagedBoxConstraints
++        ? constraints as PagedBoxConstraints
++        : null;
++    final proxy = body is RenderParagraphProxy ? body : null;
++    if (paged == null) {
++      proxy?.pageGaps = const [];
++      return 0;
++    }
++    final pages = paged.pages;
++    final top = paged.top;
++    final padding = _resolvedPadding!.top;
++    // A table in the line breaks its own pages, row by row of its cells.
++    if (hasPagedDependents) {
++      proxy?.pageGaps = const [];
++      return 0;
++    }
++    // A line of one picture or table, or of anything not a paragraph, is
++    // one row and moves whole.
++    final height = body!.size.height;
++    final rows = proxy == null || _containsEmbed()
++        ? [(top: 0.0, bottom: height, inkTop: 0.0, inkBottom: height)]
++        : proxy.rows;
++    final above = pages.push(top, top + padding + rows.first.bottom);
++    final gaps = <({double from, double shift, double cut})>[];
++    var shift = 0.0;
++    for (var i = 1; i < rows.length; i++) {
++      final row = rows[i];
++      final at = top + above + padding + row.top + shift;
++      final push = pages.push(at, at + row.bottom - row.top);
++      if (push == 0) continue;
++      shift += push;
++      // Just under the letters of the row above: their descenders reach a
++      // hair below the font's descent, and at single spacing into the top
++      // of the row below, so cut at the descent the page would show the
++      // tails of "g" and "ş" over the next page's first row. A twentieth of
++      // a row — a pixel at 12 point — takes them all (measured on the
++      // printed-page fonts) and stays clear of the capitals' accents below.
++      final previous = rows[i - 1];
++      final cut =
++          previous.inkBottom + (previous.bottom - previous.top) * .06;
++      gaps.add((from: row.top, shift: shift, cut: cut));
++    }
++    proxy?.pageGaps = gaps;
++    return above;
++  }
++
++  QuillPageGeometry? _hostedPages;
++
++  @override
++  QuillPageGeometry? pagesFor(RenderObject child) => _hostedPages;
++
++  double get _pageGapHeight {
++    final body = _body;
++    return body is RenderParagraphProxy ? body.pageGapHeight : 0;
++  }
++
++  bool _containsEmbed() => line.hasEmbed;
++
+   @override
+   void performLayout() {
+     final constraints = this.constraints;
+@@ -1297,9 +1470,20 @@ class RenderEditableTextLine extends RenderEditableBox {
+         ? _resolvedPadding!.left
+         : _resolvedPadding!.right;
+ 
++    // FOLIO PATCH: pages. What asks below for the pages sees them from the
++    // top of the body; when that moves, it is laid out again.
++    final paged = constraints is PagedBoxConstraints
++        ? constraints as PagedBoxConstraints
++        : null;
++    final hosted = paged?.pages.shifted(paged.top + _resolvedPadding!.top);
++    if (hosted != _hostedPages) {
++      _hostedPages = hosted;
++      relayoutPagedDependents();
++    }
+     _body!.layout(innerConstraints, parentUsesSize: true);
++    final above = _pageBreaks();
+     (_body!.parentData as BoxParentData).offset =
+-        Offset(_resolvedPadding!.left, _resolvedPadding!.top);
++        Offset(_resolvedPadding!.left, above + _resolvedPadding!.top);
+ 
+     if (_leading != null) {
+       final leadingConstraints = innerConstraints.copyWith(
+@@ -1308,12 +1492,16 @@ class RenderEditableTextLine extends RenderEditableBox {
+           maxHeight: _body!.size.height);
+       _leading!.layout(leadingConstraints, parentUsesSize: true);
+       (_leading!.parentData as BoxParentData).offset =
+-          Offset(0, _resolvedPadding!.top);
++          Offset(0, above + _resolvedPadding!.top);
+     }
+ 
+     size = constraints.constrain(Size(
+       _resolvedPadding!.left + _body!.size.width + _resolvedPadding!.right,
+-      _resolvedPadding!.top + _body!.size.height + _resolvedPadding!.bottom,
++      above +
++          _resolvedPadding!.top +
++          _body!.size.height +
++          _pageGapHeight +
++          _resolvedPadding!.bottom,
+     ));
+ 
+     _computeCaretPrototype();
+diff --git a/lib/src/editor/widgets/text/utils/text_block_utils.dart b/lib/src/editor/widgets/text/utils/text_block_utils.dart
+index a9ede7a..73b3a09 100644
+--- a/lib/src/editor/widgets/text/utils/text_block_utils.dart
++++ b/lib/src/editor/widgets/text/utils/text_block_utils.dart
+@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
+ import '../../../../common/structs/horizontal_spacing.dart';
+ import '../../../../document/attribute.dart';
+ import '../../../../document/nodes/block.dart';
++import '../../../../document/nodes/line.dart';
+ import '../../../../document/nodes/node.dart';
+ import '../../default_styles.dart';
+ 
+@@ -16,6 +17,60 @@ typedef LeadingBlockIndentWidth = HorizontalSpacing Function(
+ typedef LeadingBlockNumberPointWidth = double Function(
+     double fontSize, int count);
+ 
++// FOLIO PATCH: per-line layout. Quill takes a paragraph's indents and
++// spacing from global styles only; a document read from Word or UYAP carries
++// its own for every paragraph. See third_party/flutter_quill/FOLIO_PATCH.md.
++@immutable
++class QuillLineLayout {
++  const QuillLineLayout({
++    this.horizontal,
++    this.top = 0,
++    this.bottom = 0,
++    this.firstLine = 0,
++    this.rowHeight,
++    this.leading,
++    this.hanging = 0,
++    this.width,
++    this.rows,
++  });
++
++  /// Replaces the left/right spacing Quill would give the line when set.
++  final HorizontalSpacing? horizontal;
++
++  /// Added to the vertical spacing Quill would give the line.
++  final double top, bottom;
++
++  /// Extra room before the first visual line of the paragraph only.
++  final double firstLine;
++
++  /// The row, in pixels, of the paragraph mark, which is drawn at the end of
++  /// the line in the line's own style and so sets the last row as a run does
++  /// — all of an empty line's. It also turns the strut off,
++  /// so every run sets its row by its own style rather than being held to the
++  /// paragraph's default size.
++  final double? rowHeight;
++
++  /// Drawn in place of the list number or bullet Quill would draw, in the
++  /// room the line's left spacing leaves beside it.
++  final Widget? leading;
++
++  /// Extra room before every visual line of the paragraph but the first.
++  final double hanging;
++
++  /// The width the paragraph's text is laid out in, which finding where its
++  /// lines break takes before it is drawn. A hanging indent is only drawn
++  /// with it.
++  final double? width;
++
++  /// Where the paragraph's rows start, as offsets in the line, the first
++  /// row's 0 left out: laid out by the app by the rules the printed page is
++  /// laid out by. The line then breaks there and nowhere else, so the
++  /// editor's rows are the page's.
++  final List<int>? rows;
++}
++
++typedef QuillLineLayoutBuilder = QuillLineLayout? Function(Line line);
++
+ typedef TextSpanBuilder = InlineSpan Function(
+   BuildContext context,
+   Node node,

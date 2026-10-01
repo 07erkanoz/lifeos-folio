@@ -1,0 +1,8 @@
+[Unit]
+Description=LifeOS Folio: publish a release once GitHub has finished sending it
+
+[Path]
+PathExists=/var/lib/folio-release/incoming/READY
+
+[Install]
+WantedBy=paths.target

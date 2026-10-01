@@ -1,0 +1,7 @@
+# Preserve PDF byte offsets and xref records.
+*.pdf binary
+
+# Preserve vendored binaries and upstream license notices exactly on all hosts.
+native_tools/*/bin/* binary
+native_tools/*/tessdata/* binary
+native_tools/licenses/** -text -whitespace

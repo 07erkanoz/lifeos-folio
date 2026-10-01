@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=LifeOS Editör
+GenericName=Belge editörü
+Comment=Boş bir UDF ile açılan dilekçe ve belge editörü
+Exec=lifeos_editor %F
+Icon=com.erkanoz.lifeos_editor
+StartupWMClass=com.erkanoz.lifeos_editor
+Terminal=false
+Categories=Office;WordProcessor;
+MimeType=application/x-uyap-udf;application/udf;application/x-udf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;application/rtf;text/rtf;text/plain;

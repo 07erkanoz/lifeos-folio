@@ -1,0 +1,11 @@
+{
+  "bin/jpegtran.exe": "e3a9a11caa6b7ae7668f5098e9a7f7ccfe234859e63573381a1d5f282d4fda81",
+  "bin/libjpeg-62.dll": "7444620961311832fb4dadf7a34d1782704a58485c2965e3f07d33e913077b91",
+  "bin/libtiff-6.dll": "19805ff587b35af80a675ac67c6046f69b70b3f7b571f3823a8f770251c6f498",
+  "bin/libzlib.dll": "0cbe93ad141786199db23f2328b79f723acdb2eb10d0e7e0ae6def6e23e36a49",
+  "bin/qpdf.exe": "bce8fdd8a757c7d4b0e58d8778f6bf43cdcc27bf773f5aecbe1c9ea2bc69b05d",
+  "bin/tesseract.exe": "d48697c9b16d7e1f87009cdd20b3bc51caa2d1d906d41e275d16330061553b71",
+  "bin/tiffcp.exe": "07e7c826ff010d919522ba75e51e49a60b5a6fafff095ddf3243136b2214289d",
+  "tessdata/tur.traineddata": "7393381111e1152420fc4092cb44eef4237580d21b92bf30d7d221aad192c6b7",
+  "tessdata/tur_best.traineddata": "e0c3338dc17503dc7d335a507c9ae01b2b46cfd07561171e1e1ac55d85e8e438"
+}

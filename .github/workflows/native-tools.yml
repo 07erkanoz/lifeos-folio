@@ -1,0 +1,58 @@
+name: Paketlenen belge araçlarını yeniden derle
+run-name: LifeOS Folio · native tools · ${{ inputs.target }}
+# The binaries under native_tools/ are committed, not built during an app build.
+# This workflow rebuilds them from the pinned sources so a maintainer does not
+# need a local MinGW toolchain, then publishes the result for review and commit.
+# It never pushes: a tool that ships with the app is reviewed before it lands.
+# The result leaves as a prerelease rather than an Actions artifact, the same
+# move the app's test packages already made: that storage is a small shared
+# quota, and a rebuild that cannot hand over what it built is wasted.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Derlenecek hedef
+        required: true
+        default: windows
+        type: choice
+        options: [windows, linux]
+permissions:
+  # Creating the prerelease that carries the rebuilt tools out. Nothing is
+  # written to a branch; the binaries still land only by a reviewed commit.
+  contents: write
+concurrency:
+  group: folio-native-tools-${{ inputs.target }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Derleme araçlarını kur
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build
+          if [ "${{ inputs.target }}" = windows ]; then
+            sudo apt-get install -y --no-install-recommends mingw-w64
+          fi
+      - name: Sabitlenmiş kaynaklardan derle
+        run: |
+          if [ "${{ inputs.target }}" = windows ]; then
+            python3 packaging/native/build_tools.py windows --work "$RUNNER_TEMP/work" \
+              --toolchain packaging/native/mingw-w64-x86_64.cmake \
+              --strip x86_64-w64-mingw32-strip
+          else
+            python3 packaging/native/build_tools.py linux --work "$RUNNER_TEMP/work"
+          fi
+      - name: Sağlama toplamlarını ve bağımlılıkları doğrula
+        # Windows binaries are checked by reading their PE imports, which works
+        # on Linux; the smoke test needs the target OS and runs in the platform
+        # build workflow instead.
+        run: python3 packaging/native/verify.py ${{ inputs.target }}-x64
+      - name: Değişen dosyaları göster
+        run: git -c core.quotepath=false status --short native_tools/
+      - name: Sonucu yayımla
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash packaging/native/upload-tools.sh ${{ inputs.target }}

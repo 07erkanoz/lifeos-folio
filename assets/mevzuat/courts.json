@@ -1,0 +1,32 @@
+{
+  "surum": 2,
+  "aciklama": "Karar atıflarında tanınan mahkemeler. 'yayin': kararları resmî bir karar bankasında bulunuyor mu; ilk derece mahkemelerinin kararları bir dilekçede geçtiğinde çoğu zaman yazanın kendi dosyasıdır ve işaretlenmez. 'kaynak': karar nereden istenir (bedesten: Bedesten, yoksa UYAP Emsal; aym: Anayasa Mahkemesi karar bilgi bankası). 'tur': aynı esas/karar numarası birden çok yerde çıktığında belgede yazan mahkemenin türü öne alınır. 'etiket': dairenin gösterilen adı, {d} daire numarasıdır. Kalıptaki {no} daire numarasının yazılışıdır: '15.', '15' ya da 'On Beşinci'. Bölge İdare Mahkemesi kararları 26 Eylül 2026'da Bedesten'in beş koleksiyonunda, mevzuat.adalet.gov.tr'de ve UYAP Emsal'in birim listelerinde bulunamadı; bu yüzden yayımlanmıyor sayılır. Eşit uzaklıkta biten iki kalıptan tabloda önce geleni kazanır: daireli adlar genel adlardan önce yazılır.",
+  "mahkemeler": [
+    {"ad": "Yargıtay Büyük Genel Kurulu", "yayin": true, "kaynak": "bedesten", "tur": "yargitay", "kalip": "Büyük\\s+Genel\\s+Kurulu|\\bYBGK\\b"},
+    {"ad": "Yargıtay Hukuk Genel Kurulu", "yayin": true, "kaynak": "bedesten", "tur": "yargitay", "kalip": "(?:Yargıtay\\s+)?Hukuk\\s+Genel\\s+Kurulu|\\bYHGK\\b|\\bH\\.?G\\.?K\\b"},
+    {"ad": "Yargıtay Ceza Genel Kurulu", "yayin": true, "kaynak": "bedesten", "tur": "yargitay", "kalip": "(?:Yargıtay\\s+)?Ceza\\s+Genel\\s+Kurulu|\\bYCGK\\b|\\bC\\.?G\\.?K\\b"},
+    {"ad": "Danıştay İdari Dava Daireleri Kurulu", "yayin": true, "kaynak": "bedesten", "tur": "danistay", "kalip": "İdari\\s+Dava\\s+Daireleri\\s+Kurulu|(?<![A-Za-zÇĞİÖŞÜçğıöşü])İDDK(?![A-Za-zÇĞİÖŞÜçğıöşü])"},
+    {"ad": "Danıştay Vergi Dava Daireleri Kurulu", "yayin": true, "kaynak": "bedesten", "tur": "danistay", "kalip": "Vergi\\s+Dava\\s+Daireleri\\s+Kurulu|\\bVDDK\\b"},
+    {"ad": "Danıştay İçtihadı Birleştirme Kurulu", "yayin": true, "kaynak": "bedesten", "tur": "danistay", "kalip": "Danıştay\\s+İçtihad[ıi]\\s+Birleştirme(?:\\s+Kurulu)?"},
+    {"ad": "İçtihadı Birleştirme Kurulu", "yayin": true, "kaynak": "bedesten", "tur": "yargitay", "kalip": "İçtihad[ıi]\\s+Birleştirme|\\bYİBK\\b"},
+    {"ad": "Anayasa Mahkemesi", "yayin": true, "kaynak": "aym", "tur": "aym", "kalip": "Anayasa\\s+Mahkemesi|\\bAYM\\b|ANY\\.?\\s*MAH"},
+    {"ad": "Danıştay Dairesi", "yayin": true, "kaynak": "bedesten", "tur": "danistay", "etiket": "Danıştay {d}. Daire", "kalip": "Danıştay\\s+{no}\\s*(?:Daire(?:si)?|D\\b)|\\bD\\s*\\.\\s*\\d{1,2}\\s*\\.\\s*D\\b"},
+    {"ad": "Danıştay", "yayin": true, "kaynak": "bedesten", "tur": "danistay", "kalip": "Danıştay"},
+    {"ad": "Bölge Adliye Mahkemesi Hukuk Dairesi", "yayin": true, "kaynak": "bedesten", "tur": "bam", "etiket": "Bölge Adliye Mahkemesi {d}. Hukuk Dairesi", "kalip": "(?:Bölge\\s+Adliye\\s+Mahkemesi(?:'?nin)?|\\bBAM\\b)[\\s,.]*(?:[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\\s+){0,2}{no}\\s*(?:Hukuk\\s+Dairesi|H\\.?\\s*D\\b)"},
+    {"ad": "Bölge Adliye Mahkemesi Ceza Dairesi", "yayin": true, "kaynak": "bedesten", "tur": "bam", "etiket": "Bölge Adliye Mahkemesi {d}. Ceza Dairesi", "kalip": "(?:Bölge\\s+Adliye\\s+Mahkemesi(?:'?nin)?|\\bBAM\\b)[\\s,.]*(?:[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\\s+){0,2}{no}\\s*(?:Ceza\\s+Dairesi|C\\.?\\s*D\\b)"},
+    {"ad": "Bölge İdare Mahkemesi", "yayin": false, "tur": "bim", "kalip": "Bölge\\s+İdare\\s+Mahkemesi|\\bBİM\\b"},
+    {"ad": "Bölge Adliye Mahkemesi", "yayin": true, "kaynak": "bedesten", "tur": "bam", "kalip": "Bölge\\s+Adliye\\s+Mahkemesi|\\bBAM\\b"},
+    {"ad": "Asliye Hukuk Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "Asliye\\s+Hukuk|\\bAHM\\b|Asliye\\s+Ticaret|\\bATM\\b"},
+    {"ad": "Asliye Ceza Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "Asliye\\s+Ceza|Ağır\\s+Ceza"},
+    {"ad": "Sulh Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "Sulh\\s+Hukuk|Sulh\\s+Ceza"},
+    {"ad": "Aile Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "Aile\\s+Mahkemesi"},
+    {"ad": "İcra Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "İcra\\s+(?:Hukuk|Ceza)|İcra\\s+Mahkemesi"},
+    {"ad": "İş Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "İş\\s+Mahkemesi"},
+    {"ad": "Tüketici Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "Tüketici\\s+Mahkemesi|Tüketici\\s+Hakem"},
+    {"ad": "İdare/Vergi Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "İdare\\s+Mahkemesi|Vergi\\s+Mahkemesi"},
+    {"ad": "Kadastro Mahkemesi", "yayin": false, "tur": "ilk", "kalip": "Kadastro\\s+Mahkemesi"},
+    {"ad": "Hukuk Dairesi", "yayin": true, "kaynak": "bedesten", "tur": "yargitay", "kalip": "(?:Yargıtay\\s+|Y\\.\\s*)?{no}\\s*(?:Hukuk\\s+Dairesi|H\\.?\\s*D\\b)"},
+    {"ad": "Ceza Dairesi", "yayin": true, "kaynak": "bedesten", "tur": "yargitay", "kalip": "(?:Yargıtay\\s+|Y\\.\\s*)?{no}\\s*(?:Ceza\\s+Dairesi|C\\.?\\s*D\\b)"},
+    {"ad": "Yargıtay", "yayin": true, "kaynak": "bedesten", "tur": "yargitay", "kalip": "Yargıtay"}
+  ]
+}

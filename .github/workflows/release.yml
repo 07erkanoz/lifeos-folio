@@ -1,0 +1,293 @@
+name: Sürüm yayınla
+run-name: LifeOS Folio ${{ github.ref_name }}
+# Pushing a tag v<version> that matches pubspec.yaml builds Folio for Windows,
+# Linux and Android, signs one update manifest per platform and publishes
+# them all as a GitHub Release, then sends them to lifeos.com.tr, which
+# publishes them once it has checked their signatures (packaging/server).
+#
+# The packages travel through a draft of that release rather than workflow
+# artifacts, whose storage quota a private repository soon fills. The draft
+# becomes the release only once every package is in it and signed for.
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: read
+concurrency:
+  group: folio-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  version:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - id: read
+        name: Etiket, pubspec ve sürüm notları uyuşuyor mu
+        run: |
+          version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+[[:space:]]*$/\1/p' pubspec.yaml)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Etiket $GITHUB_REF_NAME, pubspec.yaml ise $version diyor."
+            exit 1
+          fi
+          notes="packaging/release/notes/$version.json"
+          jq -e '(.tr | type == "string" and length > 0) and (.en | type == "string" and length > 0)' "$notes" >/dev/null || {
+            echo "::error::$notes yok ya da tr/en notu eksik."
+            exit 1
+          }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Taslak sürümü aç
+        # A draft left by an earlier, failed run of the same tag is replaced;
+        # a release already published is never touched.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [ "$draft" = false ]; then
+            echo "::error::$GITHUB_REF_NAME zaten yayımlanmış."
+            exit 1
+          fi
+          if [ "$draft" = true ]; then
+            gh release delete "$GITHUB_REF_NAME" --yes
+          fi
+          jq -r '"\(.tr)\n\n\(.en)"' "packaging/release/notes/$VERSION.json" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "LifeOS Folio $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+
+  tests:
+    needs: version
+    uses: ./.github/workflows/tests.yml
+
+  windows:
+    needs: version
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Paketli araçları ve DLL dosyalarını doğrula
+        run: python packaging/native/verify.py windows-x64 --smoke
+      - run: flutter build windows --release
+      - name: Windows kurulum paketini oluştur
+        shell: pwsh
+        run: ./packaging/windows/build-installer.ps1
+      - name: Kurulum ve kaldırmayı doğrula
+        shell: pwsh
+        run: ./packaging/windows/test-installer.ps1
+      - name: Taslak sürüme yükle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "build/windows/installer/LifeOS-Folio-${{ needs.version.outputs.version }}-Windows-x64-Setup.exe" --clobber
+
+  linux:
+    needs: version
+    permissions:
+      contents: write
+    # The bundled qpdf and Tesseract were built against glibc 2.38, so the
+    # package needs Ubuntu 24.04, Debian 13 or Pardus 25 and later whatever
+    # it is built on; build it where those tools were built.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Linux derleme araçları
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev \
+            libayatana-appindicator3-dev libwebkit2gtk-4.1-dev
+      - name: Paketli araçları doğrula
+        run: python3 packaging/native/verify.py linux-x64 --smoke
+      - run: flutter build linux --release
+      - name: Linux paketini oluştur
+        run: bash packaging/linux/make-release.sh
+      - name: Paketten kurulumu dene
+        run: |
+          work="$RUNNER_TEMP/kur"
+          mkdir -p "$work"
+          tar -C "$work" -xzf artifacts/LifeOS-Folio-*-Linux-x64.tar.gz
+          XDG_DATA_HOME="$work/data" sh "$work/LifeOS-Folio/kur.sh"
+          test -x "$work/data/lifeos-folio/lifeos_folio"
+          test -x "$work/data/lifeos-folio/tools/bin/tesseract"
+          grep -q "lifeos-folio/lifeos_folio" "$work/data/applications/com.erkanoz.evrak_convert.desktop"
+      - name: Taslak sürüme yükle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "artifacts/LifeOS-Folio-${{ needs.version.outputs.version }}-Linux-x64.tar.gz" --clobber
+
+  android:
+    needs: version
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Release imza anahtarını yerleştir
+        # A published APK must carry Folio's own key: Android installs an
+        # update only over an app signed by the same one. So unlike the test
+        # builds, a missing key stops the release. Written to the runner's
+        # temporary folder, never into the repository.
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::error::Android release anahtarı tanımlı değil."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/folio-release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/folio-release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+      # One APK for every phone, so there is one file to offer and one
+      # manifest to check against.
+      - run: flutter build apk --release
+      - name: APK'nın Folio anahtarıyla imzalandığını doğrula
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          # build-tools 37.0.0's apksigner exits 0 printing nothing, even with
+          # -v; 36.0.0 prints the signers.
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          if [ ! -x "$tools/apksigner" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0" > /dev/null
+          fi
+          apksigner="$tools/apksigner"
+          echo "apksigner: $apksigner ($("$apksigner" version 2>&1 | tail -1))"
+          "$apksigner" verify -v --print-certs build/app/outputs/flutter-apk/app-release.apk \
+            > "$RUNNER_TEMP/certs.txt" 2>&1 || cat "$RUNNER_TEMP/certs.txt"
+          # Every signer the APK has, however this apksigner words the line
+          # ("Signer #1 …" or "Signer (minSdkVersion=…) …"); all must be Folio's.
+          signed="$(sed -nE 's/^Signer.* certificate SHA-256 digest: ([0-9a-f]{64}).*$/\1/p' "$RUNNER_TEMP/certs.txt" | sort -u | tr '\n' ' ' | sed 's/ $//')"
+          expected="$(keytool -exportcert -keystore "$RUNNER_TEMP/folio-release.jks" \
+            -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" | sha256sum | cut -d' ' -f1)"
+          # Fingerprints of public certificates; nothing secret.
+          echo "APK imzası:       ${signed:-okunamadı}"
+          echo "Folio sertifikası: $expected"
+          if [ -z "$signed" ] || [ "$signed" != "$expected" ]; then
+            cat "$RUNNER_TEMP/certs.txt"
+            echo "::error::APK Folio'nun release anahtarıyla imzalanmamış."
+            exit 1
+          fi
+      - name: APK'yı adlandır
+        run: |
+          mkdir -p artifacts
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "artifacts/LifeOS-Folio-${{ needs.version.outputs.version }}-Android.apk"
+      - name: Taslak sürüme yükle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "artifacts/LifeOS-Folio-${{ needs.version.outputs.version }}-Android.apk" --clobber
+
+  publish:
+    needs: [version, tests, windows, linux, android]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Paketleri taslaktan al
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$GITHUB_REF_NAME" --pattern 'LifeOS-Folio-*' --dir packages
+      - name: Sürüm bilgilerini imzala
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          notes="packaging/release/notes/$VERSION.json"
+          mkdir -p release
+          sign() {
+            dart run tool/release/sign_manifest.dart --platform "$1" --file "packages/$2" \
+              --notes-tr "$(jq -r .tr "$notes")" --notes-en "$(jq -r .en "$notes")" \
+              > "release/$1.json"
+          }
+          sign windows-x64 "LifeOS-Folio-$VERSION-Windows-x64-Setup.exe"
+          sign linux-x64 "LifeOS-Folio-$VERSION-Linux-x64.tar.gz"
+          sign android "LifeOS-Folio-$VERSION-Android.apk"
+          (cd packages && sha256sum LifeOS-Folio-* > ../release/SHA256SUMS.txt)
+          cat release/SHA256SUMS.txt
+      - name: İmzalı sürüm bilgilerini taslağa ekle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" release/* --clobber
+      - name: lifeos.com.tr'ye gönder
+        # The key can only drop files into the server's incoming folder;
+        # the server publishes them only if the signatures above check out.
+        # READY goes last: it is what starts the server's check.
+        env:
+          DEPLOY_KEY: ${{ secrets.FOLIO_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.FOLIO_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 600 /dev/null "$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
+          ssh="ssh -i $RUNNER_TEMP/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+          mkdir -p outgoing
+          cp packages/LifeOS-Folio-* release/*.json outgoing/
+          rsync -rt -e "$ssh" outgoing/ folio-release@sbyazilim.info:
+          touch "$RUNNER_TEMP/READY"
+          rsync -t -e "$ssh" "$RUNNER_TEMP/READY" folio-release@sbyazilim.info:READY
+      - name: Sitede yayında mı
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          for platform in windows-x64 linux-x64 android; do
+            for attempt in $(seq 1 30); do
+              seen="$(curl -fsS -H 'Cache-Control: no-cache' "https://lifeos.com.tr/surum/stable/$platform.json" | jq -r .version || true)"
+              [ "$seen" = "$VERSION" ] && break
+              sleep 10
+            done
+            if [ "$seen" != "$VERSION" ]; then
+              echo "::error::lifeos.com.tr $platform için $VERSION göstermiyor (${seen:-yok})."
+              exit 1
+            fi
+            url="$(curl -fsS "https://lifeos.com.tr/surum/stable/$platform.json" | jq -r .url)"
+            curl -fsSI "$url" > /dev/null
+            echo "$platform: $VERSION yayında, $url"
+          done
+      - name: Sürümü yayımla
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest

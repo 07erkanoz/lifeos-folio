@@ -1,0 +1,15 @@
+[Unit]
+Description=LifeOS Folio: check and publish the release GitHub sent
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/folio-release/folio_release_publish.py
+# Root only to hand the files to the site's owner; it may write nowhere
+# but the site and its own folder.
+ProtectSystem=strict
+ReadWritePaths=/var/www/vhosts/lifeos.com.tr/httpdocs /var/lib/folio-release
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+Nice=10

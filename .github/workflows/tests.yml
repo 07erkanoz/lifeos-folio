@@ -1,0 +1,75 @@
+name: Testler
+run-name: LifeOS Folio · testler · ${{ github.sha }}
+# Nothing ran the suite until now, and it showed: eight tests were failing on a
+# maintainer's machine without anyone being told, and the tests that matter most
+# for OCR were skipping silently because the bundled binaries were not on PATH.
+# A suite no job runs is a suite that drifts.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # The release workflow runs the same suite on the commit it publishes.
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: folio-tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows-clipboard:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Windows pano köprüsünü derle
+        run: |
+          cmake -S test/native/windows -B build/clipboard-test
+          cmake --build build/clipboard-test --config Debug
+      - name: Gerçek Win32 panosunda HTML, RTF ve UYAP verisini doğrula
+        run: ctest --test-dir build/clipboard-test -C Debug --output-on-failure
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Statik analiz
+        run: flutter analyze
+      - name: Paketlenen araçları PATH'e ekle
+        # OcrService looks beside the running executable and then along PATH.
+        # Under `flutter test` the executable is the test runner, so without
+        # this the OCR tests find no Tesseract and skip themselves — which is
+        # how a multi-page scan stayed broken while the suite looked green.
+        run: echo "$GITHUB_WORKSPACE/native_tools/linux-x64/bin" >> "$GITHUB_PATH"
+      - name: Araçların gerçekten bulunduğunu doğrula
+        # Skipping is the failure mode this job exists to prevent, and a skipped
+        # test still reports success. Fail here instead, where it is legible.
+        run: tesseract --list-langs
+      - name: Testler
+        run: flutter test
+      - name: Linux derleme araçları
+        # The Linux runner carries C++ of its own — the spelling bridge, the
+        # file actions, the quick search — and nothing compiled any of it:
+        # the tests never build a runner, and the only packaging job builds
+        # Windows. So it was written and shipped unbuilt.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev \
+            libayatana-appindicator3-dev libwebkit2gtk-4.1-dev
+      - name: Linux uygulamasını derle
+        run: flutter build linux --release
+      - name: LifeOS Editör pakette
+        # The editor is a second program built from the same runner; a bundle
+        # without it would install a menu entry that opens nothing.
+        run: |
+          test -x build/linux/x64/release/bundle/lifeos_folio
+          test -x build/linux/x64/release/bundle/lifeos_editor
+          # The e-Devlet window for logging into UYAP.
+          test -x build/linux/x64/release/bundle/folio-edevlet
+          test -f build/linux/x64/release/bundle/data/flutter_assets/assets/branding/lifeos_editor.png

@@ -1,0 +1,54 @@
+{
+ "01-satirlar.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Satır 51 ile tanık beyan"
+ ],
+ "02-bolunen.udf": [
+  "Satır 01 dava dilekçesi ",
+  "sunulan belgeler ile tan"
+ ],
+ "03-yetim.udf": [
+  "Satır 01 dava dilekçesi ",
+  "değerlendirildiğinde dav"
+ ],
+ "04-dul.udf": [
+  "Satır 01 dava dilekçesi ",
+  "açıkça anlaşılmaktadır d"
+ ],
+ "05-aralik.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Üstünde boşluk olan ilk "
+ ],
+ "06-aralik-sigmayan.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Aralıklı satır B"
+ ],
+ "07-tablo.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Hücre 5 a"
+ ],
+ "08-aralik15.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Satır 36 ile tanık beyan"
+ ],
+ "09-bos.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Sonra 01 dava dilekçesi "
+ ],
+ "10-tablo-uzun-hucre.udf": [
+  "Satır 01 dava dilekçesi ",
+  "belgeler ile tanık beyan"
+ ],
+ "11-ust-alt.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Satır 51 ile tanık beyan"
+ ],
+ "12-uc-satir-ust.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Satır 54 birlikte değerl"
+ ],
+ "14-uc-satir-alt.udf": [
+  "Satır 01 dava dilekçesi ",
+  "Satır 54 birlikte değerl"
+ ]
+}

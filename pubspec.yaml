@@ -1,0 +1,134 @@
+name: evrak_convert
+description: "LifeOS Folio — belge ve görsel önizleme, dönüştürme ve arşivleme"
+publish_to: 'none'
+
+version: 1.2.0+4
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  intl: ^0.20.2
+  archive: ^4.0.4
+  asn1lib: ^1.6.5
+  ffi: ^2.1.4
+  crypto: ^3.0.6
+  pointycastle: ^4.0.0
+  image: ^4.5.4
+  file_picker: 11.0.3
+  desktop_drop: ^0.7.1
+  pdfrx: ^2.4.4
+  # PDFium without the Flutter binding, so the index isolate can rasterize
+  # scanned pages for OCR where `pdfrxFlutterInitialize` cannot run.
+  pdfrx_engine: ^0.6.0
+  pdfium_dart: ^0.3.0
+  pdf: ^3.11.3
+  printing: ^5.14.2
+  flutter_quill: ^11.5.1
+  quill_native_bridge: ^11.1.0
+  docx_creator: 1.3.4
+  xml: ^7.0.1
+  html: ^0.15.6
+  markdown: ^7.3.1
+  flutter_svg: ^2.3.0
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  sqlite3: ^2.9.4
+  sqlite3_flutter_libs: 0.5.42
+  watcher: ^1.2.1
+  window_manager: ^0.5.1
+  tray_manager: 0.5.3
+  dbus: ^0.7.15
+  url_launcher: ^6.3.2
+  worksheet: ^3.9.2
+  excel_plus: ^2.23.0
+  google_mlkit_document_scanner: ^0.6.1
+  cryptography: ^2.9.0
+  package_info_plus: ^9.0.1
+  sherpa_onnx: ^1.13.8
+  flutter_soloud: ^5.1.5
+  flutter_recorder: ^2.0.5
+  webview_windows: ^0.4.0
+
+# flutter_quill has no way to give one paragraph its own indents and spacing,
+# which every Word and UYAP document does. The patched copy adds exactly that;
+# third_party/flutter_quill/FOLIO_PATCH.md says what changed and how to redo it.
+dependency_overrides:
+  flutter_quill:
+    path: third_party/flutter_quill
+
+dev_dependencies:
+  integration_test:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/legal/
+    - assets/mevzuat/laws.json
+    - assets/mevzuat/terms.json
+    - assets/mevzuat/courts.json
+    - assets/sozluk/terms.json
+    - assets/ses/okuma.json
+    - assets/mevzuat/mevzuat-chain.pem
+    - fonts/pdf/
+    - assets/branding/
+    - packaging/windows/register-viewer.ps1
+    - packaging/linux/context_menu.py
+  fonts:
+    - family: LiberationSerif
+      fonts:
+        - asset: fonts/pdf/LiberationSerif-Regular.ttf
+        - asset: fonts/pdf/LiberationSerif-Bold.ttf
+          weight: 700
+        - asset: fonts/pdf/LiberationSerif-Italic.ttf
+          style: italic
+        - asset: fonts/pdf/LiberationSerif-BoldItalic.ttf
+          weight: 700
+          style: italic
+    - family: LiberationSans
+      fonts:
+        - asset: fonts/pdf/LiberationSans-Regular.ttf
+        - asset: fonts/pdf/LiberationSans-Bold.ttf
+          weight: 700
+        - asset: fonts/pdf/LiberationSans-Italic.ttf
+          style: italic
+        - asset: fonts/pdf/LiberationSans-BoldItalic.ttf
+          weight: 700
+          style: italic
+    - family: LiberationMono
+      fonts:
+        - asset: fonts/pdf/LiberationMono-Regular.ttf
+        - asset: fonts/pdf/LiberationMono-Bold.ttf
+          weight: 700
+        - asset: fonts/pdf/LiberationMono-Italic.ttf
+          style: italic
+        - asset: fonts/pdf/LiberationMono-BoldItalic.ttf
+          weight: 700
+          style: italic
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/branding/lifeos_folio.png
+  remove_alpha_ios: true
+  background_color_ios: "#3D526A"
+  windows:
+    generate: true
+    icon_size: 256
+  macos:
+    generate: true
+  web:
+    generate: true
+    background_color: "#3D526A"
+    theme_color: "#3D526A"

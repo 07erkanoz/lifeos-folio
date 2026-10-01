@@ -1,0 +1,14 @@
+LifeOS Folio — Ücretsiz Kullanım Lisansı
+Telif hakkı © 2026 Erkan ÖZ. Tüm hakları saklıdır.
+
+LifeOS Folio, kişisel ve iş amaçlı belge görüntüleme, düzenleme, arama ve dönüştürme için ücretsiz kullanılabilir. Bu kullanım için abonelik veya lisans ücreti talep edilmez.
+
+Ücretsiz kullanım izni; uygulamanın mülkiyetinin devri, kaynak kodunun açık kaynak olarak lisanslanması, uygulamanın yeniden markalanması veya satılması anlamına gelmez. Bu haklar için geliştiricinin yazılı izni gerekir.
+
+Uygulama mevcut haliyle sunulur. Kullanıcı kendi belgelerinin ve yedeklerinin sorumluluğunu taşır. Yürürlükteki mevzuatın vazgeçilemeyen hakları saklıdır.
+
+Uygulamada kullanılan üçüncü taraf bileşenler ve yazı tipleri kendi lisanslarına tabidir. Bu bildirim onların lisans koşullarını değiştirmez veya onlar adına kullanım izni vermez.
+
+Geliştirici: Erkan ÖZ
+https://lifeos.com.tr
+https://erkanoz.com
