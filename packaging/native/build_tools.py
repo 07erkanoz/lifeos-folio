@@ -154,6 +154,10 @@ wintiff=['-DLEPT_TIFF_RESULT=0',f'-DTIFF_LIBRARY_RELEASE={ot}',f'-DTIFF_LIBRARY=
 # The Intel half of the Mac build is made on an Apple Silicon runner, where the
 # same probe would run an x86_64 program; answer it the same way.
 if mac:wintiff=['-DLEPT_TIFF_RESULT=0']
+# Tesseract picks its SIMD code by CMAKE_SYSTEM_PROCESSOR, which CMake fills
+# from the host: the Intel half came out with the Apple Silicon NEON kernels
+# and failed to link. Declared a cross build to x86_64, it picks AVX/SSE.
+if mac and a.arch=='x86_64':wintiff+=['-DCMAKE_SYSTEM_NAME=Darwin','-DCMAKE_SYSTEM_PROCESSOR=x86_64']
 tess=build('tesseract','tesseract-5.5.3',['-DBUILD_SHARED_LIBS=OFF','-DSW_BUILD=OFF','-DBUILD_TRAINING_TOOLS=OFF','-DBUILD_TESTS=OFF','-DDISABLE_CURL=ON','-DDISABLE_ARCHIVE=ON','-DGRAPHICS_DISABLED=ON','-DUSE_SYSTEM_ICU=OFF','-DOPENMP_BUILD=OFF',*wintiff,
   f'-DCMAKE_PREFIX_PATH={ocr}',f'-DLeptonica_DIR={ocr}/lib/cmake/leptonica',
   f'-DCMAKE_EXE_LINKER_FLAGS={f"-static {obj} " if windows else ""}{link}'],['tesseract'])
