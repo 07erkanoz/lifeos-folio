@@ -51,6 +51,12 @@ jobs:
         # Skipping is the failure mode this job exists to prevent, and a skipped
         # test still reports success. Fail here instead, where it is legible.
         run: tesseract --list-langs
+      - name: Ses kitaplığı
+        # The recorder's native code links against ALSA when the tests build
+        # it, before the Linux build tools below are installed.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
       - name: Testler
         run: flutter test
       - name: Linux derleme araçları
