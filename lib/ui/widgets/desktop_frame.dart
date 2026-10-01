@@ -232,6 +232,15 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                                     widget.icon,
                                     width: 23,
                                     height: 23,
+                                    // The artwork is 1254 pixels square:
+                                    // decoded at the size it is shown,
+                                    // not in full on the first frame.
+                                    cacheWidth:
+                                        (23 *
+                                                MediaQuery.devicePixelRatioOf(
+                                                  context,
+                                                ))
+                                            .ceil(),
                                   ),
                                 ),
                               ),

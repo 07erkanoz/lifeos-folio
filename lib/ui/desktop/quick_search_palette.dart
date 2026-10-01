@@ -136,6 +136,9 @@ class _QuickSearchPaletteState extends State<QuickSearchPalette> {
                         'assets/branding/lifeos_folio.png',
                         width: 30,
                         height: 30,
+                        cacheWidth:
+                            (30 * MediaQuery.devicePixelRatioOf(context))
+                                .ceil(),
                       ),
                     ),
                     const SizedBox(width: 12),

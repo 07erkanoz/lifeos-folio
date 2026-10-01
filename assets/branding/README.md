@@ -1,6 +1,6 @@
 # LifeOS Folio ikonu
 
-Kaynak: `lifeos_folio.png`. Yerleşik `image_gen` aracı, mevcut logoya uygulanan düzenleme modu. Fildişi katlanmış belge artık **F** harfi oluşturur; arduvaz mavisi zemin ve adaçayı turkuazı halka korunur. Kare, opak zemin.
+Kaynak: `packaging/branding/lifeos_folio.png` (1254×1254). Uygulamaya giren `lifeos_folio.png` onun 512×512 kopyasıdır; en büyük kullanımı Linux masaüstü simgesidir. Kaynak değişirse kopya yeniden küçültülmelidir. Yerleşik `image_gen` aracı, mevcut logoya uygulanan düzenleme modu. Fildişi katlanmış belge artık **F** harfi oluşturur; arduvaz mavisi zemin ve adaçayı turkuazı halka korunur. Kare, opak zemin.
 
 Son üretim istemi:
 

@@ -206,6 +206,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               'assets/branding/lifeos_folio.png',
                               width: 46,
                               height: 46,
+                              cacheWidth:
+                                  (46 * MediaQuery.devicePixelRatioOf(context))
+                                      .ceil(),
                             ),
                           ),
                           const SizedBox(width: 12),

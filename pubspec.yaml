@@ -129,7 +129,9 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/branding/lifeos_folio.png
+  # The full-size artwork, kept out of the app bundle; the app ships a 512 px
+  # copy in assets/branding/.
+  image_path: packaging/branding/lifeos_folio.png
   remove_alpha_ios: true
   background_color_ios: "#3D526A"
   windows:

@@ -97,6 +97,9 @@ class FolioAboutDialog extends StatelessWidget {
                         'assets/branding/lifeos_folio.png',
                         width: 88,
                         height: 88,
+                        cacheWidth:
+                            (88 * MediaQuery.devicePixelRatioOf(context))
+                                .ceil(),
                       ),
                     ),
                     const SizedBox(height: 20),
