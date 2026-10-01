@@ -233,6 +233,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "$GITHUB_REF_NAME" --pattern 'LifeOS-Folio-*' --dir packages
+      - name: Ses kitaplığı
+        # dart run builds every package's native code first, the recorder's
+        # included, and that links against ALSA.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
       - name: Sürüm bilgilerini imzala
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
