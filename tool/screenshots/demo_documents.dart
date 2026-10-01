@@ -199,3 +199,41 @@ List<DemoFile> demoArchive(String decision) => [
     ),
   ], daysAgo: 1),
 ];
+
+/// What the documents of the demo UYAP case say: enough to show one.
+List<DemoParagraph> demoUyapDocument(String type) => switch (type) {
+  'Bilirkişi Raporu' => [
+    _label(
+      'KONU',
+      'Tarafların ve müşterek çocuğun sosyal durumunun incelenmesi',
+    ),
+    const DemoParagraph(''),
+    _body(
+      'Mahkemenin 16.09.2026 tarihli ara kararı uyarınca taraflarla ayrı '
+      'ayrı görüşülmüş, müşterek konut ve davacının hâlen oturduğu konut '
+      'yerinde incelenmiştir. Müşterek çocuğun okul öğretmeni ile de '
+      'görüşülmüştür.',
+    ),
+    _body(
+      'Davacının çocuğun okuluna yakın bir konutta düzenli bir yaşam '
+      'sürdürdüğü, çocuğun bakım ve eğitim ihtiyaçlarının karşılandığı '
+      'gözlemlenmiştir. Davalının iş nedeniyle sık sık şehir dışında '
+      'bulunduğu ve çocukla görüşmelerinin düzensiz olduğu anlaşılmıştır.',
+    ),
+    _body(
+      'Bu tespitler ışığında, müşterek çocuğun velayetinin davacı anneye '
+      'verilmesinin, babayla kişisel ilişkinin ise hafta sonları ve yarıyıl '
+      'tatillerinde kurulmasının çocuğun üstün yararına uygun olacağı '
+      'kanaatine varılmıştır.',
+    ),
+    const DemoParagraph(''),
+    _label('SONUÇ', 'Velayetin davacıya verilmesi uygun görülmüştür.'),
+    const DemoParagraph('Sosyal Çalışmacı Ayşe DEMİR', center: true),
+  ],
+  _ => [
+    _body(
+      'Dosya kapsamındaki belgeler ve tarafların beyanları birlikte '
+      'değerlendirilmiş, işbu evrak düzenlenmiştir.',
+    ),
+  ],
+};

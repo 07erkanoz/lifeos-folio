@@ -26,8 +26,12 @@ import 'package:evrak_convert/services/udf/udf_writer.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:evrak_convert/ui/legal/case_law_search_screen.dart';
+import 'package:evrak_convert/ui/widgets/editor_toolbar.dart';
 import 'package:evrak_convert/ui/widgets/editor_widget.dart';
+import 'package:evrak_convert/ui/widgets/file_preview.dart';
+import 'package:evrak_convert/ui/widgets/uyap_case_panel.dart';
 import 'package:evrak_convert/services/uyap/adalet_eimza.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -43,12 +47,19 @@ import 'package:evrak_convert/services/signing/pkcs11/pkcs11_discovery.dart';
 import 'package:evrak_convert/services/signing/pkcs11/pkcs11_session.dart';
 import 'package:evrak_convert/services/signing/udf_signing_service.dart';
 import 'package:evrak_convert/ui/widgets/signing_dialog.dart';
+import 'package:evrak_convert/services/speech/speech_models.dart';
+import 'package:evrak_convert/services/speech/speech_session.dart';
+import 'package:evrak_convert/services/uyap/edevlet_window.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/widgets/uyap_operations_dialog.dart';
 import 'package:evrak_convert/ui/widgets/uyap_send_dialog.dart';
 
 import '../../test/support/fake_path_provider.dart';
 import '../../test/support/pdfium.dart';
+import '../../test/speech_session_test.dart'
+    show FakeEar, FakeMicrophone, FakePlayer, FakeVoice;
 import 'demo_documents.dart';
 import 'demo_uyap.dart';
 
@@ -232,6 +243,79 @@ Future<File> _openPetition(
   return file;
 }
 
+/// The voice models, as if fetched long ago.
+class _Installed extends SpeechModelStore {
+  @override
+  Future<String?> installed(SpeechModel model) async => '/ses/${model.folder}';
+}
+
+/// The demo case of the UYAP scenes, kept on this computer as Folio keeps a
+/// case: tied to the petition, fetched twice — the documents that came the
+/// second time marked new — and some of its documents saved.
+Future<UyapCaseStore> _demoCase(
+  Directory base,
+  String petition, {
+  String? home,
+}) async {
+  final support = Directory('${base.path}/support');
+  final settings = UyapSettings(directory: support, home: home ?? base.path);
+  final store = UyapCaseStore(directory: support, settings: settings);
+  UyapSettings.instance = settings;
+  UyapCaseStore.instance = store;
+  UyapCaseLinks.instance = UyapCaseLinks(directory: support);
+  DemoUyap.content = (document) => Uint8List.fromList(
+    UdfWriter.writeBytes(
+      DocModel(
+        blocks: [
+          for (final p in [
+            DemoParagraph.heading(document.type.toUpperCase(), center: true),
+            const DemoParagraph(''),
+            DemoParagraph('MAHKEME: ${DemoUyap.target.courtName}'),
+            DemoParagraph('DOSYA NO: ${DemoUyap.target.number} Esas'),
+            const DemoParagraph(''),
+            ...demoUyapDocument(document.type),
+          ])
+            _block(p),
+        ],
+      ),
+    ),
+  );
+  await UyapCaseLinks.instance.link(
+    petition,
+    UyapCaseLink(
+      jurisdiction: '1',
+      courtType: 'AILE',
+      courtId: DemoUyap.court.id,
+      court: DemoUyap.court.label,
+      number: DemoUyap.target.number,
+    ),
+  );
+  final parties = await DemoUyap().parties(DemoUyap.target);
+  await store.keep(
+    target: DemoUyap.target,
+    details: DemoUyap.details,
+    parties: parties,
+    documents: UyapCaseDocuments(DemoUyap.documents(6)),
+    now: DateTime.now().subtract(const Duration(days: 3)),
+  );
+  var record = await store.keep(
+    target: DemoUyap.target,
+    details: DemoUyap.details,
+    parties: parties,
+    documents: UyapCaseDocuments(DemoUyap.documents()),
+  );
+  for (final document in record.documents.where(
+    (d) => ['101', '103', '105', '106'].contains(d.key),
+  )) {
+    (record, _) = await store.save(
+      record,
+      document,
+      DemoUyap.content!(document),
+    );
+  }
+  return store;
+}
+
 /// An e-signature card as a reader's machine would show one; invented.
 const _card = SigningCard(
   Pkcs11ModuleInfo(
@@ -357,8 +441,9 @@ Future<String> Function(String path, String? body) _replay() {
 }
 
 void main() {
-  // The screens show the card login offered, whatever this machine has.
+  // The screens show every login offered, whatever this machine has.
   AdaletEimza.check = () async => true;
+  EdevletWindow.check = () => true;
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
     await _loadFonts();
@@ -500,6 +585,76 @@ void main() {
       await tester.runAsync(library.searchNow);
       await _settle(tester, () => library.matches > 0, rounds: 30);
       await _shot(tester, 'library-search');
+    } finally {
+      debugDisableShadows = true;
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
+      library.dispose();
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    });
+    theme.dispose();
+  });
+
+  testWidgets('library: each UYAP case a category of its own', (tester) async {
+    tester.view.physicalSize = logical * pixelRatio;
+    tester.view.devicePixelRatio = pixelRatio;
+    addTearDown(tester.view.reset);
+    final base = _home();
+    final archive = Directory(
+      '${Directory.systemTemp.path}/Belgeler/Büro Arşivi',
+    );
+    if (archive.existsSync()) archive.deleteSync(recursive: true);
+    archive.createSync(recursive: true);
+    addTearDown(() => archive.parent.deleteSync(recursive: true));
+    final stores = (
+      UyapCaseStore.instance,
+      UyapSettings.instance,
+      UyapCaseLinks.instance,
+    );
+    addTearDown(() {
+      UyapCaseStore.instance = stores.$1;
+      UyapSettings.instance = stores.$2;
+      UyapCaseLinks.instance = stores.$3;
+    });
+    await tester.runAsync(() async {
+      await _writeArchive(archive);
+      await _demoCase(
+        base,
+        '${archive.path}/Boşanma Dava Dilekçesi.udf',
+        home: archive.parent.path,
+      );
+    });
+    final library = LibraryController(
+      databasePath: ':memory:',
+      watchFolders: false,
+    );
+    final theme = ThemeController(
+      settingsPath: '${base.path}/appearance.json',
+      mode: ThemeMode.light,
+    );
+    PdfiumSetup.pathOverride = pdfiumLibrary();
+    addTearDown(() => PdfiumSetup.pathOverride = null);
+    await tester.runAsync(() async {
+      await library.initialize();
+      await library.addPaths([archive.path, UyapSettings.instance.folder]);
+      await library.waitForIdle();
+    });
+    debugDisableShadows = false;
+    try {
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: _frame,
+          child: EvrakConvertApp(library: library, appearance: theme),
+        ),
+      );
+      final tile = find.byWidgetPredicate(
+        (w) => '${w.key}'.contains('uyap-case-'),
+      );
+      await _settle(tester, () => tile.evaluate().isNotEmpty, rounds: 60);
+      await tester.tap(tile.first);
+      await _settle(tester, () => false, rounds: 20);
+      await _shot(tester, 'uyap-kategori');
     } finally {
       debugDisableShadows = true;
     }
@@ -690,6 +845,8 @@ void main() {
             )
             .first,
       );
+      // The document's preview settles first, and the menu stays put.
+      await _settle(tester, () => false, rounds: 10);
       await tester.tap(types);
       await _settle(tester, () => false, rounds: 5);
       await tester.tap(find.text('Tanık Listesi').last);
@@ -725,6 +882,179 @@ void main() {
     } finally {
       debugDisableShadows = true;
     }
+  });
+
+  testWidgets('voice: the page read aloud, and written by speaking', (
+    tester,
+  ) async {
+    tester.view.physicalSize = logical * pixelRatio;
+    tester.view.devicePixelRatio = pixelRatio;
+    addTearDown(tester.view.reset);
+    final base = _home();
+    final reading = ReadAloud.instance;
+    final dictation = Dictation.instance;
+    final models = SpeechModelStore.instance;
+    final ear = FakeEar();
+    ReadAloud.instance = ReadAloud(
+      openVoice: (_) async => FakeVoice(),
+      player: FakePlayer(),
+    );
+    Dictation.instance = Dictation(
+      openEar: (_) async => ear,
+      microphone: FakeMicrophone(),
+    );
+    SpeechModelStore.instance = _Installed();
+    addTearDown(() {
+      ReadAloud.instance = reading;
+      Dictation.instance = dictation;
+      SpeechModelStore.instance = models;
+    });
+    debugDisableShadows = false;
+    // The desktop the features are for: a selection without touch handles.
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    try {
+      await _openPetition(tester, base);
+      // The rulers a desktop shows would number in the test's stand-in font.
+      final toolbar = tester.widget<EditorToolbar>(find.byType(EditorToolbar));
+      toolbar.onHorizontalRuler();
+      toolbar.onVerticalRuler();
+      await tester.pump();
+      final controller = tester
+          .widget<QuillEditor>(find.byType(QuillEditor))
+          .controller;
+      void caret(String before, {bool end = false}) {
+        final text = controller.document.toPlainText();
+        final at = text.indexOf(before) + (end ? before.length : 0);
+        controller.updateSelection(
+          TextSelection.collapsed(offset: at),
+          ChangeSource.local,
+        );
+      }
+
+      caret('2. TMK m. 166/1');
+      await tester.pump();
+      await tester.tap(
+        find.byTooltip('Sesli oku · seçimi ya da imleçten sonrasını'),
+      );
+      await _settle(
+        tester,
+        () => ReadAloud.instance.state == ReadState.reading,
+        rounds: 40,
+      );
+      await _shot(tester, 'sesli-okuma');
+      await tester.runAsync(ReadAloud.instance.stop);
+      await tester.pump();
+
+      caret('nafakasına hükmedilmesi gerekmektedir.', end: true);
+      await tester.pump();
+      await tester.tap(
+        find.byTooltip('Sesli yaz · söylediğiniz imlecin yerine yazılır'),
+      );
+      await _settle(
+        tester,
+        () => Dictation.instance.state == ListenState.listening,
+        rounds: 40,
+      );
+      ear.say(
+        'Davalı, ortak konutu terk ettiğini cevap dilekçesinde de kabul '
+        'etmektedir.',
+      );
+      await _settle(tester, () => false, rounds: 5);
+      await _shot(tester, 'sesli-yazma');
+      // Stopped in the test's own clock, where the listening began.
+      unawaited(Dictation.instance.stop());
+      await tester.pump(const Duration(seconds: 1));
+    } finally {
+      debugDisableShadows = true;
+      debugDefaultTargetPlatformOverride = null;
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(minutes: 4));
+  });
+
+  testWidgets('UYAP: the case beside the page, its documents read there', (
+    tester,
+  ) async {
+    tester.view.physicalSize = logical * pixelRatio;
+    tester.view.devicePixelRatio = pixelRatio;
+    addTearDown(tester.view.reset);
+    final base = _home();
+    PdfiumSetup.pathOverride = pdfiumLibrary();
+    addTearDown(() => PdfiumSetup.pathOverride = null);
+    final previous = UyapWebService.instance;
+    final web = DemoUyap();
+    UyapWebService.instance = web;
+    final stores = (
+      UyapCaseStore.instance,
+      UyapSettings.instance,
+      UyapCaseLinks.instance,
+    );
+    addTearDown(() {
+      UyapWebService.instance = previous;
+      UyapCaseStore.instance = stores.$1;
+      UyapSettings.instance = stores.$2;
+      UyapCaseLinks.instance = stores.$3;
+    });
+    await tester.runAsync(() async {
+      await web.connect('123456');
+      await _demoCase(base, '${base.path}/Boşanma Dava Dilekçesi.udf');
+    });
+    debugDisableShadows = false;
+    try {
+      await _openPetition(tester, base);
+      await tester.tap(find.byTooltip('UYAP dosyası'));
+      await _settle(
+        tester,
+        () => find.textContaining('Evraklar · 9').evaluate().isNotEmpty,
+        rounds: 40,
+      );
+      await _shot(tester, 'uyap-panel');
+
+      final panelList = find
+          .descendant(
+            of: find.byType(UyapCasePanel),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('uyap-doc-107')),
+        200,
+        scrollable: panelList,
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('uyap-doc-107')));
+      await _settle(
+        tester,
+        () => find.byType(FilePreview).evaluate().isNotEmpty,
+        rounds: 60,
+      );
+      await _settle(tester, () => false, rounds: 25);
+      await _shot(tester, 'uyap-onizleme');
+
+      for (final key in ['108', '109', '104']) {
+        final row = find.byKey(ValueKey('uyap-doc-$key'));
+        await tester.scrollUntilVisible(
+          row,
+          200,
+          scrollable: find
+              .descendant(
+                of: find.byType(UyapCasePanel),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.tap(
+          find.descendant(of: row, matching: find.byType(Checkbox)),
+        );
+        await tester.pump();
+      }
+      await _settle(tester, () => false, rounds: 5);
+      await _shot(tester, 'uyap-secerek-indirme');
+    } finally {
+      debugDisableShadows = true;
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('phone: home, a petition and an article', (tester) async {

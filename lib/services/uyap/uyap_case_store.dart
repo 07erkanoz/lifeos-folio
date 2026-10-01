@@ -192,7 +192,12 @@ class UyapCaseRecord {
 class UyapCaseStore {
   UyapCaseStore({this._directory, this._settings});
 
-  static UyapCaseStore instance = UyapCaseStore();
+  static final _real = UyapCaseStore();
+  static UyapCaseStore instance = _real;
+
+  /// Whether the store is the one on this computer's own folders, rather
+  /// than one a test put in its place.
+  static bool get isReal => identical(instance, _real);
 
   /// Ticks when a case is kept or a document saved, for what lists them.
   static final changes = ValueNotifier<int>(0);

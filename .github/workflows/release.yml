@@ -112,7 +112,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build libgtk-3-dev \
-            libayatana-appindicator3-dev libwebkit2gtk-4.1-dev
+            libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libasound2-dev
       - name: Paketli araçları doğrula
         run: python3 packaging/native/verify.py linux-x64 --smoke
       - run: flutter build linux --release

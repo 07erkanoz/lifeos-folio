@@ -376,17 +376,17 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-                child: Row(
+                // Side by side when the panel is wide enough, the time
+                // under the session otherwise: never squeezed letter by
+                // letter beside it.
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     const UyapSessionChip(),
-                    const Spacer(),
-                    Flexible(
-                      child: Text(
-                        'Son çekim ${_clock(record.fetchedAt)}',
-                        style: muted,
-                        textAlign: TextAlign.end,
-                      ),
-                    ),
+                    Text('Son çekim ${_clock(record.fetchedAt)}', style: muted),
                   ],
                 ),
               ),

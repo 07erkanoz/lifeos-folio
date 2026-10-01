@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
 import 'uyap_web_service.dart';
@@ -18,7 +19,13 @@ class EdevletWindow {
   static String get _helper =>
       p.join(p.dirname(Platform.resolvedExecutable), 'folio-edevlet');
 
-  static bool get available => Platform.isLinux && File(_helper).existsSync();
+  /// Replaced under test.
+  @visibleForTesting
+  static bool Function() check = _found;
+
+  static bool get available => check();
+
+  static bool _found() => Platform.isLinux && File(_helper).existsSync();
 
   /// Opens [page]; the window stays until e-Devlet sends the lawyer back or
   /// the window is closed.

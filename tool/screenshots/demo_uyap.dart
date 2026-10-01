@@ -157,4 +157,90 @@ class DemoUyap extends UyapWebService {
   @override
   Future<Uint8List> documentBytes(UyapOperation operation) async =>
       throw StateError('Önizleme bu tanıtımda yok.');
+
+  @override
+  Future<UyapCaseDetails> caseDetails(UyapCase target) async => details;
+
+  static const details = UyapCaseDetails(
+    kind: 'Boşanma (TMK 166/1)',
+    opening: 'Dava',
+    status: 'Açık',
+    hearing: '12/11/2026 10:30',
+    preliminary: '16/09/2026 11:05',
+    related: [('Birleşen dosya', '2026/1388 Esas')],
+  );
+
+  /// The case's documents, the first [count] of them: what came later is
+  /// what the panel marks new.
+  static List<UyapCaseDocument> documents([int count = 9]) => [
+    for (final (number, type, approved, sender, description) in const [
+      ('101', 'Dava Dilekçesi', '12/03/2026 10:14', 'Davacı Vekili', ''),
+      ('102', 'Tensip Zaptı', '16/03/2026 14:02', 'Mahkeme', ''),
+      ('103', 'Cevap Dilekçesi', '21/04/2026 09:40', 'Davalı Vekili', ''),
+      (
+        '104',
+        'Cevaba Cevap Dilekçesi',
+        '05/05/2026 16:22',
+        'Davacı Vekili',
+        '',
+      ),
+      ('105', 'Ön İnceleme Zaptı', '16/09/2026 11:30', 'Mahkeme', ''),
+      ('106', 'Tanık Listesi', '23/09/2026 10:05', 'Davacı Vekili', ''),
+      (
+        '107',
+        'Bilirkişi Raporu',
+        '28/09/2026 15:47',
+        'Bilirkişi',
+        'Sosyal inceleme',
+      ),
+      ('108', 'Ara Karar', '29/09/2026 09:12', 'Mahkeme', ''),
+      (
+        '109',
+        'Bilirkişi Raporuna İtiraz',
+        '30/09/2026 17:31',
+        'Davalı Vekili',
+        '',
+      ),
+    ].take(count))
+      UyapCaseDocument(
+        key: number,
+        documentId: 'e$number',
+        caseId: target.id,
+        type: type,
+        number: number,
+        approved: approved,
+        sender: sender,
+        description: description,
+        source: '2026/1204(Hukuk Dava Dosyası)',
+        attachments: [
+          if (number == '101')
+            const UyapCaseDocument(
+              key: '101:ek:1',
+              documentId: 'e101-1',
+              caseId: 'd1',
+              type: 'Vekaletname',
+              number: '',
+              approved: '',
+              sender: '',
+              description: '',
+              parentKey: '101',
+            ),
+        ],
+      ),
+  ];
+
+  @override
+  Future<UyapCaseDocuments> caseDocuments(
+    UyapCase target, {
+    void Function(int page, int pages)? onPage,
+  }) async => UyapCaseDocuments(documents());
+
+  /// What a document is, when it is opened: given by the scene.
+  static Uint8List Function(UyapCaseDocument document)? content;
+
+  @override
+  Future<Uint8List> caseDocumentBytes(
+    UyapCaseDocument document, {
+    String? caseId,
+  }) async => content!(document);
 }

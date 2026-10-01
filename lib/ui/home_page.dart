@@ -563,7 +563,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// Looks again when a case changed in this window, or the archive grew:
   /// documents saved from an editor window of its own come in that way.
   void _reloadUyapCases() {
-    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+    // Tests do not list the lawyer's real cases; one with a store of its
+    // own does.
+    if (Platform.environment.containsKey('FLUTTER_TEST') &&
+        UyapCaseStore.isReal) {
+      return;
+    }
     unawaited(
       UyapCaseStore.instance.savedCases().then((cases) {
         if (mounted) setState(() => _uyapCases = cases);
