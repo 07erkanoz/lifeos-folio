@@ -28,6 +28,25 @@ jobs:
           cmake --build build/clipboard-test --config Debug
       - name: Gerçek Win32 panosunda HTML, RTF ve UYAP verisini doğrula
         run: ctest --test-dir build/clipboard-test -C Debug --output-on-failure
+  windows-build:
+    # Only the release built Windows, so a build that broke was found on the
+    # day of a release. The native assets' hooks say little unless asked.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Windows uygulamasını derle
+        shell: bash
+        run: |
+          flutter build windows --release -v > build-windows.log 2>&1 && exit 0
+          grep -n -i -B3 -A25 'hook\|native asset\|error' build-windows.log | tail -n 300
+          exit 1
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
