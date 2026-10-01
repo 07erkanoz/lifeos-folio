@@ -20,6 +20,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   winrt::init_apartment(winrt::apartment_type::single_threaded);
 
   flutter::DartProject project(L"data");
+  // Skia rather than Impeller. Impeller's OpenGL backend links its shader
+  // programs through ANGLE before the first Dart line runs: about 1.3 s on an
+  // Iris Xe, with the window not yet shown, and frames cost four times as
+  // much after it. Measured on 1.3.0: the window opened in 2.2-3.0 s with
+  // Impeller and 0.43-0.50 s without.
+  project.set_impeller_switch(flutter::ImpellerSwitch::Disabled);
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
