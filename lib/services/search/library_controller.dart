@@ -31,6 +31,13 @@ class LibraryController extends ChangeNotifier {
   Timer? _catalogDebounce;
   bool _disposed = false;
   bool _syncingAndroid = false;
+
+  /// Told when only [phase], [processed], [toProcess] or [currentPath]
+  /// moved. Indexing reports those every 150 ms; telling every listener of
+  /// the controller rebuilt the whole home page that often while the
+  /// archive was scanned. What shows the counters listens here too.
+  Listenable get progress => _progress;
+  final _progress = _Progress();
   int _generation = 0;
   String? _actualPath;
   bool ready = false;
@@ -280,7 +287,17 @@ class LibraryController extends ChangeNotifier {
           'Folio index and first results: ${startup.elapsedMilliseconds} ms',
         );
       }
-      if (sources.isNotEmpty) await refresh();
+      if (sources.isNotEmpty) {
+        // The index already answers searches; the rescan that catches what
+        // changed while Folio was closed waits until the window has settled,
+        // rather than share the first seconds with it. The folder watchers,
+        // started by refreshCatalog above, already report changes meanwhile.
+        if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+          await Future<void>.delayed(const Duration(seconds: 3));
+          if (_disposed) return;
+        }
+        await refresh();
+      }
     } catch (e) {
       error = 'Arama arşivi açılamadı: $e';
     }
@@ -296,6 +313,7 @@ class LibraryController extends ChangeNotifier {
     if (event['event'] == 'error') {
       error = event['message'] as String?;
     }
+    final wasActive = active;
     if (event['event'] == 'progress') {
       active = event['active'] == true;
       cancelled = event['cancelled'] == true;
@@ -315,7 +333,12 @@ class LibraryController extends ChangeNotifier {
         await searchNow();
       });
     }
+    if (event['event'] == 'progress' && active && wasActive) {
+      if (!_disposed) _progress.changed();
+      return;
+    }
     _notify();
+    if (!_disposed) _progress.changed();
   }
 
   Future<void> refreshCatalog() async {
@@ -648,6 +671,11 @@ class LibraryController extends ChangeNotifier {
       watcher.cancel();
     }
     _service?.close();
+    _progress.dispose();
     super.dispose();
   }
+}
+
+class _Progress extends ChangeNotifier {
+  void changed() => notifyListeners();
 }

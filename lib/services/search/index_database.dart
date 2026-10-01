@@ -561,40 +561,71 @@ class IndexDatabase {
   }) {
     final pending =
         <({int id, String path, int size, int modified, int changed})>[];
-    transaction(() {
-      for (final file in files) {
-        final previous = document(file.path);
-        final changedContent =
-            force ||
-            previous == null ||
-            previous['state'] == 'pending' ||
-            previous['size'] != file.size ||
-            previous['modified'] != file.modified ||
-            previous['changed'] != file.changed;
-        if (!changedContent) {
-          _markMembership(sourceId, previous['id'] as int, token);
-          continue;
-        }
-        final id = _register(
-          sourceId: sourceId,
-          token: token,
-          path: file.path,
-          size: file.size,
-          modified: file.modified,
-          changed: file.changed,
-          changedContent: changedContent,
-        );
-        if (changedContent) {
-          pending.add((
-            id: id,
+    final scanning = _activeScans.contains(sourceId);
+    // Prepared once for the whole batch: a launch rescans every file of
+    // the archive, and preparing three statements for each unchanged one
+    // was most of what that cost.
+    final lookup = db.prepare(
+      'SELECT d.id,d.size,d.modified,d.changed,d.state, EXISTS(SELECT 1 FROM '
+      'memberships m WHERE m.source_id=? AND m.document_id=d.id) AS member '
+      'FROM documents d WHERE d.path=?',
+    );
+    final seen = scanning
+        ? db.prepare(
+            'INSERT OR IGNORE INTO scan_seen(source_id,document_id) VALUES(?,?)',
+          )
+        : null;
+    try {
+      transaction(() {
+        for (final file in files) {
+          final rows = lookup.select([sourceId, file.path]);
+          final previous = rows.isEmpty ? null : rows.first;
+          final changedContent =
+              force ||
+              previous == null ||
+              previous['state'] == 'pending' ||
+              previous['size'] != file.size ||
+              previous['modified'] != file.modified ||
+              previous['changed'] != file.changed;
+          if (!changedContent) {
+            final id = previous['id'] as int;
+            if (!scanning) {
+              _markMembership(sourceId, id, token);
+            } else {
+              // During a scan the membership is only inserted if missing,
+              // so one that exists needs no write; the scan only notes it.
+              if (previous['member'] != 1) {
+                _markMembership(sourceId, id, token);
+              } else {
+                seen!.execute([sourceId, id]);
+              }
+            }
+            continue;
+          }
+          final id = _register(
+            sourceId: sourceId,
+            token: token,
             path: file.path,
             size: file.size,
             modified: file.modified,
             changed: file.changed,
-          ));
+            changedContent: changedContent,
+          );
+          if (changedContent) {
+            pending.add((
+              id: id,
+              path: file.path,
+              size: file.size,
+              modified: file.modified,
+              changed: file.changed,
+            ));
+          }
         }
-      }
-    });
+      });
+    } finally {
+      lookup.dispose();
+      seen?.dispose();
+    }
     return pending;
   }
 

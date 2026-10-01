@@ -123,7 +123,11 @@ class _LibrarySettingsDialogState extends State<LibrarySettingsDialog> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([widget.library, widget.appearance]),
+    listenable: Listenable.merge([
+      widget.library,
+      widget.library.progress,
+      widget.appearance,
+    ]),
     builder: (context, _) {
       final scheme = Theme.of(context).colorScheme;
       final library = widget.library;

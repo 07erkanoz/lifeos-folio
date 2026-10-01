@@ -7,7 +7,7 @@ class IndexStatusDialog extends StatelessWidget {
   const IndexStatusDialog({super.key, required this.library});
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: library,
+    listenable: Listenable.merge([library, library.progress]),
     builder: (context, _) {
       final scheme = Theme.of(context).colorScheme;
       return AlertDialog(

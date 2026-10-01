@@ -2003,7 +2003,14 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     passages: _library.passages,
   );
 
-  Widget _statusBar() {
+  /// Listens to the indexing counters on its own, so they move without the
+  /// whole page being built again.
+  Widget _statusBar() => ListenableBuilder(
+    listenable: _library.progress,
+    builder: (context, _) => _statusBarContent(),
+  );
+
+  Widget _statusBarContent() {
     final scheme = Theme.of(context).colorScheme;
     return Container(
       height: 38,
@@ -2015,13 +2022,20 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       child: Row(
         children: [
           if (_library.active)
+            // How far it has come rather than a spinner: a spinner redraws
+            // the window on every display refresh, 200 times a second on a
+            // fast screen, for as long as the archive is scanned.
             SizedBox(
               width: 12,
               height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: scheme.primary,
-              ),
+              child: _library.toProcess > 0
+                  ? CircularProgressIndicator(
+                      value: _library.processed / _library.toProcess,
+                      strokeWidth: 1.5,
+                      color: scheme.primary,
+                      backgroundColor: scheme.outlineVariant,
+                    )
+                  : Icon(Icons.sync_rounded, size: 12, color: scheme.primary),
             )
           else
             Container(

@@ -328,13 +328,16 @@ class LibrarySidebar extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 3),
-                                  Text(
-                                    library.active
-                                        ? '${library.processed} / ${library.toProcess}'
-                                        : '${library.searchable} içerik aranabilir',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: scheme.onSurfaceVariant,
+                                  ListenableBuilder(
+                                    listenable: library.progress,
+                                    builder: (context, _) => Text(
+                                      library.active
+                                          ? '${library.processed} / ${library.toProcess}'
+                                          : '${library.searchable} içerik aranabilir',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
                                     ),
                                   ),
                                 ],
