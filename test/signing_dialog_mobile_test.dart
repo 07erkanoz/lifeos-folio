@@ -144,6 +144,11 @@ class _Setup {
     for (var i = 0; i < 100; i++) {
       final found = await tester.runAsync(read);
       if (found != null || !wait) return found;
+      // The file is written on the real clock: on a slow disk the test's
+      // own clock alone ran out before it got there.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
       await tester.pump(const Duration(milliseconds: 20));
     }
     return null;

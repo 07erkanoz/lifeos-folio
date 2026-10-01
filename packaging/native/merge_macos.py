@@ -18,7 +18,7 @@ for tool in sorted((arm / 'bin').iterdir()):
     subprocess.run(['lipo', '-create', tool, intel / 'bin' / tool.name, '-output', dest], check=True)
     # lipo writes a new file; each half's signature does not carry over.
     subprocess.run(['codesign', '--force', '--sign', '-', dest], check=True)
-    subprocess.run(['lipo', '-verify_arch', 'arm64', 'x86_64', dest], check=True)
+    subprocess.run(['lipo', dest, '-verify_arch', 'arm64', 'x86_64'], check=True)
 shutil.copytree(arm / 'tessdata', out / 'tessdata')
 hashes = {f.relative_to(out).as_posix(): hashlib.sha256(f.read_bytes()).hexdigest()
           for f in sorted(p for p in out.rglob('*') if p.is_file())}
