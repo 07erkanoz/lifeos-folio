@@ -1,6 +1,6 @@
 ﻿; Build with build-installer.ps1. Keep AppId stable for in-place upgrades.
 #ifndef AppVersion
-  #define AppVersion "1.2.0"
+  #define AppVersion "1.3.0"
 #endif
 #ifndef BundleDir
   #define BundleDir "..\..\build\windows\x64\runner\Release"
