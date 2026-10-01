@@ -1,6 +1,16 @@
 # LifeOS Folio
 
-Linux, Windows ve Android için yerel evrak arşivi. Hızlı içerik arama, gerçek kaynak önizlemesi, isteğe bağlı düzenleme ve uygun biçimlere dönüştürme. Beyaz, gerçek siyah ve sistem teması; kısa ve durum koruyan geçiş animasyonları.
+Avukatlar için evrak ve dilekçe uygulaması: Windows, Linux ve Android; macOS için deneme paketi. UDF, Word, Excel ve PDF dosyalarını Microsoft Office olmadan açıp düzenler. Dilekçede geçen kanun maddelerini ve Yargıtay kararlarını belgenin yanında gösterir. Evrakı e-imza ya da mobil imzayla imzalayıp UYAP'a gönderir. Bir UYAP dosyasını dilekçeye bağladığınızda dosyanın taraflarını, duruşma günlerini ve evrakını editörün yanında açar; evrakı seçerek ya da toplu indirir ve arşive katar. Yazdığınız metni Türkçe bir sesle okur, söylediklerinizi yazar. Belgeleriniz bilgisayarınızda kalır; arama ve düzenleme yerel olarak yapılır.
+
+![Folio'da bir dilekçe ve üzerinde açılmış TMK m. 166](docs/screenshots/editor-madde.webp)
+
+Ekran görüntülerindeki kişi ve dosya bilgileri uydurmadır; görüntüler `tool/screenshots` ile kurmaca veriden üretilir.
+
+- [Sesli okuma ve sesli yazma](#sesli-okuma-ve-sesli-yazma)
+- [Birden fazla pencere ve yazdırma](#birden-fazla-pencere-ve-yazdırma)
+- [UYAP'a bağlanma](#uyapa-bağlanma) · [UYAP'a evrak gönderme](#uyapa-evrak-gönderme) · [UYAP dosyası editörün yanında](#uyap-dosyası-editörün-yanında)
+- [Elektronik imzalı UDF](#elektronik-imzalı-udf) · [Arama ve otomatik indeksleme](#arama-ve-otomatik-indeksleme) · [Kanun maddesi ve emsal karar önizlemesi](#kanun-maddesi-ve-emsal-karar-önizlemesi)
+- [Güncellemeler](#güncellemeler) · [macOS](#macos) · [Derleme](#derleme)
 
 Dosyalar önce **önizlemeye** açılır. UDF/DOCX/XLSX/TXT/ODT için ayrı **Düzenle** düğmesi editörü açar; **Önizlemeye Dön** diskteki kaynak belgeyi gösterir. Masaüstünde UDF, DOCX, RTF, TXT ve ODT önizlemesinde sayfaya **çift tıklamak** da editörü açar: imleç çift tıklanan kelimeye gelir ve o satır görünümün ortasına kaydırılır. Satır, sayfanın kendi metin katmanından okunur ve komşu satırlarıyla birlikte aranır; böylece her paragrafın sonunda tekrarlanan bir cümlede de doğru yere gidilir. PDF'de çift tıklama editörü açmaz, çünkü PDF'yi düzenlemeye almak ayrıca onay istenen bir dönüşümdür. Sağa/sola 90° döndürme ve yakınlaştırma kaynak dosyayı değiştirmez. Fontlar yerel olarak paketlenir, UDF/PDF üretimi arka planda çalışır, son önizlemeler bellekte tutulur.
 
@@ -9,6 +19,24 @@ Uygulama içindeki arama sonucundan açıldığında arama ve sonuçlar solda, b
 ## LifeOS Editör
 
 Folio'nun yanında, aynı kurulumdan ikinci bir program: **LifeOS Editör** (`lifeos_editor.exe`, Linux'ta `lifeos_editor`). Yalnızca editörü açar, boş bir UDF ile başlar; arşiv, arama ve tepsi yüklenmez. Folio açık olsa da olmasa da kendi penceresinde çalışır, görev çubuğunda ayrı durur ve kalemli kendi simgesini taşır. Başlık çubuğundaki **Yeni** (Ctrl+N) ve **Aç** (Ctrl+O) ile başka belgeye geçilir; kaydedilmemiş değişiklik varsa önce sorulur. UDF, DOCX, DOC, RTF, ODT, TXT ve PDF açar. Avukat profili, kalıplar, belge geçmişi ve görünüm Folio ile ortaktır. Windows kurulumu Başlat menüsüne "LifeOS Editör" kısayolunu, isteğe bağlı masaüstü kısayolunu ve UDF/DOCX/RTF/ODT/TXT için "Birlikte aç" kaydını ekler; Linux'ta `install_local.py` menüye ayrı bir girdi koyar. Folio'nun içinde "Düzenle" eskisi gibi uygulamanın içinde açılır.
+
+## Sesli okuma ve sesli yazma
+
+Windows ve Linux'ta editörün araç çubuğundaki **Ses** grubunda iki düğme bulunur. **Sesli oku**, seçili metni ya da seçim yoksa imleçten sonrasını Türkçe bir kadın sesiyle okur. Okunan cümle sayfada seçili görünür ve sayfa sesi izler; alttaki çubukta kaçıncı cümlenin okunduğu, okuma hızı, duraklatma ve durdurma vardır. Metin okunmadan önce Türkçe okunuşuna çevrilir: "TMK m. 166" "Türk Medeni Kanunu'nun yüz altmış altıncı maddesi" olarak, tarihler, sayılar, para tutarları ve dava kısaltmaları açılarak okunur. Kısaltmalar `assets/ses/okuma.json` dosyasında, kanun adları kanun listesinde tutulur. Bir bölümü seçip sağ tıklayınca menüdeki **Sesli oku** yalnız o bölümü okur. Önizlenen metin belgelerinde de aynı düğme bulunur.
+
+![Dilekçenin ikinci paragrafı sesli okunurken](docs/screenshots/sesli-okuma.webp)
+
+**Sesli yaz** açıkken söylenenler imlecin bulunduğu yere yazılır. Konuşma, sessizlik algılayıcısıyla cümlelere bölünür ve her cümle bittiğinde yazıya geçer; **Bitir**'e basıldığında son cümle de yazılır.
+
+![Söylenen cümle dilekçenin üçüncü paragrafının sonuna yazılmış](docs/screenshots/sesli-yazma.webp)
+
+Okuma ve yazma tamamen bilgisayarda yapılır; ses ve metin hiçbir sunucuya gönderilmez. Bunun için iki model kullanılır ve uygulamaya gömülmez: okuma için Supertone'un **Supertonic 3** modeli (yaklaşık 125 MB indirme), yazma için OpenAI'nin **Whisper large-v3 turbo** modeli ve Silero sessizlik algılayıcısı (yaklaşık 610 MB indirme). Bir özellik ilk kez kullanıldığında indirme boyutu gösterilir ve onay istenir; indirme ilerleme çubuğuyla izlenir, yarıda kalırsa kaldığı yerden sürer. Modeller `lifeos.com.tr/ses/` adresinden sıkıştırılmış olarak gelir; her dosyanın SHA-256 özeti açıldıktan sonra denetlenir. İkisi de [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) ile ayrı bir iş parçacığında çalışır; arayüz donmaz. Android'de sesli okuma ve yazma yoktur.
+
+## Birden fazla pencere ve yazdırma
+
+Önizlemedeki **Yeni pencerede düzenle** belgeyi kendi editör penceresinde açar; editörün **Dosya** menüsündeki **Yeni pencere** boş bir editör penceresi açar. Böylece iki dilekçe yan yana düzenlenebilir. Her pencere ayrı bir süreçtir. Aynı belge iki pencerede birden düzenlenemez, çünkü biri ötekinin kaydını ezerdi: belge başka bir pencerede açıksa editör bunu bir uyarı şeridiyle bildirir ve belge açık olduğu pencerede düzenlenir. Taslak kurtarma da pencere başınadır; başka bir pencerenin açık taslağı kurtarılacak diye listelenmez. Dilekçenin yanında açılan bir UYAP evrakı **Ayrı pencerede aç** ile kendi penceresine taşınır ve örneğin ikinci ekrana alınabilir.
+
+Önizlemede ve editörde **Yazdır** (Ctrl+P) önce sayfaları gösterir; yazdırılacak sayfalar seçilebilir.
 
 ## Yeni belge ve hızlı bakış
 
@@ -70,6 +98,8 @@ ODT/HTML/Markdown önizlemesi temel metin, biçim ve tabloları kullanır; özg�
 
 ## Arama ve otomatik indeksleme
 
+![Arşivde "kira bedeli" araması; eşleşen yerler işaretli](docs/screenshots/library-search.webp)
+
 **Ayarlar → Arşiv klasörleri → Klasör seç ve ekle.** Alt klasör seçimi her kaynak için ayrı saklanır. PDF (metin katmanı), UDF, DOCX, ODT, TXT, HTML, Markdown ve desteklenen veri dosyalarının metni indekslenir; görseller dosya adıyla aranır. Kaynak dosyalar değiştirilmez; arşivden çıkarmak belgeleri silmez.
 
 - Ana sayfada dosya adı + içerik arama, eşleşen bölümden kısa ve vurgulu alıntılar, biçim/klasör filtreleri ve sıralama. Sonuca tıklamak önizlemeyi açar.
@@ -85,6 +115,8 @@ ODT/HTML/Markdown önizlemesi temel metin, biçim ve tabloları kullanır; özg�
 Arama tasarımında [lifeoshukuk](https://github.com/07erkanoz/lifeoshukuk/tree/bad89170b38722914dda76019863c712503c9a77) içindeki FTS5, arka plan indeksleyici ve klasör izleme akışları incelendi. Yeni uygulama; kaynak üyeliği, güvenli sorgu üretimi, silme takibi ve çoklu belge ayrıştırmayı kendi servisleriyle uygular. 10.000 kısa örnek kayıtta yerel FTS sorgusu yaklaşık 1,5–2,6 ms ölçüldü; bu sayı dosya açma veya uçtan uca arayüz süresi değildir.
 
 ## Kanun maddesi ve emsal karar önizlemesi
+
+![Dilekçenin yanında açılmış emsal karar araması](docs/screenshots/editor-emsal-arama.webp)
 
 Editörde ve PDF önizlemesinde belgede geçen kanun maddeleri (düz altı çizili) ve yüksek mahkeme kararları (noktalı altı çizili) işaretlenir; tıklanınca kaynağı açılır. Tanınan yazımlar: `TMK m. 166/1-a`, `HMK'nın 297. maddesi`, `6100 sayılı Kanun'un 119. maddesi`, `2942 sayılı Kanun m. 11`, `TBK'nın 49, 50 ve 51. maddeleri`, `Anayasa'nın 2. ve 38. maddelerine`, `aynı Kanun'un 7. maddesi`, harfli/geçici/ek madde (`İİK 68/a`, `HMK geçici m. 3`), Romen fıkra (`TBK m. 479/II`), noktalı kısaltma (`H.M.K.`), büyük harfle yazılmış atıf; kararda `2016/1531 E., 2017/3344 K.`, `E: … K: …`, `Esas No: … Karar No: …`, `2014/140 Esas, 2015/85 Karar sayılı`, `(E) ve (K)`, HGK'nın daireli esası (`2011/7-695 E.`), yazıyla daire (`Danıştay Dördüncü Dairesi`) ve AYM bireysel başvurusu (`AYM, … B. No: 2019/19126`). Hangi kısaltmanın hangi kanun, hangi mahkemenin kararlarının yayımlandığı `assets/mevzuat/laws.json` (89 kanun) ve `courts.json` veri paketlerindedir. 2.606 belgelik gerçek arşivde yeni tanıma 4.814 yerine 6.568 kanun atfı, 469 yerine 861 getirilebilir karar atfı buldu; eski tanımanın yakalayıp yeninin bıraktığı 113 kayıt süre ("7 AY 15 GÜN"), kimlik numarası ve damga kodu gibi yanlış alarmlardı.
 
@@ -147,6 +179,56 @@ Kart işlemleri arka planda çalışır; PIN diske/loga yazılmaz ve hatalı PIN
 
 İmzalı bir belgeyi editörde açmak imzayı silmez. Editörden kaydedilen belge ise imzasızdır: masaüstünde kaydederken **Üzerine kaydet** ya da **İmzasız kopya kaydet…** seçilir (ayrıntısı “Düzenleme geçmişi ve kurtarma” bölümünde); imzalı hal belge geçmişinde saklanır. Kaydedilen belge sonra yeniden imzalanabilir. UDF yerel modele göre çizilir; bütün UYAP özelliklerinde birebir sayfa eşleşmesi garanti edilmez.
 
+| E-imza kartı | Mobil imza |
+|---|---|
+| ![E-imza kartıyla imzalama](docs/screenshots/sign-card.webp) | ![Mobil imzada telefona gelen doğrulama kodu](docs/screenshots/sign-mobile-code.webp) |
+
+## UYAP'a bağlanma
+
+Folio, UYAP Avukat Portalı'nın web arayüzünün kullandığı adreslerle çalışır; tarayıcıda portalı açmanız gerekmez. Bağlantı penceresinde üç yol vardır:
+
+1. **Adalet E-İmza ile:** kartınız takılıyken PIN kodunuzu girersiniz; imzayı bilgisayardaki Adalet E-İmza uygulaması atar. Uygulama kurulu değilse bu seçenek pasif görünür ve Adalet Bakanlığı'nın [indirme sayfasına](https://eimza.adalet.gov.tr) bağlantı verilir; kurduktan sonra **Yeniden denetle** ile seçenek açılır.
+2. **Mobil imza ile:** e-Devlet'in giriş sayfası Folio'nun açtığı küçük bir pencerede açılır; telefonunuza gelen onayı verirsiniz.
+3. **E-imza ile, e-Devlet üzerinden:** aynı pencerede e-Devlet'in e-imza girişi kullanılır.
+
+e-Devlet penceresi Linux'ta sistemin WebKitGTK'sıyla çalışan ayrı bir yardımcı programdır (`folio-edevlet`), Windows'ta Microsoft Edge WebView2'dir, macOS'ta sistemin WebKit'idir. Pencere geçici bir tarayıcı deposu kullanır; çerezler diske yazılmaz. e-Devlet UYAP'a geri yönlendirdiğinde bu yönlendirme yüklenmeden durdurulur ve içindeki kod Folio'ya verilir; kodu UYAP'a, oturumu açan Folio götürür.
+
+![UYAP bağlantı penceresi: Adalet E-İmza, mobil imza ve e-Devlet ile e-imza](docs/screenshots/uyap-baglan.webp)
+
+Oturum yaklaşık 2 saat 55 dakika açık kalır; bu sürede gönderme ve dosya işlemleri için yeniden imza gerekmez. Kalan süre UYAP penceresinde ve dosya panelinde görünür.
+
+## UYAP'a evrak gönderme
+
+İmzalı bir UDF, editörün **Dosya** menüsündeki **UYAP’a gönder** ile gönderilir. Mahkeme türü ve mahkeme seçilir, dosyanın yılı ve esas numarası yazılır. Folio dosyayı bulunca tarafları, vekilleri ve gönderilecek belgenin önizlemesini aynı ekranda gösterir. Evrak türü UYAP'ın o dosya için verdiği listeden seçilir; tür izin veriyorsa ek evrak (türü ve açıklamasıyla, dosya başına en fazla 64 MB) eklenir. Belge bir UYAP dosyasına bağlıysa o dosya baştan seçili gelir.
+
+| Dosyayı seçin | Son kontrol |
+|---|---|
+| ![Taraflar ve gönderilecek belge aynı ekranda](docs/screenshots/uyap-hedef.webp) | ![Göndermeden önce son kontrol](docs/screenshots/uyap-onay.webp) |
+
+**Gönderimi incele** son kontrol ekranını açar. Gönderilmeden hemen önce dosya numarası, taraflar, evrak türü ve belgenin kendisi yeniden denetlenir; bunlardan biri bu arada değiştiyse evrak gönderilmez ve neden gönderilmediği yazılır. Gönderilen evrak, UYAP'taki işlem tamamlanana kadar ana ekrandan açılan **UYAP Devam Eden İşlemler** listesinde izlenir.
+
+![Devam Eden İşlemler](docs/screenshots/uyap-islemler.webp)
+
+## UYAP dosyası editörün yanında
+
+Editörün araç çubuğundaki **UYAP dosyası**, sayfanın yanında bir panel açar. Belgeyi bir UYAP dosyasına bağladığınızda panelde dosyanın bilgileri görünür: dava türü, durum, duruşma, keşif ve ön inceleme tarihleri, birleşen ve ilgili dosyalar, taraflar ve vekilleri, dosyadaki bütün evrak. Bir tarafın bilgisi **Metne ekle** ile imlecin bulunduğu yere yazılır. Bağ belgeyle birlikte hatırlanır; belge sonra açıldığında panel aynı dosyayla gelir. Panel sürüklenerek genişletilip daraltılabilir.
+
+![Dilekçenin yanında UYAP dosya paneli](docs/screenshots/uyap-panel.webp)
+
+Evrak listesi her çekildiğinde tarihiyle saklanır. Son çekimden sonra gelen evrak **Yeni** olarak işaretlenir ve listenin başında kaç yeni evrak olduğu yazar. Listede evrak türüne, gönderene ve tarihe göre arama yapılabilir. İndirilmiş evrak işaretlidir. Bir evraka tıklayınca evrak dilekçenin yanında açılır; istenirse ayrı bir pencereye taşınır.
+
+![UYAP evrakı dilekçenin yanında açık](docs/screenshots/uyap-onizleme.webp)
+
+Evrak tek tek işaretlenip **Seçilenleri indir** ile ya da **Tümünü indir** ile toplu indirilir. Evrak UYAP'taki özgün hâliyle, UDF ise UDF olarak kaydedilir; önizleme için üretilen PDF kaydedilmez. Daha önce indirilen evrak yeniden indirilmez. Dosyanın bilgileri ve evrak listesi de bilgisayara kaydedildiği için panel internet bağlantısı olmadan son çekilen hâliyle açılır.
+
+![Üç evrak indirilmek üzere seçili](docs/screenshots/uyap-secerek-indirme.webp)
+
+İndirilen evrak varsayılan olarak ev klasöründeki `Folio/UYAP` altında, her dosya için mahkeme adı ve esas numarasıyla adlandırılmış bir klasöre kaydedilir. Belgeler klasörü bilerek önerilmez: Windows onu OneDrive'a taşıyabilir. Kaydetme ilk kurulumda açıktır; panelin **Kayıt ayarları** bölümünden kapatılabilir ya da klasör değiştirilebilir. Kayıt klasörü arşive kendiliğinden eklenir, yani indirilen evrakın içinde de arama yapılır. Ana ekranın sol menüsünde **UYAP DOSYALARI** başlığı altında her dosya ayrı bir kategori olarak görünür; bir dosyaya tıklamak yalnız o dosyanın evrakını listeler.
+
+![Ana ekranda UYAP dosyası kategorisi](docs/screenshots/uyap-kategori.webp)
+
+Dosya kimlikleri UYAP'ta oturuma bağlı olduğu için Folio dosyaları mahkeme ve esas numarasıyla, evrakı UYAP'ın evrak numarasıyla tanır; böylece yeni bir oturumda da aynı dosya ve evrak eşleşir. LifeOS Editör ile Folio aynı kayıtları kullanır.
+
 ## PDF vurgulama
 
 PDF önizlemesinde metin seçilir ve araç çubuğundaki **vurgula** düğmesiyle işaretlenir; beş renk arasından seçim yapılır. Vurguya tıklamak rengi değiştirme ve silme menüsünü açar.
@@ -207,6 +289,14 @@ Komut satırında `lifeos_folio --preview -- dosya.udf` önizlemeyi, `lifeos_fol
 - **Android:** Ayarlar → varsayılan önizleyici akışı, kullanıcıya gerçek bir belge seçtirip o belgenin MIME türüyle Android `ACTION_VIEW` çözücüsünü açar. LifeOS Folio → “Her zaman” seçilir; PDF, UDF, DOCX gibi her tür için işlem ayrı yapılır. Başka uygulama önceden varsayılansa onun uygulama ayrıntıları açılır ve varsayılanı temizledikten sonra akış tekrarlanır. Genel depolama izni gerekmez. `content://` ve `file://` açılışları uygulama kapalıyken/açıkken alınır. Sağlayıcı UDF'yi genel binary olarak bildirirse uzantı uygulamada kontrol edilir. Yeni belge, klasör eşitleme kuyruğunu beklemeden ayrı I/O işinde okunur. Ekran adları cihaz üreticisine göre değişebilir.
 
 Platform kaynakları: [Android intent filtreleri](https://developer.android.com/training/basics/intents/filters), [Windows uygulama kaydı](https://learn.microsoft.com/en-us/windows/win32/shell/default-programs), [Linux MIME/desktop kaydı](https://specifications.freedesktop.org/desktop-entry/latest/mime-types.html).
+
+## Güncellemeler
+
+Folio yeni bir sürüm olduğunu kendisi bildirir. Sürüm bilgisi `lifeos.com.tr/surum/stable/<platform>.json` adresinden okunur ve uygulamaya gömülü Ed25519 anahtarıyla imzalanmış olmalıdır; imzası tutmayan ya da `lifeos.com.tr` dışındaki bir dosyayı gösteren bilgi yok sayılır. Paketler GitHub Actions'ta derlenir, imzalanır ve sunucuya gönderilir; sunucu imzayı yeniden denetledikten sonra yayınlar.
+
+## macOS
+
+macOS sürümü deneme aşamasındadır ve Apple tarafından imzalanmamıştır: paket ilk açılışta **Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç** ile bir kez onaylanmalıdır. Paket hem Apple Silicon hem Intel Mac'lerde çalışır ve GitHub'ın macOS makinesinde `.github/workflows/macos.yml` ile üretilir. OCR ve PDF küçültme araçları macOS için ayrıca derlenir (`packaging/native/build_tools.py macos`, `merge_macos.py`). Kartla e-imza, e-Devlet ile giriş ve UYAP gönderimi Mac'te henüz gerçek kullanıcıyla denenmedi; genel kısayol Mac'te yoktur.
 
 ## Kullanılan bileşenler ve lisansları
 
@@ -269,6 +359,18 @@ Bunlar `native_tools/` altında kaynaktan derlenip ikili olarak sürümlenir; ku
 | [watcher](https://pub.dev/packages/watcher) | BSD-3-Clause | Klasör değişikliği izleme |
 | [path](https://pub.dev/packages/path), [path_provider](https://pub.dev/packages/path_provider), [intl](https://pub.dev/packages/intl) | BSD-3-Clause | Yol, dizin ve yerelleştirme |
 
+### Ses ve tarayıcı
+
+| Bileşen | Lisans | Ne için |
+|---|---|---|
+| [sherpa_onnx](https://pub.dev/packages/sherpa_onnx) | Apache-2.0 | Sesli okuma ve sesli yazma modellerini çalıştırma |
+| [flutter_soloud](https://pub.dev/packages/flutter_soloud) | MIT | Okunan sesi çalma |
+| [flutter_recorder](https://pub.dev/packages/flutter_recorder) | Apache-2.0 | Mikrofondan ses alma |
+| Supertonic 3 (Supertone) | OpenRAIL-M | Türkçe okuma sesi; ilk kullanımda indirilir |
+| Whisper large-v3 turbo (OpenAI), Silero VAD | MIT | Konuşmayı yazıya geçirme; ilk kullanımda indirilir |
+| [webview_windows](https://pub.dev/packages/webview_windows) | BSD-3-Clause | Windows'ta e-Devlet penceresi |
+| WebKitGTK (sistemden) | LGPL-2.1 | Linux'ta e-Devlet penceresi |
+
 ### Yazı tipleri
 
 [Liberation](https://github.com/liberationfonts), [Inter](https://rsms.me/inter/) ve [Lora](https://github.com/cyrealtype/Lora-Cyrillic) — hepsi **SIL Open Font License 1.1**. Fontlar yerel olarak paketlenir; hiçbir font için ağ bağlantısı kurulmaz.
@@ -293,7 +395,7 @@ Son olarak UDF biçimini kullanan meslektaşlara: bu uygulama, her gün açılan
 
 ## Derleme
 
-Flutter **3.47.2**, Dart **3.13.2**. Android: JDK 17, SDK 36+ ve Flutter'ın istediği NDK. Linux: Flutter masaüstü gereksinimleri (CMake/Ninja/clang/GTK3), X11 ve AppIndicator geliştirme paketleri (`libx11-dev`, `libayatana-appindicator3-dev` veya `libappindicator3-dev`). İlk native SQLite/PDF derlemesi internet erişimi gerektirebilir.
+Flutter **3.47.2**, Dart **3.13.2**. Android: JDK 17, SDK 36+ ve Flutter'ın istediği NDK. Linux: Flutter masaüstü gereksinimleri (CMake/Ninja/clang/GTK3), X11 ve AppIndicator geliştirme paketleri (`libx11-dev`, `libayatana-appindicator3-dev` veya `libappindicator3-dev`), e-Devlet penceresi için `libwebkit2gtk-4.1-dev`, mikrofon için `libasound2-dev`. macOS: Xcode; e-Devlet penceresi `swiftc` ile ayrıca derlenir (bkz. `.github/workflows/macos.yml`). İlk native SQLite/PDF derlemesi internet erişimi gerektirebilir.
 
 ```sh
 flutter pub get
