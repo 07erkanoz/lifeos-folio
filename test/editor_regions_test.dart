@@ -413,11 +413,6 @@ void main() {
       'pageNumber-foreStr': 'Sayfa ',
       'pageNumber-pageStartNumStr': '',
     });
-    await tester.runAsync(
-      () =>
-          File('${dir.path}/belge.udf')
-              .copy('/tmp/claude-1000/pn/d-editorden.udf'),
-    );
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
   });
