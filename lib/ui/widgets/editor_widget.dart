@@ -104,6 +104,7 @@ import '../../services/editor/letterheads.dart';
 import '../../services/layout/page_numbers.dart';
 import '../../services/pdf/pdf_service.dart';
 import '../../services/rtf/rtf_writer.dart';
+import '../../services/udf/udf_reader.dart';
 import '../../services/udf/udf_writer.dart';
 import '../theme/app_theme.dart';
 import 'editor_line_layout.dart';
@@ -121,6 +122,16 @@ class EditorWidget extends StatefulWidget {
   final DocumentRevision? recovery;
   final ValueChanged<String>? onSaved;
   final ValueChanged<String>? onSigned;
+
+  /// Signs the UDF at a path and answers the signed file's path, or null
+  /// when the lawyer gave up: the signing dialog, replaced under test.
+  @visibleForTesting
+  static Future<String?> Function(BuildContext context, String path) sign =
+      (context, path) => showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => SigningDialog(filePath: path),
+      );
 
   /// The archive, when the editor is standing in front of one.
   ///
@@ -2562,16 +2573,11 @@ class _EditorWidgetState extends State<EditorWidget>
         // this document; asking the signer to overwrite it would hide damage.
         UyapWebService.validateSignedUdf(bytes);
       } else {
-        final signed = await showDialog<String>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => SigningDialog(filePath: path),
-        );
+        final signed = await EditorWidget.sign(context, path);
         if (!mounted || signed == null) return;
         path = signed;
-        _savedPath = signed;
-        _savedFormat = EvrakFormat.udf;
-        unawaited(_holdDocument());
+        await _takeSignature(signed);
+        if (!mounted) return;
         bytes = await File(signed).readAsBytes();
         UyapWebService.validateSignedUdf(bytes);
       }
@@ -2642,18 +2648,41 @@ class _EditorWidgetState extends State<EditorWidget>
       if ((_savedPath == null || _hasChanges) && !await _save()) return;
       final path = _savedPath;
       if (!mounted || path == null || _savedFormat != EvrakFormat.udf) return;
-      final signed = await showDialog<String>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => SigningDialog(filePath: path),
-      );
-      if (mounted && signed != null) widget.onSigned?.call(signed);
+      final signed = await EditorWidget.sign(context, path);
+      if (!mounted || signed == null) return;
+      await _takeSignature(signed);
+      widget.onSigned?.call(signed);
     } finally {
       if (mounted) {
         setState(() => _signingNew = false);
         if (widget.isActive) _editorFocus.requestFocus();
       }
     }
+  }
+
+  /// The document as it is now, signed at [path]. The editor read the
+  /// signature only when it opened the file, so without this the banner
+  /// stayed away until the document was opened again.
+  Future<void> _takeSignature(String path) async {
+    final signed = UdfReader.readBytes(await File(path).readAsBytes());
+    if (!mounted) return;
+    setState(() {
+      _savedPath = path;
+      _savedFormat = EvrakFormat.udf;
+      if (signed != null) {
+        _sourceModel = DocModel(
+          blocks: _sourceModel?.blocks ?? signed.blocks,
+          styles: _sourceModel?.styles ?? signed.styles,
+          pageProperties: _sourceModel?.pageProperties ?? signed.pageProperties,
+          pageRegions: _sourceModel?.pageRegions ?? signed.pageRegions,
+          metadata: signed.metadata,
+        );
+        _sourceSigned = signed.metadata['hasSignature'] == true;
+        // Editing it now drops the signature again: say so, as on opening.
+        _signatureNoticeShown = false;
+      }
+    });
+    unawaited(_holdDocument());
   }
 
   Future<bool> _save() async {

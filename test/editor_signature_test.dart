@@ -289,4 +289,51 @@ void main() {
     await tester.pumpAndSettle();
     await removeTemporaryDirectory(tester, dir);
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets('signing from the editor shows the signature at once, without '
+      'opening the document again', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final dir = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('editor-sign-now-'),
+    ))!;
+    DocumentHistory.instance = DocumentHistory(
+      directory: Directory('${dir.path}/history'),
+    );
+    final file = File('${dir.path}/dilekce.udf');
+    final model = DocModel(blocks: [DocBlock(plainText: 'İmzalanacak belge')]);
+    await tester.runAsync(() => file.writeAsBytes(UdfWriter.writeBytes(model)));
+    // The card or the phone, as the dialog would: the same file, signed.
+    final sign = EditorWidget.sign;
+    EditorWidget.sign = (context, path) async {
+      await File(path).writeAsBytes(_signed(model));
+      return path;
+    };
+    addTearDown(() => EditorWidget.sign = sign);
+
+    var signedPath = '';
+    await tester.pumpWidget(
+      _app(
+        EditorWidget(
+          initialFilePath: file.path,
+          initialFormat: EvrakFormat.udf,
+          onSigned: (path) => signedPath = path,
+        ),
+      ),
+    );
+    await waitFor(tester, () => find.byType(QuillEditor).evaluate().isNotEmpty);
+    expect(find.byType(SignatureBanner), findsNothing);
+
+    await tester.tap(find.byTooltip('UDF e-imzala'));
+    await waitFor(tester, () => signedPath.isNotEmpty);
+    await tester.pump();
+
+    expect(signedPath, file.path);
+    expect(find.byType(SignatureBanner), findsWidgets);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await removeTemporaryDirectory(tester, dir);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }
