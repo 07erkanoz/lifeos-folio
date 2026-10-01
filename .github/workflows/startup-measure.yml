@@ -48,7 +48,7 @@ jobs:
             $setup = Join-Path $env:RUNNER_TEMP "Folio-$version.exe"
             Invoke-WebRequest "https://lifeos.com.tr/downloads/LifeOS-Folio-$version-Windows-x64-Setup.exe" -OutFile $setup
             $install = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=`"$dir`""
-            if ($install.ExitCode -ne 0) { throw "Kurulum $version: $($install.ExitCode)" }
+            if ($install.ExitCode -ne 0) { throw "Kurulum ${version}: $($install.ExitCode)" }
             "== $version"
             for ($i = 1; $i -le 4; $i++) { Measure-Open (Join-Path $dir 'lifeos_folio.exe') "Folio $version" $i }
             for ($i = 1; $i -le 3; $i++) { Measure-Open (Join-Path $dir 'lifeos_editor.exe') "Editör $version" $i }
