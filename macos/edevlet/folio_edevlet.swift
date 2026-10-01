@@ -32,9 +32,19 @@ else {
 let hint = argument("--hint") ?? ""
 
 final class Login: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate {
+  let page: URL
+  let redirect: String
+  let hint: String
   var got = false
   var window: NSWindow!
   var view: WKWebView!
+
+  init(page: URL, redirect: String, hint: String) {
+    self.page = page
+    self.redirect = redirect
+    self.hint = hint
+    super.init()
+  }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     let configuration = WKWebViewConfiguration()
@@ -113,7 +123,7 @@ final class Login: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 }
 
 let app = NSApplication.shared
-let login = Login()
+let login = Login(page: page, redirect: redirect, hint: hint)
 app.delegate = login
 // A window of its own with a Dock icon while it is open, though it is not
 // an app bundle.
