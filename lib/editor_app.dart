@@ -65,6 +65,9 @@ Future<void> runEditorApp(List<String> arguments) async {
   runApp(EditorApp(path: path, desktopChrome: chrome));
   if (options != null) {
     await windowManager.waitUntilReadyToShow(options, () async {
+      // A document is written across the whole screen: the editor always
+      // opens maximized, its size above only what un-maximizing returns to.
+      await windowManager.maximize();
       await windowManager.show();
       await windowManager.focus();
     });

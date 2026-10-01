@@ -1,0 +1,57 @@
+name: Açılış süresi
+run-name: LifeOS Folio · açılış süresi · ${{ inputs.versions }}
+# How long Folio and LifeOS Editör take to open on Windows, release against
+# release: each version is installed from lifeos.com.tr the way a lawyer
+# installs it, then opened several times. The first opening after installing
+# is counted apart, since it is the one people notice.
+on:
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: Sırayla kurulup ölçülecek sürümler
+        default: '1.2.0 1.3.0'
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Ölç
+        shell: pwsh
+        env:
+          VERSIONS: ${{ inputs.versions }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'folio'
+          $env:FOLIO_STARTUP_TRACE = '1'
+          function Measure-Open($exe, $label, $run) {
+            $err = Join-Path $env:RUNNER_TEMP "$label-$run.txt"
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            $p = Start-Process -FilePath $exe -PassThru -RedirectStandardError $err
+            $window = $null
+            while ($clock.Elapsed.TotalSeconds -lt 60) {
+              $p.Refresh()
+              if ($p.MainWindowHandle -ne 0) { $window = $clock.ElapsedMilliseconds; break }
+              Start-Sleep -Milliseconds 25
+            }
+            # Long enough for the archive's first results to be reported.
+            Start-Sleep -Seconds 12
+            $cpu = [math]::Round($p.TotalProcessorTime.TotalMilliseconds)
+            $memory = [math]::Round($p.WorkingSet64 / 1MB)
+            Stop-Process -Id $p.Id -Force
+            Start-Sleep -Seconds 2
+            $trace = (Get-Content $err -ErrorAction SilentlyContinue) -join ' | '
+            "{0,-22} açılış {1,2}: pencere {2,6} ms · CPU {3,6} ms · bellek {4,4} MB · {5}" -f $label, $run, $window, $cpu, $memory, $trace
+          }
+          foreach ($version in $env:VERSIONS.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
+            $setup = Join-Path $env:RUNNER_TEMP "Folio-$version.exe"
+            Invoke-WebRequest "https://lifeos.com.tr/downloads/LifeOS-Folio-$version-Windows-x64-Setup.exe" -OutFile $setup
+            $install = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=`"$dir`""
+            if ($install.ExitCode -ne 0) { throw "Kurulum $version: $($install.ExitCode)" }
+            "== $version"
+            for ($i = 1; $i -le 4; $i++) { Measure-Open (Join-Path $dir 'lifeos_folio.exe') "Folio $version" $i }
+            for ($i = 1; $i -le 3; $i++) { Measure-Open (Join-Path $dir 'lifeos_editor.exe') "Editör $version" $i }
+            Get-ChildItem $dir -Recurse -File | Measure-Object Length -Sum |
+              ForEach-Object { "kurulu boyut: {0} MB, {1} dosya" -f [math]::Round($_.Sum / 1MB), $_.Count }
+          }
