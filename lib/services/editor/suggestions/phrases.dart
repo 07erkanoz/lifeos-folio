@@ -135,6 +135,14 @@ bool isPersonal(String phrase) {
   for (final m in _name.allMatches(phrase)) {
     if (!_notSurname(m.group(1)!)) return true;
   }
+  // A name all in capitals inside a sentence: "ERKAN ÖZ
+  // görevlendirilmiştir". A heading in capitals ("SONUÇ VE İSTEM",
+  // "MANAVGAT 1. ASLİYE HUKUK MAHKEMESİNE") has no lower case at all.
+  if (_lowerCase.hasMatch(phrase)) {
+    for (final m in _capitals.allMatches(phrase)) {
+      if (!_notSurname(m.group(1)!) && !_notSurname(m.group(2)!)) return true;
+    }
+  }
   // Numbers of four digits or more are years, registry and case numbers,
   // except a law's number: "7036 sayılı".
   for (final m in RegExp(r'\d{4,}').allMatches(phrase)) {
@@ -171,6 +179,13 @@ final _personal = [
 
 /// A name, then a word in capitals: how filings write "Ahmet YILMAZ".
 final _name = RegExp(r'\b[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\s+([A-ZÇĞİÖŞÜ]{2,})\b');
+
+/// Two words in capitals in a row, each a whole word.
+final _capitals = RegExp(
+  r'(?<!\p{L})(\p{Lu}{2,})\s+(\p{Lu}{2,})(?!\p{L})',
+  unicode: true,
+);
+final _lowerCase = RegExp(r'\p{Ll}', unicode: true);
 
 /// Capitals that are not a surname: the codes' abbreviations and the words
 /// a heading is written in ("Davalının TMK", "Sayın MAHKEMENİZE").

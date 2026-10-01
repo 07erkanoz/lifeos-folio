@@ -51,6 +51,8 @@ void main() {
         '2023/456 Esas sayılı dosyada',
         'görüşme 12.03.2024 tarihinde yapıldı',
         'Arabulucu 19275 sicil numaralı',
+        'ERKAN ÖZ görevlendirilmiştir',
+        'vekili Av. AHMET YILMAZ ile',
       ]) {
         expect(isPersonal(line), isTrue, reason: line);
       }
@@ -59,6 +61,9 @@ void main() {
         'Kira bedelinin zamanında ödenmemesi durumunda %15 temerrüt faizi',
         'Kat Mülkiyeti Kanunu hükümleri',
         'Yargıtay 3. Hukuk Dairesi kararı',
+        'SONUÇ VE İSTEM',
+        'MANAVGAT 1. ASLİYE HUKUK MAHKEMESİNE',
+        'HMK ve TMK hükümleri uyarınca',
       ]) {
         expect(isPersonal(line), isFalse, reason: line);
       }
@@ -113,6 +118,51 @@ void main() {
       ).suggest('Av');
       expect(found.first.text, 'Av. Deniz Yılmaz');
       expect(found.first.source, SuggestionSource.profile);
+    });
+
+    test('the lawyer’s own name is found without its title', () {
+      final engine = SuggestionEngine(
+        profile: const LawyerProfile(
+          lawyers: [Lawyer(name: 'Erkan Öz', bar: 'Antalya')],
+          email: 'erkanoz07@gmail.com',
+        ),
+      );
+      final found = engine.suggest('Saygılarımla erkan');
+      expect(found.first.text, 'Erkan Öz');
+      expect(found.first.source, SuggestionSource.profile);
+      expect(found.map((s) => s.text), contains('erkanoz07@gmail.com'));
+      expect(engine.suggest('Av. Er').first.text, 'Av. Erkan Öz');
+    });
+
+    test('a name in capitals learned earlier is not offered', () {
+      final dir = Directory.systemTemp.createTempSync('folio-oneri-');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/oneriler.sqlite';
+      // Written as a memory from before names in capitals were kept out.
+      PhraseMemory.open(path).dispose();
+      const text = 'ERKAN ÖZ görevlendirilmiştir';
+      final db = sqlite3.open(path);
+      db.execute(
+        'INSERT INTO phrases(key, text, archive, seen) VALUES(?, ?, 7, 0)',
+        [foldPhrase(text), text],
+      );
+      db.dispose();
+      final memory = PhraseMemory.open(path);
+      addTearDown(memory.dispose);
+      expect(memory.phrases.single.text, text);
+      expect(SuggestionEngine(memory: memory).suggest('erkan'), isEmpty);
+    });
+
+    test('a phrase whose first word is in capitals keeps it', () {
+      final memory = PhraseMemory.memory();
+      addTearDown(memory.dispose);
+      const text = 'TMK uyarınca boşanmalarına karar verilmesini';
+      memory.learnSaved('/a.udf', text);
+      memory.learnSaved('/b.udf', text);
+      expect(
+        SuggestionEngine(memory: memory).suggest('Talep: tmk uya').first.text,
+        text,
+      );
     });
 
     test('a learned phrase is offered once two documents have it', () {

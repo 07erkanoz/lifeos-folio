@@ -82,15 +82,17 @@ class SuggestionEngine {
       }
       for (final (label, value)
           in profile?.entries() ?? const <(String, String)>[]) {
-        if (_completes(value, key)) {
+        for (final text in _profileForms(value)) {
+          if (!_completes(text, key)) continue;
           offer(
             Suggestion(
-              text: value,
+              text: text,
               source: SuggestionSource.profile,
               typed: length,
               label: label,
             ),
           );
+          break;
         }
       }
       for (final phrase in builtInPhrases) {
@@ -105,9 +107,12 @@ class SuggestionEngine {
         }
       }
       for (final phrase in memory?.phrases ?? const <LearnedPhrase>[]) {
+        // A phrase learned before isPersonal knew a name in capitals is
+        // still in the memory; it is not offered.
         if (phrase.offered &&
             phrase.key.startsWith(key) &&
-            phrase.key.length > key.length) {
+            phrase.key.length > key.length &&
+            !isPersonal(phrase.text)) {
           offer(
             Suggestion(
               text: _cased(phrase.text, typed),
@@ -123,6 +128,14 @@ class SuggestionEngine {
     return out;
   }
 
+  /// How a profile value can be written: as it is, and a lawyer's name
+  /// without its title, which a sentence or a signature writes alone, so
+  /// "erkan" finds "Av. Erkan Öz" as "Erkan Öz".
+  static Iterable<String> _profileForms(String value) sync* {
+    yield value;
+    if (value.startsWith('Av. ')) yield value.substring(4);
+  }
+
   static bool _completes(String phrase, String key) {
     final folded = foldPhrase(phrase);
     return folded.startsWith(key) && folded.length > key.length;
@@ -133,6 +146,14 @@ class SuggestionEngine {
   /// and "Davanın" at the start of one stays capital.
   static String _cased(String phrase, String typed) {
     if (phrase == phrase.toUpperCase() || _isName(phrase)) return phrase;
+    // A first word in capitals is written so on purpose; lowering its
+    // first letter made "eRKAN".
+    final firstWord = RegExp(r'^\S+').stringMatch(phrase) ?? '';
+    if (firstWord.length >= 2 &&
+        firstWord == firstWord.toUpperCase() &&
+        firstWord != firstWord.toLowerCase()) {
+      return phrase;
+    }
     final first = typed.isEmpty ? '' : typed[0];
     if (first.isEmpty || phrase.isEmpty) return phrase;
     final upper = first != first.toLowerCase() || first == 'İ';
