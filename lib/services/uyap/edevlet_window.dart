@@ -7,8 +7,9 @@ import 'package:path/path.dart' as p;
 
 import 'uyap_web_service.dart';
 
-/// The e-Devlet page in a window of its own on Linux: `folio-edevlet`,
-/// beside Folio in its bundle, a small program on the system's WebKitGTK.
+/// The e-Devlet page in a window of its own on Linux and macOS:
+/// `folio-edevlet`, beside Folio in its bundle, a small program on the
+/// system's WebKit (WebKitGTK on Linux).
 /// It stops at UYAP's return address before loading it and hands back the
 /// code e-Devlet put there.
 class EdevletWindow {
@@ -25,7 +26,8 @@ class EdevletWindow {
 
   static bool get available => check();
 
-  static bool _found() => Platform.isLinux && File(_helper).existsSync();
+  static bool _found() =>
+      (Platform.isLinux || Platform.isMacOS) && File(_helper).existsSync();
 
   /// Opens [page]; the window stays until e-Devlet sends the lawyer back or
   /// the window is closed.
@@ -46,10 +48,13 @@ class EdevletWindow {
     }
   }
 
-  static const _missing =
-      'e-Devlet penceresi açılamadı. Sistemde WebKitGTK (libwebkit2gtk-4.1) '
-      'kurulu olmayabilir; e-imza kartınız varsa Adalet E-İmza uygulamasıyla '
-      'bağlanabilirsiniz.';
+  static String get _missing => Platform.isMacOS
+      ? 'e-Devlet penceresi açılamadı. Folio\'yu yeniden kurmayı deneyin; '
+            'e-imza kartınız varsa Adalet E-İmza uygulamasıyla '
+            'bağlanabilirsiniz.'
+      : 'e-Devlet penceresi açılamadı. Sistemde WebKitGTK (libwebkit2gtk-4.1) '
+            'kurulu olmayabilir; e-imza kartınız varsa Adalet E-İmza '
+            'uygulamasıyla bağlanabilirsiniz.';
 
   /// The code, or null when the window was closed without one.
   Future<String?> get code async {

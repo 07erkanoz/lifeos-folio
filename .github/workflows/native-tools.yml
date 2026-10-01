@@ -15,7 +15,7 @@ on:
         required: true
         default: windows
         type: choice
-        options: [windows, linux]
+        options: [windows, linux, macos]
 permissions:
   # Creating the prerelease that carries the rebuilt tools out. Nothing is
   # written to a branch; the binaries still land only by a reviewed commit.
@@ -25,12 +25,17 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Apple's linker and lipo exist only on a Mac.
+    runs-on: ${{ inputs.target == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Derleme araçlarını kur
         run: |
+          if [ "${{ inputs.target }}" = macos ]; then
+            brew install ninja
+            exit 0
+          fi
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake ninja-build
           if [ "${{ inputs.target }}" = windows ]; then
@@ -42,6 +47,12 @@ jobs:
             python3 packaging/native/build_tools.py windows --work "$RUNNER_TEMP/work" \
               --toolchain packaging/native/mingw-w64-x86_64.cmake \
               --strip x86_64-w64-mingw32-strip
+          elif [ "${{ inputs.target }}" = macos ]; then
+            # Both halves, each in a work folder of its own, then one
+            # universal binary per tool.
+            python3 packaging/native/build_tools.py macos --arch arm64 --work "$RUNNER_TEMP/work-arm64"
+            python3 packaging/native/build_tools.py macos --arch x86_64 --work "$RUNNER_TEMP/work-x86_64"
+            python3 packaging/native/merge_macos.py
           else
             python3 packaging/native/build_tools.py linux --work "$RUNNER_TEMP/work"
           fi
@@ -49,10 +60,28 @@ jobs:
         # Windows binaries are checked by reading their PE imports, which works
         # on Linux; the smoke test needs the target OS and runs in the platform
         # build workflow instead.
-        run: python3 packaging/native/verify.py ${{ inputs.target }}-x64
+        run: |
+          if [ "${{ inputs.target }}" = macos ]; then
+            # Here the target is the host: run every tool too, and show that
+            # each one carries both architectures and needs nothing from
+            # Homebrew.
+            python3 packaging/native/verify.py macos-universal --smoke
+            for tool in native_tools/macos-universal/bin/*; do
+              lipo -info "$tool"
+              otool -L "$tool"
+              if otool -L "$tool" | grep -E '/opt/homebrew|/usr/local'; then exit 1; fi
+            done
+          else
+            python3 packaging/native/verify.py ${{ inputs.target }}-x64
+          fi
       - name: Değişen dosyaları göster
         run: git -c core.quotepath=false status --short native_tools/
       - name: Sonucu yayımla
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash packaging/native/upload-tools.sh ${{ inputs.target }}
+        run: |
+          if [ "${{ inputs.target }}" = macos ]; then
+            bash packaging/native/upload-tools.sh macos macos-universal
+          else
+            bash packaging/native/upload-tools.sh ${{ inputs.target }}
+          fi

@@ -2,10 +2,18 @@ name: macOS
 run-name: LifeOS Folio · macOS · ${{ github.sha }}
 # No one working on Folio has a Mac, so this machine is where the Mac build is
 # made and tried: the suite, the app built, and the package a tester installs.
+# The package is signed ad hoc, not by Apple: it opens after the tester allows
+# it once in System Settings → Privacy & Security.
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Paketi deneme sürümü olarak yayımla
+        type: boolean
+        default: false
 permissions:
-  contents: read
+  # Publishing the test package as a prerelease; nothing is pushed.
+  contents: write
 concurrency:
   group: folio-macos-${{ github.ref }}
   cancel-in-progress: true
@@ -27,14 +35,65 @@ jobs:
         run: flutter test -r failures-only
       - name: macOS uygulamasını derle
         run: flutter build macos --release
+      - name: e-Devlet penceresini derle
+        # The Mac counterpart of linux/edevlet, for both kinds of Mac.
+        run: |
+          for arch in arm64 x86_64; do
+            swiftc -O -target "$arch-apple-macos12.0" macos/edevlet/folio_edevlet.swift \
+              -o "$RUNNER_TEMP/folio-edevlet-$arch"
+          done
+          lipo -create "$RUNNER_TEMP"/folio-edevlet-arm64 "$RUNNER_TEMP"/folio-edevlet-x86_64 \
+            -output "$RUNNER_TEMP/folio-edevlet"
       - name: Paketle
         run: |
+          version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+.*/\1/p' pubspec.yaml)"
           app="build/macos/Build/Products/Release/LifeOS Folio.app"
-          ls -la "$app/Contents/MacOS" "$app/Contents/Frameworks" | head -60
-          codesign -dv "$app" 2>&1 | head -5 || true
-          ditto -c -k --keepParent "$app" LifeOS-Folio-macOS.zip
+          cp "$RUNNER_TEMP/folio-edevlet" "$app/Contents/MacOS/folio-edevlet"
+          if [ -d native_tools/macos-universal ]; then
+            python3 packaging/native/verify.py macos-universal
+            mkdir -p "$app/Contents/Resources/tools"
+            cp -R native_tools/macos-universal/bin native_tools/macos-universal/tessdata \
+              "$app/Contents/Resources/tools/"
+          else
+            echo "::warning::native_tools/macos-universal yok: OCR ve PDF küçültme bu pakette çalışmaz."
+          fi
+          # Ad hoc, inside out: every program in the bundle, then the bundle.
+          find "$app/Contents/Resources/tools/bin" "$app/Contents/MacOS" -type f -perm -u+x 2>/dev/null \
+            | while read -r tool; do codesign --force --sign - "$tool"; done
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+          lipo -info "$app/Contents/MacOS/LifeOS Folio"
+          mkdir -p dmg && cp -R "$app" dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname "LifeOS Folio" -srcfolder dmg -ov -format UDZO \
+            "LifeOS-Folio-$version-macOS.dmg"
+          echo "DMG=LifeOS-Folio-$version-macOS.dmg" >> "$GITHUB_ENV"
+      - name: Açılıyor mu
+        # Started the way a tester starts it, left a few seconds, then closed:
+        # a crash at start shows here rather than on the tester's Mac.
+        run: |
+          app="build/macos/Build/Products/Release/LifeOS Folio.app"
+          "$app/Contents/MacOS/LifeOS Folio" > "$RUNNER_TEMP/start.log" 2>&1 &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            cat "$RUNNER_TEMP/start.log"
+            echo "::error::Folio açıldıktan sonra kapandı."
+            exit 1
+          fi
+          kill "$pid"
+          tail -n 40 "$RUNNER_TEMP/start.log"
+      - name: Deneme sürümü olarak yayımla
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="mac-deneme-${GITHUB_RUN_ID}"
+          gh release create "$tag" "$DMG" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "LifeOS Folio · Mac deneme · ${GITHUB_RUN_ID}" \
+            --notes "Mac için deneme paketi. Apple tarafından imzalı değildir: ilk açılışta Sistem Ayarları → Gizlilik ve Güvenlik'ten \"Yine de Aç\" seçilmelidir."
       - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.publish }}
         with:
           name: LifeOS-Folio-macOS
-          path: LifeOS-Folio-macOS.zip
+          path: ${{ env.DMG }}
           retention-days: 7

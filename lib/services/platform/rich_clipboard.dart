@@ -27,7 +27,10 @@ abstract final class RichClipboard {
   static Future<void>? _writing;
 
   static bool get _native =>
-      Platform.isLinux || Platform.isWindows || Platform.isAndroid;
+      Platform.isLinux ||
+      Platform.isWindows ||
+      Platform.isMacOS ||
+      Platform.isAndroid;
 
   static Future<DocModel?> model() async {
     await _writing;

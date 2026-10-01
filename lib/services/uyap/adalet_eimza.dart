@@ -17,9 +17,21 @@ abstract final class AdaletEimza {
   static Future<bool> installed() => check();
 
   static Future<bool> _installed() async {
-    if (!(Platform.isLinux || Platform.isWindows)) return false;
+    if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+      return false;
+    }
     // Running: installed, whatever it was installed as.
     if (await _listening()) return true;
+    if (Platform.isMacOS) {
+      // An app in Applications, by whatever exact name this version has.
+      try {
+        return await Directory('/Applications')
+            .list()
+            .any((entry) => entry.path.toLowerCase().contains('adalet'));
+      } on FileSystemException {
+        return false;
+      }
+    }
     if (Platform.isLinux) {
       for (final path in const [
         '/usr/lib/adalet-eimza-tray',

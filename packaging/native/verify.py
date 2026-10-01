@@ -109,7 +109,7 @@ def smoke(platform):
 
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('platform',choices=['windows-x64','linux-x64','all'])
+    parser.add_argument('platform',choices=['windows-x64','linux-x64','macos-universal','all'])
     parser.add_argument('--smoke',action='store_true')
     args=parser.parse_args()
     for platform in ['windows-x64','linux-x64'] if args.platform=='all' else [args.platform]:

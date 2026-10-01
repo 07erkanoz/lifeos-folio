@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Maintainer-only rebuild of pinned sources. Ordinary Flutter builds are offline.
 Linux host: CMake/Ninja/GCC; Windows target additionally needs a MinGW toolchain.
+macOS host: CMake/Ninja/Xcode clang, one architecture per run (--arch);
+merge_macos.py joins the two into native_tools/macos-universal.
 After rebuilding run verify.py, smoke tests and review the new binary checksums.
 """
 import argparse, hashlib, json, os, shutil, subprocess, tarfile, urllib.request
 from pathlib import Path
 REPO=Path(__file__).resolve().parents[2]
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('target',choices=['linux','windows'])
+p.add_argument('target',choices=['linux','windows','macos'])
+p.add_argument('--arch',choices=['arm64','x86_64'],default='arm64')
 p.add_argument('--work',type=Path,required=True)
 p.add_argument('--toolchain',type=Path)
 p.add_argument('--windres',default='x86_64-w64-mingw32-windres')
@@ -44,11 +47,21 @@ def build(name,folder,options,targets):
     out=work/name
     cmd=['cmake','-S',source/folder,'-B',out,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release',f'-DCMAKE_INSTALL_PREFIX={prefix}','-DCMAKE_POSITION_INDEPENDENT_CODE=ON']
     if a.toolchain:cmd.append(f'-DCMAKE_TOOLCHAIN_FILE={a.toolchain.resolve()}')
-    run(cmd+options)
+    run(cmd+apple+options)
     run(['cmake','--build',out,'--target',*targets,'-j','6'])
     return out
 windows=a.target=='windows'
-link='-static-libgcc -static-libstdc++'
+mac=a.target=='macos'
+# Apple's clang links libc++ and libSystem dynamically and always will; both
+# are part of every macOS, so the tools stay self-contained without these.
+link='' if mac else '-static-libgcc -static-libstdc++'
+# One architecture per run, for the oldest macOS the app itself supports. The
+# runner's Homebrew holds libpng, libtiff and the rest: kept out of sight, so
+# nothing links against a library a lawyer's Mac does not have.
+apple=[f'-DCMAKE_OSX_ARCHITECTURES={a.arch}','-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0',
+       '-DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew;/usr/local','-DCMAKE_FIND_FRAMEWORK=NEVER',
+       # Ninja itself comes from Homebrew, which the line above hides.
+       f'-DCMAKE_MAKE_PROGRAM={shutil.which("ninja")}'] if mac else []
 manifest=[]
 if windows:
     rc=work/'utf8.rc';rc.write_text(f'1 24 "{(REPO/"packaging/native/utf8.manifest").as_posix()}"\n')
@@ -57,7 +70,7 @@ build('zlib','zlib-1.3.1',[],['install'])
 # zlib installs a shared copy beside the static one; leave it and every later
 # find_package picks the .so, which would make the tools non-portable.
 if not windows:
-    for stale in prefix.glob('lib/libz.so*'):stale.unlink()
+    for stale in [*prefix.glob('lib/libz.so*'),*prefix.glob('lib/libz*.dylib')]:stale.unlink()
 jpeg=build('jpeg','libjpeg-turbo-3.1.2',[f'-DENABLE_SHARED={"ON" if windows else "OFF"}',f'-DENABLE_STATIC={"OFF" if windows else "ON"}','-DWITH_TURBOJPEG=OFF','-DWITH_SIMD=OFF',*manifest],['install'])
 # CMake's GNUInstallDirs may use lib or lib64; discover the installed library.
 def library(name):return next(prefix.rglob(name))
@@ -82,14 +95,14 @@ def obuild(name,folder,options,targets):
          f'-DCMAKE_INSTALL_PREFIX={ocr}','-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
          f'-DCMAKE_PREFIX_PATH={ocr}']
     if a.toolchain:cmd.append(f'-DCMAKE_TOOLCHAIN_FILE={a.toolchain.resolve()}')
-    run(cmd+options)
+    run(cmd+apple+options)
     run(['cmake','--build',out,'--target',*targets,'-j','6'])
     return out
 def olib(name):return next(ocr.rglob(name))
 obuild('zlib','zlib-1.3.1',[],['install'])
 # zlib installs a shared copy beside the static one; left in place, every later
 # find_package prefers the .so/.dll and the tool stops being self-contained.
-for stale in list(ocr.glob('lib/libz.so*'))+list(ocr.glob('bin/*zlib*.dll'))+list(ocr.glob('lib/libzlib.dll.a')):
+for stale in list(ocr.glob('lib/libz.so*'))+list(ocr.glob('lib/libz*.dylib'))+list(ocr.glob('bin/*zlib*.dll'))+list(ocr.glob('lib/libzlib.dll.a')):
     stale.unlink()
 oz=olib('libzlibstatic.a' if windows else 'libz.a')
 obuild('jpeg','libjpeg-turbo-3.1.2',['-DENABLE_SHARED=OFF','-DENABLE_STATIC=ON','-DWITH_TURBOJPEG=OFF','-DWITH_SIMD=OFF'],['install'])
@@ -138,10 +151,13 @@ if 'Folio build fix' not in text:
 # JPEG and PNG already are. Windows only: the Linux executable never links it.
 wintiff=['-DLEPT_TIFF_RESULT=0',f'-DTIFF_LIBRARY_RELEASE={ot}',f'-DTIFF_LIBRARY={ot}',
          f'-DTIFF_INCLUDE_DIR={ocr}/include'] if windows else []
+# The Intel half of the Mac build is made on an Apple Silicon runner, where the
+# same probe would run an x86_64 program; answer it the same way.
+if mac:wintiff=['-DLEPT_TIFF_RESULT=0']
 tess=build('tesseract','tesseract-5.5.3',['-DBUILD_SHARED_LIBS=OFF','-DSW_BUILD=OFF','-DBUILD_TRAINING_TOOLS=OFF','-DBUILD_TESTS=OFF','-DDISABLE_CURL=ON','-DDISABLE_ARCHIVE=ON','-DGRAPHICS_DISABLED=ON','-DUSE_SYSTEM_ICU=OFF','-DOPENMP_BUILD=OFF',*wintiff,
   f'-DCMAKE_PREFIX_PATH={ocr}',f'-DLeptonica_DIR={ocr}/lib/cmake/leptonica',
   f'-DCMAKE_EXE_LINKER_FLAGS={f"-static {obj} " if windows else ""}{link}'],['tesseract'])
-out=REPO/'native_tools'/f'{a.target}-x64';(out/'bin').mkdir(parents=True,exist_ok=True)
+out=REPO/'native_tools'/(f'macos-{a.arch}' if mac else f'{a.target}-x64');(out/'bin').mkdir(parents=True,exist_ok=True)
 files=[q/('qpdf/qpdf.exe' if windows else 'qpdf/qpdf'),tiff/('tools/tiffcp.exe' if windows else 'tools/tiffcp'),jpeg/('jpegtran.exe' if windows else 'jpegtran-static')]
 files.append(tess/('bin/tesseract.exe' if windows else 'bin/tesseract'))
 (out/'tessdata').mkdir(exist_ok=True)
@@ -153,6 +169,9 @@ if windows:files += [tiff/'libtiff/libtiff-6.dll',prefix/'bin/libjpeg-62.dll',pr
 for f in files:
     dest=out/'bin'/('jpegtran' if f.name=='jpegtran-static' else f.name)
     shutil.copy2(f,dest);run([a.strip,dest])
+    # Stripping undoes the linker's own signature, and an Apple Silicon Mac
+    # refuses to run an unsigned binary; an ad-hoc one is enough to run.
+    if mac:run(['codesign','--force','--sign','-',dest])
 # The model is as load-bearing as the binary: a truncated copy would quietly
 # degrade recognition instead of failing, so it is checksummed too.
 hashes={f.relative_to(out).as_posix():hashlib.sha256(f.read_bytes()).hexdigest()

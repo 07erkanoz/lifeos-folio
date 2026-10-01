@@ -257,6 +257,9 @@ class _UyapConnectViewState extends State<UyapConnectView> {
             child: Text(
               Platform.isWindows
                   ? 'e-Devlet girişi için Microsoft Edge WebView2 gerekiyor.'
+                  : Platform.isMacOS
+                  ? 'e-Devlet penceresi bu Folio paketinde bulunamadı; '
+                        'Folio\'yu yeniden kurun.'
                   : 'e-Devlet girişi için sistemde WebKitGTK '
                         '(libwebkit2gtk-4.1) gerekiyor.',
               style: theme.textTheme.bodySmall,

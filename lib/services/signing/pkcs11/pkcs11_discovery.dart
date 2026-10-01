@@ -152,6 +152,9 @@ List<_ModuleCandidate> _macosModules() {
     _ModuleCandidate('OpenSC', 'OpenSC Project', [
       '/Library/OpenSC/lib/opensc-pkcs11.so',
       '/usr/local/lib/opensc-pkcs11.so',
+      // Card makers' installers write to /usr/local on Apple Silicon too;
+      // only Homebrew, from which OpenSC may also come, keeps its own place.
+      '/opt/homebrew/lib/opensc-pkcs11.so',
     ]),
   ];
 }
