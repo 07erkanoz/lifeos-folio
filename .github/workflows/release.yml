@@ -66,7 +66,9 @@ jobs:
     needs: version
     permissions:
       contents: write
-    runs-on: windows-latest
+    # Visual Studio 2022: webview_windows builds with /await, which the
+    # Visual Studio 2026 on windows-latest no longer accepts.
+    runs-on: windows-2022
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7.0.1

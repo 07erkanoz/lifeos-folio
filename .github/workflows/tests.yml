@@ -31,7 +31,9 @@ jobs:
   windows-build:
     # Only the release built Windows, so a build that broke was found on the
     # day of a release. The native assets' hooks say little unless asked.
-    runs-on: windows-latest
+    # Visual Studio 2022: webview_windows builds with /await, which the
+    # Visual Studio 2026 on windows-latest no longer accepts.
+    runs-on: windows-2022
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
