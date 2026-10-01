@@ -66,12 +66,17 @@ class WindowSession with WindowListener {
     return WindowSession(target, data);
   }
 
-  Future<void> restore() async {
+  /// Puts the window back as it was left. [showMaximized], when given, shows
+  /// a hidden window that was left maximized in one step instead of
+  /// maximizing it after it is shown.
+  Future<void> restore({Future<void> Function()? showMaximized}) async {
     suspended = true;
     try {
       await windowManager.setSize(data.size);
       await windowManager.center();
-      if (data.maximized) await windowManager.maximize();
+      if (data.maximized) {
+        await (showMaximized ?? windowManager.maximize)();
+      }
       if (data.fullscreen) await windowManager.setFullScreen(true);
     } finally {
       suspended = false;

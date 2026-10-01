@@ -8,6 +8,7 @@ import 'services/desktop/desktop_instance.dart';
 import 'services/platform/document_launch.dart';
 import 'services/platform/onboarding_store.dart';
 import 'services/desktop/desktop_companion.dart';
+import 'services/desktop/native_window.dart';
 import 'ui/desktop/quick_search_palette.dart';
 
 import 'package:flutter/material.dart';
@@ -125,8 +126,14 @@ void main(List<String> arguments) async {
   });
   if (pendingWindowOptions != null) {
     await windowManager.waitUntilReadyToShow(pendingWindowOptions, () async {
-      await windowManager.show();
-      await windowSession?.restore();
+      // A window left maximized opens maximized on Windows, rather than
+      // appearing at its normal size and growing.
+      if (Platform.isWindows && windowSession?.data.maximized == true) {
+        await windowSession!.restore(showMaximized: showMaximized);
+      } else {
+        await windowManager.show();
+        await windowSession?.restore();
+      }
       await windowManager.focus();
     });
   }
