@@ -63,6 +63,15 @@ dependency_overrides:
   flutter_quill:
     path: third_party/flutter_quill
 
+hooks:
+  user_defines:
+    flutter_soloud:
+      # Reading aloud plays WAV made in memory; Ogg, Opus, Vorbis and FLAC
+      # are never asked of it. Built with them, its ogg.dll and
+      # flutter_recorder's carry one name, and the Windows build refuses two
+      # libraries of the same name.
+      no_xiph_libs: true
+
 dev_dependencies:
   integration_test:
     sdk: flutter
