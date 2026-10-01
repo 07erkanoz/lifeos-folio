@@ -55,6 +55,7 @@ dependencies:
   flutter_soloud: ^5.1.5
   flutter_recorder: ^2.0.5
   webview_windows: ^0.4.0
+  fluentui_system_icons: ^1.1.273
 
 # flutter_quill has no way to give one paragraph its own indents and spacing,
 # which every Word and UYAP document does. The patched copy adds exactly that;
