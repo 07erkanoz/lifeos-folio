@@ -256,7 +256,7 @@ class _LibrarySettingsDialogState extends State<LibrarySettingsDialog> {
                     if (mounted) setState(() {});
                   },
                 ),
-                if (Platform.isLinux || Platform.isWindows)
+                if (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Taranmış belgeleri oku (OCR)'),
@@ -291,7 +291,9 @@ class _LibrarySettingsDialogState extends State<LibrarySettingsDialog> {
                           }
                         : null,
                   ),
-                if ((Platform.isLinux || Platform.isWindows) &&
+                if ((Platform.isLinux ||
+                        Platform.isWindows ||
+                        Platform.isMacOS) &&
                     library.ocrAvailable)
                   Padding(
                     padding: const EdgeInsets.only(left: 16, bottom: 4),

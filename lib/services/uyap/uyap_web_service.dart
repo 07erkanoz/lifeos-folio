@@ -171,7 +171,7 @@ class UyapWebService {
     String pin, {
     void Function(String stage)? onProgress,
   }) => _serial(() async {
-    if (!(Platform.isLinux || Platform.isWindows)) {
+    if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
       throw UnsupportedError('UYAP web bağlantısı masaüstünde kullanılabilir.');
     }
     disconnect();
@@ -405,7 +405,7 @@ class UyapWebService {
   /// or e-signature there. The page to show is in what comes back; the code
   /// it ends with goes to [finishEdevlet].
   Future<EdevletLogin> beginEdevlet(EdevletMethod method) => _serial(() async {
-    if (!(Platform.isLinux || Platform.isWindows)) {
+    if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
       throw UnsupportedError('UYAP web bağlantısı masaüstünde kullanılabilir.');
     }
     disconnect();

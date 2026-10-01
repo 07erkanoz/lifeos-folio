@@ -2541,7 +2541,7 @@ class _EditorWidgetState extends State<EditorWidget>
         _isSaving ||
         _isLoading ||
         _loadError != null ||
-        !(Platform.isLinux || Platform.isWindows)) {
+        !(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
       return;
     }
     setState(() => _sendingUyap = true);
@@ -3409,10 +3409,16 @@ class _EditorWidgetState extends State<EditorWidget>
                     onPrint: () => unawaited(_print()),
                     onHistory: () => unawaited(_history()),
                     onSign: _canSignNew ? () => unawaited(_signNew()) : null,
-                    onSendUyap: Platform.isLinux || Platform.isWindows
+                    onSendUyap:
+                        Platform.isLinux ||
+                            Platform.isWindows ||
+                            Platform.isMacOS
                         ? () => unawaited(_sendToUyap())
                         : null,
-                    onUyapOperations: Platform.isLinux || Platform.isWindows
+                    onUyapOperations:
+                        Platform.isLinux ||
+                            Platform.isWindows ||
+                            Platform.isMacOS
                         ? () => unawaited(_openUyapOperations())
                         : null,
                     onNewWindow: EditorWindow.available
@@ -3434,7 +3440,10 @@ class _EditorWidgetState extends State<EditorWidget>
                       onCaseLaw: () =>
                           setState(() => _caseLawOpen = !_caseLawOpen),
                       caseLawOpen: _caseLawOpen,
-                      onUyapCase: Platform.isLinux || Platform.isWindows
+                      onUyapCase:
+                          Platform.isLinux ||
+                              Platform.isWindows ||
+                              Platform.isMacOS
                           ? _toggleUyap
                           : null,
                       uyapCaseOpen: _uyapOpen,
