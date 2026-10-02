@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
+import 'uyap_case_links.dart';
 import 'uyap_web_service.dart';
 
 /// Where UYAP's documents are kept, and whether they are kept at all.
@@ -88,9 +89,15 @@ class UyapCaseRecord {
     this.fresh = const {},
     this.files = const {},
     this.previews = const {},
+    this.link,
   });
 
   final String court, number;
+
+  /// Where the case is in UYAP, to find it again in a later session:
+  /// without it the case can be shown but not fetched again. Null in a
+  /// record an earlier Folio kept.
+  final UyapCaseLink? link;
   final DateTime fetchedAt;
 
   /// When it was fetched the time before: what is [fresh] came after it.
@@ -116,6 +123,8 @@ class UyapCaseRecord {
   UyapCaseRecord copyWith({
     Map<String, String>? files,
     Map<String, String>? previews,
+    Set<String>? fresh,
+    UyapCaseLink? link,
   }) => UyapCaseRecord(
     court: court,
     number: number,
@@ -125,9 +134,10 @@ class UyapCaseRecord {
     parties: parties,
     documents: documents,
     withheld: withheld,
-    fresh: fresh,
+    fresh: fresh ?? this.fresh,
     files: files ?? this.files,
     previews: previews ?? this.previews,
+    link: link ?? this.link,
   );
 
   Map<String, Object?> toJson() => {
@@ -147,6 +157,7 @@ class UyapCaseRecord {
     'yeni': fresh.toList(),
     'dosyalar': files,
     'onizlemeler': previews,
+    'bag': link?.toJson(),
   };
 
   factory UyapCaseRecord.fromJson(Map<String, Object?> json) => UyapCaseRecord(
@@ -180,6 +191,7 @@ class UyapCaseRecord {
       ..._paths(json['onizlemeler']),
       if (json['surum'] == 1) ..._paths(json['dosyalar']),
     },
+    link: UyapCaseLink.fromJson(json['bag']),
   );
 
   static Map<String, String> _paths(Object? json) => {
@@ -248,10 +260,10 @@ class UyapCaseStore {
   String folderOf(UyapCaseRecord record) =>
       p.join(settings.folder, caseFolderName(record));
 
-  /// The cases with documents saved where Folio searches, each with how
-  /// many: what the archive's own list of cases shows. A case whose
-  /// documents were only cached, or all removed since, is not among them.
-  Future<List<(UyapCaseRecord, int)>> savedCases() async {
+  /// Every case kept on this computer, each with how many of its documents
+  /// are saved where Folio searches; the last fetched first. A case is
+  /// listed once it has been fetched, a document or none.
+  Future<List<(UyapCaseRecord, int)>> cases() async {
     await settings.load();
     final folder = Directory(p.join((await _root()).path, 'dosyalar'));
     if (!await folder.exists()) return const [];
@@ -262,18 +274,42 @@ class UyapCaseStore {
         final json = jsonDecode(await entry.readAsString());
         if (json is! Map) continue;
         final record = UyapCaseRecord.fromJson(json.cast<String, Object?>());
-        final where = folderOf(record);
-        final count = [
-          ...record.files.values,
-          ...record.previews.values,
-        ].where((f) => p.isWithin(where, f) && File(f).existsSync()).length;
-        if (count > 0) out.add((record, count));
+        out.add((record, savedFiles(record).length));
       } catch (_) {
         // A record that cannot be read is not listed.
       }
     }
     out.sort((a, b) => b.$1.fetchedAt.compareTo(a.$1.fetchedAt));
     return out;
+  }
+
+  /// [record]'s documents saved in its folder where Folio searches and
+  /// still there, by key: what a case's page lists as downloaded.
+  Map<String, File> savedFiles(UyapCaseRecord record) {
+    final where = folderOf(record);
+    return {
+      for (final e in {...record.previews, ...record.files}.entries)
+        if (p.isWithin(where, e.value) && File(e.value).existsSync())
+          e.key: File(e.value),
+    };
+  }
+
+  /// Forgets [record]: Folio no longer lists it, and UYAP is not touched.
+  /// [documents] also deletes what was downloaded of it.
+  Future<void> remove(UyapCaseRecord record, {bool documents = false}) async {
+    if (documents) {
+      for (final path in {...record.files.values, ...record.previews.values}) {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      }
+      final folder = Directory(folderOf(record));
+      if (await folder.exists() && await folder.list().isEmpty) {
+        await folder.delete();
+      }
+    }
+    final file = await _recordFile(record.key);
+    if (await file.exists()) await file.delete();
+    changes.value++;
   }
 
   /// Keeps what was just fetched of a case. What was not there the time
@@ -283,6 +319,7 @@ class UyapCaseStore {
     required UyapCaseDetails details,
     required List<UyapParty> parties,
     required UyapCaseDocuments documents,
+    UyapCaseLink? link,
     DateTime? now,
   }) async {
     final before = await load(target.courtName, target.number);
@@ -308,6 +345,7 @@ class UyapCaseStore {
                 .union(before!.fresh.intersection(keys)),
       files: before?.files ?? const {},
       previews: before?.previews ?? const {},
+      link: link ?? before?.link,
     );
     await _write(record);
     return record;
@@ -320,19 +358,7 @@ class UyapCaseStore {
   /// Takes [key] off the new ones: it has been looked at.
   Future<UyapCaseRecord> seen(UyapCaseRecord record, String key) async {
     if (!record.fresh.contains(key)) return record;
-    final next = UyapCaseRecord(
-      court: record.court,
-      number: record.number,
-      fetchedAt: record.fetchedAt,
-      previousFetchedAt: record.previousFetchedAt,
-      details: record.details,
-      parties: record.parties,
-      documents: record.documents,
-      withheld: record.withheld,
-      fresh: {...record.fresh}..remove(key),
-      files: record.files,
-      previews: record.previews,
-    );
+    final next = record.copyWith(fresh: {...record.fresh}..remove(key));
     await _write(next);
     return next;
   }

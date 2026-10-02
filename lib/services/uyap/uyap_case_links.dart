@@ -88,6 +88,20 @@ class UyapCaseLinks {
   Future<UyapCaseLink?> of(String path) async =>
       UyapCaseLink.fromJson((await _read())[DocumentHistory.documentKey(path)]);
 
+  /// The place in UYAP of the case kept as [court] [number], from any
+  /// document tied to it: for a case an earlier Folio kept without it.
+  Future<UyapCaseLink?> findFor(String court, String number) async {
+    for (final value in (await _read()).values) {
+      final link = UyapCaseLink.fromJson(value);
+      if (link != null &&
+          UyapWebService.fold(link.court) == UyapWebService.fold(court) &&
+          UyapWebService.fold(link.number) == UyapWebService.fold(number)) {
+        return link;
+      }
+    }
+    return null;
+  }
+
   /// Ties [path] to [link]; null unties it.
   Future<void> link(String path, UyapCaseLink? link) async {
     final all = await _read();

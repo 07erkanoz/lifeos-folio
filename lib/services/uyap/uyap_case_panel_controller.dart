@@ -105,6 +105,45 @@ class UyapCasePanelController extends ChangeNotifier {
     await refresh();
   }
 
+  /// The case kept as [record], with no document: the case's own page.
+  /// Its place in UYAP comes from the record, or for one an earlier Folio
+  /// kept, from a document tied to it.
+  Future<void> show(UyapCaseRecord record) async {
+    _path = null;
+    _link =
+        record.link ??
+        await links.findFor(record.court, record.number) ??
+        UyapCaseLink(
+          jurisdiction: '',
+          courtType: '',
+          courtId: '',
+          court: record.court,
+          number: record.number,
+        );
+    _record = record;
+    _live = null;
+    _liveDocuments = const {};
+    selected.clear();
+    _changed();
+  }
+
+  /// Ties the document to [link], a case kept on this computer, without
+  /// asking UYAP: what was fetched of it before is there already.
+  Future<void> attach(UyapCaseLink link) async {
+    _link = link;
+    _record = await store.load(link.court, link.number);
+    _live = null;
+    _liveDocuments = const {};
+    selected.clear();
+    if (_path != null) await links.link(_path!, link);
+    _changed();
+  }
+
+  /// Whether the case can be looked for in UYAP: a case kept by an earlier
+  /// Folio may not know where it is.
+  bool get findable =>
+      _link != null && _link!.courtId.isNotEmpty && _link!.courtType.isNotEmpty;
+
   Future<void> unlink() async {
     if (_path != null) await links.link(_path!, null);
     _link = null;
@@ -118,6 +157,12 @@ class UyapCasePanelController extends ChangeNotifier {
   /// The case in this session: its ids are the session's, so a new login
   /// finds it again by court and number.
   Future<UyapCase> _liveCase() async {
+    if (!findable) {
+      throw StateError(
+        'Bu dosyanın UYAP’taki yeri kayıtlı değil. Dosyayı UYAP’tan yeniden '
+        'ekleyin.',
+      );
+    }
     final session = web.session.value;
     if (_live != null && identical(session, _liveSession)) return _live!;
     _live = await web.findCase(_link!);
@@ -170,6 +215,7 @@ class UyapCasePanelController extends ChangeNotifier {
         details: details,
         parties: parties,
         documents: documents,
+        link: _link,
       );
     });
   }

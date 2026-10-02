@@ -648,10 +648,20 @@ void main() {
           child: EvrakConvertApp(library: library, appearance: theme),
         ),
       );
+      // UYAP among the folders: its list of cases, then one case's page.
+      final uyap = find.byKey(const ValueKey('uyap-folder'));
+      await _settle(tester, () => uyap.evaluate().isNotEmpty, rounds: 60);
+      await tester.tap(uyap);
       final tile = find.byWidgetPredicate(
         (w) => '${w.key}'.contains('uyap-case-'),
       );
       await _settle(tester, () => tile.evaluate().isNotEmpty, rounds: 60);
+      await _settle(
+        tester,
+        () => find.textContaining('evrak').evaluate().length > 1,
+        rounds: 40,
+      );
+      await _shot(tester, 'uyap-dosyalarim');
       await tester.tap(tile.first);
       await _settle(tester, () => false, rounds: 20);
       await _shot(tester, 'uyap-kategori');

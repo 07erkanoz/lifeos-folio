@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 
@@ -328,11 +329,76 @@ void main() {
       );
       expect(cached.$2.path, startsWith('${root.path}/destek/uyap/belgeler/'));
       expect(cached.$2.path, endsWith('.pdf'));
-      // Listed with the documents saved where Folio searches, not the
+      // Counted with the documents saved where Folio searches, not the
       // cached one.
-      final listed = await store.savedCases();
+      final listed = await store.cases();
       expect(listed.single.$1.number, '2026/1204');
       expect(listed.single.$2, 2);
+      expect(store.savedFiles(record).keys, {'1', '2'});
+    });
+
+    test('a case is listed once fetched, with or without documents, and '
+        'keeps where it is in UYAP to be found again', () async {
+      const link = UyapCaseLink(
+        jurisdiction: '1',
+        courtType: 'AILE',
+        courtId: 'c5',
+        court: 'İstanbul 5. Aile Mahkemesi',
+        number: '2026/1204',
+      );
+      await store.keep(
+        target: target,
+        details: const UyapCaseDetails(),
+        parties: const [],
+        documents: UyapCaseDocuments(listOf(['1'])),
+        link: link,
+      );
+      final listed = await store.cases();
+      expect(listed.single.$2, 0, reason: 'nothing downloaded yet');
+      expect(listed.single.$1.link?.courtType, 'AILE');
+      // A later fetch that does not say where it is keeps what was known.
+      final again = await store.keep(
+        target: target,
+        details: const UyapCaseDetails(),
+        parties: const [],
+        documents: UyapCaseDocuments(listOf(['1', '2'])),
+      );
+      expect(again.link?.courtId, 'c5');
+    });
+
+    test('a case taken off the list leaves UYAP alone, and its documents '
+        'too unless asked', () async {
+      var record = await store.keep(
+        target: target,
+        details: const UyapCaseDetails(),
+        parties: const [],
+        documents: UyapCaseDocuments(listOf(['1', '2'])),
+      );
+      final udf = Uint8List.fromList(
+        ZipEncoder().encodeBytes(
+          Archive()..add(ArchiveFile.bytes('content.xml', utf8.encode('<x/>'))),
+        ),
+      );
+      final File kept;
+      (record, kept) = await store.save(record, record.documents.first, udf);
+      await store.remove(record);
+      expect(await store.cases(), isEmpty);
+      expect(kept.existsSync(), isTrue);
+
+      record = await store.keep(
+        target: target,
+        details: const UyapCaseDetails(),
+        parties: const [],
+        documents: UyapCaseDocuments(listOf(['1'])),
+      );
+      // Added again, it starts afresh; asked to, removing takes the
+      // downloads with it.
+      expect(store.fileOf(record, '1'), isNull);
+      final File again;
+      (record, again) = await store.save(record, record.documents.first, udf);
+      await store.remove(record, documents: true);
+      expect(again.existsSync(), isFalse);
+      expect(await store.cases(), isEmpty);
     });
 
     test('what kind of file UYAP sent, by its first bytes', () {

@@ -10,6 +10,8 @@ import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/widgets/uyap_case_panel.dart';
+import 'package:evrak_convert/ui/widgets/uyap_case_picker.dart';
+import 'package:evrak_convert/ui/widgets/uyap_cases_page.dart';
 
 /// A stand-in for the Avukat Portal with one case in it, whose ids change
 /// with every login as the real ones do.
@@ -338,5 +340,177 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('uyap-doc-2')), findsOneWidget);
     expect(find.byKey(const ValueKey('uyap-doc-1')), findsNothing);
+  });
+
+  test('a case has a page of its own, with no document, and a document is '
+      'tied to a kept case without UYAP', () async {
+    await portal.login(web);
+    final adding = panel();
+    // Added from the page: no document is tied to it.
+    await adding.choose(link, await web.findCase(link));
+    expect(adding.error, isNull);
+    final record = adding.record!;
+    expect(record.link?.courtType, '0926', reason: 'where it is in UYAP');
+    expect(await links.of('${root.path}/cevap.udf'), isNull);
+
+    // The page, another time: refreshed from UYAP by what the record says.
+    final page = panel();
+    await page.show((await store.load(link.court, link.number))!);
+    expect(page.findable, isTrue);
+    portal.documents.add('3');
+    await page.refresh();
+    expect(page.error, isNull);
+    expect(page.record!.fresh, {'3'});
+
+    // A petition tied to the kept case with no connection at all.
+    web.disconnect();
+    final editor = panel();
+    await editor.bind('${root.path}/cevap.udf');
+    await editor.attach(record.link!);
+    expect(editor.record?.documents.length, 3);
+    expect((await links.of('${root.path}/cevap.udf'))?.number, '2026/1204');
+  });
+
+  test('a case an earlier Folio kept without its place finds it from a '
+      'document tied to it', () async {
+    await portal.login(web);
+    final c = panel();
+    await c.bind('${root.path}/cevap.udf');
+    await c.choose(link, await web.findCase(link));
+    // As an earlier Folio wrote it: no "bag".
+    final file = File(
+      '${root.path}/destek/uyap/dosyalar/${c.record!.key}.json',
+    );
+    final json = jsonDecode(file.readAsStringSync()) as Map<String, Object?>
+      ..remove('bag');
+    file.writeAsStringSync(jsonEncode(json));
+    final old = (await store.load(link.court, link.number))!;
+    expect(old.link, isNull);
+    final page = panel();
+    await page.show(old);
+    expect(page.findable, isTrue);
+    expect(page.link?.courtId, 'c5');
+  });
+
+  testWidgets('the cases page lists the kept cases, offers to connect, and '
+      'opens a case with what was downloaded of it', (tester) async {
+    final c = panel();
+    await tester.runAsync(() async {
+      await portal.login(web);
+      await c.choose(link, await web.findCase(link));
+      await c.download({'2'});
+      web.disconnect();
+    });
+    final stores = (
+      UyapCaseStore.instance,
+      UyapSettings.instance,
+      UyapCaseLinks.instance,
+    );
+    UyapCaseStore.instance = store;
+    UyapSettings.instance = store.settings;
+    UyapCaseLinks.instance = links;
+    addTearDown(() {
+      UyapCaseStore.instance = stores.$1;
+      UyapSettings.instance = stores.$2;
+      UyapCaseLinks.instance = stores.$3;
+    });
+    tester.view.physicalSize = const Size(1000, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final shown = <String?>[];
+    File? opened;
+    // The kept cases are read from disk on the real clock, a step at a time.
+    Future<void> settle() async {
+      for (var i = 0; i < 20; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+    }
+
+    Widget page(String? key) => MaterialApp(
+      home: Scaffold(
+        body: UyapCasesPage(
+          caseKey: key,
+          onShowCase: shown.add,
+          onOpen: (file) => opened = file,
+        ),
+      ),
+    );
+    await tester.pumpWidget(page(null));
+    await settle();
+    expect(find.byKey(const ValueKey('uyap-cases-connect')), findsOneWidget);
+    expect(find.byKey(const ValueKey('uyap-cases-add')), findsOneWidget);
+    expect(find.text('2026/1204'), findsOneWidget);
+    expect(find.text('1 / 2 evrak'), findsOneWidget);
+    await tester.tap(find.byKey(ValueKey('uyap-cases-${c.record!.key}')));
+    expect(shown, [c.record!.key]);
+
+    await tester.pumpWidget(page(c.record!.key));
+    await settle();
+    expect(find.text('Boşanma'), findsOneWidget);
+    expect(find.text('İndirilen evrak · 1'), findsOneWidget);
+    // Nothing to write into here.
+    expect(find.byTooltip('Metne ekle'), findsNothing);
+    final saved = find.byKey(const ValueKey('uyap-saved-2'));
+    await tester.ensureVisible(saved);
+    await tester.tap(saved);
+    expect(opened?.path, endsWith('.pdf'));
+
+    await tester.tap(find.byTooltip('Dosya işlemleri'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Listeden kaldır…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('uyap-case-remove-confirm')));
+    await settle();
+    expect(shown.last, isNull, reason: 'back to the list');
+    expect(await tester.runAsync(store.cases), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('tying a document offers the kept cases first, and takes one '
+      'with no connection', (tester) async {
+    final c = panel();
+    await tester.runAsync(() async {
+      await portal.login(web);
+      await c.choose(link, await web.findCase(link));
+      web.disconnect();
+    });
+    final previous = UyapCaseStore.instance;
+    UyapCaseStore.instance = store;
+    addTearDown(() => UyapCaseStore.instance = previous);
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    (UyapCaseLink, UyapCase?)? chosen;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async =>
+                chosen = await UyapCasePicker.show(context, offerKept: true),
+            child: const Text('bağla'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('bağla'));
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Bu bilgisayardaki dosyalar'), findsOneWidget);
+    await tester.tap(find.byKey(ValueKey('uyap-kept-${c.record!.key}')));
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(chosen?.$1.courtId, 'c5');
+    expect(chosen?.$2, isNull, reason: 'not looked for in UYAP');
   });
 }

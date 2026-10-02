@@ -20,8 +20,9 @@ class UyapCasePanel extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onOpen,
-    required this.onInsert,
-    required this.onClose,
+    this.onInsert,
+    this.onClose,
+    this.onRemoved,
   });
 
   final UyapCasePanelController controller;
@@ -30,8 +31,18 @@ class UyapCasePanel extends StatefulWidget {
   final void Function(File file, UyapCaseDocument document) onOpen;
 
   /// Puts [text] where the caret is: a party's name, the case number.
-  final ValueChanged<String> onInsert;
-  final VoidCallback onClose;
+  /// Null on the case's own page, where there is no document to write in.
+  final ValueChanged<String>? onInsert;
+
+  /// Null on the case's own page, which is not a panel to close.
+  final VoidCallback? onClose;
+
+  /// The case's own page: called once the case was taken off Folio's list.
+  /// Its presence is what makes this the page: no document to tie or untie,
+  /// the case to remove instead, and what was downloaded listed at the end.
+  final VoidCallback? onRemoved;
+
+  bool get page => onRemoved != null;
 
   @override
   State<UyapCasePanel> createState() => _UyapCasePanelState();
@@ -70,9 +81,58 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
   }
 
   Future<void> _pick() async {
-    final chosen = await UyapCasePicker.show(context);
+    final chosen = await UyapCasePicker.show(context, offerKept: true);
     if (chosen == null) return;
-    await _c.choose(chosen.$1, chosen.$2);
+    final live = chosen.$2;
+    // A case kept on this computer is tied without asking UYAP.
+    await (live == null ? _c.attach(chosen.$1) : _c.choose(chosen.$1, live));
+  }
+
+  Future<void> _remove() async {
+    final record = _c.record;
+    if (record == null) return;
+    final saved = _c.store.savedFiles(record).length;
+    var documents = false;
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, set) => AlertDialog(
+          title: const Text('Dosyayı listeden kaldır'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${record.court} ${record.number} Folio’nun listesinden '
+                'kaldırılır. UYAP’taki dosyaya dokunulmaz; dosyayı '
+                'istediğiniz zaman yeniden ekleyebilirsiniz.',
+              ),
+              if (saved > 0)
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: documents,
+                  onChanged: (v) => set(() => documents = v ?? false),
+                  title: Text('İndirilen $saved evrakı da sil'),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('uyap-case-remove-confirm'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Kaldır'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (sure != true) return;
+    await _c.store.remove(record, documents: documents);
+    widget.onRemoved?.call();
   }
 
   Future<void> _open(UyapCaseDocument document) async {
@@ -250,7 +310,7 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
               ],
             ),
           ),
-          if (link != null)
+          if (link != null && _c.findable)
             IconButton(
               tooltip: 'UYAP’tan yenile',
               onPressed: _c.busy != null
@@ -278,38 +338,48 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
                     await folder.create(recursive: true);
                     await FileActions.invoke('openDefault', folder.path);
                   }
+                case 'remove':
+                  await _remove();
                 case 'settings':
                   await _settings();
               }
             },
             itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'pick',
-                child: Text(
-                  link == null ? 'Dosya bağla…' : 'Başka dosya bağla…',
+              if (!widget.page)
+                PopupMenuItem(
+                  value: 'pick',
+                  child: Text(
+                    link == null ? 'Dosya bağla…' : 'Başka dosya bağla…',
+                  ),
                 ),
-              ),
               if (link != null) ...[
                 const PopupMenuItem(
                   value: 'folder',
                   child: Text('Evrak klasörünü aç'),
                 ),
-                const PopupMenuItem(
-                  value: 'unlink',
-                  child: Text('Bağı kaldır'),
-                ),
+                if (!widget.page)
+                  const PopupMenuItem(
+                    value: 'unlink',
+                    child: Text('Bağı kaldır'),
+                  ),
               ],
+              if (widget.page && _c.record != null)
+                const PopupMenuItem(
+                  value: 'remove',
+                  child: Text('Listeden kaldır…'),
+                ),
               const PopupMenuItem(
                 value: 'settings',
                 child: Text('Kayıt ayarları…'),
               ),
             ],
           ),
-          IconButton(
-            tooltip: 'Paneli kapat',
-            onPressed: widget.onClose,
-            icon: const Icon(Icons.close_rounded, size: 20),
-          ),
+          if (widget.onClose != null)
+            IconButton(
+              tooltip: 'Paneli kapat',
+              onPressed: widget.onClose,
+              icon: const Icon(Icons.close_rounded, size: 20),
+            ),
         ],
       ),
     );
@@ -412,11 +482,13 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
                         if (t.lawyer.isNotEmpty) 'Vekil: ${t.lawyer}',
                       ].join(' · '),
                     ),
-                    trailing: IconButton(
-                      tooltip: 'Metne ekle',
-                      icon: const Icon(Icons.input_rounded, size: 18),
-                      onPressed: () => widget.onInsert(t.name),
-                    ),
+                    trailing: widget.onInsert == null
+                        ? null
+                        : IconButton(
+                            tooltip: 'Metne ekle',
+                            icon: const Icon(Icons.input_rounded, size: 18),
+                            onPressed: () => widget.onInsert!(t.name),
+                          ),
                   ),
               ]),
               Padding(
@@ -501,6 +573,7 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
                   padding: EdgeInsets.all(14),
                   child: Text('Aramaya uyan evrak yok.'),
                 ),
+              if (widget.page) ..._saved(theme, record),
             ],
           ),
         ),
@@ -540,6 +613,48 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
         ),
       ],
     );
+  }
+
+  /// What of the case is on this computer, to open without UYAP.
+  List<Widget> _saved(ThemeData theme, UyapCaseRecord record) {
+    final files = _c.store.savedFiles(record);
+    final byKey = {
+      for (final d in record.documents) ...{
+        d.key: d,
+        for (final a in d.attachments) a.key: a,
+      },
+    };
+    return [
+      const Divider(height: 24),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
+        child: Text(
+          'İndirilen evrak · ${files.length}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      if (files.isEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 2, 14, 8),
+          child: Text(
+            'Bu dosyadan henüz evrak indirilmedi. Yukarıdaki listeden '
+            'seçerek ya da tümünü indirebilirsiniz.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      for (final MapEntry(key: key, value: file) in files.entries)
+        ListTile(
+          key: ValueKey('uyap-saved-$key'),
+          dense: true,
+          leading: const Icon(Icons.description_outlined, size: 20),
+          title: Text(byKey[key]?.title ?? file.uri.pathSegments.last),
+          subtitle: Text(file.uri.pathSegments.last),
+          onTap: () {
+            final document = byKey[key];
+            if (document != null) widget.onOpen(file, document);
+          },
+        ),
+    ];
   }
 
   Widget _section(ThemeData theme, String title, List<Widget> children) =>

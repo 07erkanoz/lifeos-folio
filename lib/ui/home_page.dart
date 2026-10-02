@@ -61,6 +61,7 @@ import 'widgets/document_preview_widget.dart';
 import 'widgets/drop_zone.dart';
 import 'widgets/editor_file_menu.dart';
 import 'widgets/editor_widget.dart';
+import 'widgets/uyap_cases_page.dart';
 import 'widgets/uyap_operations_dialog.dart';
 import 'widgets/image_viewer_widget.dart';
 import 'widgets/optimize_dialog.dart';
@@ -556,7 +557,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _isNewDocument = false;
   String _group = 'all';
 
-  /// The UYAP cases with documents saved, listed in the sidebar.
+  /// The UYAP cases kept on this computer, listed under UYAP in the sidebar.
   List<(UyapCaseRecord, int)> _uyapCases = const [];
   int _uyapTotal = -1;
 
@@ -570,7 +571,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
     unawaited(
-      UyapCaseStore.instance.savedCases().then((cases) {
+      UyapCaseStore.instance.cases().then((cases) {
         if (mounted) setState(() => _uyapCases = cases);
       }, onError: (Object _) {}),
     );
@@ -875,21 +876,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _mobileArchive = true;
       _showLibrary = true;
     });
-    // Case law is not a way of looking at the archive but a different place
-    // to look, so the archive's own filters are left as they were: coming
-    // back from it finds the documents where they were left.
-    if (value == 'caselaw') return;
-    if (value.startsWith('uyap:')) {
-      final key = value.substring(5);
-      final record = _uyapCases.where((c) => c.$1.key == key).firstOrNull;
-      if (record != null) {
-        _library.filter(
-          types: const [],
-          inside: UyapCaseStore.instance.folderOf(record.$1),
-        );
-      }
-      return;
-    }
+    // Case law and the UYAP cases are not ways of looking at the archive
+    // but places of their own, so the archive's filters are left as they
+    // were: coming back finds the documents where they were left.
+    if (value == 'caselaw' || _isUyapGroup(value)) return;
     final types = value == 'all'
         ? <String>[]
         : EvrakFormat.supportedExtensions
@@ -901,6 +891,19 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               .toList();
     _library.filter(types: types, clearFolder: true);
   }
+
+  static bool _isUyapGroup(String group) =>
+      group == 'uyap' || group.startsWith('uyap:');
+
+  Widget _uyapPage() => UyapCasesPage(
+    caseKey: _group.startsWith('uyap:') ? _group.substring(5) : null,
+    onShowCase: (key) =>
+        setState(() => _group = key == null ? 'uyap' : 'uyap:$key'),
+    onOpen: (file) =>
+        unawaited(_addFiles([file.path], index: false, external: true)),
+    onSaved: (_) =>
+        unawaited(searchUyapFolder(_library).catchError((Object _) => false)),
+  );
 
   void _openConvertDialog({List<EvrakFile>? specificFiles}) {
     final files =
@@ -1135,7 +1138,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       if (!compact)
                                         Text(
                                           '/  ${_showLibrary
-                                              ? 'Evrak arşivi'
+                                              ? _isUyapGroup(_group)
+                                                    ? 'UYAP Dosyalarım'
+                                                    : 'Evrak arşivi'
                                               : _isNewDocument
                                               ? _newTitle
                                               : 'Önizleme'}',
@@ -1226,12 +1231,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     ],
                                   ),
                                 ),
-                              // The gallery brings its own heading; the
-                              // archive's search field and type filters have
-                              // nothing to offer a wall of photographs.
+                              // The gallery and the UYAP cases bring their own
+                              // headings; the archive's search field and type
+                              // filters have nothing to offer either.
                               if (_showLibrary &&
                                   !mobileHome &&
-                                  _group != 'images')
+                                  _group != 'images' &&
+                                  !_isUyapGroup(_group))
                                 _searchArea(compact),
                               if (_showLibrary &&
                                   !mobileHome &&
@@ -1283,6 +1289,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                             ? _mobileHome()
                                             : _group == 'images'
                                             ? _gallery(mobile)
+                                            : _isUyapGroup(_group)
+                                            ? _uyapPage()
                                             : _overview(),
                                       ),
                                       TransitionPane(
@@ -1499,9 +1507,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _selectGroup(value);
     },
     uyapCases: [
-      for (final (record, count) in _uyapCases)
-        (record.key, record.number, record.court, count),
+      for (final (record, _) in _uyapCases)
+        (record.key, record.number, record.court, record.fresh.length),
     ],
+    uyapFolder: UyapSettings.instance.folder,
+    uyapAvailable: Platform.isLinux || Platform.isWindows || Platform.isMacOS,
     selectFolder: (id) async {
       _closeDrawer();
       if (!await _leaveEditor()) return;

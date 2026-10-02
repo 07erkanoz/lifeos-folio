@@ -5,10 +5,10 @@ import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/ui/library/library_sidebar.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
 
-/// The lawyer's own cases, among the ways of looking at the archive.
+/// The lawyer's own cases, under UYAP among the folders.
 void main() {
-  testWidgets('each UYAP case with documents saved is listed, and opens to '
-      'its own documents', (tester) async {
+  testWidgets('UYAP stands among the folders, and its cases open beneath it '
+      'once it is chosen', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -29,21 +29,29 @@ void main() {
             showStatus: () {},
             selectGroup: chosen.add,
             selectFolder: (_) {},
+            uyapAvailable: true,
             uyapCases: const [
-              ('k1', '2026/1204', 'İstanbul 5. Aile Mahkemesi', 7),
-              ('k2', '2025/77', 'Ankara 3. Asliye Hukuk Mahkemesi', 2),
+              ('k1', '2026/1204', 'İstanbul 5. Aile Mahkemesi', 3),
+              ('k2', '2025/77', 'Ankara 3. Asliye Hukuk Mahkemesi', 0),
             ],
           ),
         ),
       ),
     );
     await tester.pumpWidget(sidebar('all'));
-    expect(find.text('UYAP DOSYALARI'), findsOneWidget);
+    // No list of its own on the home screen any more: UYAP, closed.
+    expect(find.text('UYAP DOSYALARI'), findsNothing);
+    expect(find.text('UYAP Dosyalarım'), findsOneWidget);
+    expect(find.text('2026/1204'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('uyap-folder')));
+    expect(chosen, ['uyap']);
+
+    await tester.pumpWidget(sidebar('uyap'));
     expect(find.text('2026/1204'), findsOneWidget);
     expect(find.text('Ankara 3. Asliye Hukuk Mahkemesi'), findsOneWidget);
-    expect(find.text('7'), findsOneWidget);
+    expect(find.text('3 yeni'), findsOneWidget);
     await tester.tap(find.text('2025/77'));
-    expect(chosen, ['uyap:k2']);
+    expect(chosen.last, 'uyap:k2');
     await tester.pumpWidget(sidebar('uyap:k2'));
     expect(
       tester

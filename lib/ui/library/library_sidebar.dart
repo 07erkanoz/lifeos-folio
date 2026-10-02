@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../services/search/library_controller.dart';
 import '../theme/theme_controller.dart';
@@ -14,9 +15,18 @@ class LibrarySidebar extends StatelessWidget {
   final ValueChanged<String> selectGroup;
   final ValueChanged<int> selectFolder;
 
-  /// The UYAP cases with documents saved, each a way of looking at the
-  /// archive: its key, number, court and how many documents.
+  /// The UYAP cases kept on this computer, listed under UYAP when it is
+  /// chosen: each case's key, number, court and how many documents came new
+  /// at its last fetch.
   final List<(String, String, String, int)> uyapCases;
+
+  /// Where UYAP's documents are saved: the archive folder that stands as
+  /// UYAP in the list of folders, not as one more folder.
+  final String? uyapFolder;
+
+  /// Whether UYAP can be reached from this Folio at all: on a phone only
+  /// the cases already kept are shown.
+  final bool uyapAvailable;
   const LibrarySidebar({
     super.key,
     required this.library,
@@ -29,7 +39,14 @@ class LibrarySidebar extends StatelessWidget {
     required this.selectGroup,
     required this.selectFolder,
     this.uyapCases = const [],
+    this.uyapFolder,
+    this.uyapAvailable = false,
   });
+
+  bool get _showUyap => uyapAvailable || uyapCases.isNotEmpty;
+
+  bool _isUyapFolder(String path) =>
+      uyapFolder != null && p.equals(path, uyapFolder!);
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
@@ -113,83 +130,14 @@ class LibrarySidebar extends StatelessWidget {
             // İçtihat araması buradan kaldırıldı: bu liste arşivin
             // görünümlerini sayar, o ise dışarıdaki bir bankaya sorulan
             // ayrı bir soru. Yazarken sorulur, editörün araç çubuğundan.
-            if (!compact && uyapCases.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: Text(
-                  'UYAP DOSYALARI',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
+            if (compact && _showUyap)
+              _nav(
+                context,
+                Icons.gavel_rounded,
+                'UYAP Dosyalarım',
+                'uyap',
+                uyapCases.length,
               ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 230),
-                child: ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  children: [
-                    for (final (key, number, court, count) in uyapCases)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: Tooltip(
-                          message: '$court $number',
-                          child: ListTile(
-                            key: ValueKey('uyap-case-$key'),
-                            dense: true,
-                            minTileHeight: 46,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            selected: group == 'uyap:$key',
-                            selectedTileColor: scheme.primary.withValues(
-                              alpha: .08,
-                            ),
-                            leading: Icon(
-                              Icons.gavel_rounded,
-                              size: 17,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                            minLeadingWidth: 18,
-                            title: Text(
-                              number,
-                              maxLines: 1,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              court,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                            trailing: Text(
-                              '$count',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                            onTap: () => selectGroup('uyap:$key'),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
             const SizedBox(height: 20),
             if (!compact)
               Padding(
@@ -227,8 +175,9 @@ class LibrarySidebar extends StatelessWidget {
                         vertical: 8,
                       ),
                       children: [
+                        if (_showUyap) ..._uyap(context),
                         for (final source in library.sources.where(
-                          (s) => s.folder,
+                          (s) => s.folder && !_isUyapFolder(s.path),
                         ))
                           Padding(
                             padding: const EdgeInsets.only(bottom: 3),
@@ -274,7 +223,8 @@ class LibrarySidebar extends StatelessWidget {
                               ),
                             ),
                           ),
-                        if (library.sources.where((s) => s.folder).isEmpty)
+                        if (library.sources.where((s) => s.folder).isEmpty &&
+                            !_showUyap)
                           Padding(
                             padding: const EdgeInsets.all(10),
                             child: Text(
@@ -431,6 +381,101 @@ class LibrarySidebar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// UYAP among the folders: its cases open beneath it once it is chosen.
+  List<Widget> _uyap(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final open = group == 'uyap' || group.startsWith('uyap:');
+    final folder = library.sources
+        .where((s) => s.folder && _isUyapFolder(s.path))
+        .firstOrNull;
+    return [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 3),
+        child: Tooltip(
+          message: folder?.path ?? 'UYAP dosyaları',
+          child: ListTile(
+            key: const ValueKey('uyap-folder'),
+            dense: true,
+            minTileHeight: 42,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            selected: group == 'uyap',
+            selectedTileColor: scheme.primary.withValues(alpha: .08),
+            leading: Icon(
+              open ? Icons.folder_open_rounded : Icons.folder_special_outlined,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+            minLeadingWidth: 18,
+            title: const Text(
+              'UYAP Dosyalarım',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12),
+            ),
+            trailing: Text(
+              '${uyapCases.length}',
+              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+            ),
+            onTap: () => selectGroup('uyap'),
+          ),
+        ),
+      ),
+      if (open)
+        for (final (key, number, court, fresh) in uyapCases)
+          Padding(
+            padding: const EdgeInsets.only(left: 14, bottom: 3),
+            child: Tooltip(
+              message: '$court $number',
+              child: ListTile(
+                key: ValueKey('uyap-case-$key'),
+                dense: true,
+                minTileHeight: 44,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                selected: group == 'uyap:$key',
+                selectedTileColor: scheme.primary.withValues(alpha: .08),
+                leading: Icon(
+                  Icons.gavel_rounded,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
+                minLeadingWidth: 16,
+                title: Text(
+                  number,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  court,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11),
+                ),
+                trailing: fresh == 0
+                    ? null
+                    : Text(
+                        '$fresh yeni',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary,
+                        ),
+                      ),
+                onTap: () => selectGroup('uyap:$key'),
+              ),
+            ),
+          ),
+    ];
   }
 
   Widget _nav(
