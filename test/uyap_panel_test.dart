@@ -78,8 +78,46 @@ class _Portal {
             ],
             1,
           ];
+        case '/getYargitayDaireleri.ajx':
+          body = [
+            {
+              'birimDVO': {
+                'birimId': '1010564',
+                'birimAdi': '2. Hukuk Dairesi',
+              },
+              'birimAdiVeDosyaSayisi': '2. Hukuk Dairesi (1)',
+              'dosyaSayisi': 0,
+            },
+          ];
+        case '/getYargitayDosyalar_brd.ajx':
+          if (!sent.contains('1010564')) break;
+          body = {
+            'type': 'success',
+            'message': 'Dosya bulundu.',
+            'value': [
+              {
+                'yargitaySorguDosyaDetayDVO': {
+                  'dosyaId': 'yargitay-$id',
+                  'esasNo': '2026/9001',
+                  'birimAdi': '2. Hukuk Dairesi',
+                  'birimId': '1010564',
+                  'dosyaTuru': 77,
+                  'durumAdi': 'Daireye Gönderildi',
+                  'davaSucTuruAdi': 'Boşanma',
+                  'gelisTarihi': '14/09/2026',
+                  'mahkemeBirimAdi': 'İstanbul 5. Aile Mahkemesi',
+                  'mahkemeEsasNo': '2026/1204',
+                  'mahkemeKararNo': '2026/77',
+                  'mahkemeKararTarihi': '01/07/2026',
+                  'savcilikOncelikDilekceSonuc': '---',
+                },
+              },
+            ],
+          };
         case '/dosya_islem_turleri_sorgula_brd.ajx':
-          body = {'15': permissions};
+          body = sent.contains('yargitay-')
+              ? {'77': 'ayrinti_bilgileri,evrak_bilgileri,taraf_bilgileri'}
+              : {'15': permissions};
         case '/dosya_tahsilat_reddiyat_bilgileri_brd.ajx':
           // Not answered without the kind of case.
           if (!sent.contains('"dosyaTurKod":15')) break;
@@ -741,5 +779,48 @@ void main() {
     );
     await tester.pump();
     expect(find.byKey(const ValueKey('uyap-doc-1')), findsOneWidget);
+  });
+
+  test('a case at the Yargıtay is found by its chamber, kept with what its '
+      'list says, and found again in a later session', () async {
+    await portal.login(web);
+    final chambers = await web.chambers('yargitay');
+    expect(chambers.single.id, '1010564');
+    expect(chambers.single.label, '2. Hukuk Dairesi (1)');
+    final found = (await web.chamberCases('yargitay', chambers.single)).single;
+    expect(found.number, '2026/9001');
+    expect(found.courtName, 'Yargıtay 2. Hukuk Dairesi');
+    final link = UyapCaseLink(
+      jurisdiction: 'yargitay',
+      courtType: '',
+      courtId: found.courtId,
+      court: found.courtName,
+      number: found.number,
+    );
+    final c = panel();
+    await c.choose(link, found);
+    expect(c.error, isNull);
+    expect(c.findable, isTrue);
+    expect(
+      portal.asked,
+      isNot(contains('/dosyaAyrintiBilgileri_brd.ajx')),
+      reason: 'its particulars come with the list',
+    );
+    final d = c.record!.details;
+    expect(d.fileType, 'Yargıtay Dosyası');
+    expect(d.state, 'Daireye Gönderildi');
+    expect(d.openedOn, '14/09/2026');
+    expect(d.related, contains(('Konu', 'Boşanma')));
+    expect(
+      d.related,
+      contains(('Yerel mahkeme', 'İstanbul 5. Aile Mahkemesi · 2026/1204')),
+    );
+    expect(d.decision, [('Yerel mahkeme kararı', '2026/77 · 01/07/2026')]);
+    expect(c.record!.money, isNull, reason: 'no fees at the Yargıtay');
+
+    // A new login: the case is looked for in its chamber again.
+    await portal.login(web);
+    final again = await web.findCase(link);
+    expect(again.id, startsWith('yargitay-'));
   });
 }

@@ -145,7 +145,10 @@ class UyapCasePanelController extends ChangeNotifier {
   /// Whether the case can be looked for in UYAP: a case kept by an earlier
   /// Folio may not know where it is.
   bool get findable =>
-      _link != null && _link!.courtId.isNotEmpty && _link!.courtType.isNotEmpty;
+      _link != null &&
+      _link!.courtId.isNotEmpty &&
+      (_link!.courtType.isNotEmpty ||
+          UyapWebService.isHighCourt(_link!.jurisdiction));
 
   Future<void> unlink() async {
     if (_path != null) await links.link(_path!, null);
@@ -216,7 +219,11 @@ class UyapCasePanelController extends ChangeNotifier {
         for (final what in hiddenNotes.keys)
           if (!permissions.allows(what)) what,
       };
-      final details = hidden.contains('ayrinti_bilgileri')
+      // A high court's particulars come with its list; the court cases'
+      // particulars call is not known to answer for it.
+      final details =
+          hidden.contains('ayrinti_bilgileri') ||
+              UyapWebService.isHighCourt(_link!.jurisdiction)
           ? const UyapCaseDetails()
           : await web.caseDetails(live);
       final parties = hidden.contains('taraf_bilgileri')

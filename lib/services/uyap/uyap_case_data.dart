@@ -197,8 +197,18 @@ class UyapCaseDetails {
           hearing: hearing,
           inspection: inspection,
           preliminary: preliminary,
-          related: related,
-          decision: decision,
+          // The high courts' lists carry the decision and the lower court
+          // themselves; their particulars are not asked for.
+          related: [
+            ...row.facts,
+            for (final r in related)
+              if (!row.facts.any((f) => f.$1 == r.$1)) r,
+          ],
+          decision: [
+            ...row.decision,
+            for (final d in decision)
+              if (!row.decision.any((f) => f.$1 == d.$1)) d,
+          ],
           enforcement: enforcement,
           fileType: row.type.isEmpty ? fileType : row.type,
           state: row.state.isEmpty ? state : row.state,
@@ -258,7 +268,59 @@ class UyapCaseListing {
     this.state = '',
     this.openedOn,
     this.closedOn,
+    this.facts = const [],
+    this.decision = const [],
   });
+
+  /// A row of a Yargıtay chamber's list, or of a Danıştay chamber's: the
+  /// case's subject, its lower court and the decisions, all in the list.
+  factory UyapCaseListing.highCourt(Map<Object?, Object?> row) {
+    String text(String key) {
+      final v = _str(row[key]).trim();
+      return v == '---' ? '' : v;
+    }
+
+    String joined(List<String> parts) =>
+        parts.where((p) => p.isNotEmpty).join(' · ');
+    return UyapCaseListing(
+      type: text('dosyaTurAciklama').isNotEmpty
+          ? text('dosyaTurAciklama')
+          : row.containsKey('esasNo')
+          ? 'Yargıtay Dosyası'
+          : 'Danıştay Dosyası',
+      typeCode: int.tryParse(
+        _str(row['dosyaTuru'] ?? row['dosyaTurKod']).split('#').first,
+      ),
+      state: text('durumAdi').isNotEmpty
+          ? text('durumAdi')
+          : text('genelDosyaDurumu'),
+      openedOn: _day(row['gelisTarihi']) ?? _day(row['dosyaAcilisTarihi']),
+      closedOn: _day(row['kapatmaTarihi']),
+      facts: [
+        if (text('davaSucTuruAdi').isNotEmpty) ('Konu', text('davaSucTuruAdi')),
+        if (text('mahkemeBirimAdi').isNotEmpty ||
+            text('mahkemeEsasNo').isNotEmpty)
+          (
+            'Yerel mahkeme',
+            joined([text('mahkemeBirimAdi'), text('mahkemeEsasNo')]),
+          ),
+        if (text('ilislikiDosyaListesi').isNotEmpty)
+          ('İlişkili dosya', text('ilislikiDosyaListesi')),
+      ],
+      decision: [
+        if (text('kararNo').isNotEmpty || text('karar').isNotEmpty)
+          (
+            'Karar',
+            joined([text('kararNo'), text('kararTarihi'), text('karar')]),
+          ),
+        if (text('mahkemeKararNo').isNotEmpty)
+          (
+            'Yerel mahkeme kararı',
+            joined([text('mahkemeKararNo'), text('mahkemeKararTarihi')]),
+          ),
+      ],
+    );
+  }
 
   factory UyapCaseListing.fromJson(Map<Object?, Object?> row) =>
       UyapCaseListing(
@@ -275,6 +337,10 @@ class UyapCaseListing {
   /// letter rogatory: what the money of a case is asked with.
   final int? typeCode;
   final String? openedOn, closedOn;
+
+  /// What a high court's list says of the case besides: its subject, its
+  /// lower court; and its decisions.
+  final List<(String, String)> facts, decision;
 }
 
 /// What UYAP lets be seen of a case, and its kind, asked before the rest:

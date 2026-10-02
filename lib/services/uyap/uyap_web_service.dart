@@ -585,6 +585,90 @@ class UyapWebService {
     return parsed;
   }
 
+  /// Yargıtay and Danıştay: a case there is found by its chamber, among the
+  /// chambers the lawyer has a case in, not by kind of court and court.
+  static const highCourts = {'yargitay': 'Yargıtay', 'danistay': 'Danıştay'};
+  static bool isHighCourt(String jurisdiction) =>
+      highCourts.containsKey(jurisdiction);
+
+  /// The chambers of [jurisdiction] where the lawyer has a case, each
+  /// labelled with how many, as "2. Hukuk Dairesi (3)".
+  Future<List<UyapOption>> chambers(String jurisdiction) => _serial(() async {
+    final data = await _post(
+      jurisdiction == 'danistay'
+          ? '/avukatDanistayDaireSorgula.ajx'
+          : '/getYargitayDaireleri.ajx',
+      {},
+    );
+    return [
+      for (final item in data is List ? data : const [])
+        if (item is Map && item['birimDVO'] is Map)
+          UyapOption(
+            _id((item['birimDVO'] as Map)['birimId']),
+            (item['birimAdiVeDosyaSayisi'] ??
+                    (item['birimDVO'] as Map)['birimAdi'] ??
+                    '')
+                .toString(),
+          ),
+    ].where((e) => e.id.isNotEmpty).toList();
+  });
+
+  /// Every case of the lawyer's in [chamber]: the high courts answer with
+  /// the whole chamber, never by year or number.
+  Future<List<UyapCase>> chamberCases(
+    String jurisdiction,
+    UyapOption chamber,
+  ) => _serial(() async {
+    final danistay = jurisdiction == 'danistay';
+    final data = await _post(
+      danistay
+          ? '/avukatDanistayDosyaSorgula.ajx'
+          : '/getYargitayDosyalar_brd.ajx',
+      {danistay ? 'danistayDairesi' : 'yargitayDairesi': chamber.id},
+    );
+    final rows = data is Map ? data['value'] : data;
+    final name = highCourts[jurisdiction]!;
+    String court(String unit) {
+      final label = unit.isEmpty
+          ? chamber.label.replaceFirst(RegExp(r'\s*\(\d+\)\s*$'), '')
+          : unit;
+      return label.contains(name) ? label : '$name $label';
+    }
+
+    final out = <UyapCase>[];
+    for (final item in rows is List ? rows : const []) {
+      if (item is! Map) continue;
+      final inner = item['yargitaySorguDosyaDetayDVO'];
+      final row = inner is Map ? inner : item;
+      final unit = row['birimDVO'] ?? row['birimDvo'];
+      final number =
+          [
+                row['esasNo'],
+                row['dosyaNo'],
+                row['teblignameNo'],
+                row['savcilikEsasNo'],
+              ]
+              .map((v) => (v ?? '').toString().trim())
+              .firstWhere((v) => v.isNotEmpty, orElse: () => '');
+      final id = _id(row['dosyaId']);
+      if (id.isEmpty || number.isEmpty) continue;
+      final unitName =
+          (row['birimAdi'] ?? (unit is Map ? unit['birimAdi'] : null) ?? '')
+              .toString()
+              .trim();
+      out.add(
+        UyapCase(
+          id,
+          number,
+          chamber.id,
+          court(unitName),
+          listing: UyapCaseListing.highCourt(row),
+        ),
+      );
+    }
+    return out;
+  });
+
   Future<List<UyapOption>> courtTypes(String jurisdiction) => _serial(() async {
     final data = await _post('/yargiBirimleriSorgula_brd.ajx', {
       'yargiTuru': jurisdiction,

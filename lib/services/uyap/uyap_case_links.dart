@@ -140,6 +140,20 @@ extension UyapCaseFinding on UyapWebService {
   /// [link]'s case in this session, with this session's id: open cases
   /// first, then closed ones.
   Future<UyapCase> findCase(UyapCaseLink link) async {
+    if (UyapWebService.isHighCourt(link.jurisdiction)) {
+      // A high court lists the whole chamber; the case is found in it by
+      // its number.
+      final found = await chamberCases(
+        link.jurisdiction,
+        UyapOption(link.courtId, link.court),
+      );
+      for (final c in found) {
+        if (UyapWebService.fold(c.number) == UyapWebService.fold(link.number)) {
+          return c;
+        }
+      }
+      throw StateError('${link.title} UYAP’ta bulunamadı.');
+    }
     final number = RegExp(r'(\d{4})\s*/\s*(\d+)').firstMatch(link.number);
     final wanted = UyapCase('', link.number, link.courtId, link.court);
     for (final closed in [link.closed, !link.closed]) {

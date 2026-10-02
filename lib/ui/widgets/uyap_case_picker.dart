@@ -148,8 +148,13 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
     }
   }
 
+  /// Yargıtay or Danıştay: chambers in place of kinds of court and courts.
+  bool get _high => UyapWebService.isHighCourt(_jurisdiction);
+
   Future<void> _loadTypes() => _run(() async {
-    final types = await _web.courtTypes(_jurisdiction);
+    final types = _high
+        ? await _web.chambers(_jurisdiction)
+        : await _web.courtTypes(_jurisdiction);
     if (!mounted) return;
     setState(() {
       _types = types;
@@ -173,6 +178,21 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
   });
 
   Future<void> _search() => _run(() async {
+    if (_high) {
+      final chamber = _type;
+      if (chamber == null) throw StateError('Daireyi seçin.');
+      // The chamber comes whole; the year and number narrow it here.
+      final year = int.tryParse(_year.text.trim());
+      final number = int.tryParse(_number.text.trim());
+      final found = [
+        for (final c in await _web.chamberCases(_jurisdiction, chamber))
+          if ((year == null || c.parsedNumber?.year == year) &&
+              (number == null || c.parsedNumber?.sequence == number))
+            c,
+      ];
+      if (mounted) setState(() => _cases = found);
+      return;
+    }
     final type = _type;
     final court = _court;
     if (type == null || court == null) {
@@ -192,9 +212,14 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
   void _pick(UyapCase found) => Navigator.pop(context, (
     UyapCaseLink(
       jurisdiction: _jurisdiction,
-      courtType: _type!.id,
-      courtId: found.courtId.isEmpty ? _court!.id : found.courtId,
-      court: found.courtName.isEmpty ? _court!.label : found.courtName,
+      // A chamber is found again by itself; it has no kind of court.
+      courtType: _high ? '' : _type!.id,
+      courtId: found.courtId.isEmpty
+          ? (_high ? _type!.id : _court!.id)
+          : found.courtId,
+      court: found.courtName.isEmpty
+          ? (_high ? _type!.label : _court!.label)
+          : found.courtName,
       number: found.number,
       closed: _closed,
     ),
@@ -257,6 +282,14 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                                 value: '6',
                                 child: Text('İdari'),
                               ),
+                              DropdownMenuItem(
+                                value: 'yargitay',
+                                child: Text('Yargıtay'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'danistay',
+                                child: Text('Danıştay'),
+                              ),
                             ],
                             onChanged: _busy
                                 ? null
@@ -267,21 +300,25 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                                   },
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        SegmentedButton<bool>(
-                          showSelectedIcon: false,
-                          segments: const [
-                            ButtonSegment(value: false, label: Text('Açık')),
-                            ButtonSegment(value: true, label: Text('Kapalı')),
-                          ],
-                          selected: {_closed},
-                          onSelectionChanged: _busy
-                              ? null
-                              : (v) {
-                                  setState(() => _closed = v.first);
-                                  unawaited(_loadCourts());
-                                },
-                        ),
+                        // A high court's list has the closed cases with the
+                        // open; there is nothing to choose.
+                        if (!_high) ...[
+                          const SizedBox(width: 10),
+                          SegmentedButton<bool>(
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment(value: false, label: Text('Açık')),
+                              ButtonSegment(value: true, label: Text('Kapalı')),
+                            ],
+                            selected: {_closed},
+                            onSelectionChanged: _busy
+                                ? null
+                                : (v) {
+                                    setState(() => _closed = v.first);
+                                    unawaited(_loadCourts());
+                                  },
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -289,7 +326,7 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                       key: ValueKey('tur-${_types.length}-$_jurisdiction'),
                       initialValue: _type,
                       isExpanded: true,
-                      decoration: _field('Mahkeme türü'),
+                      decoration: _field(_high ? 'Daire' : 'Mahkeme türü'),
                       items: [
                         for (final t in _types)
                           DropdownMenuItem(value: t, child: Text(t.label)),
@@ -297,30 +334,42 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                       onChanged: _busy
                           ? null
                           : (v) {
-                              setState(() => _type = v);
-                              unawaited(_loadCourts());
+                              setState(() {
+                                _type = v;
+                                _cases = null;
+                              });
+                              if (!_high) unawaited(_loadCourts());
                             },
                     ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<UyapOption>(
-                      key: ValueKey('mahkeme-${_courts.length}-${_type?.id}'),
-                      initialValue: _court,
-                      isExpanded: true,
-                      decoration: _field('Mahkeme'),
-                      items: [
-                        for (final c in _courts)
-                          DropdownMenuItem(
-                            value: c,
-                            child: Text(
-                              c.label,
-                              overflow: TextOverflow.ellipsis,
+                    if (_high && !_busy && _types.isEmpty) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Bu yargı yerinde dosyanız görünmüyor.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                    if (!_high) ...[
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<UyapOption>(
+                        key: ValueKey('mahkeme-${_courts.length}-${_type?.id}'),
+                        initialValue: _court,
+                        isExpanded: true,
+                        decoration: _field('Mahkeme'),
+                        items: [
+                          for (final c in _courts)
+                            DropdownMenuItem(
+                              value: c,
+                              child: Text(
+                                c.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                      ],
-                      onChanged: _busy
-                          ? null
-                          : (v) => setState(() => _court = v),
-                    ),
+                        ],
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _court = v),
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     Row(
                       children: [
