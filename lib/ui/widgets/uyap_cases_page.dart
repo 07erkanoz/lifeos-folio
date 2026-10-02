@@ -146,16 +146,11 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
           Expanded(
             child: key == null
                 ? _list(theme)
-                : Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 900),
-                      child: UyapCasePanel(
-                        controller: _controller,
-                        onOpen: (file, _) => widget.onOpen(file),
-                        onRemoved: () => widget.onShowCase(null),
-                      ),
-                    ),
+                : UyapCasePanel(
+                    controller: _controller,
+                    onOpen: (file, _) => widget.onOpen(file),
+                    onOpenFile: widget.onOpen,
+                    onRemoved: () => widget.onShowCase(null),
                   ),
           ),
         ],

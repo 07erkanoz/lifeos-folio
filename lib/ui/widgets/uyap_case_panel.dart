@@ -23,6 +23,7 @@ class UyapCasePanel extends StatefulWidget {
     this.onInsert,
     this.onClose,
     this.onRemoved,
+    this.onOpenFile,
   });
 
   final UyapCasePanelController controller;
@@ -43,6 +44,9 @@ class UyapCasePanel extends StatefulWidget {
   final VoidCallback? onRemoved;
 
   bool get page => onRemoved != null;
+
+  /// On the case's own page: opens a petition written for it.
+  final ValueChanged<File>? onOpenFile;
 
   @override
   State<UyapCasePanel> createState() => _UyapCasePanelState();
@@ -86,6 +90,60 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
     final live = chosen.$2;
     // A case kept on this computer is tied without asking UYAP.
     await (live == null ? _c.attach(chosen.$1) : _c.choose(chosen.$1, live));
+  }
+
+  /// A case an earlier Folio kept without where it is in UYAP: the lawyer
+  /// shows it once, and it is fetched and kept with its place.
+  Future<void> _locate() async {
+    final record = _c.record;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Dosyanın UYAP’taki yeri'),
+        content: Text(
+          'Folio’nun önceki sürümü ${record?.number ?? 'bu dosyanın'} UYAP’taki '
+          'yerini kaydetmemiş. Mahkemeyi ve esas numarasını bir kez seçin; '
+          'sonra dosya bu sayfadan yenilenir.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Seç'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    final chosen = await UyapCasePicker.show(context);
+    final live = chosen?.$2;
+    if (chosen == null || live == null) return;
+    if (record != null &&
+        UyapWebService.fold(chosen.$1.number) !=
+            UyapWebService.fold(record.number)) {
+      if (mounted) {
+        showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            content: Text(
+              'Seçilen dosya ${chosen.$1.number}, bu sayfadaki dosya '
+              '${record.number}. Aynı dosyayı seçin.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tamam'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+    await _c.choose(chosen.$1, live);
   }
 
   Future<void> _remove() async {
@@ -310,12 +368,14 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
               ],
             ),
           ),
-          if (link != null && _c.findable)
+          if (link != null)
             IconButton(
               tooltip: 'UYAP’tan yenile',
               onPressed: _c.busy != null
                   ? null
-                  : () => unawaited(_withSession(_c.refresh)),
+                  : () => unawaited(
+                      _c.findable ? _withSession(_c.refresh) : _locate(),
+                    ),
               icon: const Icon(Icons.refresh_rounded, size: 20),
             ),
           PopupMenuButton<String>(
@@ -431,189 +491,320 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
   }
 
   Widget _case(ThemeData theme, UyapCaseRecord record) {
+    if (!widget.page) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 8),
+              children: [
+                ..._info(theme, record),
+                ..._documentList(theme, record),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          _downloadBar(theme, record),
+        ],
+      );
+    }
+    // The case's own page: its particulars beside the documents on a wide
+    // screen, a tab of their own on a narrow one; what was downloaded and
+    // the petitions written for it, each a tab.
+    if (_petitionsOf != record.key) unawaited(_loadPetitions(record));
+    return LayoutBuilder(
+      builder: (context, box) {
+        final wide = box.maxWidth >= 980;
+        final saved = _c.store.savedFiles(record).length;
+        final tabs = <(String, Widget)>[
+          if (!wide)
+            (
+              'Bilgiler',
+              ListView(
+                padding: const EdgeInsets.only(bottom: 12),
+                children: _info(theme, record),
+              ),
+            ),
+          (
+            'Evraklar · ${record.documents.length}',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    children: _documentList(theme, record),
+                  ),
+                ),
+                const Divider(height: 1),
+                _downloadBar(theme, record),
+              ],
+            ),
+          ),
+          ('İndirilen · $saved', ListView(children: _saved(theme, record))),
+          (
+            'Dilekçeler · ${_petitions?.length ?? 0}',
+            ListView(children: _petitionList(theme)),
+          ),
+        ];
+        final tabbed = DefaultTabController(
+          key: ValueKey('uyap-tabs-$wide'),
+          length: tabs.length,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: [for (final (label, _) in tabs) Tab(text: label)],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [for (final (_, body) in tabs) body],
+                ),
+              ),
+            ],
+          ),
+        );
+        if (!wide) return tabbed;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: 420,
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 12),
+                children: _info(theme, record),
+              ),
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(child: tabbed),
+          ],
+        );
+      },
+    );
+  }
+
+  /// The petitions tied to the case shown, once looked up.
+  List<File>? _petitions;
+  String? _petitionsOf;
+
+  Future<void> _loadPetitions(UyapCaseRecord record) async {
+    _petitionsOf = record.key;
+    final paths = await _c.links.documentsOf(record.court, record.number);
+    if (mounted && _petitionsOf == record.key) {
+      setState(() => _petitions = [for (final path in paths) File(path)]);
+    }
+  }
+
+  List<Widget> _petitionList(ThemeData theme) {
+    final petitions = _petitions ?? const <File>[];
+    return [
+      if (petitions.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Text(
+            'Bu dosyaya bağlı dilekçe yok. Editörde bir belgeyi “UYAP '
+            'dosyası” panelinden bu dosyaya bağladığınızda burada görünür.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      for (final file in petitions)
+        ListTile(
+          key: ValueKey('uyap-petition-${file.path}'),
+          dense: true,
+          leading: const Icon(Icons.edit_document, size: 20),
+          title: Text(file.uri.pathSegments.last),
+          subtitle: Text(file.parent.path),
+          onTap: () => widget.onOpenFile?.call(file),
+        ),
+    ];
+  }
+
+  /// The session, when the case was fetched, its particulars and parties.
+  List<Widget> _info(ThemeData theme, UyapCaseRecord record) {
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+        // Side by side when the panel is wide enough, the time
+        // under the session otherwise: never squeezed letter by
+        // letter beside it.
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            const UyapSessionChip(),
+            Text('Son çekim ${_clock(record.fetchedAt)}', style: muted),
+          ],
+        ),
+      ),
+      _section(theme, 'Dosya bilgileri', [
+        _fact('Dava türü', record.details.kind),
+        _fact('Durum', record.details.status),
+        _fact('Duruşma', record.details.hearing, strong: true),
+        _fact('Keşif', record.details.inspection, strong: true),
+        _fact('Ön inceleme', record.details.preliminary, strong: true),
+        for (final (label, value) in record.details.related)
+          _fact(label, value),
+      ]),
+      _section(theme, 'Taraflar · ${record.parties.length}', [
+        for (final t in record.parties)
+          ListTile(
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+            title: Text(t.name),
+            subtitle: Text(
+              [
+                t.role,
+                if (t.lawyer.isNotEmpty) 'Vekil: ${t.lawyer}',
+              ].join(' · '),
+            ),
+            trailing: widget.onInsert == null
+                ? null
+                : IconButton(
+                    tooltip: 'Metne ekle',
+                    icon: const Icon(Icons.input_rounded, size: 18),
+                    onPressed: () => widget.onInsert!(t.name),
+                  ),
+          ),
+      ]),
+    ];
+  }
+
+  /// The documents of the case, as the search narrows them.
+  List<Widget> _documentList(ThemeData theme, UyapCaseRecord record) {
     final documents = _c.documents;
     final sources = {for (final d in record.documents) d.source};
     final fresh = record.fresh.length;
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 8),
+    return [
+      // On the case's page the tab names the list; what is new still shows.
+      if (!widget.page || fresh > 0)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+          child: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-                // Side by side when the panel is wide enough, the time
-                // under the session otherwise: never squeezed letter by
-                // letter beside it.
-                child: Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    const UyapSessionChip(),
-                    Text('Son çekim ${_clock(record.fetchedAt)}', style: muted),
-                  ],
+              if (!widget.page) ...[
+                Text(
+                  'Evraklar · ${record.documents.length}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-              ),
-              _section(theme, 'Dosya bilgileri', [
-                _fact('Dava türü', record.details.kind),
-                _fact('Durum', record.details.status),
-                _fact('Duruşma', record.details.hearing, strong: true),
-                _fact('Keşif', record.details.inspection, strong: true),
-                _fact('Ön inceleme', record.details.preliminary, strong: true),
-                for (final (label, value) in record.details.related)
-                  _fact(label, value),
-              ]),
-              _section(theme, 'Taraflar · ${record.parties.length}', [
-                for (final t in record.parties)
-                  ListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                    title: Text(t.name),
-                    subtitle: Text(
-                      [
-                        t.role,
-                        if (t.lawyer.isNotEmpty) 'Vekil: ${t.lawyer}',
-                      ].join(' · '),
-                    ),
-                    trailing: widget.onInsert == null
-                        ? null
-                        : IconButton(
-                            tooltip: 'Metne ekle',
-                            icon: const Icon(Icons.input_rounded, size: 18),
-                            onPressed: () => widget.onInsert!(t.name),
-                          ),
-                  ),
-              ]),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
-                child: Row(
-                  children: [
-                    Text(
-                      'Evraklar · ${record.documents.length}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    if (fresh > 0) ...[
-                      const SizedBox(width: 8),
-                      _badge(theme, '$fresh yeni'),
-                    ],
-                  ],
-                ),
-              ),
-              if (record.previousFetchedAt != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-                  child: Text(
-                    'Yeniler: ${_clock(record.previousFetchedAt!)} çekiminden '
-                    'sonra gelenler',
-                    style: muted,
-                  ),
-                ),
-              if (record.withheld != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-                  child: Text(
-                    'UYAP evrakları şu an göstermiyor: ${record.withheld}',
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-                child: TextField(
-                  key: const ValueKey('uyap-panel-search'),
-                  controller: _search,
-                  onChanged: (v) => _c.query = v,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    hintText: 'Evrak ara: tür, gönderen, tarih',
-                    border: const OutlineInputBorder(),
-                    suffixIcon: _search.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear, size: 16),
-                            onPressed: () {
-                              _search.clear();
-                              _c.query = '';
-                            },
-                          ),
-                  ),
-                ),
-              ),
-              for (final source in sources)
-                ...() {
-                  final group = [
-                    for (final d in documents)
-                      if (d.source == source) d,
-                  ];
-                  if (group.isEmpty) return const <Widget>[];
-                  return [
-                    if (sources.length > 1)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 2),
-                        child: Text(
-                          source.isEmpty ? 'Son eklenenler' : source,
-                          style: muted?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    for (final d in group) ...[
-                      _row(theme, d),
-                      for (final a in d.attachments) _row(theme, a, depth: 1),
-                    ],
-                  ];
-                }(),
-              if (documents.isEmpty && record.documents.isNotEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: Text('Aramaya uyan evrak yok.'),
-                ),
-              if (widget.page) ..._saved(theme, record),
+                const SizedBox(width: 8),
+              ],
+              if (fresh > 0) _badge(theme, '$fresh yeni'),
             ],
           ),
         ),
-        const Divider(height: 1),
+      if (record.previousFetchedAt != null)
         Padding(
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-          child: Row(
-            children: [
-              if (_c.selected.isNotEmpty)
-                TextButton(
-                  onPressed: () => setState(_c.selected.clear),
-                  child: const Text('Seçimi bırak'),
-                ),
-              const Spacer(),
-              FilledButton.tonalIcon(
-                key: const ValueKey('uyap-panel-download'),
-                onPressed: _c.busy != null || record.documents.isEmpty
-                    ? null
-                    : () => unawaited(
-                        _withSession(
-                          () => _c
-                              .download(
-                                _c.selected.isEmpty ? null : {..._c.selected},
-                              )
-                              .then((_) {}),
-                        ),
-                      ),
-                icon: const Icon(Icons.download_rounded, size: 18),
-                label: Text(
-                  _c.selected.isEmpty
-                      ? 'Tümünü indir'
-                      : 'Seçilenleri indir (${_c.selected.length})',
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+          child: Text(
+            'Yeniler: ${_clock(record.previousFetchedAt!)} çekiminden '
+            'sonra gelenler',
+            style: muted,
+          ),
+        ),
+      if (record.withheld != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+          child: Text(
+            'UYAP evrakları şu an göstermiyor: ${record.withheld}',
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+        child: TextField(
+          key: const ValueKey('uyap-panel-search'),
+          controller: _search,
+          onChanged: (v) => _c.query = v,
+          decoration: InputDecoration(
+            isDense: true,
+            prefixIcon: const Icon(Icons.search, size: 18),
+            hintText: 'Evrak ara: tür, gönderen, tarih',
+            border: const OutlineInputBorder(),
+            suffixIcon: _search.text.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.clear, size: 16),
+                    onPressed: () {
+                      _search.clear();
+                      _c.query = '';
+                    },
+                  ),
+          ),
+        ),
+      ),
+      for (final source in sources)
+        ...() {
+          final group = [
+            for (final d in documents)
+              if (d.source == source) d,
+          ];
+          if (group.isEmpty) return const <Widget>[];
+          return [
+            if (sources.length > 1)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 2),
+                child: Text(
+                  source.isEmpty ? 'Son eklenenler' : source,
+                  style: muted?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
+            for (final d in group) ...[
+              _row(theme, d),
+              for (final a in d.attachments) _row(theme, a, depth: 1),
             ],
+          ];
+        }(),
+      if (documents.isEmpty && record.documents.isNotEmpty)
+        const Padding(
+          padding: EdgeInsets.all(14),
+          child: Text('Aramaya uyan evrak yok.'),
+        ),
+    ];
+  }
+
+  Widget _downloadBar(ThemeData theme, UyapCaseRecord record) => Padding(
+    padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+    child: Row(
+      children: [
+        if (_c.selected.isNotEmpty)
+          TextButton(
+            onPressed: () => setState(_c.selected.clear),
+            child: const Text('Seçimi bırak'),
+          ),
+        const Spacer(),
+        FilledButton.tonalIcon(
+          key: const ValueKey('uyap-panel-download'),
+          onPressed: _c.busy != null || record.documents.isEmpty
+              ? null
+              : () => unawaited(
+                  _withSession(
+                    () => _c
+                        .download(_c.selected.isEmpty ? null : {..._c.selected})
+                        .then((_) {}),
+                  ),
+                ),
+          icon: const Icon(Icons.download_rounded, size: 18),
+          label: Text(
+            _c.selected.isEmpty
+                ? 'Tümünü indir'
+                : 'Seçilenleri indir (${_c.selected.length})',
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
 
   /// What of the case is on this computer, to open without UYAP.
   List<Widget> _saved(ThemeData theme, UyapCaseRecord record) {
@@ -625,19 +816,11 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
       },
     };
     return [
-      const Divider(height: 24),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
-        child: Text(
-          'İndirilen evrak · ${files.length}',
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
       if (files.isEmpty)
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 2, 14, 8),
+          padding: const EdgeInsets.all(14),
           child: Text(
-            'Bu dosyadan henüz evrak indirilmedi. Yukarıdaki listeden '
+            'Bu dosyadan henüz evrak indirilmedi. Evraklar sekmesinden '
             'seçerek ya da tümünü indirebilirsiniz.',
             style: theme.textTheme.bodySmall,
           ),

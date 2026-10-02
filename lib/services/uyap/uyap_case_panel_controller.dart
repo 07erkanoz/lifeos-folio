@@ -88,6 +88,9 @@ class UyapCasePanelController extends ChangeNotifier {
     if (_link != null) {
       _record = await store.load(_link!.court, _link!.number);
     }
+    // A tie an earlier Folio made kept no path: written again with it, the
+    // petition shows on its case's page.
+    if (kept != null && path != null) await links.link(path, kept);
     _changed();
   }
 

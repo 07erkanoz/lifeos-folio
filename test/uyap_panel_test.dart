@@ -400,6 +400,9 @@ void main() {
       await c.choose(link, await web.findCase(link));
       await c.download({'2'});
       web.disconnect();
+      // A petition tied to the case.
+      File('${root.path}/cevap.udf').writeAsStringSync('x');
+      await links.link('${root.path}/cevap.udf', link);
     });
     final stores = (
       UyapCaseStore.instance,
@@ -414,7 +417,7 @@ void main() {
       UyapSettings.instance = stores.$2;
       UyapCaseLinks.instance = stores.$3;
     });
-    tester.view.physicalSize = const Size(1000, 1400);
+    tester.view.physicalSize = const Size(1300, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final shown = <String?>[];
@@ -449,14 +452,20 @@ void main() {
 
     await tester.pumpWidget(page(c.record!.key));
     await settle();
+    // On a wide screen the particulars stand beside the tabs.
     expect(find.text('Boşanma'), findsOneWidget);
-    expect(find.text('İndirilen evrak · 1'), findsOneWidget);
+    expect(find.text('Evraklar · 2'), findsOneWidget);
     // Nothing to write into here.
     expect(find.byTooltip('Metne ekle'), findsNothing);
-    final saved = find.byKey(const ValueKey('uyap-saved-2'));
-    await tester.ensureVisible(saved);
-    await tester.tap(saved);
+    await tester.tap(find.text('İndirilen · 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('uyap-saved-2')));
     expect(opened?.path, endsWith('.pdf'));
+    // The petition written for the case, by the path its tie keeps.
+    await tester.tap(find.text('Dilekçeler · 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('cevap.udf'));
+    expect(opened?.path, endsWith('cevap.udf'));
 
     await tester.tap(find.byTooltip('Dosya işlemleri'));
     await tester.pumpAndSettle();

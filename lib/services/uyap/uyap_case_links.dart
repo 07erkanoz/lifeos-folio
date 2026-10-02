@@ -102,6 +102,25 @@ class UyapCaseLinks {
     return null;
   }
 
+  /// The documents tied to the case kept as [court] [number] that are
+  /// still where they were: the petitions written for it. A tie made by an
+  /// earlier Folio, which kept no path, is listed once its document is
+  /// opened again.
+  Future<List<String>> documentsOf(String court, String number) async {
+    final out = <String>[];
+    for (final value in (await _read()).values) {
+      final link = UyapCaseLink.fromJson(value);
+      final path = value is Map ? value['yol'] : null;
+      if (link == null || path is! String) continue;
+      if (UyapWebService.fold(link.court) == UyapWebService.fold(court) &&
+          UyapWebService.fold(link.number) == UyapWebService.fold(number) &&
+          await File(path).exists()) {
+        out.add(path);
+      }
+    }
+    return out..sort();
+  }
+
   /// Ties [path] to [link]; null unties it.
   Future<void> link(String path, UyapCaseLink? link) async {
     final all = await _read();
@@ -109,7 +128,9 @@ class UyapCaseLinks {
     if (link == null) {
       all.remove(key);
     } else {
-      all[key] = link.toJson();
+      // The path beside the tie: the key is a hash of it, and a case's
+      // page lists the petitions written for it by where they are.
+      all[key] = {...link.toJson(), 'yol': p.absolute(path)};
     }
     await replaceFileIfChanged(await _file(), utf8.encode(jsonEncode(all)));
   }
