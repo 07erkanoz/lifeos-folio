@@ -24,6 +24,12 @@ class _Portal {
   /// Documents filed as UDF come back as UDF.
   var udf = false;
 
+  /// What UYAP lets be seen of the case; a court case's by default.
+  var permissions =
+      'ayrinti_bilgileri,taraf_bilgileri,evrak_bilgileri,'
+      'tahsilat_reddiyat_bilgileri';
+  final asked = <String>[];
+
   Uri get uri => Uri.parse('http://${server.address.host}:${server.port}');
 
   Future<void> start() async {
@@ -37,6 +43,8 @@ class _Portal {
           .firstOrNull;
       // This session's id for the case and its documents.
       final id = 'oturum$logins';
+      final sent = await utf8.decoder.bind(request).join();
+      asked.add(request.uri.path);
       Object? body;
       switch (request.uri.path) {
         case '/portal_baslangic.uyap':
@@ -56,10 +64,44 @@ class _Portal {
                 'dosyaNo': '2026/1204',
                 'birimId': 'c5',
                 'birimAdi': 'İstanbul 5. Aile Mahkemesi',
+                'dosyaTur': 'Hukuk Dava Dosyası',
+                'dosyaTurKod': 15,
+                'dosyaDurum': 'Açık',
+                'dosyaAcilisTarihi': {
+                  'date': {'year': 2026, 'month': 3, 'day': 2},
+                  'time': {'hour': 9, 'minute': 5},
+                },
               },
             ],
             1,
           ];
+        case '/dosya_islem_turleri_sorgula_brd.ajx':
+          body = {'15': permissions};
+        case '/dosya_tahsilat_reddiyat_bilgileri_brd.ajx':
+          // Not answered without the kind of case.
+          if (!sent.contains('"dosyaTurKod":15')) break;
+          body = {
+            'toplamTahsilat': 1250.5,
+            'toplamreddiyat': 200,
+            'toplamKalan': 1050.5,
+            'harcList': [
+              {
+                'tahsilatTuru': 'Başvurma Harcı',
+                'tahsilatTarihi': '02/03/2026',
+                'yatirilanMiktar': 615.4,
+                'makbuzNo': 'M1',
+                'odeyenKisi': 'Ali Veli',
+              },
+            ],
+            'tahsilatList': [],
+            'reddiyatList': [
+              {
+                'reddiyatNedeni': 'Gider avansı iadesi',
+                'reddiyatTarihi': '10/09/2026',
+                'miktar': 200,
+              },
+            ],
+          };
         case '/dosyaAyrintiBilgileri_brd.ajx':
           body = {
             'davaTurleriStr': 'Boşanma',
@@ -521,5 +563,41 @@ void main() {
     }
     expect(chosen?.$1.courtId, 'c5');
     expect(chosen?.$2, isNull, reason: 'not looked for in UYAP');
+  });
+
+  test('a refresh asks what UYAP shows of the case first, keeps the list\'s '
+      'state and dates, and the fees and collections', () async {
+    await portal.login(web);
+    final c = panel();
+    await c.choose(link, await web.findCase(link));
+    expect(c.error, isNull);
+    final record = c.record!;
+    expect(record.details.fileType, 'Hukuk Dava Dosyası');
+    expect(record.details.openedOn, '02.03.2026');
+    expect(record.money?.collected, 1250.5);
+    expect(record.money?.paidOut, 200, reason: 'toplamreddiyat, lower-case');
+    expect(record.money?.fees.single.kind, 'Başvurma Harcı');
+    expect(record.money?.payments.single.amount, 200);
+    expect(record.hidden, isEmpty);
+    // Read back from disk as kept.
+    final read = (await store.load(link.court, link.number))!;
+    expect(read.money?.fees.single.receipt, 'M1');
+    expect(read.details.openedOn, '02.03.2026');
+  });
+
+  test('a case of a kind UYAP shows no particulars of is not asked for '
+      'them', () async {
+    portal.permissions = 'taraf_bilgileri,evrak_bilgileri';
+    await portal.login(web);
+    final c = panel();
+    await c.choose(link, await web.findCase(link));
+    expect(c.error, isNull);
+    expect(portal.asked, isNot(contains('/dosyaAyrintiBilgileri_brd.ajx')));
+    expect(
+      portal.asked,
+      isNot(contains('/dosya_tahsilat_reddiyat_bilgileri_brd.ajx')),
+    );
+    expect(c.record!.hidden, {'ayrinti_bilgileri'});
+    expect(c.record!.documents, isNotEmpty);
   });
 }

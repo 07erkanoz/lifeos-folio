@@ -35,8 +35,46 @@ Map<String, Object?> _one(Object? raw) {
   return const {};
 }
 
+/// A sum as UYAP gives it, a number or the text of one.
+double? _amount(Object? v) {
+  if (v is num) return v.toDouble();
+  final s = _str(v).trim();
+  return s.isEmpty ? null : double.tryParse(s.replaceAll(',', '.'));
+}
+
+/// A date as the case list gives it: a map of `date` and `time`, or text.
+String? _day(Object? v) {
+  if (v is Map) {
+    final date = v['date'];
+    if (date is Map) {
+      String two(Object? n) => '${n ?? ''}'.padLeft(2, '0');
+      return '${two(date['day'])}.${two(date['month'])}.${date['year']}';
+    }
+    return null;
+  }
+  final s = _str(v).trim();
+  return s.isEmpty ? null : s;
+}
+
+/// "12.345,67 TL": a sum written as a Turkish reader reads it.
+String formatTl(double amount) {
+  final negative = amount < 0;
+  final fixed = amount.abs().toStringAsFixed(2);
+  final whole = fixed.substring(0, fixed.length - 3);
+  final grouped = StringBuffer();
+  for (var i = 0; i < whole.length; i++) {
+    if (i > 0 && (whole.length - i) % 3 == 0) grouped.write('.');
+    grouped.write(whole[i]);
+  }
+  return '${negative ? '-' : ''}$grouped,${fixed.substring(fixed.length - 2)} TL';
+}
+
 /// The case's particulars: what kind of case, where it stands, and the days
 /// set for it. Shown, not followed: the calendar is banaozel's.
+///
+/// The portal answers in two shapes. A court case's particulars name the
+/// kind of case and its days; an enforcement file's name the kind of
+/// proceedings and the sums owed instead. Both are read, whichever came.
 class UyapCaseDetails {
   const UyapCaseDetails({
     this.kind = '',
@@ -46,6 +84,12 @@ class UyapCaseDetails {
     this.inspection,
     this.preliminary,
     this.related = const [],
+    this.decision = const [],
+    this.enforcement = const [],
+    this.fileType = '',
+    this.state = '',
+    this.openedOn,
+    this.closedOn,
   });
 
   factory UyapCaseDetails.fromJson(Object? raw) {
@@ -55,10 +99,16 @@ class UyapCaseDetails {
       return s.isEmpty ? null : s;
     }
 
+    String text(String key) => _str(json[key]).trim();
+    String? sum(String key) {
+      final v = _amount(json[key]);
+      return v == null ? null : formatTl(v);
+    }
+
     return UyapCaseDetails(
-      kind: _str(json['davaTurleriStr']).trim(),
-      opening: _str(json['davaAcilisTuruStr']).trim(),
-      status: _str(json['dosyaDurumu']).trim(),
+      kind: text('davaTurleriStr'),
+      opening: text('davaAcilisTuruStr'),
+      status: text('dosyaDurumu'),
       hearing: date(json['durusmaTarihiStr']),
       inspection: date(json['kesifTarihiStr']),
       // UYAP writes it without the second e; both are read in case it is
@@ -73,8 +123,45 @@ class UyapCaseDetails {
           ('birlesenDosyaListStr', 'Birleşen dosya'),
           ('ilgiliSeriDavaListesiStr', 'Seri dava'),
         ])
-          if (_str(json[field]).trim().isNotEmpty)
-            (label, _str(json[field]).trim()),
+          if (text(field).isNotEmpty) (label, text(field)),
+      ],
+      // Only a case decided has these: the court's own decision, and when
+      // the case is on appeal, the decision appealed.
+      decision: [
+        if (text('kararNo').isNotEmpty || text('kararTarihi').isNotEmpty)
+          (
+            'Karar',
+            [
+              text('kararNo'),
+              text('kararTarihi'),
+            ].where((v) => v.isNotEmpty).join(' · '),
+          ),
+        if (text('mahkemeKararNo').isNotEmpty ||
+            text('mahkemeKararTarihi').isNotEmpty)
+          (
+            'Yerel mahkeme kararı',
+            [
+              text('mahkemeKararNo'),
+              text('mahkemeKararTarihi'),
+            ].where((v) => v.isNotEmpty).join(' · '),
+          ),
+      ],
+      enforcement: [
+        for (final (field, label) in const [
+          ('takibinTuruAciklama', 'Takip türü'),
+          ('takibinSekliAciklama', 'Takip şekli'),
+          ('takibinYoluAciklama', 'Takip yolu'),
+        ])
+          if (text(field).isNotEmpty) (label, text(field)),
+        for (final (field, label) in const [
+          ('alacakKalemToplamTutar', 'Alacak toplamı'),
+          ('alacakKalemFaizTutar', 'Faiz'),
+          ('takipSonrasiMasraf', 'Takip sonrası masraf'),
+          ('vekaletUcreti', 'Vekâlet ücreti'),
+          ('tahsilHarci', 'Tahsil harcı'),
+          ('yapilmisBorcTahsilati', 'Yapılmış tahsilat'),
+        ])
+          if (sum(field) != null) (label, sum(field)!),
       ],
     );
   }
@@ -88,6 +175,46 @@ class UyapCaseDetails {
   /// related one are not the same thing in law.
   final List<(String, String)> related;
 
+  /// The decision, once there is one, and the one appealed.
+  final List<(String, String)> decision;
+
+  /// An enforcement file's proceedings and sums, each with its name.
+  final List<(String, String)> enforcement;
+
+  /// From the list the case was found in: "Hukuk Dava Dosyası", "İcra
+  /// Dosyası"; where it stands, in full ("Açık (Durdurulmuş : Takibe
+  /// İtiraz)", "İstinafta"); and when it was opened and closed.
+  final String fileType, state;
+  final String? openedOn, closedOn;
+
+  /// These particulars, with what the case list says of [row].
+  UyapCaseDetails withListing(UyapCaseListing? row) => row == null
+      ? this
+      : UyapCaseDetails(
+          kind: kind,
+          opening: opening,
+          status: status,
+          hearing: hearing,
+          inspection: inspection,
+          preliminary: preliminary,
+          related: related,
+          decision: decision,
+          enforcement: enforcement,
+          fileType: row.type.isEmpty ? fileType : row.type,
+          state: row.state.isEmpty ? state : row.state,
+          openedOn: row.openedOn ?? openedOn,
+          closedOn: row.closedOn ?? closedOn,
+        );
+
+  static List<List<String>> _pairs(List<(String, String)> list) => [
+    for (final (label, value) in list) [label, value],
+  ];
+
+  static List<(String, String)> _unpairs(Object? json) => [
+    for (final r in (json as List? ?? const []))
+      if (r is List && r.length == 2) (_str(r[0]), _str(r[1])),
+  ];
+
   Map<String, Object?> toJson() => {
     'kind': kind,
     'opening': opening,
@@ -95,9 +222,13 @@ class UyapCaseDetails {
     'hearing': hearing,
     'inspection': inspection,
     'preliminary': preliminary,
-    'related': [
-      for (final (label, value) in related) [label, value],
-    ],
+    'related': _pairs(related),
+    'decision': _pairs(decision),
+    'enforcement': _pairs(enforcement),
+    'fileType': fileType,
+    'state': state,
+    'openedOn': openedOn,
+    'closedOn': closedOn,
   };
 
   factory UyapCaseDetails.stored(Map<String, Object?> json) => UyapCaseDetails(
@@ -107,11 +238,182 @@ class UyapCaseDetails {
     hearing: json['hearing'] as String?,
     inspection: json['inspection'] as String?,
     preliminary: json['preliminary'] as String?,
-    related: [
-      for (final r in (json['related'] as List? ?? const []))
-        if (r is List && r.length == 2) (_str(r[0]), _str(r[1])),
-    ],
+    related: _unpairs(json['related']),
+    decision: _unpairs(json['decision']),
+    enforcement: _unpairs(json['enforcement']),
+    fileType: _str(json['fileType']),
+    state: _str(json['state']),
+    openedOn: json['openedOn'] as String?,
+    closedOn: json['closedOn'] as String?,
   );
+}
+
+/// What the case list says of a case beside its number: its kind, where it
+/// stands in full, and its dates. Comes with the search; no request of its
+/// own.
+class UyapCaseListing {
+  const UyapCaseListing({
+    this.type = '',
+    this.typeCode,
+    this.state = '',
+    this.openedOn,
+    this.closedOn,
+  });
+
+  factory UyapCaseListing.fromJson(Map<Object?, Object?> row) =>
+      UyapCaseListing(
+        type: _str(row['dosyaTur']).trim(),
+        typeCode: int.tryParse(_str(row['dosyaTurKod']).split('#').first),
+        state: _str(row['dosyaDurum']).trim(),
+        openedOn: _day(row['dosyaAcilisTarihi']),
+        closedOn: _day(row['dosyaKapanisTarihi']),
+      );
+
+  final String type, state;
+
+  /// 15 a court case, 35 an enforcement file, 3 a criminal case, 1 a
+  /// letter rogatory: what the money of a case is asked with.
+  final int? typeCode;
+  final String? openedOn, closedOn;
+}
+
+/// What UYAP lets be seen of a case, and its kind, asked before the rest:
+/// a criminal case has no particulars to ask for, and asking only earns an
+/// error.
+class UyapCasePermissions {
+  const UyapCasePermissions(this.typeCode, this.allowed);
+
+  /// `{"15": "ayrinti_bilgileri,taraf_bilgileri,…"}`.
+  factory UyapCasePermissions.fromJson(Object? raw) {
+    final json = _one(raw);
+    if (json.isEmpty) return const UyapCasePermissions(null, null);
+    final entry = json.entries.first;
+    return UyapCasePermissions(int.tryParse(entry.key.split('#').first), {
+      for (final p in _str(entry.value).split(','))
+        if (p.trim().isNotEmpty) p.trim(),
+    });
+  }
+
+  final int? typeCode;
+
+  /// Null when UYAP did not say: then everything is asked for, as before.
+  final Set<String>? allowed;
+
+  bool allows(String what) => allowed == null || allowed!.contains(what);
+}
+
+/// One line of a case's money: a fee paid, a sum collected or paid out.
+class UyapMoneyItem {
+  const UyapMoneyItem({
+    required this.kind,
+    required this.date,
+    required this.amount,
+    this.receipt = '',
+    this.payer = '',
+  });
+
+  factory UyapMoneyItem.fromJson(Map<Object?, Object?> json) => UyapMoneyItem(
+    kind: _first([
+      json['tahsilatTuru'],
+      json['reddiyatNedeni'],
+      json['harcTuru'],
+    ]).trim(),
+    date: _first([json['tahsilatTarihi'], json['reddiyatTarihi']]).trim(),
+    amount: _amount(json['yatirilanMiktar'] ?? json['miktar']) ?? 0,
+    receipt: _str(json['makbuzNo']).trim(),
+    payer: _str(json['odeyenKisi']).trim(),
+  );
+
+  final String kind, date, receipt, payer;
+  final double amount;
+
+  Map<String, Object?> toJson() => {
+    'tur': kind,
+    'tarih': date,
+    'tutar': amount,
+    'makbuz': receipt,
+    'odeyen': payer,
+  };
+
+  factory UyapMoneyItem.stored(Map<Object?, Object?> json) => UyapMoneyItem(
+    kind: _str(json['tur']),
+    date: _str(json['tarih']),
+    amount: _amount(json['tutar']) ?? 0,
+    receipt: _str(json['makbuz']),
+    payer: _str(json['odeyen']),
+  );
+}
+
+/// The fees, collections and payments out of a case, as its money page in
+/// the portal shows them: shown, not reckoned with.
+class UyapCaseMoney {
+  const UyapCaseMoney({
+    this.collected,
+    this.paidOut,
+    this.deposit,
+    this.remaining,
+    this.fees = const [],
+    this.collections = const [],
+    this.payments = const [],
+  });
+
+  factory UyapCaseMoney.fromJson(Object? raw) {
+    final json = _one(raw);
+    List<UyapMoneyItem> items(String key) => [
+      for (final item in (json[key] as List? ?? const []))
+        if (item is Map) UyapMoneyItem.fromJson(item),
+    ];
+    return UyapCaseMoney(
+      collected: _amount(json['toplamTahsilat']),
+      // Lower-case r, as it comes over the wire.
+      paidOut: _amount(json['toplamreddiyat'] ?? json['toplamReddiyat']),
+      deposit: _amount(json['toplamTeminat']),
+      remaining: _amount(json['toplamKalan']),
+      fees: items('harcList'),
+      collections: items('tahsilatList'),
+      payments: items('reddiyatList'),
+    );
+  }
+
+  final double? collected, paidOut, deposit, remaining;
+  final List<UyapMoneyItem> fees, collections, payments;
+
+  bool get isEmpty =>
+      fees.isEmpty &&
+      collections.isEmpty &&
+      payments.isEmpty &&
+      [
+        collected,
+        paidOut,
+        deposit,
+        remaining,
+      ].every((v) => v == null || v == 0);
+
+  Map<String, Object?> toJson() => {
+    'tahsilat': collected,
+    'reddiyat': paidOut,
+    'teminat': deposit,
+    'kalan': remaining,
+    'harclar': [for (final i in fees) i.toJson()],
+    'tahsilatlar': [for (final i in collections) i.toJson()],
+    'reddiyatlar': [for (final i in payments) i.toJson()],
+  };
+
+  factory UyapCaseMoney.stored(Map<Object?, Object?> json) {
+    List<UyapMoneyItem> items(String key) => [
+      for (final item in (json[key] as List? ?? const []))
+        if (item is Map) UyapMoneyItem.stored(item),
+    ];
+    return UyapCaseMoney(
+      collected: _amount(json['tahsilat']),
+      paidOut: _amount(json['reddiyat']),
+      deposit: _amount(json['teminat']),
+      remaining: _amount(json['kalan']),
+      fees: items('harclar'),
+      collections: items('tahsilatlar'),
+      payments: items('reddiyatlar'),
+    );
+  }
 }
 
 /// One document in a case: what it is, who sent it, and the ids to fetch

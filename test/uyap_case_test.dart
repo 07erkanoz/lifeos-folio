@@ -203,6 +203,77 @@ void main() {
     });
   });
 
+  group('reading a case\'s particulars', () {
+    test('an enforcement file\'s particulars are its proceedings and sums, '
+        'written as a Turkish reader reads them', () {
+      final d = UyapCaseDetails.fromJson({
+        'takibinTuruAciklama': 'İlamsız',
+        'takibinSekliAciklama': 'Genel Haciz Yoluyla',
+        'takibinYoluAciklama': 'Örnek 7',
+        'alacakKalemToplamTutar': 125430.5,
+        'alacakKalemFaizTutar': '1200.75',
+        'vekaletUcreti': 0,
+        'dosyaDurumu': 'Açık',
+      });
+      expect(d.kind, isEmpty, reason: 'no court-case fields');
+      expect(d.enforcement, [
+        ('Takip türü', 'İlamsız'),
+        ('Takip şekli', 'Genel Haciz Yoluyla'),
+        ('Takip yolu', 'Örnek 7'),
+        ('Alacak toplamı', '125.430,50 TL'),
+        ('Faiz', '1.200,75 TL'),
+        ('Vekâlet ücreti', '0,00 TL'),
+      ]);
+      // Kept and read back.
+      final stored = UyapCaseDetails.stored(d.toJson());
+      expect(stored.enforcement, d.enforcement);
+    });
+
+    test('a decided case shows its decision and the one appealed', () {
+      final d = UyapCaseDetails.fromJson({
+        'davaTurleriStr': 'Alacak',
+        'kararNo': '2026/55',
+        'kararTarihi': '12/05/2026',
+        'mahkemeKararNo': '2025/310',
+        'mahkemeKararTarihi': '',
+      });
+      expect(d.decision, [
+        ('Karar', '2026/55 · 12/05/2026'),
+        ('Yerel mahkeme kararı', '2025/310'),
+      ]);
+      expect(UyapCaseDetails.fromJson({'davaTurleriStr': 'x'}).decision, []);
+    });
+
+    test('the case list\'s kind, full state and dates, and what UYAP lets '
+        'be seen', () {
+      final row = UyapCaseListing.fromJson({
+        'dosyaTur': 'İcra Dosyası',
+        'dosyaTurKod': '35#İcra Dosyası',
+        'dosyaDurum': 'Açık (Durdurulmuş : Takibe İtiraz)',
+        'dosyaAcilisTarihi': {
+          'date': {'year': 2025, 'month': 1, 'day': 7},
+          'time': {'hour': 0},
+        },
+      });
+      expect(row.typeCode, 35);
+      expect(row.openedOn, '07.01.2025');
+      final d = const UyapCaseDetails(status: 'Açık').withListing(row);
+      expect(d.state, 'Açık (Durdurulmuş : Takibe İtiraz)');
+      final p = UyapCasePermissions.fromJson({
+        '3': 'evrak_bilgileri,taraf_bilgileri',
+      });
+      expect(p.typeCode, 3);
+      expect(p.allows('ayrinti_bilgileri'), isFalse);
+      expect(p.allows('taraf_bilgileri'), isTrue);
+      expect(
+        UyapCasePermissions.fromJson(null).allows('ayrinti_bilgileri'),
+        isTrue,
+        reason: 'unsaid: asked for',
+      );
+      expect(formatTl(-1234567.8), '-1.234.567,80 TL');
+    });
+  });
+
   group('keeping a case', () {
     late Directory root;
     late UyapCaseStore store;

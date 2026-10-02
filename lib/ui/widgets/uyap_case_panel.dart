@@ -547,6 +547,13 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
             'Dilekçeler · ${_petitions?.length ?? 0}',
             ListView(children: _petitionList(theme)),
           ),
+          (
+            'Harç ve tahsilat',
+            ListView(
+              padding: const EdgeInsets.only(bottom: 12),
+              children: _money(theme, record),
+            ),
+          ),
         ];
         final tabbed = DefaultTabController(
           key: ValueKey('uyap-tabs-$wide'),
@@ -645,15 +652,34 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
         ),
       ),
       _section(theme, 'Dosya bilgileri', [
+        _hiddenNote(theme, record, 'ayrinti_bilgileri'),
+        _fact('Dosya türü', record.details.fileType),
         _fact('Dava türü', record.details.kind),
-        _fact('Durum', record.details.status),
+        _fact('Açılış türü', record.details.opening),
+        // The list's state says more: "Açık (Durdurulmuş : Takibe İtiraz)".
+        _fact(
+          'Durum',
+          record.details.state.isNotEmpty
+              ? record.details.state
+              : record.details.status,
+        ),
+        _fact('Açılış tarihi', record.details.openedOn),
+        _fact('Kapanış tarihi', record.details.closedOn),
         _fact('Duruşma', record.details.hearing, strong: true),
         _fact('Keşif', record.details.inspection, strong: true),
         _fact('Ön inceleme', record.details.preliminary, strong: true),
+        for (final (label, value) in record.details.decision)
+          _fact(label, value, strong: true),
         for (final (label, value) in record.details.related)
           _fact(label, value),
       ]),
+      if (record.details.enforcement.isNotEmpty)
+        _section(theme, 'İcra bilgileri', [
+          for (final (label, value) in record.details.enforcement)
+            _fact(label, value),
+        ]),
       _section(theme, 'Taraflar · ${record.parties.length}', [
+        _hiddenNote(theme, record, 'taraf_bilgileri'),
         for (final t in record.parties)
           ListTile(
             dense: true,
@@ -678,6 +704,75 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
     ];
   }
 
+  /// What UYAP does not show of a case of this kind, said so.
+  Widget _hiddenNote(ThemeData theme, UyapCaseRecord record, String what) =>
+      record.hidden.contains(what)
+      ? Padding(
+          padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
+          child: Text(
+            UyapCasePanelController.hiddenNotes[what]!,
+            style: theme.textTheme.bodySmall,
+          ),
+        )
+      : const SizedBox.shrink();
+
+  /// The case's fees, collections and payments out: the portal's money
+  /// page, shown.
+  List<Widget> _money(ThemeData theme, UyapCaseRecord record) {
+    final money = record.money;
+    if (money == null || money.isEmpty) {
+      return [
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Text(
+            money == null
+                ? 'Harç ve tahsilat bilgisi henüz çekilmedi. Dosyayı '
+                      'UYAP’tan yenilediğinizde gelir.'
+                : 'UYAP bu dosyada harç, tahsilat ya da reddiyat kaydı '
+                      'göstermiyor.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      ];
+    }
+    String? sum(double? v) => v == null ? null : formatTl(v);
+    Widget item(UyapMoneyItem i) => ListTile(
+      dense: true,
+      title: Text(i.kind.isEmpty ? '—' : i.kind),
+      subtitle: Text(
+        [
+          i.date,
+          if (i.receipt.isNotEmpty) 'Makbuz ${i.receipt}',
+          i.payer,
+        ].where((v) => v.isNotEmpty).join(' · '),
+      ),
+      trailing: Text(
+        formatTl(i.amount),
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+    );
+    return [
+      _section(theme, 'Toplamlar', [
+        _fact('Tahsilat', sum(money.collected), strong: true),
+        _fact('Reddiyat', sum(money.paidOut)),
+        _fact('Teminat', sum(money.deposit)),
+        _fact('Kalan', sum(money.remaining), strong: true),
+      ]),
+      if (money.fees.isNotEmpty)
+        _section(theme, 'Harçlar · ${money.fees.length}', [
+          for (final i in money.fees) item(i),
+        ]),
+      if (money.collections.isNotEmpty)
+        _section(theme, 'Tahsilatlar · ${money.collections.length}', [
+          for (final i in money.collections) item(i),
+        ]),
+      if (money.payments.isNotEmpty)
+        _section(theme, 'Reddiyatlar · ${money.payments.length}', [
+          for (final i in money.payments) item(i),
+        ]),
+    ];
+  }
+
   /// The documents of the case, as the search narrows them.
   List<Widget> _documentList(ThemeData theme, UyapCaseRecord record) {
     final documents = _c.documents;
@@ -687,6 +782,7 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
       color: theme.colorScheme.onSurfaceVariant,
     );
     return [
+      _hiddenNote(theme, record, 'evrak_bilgileri'),
       // On the case's page the tab names the list; what is new still shows.
       if (!widget.page || fresh > 0)
         Padding(

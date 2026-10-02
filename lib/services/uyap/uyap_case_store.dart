@@ -90,6 +90,8 @@ class UyapCaseRecord {
     this.files = const {},
     this.previews = const {},
     this.link,
+    this.money,
+    this.hidden = const {},
   });
 
   final String court, number;
@@ -98,6 +100,13 @@ class UyapCaseRecord {
   /// without it the case can be shown but not fetched again. Null in a
   /// record an earlier Folio kept.
   final UyapCaseLink? link;
+
+  /// The fees, collections and payments out, when UYAP gave them.
+  final UyapCaseMoney? money;
+
+  /// What UYAP does not show of a case of this kind: 'ayrinti_bilgileri'
+  /// for a criminal case's particulars, and the like. Said, not left blank.
+  final Set<String> hidden;
   final DateTime fetchedAt;
 
   /// When it was fetched the time before: what is [fresh] came after it.
@@ -138,6 +147,8 @@ class UyapCaseRecord {
     files: files ?? this.files,
     previews: previews ?? this.previews,
     link: link ?? this.link,
+    money: money,
+    hidden: hidden,
   );
 
   Map<String, Object?> toJson() => {
@@ -158,6 +169,8 @@ class UyapCaseRecord {
     'dosyalar': files,
     'onizlemeler': previews,
     'bag': link?.toJson(),
+    'para': money?.toJson(),
+    'gizli': hidden.toList(),
   };
 
   factory UyapCaseRecord.fromJson(Map<String, Object?> json) => UyapCaseRecord(
@@ -192,6 +205,10 @@ class UyapCaseRecord {
       if (json['surum'] == 1) ..._paths(json['dosyalar']),
     },
     link: UyapCaseLink.fromJson(json['bag']),
+    money: json['para'] is Map
+        ? UyapCaseMoney.stored(json['para'] as Map)
+        : null,
+    hidden: {for (final k in (json['gizli'] as List? ?? const [])) '$k'},
   );
 
   static Map<String, String> _paths(Object? json) => {
@@ -320,6 +337,8 @@ class UyapCaseStore {
     required List<UyapParty> parties,
     required UyapCaseDocuments documents,
     UyapCaseLink? link,
+    UyapCaseMoney? money,
+    Set<String> hidden = const {},
     DateTime? now,
   }) async {
     final before = await load(target.courtName, target.number);
@@ -346,6 +365,9 @@ class UyapCaseStore {
       files: before?.files ?? const {},
       previews: before?.previews ?? const {},
       link: link ?? before?.link,
+      // Money that could not be had this time is not money gone.
+      money: money ?? before?.money,
+      hidden: hidden,
     );
     await _write(record);
     return record;

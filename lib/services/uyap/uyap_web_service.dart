@@ -647,6 +647,7 @@ class UyapWebService {
                 row['dosyaNo']?.toString() ?? '',
                 _id(row['birimId'] ?? court.id),
                 row['birimAdi']?.toString() ?? court.label,
+                listing: UyapCaseListing.fromJson(row),
               ),
         ]
         .where(
@@ -728,6 +729,32 @@ class UyapWebService {
     }
     return _viewDocument(operation.documentId, operation.caseId);
   });
+
+  /// What UYAP lets be seen of [target], and what kind of case it is.
+  /// An answer that cannot be read lets everything be asked for.
+  Future<UyapCasePermissions> permissions(UyapCase target) => _serial(() async {
+    try {
+      return UyapCasePermissions.fromJson(
+        await _post('/dosya_islem_turleri_sorgula_brd.ajx', {
+          'dosyaId': target.id,
+        }),
+      );
+    } on FormatException {
+      return const UyapCasePermissions(null, null);
+    }
+  });
+
+  /// The fees, collections and payments out of [target]. Asked with the
+  /// kind of case: the portal will not answer without it.
+  Future<UyapCaseMoney> caseMoney(UyapCase target, int typeCode) =>
+      _serial(() async {
+        return UyapCaseMoney.fromJson(
+          await _post('/dosya_tahsilat_reddiyat_bilgileri_brd.ajx', {
+            'dosyaId': target.id,
+            'dosyaTurKod': typeCode,
+          }),
+        );
+      });
 
   /// The particulars of [target]: its kind, where it stands, and the days
   /// set for a hearing, an inspection or a preliminary examination.
@@ -1069,11 +1096,20 @@ class UyapOption {
 }
 
 class UyapCase {
-  const UyapCase(this.id, this.number, this.courtId, this.courtName);
+  const UyapCase(
+    this.id,
+    this.number,
+    this.courtId,
+    this.courtName, {
+    this.listing,
+  });
   final String id;
   final String number;
   final String courtId;
   final String courtName;
+
+  /// What the list it was found in says of it besides.
+  final UyapCaseListing? listing;
 
   ({int year, int sequence})? get parsedNumber {
     final match = RegExp(r'(\d{4})\s*/\s*(\d+)').firstMatch(number);

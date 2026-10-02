@@ -189,24 +189,62 @@ class UyapCasePanelController extends ChangeNotifier {
     }
   }
 
-  /// Fetches the case's particulars, parties and documents, and keeps them.
+  /// What UYAP shows of a case of a kind it does not show it for.
+  static const hiddenNotes = {
+    'ayrinti_bilgileri': 'UYAP bu dosya türünde dosya bilgilerini göstermiyor.',
+    'taraf_bilgileri': 'UYAP bu dosya türünde tarafları göstermiyor.',
+    'evrak_bilgileri': 'UYAP bu dosya türünde evrak listesini göstermiyor.',
+  };
+
+  /// Fetches the case's particulars, parties, documents and money, and
+  /// keeps them. UYAP is asked first what it shows of a case of this kind,
+  /// and only that is asked for.
   Future<void> refresh() async {
     if (_link == null || !web.connected) return;
     await _doing('Dosya UYAP’ta aranıyor', () async {
       final live = await _liveCase();
       busy = 'Dosya bilgileri çekiliyor';
       _changed();
-      final details = await web.caseDetails(live);
-      final parties = await web.parties(live);
-      final documents = await web.caseDocuments(
-        live,
-        onPage: (page, pages) {
-          busy = pages > 1
-              ? 'Evrak listesi çekiliyor · $page/$pages'
-              : 'Evrak listesi çekiliyor';
-          _changed();
-        },
-      );
+      UyapCasePermissions permissions;
+      try {
+        permissions = await web.permissions(live);
+      } catch (_) {
+        // Not answered: everything is asked for, as before.
+        permissions = const UyapCasePermissions(null, null);
+      }
+      final hidden = {
+        for (final what in hiddenNotes.keys)
+          if (!permissions.allows(what)) what,
+      };
+      final details = hidden.contains('ayrinti_bilgileri')
+          ? const UyapCaseDetails()
+          : await web.caseDetails(live);
+      final parties = hidden.contains('taraf_bilgileri')
+          ? const <UyapParty>[]
+          : await web.parties(live);
+      final documents = hidden.contains('evrak_bilgileri')
+          ? const UyapCaseDocuments([])
+          : await web.caseDocuments(
+              live,
+              onPage: (page, pages) {
+                busy = pages > 1
+                    ? 'Evrak listesi çekiliyor · $page/$pages'
+                    : 'Evrak listesi çekiliyor';
+                _changed();
+              },
+            );
+      final typeCode = permissions.typeCode ?? live.listing?.typeCode;
+      UyapCaseMoney? money;
+      if (typeCode != null &&
+          permissions.allows('tahsilat_reddiyat_bilgileri')) {
+        busy = 'Harç ve tahsilat bilgileri çekiliyor';
+        _changed();
+        try {
+          money = await web.caseMoney(live, typeCode);
+        } catch (_) {
+          // The rest of the case stands without it.
+        }
+      }
       _liveDocuments = {
         for (final d in documents.documents) ...{
           d.key: d,
@@ -215,10 +253,12 @@ class UyapCasePanelController extends ChangeNotifier {
       };
       _record = await store.keep(
         target: live,
-        details: details,
+        details: details.withListing(live.listing),
         parties: parties,
         documents: documents,
         link: _link,
+        money: money,
+        hidden: hidden,
       );
     });
   }
