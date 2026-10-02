@@ -504,6 +504,29 @@ void main() {
     expect(find.byKey(const ValueKey('uyap-cases-add')), findsOneWidget);
     expect(find.text('2026/1204'), findsOneWidget);
     expect(find.text('1 / 2 evrak'), findsOneWidget);
+    // The parties by their role, and a search over them.
+    expect(find.text('Davacı: Ali Veli · Davalı: Ayten Veli'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('uyap-cases-search')),
+      'ayten',
+    );
+    await tester.pump();
+    expect(find.text('2026/1204'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('uyap-cases-search')),
+      'mehmet',
+    );
+    await tester.pump();
+    expect(find.text('Aramaya uyan dosya yok.'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('uyap-cases-search')), '');
+    await tester.pump();
+    // Nothing new in it: the filter leaves it out.
+    await tester.tap(find.byKey(const ValueKey('uyap-cases-filter-yeni')));
+    await tester.pump();
+    expect(find.text('2026/1204'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('uyap-cases-filter-yeni')));
+    await tester.pump();
+    expect(find.text('2026/1204'), findsOneWidget);
     await tester.tap(find.byKey(ValueKey('uyap-cases-${c.record!.key}')));
     expect(shown, [c.record!.key]);
 
