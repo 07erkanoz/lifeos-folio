@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_web_service.dart';
@@ -23,6 +24,7 @@ class UyapCasesPage extends StatefulWidget {
     required this.onShowCase,
     required this.onOpen,
     this.onSaved,
+    this.onNewPetition,
   });
 
   /// The case shown, by [UyapCaseRecord.key]; null for the list of cases.
@@ -36,6 +38,9 @@ class UyapCasesPage extends StatefulWidget {
 
   /// Told where a document was saved, so that Folio can search the folder.
   final void Function(File file)? onSaved;
+
+  /// Begins a petition for the case shown, tied to it.
+  final ValueChanged<UyapCaseLink>? onNewPetition;
 
   @override
   State<UyapCasesPage> createState() => _UyapCasesPageState();
@@ -195,6 +200,21 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
               onPressed: () => unawaited(_connect()),
               icon: const Icon(Icons.login_rounded, size: 18),
               label: const Text('UYAP’a bağlan'),
+            ),
+          if (inCase && widget.onNewPetition != null)
+            ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) {
+                final link = _controller.link;
+                return FilledButton.icon(
+                  key: const ValueKey('uyap-case-new-petition'),
+                  onPressed: link == null
+                      ? null
+                      : () => widget.onNewPetition!(link),
+                  icon: const Icon(Icons.edit_document, size: 18),
+                  label: const Text('Bu dosya için yeni dilekçe'),
+                );
+              },
             ),
           if (!inCase && _desktop)
             FilledButton.icon(

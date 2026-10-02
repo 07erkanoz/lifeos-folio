@@ -118,7 +118,7 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
       ),
     );
     if (go != true || !mounted) return;
-    final chosen = await UyapCasePicker.show(context);
+    final chosen = await UyapCasePicker.show(context, number: record?.number);
     final live = chosen?.$2;
     if (chosen == null || live == null) return;
     if (record != null &&
@@ -646,7 +646,8 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
           spacing: 8,
           runSpacing: 4,
           children: [
-            const UyapSessionChip(),
+            // The page shows the session at its top already.
+            if (!widget.page) const UyapSessionChip(),
             Text('Son çekim ${_clock(record.fetchedAt)}', style: muted),
           ],
         ),
@@ -773,6 +774,33 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
     ];
   }
 
+  /// Groups the reader opened or closed; the rest follow [_groupOpen].
+  final _groupToggled = <String, bool>{};
+
+  /// Whether [source] is the case's own documents: its group is named after
+  /// its number, "2026/441(Hukuk Dava Dosyası)".
+  static bool _own(String source, UyapCaseRecord record) =>
+      UyapWebService.fold(source)
+          .startsWith(UyapWebService.fold(record.number));
+
+  /// The case's own documents first, then those of the cases tied to it.
+  static List<String> _ordered(Set<String> sources, UyapCaseRecord record) => [
+    ...sources.where((s) => _own(s, record)),
+    ...sources.where((s) => !_own(s, record)),
+  ];
+
+  /// The case's own group opens of itself, the others wait to be opened; a
+  /// search opens every group it finds something in.
+  /// [first]: the group listed first, open when no group is the case's
+  /// own by its name, so that the list never comes all closed.
+  bool _groupOpen(String source, UyapCaseRecord record, {bool first = false}) {
+    if (_c.query.trim().isNotEmpty) return true;
+    final toggled = _groupToggled[source];
+    if (toggled != null) return toggled;
+    if (_own(source, record)) return true;
+    return first && !record.documents.any((d) => _own(d.source, record));
+  }
+
   /// The documents of the case, as the search narrows them.
   List<Widget> _documentList(ThemeData theme, UyapCaseRecord record) {
     final documents = _c.documents;
@@ -840,26 +868,60 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
           ),
         ),
       ),
-      for (final source in sources)
+      for (final (i, source) in _ordered(sources, record).indexed)
         ...() {
           final group = [
             for (final d in documents)
               if (d.source == source) d,
           ];
           if (group.isEmpty) return const <Widget>[];
+          if (sources.length == 1) {
+            return [
+              for (final d in group) ...[
+                _row(theme, d),
+                for (final a in d.attachments) _row(theme, a, depth: 1),
+              ],
+            ];
+          }
+          final open = _groupOpen(source, record, first: i == 0);
+          final fresh = [
+            for (final d in group) ...[d, ...d.attachments],
+          ].where((d) => record.fresh.contains(d.key)).length;
           return [
-            if (sources.length > 1)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 2),
-                child: Text(
-                  source.isEmpty ? 'Son eklenenler' : source,
-                  style: muted?.copyWith(fontWeight: FontWeight.w700),
+            InkWell(
+              key: ValueKey('uyap-group-$source'),
+              onTap: () => setState(() => _groupToggled[source] = !open),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 10, 14, 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      open
+                          ? Icons.expand_more_rounded
+                          : Icons.chevron_right_rounded,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        '${source.isEmpty ? 'Son eklenenler' : source} · '
+                        '${group.length}',
+                        style: muted?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    if (fresh > 0) ...[
+                      const SizedBox(width: 8),
+                      _badge(theme, '$fresh yeni'),
+                    ],
+                  ],
                 ),
               ),
-            for (final d in group) ...[
-              _row(theme, d),
-              for (final a in d.attachments) _row(theme, a, depth: 1),
-            ],
+            ),
+            if (open)
+              for (final d in group) ...[
+                _row(theme, d),
+                for (final a in d.attachments) _row(theme, a, depth: 1),
+              ],
           ];
         }(),
       if (documents.isEmpty && record.documents.isNotEmpty)

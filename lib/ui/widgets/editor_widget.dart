@@ -12,6 +12,7 @@ import 'package:crypto/crypto.dart';
 
 import '../../services/editor/document_history.dart';
 import '../../services/editor/document_lock.dart';
+import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
 import '../../services/uyap/uyap_library.dart';
 import '../../preview_app.dart' show openPreviewWindow;
@@ -123,6 +124,10 @@ class EditorWidget extends StatefulWidget {
   final ValueChanged<String>? onSaved;
   final ValueChanged<String>? onSigned;
 
+  /// A new petition begun from a UYAP case's page: written for that case,
+  /// with the case open beside the page, and tied to it when first saved.
+  final UyapCaseLink? uyapCase;
+
   /// Signs the UDF at a path and answers the signed file's path, or null
   /// when the lawyer gave up: the signing dialog, replaced under test.
   @visibleForTesting
@@ -161,6 +166,7 @@ class EditorWidget extends StatefulWidget {
     this.recovery,
     this.onSaved,
     this.onSigned,
+    this.uyapCase,
     this.library,
     this.reveal,
     this.fileHost,
@@ -2827,6 +2833,11 @@ class _EditorWidgetState extends State<EditorWidget>
       );
       _quillController.formatSelection(Attribute.clone(Attribute.size, '16'));
       if (widget.recovery == null) unawaited(_defaultLetterhead());
+      final uyapCase = widget.uyapCase;
+      if (uyapCase != null) {
+        _uyapOpen = true;
+        unawaited(_uyap.attach(uyapCase));
+      }
     }
     _markSaved();
     widget.draft?.changed = () => _hasChanges;

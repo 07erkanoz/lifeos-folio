@@ -19,6 +19,9 @@ class _Portal {
   late HttpServer server;
   var logins = 0;
   final documents = <String>['1', '2'];
+
+  /// Documents of a case tied to this one, listed by UYAP before its own.
+  final related = <String>[];
   final fetched = <String>[];
 
   /// Documents filed as UDF come back as UDF.
@@ -116,6 +119,18 @@ class _Portal {
           body = {
             'pageTotal': 1,
             'tumEvraklar': {
+              if (related.isNotEmpty)
+                '2025/686(Hukuk Dava Dosyası)##y': [
+                  for (final n in related)
+                    {
+                      'evrakId': '$id-evrak$n',
+                      'dosyaId': 'dava-$id',
+                      'evrakTuruAciklama': 'Görevsizlik Kararı',
+                      'birimEvrakNo': n,
+                      'onayTarihi': '01/01/2026',
+                      'gonderenYerKisi': 'Mahkeme',
+                    },
+                ],
               '2026/1204(Hukuk Dava Dosyası)##x': [
                 for (final n in documents)
                   {
@@ -509,6 +524,25 @@ void main() {
     await tester.tap(find.textContaining('cevap.udf'));
     expect(opened?.path, endsWith('cevap.udf'));
 
+    // A petition begun from here is written for this case.
+    UyapCaseLink? petition;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: UyapCasesPage(
+            caseKey: c.record!.key,
+            onShowCase: shown.add,
+            onOpen: (file) => opened = file,
+            onNewPetition: (link) => petition = link,
+          ),
+        ),
+      ),
+    );
+    await settle();
+    await tester.tap(find.byKey(const ValueKey('uyap-case-new-petition')));
+    expect(petition?.number, '2026/1204');
+    expect(petition?.courtId, 'c5');
+
     await tester.tap(find.byTooltip('Dosya işlemleri'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Listeden kaldır…'));
@@ -599,5 +633,90 @@ void main() {
     );
     expect(c.record!.hidden, {'ayrinti_bilgileri'});
     expect(c.record!.documents, isNotEmpty);
+  });
+
+  testWidgets('the case search starts with no year, so it lists every case '
+      'of the court; a case looked for comes filled in', (tester) async {
+    await tester.runAsync(() => portal.login(web));
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    Future<void> open(String? number) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => UyapCasePicker.show(context, number: number),
+              child: const Text('bağla'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('bağla'));
+      await tester.pump();
+      await tester.pump();
+    }
+
+    String field(String label) => tester
+        .widget<TextField>(find.widgetWithText(TextField, label))
+        .controller!
+        .text;
+    await open(null);
+    expect(field('Yıl (boş: tümü)'), isEmpty);
+    expect(field('Esas sıra no (boş: tümü)'), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await open('2026/191');
+    expect(field('Yıl (boş: tümü)'), '2026');
+    expect(field('Esas sıra no (boş: tümü)'), '191');
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('the case\'s own documents come first and open; a tied case\'s '
+      'come after, closed until opened', (tester) async {
+    final c = panel();
+    portal.related.add('9');
+    await tester.runAsync(() async {
+      await portal.login(web);
+      await c.bind('${root.path}/cevap.udf');
+      await c.choose(link, await web.findCase(link));
+    });
+    tester.view.physicalSize = const Size(500, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: UyapCasePanel(
+            controller: c,
+            onOpen: (_, _) {},
+            onInsert: (_) {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final own = find.byKey(
+      const ValueKey('uyap-group-2026/1204(Hukuk Dava Dosyası)'),
+    );
+    final tied = find.byKey(
+      const ValueKey('uyap-group-2025/686(Hukuk Dava Dosyası)'),
+    );
+    expect(tester.getTopLeft(own).dy, lessThan(tester.getTopLeft(tied).dy));
+    expect(find.byKey(const ValueKey('uyap-doc-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('uyap-doc-9')), findsNothing);
+    await tester.tap(tied);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('uyap-doc-9')), findsOneWidget);
+    await tester.tap(own);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('uyap-doc-1')), findsNothing);
+    // A search opens what it finds.
+    await tester.enterText(
+      find.byKey(const ValueKey('uyap-panel-search')),
+      'dilekçe',
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('uyap-doc-1')), findsOneWidget);
   });
 }

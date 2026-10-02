@@ -11,7 +11,11 @@ import 'uyap_session_chip.dart';
 /// Finds the UYAP case a document is written for: the kind of court, the
 /// court, then the number. Asks for a session first when there is none.
 class UyapCasePicker extends StatefulWidget {
-  const UyapCasePicker({super.key, this.offerKept = false});
+  const UyapCasePicker({super.key, this.offerKept = false, this.number});
+
+  /// "2026/191": the case looked for, its year and number filled in. With
+  /// none, both are left empty and a search lists every case of the court.
+  final String? number;
 
   /// Lists the cases kept on this computer first, to take one without
   /// UYAP; a document is tied to a case this way most of the time.
@@ -22,9 +26,10 @@ class UyapCasePicker extends StatefulWidget {
   static Future<(UyapCaseLink, UyapCase?)?> show(
     BuildContext context, {
     bool offerKept = false,
+    String? number,
   }) => showDialog<(UyapCaseLink, UyapCase?)>(
     context: context,
-    builder: (_) => UyapCasePicker(offerKept: offerKept),
+    builder: (_) => UyapCasePicker(offerKept: offerKept, number: number),
   );
 
   @override
@@ -33,8 +38,10 @@ class UyapCasePicker extends StatefulWidget {
 
 class _UyapCasePickerState extends State<UyapCasePicker> {
   UyapWebService get _web => UyapWebService.instance;
-  final _year = TextEditingController(text: '${DateTime.now().year}');
-  final _number = TextEditingController();
+  late final _wanted = RegExp(r'(\d{4})\s*/\s*(\d+)')
+      .firstMatch(widget.number ?? '');
+  late final _year = TextEditingController(text: _wanted?.group(1) ?? '');
+  late final _number = TextEditingController(text: _wanted?.group(2) ?? '');
   String _jurisdiction = '1';
   bool _closed = false;
   List<UyapOption> _types = const [];
@@ -321,7 +328,7 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                           width: 110,
                           child: TextField(
                             controller: _year,
-                            decoration: _field('Yıl'),
+                            decoration: _field('Yıl (boş: tümü)'),
                             keyboardType: TextInputType.number,
                           ),
                         ),

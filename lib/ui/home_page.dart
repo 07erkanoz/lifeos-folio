@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 
 import '../services/platform/editor_window.dart';
+import '../services/uyap/uyap_case_links.dart';
 import '../services/uyap/uyap_case_store.dart';
 import '../services/uyap/uyap_library.dart';
 import '../services/speech/speech_session.dart';
@@ -234,6 +235,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final EditorDrafts _drafts = widget.drafts ?? EditorDrafts();
   int _newDocumentVersion = 0;
   EvrakFormat _newFormat = EvrakFormat.udf;
+
+  /// The UYAP case the new document is written for, when begun from its page.
+  UyapCaseLink? _newCase;
   bool _choosingNewDocument = false;
   String get _newTitle =>
       _newRecovery?.name ?? 'Yeni belge.${_newFormat.defaultExtension}';
@@ -903,6 +907,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         unawaited(_addFiles([file.path], index: false, external: true)),
     onSaved: (_) =>
         unawaited(searchUyapFolder(_library).catchError((Object _) => false)),
+    onNewPetition: (link) => unawaited(_newDocument(forCase: link)),
   );
 
   void _openConvertDialog({List<EvrakFile>? specificFiles}) {
@@ -920,16 +925,22 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     context: context,
     builder: (_) => IndexStatusDialog(library: _library),
   );
-  Future<void> _newDocument() async {
+
+  /// [forCase]: a petition begun from a UYAP case's page, a UDF written for
+  /// that case; no choice of format is asked for.
+  Future<void> _newDocument({UyapCaseLink? forCase}) async {
     if (_choosingNewDocument) return;
     _choosingNewDocument = true;
     try {
-      final format = await showDialog<EvrakFormat>(
-        context: context,
-        builder: (_) => const NewDocumentDialog(),
-      );
+      final format = forCase != null
+          ? EvrakFormat.udf
+          : await showDialog<EvrakFormat>(
+              context: context,
+              builder: (_) => const NewDocumentDialog(),
+            );
       if (format == null || !mounted || !await _leaveEditor()) return;
       setState(() {
+        _newCase = forCase;
         _newFormat = format;
         _newDocumentVersion++;
         _newRecovery = null;
@@ -1436,6 +1447,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                                         _newDraft,
                                                                     onSaved:
                                                                         _saved,
+                                                                    uyapCase:
+                                                                        _newCase,
                                                                     isActive:
                                                                         !_showLibrary &&
                                                                         _isNewDocument,
