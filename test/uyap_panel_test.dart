@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:evrak_convert/services/uyap/adalet_eimza.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
@@ -626,6 +627,11 @@ void main() {
     final previous = UyapCaseStore.instance;
     UyapCaseStore.instance = store;
     addTearDown(() => UyapCaseStore.instance = previous);
+    // The login it offers asks the system whether Adalet E-İmza is there;
+    // that answer is no business of this test.
+    final tray = AdaletEimza.check;
+    AdaletEimza.check = () async => false;
+    addTearDown(() => AdaletEimza.check = tray);
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -658,6 +664,8 @@ void main() {
     }
     expect(chosen?.$1.courtId, 'c5');
     expect(chosen?.$2, isNull, reason: 'not looked for in UYAP');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 10));
   });
 
   test('a refresh asks what UYAP shows of the case first, keeps the list\'s '
