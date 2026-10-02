@@ -291,11 +291,70 @@ Future<UyapCaseStore> _demoCase(
     ),
   );
   final parties = await DemoUyap().parties(DemoUyap.target);
+  const link = UyapCaseLink(
+    jurisdiction: '1',
+    courtType: 'AILE',
+    courtId: 'c5',
+    court: 'İstanbul Anadolu 5. Aile Mahkemesi',
+    number: '2026/1204',
+  );
+  // Two more cases on the list, invented: an enforcement file and one at
+  // the Yargıtay.
+  await store.keep(
+    target: const UyapCase(
+      'd2',
+      '2026/3318',
+      'c9',
+      'İstanbul 12. İcra Dairesi',
+    ),
+    details: const UyapCaseDetails(
+      fileType: 'İcra Dosyası',
+      state: 'Açık (Durdurulmuş : Takibe İtiraz)',
+      openedOn: '14.01.2026',
+      enforcement: [
+        ('Takip türü', 'İlamsız'),
+        ('Alacak toplamı', '84.250,00 TL'),
+      ],
+    ),
+    parties: const [
+      UyapParty(
+        'Örnek Yapı Ltd. Şti.',
+        'Alacaklı',
+        'Av. Deniz YILMAZ',
+        'Kurum',
+      ),
+      UyapParty('Can DEMİR', 'Borçlu', '', 'Kişi'),
+    ],
+    documents: UyapCaseDocuments(DemoUyap.documents(4)),
+    now: DateTime.now().subtract(const Duration(days: 6)),
+  );
+  await store.keep(
+    target: const UyapCase(
+      'd3',
+      '2026/9001',
+      'y2',
+      'Yargıtay 2. Hukuk Dairesi',
+    ),
+    details: const UyapCaseDetails(
+      fileType: 'Yargıtay Dosyası',
+      state: 'Daireye Gönderildi',
+      openedOn: '14/09/2026',
+      related: [('Yerel mahkeme', 'İstanbul 7. Aile Mahkemesi · 2025/880')],
+    ),
+    parties: const [
+      UyapParty('Elif AKSOY', 'Davacı', 'Av. Deniz YILMAZ', 'Kişi'),
+      UyapParty('Murat AKSOY', 'Davalı', '', 'Kişi'),
+    ],
+    documents: UyapCaseDocuments(DemoUyap.documents(3)),
+    now: DateTime.now().subtract(const Duration(days: 9)),
+  );
   await store.keep(
     target: DemoUyap.target,
     details: DemoUyap.details,
     parties: parties,
     documents: UyapCaseDocuments(DemoUyap.documents(6)),
+    link: link,
+    money: DemoUyap.money,
     now: DateTime.now().subtract(const Duration(days: 3)),
   );
   var record = await store.keep(
@@ -662,9 +721,23 @@ void main() {
         rounds: 40,
       );
       await _shot(tester, 'uyap-dosyalarim');
-      await tester.tap(tile.first);
+      await tester.tap(
+        find.byWidgetPredicate(
+          (w) =>
+              '${w.key}'.contains('uyap-case-') &&
+              '${w.key}'.contains(
+                UyapCaseStore.keyOf(
+                  DemoUyap.target.courtName,
+                  DemoUyap.target.number,
+                ),
+              ),
+        ),
+      );
       await _settle(tester, () => false, rounds: 20);
       await _shot(tester, 'uyap-kategori');
+      await tester.tap(find.text('Harç ve tahsilat'));
+      await _settle(tester, () => false, rounds: 20);
+      await _shot(tester, 'uyap-harc');
     } finally {
       debugDisableShadows = true;
     }

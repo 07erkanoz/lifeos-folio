@@ -168,6 +168,48 @@ class DemoUyap extends UyapWebService {
     hearing: '12/11/2026 10:30',
     preliminary: '16/09/2026 11:05',
     related: [('Birleşen dosya', '2026/1388 Esas')],
+    fileType: 'Hukuk Dava Dosyası',
+    state: 'Açık',
+    openedOn: '02.03.2026',
+  );
+
+  /// The case's fees and collections, invented.
+  static const money = UyapCaseMoney(
+    collected: 1846.20,
+    paidOut: 250,
+    deposit: 0,
+    remaining: 1596.20,
+    fees: [
+      UyapMoneyItem(
+        kind: 'Başvurma Harcı',
+        date: '02/03/2026',
+        amount: 615.40,
+        receipt: 'M-2026-0412',
+        payer: 'Av. Deniz YILMAZ',
+      ),
+      UyapMoneyItem(
+        kind: 'Peşin Harç',
+        date: '02/03/2026',
+        amount: 615.40,
+        receipt: 'M-2026-0413',
+        payer: 'Av. Deniz YILMAZ',
+      ),
+      UyapMoneyItem(
+        kind: 'Gider Avansı',
+        date: '02/03/2026',
+        amount: 615.40,
+        receipt: 'M-2026-0414',
+        payer: 'Av. Deniz YILMAZ',
+      ),
+    ],
+    payments: [
+      UyapMoneyItem(
+        kind: 'Gider avansı iadesi',
+        date: '21/09/2026',
+        amount: 250,
+        payer: 'Zeynep KAYA',
+      ),
+    ],
   );
 
   /// The case's documents, the first [count] of them: what came later is

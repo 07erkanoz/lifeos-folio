@@ -8,7 +8,7 @@ Ekran görüntülerindeki kişi ve dosya bilgileri uydurmadır; görüntüler `t
 
 - [Sesli okuma ve sesli yazma](#sesli-okuma-ve-sesli-yazma)
 - [Birden fazla pencere ve yazdırma](#birden-fazla-pencere-ve-yazdırma)
-- [UYAP'a bağlanma](#uyapa-bağlanma) · [UYAP'a evrak gönderme](#uyapa-evrak-gönderme) · [UYAP dosyası editörün yanında](#uyap-dosyası-editörün-yanında)
+- [UYAP'a bağlanma](#uyapa-bağlanma) · [UYAP'a evrak gönderme](#uyapa-evrak-gönderme) · [UYAP Dosyalarım](#uyap-dosyalarım) · [UYAP dosyası editörün yanında](#uyap-dosyası-editörün-yanında)
 - [Elektronik imzalı UDF](#elektronik-imzalı-udf) · [Arama ve otomatik indeksleme](#arama-ve-otomatik-indeksleme) · [Kanun maddesi ve emsal karar önizlemesi](#kanun-maddesi-ve-emsal-karar-önizlemesi)
 - [Güncellemeler](#güncellemeler) · [macOS](#macos) · [Derleme](#derleme)
 
@@ -205,13 +205,37 @@ Oturum yaklaşık 2 saat 55 dakika açık kalır; bu sürede gönderme ve dosya 
 |---|---|
 | ![Taraflar ve gönderilecek belge aynı ekranda](docs/screenshots/uyap-hedef.webp) | ![Göndermeden önce son kontrol](docs/screenshots/uyap-onay.webp) |
 
-**Gönderimi incele** son kontrol ekranını açar. Gönderilmeden hemen önce dosya numarası, taraflar, evrak türü ve belgenin kendisi yeniden denetlenir; bunlardan biri bu arada değiştiyse evrak gönderilmez ve neden gönderilmediği yazılır. Gönderilen evrak, UYAP'taki işlem tamamlanana kadar ana ekrandan açılan **UYAP Devam Eden İşlemler** listesinde izlenir.
+Dosya seçme penceresinde yıl ve esas numarası boş gelir; boş bırakılırsa mahkemedeki bütün dosyalar listelenir. **Gönderimi incele** son kontrol ekranını açar. Gönderilmeden hemen önce dosya numarası, taraflar, evrak türü ve belgenin kendisi yeniden denetlenir; bunlardan biri bu arada değiştiyse evrak gönderilmez ve neden gönderilmediği yazılır. Gönderilen evrak, UYAP'taki işlem tamamlanana kadar ana ekrandan açılan **UYAP Devam Eden İşlemler** listesinde izlenir.
 
 ![Devam Eden İşlemler](docs/screenshots/uyap-islemler.webp)
 
+## UYAP Dosyalarım
+
+Ana ekranın sol menüsünde, klasörlerin arasında **UYAP Dosyalarım** bulunur. Tıklandığında Folio'nun bu bilgisayarda sakladığı UYAP dosyaları listelenir ve dosyalar menüde onun altında açılır. Bir dosya, UYAP'tan bir kez çekildiği anda listeye girer; evrakının indirilmiş olması gerekmez.
+
+![UYAP Dosyalarım: arama, filtreler ve dosyalar](docs/screenshots/uyap-dosyalarim.webp)
+
+Her dosyanın kartında esas numarası, mahkemesi, tarafları rolleriyle, dosya ve dava türü, duruşma tarihi, son eşitleme zamanı, yeni evrak sayısı ve kaç evrakın indirildiği görünür. Dosya yalnız "Açık" değilse durumu ayrıca yazılır, örneğin "Açık (Durdurulmuş : Takibe İtiraz)" ya da "İstinafta". Arama kutusu esas numarasında, mahkemede, taraf ve vekil adlarında, dava türünde ve durumda arar. Filtreler yeni evrakı olan dosyaları, 30 gün içinde duruşması olanları ya da bir dosya türünü (Hukuk, İcra, Yargıtay…) gösterir. Liste son eşitlemeye, yaklaşan duruşmaya ya da esas numarasına göre sıralanır.
+
+Sayfanın üstündeki **UYAP'a bağlan** oturumu açar; bağlıyken yerinde kalan oturum süresi görünür. **UYAP'tan dosya ekle** ile yargı türü, mahkeme türü, mahkeme ve isteğe bağlı olarak yıl ve esas numarası seçilir. Yıl ve numara boş bırakılırsa o mahkemedeki bütün dosyalar listelenir. Yargıtay ve Danıştay dosyaları da eklenir: bunlarda mahkeme yerine avukatın dosyası olan daireler listelenir; yıl ve numara dairenin dosyalarını süzer. Folio portföyün tamamını kendiliğinden çekmez; her dosya isteyerek eklenir, çünkü UYAP aynı anda tek isteğe izin verir.
+
+Bir dosyaya tıklanınca dosya sayfası açılır. Geniş ekranda solda dosya bilgileri ve taraflar, sağda sekmeler bulunur; dar ekranda dosya bilgileri de bir sekmedir.
+
+![Bir UYAP dosyasının sayfası](docs/screenshots/uyap-kategori.webp)
+
+- **Dosya bilgileri:** dosya türü, dava türü, açılış türü, ayrıntılı durum, açılış ve kapanış tarihi, duruşma, keşif ve ön inceleme, karar ve istinaf ya da Yargıtay aşamasındaki dosyada yerel mahkemenin kararı, bağlı dosyalar. İcra dosyasında ayrıca takip türü, şekli ve yolu ile alacak toplamı, faiz, masraf, vekâlet ücreti, tahsil harcı ve yapılmış tahsilat. Yargıtay ve Danıştay dosyasında konu, daireye geliş tarihi ve yerel mahkeme.
+- **Evraklar:** dosyanın kendi evrakı en üstte ve açık gelir; bağlı dosyaların evrakı ayrı gruplar hâlinde kapalı gelir ve tıklanınca açılır. Arama, bulduğu grupları kendiliğinden açar.
+- **İndirilen:** bu bilgisayardaki evrak; tıklanan evrak Folio'nun önizlemesinde açılır.
+- **Dilekçeler:** editörde bu dosyaya bağlanmış belgeler.
+- **Harç ve tahsilat:** toplam tahsilat, reddiyat, teminat ve kalan; harçlar, tahsilatlar ve reddiyatlar makbuz no, tarih, ödeyen ve tutarla.
+
+![Harç ve tahsilat sekmesi](docs/screenshots/uyap-harc.webp)
+
+Dosya sayfasındaki yenile düğmesi dosyayı UYAP'tan yeniden çeker. Folio önce UYAP'a o dosya türünde nelerin gösterildiğini sorar ve yalnız onları ister; örneğin ceza dosyasında dosya bilgileri istenmez, sayfada "UYAP bu dosya türünde dosya bilgilerini göstermiyor" yazar. Önceki bir Folio sürümünün kaydettiği ve UYAP'taki yerini bilmeyen dosyada ilk yenilemede mahkeme ve esas numarası bir kez seçilir. **Bu dosya için yeni dilekçe** editörü bu dosyaya bağlı yeni bir UDF ile açar; **Listeden kaldır** dosyayı yalnız Folio'nun listesinden çıkarır, UYAP'taki dosyaya dokunmaz ve indirilen evrakın da silinip silinmeyeceğini ayrıca sorar.
+
 ## UYAP dosyası editörün yanında
 
-Editörün araç çubuğundaki **UYAP dosyası**, sayfanın yanında bir panel açar. Belgeyi bir UYAP dosyasına bağladığınızda panelde dosyanın bilgileri görünür: dava türü, durum, duruşma, keşif ve ön inceleme tarihleri, birleşen ve ilgili dosyalar, taraflar ve vekilleri, dosyadaki bütün evrak. Bir tarafın bilgisi **Metne ekle** ile imlecin bulunduğu yere yazılır. Bağ belgeyle birlikte hatırlanır; belge sonra açıldığında panel aynı dosyayla gelir. Panel sürüklenerek genişletilip daraltılabilir.
+Editörün araç çubuğundaki **UYAP dosyası**, sayfanın yanında bir panel açar. Belgeyi bir UYAP dosyasına bağladığınızda panelde dosya sayfasındaki bilgiler görünür: dosya bilgileri, taraflar ve vekilleri, dosyadaki bütün evrak. Bir tarafın adı **Metne ekle** ile imlecin bulunduğu yere yazılır. Bağlarken önce bu bilgisayardaki dosyalar listelenir; bunlardan biri UYAP oturumu olmadan seçilebilir. Bağ belgeyle birlikte hatırlanır; belge sonra açıldığında panel aynı dosyayla gelir ve belge dosya sayfasının **Dilekçeler** sekmesinde görünür. Panel sürüklenerek genişletilip daraltılabilir.
 
 ![Dilekçenin yanında UYAP dosya paneli](docs/screenshots/uyap-panel.webp)
 
@@ -223,9 +247,7 @@ Evrak tek tek işaretlenip **Seçilenleri indir** ile ya da **Tümünü indir** 
 
 ![Üç evrak indirilmek üzere seçili](docs/screenshots/uyap-secerek-indirme.webp)
 
-İndirilen evrak varsayılan olarak ev klasöründeki `Folio/UYAP` altında, her dosya için mahkeme adı ve esas numarasıyla adlandırılmış bir klasöre kaydedilir. Belgeler klasörü bilerek önerilmez: Windows onu OneDrive'a taşıyabilir. Kaydetme ilk kurulumda açıktır; panelin **Kayıt ayarları** bölümünden kapatılabilir ya da klasör değiştirilebilir. Kayıt klasörü arşive kendiliğinden eklenir, yani indirilen evrakın içinde de arama yapılır. Ana ekranın sol menüsünde **UYAP DOSYALARI** başlığı altında her dosya ayrı bir kategori olarak görünür; bir dosyaya tıklamak yalnız o dosyanın evrakını listeler.
-
-![Ana ekranda UYAP dosyası kategorisi](docs/screenshots/uyap-kategori.webp)
+İndirilen evrak varsayılan olarak ev klasöründeki `Folio/UYAP` altında, her dosya için mahkeme adı ve esas numarasıyla adlandırılmış bir klasöre kaydedilir. Belgeler klasörü bilerek önerilmez: Windows onu OneDrive'a taşıyabilir. Kaydetme ilk kurulumda açıktır; panelin **Kayıt ayarları** bölümünden kapatılabilir ya da klasör değiştirilebilir. Kayıt klasörü arşive kendiliğinden eklenir, yani indirilen evrakın içinde de arama yapılır.
 
 Dosya kimlikleri UYAP'ta oturuma bağlı olduğu için Folio dosyaları mahkeme ve esas numarasıyla, evrakı UYAP'ın evrak numarasıyla tanır; böylece yeni bir oturumda da aynı dosya ve evrak eşleşir. LifeOS Editör ile Folio aynı kayıtları kullanır.
 
