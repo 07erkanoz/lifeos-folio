@@ -90,7 +90,7 @@ class _UyapConnectViewState extends State<UyapConnectView> {
 
   Future<void> _connect() async {
     if (_route == _Route.tray && _pin.text.isEmpty) {
-      setState(() => _error = 'Adalet E-İmza PIN kodunu girin.');
+      setState(() => _error = 'E-imza PIN kodunu girin.');
       return;
     }
     _last = _route;
@@ -275,7 +275,7 @@ class _UyapConnectViewState extends State<UyapConnectView> {
               if (!_busy) unawaited(_connect());
             },
             decoration: const InputDecoration(
-              labelText: 'Adalet E-İmza PIN',
+              labelText: 'E-imza PIN',
               prefixIcon: Icon(Icons.lock_outline),
               border: OutlineInputBorder(),
             ),

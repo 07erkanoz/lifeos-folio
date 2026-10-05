@@ -104,6 +104,55 @@ class UyapWebService {
     disconnect();
   }
 
+  /// The card certificate Adalet E-İmza offers: a valid one first, else any
+  /// with an identifier; null when its readers show none.
+  Future<Map?> _trayCertificate(Completer<void> cancel) async {
+    final certificates = await _loginWait(
+      _http.getUrl(Uri.parse('$_tray/getCertificates')),
+      cancel,
+      const Duration(seconds: 25),
+      'Sertifika sorgusu',
+    );
+    certificates.headers.set('Accept', 'application/json');
+    final certResponse = await _loginWait(
+      certificates.close(),
+      cancel,
+      const Duration(seconds: 30),
+      'Sertifika sorgusu',
+    );
+    if (certResponse.statusCode != 200) {
+      throw StateError('Adalet E-İmza uygulamasına ulaşılamadı.');
+    }
+    final certJson = jsonDecode(
+      await _loginWait(
+        _body(certResponse),
+        cancel,
+        const Duration(seconds: 30),
+        'Sertifika yanıtı',
+      ),
+    );
+    Map? selectedCertificate;
+    Map? fallbackCertificate;
+    if (certJson is Map && certJson['data'] is List) {
+      for (final terminal in certJson['data'] as List) {
+        if (terminal is! Map || terminal['certificates'] is! List) continue;
+        for (final certificate in terminal['certificates'] as List) {
+          if (certificate is Map &&
+              certificate['certificateId'] is String &&
+              (certificate['certificateId'] as String).isNotEmpty) {
+            fallbackCertificate ??= certificate;
+            if (certificate['valid'] == true) {
+              selectedCertificate = certificate;
+              break;
+            }
+          }
+        }
+        if (selectedCertificate != null) break;
+      }
+    }
+    return selectedCertificate ?? fallbackCertificate;
+  }
+
   Future<T> _loginWait<T>(
     Future<T> work,
     Completer<void> cancel,
@@ -186,53 +235,17 @@ class UyapWebService {
         'Adalet E-İmza hazırlığı',
       );
       onProgress?.call('Kart ve sertifika okunuyor');
-      final certificates = await _loginWait(
-        _http.getUrl(Uri.parse('$_tray/getCertificates')),
-        cancel,
-        const Duration(seconds: 25),
-        'Sertifika sorgusu',
-      );
-      certificates.headers.set('Accept', 'application/json');
-      final certResponse = await _loginWait(
-        certificates.close(),
-        cancel,
-        const Duration(seconds: 30),
-        'Sertifika sorgusu',
-      );
-      if (certResponse.statusCode != 200) {
-        throw StateError('Adalet E-İmza uygulamasına ulaşılamadı.');
+      var certificate = await _trayCertificate(cancel);
+      if (certificate == null && await TrayRecovery.restartOnWindows()) {
+        onProgress?.call('Adalet E-İmza kart okuyucuları yeniden tarıyor');
+        certificate = await _trayCertificate(cancel);
       }
-      final certJson = jsonDecode(
-        await _loginWait(
-          _body(certResponse),
-          cancel,
-          const Duration(seconds: 30),
-          'Sertifika yanıtı',
-        ),
-      );
-      Map? selectedCertificate;
-      Map? fallbackCertificate;
-      if (certJson is Map && certJson['data'] is List) {
-        for (final terminal in certJson['data'] as List) {
-          if (terminal is! Map || terminal['certificates'] is! List) continue;
-          for (final certificate in terminal['certificates'] as List) {
-            if (certificate is Map &&
-                certificate['certificateId'] is String &&
-                (certificate['certificateId'] as String).isNotEmpty) {
-              fallbackCertificate ??= certificate;
-              if (certificate['valid'] == true) {
-                selectedCertificate = certificate;
-                break;
-              }
-            }
-          }
-          if (selectedCertificate != null) break;
-        }
-      }
-      final certificate = selectedCertificate ?? fallbackCertificate;
       final certificateId = certificate?['certificateId']?.toString() ?? '';
       if (certificateId.isEmpty) {
-        throw StateError('İmza sertifikası bulunamadı.');
+        throw StateError(
+          'İmza sertifikası bulunamadı. Kartın okuyucuda takılı olduğundan '
+          'emin olun.',
+        );
       }
       final tc = certificate?['subjectSerial']?.toString().trim() ?? '';
       _tckn = RegExp(r'^\d{11}$').hasMatch(tc) ? tc : '';

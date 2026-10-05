@@ -74,12 +74,17 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
     return used < candidate.max;
   }
 
+  /// One compact look for every box of the dialog: a 13-point label and
+  /// text, and the height of a line rather than Material's 56 pixels.
   InputDecoration _field(String label, {String? hint}) => InputDecoration(
     labelText: label,
     hintText: hint,
     isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    labelStyle: const TextStyle(fontSize: 13),
+    hintStyle: const TextStyle(fontSize: 13),
+    counterStyle: const TextStyle(fontSize: 11),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
   );
 
   @override
@@ -773,6 +778,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                     color: theme.colorScheme.onSurface,
                   ),
                   isExpanded: true,
+                  iconSize: 20,
                   items: const [
                     DropdownMenuItem(value: '1', child: Text('Hukuk')),
                     DropdownMenuItem(value: '0', child: Text('Ceza')),
@@ -839,6 +845,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                       color: theme.colorScheme.onSurface,
                     ),
                     isExpanded: true,
+                    iconSize: 20,
                     menuMaxHeight: 320,
                     items: [
                       for (final t in _types)
@@ -868,6 +875,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                       color: theme.colorScheme.onSurface,
                     ),
                     isExpanded: true,
+                    iconSize: 20,
                     menuMaxHeight: 320,
                     items: [
                       for (final c in _courts)
@@ -1126,6 +1134,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                     color: theme.colorScheme.onSurface,
                   ),
                   isExpanded: true,
+                  iconSize: 20,
                   menuMaxHeight: 320,
                   items: [
                     for (final t in _documentTypes)
@@ -1149,9 +1158,8 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                 TextField(
                   controller: _description,
                   maxLength: 350,
-                  decoration: const InputDecoration(
-                    labelText: 'Evrak açıklaması',
-                  ),
+                  decoration: _field('Evrak açıklaması'),
+                  style: const TextStyle(fontSize: 13),
                 ),
                 const Divider(),
                 for (var i = 0; i < _attachments.length; i++)
@@ -1177,9 +1185,10 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                           ),
                           DropdownButtonFormField<UyapDocumentType>(
                             initialValue: _attachments[i].documentType,
-                            decoration: const InputDecoration(
-                              labelText: 'Ek evrak türü',
-                            ),
+                            decoration: _field('Ek evrak türü'),
+                            style: const TextStyle(fontSize: 13),
+                            isExpanded: true,
+                            iconSize: 20,
                             items: [
                               for (final t in _documentTypes)
                                 if ((t.acceptedExtensions.isEmpty ||
@@ -1215,9 +1224,8 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                             ),
                             initialValue: _attachments[i].description,
                             maxLength: 350,
-                            decoration: const InputDecoration(
-                              labelText: 'Ek açıklaması',
-                            ),
+                            decoration: _field('Ek açıklaması'),
+                            style: const TextStyle(fontSize: 13),
                             onChanged: (value) {
                               final old = _attachments[i];
                               _attachments[i] = UyapUpload(

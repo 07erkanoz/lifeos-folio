@@ -39,6 +39,48 @@ class TrayRecovery {
     }
   }
 
+  /// Windows: Adalet E-İmza reads the card readers once, when it starts. One
+  /// started before the reader was plugged in, or behind Windows Hello's
+  /// virtual reader, reports no certificate until it is started again.
+  /// Restarts it and waits for its port; false where it is not installed in
+  /// the user's folder or does not come back.
+  static Future<bool> restartOnWindows() async {
+    if (!Platform.isWindows) return false;
+    final local = Platform.environment['LOCALAPPDATA'];
+    if (local == null) return false;
+    final exe = File('$local\\Adalet E-imza\\Adalet E-imza.exe');
+    if (!await exe.exists()) return false;
+    try {
+      await Process.run('taskkill', [
+        '/F',
+        '/IM',
+        'Adalet E-imza.exe',
+      ]).timeout(const Duration(seconds: 10));
+      await Future<void>.delayed(const Duration(seconds: 1));
+      await Process.start(
+        exe.path,
+        const [],
+        workingDirectory: exe.parent.path,
+        mode: ProcessStartMode.detached,
+      );
+    } catch (_) {
+      return false;
+    }
+    for (var i = 0; i < 40; i++) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      try {
+        final socket = await Socket.connect(
+          '127.0.0.1',
+          5975,
+          timeout: const Duration(seconds: 1),
+        );
+        socket.destroy();
+        return true;
+      } catch (_) {}
+    }
+    return false;
+  }
+
   static Future<bool> _ready() async {
     for (var i = 0; i < 12; i++) {
       await Future<void>.delayed(const Duration(seconds: 1));

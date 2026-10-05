@@ -81,7 +81,7 @@ void main() {
     expect(first.enabled, isFalse);
     expect(find.text('Bu bilgisayarda kurulu değil.'), findsOneWidget);
     expect(find.byKey(const ValueKey('adalet-eimza-download')), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Adalet E-İmza PIN'), findsNothing);
+    expect(find.widgetWithText(TextField, 'E-imza PIN'), findsNothing);
     // And with no e-Devlet window beside the test runner either, there is
     // no way in at all: the button says so by not being there to press.
     final connect = tester.widget<FilledButton>(
@@ -97,7 +97,7 @@ void main() {
     await tester.tap(find.text('Yeniden denetle'));
     await tester.pumpAndSettle();
     expect(find.text('Bu bilgisayarda kurulu değil.'), findsNothing);
-    expect(find.widgetWithText(TextField, 'Adalet E-İmza PIN'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'E-imza PIN'), findsOneWidget);
   });
 
   testWidgets('without an e-Devlet window, the card and PIN is the way in; '
@@ -124,15 +124,15 @@ void main() {
     // No e-Devlet window beside the test runner: the e-Devlet ways are
     // offered but cannot be chosen, and why is said.
     expect(find.textContaining('WebKitGTK'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Adalet E-İmza PIN'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'E-imza PIN'), findsOneWidget);
 
     // Asked without a PIN, it says so rather than trying.
     await tester.tap(find.byKey(const ValueKey('uyap-connect-button')));
     await tester.pumpAndSettle();
-    expect(find.text('Adalet E-İmza PIN kodunu girin.'), findsOneWidget);
+    expect(find.text('E-imza PIN kodunu girin.'), findsOneWidget);
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Adalet E-İmza PIN'),
+      find.widgetWithText(TextField, 'E-imza PIN'),
       '123456',
     );
     await tester.tap(find.byKey(const ValueKey('uyap-connect-button')));
@@ -168,7 +168,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextField, 'Adalet E-İmza PIN'),
+      find.widgetWithText(TextField, 'E-imza PIN'),
       '123456',
     );
     await tester.tap(find.byKey(const ValueKey('uyap-connect-button')));
