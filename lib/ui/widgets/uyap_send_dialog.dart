@@ -768,6 +768,8 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                 child: UyapSessionChip(onDisconnected: _cleared),
               ),
               const Divider(),
+              // Room for the first box's floating label.
+              const SizedBox(height: 10),
               if (_case == null) ...[
                 DropdownButtonFormField<String>(
                   initialValue: _jurisdiction,
@@ -793,7 +795,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                           _loadTypes();
                         },
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     const Text('Dosya durumu', style: TextStyle(fontSize: 13)),
@@ -828,7 +830,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 if (_types.isEmpty)
                   OutlinedButton(
                     onPressed: _busy ? null : _loadTypes,
@@ -864,6 +866,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                             if (v != null) _loadCourts(v);
                           },
                   ),
+                if (_courts.isNotEmpty) const SizedBox(height: 12),
                 if (_courts.isNotEmpty)
                   DropdownButtonFormField<UyapOption>(
                     key: ValueKey('uyap-courts-${_type?.id}-$_closed'),
@@ -899,6 +902,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                           }),
                   ),
                 if (_court != null) ...[
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -920,6 +924,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
                   OutlinedButton(
                     onPressed: _busy ? null : _search,
                     child: const Text('Dosyaları getir'),
