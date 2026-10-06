@@ -4,7 +4,7 @@ Tarih: 6 Ekim 2026
 
 Durum: Kaynak incelemesi ve plan hazırlandı. Uygulama geliştirmesi başlatılmadı.
 
-Ek inceleme (6 Ekim 2026): Banaozel'in senkron, portföy, evrak, duruşma ve UETS eşleştirme mantığı incelendi; Folio kuralları §9'a, paket maddeleri ilgili paketlere işlendi. Ekran yerleşimi §10'da karara bağlandı; uygulama sırası §11'de.
+Ek inceleme (6 Ekim 2026): Banaozel'in senkron, portföy, evrak, duruşma ve UETS eşleştirme mantığı incelendi; Folio kuralları §9'a, paket maddeleri ilgili paketlere işlendi. Ekran yerleşimi §10'da karara bağlandı; süre motoru kararı §11'de, uygulama sırası §12'de.
 
 Hedef proje: `/home/erkanoz/projeler/evrak convert`
 
@@ -631,7 +631,7 @@ Kullanıcı `docs/design/ajanda-taslak.png` taslağını onayladı; uygulama bu 
 - **Sağ panel:** seçili duruşmanın hazırlık kartı (mahkeme, esas, taraflar, işlem, salon, kaynak kanal, son evraklar, notlarım ve işlerim, Dosyayı aç / Dilekçe başlat / Mazeret) ve yaklaşan süreler.
 - Bağlantı kartları, ilgili ekranın kanal çipine tıklanınca açılır; Ayarlar'da da bulunur. UETS Tebligatlarım ve mobil yerleşimi aynı görsel dille ayrıca tasarlanır.
 
-## 12. Süre motoru kararı
+## 11. Süre motoru kararı
 
 Banaozel'in süre motoru (`app/lib/uyap/legal/` ve `app/lib/legal/sure_katalogu.dart`) saf Dart'tır: ağ, yapay zekâ, veritabanı ve Flutter bağımlılığı yoktur; `now` parametreyle verilir. Folio'ya `lib/services/legal/deadlines/` altına taşınacak (T8).
 
@@ -641,15 +641,15 @@ Banaozel'in süre motoru (`app/lib/uyap/legal/` ve `app/lib/legal/sure_katalogu.
 - Alınmayacaklar: LLM ile belge türü, m.103 tabiiyeti ve zabıttan süre çıkarımı (`server/tebligat_tur.py`, `adli_tatil_kapsami.py`, `zabit_sure.py`, `uets_belge_suresi.py`). Folio'da belge türü ve m.103 bilgisi kullanıcı seçimi veya kurallı ayrıştırmayla gelir; bilinmiyorsa motorun güvenli (erken) yönü kullanılır ve not gösterilir.
 - Testler taşınır (`deadline_service_test`, `icra_sure_test`, `karar_tarihi_sure_baslangici_degil_test`); eksik olanlar eklenir: bayram/resmî tatil kaydırması, iş günü birimi, mali tatil, ay/yıl sonu kıstırma, projeksiyon uyarısı.
 
-## 11. Uygulama sırası ve durum
+## 12. Uygulama sırası ve durum
 
 Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 
 | # | İş | Paket | Durum |
 |---|---|---|---|
 | T1 | Ekran kararı ve iş sırası plana işlendi | §10 | Tamam |
-| T2 | Banaozel süre motoru incelemesi; kullanılabilirse taşıma kararı | P10 | Tamam: taşınacak (§12) |
-| T3 | Kanal ve işlem → kanal tablosu (§9.2), testleriyle | P01 | Sırada |
+| T2 | Banaozel süre motoru incelemesi; kullanılabilirse taşıma kararı | P10 | Tamam: taşınacak (§11) |
+| T3 | Kanal ve işlem → kanal tablosu (§9.2), testleriyle | P01 | Tamam |
 | T4 | Gözlem damgalı birleştirme: web ve mobil birbirini ezmez, eksiklerini tamamlar (§9.4) | P06/P07 | Sırada |
 | T5 | Yerel portal veritabanı: dosya, duruşma, not/iş | P02 | Sırada |
 | T6 | Web duruşma listesi (29 günlük pencereler), normalize ve birleştirme | P10 | Sırada |
