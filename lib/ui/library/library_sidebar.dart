@@ -210,7 +210,6 @@ class LibrarySidebar extends StatelessWidget {
                         vertical: 8,
                       ),
                       children: [
-                        if (_showUyap) ..._uyapCases(context),
                         for (final source in library.sources.where(
                           (s) => s.folder && !_isUyapFolder(s.path),
                         ))
@@ -416,65 +415,6 @@ class LibrarySidebar extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// The cases of UYAP Dosyalarım, at the head of the list once it is
-  /// chosen: the list scrolls, the office's entries above it do not.
-  List<Widget> _uyapCases(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final open = group == 'uyap' || group.startsWith('uyap:');
-    return [
-      if (open)
-        for (final (key, number, court, fresh) in uyapCases)
-          Padding(
-            padding: const EdgeInsets.only(left: 14, bottom: 3),
-            child: Tooltip(
-              message: '$court $number',
-              child: ListTile(
-                key: ValueKey('uyap-case-$key'),
-                dense: true,
-                minTileHeight: 44,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                selected: group == 'uyap:$key',
-                selectedTileColor: scheme.primary.withValues(alpha: .08),
-                leading: Icon(
-                  Icons.gavel_rounded,
-                  size: 16,
-                  color: scheme.onSurfaceVariant,
-                ),
-                minLeadingWidth: 16,
-                title: Text(
-                  number,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(
-                  court,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11),
-                ),
-                trailing: fresh == 0
-                    ? null
-                    : Text(
-                        '$fresh yeni',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: scheme.primary,
-                        ),
-                      ),
-                onTap: () => selectGroup('uyap:$key'),
-              ),
-            ),
-          ),
-    ];
   }
 
   Widget _heading(BuildContext context, String text) => Padding(

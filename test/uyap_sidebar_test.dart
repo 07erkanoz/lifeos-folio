@@ -7,8 +7,8 @@ import 'package:evrak_convert/ui/theme/theme_controller.dart';
 
 /// The lawyer's own cases, under UYAP among the folders.
 void main() {
-  testWidgets('UYAP stands among the folders, and its cases open beneath it '
-      'once it is chosen', (tester) async {
+  testWidgets('UYAP stands among the folders with its count; its cases are '
+      'on its own page', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -46,18 +46,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('uyap-folder')));
     expect(chosen, ['uyap']);
 
+    // Its cases are on its own page, not under it in the sidebar.
     await tester.pumpWidget(sidebar('uyap'));
-    expect(find.text('2026/1204'), findsOneWidget);
-    expect(find.text('Ankara 3. Asliye Hukuk Mahkemesi'), findsOneWidget);
-    expect(find.text('3 yeni'), findsOneWidget);
-    await tester.tap(find.text('2025/77'));
-    expect(chosen.last, 'uyap:k2');
-    await tester.pumpWidget(sidebar('uyap:k2'));
-    expect(
-      tester
-          .widget<ListTile>(find.byKey(const ValueKey('uyap-case-k2')))
-          .selected,
-      isTrue,
-    );
+    expect(find.text('2026/1204'), findsNothing);
+    expect(find.text('2'), findsOneWidget, reason: 'the count stays');
   });
 }
