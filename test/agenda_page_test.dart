@@ -7,6 +7,7 @@ import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/agenda/agenda_page.dart';
 import 'package:flutter/material.dart';
+import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -16,6 +17,7 @@ void main() {
   Future<PortalDatabase> pump(
     WidgetTester tester, {
     Size size = const Size(1440, 900),
+    void Function(PortalCase kase)? onPetition,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -70,6 +72,7 @@ void main() {
               database: () async => db,
             ),
             now: () => now,
+            onPetition: onPetition,
           ),
         ),
       ),
@@ -234,5 +237,28 @@ void main() {
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
     }
+  });
+
+  testWidgets('a petition begun from the card closes the sheet first', (
+    tester,
+  ) async {
+    final begun = <String>[];
+    await pump(
+      tester,
+      size: const Size(390, 844),
+      onPetition: (kase) => begun.add(kase.number),
+    );
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) =>
+            w.key is ValueKey<String> &&
+            (w.key! as ValueKey<String>).value.startsWith('agenda-hearing-'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dilekçe başlat'));
+    await tester.pumpAndSettle();
+    expect(begun, ['2025/412']);
+    expect(find.byKey(const ValueKey('agenda-prep')), findsNothing);
   });
 }

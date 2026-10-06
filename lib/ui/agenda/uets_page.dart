@@ -629,9 +629,20 @@ class _UetsPageState extends State<UetsPage> {
     );
   }
 
+  /// The notice's page on a phone, while it is open.
+  Route<void>? _noticePage;
+
+  /// Going to the case or to a document leaves the notice's page first, or
+  /// it stays over the page that opens.
+  void _leaveNoticePage() {
+    final page = _noticePage;
+    _noticePage = null;
+    if (page != null && page.isActive) Navigator.of(context).removeRoute(page);
+  }
+
   /// The notice on a page of its own, on a phone.
-  void _openNotice() => Navigator.of(context).push(
-    MaterialPageRoute<void>(
+  void _openNotice() {
+    final page = _noticePage = MaterialPageRoute<void>(
       builder: (page) => Scaffold(
         appBar: AppBar(
           title: const Text('Tebligat', style: TextStyle(fontSize: 16)),
@@ -645,8 +656,13 @@ class _UetsPageState extends State<UetsPage> {
           ),
         ),
       ),
-    ),
-  );
+    );
+    unawaited(
+      Navigator.of(context).push(page).whenComplete(() {
+        if (_noticePage == page) _noticePage = null;
+      }),
+    );
+  }
 
   Widget _tag((Color, Color, IconData, String) look) {
     final (fill, text, icon, label) = look;
@@ -821,15 +837,19 @@ class _UetsPageState extends State<UetsPage> {
                       child: OutlinedButton.icon(
                         style: _buttonStyle(),
                         onPressed: () {
+                          _leaveNoticePage();
                           if (!widget.onOpenCase!(kase.key)) {
-                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Bu dosya henüz UYAP Dosyalarım’da yok; '
-                                  'önce UYAP’tan alın.',
-                                ),
-                              ),
-                            );
+                            // The page's own heading, the notice's page
+                            // having gone.
+                            ScaffoldMessenger.maybeOf(this.context)
+                                ?.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Bu dosya henüz UYAP Dosyalarım’da yok; '
+                                      'önce UYAP’tan alın.',
+                                    ),
+                                  ),
+                                );
                           }
                         },
                         icon: const Icon(Icons.folder_open_outlined, size: 16),
@@ -1112,6 +1132,7 @@ class _UetsPageState extends State<UetsPage> {
         widget.onChanged?.call();
       }
       if (part != null && widget.onOpenFile != null) {
+        _leaveNoticePage();
         widget.onOpenFile!(file.path);
       } else if (mounted) {
         ScaffoldMessenger.maybeOf(context)

@@ -1560,6 +1560,7 @@ class _AgendaPageState extends State<AgendaPage> {
                   onPressed: widget.onOpenCase == null
                       ? null
                       : () {
+                          _leaveSheet(context);
                           if (!widget.onOpenCase!(h.caseKey)) {
                             ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                               const SnackBar(
@@ -1584,13 +1585,16 @@ class _AgendaPageState extends State<AgendaPage> {
                 child: OutlinedButton(
                   onPressed: widget.onPetition == null
                       ? null
-                      : () => widget.onPetition!(
-                          kase ??
-                              PortalCase.create(
-                                number: h.number,
-                                court: h.court,
-                              ),
-                        ),
+                      : () {
+                          _leaveSheet(context);
+                          widget.onPetition!(
+                            kase ??
+                                PortalCase.create(
+                                  number: h.number,
+                                  court: h.court,
+                                ),
+                          );
+                        },
                   style: _buttonStyle(),
                   child: const Text(
                     'Dilekçe başlat',
@@ -1621,6 +1625,15 @@ class _AgendaPageState extends State<AgendaPage> {
         ],
       ),
     );
+  }
+
+  /// On a phone the hearing's card is a sheet from below: going to the case
+  /// or into a petition closes it first, or the sheet stays over the page
+  /// that opens.
+  void _leaveSheet(BuildContext context) {
+    if (ModalRoute.of(context) is ModalBottomSheetRoute) {
+      Navigator.of(context).pop();
+    }
   }
 
   ButtonStyle _buttonStyle() => ButtonStyle(
