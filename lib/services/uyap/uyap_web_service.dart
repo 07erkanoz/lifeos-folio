@@ -855,6 +855,24 @@ class UyapWebService {
 
   /// The particulars of [target]: its kind, where it stands, and the days
   /// set for a hearing, an inspection or a preliminary examination.
+  /// The lawyer's hearings from [from] to [to], both days included, as the
+  /// portal gives them. The portal refuses more than 30 days at once and
+  /// wants the dates unpadded ("1.10.2026"); the caller splits the range
+  /// (`HearingSync`).
+  Future<List<Map<String, Object?>>> hearingRows(DateTime from, DateTime to) =>
+      _serial(() async {
+        String day(DateTime d) => '${d.day}.${d.month}.${d.year}';
+        final data = await _post('/avukat_durusma_sorgula_brd.ajx', {
+          'baslangicTarihi': day(from),
+          'bitisTarihi': day(to),
+        });
+        return [
+          if (data is List)
+            for (final row in data)
+              if (row is Map) Map<String, Object?>.from(row),
+        ];
+      });
+
   Future<UyapCaseDetails> caseDetails(UyapCase target) => _serial(() async {
     final data = await _post('/dosyaAyrintiBilgileri_brd.ajx', {
       'dosyaId': target.id,

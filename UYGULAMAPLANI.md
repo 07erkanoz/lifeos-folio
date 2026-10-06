@@ -652,7 +652,7 @@ Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 | T3 | Kanal ve işlem → kanal tablosu (§9.2), testleriyle | P01 | Tamam |
 | T4 | Gözlem damgalı birleştirme: web ve mobil birbirini ezmez, eksiklerini tamamlar (§9.4) | P06/P07 | Tamam |
 | T5 | Yerel portal veritabanı: dosya, duruşma, not/iş | P02 | Tamam |
-| T6 | Web duruşma listesi (29 günlük pencereler), normalize ve birleştirme | P10 | Sırada |
+| T6 | Web duruşma listesi (29 günlük pencereler), normalize ve birleştirme | P10 | Tamam |
 | T7 | Kenar çubuğu BÜRO bölümü ve Ajanda ekranı (taslağın aynısı) | P10/P11 | Sırada |
 | T8 | Süre motoru ve yaklaşan süreler | P10 | Sırada |
 | T9 | UYAP Mobil API girişi, portföy ve duruşma; web ile birleştirme | P04/P07 | Sırada |
