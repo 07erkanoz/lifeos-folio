@@ -1017,7 +1017,14 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     try {
       final record = await PortalCaseImport().add(kase);
-      if (mounted) setState(() => _group = 'uyap:${record.key}');
+      if (!mounted) return;
+      setState(() => _group = 'uyap:${record.key}');
+      showNotice(
+        context,
+        'Dosya UYAP Dosyalarım’a eklendi',
+        detail:
+            '${record.court} ${record.number} · ${record.documents.length} evrak',
+      );
     } catch (e) {
       if (mounted) {
         showNotice(

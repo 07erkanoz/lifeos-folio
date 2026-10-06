@@ -300,6 +300,29 @@ class UyapMobileApi {
     return out;
   }
 
+  /// The case [year]/[sequence] at [court], as `dosya` lists it filtered:
+  /// one request, not the court's whole list. Its ids are this session's.
+  Future<List<Map<String, Object?>>> findCase(
+    int type,
+    String unitKind,
+    String court, {
+    required String year,
+    required String sequence,
+    required bool closed,
+  }) async => _list(
+    await _post('mobile/avukat/dosya', {
+      'birimTuru2': unitKind,
+      'birimTuru3': type,
+      'dosyaKapaliMi': closed,
+      'mahkeme': court,
+      'pageCount': 1,
+      'pageSize': 100,
+      'dosyaYil': year,
+      'dosyaSira': sequence,
+    }),
+    'dosyaList',
+  );
+
   /// A case's documents: `son20Evrak` and `tumEvraklar`, as UYAP gives them.
   Future<Map<String, Object?>> caseDocuments(String caseId) async {
     final data = await _get('mobile/avukat/dosya/${_id(caseId)}/1');

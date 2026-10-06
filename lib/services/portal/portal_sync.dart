@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../security/secret_store.dart';
 import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
+import '../uyap/mobile_case_finder.dart';
 import '../uyap/uyap_mobile_api.dart';
 import '../uyap/uyap_web_service.dart';
 import 'hearing_sync.dart';
@@ -258,34 +259,40 @@ class PortalSync extends ChangeNotifier {
   Future<void> syncMobile() =>
       _mobileSync ??= _run(PortalChannel.uyapMobile, (db) async {
         if (!_mobile.connected) return null;
-        final session = _mobile.session.value;
         final hearings = await syncHearings(
           PortalChannel.uyapMobile,
           db,
           _mobile.hearingRows,
         );
         final cases = await syncMobilePortfolio(_mobile, db);
-        _mobileIdsOf = session;
         return hearings.complete && cases.complete
             ? null
             : 'Bazı kayıtlar alınamadı';
       }).whenComplete(() => _mobileSync = null);
   Future<void>? _mobileSync;
 
-  /// The mobile session the kept mobile ids were read in: they are that
-  /// session's only (§9).
-  MobileSession? _mobileIdsOf;
+  late final _finder = MobileCaseFinder(_mobile);
 
-  /// The mobile API's id of [key]'s case in this session: the portfolio is
-  /// read first when it was not read in this session. Null when the mobile
-  /// API is not connected or does not list the case.
-  Future<String?> mobileCaseId(String key) async {
-    if (!_mobile.connected) return null;
-    final session = _mobile.session.value;
-    if (session == null || !identical(session, _mobileIdsOf)) {
-      await syncMobile();
-    }
-    return (await _database()).cases()[key]?.ids[PortalChannel.uyapMobile];
+  /// The mobile API's id of the case [number] at [court] in this session,
+  /// looked up anew (§9: the id is the session's and never kept): the
+  /// codes the portfolio kept for it narrow the search to a few requests.
+  /// Null when the mobile API is not connected or does not list the case.
+  Future<String?> mobileCaseId({
+    required String court,
+    required String number,
+    String? jurisdiction,
+    String? unitKind,
+  }) async {
+    final kept = (await _database()).cases()[caseKey(number, court)];
+    final details = kept?.details?.value ?? const <String, Object?>{};
+    String? code(Object? v) => '${v ?? ''}'.trim().isEmpty ? null : '$v';
+    return _finder.find(
+      court: court,
+      number: number,
+      jurisdiction: code(details['yargiTuru']) ?? code(jurisdiction),
+      unitKind: code(details['yargiBirimi']) ?? code(unitKind),
+      closedFirst: (kept?.status?.value ?? '').contains('Kapal'),
+    );
   }
 
   /// The case kept as [key], if any.

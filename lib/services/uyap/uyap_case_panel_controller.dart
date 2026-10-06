@@ -303,7 +303,12 @@ class UyapCasePanelController extends ChangeNotifier {
     }
     busy = 'UYAP Mobil’de dosya aranıyor';
     _changed();
-    final id = await sync.mobileCaseId(caseKey(_link!.number, _link!.court));
+    final id = await sync.mobileCaseId(
+      court: _link!.court,
+      number: _link!.number,
+      jurisdiction: _link!.jurisdiction,
+      unitKind: _link!.courtType,
+    );
     if (id == null || id.isEmpty) {
       throw StateError(
         '${_link!.title} UYAP Mobil’de bulunamadı. Yargıtay ve Cumhuriyet '
@@ -342,21 +347,29 @@ class UyapCasePanelController extends ChangeNotifier {
       if (raw['tumEvraklar'] is List) {
         raw['tumEvraklar'] = {'': raw['tumEvraklar']};
       }
-      final documents = keyDocuments([UyapDocumentPage.fromJson(raw)]);
+      final fetched = keyDocuments([UyapDocumentPage.fromJson(raw)]);
       _liveDocuments = {
-        for (final d in documents) ...{
+        for (final d in fetched) ...{
           d.key: d,
           for (final a in d.attachments) a.key: a,
         },
       };
       final before = _record;
+      final documents = enrichDocuments(fetched, before?.documents ?? const []);
       String text(String key) => '${details[key] ?? ''}'.trim();
       // What the web gave before stays: the mobile API knows less of a case.
-      final hasWeb = before != null && before.details.kind.isNotEmpty;
+      final d = before?.details;
+      final hasWeb =
+          d != null &&
+          (d.kind.isNotEmpty ||
+              d.opening.isNotEmpty ||
+              d.status.isNotEmpty ||
+              d.hearing != null ||
+              d.decision.isNotEmpty);
       _record = await store.keep(
         target: UyapCase(id, _link!.number, _link!.courtId, _link!.court),
         details: hasWeb
-            ? before.details
+            ? d
             : UyapCaseDetails(
                 kind: text('davaTuru'),
                 fileType: text('tur'),
@@ -371,6 +384,54 @@ class UyapCasePanelController extends ChangeNotifier {
       );
     },
   );
+
+  /// The mobile API's list [fetched] merged into the list kept: it adds
+  /// and fills, it never takes away (UYGULAMAPLANI §9.4). A document the
+  /// web listed and the mobile API does not (a tied case's group, often)
+  /// stays; a field the mobile API leaves empty keeps what the web gave;
+  /// the session's ids are the mobile API's. Newest first.
+  @visibleForTesting
+  static List<UyapCaseDocument> enrichDocuments(
+    List<UyapCaseDocument> fetched,
+    List<UyapCaseDocument> kept,
+  ) {
+    String pick(String a, String b) => a.isNotEmpty ? a : b;
+    UyapCaseDocument fill(UyapCaseDocument fresh, UyapCaseDocument? old) {
+      if (old == null) return fresh;
+      final oldAttachments = {for (final a in old.attachments) a.key: a};
+      final freshKeys = {for (final a in fresh.attachments) a.key};
+      return UyapCaseDocument(
+        key: fresh.key,
+        documentId: fresh.documentId,
+        caseId: fresh.caseId,
+        type: pick(fresh.type, old.type),
+        number: pick(fresh.number, old.number),
+        approved: pick(fresh.approved, old.approved),
+        sender: pick(fresh.sender, old.sender),
+        description: pick(fresh.description, old.description),
+        // The group it is listed under stays as it was named.
+        source: pick(old.source, fresh.source),
+        sentToSystem: pick(fresh.sentToSystem, old.sentToSystem),
+        parentKey: fresh.parentKey ?? old.parentKey,
+        attachments: [
+          for (final a in fresh.attachments) fill(a, oldAttachments[a.key]),
+          for (final a in old.attachments)
+            if (!freshKeys.contains(a.key)) a,
+        ],
+      );
+    }
+
+    final byKey = {for (final d in kept) d.key: d};
+    final freshKeys = {for (final d in fetched) d.key};
+    final out = [
+      for (final d in fetched) fill(d, byKey[d.key]),
+      for (final d in kept)
+        if (!freshKeys.contains(d.key)) d,
+    ];
+    final far = DateTime(1900);
+    out.sort((a, b) => (b.date ?? far).compareTo(a.date ?? far));
+    return out;
+  }
 
   /// The documents the list shows, as the search narrows them.
   List<UyapCaseDocument> get documents {
@@ -451,10 +512,24 @@ class UyapCasePanelController extends ChangeNotifier {
         throw StateError('${document.title} UYAP Mobil’deki listede yok.');
       }
     }
-    final bytes = await mobile.documentBytes(
-      live.documentId,
-      live.caseId.isNotEmpty ? live.caseId : id,
-    );
+    Uint8List bytes;
+    try {
+      bytes = await mobile.documentBytes(
+        live.documentId,
+        live.caseId.isNotEmpty ? live.caseId : id,
+      );
+    } catch (_) {
+      // The case's id and the document's go together and are the
+      // session's: both are looked up again, once.
+      _mobileCaseId = null;
+      await _refreshMobile();
+      final again = _liveDocuments[document.key];
+      if (again == null || _mobileCaseId == null) rethrow;
+      bytes = await mobile.documentBytes(
+        again.documentId,
+        again.caseId.isNotEmpty ? again.caseId : _mobileCaseId!,
+      );
+    }
     final (record, file) = await store.save(_record!, document, bytes);
     _record = await store.seen(record, document.key);
     onSaved?.call(file);
