@@ -109,6 +109,17 @@ void main() {
         () => find.byType(QuillEditor).evaluate().isNotEmpty,
       );
       expect(find.byType(DocumentRuler), findsNothing);
+      // A phone shows the text flowing at its width, not an A4 sheet; the
+      // page is one tap away and back.
+      expect(find.byKey(const ValueKey('editor-flowing')), findsOneWidget);
+      expect(find.byKey(const ValueKey('editor-paper')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('editor-view-switch')));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.byKey(const ValueKey('editor-flowing')), findsNothing);
+      expect(find.byKey(const ValueKey('editor-paper')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('editor-view-switch')));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.byKey(const ValueKey('editor-flowing')), findsOneWidget);
       expect(find.text('İmzasız kopya kaydedilecek'), findsNothing);
       expect(tester.takeException(), null);
       final editor = tester.widget<EditorWidget>(find.byType(EditorWidget));

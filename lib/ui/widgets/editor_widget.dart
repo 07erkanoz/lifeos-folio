@@ -2323,6 +2323,189 @@ class _EditorWidgetState extends State<EditorWidget>
     child: child,
   );
 
+  /// The lawyer's choice of view; null for the width's: flowing under
+  /// 600 px, on pages above.
+  final _flowChoice = ValueNotifier<bool?>(null);
+  bool _flowsAt(double width) => _flowChoice.value ?? width < 600;
+
+  /// The text larger on a phone's flowing view, as a phone's reader expects.
+  static const _flowZoom = 1.3;
+
+  /// The document flowing at the screen's width, as a phone shows a page:
+  /// no sheets, no rulers, the header and the footer kept but not drawn.
+  /// The document, its formats and its page are untouched; the page view
+  /// and the saved file are as they were.
+  Widget _flowing(BuildContext context, BoxConstraints box) {
+    const gutter = 14.0;
+    return ColoredBox(
+      color: Colors.white,
+      child: SingleChildScrollView(
+        key: const ValueKey('editor-flowing'),
+        padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 96),
+        child: MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(_flowZoom)),
+          child: _paperTheme(
+            context,
+            DefaultTextStyle(
+              style: const TextStyle(color: Colors.black),
+              child: Listener(
+                onPointerDown: _bodyClicked,
+                child: _bodyEditor(
+                  pages: null,
+                  lineWidth:
+                      (box.maxWidth - 2 * gutter) /
+                      _flowZoom /
+                      EditorUnits.pixelsPerPoint,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// "Sayfa görünümü" on the flowing view, "Mobil görünüm" on the pages.
+  Widget _viewSwitch(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final flows = _flowsAt(MediaQuery.sizeOf(context).width);
+    return Material(
+      color: scheme.surface,
+      elevation: 2,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        key: const ValueKey('editor-view-switch'),
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _flowChoice.value = !flows,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                flows ? Icons.description_outlined : Icons.smartphone,
+                size: 16,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                flows ? 'Sayfa görünümü' : 'Mobil görünüm',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The document's body: on its pages ([pages]) or, on a phone, flowing at
+  /// the screen's width ([pages] null). The same document either way: only
+  /// how it is shown differs. [lineWidth] is a line's width in points, for
+  /// the tab stops.
+  Widget _bodyEditor({
+    required QuillPageGeometry? pages,
+    required double lineWidth,
+  }) => QuillEditor.basic(
+    controller: _quillController,
+    focusNode: _editorFocus,
+    config: QuillEditorConfig(
+      editorKey: _editorKey,
+      // Without this a tab is drawn as one
+      // space and the columns a filing is
+      // laid out in collapse.
+      textSpanBuilder: EditorTabSpans.builder(
+        spelling: _spelling,
+        citations: _citationMarks,
+        pageWidth: lineWidth,
+      ),
+      lineLayoutBuilder: EditorLineLayout.builder(pageWidth: lineWidth),
+      contextMenuBuilder: _contextMenu,
+      embedBuilders: [
+        EditorImageEmbed(),
+        EditorTableEmbed(
+          word: () => _sourceModel?.metadata['tabRules'] == 'word',
+          blocks: () => _korunanBloklar,
+          onChanged: _tableChanged,
+          onFocus: _cellFocused,
+          onDelete: _deleteTable,
+          onCellsGone: _cellsGone,
+          onPointerInside: () => _clickedInTable = true,
+        ),
+      ],
+      customStyles: DefaultStyles(
+        paragraph: DefaultTextBlockStyle(
+          TextStyle(
+            color: Colors.black,
+            fontFamily: DocumentFonts.family('Times New Roman'),
+            fontSize: 12,
+            height: 1.15,
+          ),
+          const HorizontalSpacing(0, 0),
+          const VerticalSpacing(0, 0),
+          const VerticalSpacing(0, 0),
+          null,
+        ),
+        // A list item is set as a paragraph,
+        // with no room between items that
+        // UYAP and the page do not have.
+        lists: DefaultListBlockStyle(
+          TextStyle(
+            color: Colors.black,
+            fontFamily: DocumentFonts.family('Times New Roman'),
+            fontSize: 12,
+            height: 1.15,
+          ),
+          const HorizontalSpacing(0, 0),
+          const VerticalSpacing(0, 0),
+          const VerticalSpacing(0, 0),
+          null,
+          null,
+        ),
+        // Nor between the lines of an indented block, which Quill spaces
+        // 6 apart by default: the page does not.
+        indent: DefaultTextBlockStyle(
+          TextStyle(
+            color: Colors.black,
+            fontFamily: DocumentFonts.family('Times New Roman'),
+            fontSize: 12,
+            height: 1.15,
+          ),
+          const HorizontalSpacing(0, 0),
+          const VerticalSpacing(0, 0),
+          const VerticalSpacing(0, 0),
+          null,
+        ),
+      ),
+      // ignore: experimental_member_use
+      onKeyPressed: _onKey,
+      customShortcuts: _shortcuts,
+      customActions: {
+        _EditorCommandIntent: CallbackAction<_EditorCommandIntent>(
+          onInvoke: (intent) {
+            _command(intent.command);
+            return null;
+          },
+        ),
+      },
+      customStyleBuilder: (attribute) => attribute.key == 'font'
+          ? TextStyle(
+              fontFamily: DocumentFonts.family(attribute.value as String?),
+            )
+          : const TextStyle(),
+      autoFocus: widget.isActive,
+      pages: pages,
+      scrollable: false,
+      expands: false,
+      padding: EdgeInsets.zero,
+    ),
+  );
+
   /// The sheets and the text on them, with the header and footer in the
   /// first page's margins, where UYAP and the printed page put them, rather
   /// than in the text.
@@ -3579,359 +3762,223 @@ class _EditorWidgetState extends State<EditorWidget>
                           child: Stack(
                             children: [
                               Positioned.fill(
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    // A4 exactly, as the preview lays it out: the
-                                    // 595.28 this used to round to made the page a
-                                    // hair wider, enough for a word the preview
-                                    // put on the next row to stay on this one.
-                                    final widthPoints =
-                                        _pageProperties.landscape
-                                        ? PdfPageFormat.a4.height
-                                        : PdfPageFormat.a4.width;
-                                    final heightPoints =
-                                        _pageProperties.landscape
-                                        ? PdfPageFormat.a4.width
-                                        : PdfPageFormat.a4.height;
-                                    // The page is laid out in points and drawn
-                                    // larger (see EditorUnits).
-                                    const scale = EditorUnits.pixelsPerPoint;
-                                    final paperWidth = widthPoints * scale;
-                                    final paperHeight = heightPoints * scale;
-                                    // The text area of every page, by UYAP's rule.
-                                    final area = EditorPages.textArea(
-                                      _pageProperties,
-                                      header: _regionHeight('header'),
-                                      footer: _regionHeight('footer'),
-                                    );
-                                    final textTop = area.top;
-                                    final textBottom = area.bottom;
-                                    final pages = EditorPages.geometry(
-                                      _pageProperties,
-                                      header: _regionHeight('header'),
-                                      footer: _regionHeight('footer'),
-                                    );
-                                    void margins(
-                                      bool horizontal,
-                                      double start,
-                                      double end,
-                                    ) => setState(() {
-                                      _recovery.changed();
-                                      _checkEditedSoon();
-                                      _pageProperties = DocPageProperties(
-                                        marginLeft: horizontal
-                                            ? start
-                                            : _pageProperties.marginLeft,
-                                        marginRight: horizontal
-                                            ? end
-                                            : _pageProperties.marginRight,
-                                        marginTop: horizontal
-                                            ? _pageProperties.marginTop
-                                            : start,
-                                        marginBottom: horizontal
-                                            ? _pageProperties.marginBottom
-                                            : end,
-                                        landscape: _pageProperties.landscape,
-                                        headerOffset:
-                                            _pageProperties.headerOffset,
-                                        footerOffset:
-                                            _pageProperties.footerOffset,
+                                child: ValueListenableBuilder<bool?>(
+                                  // The view chosen rebuilds the body, which
+                                  // is otherwise kept as it was laid out.
+                                  valueListenable: _flowChoice,
+                                  builder: (context, _, _) => LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      if (_flowsAt(
+                                        MediaQuery.sizeOf(context).width,
+                                      )) {
+                                        return _flowing(context, constraints);
+                                      }
+                                      // A4 exactly, as the preview lays it out: the
+                                      // 595.28 this used to round to made the page a
+                                      // hair wider, enough for a word the preview
+                                      // put on the next row to stay on this one.
+                                      final widthPoints =
+                                          _pageProperties.landscape
+                                          ? PdfPageFormat.a4.height
+                                          : PdfPageFormat.a4.width;
+                                      final heightPoints =
+                                          _pageProperties.landscape
+                                          ? PdfPageFormat.a4.width
+                                          : PdfPageFormat.a4.height;
+                                      // The page is laid out in points and drawn
+                                      // larger (see EditorUnits).
+                                      const scale = EditorUnits.pixelsPerPoint;
+                                      final paperWidth = widthPoints * scale;
+                                      final paperHeight = heightPoints * scale;
+                                      // The text area of every page, by UYAP's rule.
+                                      final area = EditorPages.textArea(
+                                        _pageProperties,
+                                        header: _regionHeight('header'),
+                                        footer: _regionHeight('footer'),
                                       );
-                                      // A header breaks its lines at the page's
-                                      // width.
-                                      _measureRegionsSoon();
-                                    });
-                                    // A page is a facsimile of paper: twelve point is twelve
-                                    // point whether or not Windows has been told to enlarge
-                                    // text. Left scaled, the type grew while the page stayed the
-                                    // width it prints at, and a table that fits on paper spilled
-                                    // over three lines a cell. The setting still reaches the
-                                    // toolbar and the menus, which is where it belongs.
-                                    return MediaQuery.withNoTextScaling(
-                                      child: EditorPageViewport(
-                                        status: _citationStatus(context),
-                                        drawer: _citationDrawer(),
-                                        background: isDark
-                                            ? const Color(0xFF17191D)
-                                            : const Color(0xFFE9ECF1),
-                                        pageWidth:
-                                            (paperWidth +
-                                                (_showVerticalRuler ? 24 : 0)) *
-                                            EditorUnits.screenScale,
-                                        child: Column(
-                                          children: [
-                                            if (_showHorizontalRuler)
-                                              Padding(
-                                                padding: EdgeInsets.only(
-                                                  left: _showVerticalRuler
+                                      final textTop = area.top;
+                                      final textBottom = area.bottom;
+                                      final pages = EditorPages.geometry(
+                                        _pageProperties,
+                                        header: _regionHeight('header'),
+                                        footer: _regionHeight('footer'),
+                                      );
+                                      void margins(
+                                        bool horizontal,
+                                        double start,
+                                        double end,
+                                      ) => setState(() {
+                                        _recovery.changed();
+                                        _checkEditedSoon();
+                                        _pageProperties = DocPageProperties(
+                                          marginLeft: horizontal
+                                              ? start
+                                              : _pageProperties.marginLeft,
+                                          marginRight: horizontal
+                                              ? end
+                                              : _pageProperties.marginRight,
+                                          marginTop: horizontal
+                                              ? _pageProperties.marginTop
+                                              : start,
+                                          marginBottom: horizontal
+                                              ? _pageProperties.marginBottom
+                                              : end,
+                                          landscape: _pageProperties.landscape,
+                                          headerOffset:
+                                              _pageProperties.headerOffset,
+                                          footerOffset:
+                                              _pageProperties.footerOffset,
+                                        );
+                                        // A header breaks its lines at the page's
+                                        // width.
+                                        _measureRegionsSoon();
+                                      });
+                                      // A page is a facsimile of paper: twelve point is twelve
+                                      // point whether or not Windows has been told to enlarge
+                                      // text. Left scaled, the type grew while the page stayed the
+                                      // width it prints at, and a table that fits on paper spilled
+                                      // over three lines a cell. The setting still reaches the
+                                      // toolbar and the menus, which is where it belongs.
+                                      return MediaQuery.withNoTextScaling(
+                                        child: EditorPageViewport(
+                                          status: _citationStatus(context),
+                                          drawer: _citationDrawer(),
+                                          background: isDark
+                                              ? const Color(0xFF17191D)
+                                              : const Color(0xFFE9ECF1),
+                                          pageWidth:
+                                              (paperWidth +
+                                                  (_showVerticalRuler
                                                       ? 24
-                                                      : 0,
-                                                  bottom: 6,
+                                                      : 0)) *
+                                              EditorUnits.screenScale,
+                                          child: Column(
+                                            children: [
+                                              if (_showHorizontalRuler)
+                                                Padding(
+                                                  padding: EdgeInsets.only(
+                                                    left: _showVerticalRuler
+                                                        ? 24
+                                                        : 0,
+                                                    bottom: 6,
+                                                  ),
+                                                  child: DocumentRuler(
+                                                    axis: Axis.horizontal,
+                                                    pagePoints: widthPoints,
+                                                    pixels: paperWidth,
+                                                    leading: _pageProperties
+                                                        .marginLeft,
+                                                    trailing: _pageProperties
+                                                        .marginRight,
+                                                    onChanged: (start, end) =>
+                                                        margins(
+                                                          true,
+                                                          start,
+                                                          end,
+                                                        ),
+                                                  ),
                                                 ),
-                                                child: DocumentRuler(
-                                                  axis: Axis.horizontal,
-                                                  pagePoints: widthPoints,
-                                                  pixels: paperWidth,
-                                                  leading: _pageProperties
-                                                      .marginLeft,
-                                                  trailing: _pageProperties
-                                                      .marginRight,
-                                                  onChanged: (start, end) =>
-                                                      margins(true, start, end),
-                                                ),
-                                              ),
-                                            Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                _paged(
-                                                  scale: scale,
-                                                  paperHeight: paperHeight,
-                                                  heightPoints: heightPoints,
-                                                  onMargins: (start, end) =>
-                                                      margins(
-                                                        false,
-                                                        start,
-                                                        end,
+                                              Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  _paged(
+                                                    scale: scale,
+                                                    paperHeight: paperHeight,
+                                                    heightPoints: heightPoints,
+                                                    onMargins: (start, end) =>
+                                                        margins(
+                                                          false,
+                                                          start,
+                                                          end,
+                                                        ),
+                                                    textTop: textTop,
+                                                    textBottom: textBottom,
+                                                    child: CustomPaint(
+                                                      painter: EditorSheetsPainter(
+                                                        pageHeight: paperHeight,
+                                                        gutter:
+                                                            EditorSheetsPainter
+                                                                .room,
                                                       ),
-                                                  textTop: textTop,
-                                                  textBottom: textBottom,
-                                                  child: CustomPaint(
-                                                    painter: EditorSheetsPainter(
-                                                      pageHeight: paperHeight,
-                                                      gutter:
-                                                          EditorSheetsPainter
-                                                              .room,
-                                                    ),
-                                                    child: Container(
-                                                      key: const ValueKey(
-                                                        'editor-paper',
-                                                      ),
-                                                      width: paperWidth,
-                                                      padding: EdgeInsets.fromLTRB(
-                                                        _pageProperties
-                                                                .marginLeft *
-                                                            scale,
-                                                        textTop * scale,
-                                                        _pageProperties
-                                                                .marginRight *
-                                                            scale,
-                                                        textBottom * scale,
-                                                      ),
-                                                      child: _paperTheme(
-                                                        context,
-                                                        DefaultTextStyle(
-                                                          style:
-                                                              const TextStyle(
-                                                                color: Colors
-                                                                    .black,
-                                                              ),
-                                                          child: Column(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .stretch,
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              ConstrainedBox(
-                                                                constraints:
-                                                                    const BoxConstraints(),
-                                                                child: Listener(
-                                                                  onPointerDown:
-                                                                      _bodyClicked,
-                                                                  child: QuillEditor.basic(
-                                                                    controller:
-                                                                        _quillController,
-                                                                    focusNode:
-                                                                        _editorFocus,
-                                                                    config: QuillEditorConfig(
-                                                                      editorKey:
-                                                                          _editorKey,
-                                                                      // Without this a tab is drawn as one
-                                                                      // space and the columns a filing is
-                                                                      // laid out in collapse.
-                                                                      textSpanBuilder: EditorTabSpans.builder(
-                                                                        spelling:
-                                                                            _spelling,
-                                                                        citations:
-                                                                            _citationMarks,
-                                                                        pageWidth:
-                                                                            widthPoints -
-                                                                            _pageProperties.marginLeft -
-                                                                            _pageProperties.marginRight,
-                                                                      ),
-                                                                      lineLayoutBuilder: EditorLineLayout.builder(
-                                                                        pageWidth:
-                                                                            widthPoints -
-                                                                            _pageProperties.marginLeft -
-                                                                            _pageProperties.marginRight,
-                                                                      ),
-                                                                      contextMenuBuilder:
-                                                                          _contextMenu,
-                                                                      embedBuilders: [
-                                                                        EditorImageEmbed(),
-                                                                        EditorTableEmbed(
-                                                                          word: () =>
-                                                                              _sourceModel?.metadata['tabRules'] == 'word',
-                                                                          blocks: () =>
-                                                                              _korunanBloklar,
-                                                                          onChanged:
-                                                                              _tableChanged,
-                                                                          onFocus:
-                                                                              _cellFocused,
-                                                                          onDelete:
-                                                                              _deleteTable,
-                                                                          onCellsGone:
-                                                                              _cellsGone,
-                                                                          onPointerInside: () =>
-                                                                              _clickedInTable = true,
-                                                                        ),
-                                                                      ],
-                                                                      customStyles: DefaultStyles(
-                                                                        paragraph: DefaultTextBlockStyle(
-                                                                          TextStyle(
-                                                                            color:
-                                                                                Colors.black,
-                                                                            fontFamily: DocumentFonts.family(
-                                                                              'Times New Roman',
-                                                                            ),
-                                                                            fontSize:
-                                                                                12,
-                                                                            height:
-                                                                                1.15,
-                                                                          ),
-                                                                          const HorizontalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          const VerticalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          const VerticalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          null,
-                                                                        ),
-                                                                        // A list item is set as a paragraph,
-                                                                        // with no room between items that
-                                                                        // UYAP and the page do not have.
-                                                                        lists: DefaultListBlockStyle(
-                                                                          TextStyle(
-                                                                            color:
-                                                                                Colors.black,
-                                                                            fontFamily: DocumentFonts.family(
-                                                                              'Times New Roman',
-                                                                            ),
-                                                                            fontSize:
-                                                                                12,
-                                                                            height:
-                                                                                1.15,
-                                                                          ),
-                                                                          const HorizontalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          const VerticalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          const VerticalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          null,
-                                                                          null,
-                                                                        ),
-                                                                        // Nor between the lines of an indented block, which Quill spaces
-                                                                        // 6 apart by default: the page does not.
-                                                                        indent: DefaultTextBlockStyle(
-                                                                          TextStyle(
-                                                                            color:
-                                                                                Colors.black,
-                                                                            fontFamily: DocumentFonts.family(
-                                                                              'Times New Roman',
-                                                                            ),
-                                                                            fontSize:
-                                                                                12,
-                                                                            height:
-                                                                                1.15,
-                                                                          ),
-                                                                          const HorizontalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          const VerticalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          const VerticalSpacing(
-                                                                            0,
-                                                                            0,
-                                                                          ),
-                                                                          null,
-                                                                        ),
-                                                                      ),
-                                                                      // ignore: experimental_member_use
-                                                                      onKeyPressed:
-                                                                          _onKey,
-                                                                      customShortcuts:
-                                                                          _shortcuts,
-                                                                      customActions: {
-                                                                        _EditorCommandIntent: CallbackAction<_EditorCommandIntent>(
-                                                                          onInvoke: (intent) {
-                                                                            _command(
-                                                                              intent.command,
-                                                                            );
-                                                                            return null;
-                                                                          },
-                                                                        ),
-                                                                      },
-                                                                      customStyleBuilder:
-                                                                          (
-                                                                            attribute,
-                                                                          ) => attribute.key == 'font'
-                                                                          ? TextStyle(
-                                                                              fontFamily: DocumentFonts.family(
-                                                                                attribute.value as String?,
-                                                                              ),
-                                                                            )
-                                                                          : const TextStyle(),
-                                                                      autoFocus:
-                                                                          widget
-                                                                              .isActive,
+                                                      child: Container(
+                                                        key: const ValueKey(
+                                                          'editor-paper',
+                                                        ),
+                                                        width: paperWidth,
+                                                        padding: EdgeInsets.fromLTRB(
+                                                          _pageProperties
+                                                                  .marginLeft *
+                                                              scale,
+                                                          textTop * scale,
+                                                          _pageProperties
+                                                                  .marginRight *
+                                                              scale,
+                                                          textBottom * scale,
+                                                        ),
+                                                        child: _paperTheme(
+                                                          context,
+                                                          DefaultTextStyle(
+                                                            style:
+                                                                const TextStyle(
+                                                                  color: Colors
+                                                                      .black,
+                                                                ),
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .stretch,
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                ConstrainedBox(
+                                                                  constraints:
+                                                                      const BoxConstraints(),
+                                                                  child: Listener(
+                                                                    onPointerDown:
+                                                                        _bodyClicked,
+                                                                    child: _bodyEditor(
                                                                       pages:
                                                                           pages,
-                                                                      scrollable:
-                                                                          false,
-                                                                      expands:
-                                                                          false,
-                                                                      padding:
-                                                                          EdgeInsets
-                                                                              .zero,
+                                                                      lineWidth:
+                                                                          widthPoints -
+                                                                          _pageProperties
+                                                                              .marginLeft -
+                                                                          _pageProperties
+                                                                              .marginRight,
                                                                     ),
                                                                   ),
                                                                 ),
-                                                              ),
-                                                            ],
+                                                              ],
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
+                                                ],
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    );
-                                  },
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
+                              // A phone's view and the page's, one tap apart.
+                              if (MediaQuery.sizeOf(context).width < 900)
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: ValueListenableBuilder<bool?>(
+                                    valueListenable: _flowChoice,
+                                    builder: (context, _, _) =>
+                                        _viewSwitch(context),
+                                  ),
+                                ),
                               // Reading aloud and dictation, over the page
                               // they are working on.
                               if (speechAvailable)
