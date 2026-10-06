@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../editor/suggestions/phrases.dart' show foldPhrase;
 import 'portal_channel.dart';
 
@@ -60,6 +62,13 @@ bool isEmptyValue(Object? value) => switch (value) {
 /// 4. Otherwise the newer observation wins; on a tie, what there is stays.
 Observed<T>? mergeObserved<T>(Observed<T>? current, Observed<T>? incoming) {
   if (incoming == null || isEmptyValue(incoming.value)) return current;
+  // The same answer again changes nothing, not even when it was given:
+  // what is kept is written again only for news.
+  if (current != null &&
+      current.complete == incoming.complete &&
+      jsonEncode(current.value) == jsonEncode(incoming.value)) {
+    return current;
+  }
   if (current == null || isEmptyValue(current.value)) return incoming;
   if (current.complete && !incoming.complete) return current;
   if (incoming.complete && !current.complete) return incoming;

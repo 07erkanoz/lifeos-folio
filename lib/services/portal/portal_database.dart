@@ -82,6 +82,35 @@ class AgendaItem {
   );
 }
 
+/// What Folio knows of a case beyond the portals' answers (see
+/// [PortalDatabase.caseStates]).
+class CaseState {
+  const CaseState({
+    this.firstSeen,
+    this.seenAt,
+    this.fresh = 0,
+    this.change,
+    this.changeAt,
+  });
+
+  /// When the portfolio first brought it; null for one there from the start.
+  final DateTime? firstSeen;
+
+  /// When the lawyer last opened it.
+  final DateTime? seenAt;
+
+  /// Its documents not yet looked at.
+  final int fresh;
+
+  /// "3 yeni evrak", "Taraflar değişti" and the like, and when.
+  final String? change;
+  final DateTime? changeAt;
+
+  /// New to the portfolio and not yet opened.
+  bool get isNew =>
+      firstSeen != null && (seenAt == null || seenAt!.isBefore(firstSeen!));
+}
+
 /// What Folio keeps of the portals on this computer: the merged cases and
 /// hearings, and the agenda's own notes and tasks (UYGULAMAPLANI §4, §9).
 /// One SQLite file in Folio's data folder; every write is one transaction.
@@ -107,6 +136,12 @@ class PortalDatabase {
         id TEXT PRIMARY KEY, sent TEXT, json TEXT NOT NULL,
         case_key TEXT, link TEXT);
       CREATE INDEX IF NOT EXISTS uets_sent ON uets(sent);
+      CREATE TABLE IF NOT EXISTS meta (
+        key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS case_state (
+        key TEXT PRIMARY KEY, first_seen TEXT NOT NULL DEFAULT '',
+        seen_at TEXT, fresh INTEGER NOT NULL DEFAULT 0, change TEXT,
+        change_at TEXT);
     ''');
   }
 
@@ -154,25 +189,100 @@ class PortalDatabase {
 
   /// Merges [incoming] into what is kept, in one transaction: neither
   /// portal's fields overwrite the other's, and a case the answer leaves out
-  /// stays.
-  void mergeCases(Iterable<PortalCase> incoming) => _transaction(() {
-    final read = _db.prepare('SELECT json FROM cases WHERE key=?');
-    final write = _db.prepare(
-      'INSERT OR REPLACE INTO cases(key, json) VALUES(?, ?)',
-    );
-    try {
-      for (final one in incoming) {
-        final rows = read.select([one.key]);
-        final merged = rows.isEmpty
-            ? one
-            : _case(rows.first['json'] as String).merge(one);
-        write.execute([merged.key, jsonEncode(merged.toJson())]);
+  /// stays. A case is written only when something in it changed; the same
+  /// answer again writes nothing. Answers the keys of cases not kept
+  /// before; those the portfolio brings are marked new unless [baseline]
+  /// (the first reading of the portfolio, where nothing is news).
+  Set<String> mergeCases(
+    Iterable<PortalCase> incoming, {
+    bool portfolio = false,
+    bool baseline = false,
+  }) {
+    final added = <String>{};
+    _transaction(() {
+      final read = _db.prepare('SELECT json FROM cases WHERE key=?');
+      final write = _db.prepare(
+        'INSERT OR REPLACE INTO cases(key, json) VALUES(?, ?)',
+      );
+      final state = _db.prepare(
+        'INSERT OR IGNORE INTO case_state(key, first_seen) VALUES(?, ?)',
+      );
+      final now = DateTime.now().toUtc().toIso8601String();
+      try {
+        for (final one in incoming) {
+          final rows = read.select([one.key]);
+          final before = rows.isEmpty ? null : rows.first['json'] as String;
+          final merged = before == null ? one : _case(before).merge(one);
+          final json = jsonEncode(merged.toJson());
+          if (json == before) continue;
+          write.execute([merged.key, json]);
+          if (before == null) {
+            added.add(merged.key);
+            state.execute([merged.key, portfolio && !baseline ? now : '']);
+          }
+        }
+      } finally {
+        read.dispose();
+        write.dispose();
+        state.dispose();
       }
-    } finally {
-      read.dispose();
-      write.dispose();
-    }
-  });
+    });
+    return added;
+  }
+
+  // What Folio remembers beside the portals' answers.
+
+  String? meta(String key) {
+    final rows = _db.select('SELECT value FROM meta WHERE key=?', [key]);
+    return rows.isEmpty ? null : rows.first['value'] as String;
+  }
+
+  void setMeta(String key, String value) => _db.execute(
+    'INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)',
+    [key, value],
+  );
+
+  /// Each case's news: whether it came new to the portfolio, how many of
+  /// its documents are new, and the last change seen in it.
+  Map<String, CaseState> caseStates() => {
+    for (final row in _db.select(
+      'SELECT key, first_seen, seen_at, fresh, change, change_at '
+      'FROM case_state',
+    ))
+      row['key'] as String: CaseState(
+        firstSeen: DateTime.tryParse('${row['first_seen'] ?? ''}'),
+        seenAt: DateTime.tryParse('${row['seen_at'] ?? ''}'),
+        fresh: row['fresh'] as int? ?? 0,
+        change: row['change'] as String?,
+        changeAt: DateTime.tryParse('${row['change_at'] ?? ''}'),
+      ),
+  };
+
+  /// A change found in [key]: [fresh] new documents, and what changed.
+  void noteChange(String key, {required int fresh, String? change}) {
+    _db.execute(
+      'INSERT OR IGNORE INTO case_state(key, first_seen) VALUES(?, ?)',
+      [key, ''],
+    );
+    _db.execute(
+      'UPDATE case_state SET fresh=?, '
+      'change=COALESCE(?, change), '
+      'change_at=CASE WHEN ? IS NULL THEN change_at ELSE ? END WHERE key=?',
+      [fresh, change, change, DateTime.now().toUtc().toIso8601String(), key],
+    );
+  }
+
+  /// The lawyer opened [key]: it is no longer new, nor are its documents.
+  void markSeen(String key) {
+    _db.execute(
+      'INSERT OR IGNORE INTO case_state(key, first_seen) VALUES(?, ?)',
+      [key, ''],
+    );
+    _db.execute('UPDATE case_state SET seen_at=?, fresh=0 WHERE key=?', [
+      DateTime.now().toUtc().toIso8601String(),
+      key,
+    ]);
+  }
 
   // Hearings
 

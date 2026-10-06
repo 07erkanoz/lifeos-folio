@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -6,6 +7,9 @@ import '../security/secret_store.dart';
 import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
 import '../uyap/mobile_case_finder.dart';
+import '../uyap/uyap_case_links.dart';
+import '../uyap/uyap_case_panel_controller.dart';
+import '../uyap/uyap_case_store.dart';
 import '../uyap/uyap_mobile_api.dart';
 import '../uyap/uyap_web_service.dart';
 import 'hearing_sync.dart';
@@ -275,10 +279,10 @@ class PortalSync extends ChangeNotifier {
   });
 
   /// The mobile API's hearings, then its cases. The whole portfolio is read
-  /// court by court, hundreds of requests: at the first sync of a session,
-  /// when [full] is asked (the lawyer's own "Senkronize et", adding cases)
-  /// or six hours after the last; otherwise only the hearings. A second
-  /// call while one runs waits for that one.
+  /// court by court, hundreds of requests: once a day, kept across runs,
+  /// or when [full] is asked (Portföyü yenile); otherwise only the
+  /// hearings. After it the open cases are asked what is new in them
+  /// ([refreshCases]). A second call while one runs waits for that one.
   Future<void> syncMobile({bool full = false}) =>
       _mobileSync ??= _run(PortalChannel.uyapMobile, (db) async {
         if (!_mobile.connected) return null;
@@ -288,20 +292,27 @@ class PortalSync extends ChangeNotifier {
           db,
           _mobile.hearingRows,
         );
-        final read = _portfolioAt;
+        final read = DateTime.tryParse(db.meta(_portfolioKey) ?? '');
         var cases = const PortfolioResult(0, true);
         if (full ||
             read == null ||
-            DateTime.now().difference(read) > const Duration(hours: 6)) {
+            DateTime.now().difference(read) > portfolioInterval) {
+          final session = _mobile.session.value;
+          final ids = <String, String>{};
           cases = await syncMobilePortfolio(
             _mobile,
             db,
+            includeClosed: db.meta(_closedKey) == '1',
+            onCaseId: (key, id) => ids[key] = id,
             onProgress: (done, total) => _progress(
               PortalChannel.uyapMobile,
               total == 0 ? 'Portföy' : 'Portföy $done/$total',
             ),
           );
-          _portfolioAt = DateTime.now();
+          _sessionIds = ids;
+          _idsSession = session;
+          db.setMeta(_portfolioKey, DateTime.now().toIso8601String());
+          await refreshCases(db);
         }
         return hearings.complete && cases.complete
             ? null
@@ -309,8 +320,65 @@ class PortalSync extends ChangeNotifier {
       }).whenComplete(() => _mobileSync = null);
   Future<void>? _mobileSync;
 
-  /// When the whole portfolio was last read.
-  DateTime? _portfolioAt;
+  /// How often the whole portfolio is read on its own.
+  static const portfolioInterval = Duration(hours: 20);
+  static const _portfolioKey = 'portfolio_at';
+  static const _closedKey = 'portfolio_closed';
+  static const _checkedKey = 'cases_checked_at';
+
+  /// The mobile ids the last reading of the portfolio gave, valid while
+  /// [_idsSession] lasts: a case then needs no search of its own.
+  Map<String, String> _sessionIds = const {};
+  MobileSession? _idsSession;
+
+  /// When the whole portfolio was last read, and its open cases checked.
+  Future<DateTime?> portfolioAt() async =>
+      DateTime.tryParse((await _database()).meta(_portfolioKey) ?? '');
+  Future<DateTime?> casesCheckedAt() async =>
+      DateTime.tryParse((await _database()).meta(_checkedKey) ?? '');
+
+  /// Whether the closed cases are read too (Kapalı dosyaları da indir).
+  Future<bool> includeClosed() async =>
+      (await _database()).meta(_closedKey) == '1';
+  Future<void> setIncludeClosed(bool value) async {
+    (await _database()).setMeta(_closedKey, value ? '1' : '0');
+    notifyListeners();
+  }
+
+  /// Each open case asked once what is new in it: documents, parties,
+  /// its state, its money. Kept only where something changed, and the
+  /// change remembered for the portfolio's list. One case at a time, as
+  /// UYAP answers a burst with errors.
+  Future<void> refreshCases(PortalDatabase db) async {
+    final open = [
+      for (final c in db.cases().values)
+        if (c.family == CaseFamily.court && !isClosedStatus(c.status?.value)) c,
+    ];
+    for (final (i, kase) in open.indexed) {
+      if (!_mobile.connected && !_web.connected) break;
+      _progress(PortalChannel.uyapMobile, 'Evraklar ${i + 1}/${open.length}');
+      final panel = UyapCasePanelController(pause: Duration.zero);
+      try {
+        await panel.attach(linkOf(kase));
+        final before = panel.record;
+        await panel.refresh();
+        final after = panel.record;
+        if (after == null || identical(after, before)) continue;
+        db.noteChange(
+          kase.key,
+          fresh: after.fresh.length,
+          change: before == null ? null : describeChange(before, after),
+        );
+      } catch (_) {
+        // One case that does not answer does not stop the others.
+      } finally {
+        panel.dispose();
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    db.setMeta(_checkedKey, DateTime.now().toIso8601String());
+    notifyListeners();
+  }
 
   late final _finder = MobileCaseFinder(_mobile);
 
@@ -324,7 +392,12 @@ class PortalSync extends ChangeNotifier {
     String? jurisdiction,
     String? unitKind,
   }) async {
-    final kept = (await _database()).cases()[caseKey(number, court)];
+    final key = caseKey(number, court);
+    if (identical(_mobile.session.value, _idsSession)) {
+      final known = _sessionIds[key];
+      if (known != null && known.isNotEmpty) return known;
+    }
+    final kept = (await _database()).cases()[key];
     final details = kept?.details?.value ?? const <String, Object?>{};
     String? code(Object? v) => '${v ?? ''}'.trim().isEmpty ? null : '$v';
     return _finder.find(
@@ -412,7 +485,11 @@ Future<PortfolioResult> syncMobilePortfolio(
   UyapMobileApi api,
   PortalDatabase db, {
   void Function(int done, int total)? onProgress,
+  bool includeClosed = false,
+  void Function(String key, String mobileId)? onCaseId,
 }) async {
+  // The first reading brings the portfolio as it is: nothing in it is news.
+  final baseline = db.meta('portfolio_at') == null;
   final asked = DateTime.now().toUtc();
   const mobile = PortalChannel.uyapMobile;
   var complete = true;
@@ -459,6 +536,8 @@ Future<PortfolioResult> syncMobilePortfolio(
           : Observed(details, mobile, asked, complete: false),
     );
     found[one.key] = found[one.key]?.merge(one) ?? one;
+    final id = one.ids[mobile];
+    if (id != null) onCaseId?.call(one.key, id);
   }
 
   // The courts first, so that how far the reading has come can be said;
@@ -477,7 +556,7 @@ Future<PortfolioResult> syncMobilePortfolio(
     for (final unit in units) {
       final kind = '${unit['tablo'] ?? ''}'.trim();
       if (kind.isEmpty) continue;
-      for (final closed in [false, true]) {
+      for (final closed in [false, if (includeClosed) true]) {
         try {
           for (final court in await api.courts(type, kind, closed: closed)) {
             final id = '${court['birimId'] ?? ''}'.trim();
@@ -496,7 +575,7 @@ Future<PortfolioResult> syncMobilePortfolio(
         add(row, CaseFamily.court, jurisdiction: type, unit: kind);
       }
       if (found.isNotEmpty) {
-        db.mergeCases(found.values);
+        db.mergeCases(found.values, portfolio: true, baseline: baseline);
         found.clear();
       }
     } catch (_) {
@@ -515,6 +594,51 @@ Future<PortfolioResult> syncMobilePortfolio(
   } catch (_) {
     complete = false;
   }
-  db.mergeCases(found.values);
+  db.mergeCases(found.values, portfolio: true, baseline: baseline);
   return PortfolioResult(courts.length, complete);
+}
+
+/// "Kapalı", "Kapalı (12.03.2025)", "Arşiv": a case closed for good.
+bool isClosedStatus(String? status) {
+  final s = (status ?? '').trim().toLowerCase();
+  return s.startsWith('kapal') ||
+      s.startsWith('arşiv') ||
+      s.startsWith('arsiv');
+}
+
+/// Where [kase] is in UYAP, as a document is tied to it.
+UyapCaseLink linkOf(PortalCase kase) {
+  final d = kase.details?.value ?? const <String, Object?>{};
+  String text(String key) => '${d[key] ?? ''}'.trim();
+  return UyapCaseLink(
+    jurisdiction: text('yargiTuru'),
+    courtType: text('yargiBirimi'),
+    courtId: text('birimId'),
+    court: kase.court,
+    number: kase.number,
+  );
+}
+
+/// What changed in a case between two fetches, said shortly: "3 yeni
+/// evrak", "Taraflar değişti", "Durum: Karara çıkmış". Null for nothing.
+String? describeChange(UyapCaseRecord before, UyapCaseRecord after) {
+  final parts = <String>[];
+  final fresh = after.fresh.difference(before.fresh).length;
+  if (fresh > 0) parts.add('$fresh yeni evrak');
+  Set<String> ids(UyapCaseRecord r) => {for (final t in r.parties) t.identity};
+  final had = ids(before), has = ids(after);
+  if (had.isNotEmpty &&
+      has.isNotEmpty &&
+      (had.length != has.length || !had.containsAll(has))) {
+    parts.add('Taraflar değişti');
+  }
+  final was = before.details.state.trim();
+  final now = after.details.state.trim();
+  if (now.isNotEmpty && was.isNotEmpty && now != was) parts.add('Durum: $now');
+  if (before.money != null &&
+      after.money != null &&
+      jsonEncode(before.money!.toJson()) != jsonEncode(after.money!.toJson())) {
+    parts.add('Para hareketi');
+  }
+  return parts.isEmpty ? null : parts.join(' · ');
 }

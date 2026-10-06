@@ -369,8 +369,18 @@ class UyapCaseStore {
       money: money ?? before?.money,
       hidden: hidden,
     );
+    // The same answer as before is not written again: only a new document,
+    // party, sum or state is news, not the time it was asked.
+    if (before != null && _sameContent(record, before)) return before;
     await _write(record);
     return record;
+  }
+
+  static bool _sameContent(UyapCaseRecord a, UyapCaseRecord b) {
+    Map<String, Object?> content(UyapCaseRecord r) => r.toJson()
+      ..remove('cekildi')
+      ..remove('oncekiCekim');
+    return jsonEncode(content(a)) == jsonEncode(content(b));
   }
 
   static Set<String> _keys(List<UyapCaseDocument> documents) => {

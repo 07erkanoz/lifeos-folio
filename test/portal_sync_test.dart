@@ -87,7 +87,7 @@ void main() {
 
   test('the mobile API fills the portfolio, open and closed', () async {
     await api.login('kod');
-    final result = await syncMobilePortfolio(api, db);
+    final result = await syncMobilePortfolio(api, db, includeClosed: true);
     expect(result.complete, isTrue);
     final cases = db.cases().values.toList()
       ..sort((a, b) => a.number.compareTo(b.number));
@@ -96,6 +96,36 @@ void main() {
     expect(cases.last.ids[PortalChannel.uyapMobile], 'o1');
     // Only the mobile API was asked: no web portal request.
     expect(asked.every((p) => !p.contains('.ajx')), isTrue);
+  });
+
+  test('the closed cases are read only when asked for', () async {
+    await api.login('kod');
+    await syncMobilePortfolio(api, db);
+    expect(db.cases().values.map((c) => c.number), ['2025/412']);
+  });
+
+  test('the same portfolio again writes nothing; a case that comes later '
+      'is new', () async {
+    await api.login('kod');
+    // The first reading: nothing is news.
+    expect(
+      db.mergeCases(
+        [PortalCase.create(number: '2025/412', court: 'X Mahkemesi')],
+        portfolio: true,
+        baseline: true,
+      ),
+      hasLength(1),
+    );
+    expect(db.caseStates().values.single.isNew, isFalse);
+    final again = PortalCase.create(number: '2025/412', court: 'X Mahkemesi');
+    expect(db.mergeCases([again], portfolio: true), isEmpty);
+    final added = db.mergeCases([
+      PortalCase.create(number: '2026/7', court: 'X Mahkemesi'),
+    ], portfolio: true);
+    expect(added, hasLength(1));
+    expect(db.caseStates()[added.single]!.isNew, isTrue);
+    db.markSeen(added.single);
+    expect(db.caseStates()[added.single]!.isNew, isFalse);
   });
 
   test('a case is synced on its own, newest document first', () async {
