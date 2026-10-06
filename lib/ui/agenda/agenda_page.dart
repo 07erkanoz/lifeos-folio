@@ -40,7 +40,9 @@ class AgendaPage extends StatefulWidget {
   /// Opens the case with this [caseKey] in UYAP Dosyalarım; null when the
   /// case is not kept there.
   final bool Function(String caseKey)? onOpenCase;
-  final bool Function(String caseKey)? onPetition;
+
+  /// Begins a petition for this case in the editor.
+  final void Function(PortalCase kase)? onPetition;
 
   /// Something the sidebar counts changed.
   final VoidCallback? onChanged;
@@ -109,6 +111,7 @@ class _AgendaPageState extends State<AgendaPage> {
   List<AgendaItem> _items = const [];
   Map<String, PortalCase> _cases = const {};
   Timer? _clock;
+  String? _caseSyncing;
 
   DateTime _now() => (widget.now ?? DateTime.now)();
   PortalSync get _sync => widget.sync ?? PortalSync.instance;
@@ -187,6 +190,19 @@ class _AgendaPageState extends State<AgendaPage> {
             ?.key;
       }
     });
+  }
+
+  /// The chosen hearing's case, its details and documents fetched again.
+  Future<void> _syncCase(String key) async {
+    setState(() => _caseSyncing = key);
+    final problem = await _sync.syncCase(key);
+    if (!mounted) return;
+    setState(() => _caseSyncing = null);
+    _reload();
+    if (problem != null) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(problem)));
+    }
   }
 
   void _move(int step) {
@@ -489,34 +505,61 @@ class _AgendaPageState extends State<AgendaPage> {
                 : 'UYAP Web · bağlı, ${_left(session.expires)}',
             onTap: _sync.syncWeb,
           );
+    final any = _web.connected || _mobile.connected;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 6,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!_mobile.connected)
-            chip(
-              scheme.outline,
-              'UYAP Mobil · bağlan',
-              onTap: () => connectUyapMobile(context, api: _mobile),
-            )
-          else if (mobileSync.running)
-            chip(AgendaColors.ok, 'UYAP Mobil · güncelleniyor…')
-          else if (mobileSync.problem != null)
-            chip(
-              AgendaColors.task,
-              'UYAP Mobil · ${mobileSync.problem}',
-              onTap: _sync.syncMobile,
-            )
-          else
-            chip(
-              AgendaColors.ok,
-              'UYAP Mobil · ${_mobile.session.value?.user ?? 'bağlı'}',
-              onTap: _sync.syncMobile,
+          Expanded(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (!_mobile.connected)
+                  chip(
+                    scheme.outline,
+                    'UYAP Mobil · bağlan',
+                    onTap: () => connectUyapMobile(context, api: _mobile),
+                  )
+                else if (mobileSync.running)
+                  chip(AgendaColors.ok, 'UYAP Mobil · güncelleniyor…')
+                else if (mobileSync.problem != null)
+                  chip(
+                    AgendaColors.task,
+                    'UYAP Mobil · ${mobileSync.problem}',
+                    onTap: _sync.syncMobile,
+                  )
+                else
+                  chip(
+                    AgendaColors.ok,
+                    'UYAP Mobil · ${_mobile.session.value?.user ?? 'bağlı'}',
+                    onTap: _sync.syncMobile,
+                  ),
+                web,
+                chip(scheme.outline, 'UETS · bağlı değil'),
+              ],
             ),
-          web,
-          chip(scheme.outline, 'UETS · bağlı değil'),
+          ),
+          // Every connected channel's sync, now: each asks its own share.
+          TextButton.icon(
+            key: const ValueKey('agenda-sync'),
+            onPressed: any
+                ? () {
+                    if (_web.connected) unawaited(_sync.syncWeb());
+                    if (_mobile.connected) unawaited(_sync.syncMobile());
+                  }
+                : null,
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              textStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            icon: const Icon(Icons.sync_rounded, size: 16),
+            label: const Text('Senkronize et'),
+          ),
         ],
       ),
     );
@@ -1278,8 +1321,34 @@ class _AgendaPageState extends State<AgendaPage> {
         key: const ValueKey('agenda-prep'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _kicker(
-            '$when ${_hm(h.at)} · ${h.isEHearing ? 'E-DURUŞMA' : 'DURUŞMA'} · $relative',
+          Row(
+            children: [
+              Expanded(
+                child: _kicker(
+                  '$when ${_hm(h.at)} · ${h.isEHearing ? 'E-DURUŞMA' : 'DURUŞMA'} · $relative',
+                ),
+              ),
+              SizedBox(
+                width: 28,
+                height: 22,
+                child: _caseSyncing == h.caseKey
+                    ? const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        key: const ValueKey('agenda-case-sync'),
+                        tooltip: 'Dosyayı senkronize et: dava türü ve evrak',
+                        padding: EdgeInsets.zero,
+                        iconSize: 17,
+                        onPressed: () => _syncCase(h.caseKey),
+                        icon: const Icon(
+                          Icons.sync_rounded,
+                          color: AgendaColors.hearing,
+                        ),
+                      ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
@@ -1287,23 +1356,20 @@ class _AgendaPageState extends State<AgendaPage> {
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
           ),
           Text(
-            [
-              '${h.number} Esas',
-              if ('${details['davaTuru'] ?? details['tur'] ?? ''}'.isNotEmpty)
-                '${details['davaTuru'] ?? details['tur']}',
-            ].join(' · '),
+            '${h.number} Esas',
             style: const TextStyle(fontSize: 11.5, color: AgendaColors.muted),
           ),
           const SizedBox(height: 10),
           if (parties != null && parties.isNotEmpty) row('Taraflar', parties),
+          if ('${details['davaTuru'] ?? details['dosyaTuru'] ?? ''}'.isNotEmpty)
+            row('Dava türü', '${details['davaTuru'] ?? details['dosyaTuru']}'),
           if (h.kind != null) row('İşlem', h.kind!.value),
           if (h.result != null) row('Sonuç', h.result!.value),
-          if (h.judgeNote != null) row('Hâkim notu', h.judgeNote!.value),
           row('Kaynak', 'UYAP ${sources.join(' + ')}'),
           _heading('SON EVRAKLAR'),
           if (docs.isEmpty)
             const Text(
-              'Dosyanın evrakı senkronla gelir.',
+              'Evrakı getirmek için ↻ Dosyayı senkronize edin.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             )
           else
@@ -1404,7 +1470,13 @@ class _AgendaPageState extends State<AgendaPage> {
                 child: OutlinedButton(
                   onPressed: widget.onPetition == null
                       ? null
-                      : () => widget.onPetition!(h.caseKey),
+                      : () => widget.onPetition!(
+                          kase ??
+                              PortalCase.create(
+                                number: h.number,
+                                court: h.court,
+                              ),
+                        ),
                   style: _buttonStyle(),
                   child: const Text('Dilekçe başlat'),
                 ),

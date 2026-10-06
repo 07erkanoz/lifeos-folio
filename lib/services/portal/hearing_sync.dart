@@ -1,4 +1,5 @@
 import 'observed.dart';
+import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_database.dart';
 import 'portal_hearing.dart';
@@ -45,8 +46,40 @@ PortalHearing? parseHearing(
     parties: parties.isEmpty
         ? null
         : Observed(parties, channel, asked, complete: web),
-    judgeNote: text(_plain('${row['izinliHakimList'] ?? ''}')),
     eHearing: text(link),
+  );
+}
+
+/// The case a hearing row belongs to, as far as the row tells: its number
+/// and court, this session's id for it, and the kind of file (a partial
+/// answer, which the case's own details replace). A hearing's case is in
+/// the portfolio even before the portfolio is fetched.
+PortalCase? caseOfHearing(
+  Map<String, Object?> row,
+  PortalChannel channel,
+  DateTime asked,
+) {
+  final number = '${row['dosyaNo'] ?? ''}'.split(' - ').first.trim();
+  final court = '${row['yerelBirimAd'] ?? row['birimAdi'] ?? ''}'.trim();
+  if (number.isEmpty || court.isEmpty) return null;
+  String text(String key) => '${row[key] ?? ''}'.trim();
+  final details = {
+    if (text('dosyaTurKodAciklama').isNotEmpty)
+      'dosyaTuru': text('dosyaTurKodAciklama'),
+    if (text('dosyaTurKod').isNotEmpty) 'dosyaTurKod': text('dosyaTurKod'),
+    // The web's court id is a number the web asks with; the mobile API's
+    // is its own, useless to the web.
+    if (channel == PortalChannel.uyapWeb && text('birimId').isNotEmpty)
+      'birimId': text('birimId'),
+  };
+  return PortalCase(
+    key: caseKey(number, court),
+    number: number,
+    court: court,
+    ids: {if (text('dosyaId').isNotEmpty) channel: text('dosyaId')},
+    details: details.isEmpty
+        ? null
+        : Observed(details, channel, asked, complete: false),
   );
 }
 
@@ -63,12 +96,6 @@ DateTime? _time(String raw) {
       ? null
       : DateTime(iso.year, iso.month, iso.day, iso.hour, iso.minute);
 }
-
-String _plain(String html) => html
-    .replaceAll(RegExp(r'<[^>]*>'), ' ')
-    .replaceAll('&nbsp;', ' ')
-    .replaceAll(RegExp(r'\s+'), ' ')
-    .trim();
 
 /// [from]–[to] in windows of at most [days] days each, both ends included:
 /// the portals refuse a longer range.
@@ -116,12 +143,17 @@ Future<HearingSyncResult> syncHearings(
   final to = DateTime(today.year, today.month, today.day + daysAfter);
   final asked = DateTime.now().toUtc();
   final found = <String, PortalHearing>{};
+  final cases = <String, PortalCase>{};
   final errors = <String>[];
   for (final (start, end) in hearingWindows(from, to, days: windowDays)) {
     try {
       for (final row in await query(start, end)) {
         final one = parseHearing(row, channel, asked);
         if (one != null) found[one.key] = found[one.key]?.merge(one) ?? one;
+        final kase = caseOfHearing(row, channel, asked);
+        if (kase != null) {
+          cases[kase.key] = cases[kase.key]?.merge(kase) ?? kase;
+        }
       }
     } catch (e) {
       errors.add('${start.day}.${start.month}.${start.year}: $e');
@@ -129,6 +161,7 @@ Future<HearingSyncResult> syncHearings(
     }
   }
   final complete = errors.isEmpty;
+  db.mergeCases(cases.values);
   db.mergeHearings(
     channel,
     from,

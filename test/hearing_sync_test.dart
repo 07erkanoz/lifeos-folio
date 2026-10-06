@@ -44,7 +44,7 @@ void main() {
     expect(parseHearing({...row(), 'yerelBirimAd': null}, web, asked), isNull);
   });
 
-  test('the mobile API’s judge note and e-hearing link are kept', () {
+  test('the e-hearing link is kept; the judge note is not', () {
     final one = parseHearing(
       {
         ...row(),
@@ -54,7 +54,7 @@ void main() {
       mobile,
       asked,
     )!;
-    expect(one.judgeNote!.value, 'Hâkim notu');
+    expect(one.judgeNote, isNull);
     expect(one.isEHearing, isTrue);
   });
 
@@ -106,6 +106,27 @@ void main() {
       expect(db.hearings().single.at, DateTime(2026, 10, 7, 10));
     },
   );
+
+  test('a hearing brings its case, with its id and kind of file', () async {
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    await syncHearings(web, db, (a, b) async {
+      return a == DateTime(2026, 9, 6)
+          ? [
+              {
+                ...row(),
+                'dosyaId': 'w-77',
+                'birimId': '1001',
+                'dosyaTurKodAciklama': 'Hukuk Dava Dosyası',
+              },
+            ]
+          : [];
+    }, now: DateTime(2026, 10, 6));
+    final kase = db.cases().values.single;
+    expect(kase.ids[web], 'w-77');
+    expect(kase.details!.value['dosyaTuru'], 'Hukuk Dava Dosyası');
+    expect(kase.details!.value['birimId'], '1001');
+  });
 
   test('a lost session stops asking', () async {
     final db = PortalDatabase.memory();

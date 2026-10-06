@@ -1,6 +1,7 @@
 import 'agenda/agenda_page.dart';
 import 'agenda/uets_placeholder_page.dart';
 import '../services/portal/observed.dart' show caseKey;
+import '../services/portal/portal_case.dart';
 import '../services/portal/portal_database.dart';
 import '../services/portal/portal_sync.dart';
 
@@ -947,8 +948,34 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return null;
   }
 
+  /// A petition for the agenda's [kase]: UYAP Dosyalarım's own link when
+  /// the case is kept there, else one made of its court and number.
+  void _agendaPetition(PortalCase kase) {
+    UyapCaseLink? link;
+    for (final (record, _) in _uyapCases) {
+      if (caseKey(record.number, record.court) == kase.key) link = record.link;
+    }
+    final court = kase.court;
+    final kind = court.contains('Ceza')
+        ? '0'
+        : court.contains('İcra')
+        ? '2'
+        : court.contains('İdare') || court.contains('Vergi')
+        ? '6'
+        : '1';
+    link ??= UyapCaseLink(
+      jurisdiction: kind,
+      courtType: '',
+      courtId: '${kase.details?.value['birimId'] ?? ''}',
+      court: court,
+      number: kase.number,
+    );
+    unawaited(_newDocument(forCase: link));
+  }
+
   Widget _agendaPage() => AgendaPage(
     onChanged: () => unawaited(_countAgenda()),
+    onPetition: _agendaPetition,
     onOpenCase: (key) {
       final found = _uyapKeyFor(key);
       if (found != null) setState(() => _group = 'uyap:$found');

@@ -7,6 +7,7 @@ import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
+import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -55,6 +56,18 @@ void main() {
             },
           ],
         };
+      } else if (path == 'mobile/avukat/dosya/o1/1') {
+        answer = {
+          'tumEvraklar': {
+            '2025/412(Esas)##x': [
+              {'evrakTuruAciklama': 'Ara Karar', 'onayTarihi': '28.09.2026'},
+              {
+                'evrakTuruAciklama': 'Bilirkişi Raporu',
+                'onayTarihi': '03.10.2026',
+              },
+            ],
+          },
+        };
       } else if (path == 'mobile/avukat/danistaydaireleri') {
         answer = {'danistayDairesi': []};
       }
@@ -83,6 +96,21 @@ void main() {
     expect(cases.last.ids[PortalChannel.uyapMobile], 'o1');
     // Only the mobile API was asked: no web portal request.
     expect(asked.every((p) => !p.contains('.ajx')), isTrue);
+  });
+
+  test('a case is synced on its own, newest document first', () async {
+    await api.login('kod');
+    await syncMobilePortfolio(api, db);
+    final sync = PortalSync(
+      web: UyapWebService.forTesting(),
+      mobile: api,
+      database: () async => db,
+    );
+    const court = 'Antalya 3. Asliye Hukuk Mahkemesi';
+    expect(await sync.syncCase(caseKey('2025/412', court)), isNull);
+    final docs = db.cases()[caseKey('2025/412', court)]!.documents!.value;
+    expect(docs.map((d) => d['ad']), ['Bilirkişi Raporu', 'Ara Karar']);
+    expect(await sync.syncCase('yok'), isNotNull);
   });
 
   test('the mobile API fills the web’s gaps and keeps its fields', () async {

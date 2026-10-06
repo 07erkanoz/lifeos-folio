@@ -112,6 +112,96 @@ class PortalSync extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// One case's details and documents, asked of the channels the table
+  /// gives for them (§9.2): the web's kind of suit, status and complete
+  /// document list first, else the mobile API's shorter list. What is kept
+  /// of the case stays; the answer is merged in. Null when it worked, else
+  /// what went wrong.
+  Future<String?> syncCase(String key) async {
+    final db = await _database();
+    final kase = db.cases()[key];
+    if (kase == null) return 'Dosya henüz kayıtlı değil.';
+    final connected = {
+      if (_web.connected) PortalChannel.uyapWeb,
+      if (_mobile.connected) PortalChannel.uyapMobile,
+    };
+    final asked = DateTime.now().toUtc();
+    final old = kase.details?.value ?? const <String, Object?>{};
+    String? problem = 'Dosyayı güncellemek için UYAP bağlantısı gerekir.';
+    for (final channel in ChannelTable.channels(
+      UyapOp.details,
+      connected,
+      kase.family,
+    )) {
+      final id = kase.ids[channel];
+      if (id == null || id.isEmpty) continue;
+      try {
+        if (channel == PortalChannel.uyapWeb) {
+          final target = UyapCase(
+            id,
+            kase.number,
+            '${old['birimId'] ?? ''}',
+            kase.court,
+          );
+          final details = await _web.caseDetails(target);
+          final documents = await _web.caseDocuments(target);
+          db.mergeCases([
+            PortalCase(
+              key: kase.key,
+              number: kase.number,
+              court: kase.court,
+              status: details.status.isEmpty
+                  ? null
+                  : Observed(details.status, channel, asked),
+              details: Observed(
+                {
+                  ...old,
+                  if (details.kind.isNotEmpty) 'davaTuru': details.kind,
+                  if (details.opening.isNotEmpty) 'acilisTuru': details.opening,
+                },
+                channel,
+                asked,
+              ),
+              documents: Observed(
+                _newestFirst([
+                  for (final d in documents.documents)
+                    if (d.parentKey == null)
+                      {
+                        'ad': d.type.isNotEmpty ? d.type : d.description,
+                        'tarih': d.approved,
+                        'no': d.number,
+                      },
+                ]),
+                channel,
+                asked,
+              ),
+            ),
+          ]);
+        } else {
+          final raw = await _mobile.caseDocuments(id);
+          db.mergeCases([
+            PortalCase(
+              key: kase.key,
+              number: kase.number,
+              court: kase.court,
+              documents: Observed(
+                _newestFirst(_mobileDocuments(raw)),
+                channel,
+                asked,
+                complete: false,
+              ),
+            ),
+          ]);
+        }
+        notifyListeners();
+        return null;
+      } catch (e) {
+        problem = '$e';
+      }
+    }
+    return problem;
+  }
+
   /// The web portal's hearings.
   Future<void> syncWeb() => _run(PortalChannel.uyapWeb, (db) async {
     if (!_web.connected) return null;
@@ -136,6 +226,53 @@ class PortalSync extends ChangeNotifier {
         ? null
         : 'Bazı kayıtlar alınamadı';
   });
+}
+
+/// The mobile API's documents of a case, from `tumEvraklar` (grouped by
+/// case, or a list) or else `son20Evrak`.
+List<Map<String, Object?>> _mobileDocuments(Map<String, Object?> raw) {
+  Iterable<Object?> rows(Object? v) => v is List
+      ? v
+      : v is Map
+      ? v.values.expand((g) => g is List ? g : const [])
+      : const [];
+  var all = rows(raw['tumEvraklar']).toList();
+  if (all.isEmpty) all = rows(raw['son20Evrak']).toList();
+  String text(Map row, List<String> keys) => keys
+      .map((k) => '${row[k] ?? ''}'.trim())
+      .firstWhere((v) => v.isNotEmpty, orElse: () => '');
+  return [
+    for (final row in all)
+      if (row is Map)
+        {
+          'ad': text(row, [
+            'evrakTuruAciklama',
+            'dagitimPlanTuruAciklama',
+            'evrakTuru',
+            'aciklama',
+          ]),
+          'tarih': text(row, ['onayTarihi', 'onaylandigiTarih']),
+          'no': text(row, ['birimEvrakNo', 'evrakId']),
+        },
+  ];
+}
+
+/// Documents with the latest approval first ("06.10.2026 09:20" or ISO).
+List<Map<String, Object?>> _newestFirst(List<Map<String, Object?>> docs) {
+  DateTime when(Map<String, Object?> d) {
+    final raw = '${d['tarih'] ?? ''}';
+    final tr = RegExp(r'(\d{1,2})\.(\d{1,2})\.(\d{4})').firstMatch(raw);
+    if (tr != null) {
+      return DateTime(
+        int.parse(tr.group(3)!),
+        int.parse(tr.group(2)!),
+        int.parse(tr.group(1)!),
+      );
+    }
+    return DateTime.tryParse(raw) ?? DateTime(1900);
+  }
+
+  return [...docs]..sort((a, b) => when(b).compareTo(when(a)));
 }
 
 class PortfolioResult {
