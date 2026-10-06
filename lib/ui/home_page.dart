@@ -1,5 +1,5 @@
 import 'agenda/agenda_page.dart';
-import 'agenda/uets_placeholder_page.dart';
+import 'agenda/uets_page.dart';
 import '../services/portal/observed.dart' show caseKey;
 import '../services/portal/portal_case.dart';
 import '../services/portal/portal_database.dart';
@@ -921,6 +921,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// The hearings today, for the badge beside Ajanda in the sidebar.
   int _agendaToday = 0;
 
+  /// The UETS notices not yet read, for the badge beside UETS Tebligatlarım.
+  int _uetsUnread = 0;
+
   void _portalSynced() => unawaited(_countAgenda());
 
   Future<void> _countAgenda() async {
@@ -931,8 +934,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final count = db
           .hearings(from: today, to: today.add(const Duration(days: 1)))
           .length;
-      if (mounted && count != _agendaToday) {
-        setState(() => _agendaToday = count);
+      final unread = db.notices().where((n) => n.message.read == null).length;
+      if (mounted && (count != _agendaToday || unread != _uetsUnread)) {
+        setState(() {
+          _agendaToday = count;
+          _uetsUnread = unread;
+        });
       }
     } catch (_) {
       // The badge is a convenience; the agenda shows the same when opened.
@@ -981,6 +988,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (found != null) setState(() => _group = 'uyap:$found');
       return found != null;
     },
+  );
+
+  Widget _uetsPage() => UetsPage(
+    onChanged: () => unawaited(_countAgenda()),
+    onOpenCase: (key) {
+      final found = _uyapKeyFor(key);
+      if (found != null) setState(() => _group = 'uyap:$found');
+      return found != null;
+    },
+    onOpenFile: (path) =>
+        unawaited(_addFiles([path], index: false, external: true)),
   );
 
   Widget _uyapPage() => UyapCasesPage(
@@ -1394,7 +1412,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                             : _group == 'agenda'
                                             ? _agendaPage()
                                             : _group == 'uets'
-                                            ? const UetsPlaceholderPage()
+                                            ? _uetsPage()
                                             : _overview(),
                                       ),
                                       TransitionPane(
@@ -1618,6 +1636,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     ],
     uyapFolder: UyapSettings.instance.folder,
     agendaToday: _agendaToday,
+    uetsUnread: _uetsUnread,
     uyapAvailable: Platform.isLinux || Platform.isWindows || Platform.isMacOS,
     selectFolder: (id) async {
       _closeDrawer();

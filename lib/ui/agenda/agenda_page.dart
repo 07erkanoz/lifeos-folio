@@ -19,6 +19,7 @@ import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import 'mobile_connect.dart';
+import 'uets_connect.dart';
 
 /// The agenda: the hearings both UYAP portals report, merged, and the
 /// lawyer's own notes, tasks and deadlines, laid out as the approved design
@@ -535,7 +536,28 @@ class _AgendaPageState extends State<AgendaPage> {
                 : 'UYAP Web · bağlı, ${_left(session.expires)}',
             onTap: _sync.syncWeb,
           );
-    final any = _web.connected || _mobile.connected;
+    final uetsSync = _sync.state(PortalChannel.uets);
+    final uets = !_sync.uets.connected
+        ? chip(
+            scheme.outline,
+            'UETS · bağlan',
+            onTap: () =>
+                connectUets(context, api: _sync.uets, secrets: _sync.secrets),
+          )
+        : uetsSync.running
+        ? chip(AgendaColors.ok, 'UETS · tebligatlar alınıyor…')
+        : uetsSync.problem != null
+        ? chip(
+            AgendaColors.task,
+            'UETS · ${uetsSync.problem!.replaceFirst('Bad state: ', '')}',
+            onTap: _sync.syncUets,
+          )
+        : chip(
+            AgendaColors.ok,
+            'UETS · bağlı, ${_left(_sync.uets.session.value?.expires)}',
+            onTap: _sync.syncUets,
+          );
+    final any = _web.connected || _mobile.connected || _sync.uets.connected;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
       child: Row(
@@ -567,7 +589,7 @@ class _AgendaPageState extends State<AgendaPage> {
                     onTap: _sync.syncMobile,
                   ),
                 web,
-                chip(scheme.outline, 'UETS · bağlı değil'),
+                uets,
               ],
             ),
           ),
@@ -578,6 +600,7 @@ class _AgendaPageState extends State<AgendaPage> {
                 ? () {
                     if (_web.connected) unawaited(_sync.syncWeb());
                     if (_mobile.connected) unawaited(_sync.syncMobile());
+                    if (_sync.uets.connected) unawaited(_sync.syncUets());
                   }
                 : null,
             style: TextButton.styleFrom(

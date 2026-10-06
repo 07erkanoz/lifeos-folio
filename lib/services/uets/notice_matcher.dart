@@ -82,8 +82,27 @@ void matchNotices(PortalDatabase db, {DateTime? now}) {
 /// the lawyer marked. Only where the kind of document is certain from the
 /// subject; otherwise the lawyer calculates it in the agenda.
 void addNoticeDeadlines(PortalDatabase db, {DateTime? now}) {
-  final have = {for (final i in db.agenda()) i.id};
+  final have = {for (final i in db.agenda()) i.id: i};
   for (final n in db.notices()) {
+    // A deadline follows its notice when the notice is tied or tied anew.
+    for (final old in have.values) {
+      if (old.caseKey != n.caseKey &&
+          old.id.startsWith('uets:${n.message.id}:')) {
+        db.saveAgenda(
+          AgendaItem(
+            id: old.id,
+            kind: old.kind,
+            title: old.title,
+            body: old.body,
+            at: old.at,
+            allDay: old.allDay,
+            done: old.done,
+            caseKey: n.caseKey,
+            updated: old.updated,
+          ),
+        );
+      }
+    }
     final m = n.message;
     final sent = m.sent;
     final parsed = NoticeSubject.parse(m.subject);
@@ -101,7 +120,7 @@ void addNoticeDeadlines(PortalDatabase db, {DateTime? now}) {
     ).items;
     for (final item in items) {
       final id = 'uets:${m.id}:${item.sureAdi}';
-      if (have.contains(id)) continue;
+      if (have.containsKey(id)) continue;
       db.saveAgenda(
         AgendaItem(
           id: id,
@@ -122,8 +141,9 @@ void addNoticeDeadlines(PortalDatabase db, {DateTime? now}) {
   }
 }
 
-/// Exposed for the screens: the subject's unit and number, or the subject.
-String noticeTitle(UetsMessage m) {
-  final p = NoticeSubject.parse(m.subject);
-  return p == null ? m.subject : '${p.unit} · ${p.number}';
-}
+/// What the subject's later brackets say the document is: "Gerekçeli
+/// Karar"; empty when they say nothing.
+String noticeKind(UetsMessage m) => [
+  for (final b in RegExp(r'\[([^\]]*)\]').allMatches(m.subject).skip(1))
+    b.group(1)!.trim(),
+].where((s) => s.isNotEmpty).join(' · ');

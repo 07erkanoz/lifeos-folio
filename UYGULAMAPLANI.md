@@ -656,7 +656,7 @@ Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 | T7 | Kenar çubuğu BÜRO bölümü ve Ajanda ekranı (taslağın aynısı) | P10/P11 | Tamam (önizleme: `tool/agenda_preview.dart`) |
 | T8 | Süre motoru ve yaklaşan süreler | P10 | Tamam (`lib/services/legal/deadlines`, Ajanda'da "Süreyi hesapla") |
 | T9 | UYAP Mobil API girişi, portföy ve duruşma; web ile birleştirme | P04/P07 | Tamam (gerçek hesapla kabul P16'da) |
-| T10 | UETS girişi, Tebligatlarım ekranı ve dosya eşleştirme | P05/P08/P09 | Sırada |
+| T10 | UETS girişi, Tebligatlarım ekranı ve dosya eşleştirme | P05/P08/P09 | Tamam (mobil imza ve kartla giriş, §9.8 eşleştirme, konudan kesin belge türünde süreler ajandaya; gerçek hesapla kabul P16'da) |
 
 ## Ek A — İncelenen Banaozel dosyalarının içerik hash'leri
 

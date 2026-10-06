@@ -133,7 +133,10 @@ class PortalSync extends ChangeNotifier {
     notifyListeners();
     String? problem;
     try {
-      problem = await work(await _database());
+      final db = await _database();
+      problem = await work(db);
+      // The portfolio may have grown: untied notices are tried again (§9.8).
+      if (channel != PortalChannel.uets) matchNotices(db);
     } catch (e) {
       problem = '$e';
     }
