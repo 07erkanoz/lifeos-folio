@@ -681,8 +681,29 @@ Aynı ekranlar, aynı veritabanı kuralları; telefonda yalnız telefonun yapabi
 - Kanal çubuğu yatay kaydırılır; durum ve kalan süre aynı.
 
 **Veri**
-- Telefon kendi `portal.sqlite`'ını tutar; birleştirme kuralları (§9.4) aynı kod.
-- Masaüstü ↔ telefon: P14'teki QR/LAN aktarımıyla ajanda notları/işleri, takip edilen dosyalar ve UETS eşleştirmeleri mantıksal kayıt olarak aktarılır; portal oturumu aktarılmaz, her cihaz kendi girişini yapar.
+- Telefon kendi `portal.sqlite`'ını tutar; birleştirme kuralları (§9.4) aynı kod. Telefon `webview_flutter` ile UYAP Mobil'e ve mobil imzayla UETS'ye kendisi bağlanır; portal verisini kendisi çeker. Bu yüzden cihazlar arasında taşınacak olan yalnız avukatın kendi verisidir.
+- Portal oturumu hiçbir zaman aktarılmaz; her cihaz kendi girişini yapar.
+
+**Masaüstü ↔ telefon senkronu (karar: 6 Ekim 2026, LifeOs-Anywhere yöntemi)**
+
+LifeOs-Anywhere'in deseni alınır: bir taraf yalnız o oturum için HTTP sunar, öbürü manifest alır, farkı hesaplar, çeker ve iter. Onun eksikleri alınmaz: sürekli açık sunucu, UDP yayını, kimlik doğrulamasız uçlar, mutlak yol okuma.
+
+- **İsteğe bağlı, sürekli açık değil.** Masaüstünde "Telefonla senkronla" denince sunucu açılır. Ekranda bir QR gösterilir: adres, port, tek kullanımlık anahtar. Telefon QR'ı okur ve senkronu kendisi yürütür. İş bitince ya da 5 dakika işlem olmayınca sunucu kapanır. Arka planda servis, dosya izleyici ya da zamanlayıcı yoktur; bilgisayar yorulmaz.
+- **Keşif QR ile.** iOS'ta UDP multicast özel izin gerektirdiğinden yayın kullanılmaz. Aynı ağ gerekir; QR'da birden çok yerel adres bulunur.
+- **Güvenlik.** Tek kullanımlık anahtarla iki cihaz eşleşir (X25519 ya da QR'daki rastgele anahtar). İstekler HMAC ile imzalanır, gövde AES-GCM ile şifrelenir. Eşleşme anahtarı Keystore/Keychain/DPAPI'de saklanır; sonraki senkronlarda QR gerekmez, ama sunucu yine yalnız istenince açılır. Uçlar yalnız Folio'nun kendi kayıtlarını verir, dosya sistemine yol kabul etmez.
+- **Ne taşınır.** Kayıt düzeyinde, dosya değil:
+  - ajanda not, iş ve süreleri;
+  - UETS'de elle yapılan eşleştirmeler;
+  - UYAP Dosyalarım'daki takip listesi ve dosya kayıtları;
+  - isteğe bağlı olarak indirilmiş evraklar (içerik özetiyle, bir kez).
+
+  Portal verisi (dosya, duruşma) taşınabilir ama §9.4 gözlem damgalarıyla birleştirilir: masaüstünün web verisi telefonun mobil verisini zenginleştirir, ezmez.
+- **Fark motoru.** LifeOs-Anywhere'in `computeSyncPlan` üç yönlü karşılaştırması kayıtlara uyarlanır:
+  - her kaydın anahtarı, `updated` damgası, içerik özeti ve silme işareti (tombstone) tutulur;
+  - son senkronun manifesti saklanır;
+  - yalnız bir tarafta değişen kayıt o taraftan alınır;
+  - iki tarafta değişen avukat kaydında yenisi kazanır, öbürü "çakışma" notu olarak saklanır; portal kaydı §9.4 kuralıyla birleştirilir.
+- **Platform.** Android, iOS, Windows ve Linux. Telefon her zaman başlatan taraftır; böylece iOS'un arka plan kısıtı sorun olmaz.
 
 **Sıra:** (1) dar ekran düzenleri ve testleri (360–430 px), (2) telefon giriş görünümü adaptörü ve güvenli saklama, (3) telefon kabulü P16'da.
 
