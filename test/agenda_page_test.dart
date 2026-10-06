@@ -2,6 +2,7 @@ import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_hearing.dart';
+import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/agenda/agenda_page.dart';
 import 'package:flutter/material.dart';
@@ -58,6 +59,7 @@ void main() {
           body: AgendaPage(
             database: db,
             web: UyapWebService.forTesting(),
+            mobile: UyapMobileApi.forTesting(Uri.parse('http://127.0.0.1:9/')),
             now: () => now,
           ),
         ),
@@ -90,6 +92,7 @@ void main() {
     // The deadline in the card of what is coming.
     expect(find.text('İstinaf süresi son gün'), findsOneWidget);
     expect(find.text('UYAP Web · bağlı değil'), findsOneWidget);
+    expect(find.text('UYAP Mobil · bağlan'), findsOneWidget);
   });
 
   testWidgets('a task added to the hearing is kept and shown in its card', (

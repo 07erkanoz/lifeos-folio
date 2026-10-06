@@ -12,7 +12,9 @@ import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_hearing.dart';
+import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
+import 'mobile_connect.dart';
 
 /// The agenda: the hearings both UYAP portals report, merged, and the
 /// lawyer's own notes, tasks and deadlines, laid out as the approved design
@@ -22,6 +24,7 @@ class AgendaPage extends StatefulWidget {
     super.key,
     this.database,
     this.web,
+    this.mobile,
     this.now,
     this.onOpenCase,
     this.onPetition,
@@ -31,6 +34,7 @@ class AgendaPage extends StatefulWidget {
   /// Tests pass their own; otherwise the one in Folio's data folder.
   final PortalDatabase? database;
   final UyapWebService? web;
+  final UyapMobileApi? mobile;
   final DateTime Function()? now;
 
   /// Opens the case with this [caseKey] in UYAP Dosyalarım; null when the
@@ -106,15 +110,19 @@ class _AgendaPageState extends State<AgendaPage> {
   Map<String, PortalCase> _cases = const {};
   bool _syncing = false;
   String? _syncError;
+  bool _mobileSyncing = false;
+  String? _mobileError;
   Timer? _clock;
 
   DateTime _now() => (widget.now ?? DateTime.now)();
   UyapWebService get _web => widget.web ?? UyapWebService.instance;
+  UyapMobileApi get _mobile => widget.mobile ?? UyapMobileApi.instance;
 
   @override
   void initState() {
     super.initState();
     _web.session.addListener(_sessionChanged);
+    _mobile.session.addListener(_mobileChanged);
     _clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -125,6 +133,7 @@ class _AgendaPageState extends State<AgendaPage> {
   void dispose() {
     _clock?.cancel();
     _web.session.removeListener(_sessionChanged);
+    _mobile.session.removeListener(_mobileChanged);
     super.dispose();
   }
 
@@ -133,12 +142,47 @@ class _AgendaPageState extends State<AgendaPage> {
     if (_web.connected) unawaited(_syncWeb());
   }
 
+  void _mobileChanged() {
+    if (mounted) setState(() {});
+    if (_mobile.connected) unawaited(_syncMobile());
+  }
+
+  /// The mobile API's hearings, merged with the web's: its shorter answer
+  /// never replaces the web's and never removes anything (§9.7).
+  Future<void> _syncMobile() async {
+    final db = _db;
+    if (db == null || _mobileSyncing || !_mobile.connected) return;
+    setState(() {
+      _mobileSyncing = true;
+      _mobileError = null;
+    });
+    try {
+      final result = await syncHearings(
+        PortalChannel.uyapMobile,
+        db,
+        _mobile.hearingRows,
+      );
+      _mobileError = result.complete ? null : 'Bazı tarihler alınamadı';
+    } catch (e) {
+      _mobileError = '$e';
+    } finally {
+      if (mounted) {
+        setState(() => _mobileSyncing = false);
+        _reload();
+        widget.onChanged?.call();
+      }
+    }
+  }
+
   Future<void> _open() async {
     final db = widget.database ?? await PortalDatabase.shared();
     if (!mounted) return;
     _db = db;
     _reload();
-    if (_web.connected) await _syncWeb();
+    await Future.wait([
+      if (_web.connected) _syncWeb(),
+      if (_mobile.connected) _syncMobile(),
+    ]);
   }
 
   (DateTime, DateTime) get _range => switch (_view) {
@@ -505,7 +549,26 @@ class _AgendaPageState extends State<AgendaPage> {
         spacing: 8,
         runSpacing: 6,
         children: [
-          chip(scheme.outline, 'UYAP Mobil · bağlı değil'),
+          if (!_mobile.connected)
+            chip(
+              scheme.outline,
+              'UYAP Mobil · bağlan',
+              onTap: () => connectUyapMobile(context, api: _mobile),
+            )
+          else if (_mobileSyncing)
+            chip(AgendaColors.ok, 'UYAP Mobil · duruşmalar güncelleniyor…')
+          else if (_mobileError != null)
+            chip(
+              AgendaColors.task,
+              'UYAP Mobil · $_mobileError',
+              onTap: _syncMobile,
+            )
+          else
+            chip(
+              AgendaColors.ok,
+              'UYAP Mobil · ${_mobile.session.value?.user ?? 'bağlı'}',
+              onTap: _syncMobile,
+            ),
           web,
           chip(scheme.outline, 'UETS · bağlı değil'),
         ],

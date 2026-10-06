@@ -11,19 +11,40 @@ import '../../services/uyap/uyap_web_service.dart';
 /// closes with the code e-Devlet sends the lawyer back with, or with null
 /// when it is closed first.
 class EdevletWebDialog extends StatefulWidget {
-  const EdevletWebDialog({super.key, required this.page, required this.hint});
+  const EdevletWebDialog({
+    super.key,
+    required this.page,
+    required this.hint,
+    this.isReturn,
+    this.state,
+  });
 
   final Uri page;
   final String hint;
+
+  /// Whether a page is the return this login waits for; the web portal's
+  /// when not given. The mobile API returns elsewhere, and a code for one
+  /// is useless to the other.
+  final bool Function(Uri url)? isReturn;
+
+  /// The state this login sent, which the return must carry back.
+  final String? state;
 
   static Future<String?> show(
     BuildContext context, {
     required Uri page,
     required String hint,
+    bool Function(Uri url)? isReturn,
+    String? state,
   }) => showDialog<String>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => EdevletWebDialog(page: page, hint: hint),
+    builder: (_) => EdevletWebDialog(
+      page: page,
+      hint: hint,
+      isReturn: isReturn,
+      state: state,
+    ),
   );
 
   /// WebView2 keeps its profile beside the program by default, which an
@@ -79,8 +100,16 @@ class _EdevletWebDialogState extends State<EdevletWebDialog> {
   }
 
   void _watch(String url) {
-    if (_done || !url.startsWith(UyapWebService.edevletReturn)) return;
-    final code = Uri.tryParse(url)?.queryParameters['code'];
+    final uri = Uri.tryParse(url);
+    if (_done || uri == null) return;
+    final returned =
+        widget.isReturn?.call(uri) ??
+        url.startsWith(UyapWebService.edevletReturn);
+    if (!returned) return;
+    if (widget.state != null && uri.queryParameters['state'] != widget.state) {
+      return;
+    }
+    final code = uri.queryParameters['code'];
     if (code == null || code.isEmpty) return;
     _done = true;
     unawaited(_controller.stop());
