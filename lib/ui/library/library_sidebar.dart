@@ -28,6 +28,9 @@ class LibrarySidebar extends StatelessWidget {
   /// the cases already kept are shown.
   final bool uyapAvailable;
 
+  /// The desktop's first page, at the top of the list.
+  final bool showHome;
+
   /// The agenda's hearings today, for the badge beside Ajanda.
   final int agendaToday;
 
@@ -47,6 +50,7 @@ class LibrarySidebar extends StatelessWidget {
     this.uyapCases = const [],
     this.uyapFolder,
     this.uyapAvailable = false,
+    this.showHome = false,
     this.agendaToday = 0,
     this.uetsUnread = 0,
   });
@@ -114,6 +118,15 @@ class LibrarySidebar extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
+            if (showHome)
+              _nav(
+                context,
+                Icons.home_outlined,
+                'Anasayfa',
+                'home',
+                null,
+                key: const ValueKey('nav-home'),
+              ),
             _nav(
               context,
               Icons.grid_view_rounded,

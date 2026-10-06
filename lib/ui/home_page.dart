@@ -35,6 +35,7 @@ import 'widgets/document_actions_dialog.dart';
 import 'widgets/spreadsheet_editor.dart';
 import 'widgets/spreadsheet_viewer.dart';
 import 'widgets/hover_document_preview.dart';
+import 'desktop/desktop_home.dart';
 import 'library/search_controls.dart';
 import 'library/collapsing_overview.dart';
 
@@ -593,7 +594,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final bool _includeSubfolders = true;
   bool _newEditorOpened = false;
   bool _isNewDocument = false;
-  String _group = 'all';
+
+  /// The desktop opens on its first page; a phone has a first page of its
+  /// own, and tests start in the archive.
+  String _group =
+      Platform.isAndroid ||
+          Platform.isIOS ||
+          Platform.environment.containsKey('FLUTTER_TEST')
+      ? 'all'
+      : 'home';
 
   /// The UYAP cases kept on this computer, listed under UYAP in the sidebar.
   List<(UyapCaseRecord, int)> _uyapCases = const [];
@@ -940,6 +949,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // but places of their own, so the archive's filters are left as they
     // were: coming back finds the documents where they were left.
     if (value == 'caselaw' ||
+        value == 'home' ||
         value == 'agenda' ||
         value == 'uets' ||
         _isUyapGroup(value)) {
@@ -958,7 +968,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// The office's own pages, which bring their headings and fill the page.
-  static bool _isFullPage(String group) => group == 'agenda' || group == 'uets';
+  static bool _isFullPage(String group) =>
+      group == 'home' || group == 'agenda' || group == 'uets';
 
   static bool _isUyapGroup(String group) =>
       group == 'uyap' || group.startsWith('uyap:');
@@ -976,6 +987,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// first page.
   int _deadlinesToday = 0;
   NextHearingLine? _nextHearing;
+
+  /// The office as the desktop's first page shows it.
+  DesktopHomeOffice _office = const DesktopHomeOffice();
 
   /// "Av. Erkan Öz": the profile's lawyer, else the UYAP Mobil user.
   String _lawyerName = '';
@@ -1019,6 +1033,24 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final next = db
           .hearings(from: now, to: today.add(const Duration(days: 31)))
           .firstOrNull;
+      final notices = db.notices().where((n) => n.message.read == null).toList()
+        ..sort(
+          (a, b) => (b.message.sent ?? DateTime(0)).compareTo(
+            a.message.sent ?? DateTime(0),
+          ),
+        );
+      final office = DesktopHomeOffice(
+        today: db.hearings(from: today, to: tomorrow),
+        next: db
+            .hearings(from: tomorrow, to: today.add(const Duration(days: 90)))
+            .firstOrNull,
+        deadlines: db
+            .agenda(from: today, to: today.add(const Duration(days: 60)))
+            .where((i) => i.kind == 'deadline' && !i.done && i.at != null)
+            .toList(),
+        unread: unread,
+        newest: notices.firstOrNull?.message,
+      );
       NextHearingLine? line;
       if (next != null) {
         String two(int v) => v.toString().padLeft(2, '0');
@@ -1055,6 +1087,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _uetsUnread = unread;
           _deadlinesToday = deadlines;
           _nextHearing = line;
+          _office = office;
         });
       }
     } catch (_) {
@@ -1151,6 +1184,36 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       }
     }
   }
+
+  /// The desktop's first page (docs/design/masaustu-anasayfa-taslak.png).
+  Widget _desktopHome() => DesktopHome(
+    name: _lawyerName,
+    recent: _recentDocuments.files,
+    office: _office,
+    uyapFolder: UyapSettings.instance.folder,
+    onSearch: (text) async {
+      await _selectGroup('all');
+      if (!mounted) return;
+      _searchController.text = text;
+      _library.setQuery(text);
+    },
+    onOpen: (file) => unawaited(_openRecent(file)),
+    onEdit: (file) => unawaited(_openRecent(file, edit: _editsAt(file))),
+    onSendUyap: (file) async {
+      await _openRecent(file, edit: true);
+      if (!mounted) return;
+      showNotice(
+        context,
+        'UYAP’a göndermek için belgeyi imzalayın',
+        detail:
+            'Editörde “UYAP’a gönder” belgeyi imzalatır ve dosyasına gönderir.',
+      );
+    },
+    onArchive: () => unawaited(_selectGroup('all')),
+    onDrafts: () => unawaited(_openRecovery()),
+    onAgenda: () => unawaited(_selectGroup('agenda')),
+    onUets: () => unawaited(_selectGroup('uets')),
+  );
 
   Widget _agendaPage() => AgendaPage(
     onChanged: () => unawaited(_countAgenda()),
@@ -1617,6 +1680,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? _gallery(mobile)
                                               : _isUyapGroup(_group)
                                               ? _uyapPage()
+                                              : _group == 'home'
+                                              ? _desktopHome()
                                               : _group == 'agenda'
                                               ? _agendaPage()
                                               : _group == 'uets'
@@ -1851,6 +1916,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     agendaToday: _agendaToday,
     uetsUnread: _uetsUnread,
     uyapAvailable: true,
+    showHome: !(Platform.isAndroid || Platform.isIOS),
     selectFolder: (id) async {
       _closeDrawer();
       if (!await _leaveEditor()) return;
