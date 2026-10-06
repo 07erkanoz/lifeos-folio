@@ -348,7 +348,11 @@ class UyapCasePanelController extends ChangeNotifier {
       if (raw['tumEvraklar'] is List) {
         raw['tumEvraklar'] = {'': raw['tumEvraklar']};
       }
-      final fetched = keyDocuments([UyapDocumentPage.fromJson(raw)]);
+      final aligned = alignKeys(
+        keyDocuments([UyapDocumentPage.fromJson(raw)]),
+        _record?.documents ?? const [],
+      );
+      final fetched = aligned.docs;
       _liveDocuments = {
         for (final d in fetched) ...{
           d.key: d,
@@ -356,7 +360,10 @@ class UyapCasePanelController extends ChangeNotifier {
         },
       };
       final before = _record;
-      final documents = enrichDocuments(fetched, before?.documents ?? const []);
+      final documents = enrichDocuments(fetched, [
+        for (final d in before?.documents ?? const <UyapCaseDocument>[])
+          if (!aligned.retired.contains(d.key)) d,
+      ]);
       String text(String key) => '${details[key] ?? ''}'.trim();
       // What the web gave before stays: the mobile API knows less of a case.
       final d = before?.details;
@@ -386,11 +393,95 @@ class UyapCasePanelController extends ChangeNotifier {
     },
   );
 
+  /// [fetched] with the keys the kept list knows its documents by. The
+  /// web and the mobile API key one document alike most of the time, by
+  /// its unit's number; where they do not (a number in two groups, a group
+  /// named another way, a date written another way), a kept document with
+  /// the same number, else the same kind, day and description, is taken
+  /// for it when it is the only one. Its attachments follow it; a kept
+  /// document is claimed once. A copy an earlier mobile refresh kept under
+  /// its own key beside the web's is [retired]: the web's key stays.
+  @visibleForTesting
+  static ({List<UyapCaseDocument> docs, Set<String> retired}) alignKeys(
+    List<UyapCaseDocument> fetched,
+    List<UyapCaseDocument> kept,
+  ) {
+    if (kept.isEmpty) return (docs: fetched, retired: const {});
+    String fold(String v) => UyapWebService.fold(v).trim();
+    String day(UyapCaseDocument d) {
+      final t = d.date;
+      return t == null ? '' : '${t.year}-${t.month}-${t.day}';
+    }
+
+    String look(UyapCaseDocument d) =>
+        '${fold(d.type)}|${day(d)}|${fold(d.description)}';
+    bool numbered(UyapCaseDocument d) => d.number.isNotEmpty && d.number != '0';
+    final keptKeys = {for (final d in kept) d.key};
+    final fetchedKeys = {for (final d in fetched) d.key};
+    // Only kept documents the fetched list does not name are candidates.
+    final open = [
+      for (final d in kept)
+        if (!fetchedKeys.contains(d.key)) d,
+    ];
+    final claimed = <String>{};
+    final retired = <String>{};
+    UyapCaseDocument? only(Iterable<UyapCaseDocument> found) {
+      final left = found.where((d) => !claimed.contains(d.key)).toList();
+      return left.length == 1 ? left.single : null;
+    }
+
+    UyapCaseDocument? twin(UyapCaseDocument d) {
+      if (numbered(d)) {
+        final same = open.where((k) => k.number == d.number).toList();
+        return only(same) ??
+            only(same.where((k) => fold(k.source) == fold(d.source)));
+      }
+      return only(open.where((k) => look(k) == look(d)));
+    }
+
+    UyapCaseDocument rekey(UyapCaseDocument d, String key) => UyapCaseDocument(
+      key: key,
+      documentId: d.documentId,
+      caseId: d.caseId,
+      type: d.type,
+      number: d.number,
+      approved: d.approved,
+      sender: d.sender,
+      description: d.description,
+      source: d.source,
+      sentToSystem: d.sentToSystem,
+      parentKey: d.parentKey,
+      attachments: [
+        for (final a in d.attachments)
+          a.withKey(
+            a.key.startsWith('${d.key}:')
+                ? '$key${a.key.substring(d.key.length)}'
+                : a.key,
+            parentKey: key,
+          ),
+      ],
+    );
+
+    final docs = [
+      for (final d in fetched)
+        () {
+          final match = twin(d);
+          if (match == null) return d;
+          claimed.add(match.key);
+          // The copy kept under the mobile API's key gives way to the web's.
+          if (keptKeys.contains(d.key)) retired.add(d.key);
+          return rekey(d, match.key);
+        }(),
+    ];
+    return (docs: docs, retired: retired);
+  }
+
   /// The mobile API's list [fetched] merged into the list kept: it adds
   /// and fills, it never takes away (UYGULAMAPLANI §9.4). A document the
   /// web listed and the mobile API does not (a tied case's group, often)
   /// stays; a field the mobile API leaves empty keeps what the web gave;
   /// the session's ids are the mobile API's. Newest first.
+
   @visibleForTesting
   static List<UyapCaseDocument> enrichDocuments(
     List<UyapCaseDocument> fetched,

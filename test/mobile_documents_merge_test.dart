@@ -14,7 +14,7 @@ UyapCaseDocument doc(
   documentId: id,
   caseId: '',
   type: type,
-  number: key,
+  number: key.startsWith('~') ? '' : key.split('@').first,
   approved: approved,
   sender: '',
   description: '',
@@ -70,5 +70,34 @@ void main() {
     expect(twenty.source, '2026/295(Talimat Dosyası)');
     expect(twenty.attachments.single.type, 'Tensip Zaptı');
     expect(twenty.attachments.single.documentId, 'a1');
+  });
+
+  test('a document the web and the mobile API key apart is one document', () {
+    final kept = [
+      // The web: a number in two groups, so told apart by the group.
+      doc(
+        '55@2024-700',
+        type: 'Duruşma Zaptı',
+        source: '2024/700(Ceza Dava Dosyası)',
+        approved: '17/06/2026 10:00',
+      ),
+      // No number: known by what it is; the web writes the date its way.
+      doc('~abc', type: 'Tebligat', approved: '01/06/2026 09:00'),
+      // An earlier mobile refresh's copy of the first, under its own key.
+      doc('55', type: 'Duruşma Zaptı', approved: '17.06.2026'),
+    ];
+    final fetched = [
+      doc('55', id: 'e55', type: 'Duruşma Zaptı', approved: '17.06.2026'),
+      doc('~xyz', id: 'e9', type: 'Tebligat', approved: '01.06.2026'),
+    ];
+    final aligned = UyapCasePanelController.alignKeys(fetched, kept);
+    expect(aligned.docs.map((d) => d.key), ['55@2024-700', '~abc']);
+    expect(aligned.docs.first.documentId, 'e55');
+    expect(aligned.retired, {'55'});
+    final merged = UyapCasePanelController.enrichDocuments(aligned.docs, [
+      for (final d in kept)
+        if (!aligned.retired.contains(d.key)) d,
+    ]);
+    expect(merged.map((d) => d.key).toSet(), {'55@2024-700', '~abc'});
   });
 }
