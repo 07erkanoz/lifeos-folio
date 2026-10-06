@@ -653,7 +653,7 @@ Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 | T4 | Gözlem damgalı birleştirme: web ve mobil birbirini ezmez, eksiklerini tamamlar (§9.4) | P06/P07 | Tamam |
 | T5 | Yerel portal veritabanı: dosya, duruşma, not/iş | P02 | Tamam |
 | T6 | Web duruşma listesi (29 günlük pencereler), normalize ve birleştirme | P10 | Tamam |
-| T7 | Kenar çubuğu BÜRO bölümü ve Ajanda ekranı (taslağın aynısı) | P10/P11 | Sırada |
+| T7 | Kenar çubuğu BÜRO bölümü ve Ajanda ekranı (taslağın aynısı) | P10/P11 | Tamam (önizleme: `tool/agenda_preview.dart`) |
 | T8 | Süre motoru ve yaklaşan süreler | P10 | Sırada |
 | T9 | UYAP Mobil API girişi, portföy ve duruşma; web ile birleştirme | P04/P07 | Sırada |
 | T10 | UETS girişi, Tebligatlarım ekranı ve dosya eşleştirme | P05/P08/P09 | Sırada |

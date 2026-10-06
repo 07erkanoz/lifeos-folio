@@ -27,6 +27,12 @@ class LibrarySidebar extends StatelessWidget {
   /// Whether UYAP can be reached from this Folio at all: on a phone only
   /// the cases already kept are shown.
   final bool uyapAvailable;
+
+  /// The agenda's hearings today, for the badge beside Ajanda.
+  final int agendaToday;
+
+  /// UETS notifications not yet opened, for the badge beside UETS.
+  final int uetsUnread;
   const LibrarySidebar({
     super.key,
     required this.library,
@@ -41,6 +47,8 @@ class LibrarySidebar extends StatelessWidget {
     this.uyapCases = const [],
     this.uyapFolder,
     this.uyapAvailable = false,
+    this.agendaToday = 0,
+    this.uetsUnread = 0,
   });
 
   bool get _showUyap => uyapAvailable || uyapCases.isNotEmpty;
@@ -62,7 +70,7 @@ class LibrarySidebar extends StatelessWidget {
     return Material(
       color: scheme.surface,
       child: Container(
-        width: compact ? 76 : 224,
+        width: compact ? 76 : 236,
         decoration: BoxDecoration(
           border: Border(right: BorderSide(color: scheme.outlineVariant)),
         ),
@@ -130,15 +138,42 @@ class LibrarySidebar extends StatelessWidget {
             // İçtihat araması buradan kaldırıldı: bu liste arşivin
             // görünümlerini sayar, o ise dışarıdaki bir bankaya sorulan
             // ayrı bir soru. Yazarken sorulur, editörün araç çubuğundan.
-            if (compact && _showUyap)
+            // The office: the cases, the agenda and the notifications, one
+            // under another (UYGULAMAPLANI §10).
+            if (!compact) _heading(context, 'BÜRO'),
+            if (_showUyap)
               _nav(
                 context,
                 Icons.gavel_rounded,
                 'UYAP Dosyalarım',
                 'uyap',
                 uyapCases.length,
+                key: const ValueKey('uyap-folder'),
+                selected: group == 'uyap' || group.startsWith('uyap:'),
               ),
-            const SizedBox(height: 20),
+            _nav(
+              context,
+              Icons.event_note_rounded,
+              'Ajanda',
+              'agenda',
+              null,
+              key: const ValueKey('agenda'),
+              badge: agendaToday > 0
+                  ? _badge(context, 'Bugün $agendaToday', danger: false)
+                  : null,
+            ),
+            _nav(
+              context,
+              Icons.mark_email_unread_outlined,
+              'UETS Tebligatlarım',
+              'uets',
+              null,
+              key: const ValueKey('uets'),
+              badge: uetsUnread > 0
+                  ? _badge(context, '$uetsUnread', danger: true)
+                  : null,
+            ),
+            const SizedBox(height: 14),
             if (!compact)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -175,7 +210,7 @@ class LibrarySidebar extends StatelessWidget {
                         vertical: 8,
                       ),
                       children: [
-                        if (_showUyap) ..._uyap(context),
+                        if (_showUyap) ..._uyapCases(context),
                         for (final source in library.sources.where(
                           (s) => s.folder && !_isUyapFolder(s.path),
                         ))
@@ -383,48 +418,12 @@ class LibrarySidebar extends StatelessWidget {
     );
   }
 
-  /// UYAP among the folders: its cases open beneath it once it is chosen.
-  List<Widget> _uyap(BuildContext context) {
+  /// The cases of UYAP Dosyalarım, at the head of the list once it is
+  /// chosen: the list scrolls, the office's entries above it do not.
+  List<Widget> _uyapCases(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final open = group == 'uyap' || group.startsWith('uyap:');
-    final folder = library.sources
-        .where((s) => s.folder && _isUyapFolder(s.path))
-        .firstOrNull;
     return [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 3),
-        child: Tooltip(
-          message: folder?.path ?? 'UYAP dosyaları',
-          child: ListTile(
-            key: const ValueKey('uyap-folder'),
-            dense: true,
-            minTileHeight: 42,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            selected: group == 'uyap',
-            selectedTileColor: scheme.primary.withValues(alpha: .08),
-            leading: Icon(
-              open ? Icons.folder_open_rounded : Icons.folder_special_outlined,
-              size: 18,
-              color: scheme.onSurfaceVariant,
-            ),
-            minLeadingWidth: 18,
-            title: const Text(
-              'UYAP Dosyalarım',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12),
-            ),
-            trailing: Text(
-              '${uyapCases.length}',
-              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
-            ),
-            onTap: () => selectGroup('uyap'),
-          ),
-        ),
-      ),
       if (open)
         for (final (key, number, court, fresh) in uyapCases)
           Padding(
@@ -478,21 +477,59 @@ class LibrarySidebar extends StatelessWidget {
     ];
   }
 
+  Widget _heading(BuildContext context, String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(26, 14, 16, 4),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    ),
+  );
+
+  /// The pill beside Ajanda and UETS: the accent for today's hearings, red
+  /// for unread notifications.
+  Widget _badge(BuildContext context, String text, {required bool danger}) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: danger
+              ? const Color(0xFFD93B3B)
+              : Theme.of(context).colorScheme.primary,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+      );
+
   Widget _nav(
     BuildContext context,
     IconData icon,
     String title,
     String value,
-    int? count,
-  ) {
+    int? count, {
+    Key? key,
+    bool? selected,
+    Widget? badge,
+  }) {
     final scheme = Theme.of(context).colorScheme;
-    final selected = group == value && library.sourceId == null;
+    final isSelected = selected ?? (group == value && library.sourceId == null);
     return Padding(
+      key: key,
       padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 12, vertical: 3),
       child: Tooltip(
         message: compact ? title : '',
         child: Material(
-          color: selected
+          color: isSelected
               ? scheme.primary.withValues(alpha: .09)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(9),
@@ -509,7 +546,9 @@ class LibrarySidebar extends StatelessWidget {
                   Icon(
                     icon,
                     size: 19,
-                    color: selected ? scheme.primary : scheme.onSurfaceVariant,
+                    color: isSelected
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
                   ),
                   if (!compact) ...[
                     const SizedBox(width: 11),
@@ -518,14 +557,15 @@ class LibrarySidebar extends StatelessWidget {
                         title,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: selected
+                          fontWeight: isSelected
                               ? FontWeight.w700
                               : FontWeight.w500,
-                          color: selected ? scheme.primary : scheme.onSurface,
+                          color: isSelected ? scheme.primary : scheme.onSurface,
                         ),
                       ),
                     ),
-                    if (count != null)
+                    ?badge,
+                    if (count != null && badge == null)
                       Text(
                         '$count',
                         style: TextStyle(

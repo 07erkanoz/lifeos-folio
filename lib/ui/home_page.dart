@@ -1,3 +1,8 @@
+import 'agenda/agenda_page.dart';
+import 'agenda/uets_placeholder_page.dart';
+import '../services/portal/observed.dart' show caseKey;
+import '../services/portal/portal_database.dart';
+
 import 'dart:io';
 import 'dart:async';
 
@@ -613,6 +618,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // archive, are searched from the next start.
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(searchUyapFolder(_library).catchError((Object _) => false));
+      unawaited(_countAgenda());
     }
     _incoming = _intents.paths.listen(
       (paths) {
@@ -883,7 +889,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // Case law and the UYAP cases are not ways of looking at the archive
     // but places of their own, so the archive's filters are left as they
     // were: coming back finds the documents where they were left.
-    if (value == 'caselaw' || _isUyapGroup(value)) return;
+    if (value == 'caselaw' ||
+        value == 'agenda' ||
+        value == 'uets' ||
+        _isUyapGroup(value)) {
+      return;
+    }
     final types = value == 'all'
         ? <String>[]
         : EvrakFormat.supportedExtensions
@@ -898,6 +909,43 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   static bool _isUyapGroup(String group) =>
       group == 'uyap' || group.startsWith('uyap:');
+
+  /// The hearings today, for the badge beside Ajanda in the sidebar.
+  int _agendaToday = 0;
+
+  Future<void> _countAgenda() async {
+    try {
+      final db = await PortalDatabase.shared();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final count = db
+          .hearings(from: today, to: today.add(const Duration(days: 1)))
+          .length;
+      if (mounted && count != _agendaToday) {
+        setState(() => _agendaToday = count);
+      }
+    } catch (_) {
+      // The badge is a convenience; the agenda shows the same when opened.
+    }
+  }
+
+  /// The UYAP Dosyalarım key of the case the agenda names by [caseKey], if
+  /// the case is kept there.
+  String? _uyapKeyFor(String key) {
+    for (final (record, _) in _uyapCases) {
+      if (caseKey(record.number, record.court) == key) return record.key;
+    }
+    return null;
+  }
+
+  Widget _agendaPage() => AgendaPage(
+    onChanged: () => unawaited(_countAgenda()),
+    onOpenCase: (key) {
+      final found = _uyapKeyFor(key);
+      if (found != null) setState(() => _group = 'uyap:$found');
+      return found != null;
+    },
+  );
 
   Widget _uyapPage() => UyapCasesPage(
     caseKey: _group.startsWith('uyap:') ? _group.substring(5) : null,
@@ -1302,6 +1350,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                             ? _gallery(mobile)
                                             : _isUyapGroup(_group)
                                             ? _uyapPage()
+                                            : _group == 'agenda'
+                                            ? _agendaPage()
+                                            : _group == 'uets'
+                                            ? const UetsPlaceholderPage()
                                             : _overview(),
                                       ),
                                       TransitionPane(
@@ -1524,6 +1576,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         (record.key, record.number, record.court, record.fresh.length),
     ],
     uyapFolder: UyapSettings.instance.folder,
+    agendaToday: _agendaToday,
     uyapAvailable: Platform.isLinux || Platform.isWindows || Platform.isMacOS,
     selectFolder: (id) async {
       _closeDrawer();
