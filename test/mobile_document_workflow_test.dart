@@ -97,7 +97,7 @@ void main() {
         () => find.byType(SignatureBanner).evaluate().isNotEmpty,
       );
       expect(find.byType(EditorWidget), findsNothing);
-      expect(find.text('Paylaş'), findsOneWidget);
+      expect(find.byTooltip('Paylaş'), findsOneWidget);
       await tester.tap(find.byTooltip('Belge işlemleri'));
       await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('UDF e-imzala'), findsNothing);
@@ -106,7 +106,8 @@ void main() {
       await tester.tap(find.text('Düzenle'));
       await helpers.ready(
         tester,
-        () => find.byType(QuillEditor).evaluate().isNotEmpty,
+        () =>
+            find.byKey(const ValueKey('editor-flowing')).evaluate().isNotEmpty,
       );
       expect(find.byType(DocumentRuler), findsNothing);
       // A phone shows the text flowing at its width, not an A4 sheet; the

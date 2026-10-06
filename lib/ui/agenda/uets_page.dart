@@ -13,6 +13,7 @@ import '../../services/uets/notice_matcher.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import 'agenda_page.dart' show AgendaColors;
+import '../mobile/scroll_chrome.dart';
 import 'channel_bar.dart';
 import 'uets_connect.dart';
 
@@ -173,8 +174,13 @@ class _UetsPageState extends State<UetsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _topBar(context),
-          _channel(context),
+          FoldingChrome(
+            enabled: _narrow,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [_topBar(context), _channel(context)],
+            ),
+          ),
           Expanded(
             child: Padding(
               padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 16),
@@ -183,8 +189,16 @@ class _UetsPageState extends State<UetsPage> {
                   final main = Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _stats(context),
-                      const SizedBox(height: 12),
+                      FoldingChrome(
+                        enabled: _narrow,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _stats(context),
+                            const SizedBox(height: 12),
+                          ],
+                        ),
+                      ),
                       Expanded(child: _list(context)),
                     ],
                   );

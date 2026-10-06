@@ -65,7 +65,7 @@ void main() {
 
     // The header and the action row step aside; the way back stays.
     expect(header, findsNothing);
-    expect(find.text('Paylaş'), findsNothing);
+    expect(find.byTooltip('Paylaş'), findsNothing);
     expect(
       find.byKey(const ValueKey('preview-exit-fullscreen')),
       findsOneWidget,
@@ -74,7 +74,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('preview-exit-fullscreen')));
     await tester.pump();
     expect(header, findsOneWidget);
-    expect(find.text('Paylaş'), findsOneWidget);
+    expect(find.byTooltip('Paylaş'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 100));

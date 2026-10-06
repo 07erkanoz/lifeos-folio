@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/evrak_file.dart';
 import '../../services/editor/text_anchor.dart';
 import '../../services/preview/preview_cache.dart';
+import 'flowing_document_view.dart';
 import 'pdf_viewer_widget.dart';
 import 'signature_banner.dart';
 
@@ -32,6 +33,10 @@ class DocumentPreviewWidget extends StatefulWidget {
 
 class _DocumentPreviewWidgetState extends State<DocumentPreviewWidget> {
   late Future<DocumentPreview> _preview;
+
+  /// The reader's choice of view; null for the width's: on a phone the
+  /// text flows at its width (UYGULAMAPLANI §13), on a computer the pages.
+  bool? _flowChoice;
   Future<DocumentPreview> _load() => PreviewCache.load(widget.file);
   @override
   void initState() {
@@ -59,6 +64,8 @@ class _DocumentPreviewWidgetState extends State<DocumentPreviewWidget> {
       }
       final model = snapshot.data!.model;
       final bytes = snapshot.data!.pdfBytes;
+      final width = MediaQuery.sizeOf(context).width;
+      final flows = _flowChoice ?? width < 600;
       return Column(
         children: [
           if (model.metadata['previewNote'] case final String note)
@@ -68,11 +75,30 @@ class _DocumentPreviewWidgetState extends State<DocumentPreviewWidget> {
             ),
           SignatureBanner(model: model),
           Expanded(
-            child: PdfViewerWidget(
-              bytes: bytes,
-              onPastEnd: widget.onPastEnd,
-              chrome: widget.chrome,
-              onEditAt: widget.onEditAt,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (flows)
+                  FlowingDocumentView(model: model)
+                else
+                  PdfViewerWidget(
+                    bytes: bytes,
+                    onPastEnd: widget.onPastEnd,
+                    chrome: widget.chrome,
+                    onEditAt: widget.onEditAt,
+                  ),
+                // A phone's view and the page's, one tap apart.
+                if (width < 900)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: ViewSwitchChip(
+                      key: const ValueKey('preview-view-switch'),
+                      flowing: flows,
+                      onTap: () => setState(() => _flowChoice = !flows),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],

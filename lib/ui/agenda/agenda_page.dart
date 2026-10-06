@@ -18,6 +18,7 @@ import '../../services/portal/portal_sync.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
+import '../mobile/scroll_chrome.dart';
 import 'channel_bar.dart';
 
 /// The agenda: the hearings both UYAP portals report, merged, and the
@@ -326,8 +327,16 @@ class _AgendaPageState extends State<AgendaPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _narrow ? _topBarNarrow(context) : _topBar(context),
-          _channels(context),
+          FoldingChrome(
+            enabled: _narrow,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _narrow ? _topBarNarrow(context) : _topBar(context),
+                _channels(context),
+              ],
+            ),
+          ),
           Expanded(
             child: Padding(
               padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 16),
@@ -337,8 +346,16 @@ class _AgendaPageState extends State<AgendaPage> {
                   final main = Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _stats(context),
-                      const SizedBox(height: 12),
+                      FoldingChrome(
+                        enabled: _narrow,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _stats(context),
+                            const SizedBox(height: 12),
+                          ],
+                        ),
+                      ),
                       Expanded(child: _body(context)),
                     ],
                   );

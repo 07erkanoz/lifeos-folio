@@ -109,6 +109,7 @@ import '../../services/udf/udf_reader.dart';
 import '../../services/udf/udf_writer.dart';
 import '../theme/app_theme.dart';
 import 'editor_line_layout.dart';
+import '../mobile/scroll_chrome.dart';
 import 'editor_units.dart';
 
 List<dynamic> _pdfDeltaJson(DocModel model) =>
@@ -3597,155 +3598,164 @@ class _EditorWidgetState extends State<EditorWidget>
         },
         child: Column(
           children: [
-            Container(
-              key: const ValueKey('editor-toolbar'),
-              height:
-                  MediaQuery.sizeOf(context).width >= 1000 &&
-                      MediaQuery.sizeOf(context).height >= 550
-                  ? 88
-                  : 44,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                border: Border(
-                  bottom: BorderSide(
-                    color: isDark
-                        ? AppColors.darkBorder
-                        : AppColors.lightBorder,
+            FoldingChrome(
+              // On a phone the toolbar folds away while the text is
+              // scrolled, and returns when it is pulled back.
+              enabled: MediaQuery.sizeOf(context).width < 700,
+              child: Container(
+                key: const ValueKey('editor-toolbar'),
+                height:
+                    MediaQuery.sizeOf(context).width >= 1000 &&
+                        MediaQuery.sizeOf(context).height >= 550
+                    ? 88
+                    : 44,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkSurface
+                      : AppColors.lightSurface,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder,
+                    ),
                   ),
                 ),
-              ),
-              child: Row(
-                children: [
-                  EditorFileMenu(
-                    controller: _fileMenu,
-                    host: widget.fileHost,
-                    currentPath: _documentPath,
-                    busy: _isSaving || _signingNew || _sendingUyap,
-                    // The short toolbar has no room for a label under an icon.
-                    compact:
-                        MediaQuery.sizeOf(context).width < 1000 ||
-                        MediaQuery.sizeOf(context).height < 550,
-                    onSave: () => unawaited(_save()),
-                    onSaveAs: () => unawaited(_saveAs(_ownFormat)),
-                    onSaveIn: (format) => unawaited(_saveAs(format)),
-                    onPrint: () => unawaited(_print()),
-                    onHistory: () => unawaited(_history()),
-                    onSign: _canSignNew ? () => unawaited(_signNew()) : null,
-                    onSendUyap:
-                        Platform.isLinux ||
-                            Platform.isWindows ||
-                            Platform.isMacOS
-                        ? () => unawaited(_sendToUyap())
-                        : null,
-                    onUyapOperations:
-                        Platform.isLinux ||
-                            Platform.isWindows ||
-                            Platform.isMacOS
-                        ? () => unawaited(_openUyapOperations())
-                        : null,
-                    onNewWindow: EditorWindow.available
-                        ? () => unawaited(EditorWindow.open())
-                        : null,
-                  ),
-                  Expanded(
-                    child: EditorToolbar(
-                      controller: _active,
-                      onFind: _find,
-                      onHistory: _history,
-                      onSnippets: () => unawaited(_snippets()),
-                      onReadAloud: speechAvailable
-                          ? () => unawaited(_readAloud())
-                          : null,
-                      onDictate: speechAvailable
-                          ? () => unawaited(_dictate())
-                          : null,
-                      onCaseLaw: () =>
-                          setState(() => _caseLawOpen = !_caseLawOpen),
-                      caseLawOpen: _caseLawOpen,
-                      onUyapCase:
+                child: Row(
+                  children: [
+                    EditorFileMenu(
+                      controller: _fileMenu,
+                      host: widget.fileHost,
+                      currentPath: _documentPath,
+                      busy: _isSaving || _signingNew || _sendingUyap,
+                      // The short toolbar has no room for a label under an icon.
+                      compact:
+                          MediaQuery.sizeOf(context).width < 1000 ||
+                          MediaQuery.sizeOf(context).height < 550,
+                      onSave: () => unawaited(_save()),
+                      onSaveAs: () => unawaited(_saveAs(_ownFormat)),
+                      onSaveIn: (format) => unawaited(_saveAs(format)),
+                      onPrint: () => unawaited(_print()),
+                      onHistory: () => unawaited(_history()),
+                      onSign: _canSignNew ? () => unawaited(_signNew()) : null,
+                      onSendUyap:
                           Platform.isLinux ||
                               Platform.isWindows ||
                               Platform.isMacOS
-                          ? _toggleUyap
+                          ? () => unawaited(_sendToUyap())
                           : null,
-                      uyapCaseOpen: _uyapOpen,
-                      onReplace: () => _find(replace: true),
-                      onPrint: _print,
-                      onInsertImage: _insertImage,
-                      onInsertTable: _insertTable,
-                      hasHeader: _regions.containsKey('header'),
-                      hasFooter: _regions.containsKey('footer'),
-                      onToggleRegion: (key) => switch (key) {
-                        'page-numbers' => _pageNumbers(),
-                        'letterheads' => _letterheads(),
-                        _ => _toggleRegion(key),
-                      },
-                      onHelp: _showShortcuts,
-                      onHorizontalRuler: () => setState(
-                        () => _showHorizontalRuler = !_showHorizontalRuler,
-                      ),
-                      onVerticalRuler: () => setState(
-                        () => _showVerticalRuler = !_showVerticalRuler,
-                      ),
-                      showHorizontalRuler: _showHorizontalRuler,
-                      showVerticalRuler: _showVerticalRuler,
-                      onFontSelected: (name) async {
-                        try {
-                          await DocumentFonts.loadEditorFamilies([name]);
-                          if (mounted) setState(() {});
-                        } catch (e) {
-                          if (context.mounted) {
-                            showNotice(
-                              context,
-                              'Yazı tipi yüklenemedi',
-                              detail: '$e',
-                              kind: NoticeKind.error,
-                            );
+                      onUyapOperations:
+                          Platform.isLinux ||
+                              Platform.isWindows ||
+                              Platform.isMacOS
+                          ? () => unawaited(_openUyapOperations())
+                          : null,
+                      onNewWindow: EditorWindow.available
+                          ? () => unawaited(EditorWindow.open())
+                          : null,
+                    ),
+                    Expanded(
+                      child: EditorToolbar(
+                        controller: _active,
+                        onFind: _find,
+                        onHistory: _history,
+                        onSnippets: () => unawaited(_snippets()),
+                        onReadAloud: speechAvailable
+                            ? () => unawaited(_readAloud())
+                            : null,
+                        onDictate: speechAvailable
+                            ? () => unawaited(_dictate())
+                            : null,
+                        onCaseLaw: () =>
+                            setState(() => _caseLawOpen = !_caseLawOpen),
+                        caseLawOpen: _caseLawOpen,
+                        onUyapCase:
+                            Platform.isLinux ||
+                                Platform.isWindows ||
+                                Platform.isMacOS
+                            ? _toggleUyap
+                            : null,
+                        uyapCaseOpen: _uyapOpen,
+                        onReplace: () => _find(replace: true),
+                        onPrint: _print,
+                        onInsertImage: _insertImage,
+                        onInsertTable: _insertTable,
+                        hasHeader: _regions.containsKey('header'),
+                        hasFooter: _regions.containsKey('footer'),
+                        onToggleRegion: (key) => switch (key) {
+                          'page-numbers' => _pageNumbers(),
+                          'letterheads' => _letterheads(),
+                          _ => _toggleRegion(key),
+                        },
+                        onHelp: _showShortcuts,
+                        onHorizontalRuler: () => setState(
+                          () => _showHorizontalRuler = !_showHorizontalRuler,
+                        ),
+                        onVerticalRuler: () => setState(
+                          () => _showVerticalRuler = !_showVerticalRuler,
+                        ),
+                        showHorizontalRuler: _showHorizontalRuler,
+                        showVerticalRuler: _showVerticalRuler,
+                        onFontSelected: (name) async {
+                          try {
+                            await DocumentFonts.loadEditorFamilies([name]);
+                            if (mounted) setState(() {});
+                          } catch (e) {
+                            if (context.mounted) {
+                              showNotice(
+                                context,
+                                'Yazı tipi yüklenemedi',
+                                detail: '$e',
+                                kind: NoticeKind.error,
+                              );
+                            }
                           }
-                        }
-                      },
+                        },
+                      ),
                     ),
-                  ),
-                  if (_leftDraft != null)
-                    LeftDraftButton(
-                      draft: _leftDraft!,
-                      onPressed: _leftDraftMenu,
-                    ),
-                  if (_canSignNew)
+                    if (_leftDraft != null)
+                      LeftDraftButton(
+                        draft: _leftDraft!,
+                        onPressed: _leftDraftMenu,
+                      ),
+                    if (_canSignNew)
+                      IconButton(
+                        tooltip: 'UDF e-imzala',
+                        onPressed: _isSaving || _signingNew ? null : _signNew,
+                        icon: const Icon(Icons.draw_outlined, size: 20),
+                      ),
+                    if (_sourceModel?.metadata['hasSignature'] == true)
+                      SizedBox(
+                        width: MediaQuery.sizeOf(context).width < 700
+                            ? 120
+                            : 180,
+                        child: SignatureBanner(
+                          model: _sourceModel!,
+                          compact: true,
+                        ),
+                      ),
                     IconButton(
-                      tooltip: 'UDF e-imzala',
-                      onPressed: _isSaving || _signingNew ? null : _signNew,
-                      icon: const Icon(Icons.draw_outlined, size: 20),
-                    ),
-                  if (_sourceModel?.metadata['hasSignature'] == true)
-                    SizedBox(
-                      width: MediaQuery.sizeOf(context).width < 700 ? 120 : 180,
-                      child: SignatureBanner(
-                        model: _sourceModel!,
-                        compact: true,
+                      tooltip: 'Kaydet · Ctrl+S',
+                      onPressed: _isSaving ? null : _save,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined, size: 19),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary
+                            .withValues(alpha: .10),
+                        foregroundColor: Theme.of(context).colorScheme.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
                       ),
                     ),
-                  IconButton(
-                    tooltip: 'Kaydet · Ctrl+S',
-                    onPressed: _isSaving ? null : _save,
-                    icon: _isSaving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save_outlined, size: 19),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary
-                          .withValues(alpha: .10),
-                      foregroundColor: Theme.of(context).colorScheme.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
