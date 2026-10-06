@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../services/uyap/uyap_mobile_api.dart';
+import '../../services/uyap/edevlet_window.dart';
 import '../widgets/edevlet_web_dialog.dart';
 
 /// Logs into the UYAP mobile API with e-Devlet, on its own: no web portal
@@ -14,6 +15,27 @@ Future<bool> connectUyapMobile(
 }) async {
   final mobile = api ?? UyapMobileApi.instance;
   final messenger = ScaffoldMessenger.maybeOf(context);
+  // A Mac and Linux show e-Devlet in a window of their own.
+  if ((Platform.isMacOS || Platform.isLinux) && EdevletWindow.available) {
+    final state = UyapMobileApi.newState();
+    String? code;
+    try {
+      final window = await EdevletWindow.open(
+        UyapMobileApi.loginPage(state),
+        hint:
+            'UYAP Mobil için e-Devlet girişi: e-imza ya da mobil imzayı seçin.',
+        redirect: '${UyapMobileApi.edevletReturn}',
+      );
+      code = await window.code;
+    } catch (e) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('UYAP Mobil girişi açılamadı: $e')),
+      );
+      return false;
+    }
+    if (code == null) return false;
+    return _login(mobile, code, messenger);
+  }
   if (!await EdevletWebDialog.available()) {
     messenger?.showSnackBar(
       SnackBar(
@@ -37,6 +59,14 @@ Future<bool> connectUyapMobile(
     state: state,
   );
   if (code == null) return false;
+  return _login(mobile, code, messenger);
+}
+
+Future<bool> _login(
+  UyapMobileApi mobile,
+  String code,
+  ScaffoldMessengerState? messenger,
+) async {
   try {
     final session = await mobile.login(code);
     messenger?.showSnackBar(

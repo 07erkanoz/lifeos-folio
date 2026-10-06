@@ -29,16 +29,21 @@ class EdevletWindow {
   static bool _found() =>
       (Platform.isLinux || Platform.isMacOS) && File(_helper).existsSync();
 
-  /// Opens [page]; the window stays until e-Devlet sends the lawyer back or
-  /// the window is closed.
-  static Future<EdevletWindow> open(Uri page, {required String hint}) async {
+  /// Opens [page]; the window stays until e-Devlet sends the lawyer back
+  /// (to [redirect], the web portal's return when not given: the mobile
+  /// API returns elsewhere) or the window is closed.
+  static Future<EdevletWindow> open(
+    Uri page, {
+    required String hint,
+    String? redirect,
+  }) async {
     try {
       return EdevletWindow._(
         await Process.start(_helper, [
           '--url',
           '$page',
           '--redirect',
-          UyapWebService.edevletReturn,
+          redirect ?? UyapWebService.edevletReturn,
           '--hint',
           hint,
         ]),

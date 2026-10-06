@@ -1,5 +1,7 @@
 import Flutter
+import PDFKit
 import UIKit
+import VisionKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -14,6 +16,9 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FolioFileActions") {
       FileActions.register(registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FolioDocuments") {
+      FolioDocuments.register(with: registrar)
     }
   }
 }
@@ -72,5 +77,152 @@ enum FileActions {
     var top = scenes.flatMap { $0.windows }.first { $0.isKeyWindow }?.rootViewController
     while let presented = top?.presentedViewController { top = presented }
     return top
+  }
+}
+
+/// What android/.../MainActivity.kt does for documents, the iPhone way:
+/// a document another app opens in Folio ("Folio ile aç") is copied into
+/// Folio's own Documents/Gelen and handed to Dart; a page scanned with the
+/// camera (VisionKit's document camera, its edges found and straightened)
+/// is made a PDF in Documents/Taramalar, which the Files app shows.
+class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
+  VNDocumentCameraViewControllerDelegate
+{
+  static var shared: FolioDocuments?
+  var channel: FlutterMethodChannel?
+  var ready = false
+  var waiting: [String] = []
+  var scanning: FlutterResult?
+
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let instance = FolioDocuments()
+    shared = instance
+    let channel = FlutterMethodChannel(
+      name: "lifeos_evrak/documents", binaryMessenger: registrar.messenger())
+    instance.channel = channel
+    registrar.addMethodCallDelegate(instance, channel: channel)
+    registrar.addSceneDelegate(instance)
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "ready":
+      ready = true
+      flush()
+      result(nil)
+    case "scan":
+      scan(result)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  // A document opened in Folio from another app.
+
+  @objc(scene:willConnectToSession:options:)
+  func scene(
+    _ scene: UIScene, willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions?
+  ) -> Bool {
+    if let contexts = connectionOptions?.urlContexts, !contexts.isEmpty {
+      receive(contexts.map { $0.url })
+    }
+    return false
+  }
+
+  @objc(scene:openURLContexts:)
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) -> Bool {
+    receive(URLContexts.map { $0.url })
+    return true
+  }
+
+  func receive(_ urls: [URL]) {
+    let inbox = Self.folder("Gelen")
+    for url in urls where url.isFileURL {
+      let scoped = url.startAccessingSecurityScopedResource()
+      defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+      let target = Self.unique(inbox, url.lastPathComponent)
+      do {
+        try FileManager.default.copyItem(at: url, to: target)
+        waiting.append(target.path)
+      } catch {
+        channel?.invokeMethod("openError", arguments: "Belge açılamadı: \(error.localizedDescription)")
+      }
+    }
+    flush()
+  }
+
+  func flush() {
+    guard ready, !waiting.isEmpty else { return }
+    let paths = waiting
+    waiting = []
+    channel?.invokeMethod("openFiles", arguments: paths)
+  }
+
+  // The document camera.
+
+  func scan(_ result: @escaping FlutterResult) {
+    guard VNDocumentCameraViewController.isSupported, let top = FileActions.topController() else {
+      result(FlutterError(code: "SCAN", message: "Bu cihazda belge tarayıcı yok.", details: nil))
+      return
+    }
+    scanning = result
+    let camera = VNDocumentCameraViewController()
+    camera.delegate = self
+    top.present(camera, animated: true)
+  }
+
+  func documentCameraViewController(
+    _ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan
+  ) {
+    controller.dismiss(animated: true)
+    let pdf = PDFDocument()
+    for index in 0..<scan.pageCount {
+      if let page = PDFPage(image: scan.imageOfPage(at: index)) {
+        pdf.insert(page, at: pdf.pageCount)
+      }
+    }
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd HH.mm"
+    let target = Self.unique(Self.folder("Taramalar"), "Tarama \(formatter.string(from: Date())).pdf")
+    if pdf.pageCount > 0, pdf.write(to: target) {
+      scanning?(target.path)
+    } else {
+      scanning?(FlutterError(code: "SCAN", message: "Tarama kaydedilemedi.", details: nil))
+    }
+    scanning = nil
+  }
+
+  func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+    controller.dismiss(animated: true)
+    scanning?(nil)
+    scanning = nil
+  }
+
+  func documentCameraViewController(
+    _ controller: VNDocumentCameraViewController, didFailWithError error: Error
+  ) {
+    controller.dismiss(animated: true)
+    scanning?(FlutterError(code: "SCAN", message: error.localizedDescription, details: nil))
+    scanning = nil
+  }
+
+  static func folder(_ name: String) -> URL {
+    let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    let folder = documents.appendingPathComponent(name, isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    return folder
+  }
+
+  static func unique(_ folder: URL, _ name: String) -> URL {
+    var target = folder.appendingPathComponent(name)
+    let stem = (name as NSString).deletingPathExtension
+    let ext = (name as NSString).pathExtension
+    var n = 2
+    while FileManager.default.fileExists(atPath: target.path) {
+      target = folder.appendingPathComponent(ext.isEmpty ? "\(stem) (\(n))" : "\(stem) (\(n)).\(ext)")
+      n += 1
+    }
+    return target
   }
 }

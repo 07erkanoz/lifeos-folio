@@ -9,9 +9,14 @@ import 'android_document_save.dart';
 /// Camera to PDF on Android, through Google's ML Kit document scanner: it
 /// finds the page's edges, straightens it, takes as many pages as wanted and
 /// returns one PDF. The camera opens in Google Play services' own screen, so
-/// Folio asks for no camera permission of its own.
+/// Folio asks for no camera permission of its own. On iOS, VisionKit's
+/// document camera does the same (ios/Runner/AppDelegate.swift); the PDF
+/// lands in Folio's Taramalar folder, which the Files app shows.
 class DocumentScan {
-  static bool get available => debugAvailable ?? Platform.isAndroid;
+  static bool get available =>
+      debugAvailable ?? (Platform.isAndroid || Platform.isIOS);
+
+  static const _ios = MethodChannel('lifeos_evrak/documents');
 
   /// For screenshots and tests on a desktop host, which is never Android.
   @visibleForTesting
@@ -20,6 +25,13 @@ class DocumentScan {
   /// Scans, has the reader choose where the PDF goes, and returns a local
   /// copy to open; null when the reader backed out at either step.
   static Future<String?> toPdf() async {
+    if (Platform.isIOS) {
+      try {
+        return await _ios.invokeMethod<String>('scan');
+      } on PlatformException catch (e) {
+        throw StateError(e.message ?? 'Belge tarayıcı açılamadı.');
+      }
+    }
     final scanner = DocumentScanner(
       options: DocumentScannerOptions(
         documentFormats: const {DocumentFormat.pdf},

@@ -11,7 +11,7 @@ import '../platform/app_directories.dart';
 
 /// Where a portal's tokens are kept on this device (UYGULAMAPLANI §4,
 /// P02, §13): encrypted for the Windows user with DPAPI; on a phone in the
-/// Android Keystore or the iOS Keychain. Where there is no such
+/// Android Keystore or the iOS Keychain, on a Mac in its keychain. Where there is no such
 /// protection, nothing is written: the session lasts as long as Folio is
 /// open, never as a plain token file.
 class SecretStore {
@@ -24,10 +24,19 @@ class SecretStore {
   final Future<Directory> Function() _directory;
 
   static bool get available =>
-      Platform.isWindows || Platform.isAndroid || Platform.isIOS;
+      Platform.isWindows ||
+      Platform.isAndroid ||
+      Platform.isIOS ||
+      Platform.isMacOS;
 
-  static bool get _phone => Platform.isAndroid || Platform.isIOS;
-  static const _keychain = FlutterSecureStorage();
+  /// The phone's keystore, or the Mac's keychain (the login keychain: Folio
+  /// is not sandboxed, and the data-protection keychain needs a signed
+  /// entitlement).
+  static bool get _phone =>
+      Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+  static const _keychain = FlutterSecureStorage(
+    mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+  );
   static String _key(String name) => 'folio.$name';
 
   Future<File> _file(String name) async {
