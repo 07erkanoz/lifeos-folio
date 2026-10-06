@@ -68,12 +68,12 @@ void main() {
     await tester.tap(find.text('Cevap dilekçesi'));
     await tester.pumpAndSettle();
     expect(text(tester), contains('CEVAP VEREN'));
-    expect(text(tester), contains('SONUÇ VE TALEP'));
+    expect(text(tester), contains('SONUÇ VE İSTEM'));
     await tester.tap(find.text('Taraf satırı'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('VEKİLİ'));
     await tester.pumpAndSettle();
-    expect(text(tester), contains('VEKİLİ          : '));
+    expect(text(tester), contains('VEKİLİ\t: '));
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 5));
   });

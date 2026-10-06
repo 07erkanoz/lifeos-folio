@@ -21,11 +21,16 @@ class SigningDialog extends StatefulWidget {
 
   /// For tests: the mobile signature service to ask.
   final MobileSignatureClient Function()? mobileClient;
+
+  /// The way chosen before the dialog opened: true for the mobile
+  /// signature, false for the card; null for the one used last time.
+  final bool? mobile;
   const SigningDialog({
     super.key,
     this.filePath,
     this.service,
     this.mobileClient,
+    this.mobile,
   });
   @override
   State<SigningDialog> createState() => _SigningDialogState();
@@ -72,10 +77,21 @@ class _SigningDialogState extends State<SigningDialog> {
       !_desktop && mobileSigningAvailable && widget.filePath != null;
   Future<File> _settings() async =>
       File(p.join((await folioSupportDirectory()).path, 'signing.json'));
+
+  /// Whether the mobile signature was asked for and can be used here.
+  bool get _mobileAsked =>
+      widget.mobile == true &&
+      mobileSigningAvailable &&
+      widget.filePath != null;
+
   @override
   void initState() {
     super.initState();
-    if (_desktop) {
+    if (_mobileAsked) {
+      _method = _Method.mobile;
+      _status = _mobileHint;
+      unawaited(_load());
+    } else if (_desktop) {
       _initialize();
     } else if (_mobileOnly) {
       _method = _Method.mobile;
@@ -118,7 +134,9 @@ class _SigningDialogState extends State<SigningDialog> {
       _operator =
           MobileOperator.byCode(operator is int ? operator : null) ?? _operator;
       // Only where there is a document: the settings dialog is the card's.
-      if (data['method'] == 'mobile' && widget.filePath != null) {
+      if (data['method'] == 'mobile' &&
+          widget.filePath != null &&
+          widget.mobile != false) {
         _method = _Method.mobile;
         _status = _mobileHint;
       }

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 
+import '../../models/document_model.dart';
+import '../../services/editor/doc_delta_map.dart';
+import '../../services/editor/petition_templates.dart';
+
 /// The editor's ribbon tabs (docs/design/editor-serit-taslak.png), after
 /// Banaozel's: Giriş holds the writing tools, Hukuk the petition, the case,
 /// the signature, the agenda and research; Ekle and Görünüm what is put in
@@ -394,18 +398,8 @@ class RibbonCaseChip extends StatelessWidget {
 
 // The petition's tools, written into the document at the cursor.
 
-/// Turkish capitals: i is İ.
-String trUpper(String s) => s.replaceAll('i', 'İ').toUpperCase();
-
 /// "07.10.2026".
-String todayDotted([DateTime? now]) {
-  final n = now ?? DateTime.now();
-  String two(int v) => v.toString().padLeft(2, '0');
-  return '${two(n.day)}.${two(n.month)}.${n.year}';
-}
-
-/// A line of a template: its text, where it stands, whether it is bold.
-typedef PetitionLine = (String text, Attribute<String?> align, bool bold);
+String todayDotted([DateTime? now]) => dotted(now ?? DateTime.now());
 
 class PetitionTools {
   PetitionTools(this.controller);
@@ -416,14 +410,16 @@ class PetitionTools {
     'DELİLLER',
     'HUKUKİ SEBEPLER',
     'HUKUKİ DELİLLER',
-    'SONUÇ VE TALEP',
+    'SONUÇ VE İSTEM',
+    'EKLER',
   ];
   static const parties = [
     'DAVACI',
     'DAVALI',
-    'DAVACILAR',
-    'DAVALILAR',
+    'SANIK',
+    'KATILAN',
     'VEKİLİ',
+    'MÜDAFİİ',
     'DOSYA NO',
     'KONU',
   ];
@@ -441,70 +437,63 @@ class PetitionTools {
     return at < 0 || at > length ? length : at;
   }
 
-  /// [text] as a paragraph of its own at the cursor: a line begun is closed
-  /// first.
-  void paragraph(
-    String text, {
-    bool bold = false,
-    Attribute<String?> align = Attribute.leftAlignment,
-  }) {
+  bool get empty => controller.document.toPlainText().trim().isEmpty;
+
+  /// [model]'s paragraphs written into the document as they are laid out,
+  /// past the editor's typing rules: in place of everything when [replace],
+  /// else as paragraphs of their own at the cursor. The cursor then follows
+  /// what was written.
+  void insert(DocModel model, {bool replace = false}) {
+    final written = DocDeltaMap.modeldenDelta(model).delta;
+    final length = controller.document.length - 1;
+    if (replace) {
+      final delta = (Delta()..delete(length)).concat(written);
+      controller.compose(
+        delta,
+        const TextSelection.collapsed(offset: 0),
+        ChangeSource.local,
+      );
+      _cursorTo(written.length);
+      return;
+    }
     final plain = controller.document.toPlainText();
     final index = _cursor;
     final before = plain.substring(0, index.clamp(0, plain.length));
-    final lead = before.isEmpty || before.endsWith('\n') ? '' : '\n';
-    _write(index, [
-      if (lead.isNotEmpty) (lead, null),
-      if (text.isNotEmpty) (text, bold ? {'bold': true} : null),
-      // A line's alignment sits on its end.
-      ('\n', align.value == null ? null : {align.key: align.value}),
-    ], index + lead.length + text.length + 1);
-  }
-
-  /// [parts] written at [index] as they are, past the editor's typing rules
-  /// (which carry the last line's bold onto the next one's end), the cursor
-  /// then at [cursor].
-  void _write(
-    int index,
-    List<(String, Map<String, dynamic>?)> parts,
-    int cursor,
-  ) {
-    final delta = Delta()..retain(index);
-    for (final (text, attributes) in parts) {
-      delta.insert(text, attributes);
-    }
+    final lead = before.isEmpty || before.endsWith('\n') ? 0 : 1;
+    var delta = Delta()..retain(index);
+    if (lead > 0) delta.insert('\n');
+    delta = delta.concat(written);
     controller.compose(
       delta,
-      TextSelection.collapsed(offset: cursor),
+      TextSelection.collapsed(offset: index),
       ChangeSource.local,
     );
+    _cursorTo(index + lead + written.length);
   }
 
-  /// "DAVALI          : ", the label padded to one column with spaces, as
-  /// UYAP keeps them; the cursor after the colon.
+  /// Compose keeps the cursor where it was, before what it wrote.
+  void _cursorTo(int offset) => controller.updateSelection(
+    TextSelection.collapsed(
+      offset: offset.clamp(0, controller.document.length - 1),
+    ),
+    ChangeSource.local,
+  );
+
+  /// "DAVALI`<TAB`>: ", the colon on the labels' stop; the cursor after it.
   void party(String label) {
-    final upper = trUpper(label);
-    final body = '$upper${' ' * (16 - upper.length).clamp(1, 40)}: ';
-    final plain = controller.document.toPlainText();
-    final index = _cursor;
-    final before = plain.substring(0, index.clamp(0, plain.length));
-    final lead = before.isEmpty || before.endsWith('\n') ? '' : '\n';
-    _write(index, [
-      if (lead.isNotEmpty) (lead, null),
-      (body, {'bold': true}),
-      ('\n', null),
-    ], index + lead.length + body.length);
+    insert(DocModel(blocks: [petitionField(label, '')]));
+    _cursorTo(_cursor - 1);
   }
 
-  void date() => paragraph(todayDotted(), align: Attribute.rightAlignment);
+  void date() => insert(
+    DocModel(blocks: [petitionLine(todayDotted(), align: DocAlignment.right)]),
+  );
 
-  void section(String name) => paragraph(trUpper(name), bold: true);
+  void section(String name) =>
+      insert(DocModel(blocks: [petitionHeading(name)]));
 
-  void signature({String role = 'Vekili', String lawyer = 'Av. [Ad Soyad]'}) {
-    paragraph(todayDotted(), align: Attribute.rightAlignment);
-    paragraph('Saygılarımla,', align: Attribute.rightAlignment);
-    paragraph(role, align: Attribute.rightAlignment);
-    paragraph(lawyer, bold: true, align: Attribute.rightAlignment);
-  }
+  void signature({String role = 'Vekili', String? lawyer}) =>
+      insert(DocModel(blocks: petitionSignature(lawyer, DateTime.now(), role)));
 
   /// A style on the lines chosen.
   void style(String key) {
@@ -525,207 +514,4 @@ class PetitionTools {
         controller.formatSelection(Attribute.clone(Attribute.bold, null));
     }
   }
-
-  /// The document emptied and [lines] written in its place.
-  void replaceWith(List<PetitionLine> lines) {
-    final length = controller.document.length - 1;
-    if (length > 0) {
-      controller.replaceText(
-        0,
-        length,
-        '',
-        const TextSelection.collapsed(offset: 0),
-      );
-    }
-    controller.updateSelection(
-      const TextSelection.collapsed(offset: 0),
-      ChangeSource.local,
-    );
-    for (final (text, align, bold) in lines) {
-      paragraph(text, bold: bold, align: align);
-    }
-  }
-
-  bool get empty => controller.document.toPlainText().trim().isEmpty;
 }
-
-/// A petition's skeleton, filled from the case where the document has one.
-class PetitionTemplate {
-  const PetitionTemplate(this.name, this.build);
-  final String name;
-  final List<PetitionLine> Function(PetitionCase? from) build;
-}
-
-/// What a template takes from the case the document belongs to.
-class PetitionCase {
-  const PetitionCase({required this.court, required this.number, this.lawyer});
-  final String court, number;
-  final String? lawyer;
-}
-
-PetitionLine _line(
-  String text, {
-  Attribute<String?> align = Attribute.leftAlignment,
-  bool bold = false,
-}) => (text, align, bold);
-
-PetitionLine _party(String label, String value) {
-  final upper = trUpper(label);
-  return _line('$upper${' ' * (16 - upper.length).clamp(1, 40)}: $value');
-}
-
-PetitionLine _court(String text) =>
-    _line(text, align: Attribute.centerAlignment, bold: true);
-
-PetitionLine _head(String text) => _line(text, bold: true);
-
-PetitionLine _justified(String text) =>
-    _line(text, align: Attribute.justifyAlignment);
-
-/// "ANTALYA 3. ASLİYE HUKUK MAHKEMESİ’NE".
-String _courtLine(PetitionCase? from, String fallback) =>
-    from == null ? fallback : '${trUpper(from.court)}’NE';
-
-List<PetitionLine> _signature(PetitionCase? from, String role) => [
-  _line(''),
-  _line(todayDotted(), align: Attribute.rightAlignment),
-  _line(role, align: Attribute.rightAlignment),
-  _line(
-    from?.lawyer ?? 'Av. [Ad Soyad]',
-    align: Attribute.rightAlignment,
-    bold: true,
-  ),
-];
-
-final petitionTemplates = <PetitionTemplate>[
-  PetitionTemplate(
-    'Dava dilekçesi',
-    (c) => [
-      _court(_courtLine(c, '[…] NÖBETÇİ [ASLİYE HUKUK] MAHKEMESİNE')),
-      _line(''),
-      _party('DAVACI', '[Ad Soyad] (T.C. …)'),
-      _party('VEKİLİ', '${c?.lawyer ?? 'Av. [Ad Soyad]'} ([…] Barosu)'),
-      _party('DAVALI', '[Ad Soyad] (T.C. …)'),
-      _party('KONU', '[…] talebimizden ibarettir.'),
-      _line(''),
-      _head('AÇIKLAMALAR'),
-      _justified('1- […]'),
-      _line(''),
-      _head('HUKUKİ SEBEPLER'),
-      _line('[İlgili kanun ve maddeler]'),
-      _head('HUKUKİ DELİLLER'),
-      _line('[Deliller]'),
-      _head('SONUÇ VE TALEP'),
-      _justified(
-        'Yukarıda açıklanan nedenlerle davamızın KABULÜ ile […]; yargılama '
-        'giderleri ve vekalet ücretinin karşı tarafa yükletilmesine karar '
-        'verilmesini saygıyla talep ederiz.',
-      ),
-      ..._signature(c, 'Davacı Vekili'),
-    ],
-  ),
-  PetitionTemplate(
-    'Cevap dilekçesi',
-    (c) => [
-      _court(_courtLine(c, '[…] [ASLİYE HUKUK] MAHKEMESİNE')),
-      _line(''),
-      _party('DOSYA NO', c?.number ?? '20…/…'),
-      _line('CEVAP VEREN'),
-      _party('DAVALI', '[Ad Soyad] (T.C. …)'),
-      _party('VEKİLİ', '${c?.lawyer ?? 'Av. [Ad Soyad]'} ([…] Barosu)'),
-      _party('DAVACI', '[Ad Soyad]'),
-      _party('KONU', 'Davaya karşı cevaplarımızın sunulmasıdır.'),
-      _line(''),
-      _head('AÇIKLAMALAR'),
-      _justified('1- […]'),
-      _line(''),
-      _head('HUKUKİ SEBEPLER'),
-      _line('[İlgili kanun ve maddeler]'),
-      _head('HUKUKİ DELİLLER'),
-      _line('[Deliller]'),
-      _head('SONUÇ VE TALEP'),
-      _justified(
-        'Yukarıda açıklanan nedenlerle haksız ve mesnetsiz davanın REDDİNE, '
-        'yargılama giderleri ve vekalet ücretinin davacıya yükletilmesine '
-        'karar verilmesini saygıyla talep ederiz.',
-      ),
-      ..._signature(c, 'Davalı Vekili'),
-    ],
-  ),
-  PetitionTemplate(
-    'İstinaf dilekçesi',
-    (c) => [
-      _court('[…] BÖLGE ADLİYE MAHKEMESİ İLGİLİ HUKUK DAİRESİNE'),
-      _line('Gönderilmek Üzere', align: Attribute.centerAlignment),
-      _court(_courtLine(c, '[…] [ASLİYE HUKUK] MAHKEMESİNE')),
-      _line(''),
-      _party('DOSYA NO', c?.number ?? '20…/… Esas – 20…/… Karar'),
-      _party('İSTİNAF EDEN', '[Davacı/Davalı] – [Ad Soyad]'),
-      _party('VEKİLİ', '${c?.lawyer ?? 'Av. [Ad Soyad]'} ([…] Barosu)'),
-      _party('KARŞI TARAF', '[Ad Soyad]'),
-      _party('KONU', '[…] kararının KALDIRILMASI istemidir.'),
-      _party('TEBLİĞ TARİHİ', '…/…/20…'),
-      _line(''),
-      _head('AÇIKLAMALAR VE İSTİNAF SEBEPLERİ'),
-      _justified('1- […]'),
-      _line(''),
-      _head('HUKUKİ SEBEPLER'),
-      _line('HMK m.341 vd. ve ilgili mevzuat.'),
-      _head('SONUÇ VE TALEP'),
-      _justified(
-        'Yukarıda açıklanan ve re’sen gözetilecek nedenlerle; istinaf '
-        'başvurumuzun KABULÜ ile […] kararının KALDIRILMASINA karar '
-        'verilmesini saygıyla talep ederiz.',
-      ),
-      ..._signature(c, 'İstinaf Eden Vekili'),
-    ],
-  ),
-  PetitionTemplate(
-    'İcra (ödeme emrine) itiraz',
-    (c) => [
-      _court('[…] İCRA HUKUK MAHKEMESİNE'),
-      _line(''),
-      _party('İCRA DOSYA NO', c?.number ?? '[…] İcra Müd. 20…/… E.'),
-      _party('İTİRAZ EDEN', '[Ad Soyad] (T.C. …)'),
-      _party('VEKİLİ', '${c?.lawyer ?? 'Av. [Ad Soyad]'} ([…] Barosu)'),
-      _party('ALACAKLI', '[Ad Soyad]'),
-      _party('KONU', 'Ödeme/icra emrine itirazımızın sunulmasıdır.'),
-      _party('TEBLİĞ TARİHİ', '…/…/20…'),
-      _line(''),
-      _head('AÇIKLAMALAR'),
-      _justified('1- Borca / imzaya / faize İTİRAZ ediyoruz. […]'),
-      _line(''),
-      _head('HUKUKİ SEBEPLER'),
-      _line('İİK m.62 vd. ve ilgili mevzuat.'),
-      _head('SONUÇ VE TALEP'),
-      _justified(
-        'Yukarıda açıklanan nedenlerle takibe İTİRAZIMIZIN KABULÜ ile '
-        'takibin DURDURULMASINA/İPTALİNE karar verilmesini saygıyla talep '
-        'ederiz.',
-      ),
-      ..._signature(c, 'İtiraz Eden (Borçlu) Vekili'),
-    ],
-  ),
-  PetitionTemplate(
-    'Bilirkişi raporuna itiraz',
-    (c) => [
-      _court(_courtLine(c, '[…] [ASLİYE HUKUK] MAHKEMESİNE')),
-      _line(''),
-      _party('DOSYA NO', c?.number ?? '20…/…'),
-      _party('İTİRAZ EDEN', '[Davacı/Davalı] – [Ad Soyad]'),
-      _party('VEKİLİ', '${c?.lawyer ?? 'Av. [Ad Soyad]'} ([…] Barosu)'),
-      _party('KONU', 'Bilirkişi raporuna itirazlarımızın sunulmasıdır.'),
-      _line(''),
-      _head('AÇIKLAMALAR'),
-      _justified('1- Dosyaya sunulan … tarihli bilirkişi raporu […]'),
-      _line(''),
-      _head('SONUÇ VE TALEP'),
-      _justified(
-        'Yukarıda açıklanan nedenlerle rapora itirazlarımızın kabulü ile '
-        'dosyanın yeni bir bilirkişi heyetine tevdiine karar verilmesini '
-        'saygıyla talep ederiz.',
-      ),
-      ..._signature(c, 'Vekili'),
-    ],
-  ),
-];

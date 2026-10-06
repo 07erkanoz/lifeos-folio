@@ -37,6 +37,7 @@ import 'widgets/spreadsheet_viewer.dart';
 import 'widgets/hover_document_preview.dart';
 import 'desktop/desktop_home.dart';
 import 'widgets/editor_ribbon.dart';
+import 'widgets/desktop_frame.dart' show windowFullScreen;
 import 'library/search_controls.dart';
 import 'library/collapsing_overview.dart';
 
@@ -580,6 +581,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return null;
   }
 
+  void _windowFullScreen() {
+    if (mounted) setState(() {});
+  }
+
   /// Reading a document with nothing else on screen. On a phone the header and
   /// the action row take a sixth of the display before the document starts,
   /// and a viewer that cannot get out of the way is not a viewer.
@@ -687,6 +692,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     if (Platform.isAndroid) {
       WidgetsBinding.instance.addObserver(this);
+      windowFullScreen.addListener(_windowFullScreen);
       _startMobileWatch();
       _folderChanges = _intents.changes.listen((_) {
         _folderDebounce?.cancel();
@@ -750,6 +756,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     UpdateCheck.instance.available.removeListener(_updateAvailable);
     DocumentHistory.recoveryChanges.removeListener(_checkRecovery);
     WidgetsBinding.instance.removeObserver(this);
+    windowFullScreen.removeListener(_windowFullScreen);
     _mobileRefresh?.cancel();
     _folderDebounce?.cancel();
     _folderChanges?.cancel();
@@ -2933,7 +2940,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   ) {
     return Column(
       children: [
-        if (!_fullScreen)
+        // The window's full screen (F11) puts the heading away too.
+        if (!_fullScreen && !windowFullScreen.value)
           FoldingChrome(
             // On a phone the heading folds away while the
             // document is scrolled, and returns when it is
@@ -2960,7 +2968,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             Flexible(
                               child: Tooltip(
                                 message: _shownPath(file),
+                                // As wide as the name, so that the ribbon's
+                                // tabs follow it.
                                 child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     FileBadge(file: file, size: 28),
                                     const SizedBox(width: 10),

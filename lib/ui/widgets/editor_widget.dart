@@ -112,6 +112,8 @@ import 'editor_line_layout.dart';
 import '../mobile/scroll_chrome.dart';
 import 'editor_units.dart';
 import 'editor_ribbon.dart';
+import '../../services/editor/petition_templates.dart';
+import 'desktop_frame.dart' show windowFullScreen;
 import '../../services/portal/observed.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_hearing.dart';
@@ -141,8 +143,12 @@ class EditorWidget extends StatefulWidget {
       (context, path) => showDialog<String>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => SigningDialog(filePath: path),
+        builder: (_) => SigningDialog(filePath: path, mobile: signingWay),
       );
+
+  /// The way the ribbon's button asked for: true for the mobile signature,
+  /// false for the card, null for the dialog's own choice.
+  static bool? signingWay;
 
   /// The archive, when the editor is standing in front of one.
   ///
@@ -777,6 +783,9 @@ class _EditorWidgetState extends State<EditorWidget>
 
   /// The UYAP case the document is written for, beside the page.
   bool _uyapOpen = false;
+
+  /// The ribbon shown for a moment in full screen; see [windowFullScreen].
+  bool _ribbonPeek = false;
   double _uyapWidth = 380;
   late final _uyap = UyapCasePanelController()..onSaved = _uyapSaved;
 
@@ -2757,32 +2766,48 @@ class _EditorWidgetState extends State<EditorWidget>
       if (choice == null || !mounted) return;
       replace = choice;
     }
-    final link = _uyap.link;
-    final lines = template.build(
-      link == null
-          ? null
-          : PetitionCase(
-              court: link.court,
-              number: link.number,
-              lawyer: _lawyerName,
-            ),
-    );
-    _petitionEdit((tools) {
-      if (replace) {
-        tools.replaceWith(lines);
-      } else {
-        for (final (text, align, bold) in lines) {
-          tools.paragraph(text, bold: bold, align: align);
-        }
-      }
-    });
+    final from = await _petitionCase();
+    if (!mounted) return;
+    final model = template.build(from, DateTime.now());
+    _petitionEdit((tools) => tools.insert(model, replace: replace));
     showNotice(
       context,
       '“${template.name}” şablonu eklendi',
-      detail: link == null
+      detail: from == null
           ? 'Köşeli parantezli yerleri doldurun.'
-          : 'Mahkeme ve dosya numarası bağlı dosyadan yazıldı.',
+          : 'Mahkeme, esas no, taraflar ve duruşma bağlı dosyadan yazıldı; '
+                'köşeli parantezli yerleri doldurun.',
       kind: NoticeKind.success,
+    );
+  }
+
+  /// What the tied case gives a petition: its court and number, its
+  /// parties as kept, the next hearing in the agenda.
+  Future<PetitionCase?> _petitionCase() async {
+    final link = _uyap.link;
+    if (link == null) return null;
+    DateTime? hearing;
+    try {
+      final db = await PortalDatabase.shared();
+      final key = caseKey(link.number, link.court);
+      hearing = db
+          .hearings(
+            from: DateTime.now(),
+            to: DateTime.now().add(const Duration(days: 365)),
+          )
+          .where((h) => h.caseKey == key)
+          .firstOrNull
+          ?.at;
+    } catch (_) {}
+    return PetitionCase(
+      court: link.court,
+      number: link.number,
+      lawyer: _lawyerName,
+      parties: [
+        for (final party in _uyap.record?.parties ?? const <UyapParty>[])
+          (party.role, party.name),
+      ],
+      hearing: hearing,
     );
   }
 
@@ -3022,15 +3047,43 @@ class _EditorWidgetState extends State<EditorWidget>
   Widget _legalRibbon(BuildContext context, bool expanded) {
     _askLawyer();
     final linked = _uyap.link != null;
-    const unlinked = 'Belge bir UYAP dosyasına bağlı değil';
+    const unlinked = 'Önce belgeyi bir UYAP dosyasına bağlayın';
+    // What needs the case: without one, the panel opens to tie it.
+    VoidCallback needsCase(VoidCallback action) => () {
+      if (_uyap.link != null) return action();
+      if (_desktop) {
+        if (!_uyapOpen) _toggleUyap();
+        showNotice(
+          context,
+          'Belge bir UYAP dosyasına bağlı değil',
+          detail: 'Yandaki panelden dosyasını seçip bağlayın.',
+        );
+      } else {
+        showNotice(context, 'Belge bir UYAP dosyasına bağlı değil');
+      }
+    };
     final templates = [
-      for (final t in petitionTemplates)
+      for (final (i, t) in petitionTemplates.indexed) ...[
+        if (i == 0 || petitionTemplates[i - 1].group != t.group)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+            child: Text(
+              t.group.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .8,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         MenuItemButton(
           key: ValueKey('petition-template-${t.name}'),
           onPressed: () => unawaited(_applyTemplate(t)),
           leadingIcon: const Icon(Icons.description_outlined, size: 18),
           child: Text(t.name),
         ),
+      ],
     ];
     final parties = [
       for (final t in PetitionTools.parties)
@@ -3058,9 +3111,20 @@ class _EditorWidgetState extends State<EditorWidget>
       (x) => x.signature(lawyer: _lawyerName ?? 'Av. [Ad Soyad]'),
     );
     final send = _desktop ? () => unawaited(_sendToUyap()) : null;
-    final sign = _canSignNew && !_isSaving && !_signingNew
-        ? () => unawaited(_signNew())
+    final canSign = _canSignNew && !_isSaving && !_signingNew;
+    final sign = canSign ? () => unawaited(_signNew(mobile: false)) : null;
+    final signMobile = canSign && mobileSigningAvailable
+        ? () => unawaited(_signNew(mobile: true))
         : null;
+    // Why a signing button is off, said on it.
+    final udf = (_savedFormat ?? widget.initialFormat) == EvrakFormat.udf;
+    String signTip(String way, {bool here = true}) => !udf
+        ? 'Yalnız UDF belgeler imzalanır: önce UDF olarak kaydedin'
+        : !here
+        ? '$way bu cihazda kullanılamıyor'
+        : _signingNew || _isSaving
+        ? 'İmzalanıyor…'
+        : 'UDF olarak $way imzala';
 
     if (!expanded) {
       return ribbonStrip(
@@ -3086,13 +3150,14 @@ class _EditorWidgetState extends State<EditorWidget>
             ]),
           ribbonMenu(context, Icons.draw_outlined, 'İmzala', [
             MenuItemButton(
-              onPressed: sign,
+              onPressed: desktopSigningAvailable ? sign : null,
               leadingIcon: const Icon(Icons.usb_rounded, size: 18),
               child: const Text('E-imza kartıyla'),
             ),
-            const MenuItemButton(
-              leadingIcon: Icon(Icons.phone_android_rounded, size: 18),
-              child: Text('Mobil imzayla (yakında)'),
+            MenuItemButton(
+              onPressed: signMobile,
+              leadingIcon: const Icon(Icons.phone_android_rounded, size: 18),
+              child: const Text('Mobil imzayla'),
             ),
           ]),
           ribbonButton(
@@ -3133,7 +3198,7 @@ class _EditorWidgetState extends State<EditorWidget>
           ),
           const Divider(height: 8),
           MenuItemButton(
-            onPressed: linked ? () => unawaited(_tieToHearing()) : null,
+            onPressed: needsCase(() => unawaited(_tieToHearing())),
             leadingIcon: const Icon(Icons.calendar_month_outlined, size: 18),
             child: const Text('Duruşmaya bağla'),
           ),
@@ -3209,18 +3274,20 @@ class _EditorWidgetState extends State<EditorWidget>
               () => unawaited(_openUyapOperations()),
               tooltip: 'UYAP gönderimleri',
             ),
-            ribbonButton(
-              context,
-              Icons.sync_rounded,
-              'Güncelle',
-              linked
-                  ? () {
-                      if (!_uyapOpen) _toggleUyap();
-                      unawaited(_uyap.refresh());
-                    }
-                  : null,
-              tooltip: linked ? 'Dosyayı UYAP’tan yenile' : unlinked,
-            ),
+            if (linked)
+              ribbonButton(context, Icons.sync_rounded, 'Güncelle', () {
+                if (!_uyapOpen) _toggleUyap();
+                unawaited(_uyap.refresh());
+              }, tooltip: 'Dosyayı UYAP’tan yenile')
+            else
+              ribbonButton(
+                context,
+                Icons.link_rounded,
+                'Dosyaya bağla',
+                needsCase(() {}),
+                key: const ValueKey('legal-link-case'),
+                tooltip: 'Belgeyi UYAP dosyasına bağla',
+              ),
           ],
         ]),
       ribbonGroup(context, 'İmzala ve gönder', [
@@ -3229,8 +3296,8 @@ class _EditorWidgetState extends State<EditorWidget>
             context,
             Icons.usb_rounded,
             'E-imza\nkartı',
-            sign,
-            tooltip: 'UDF olarak e-imza kartıyla imzala',
+            desktopSigningAvailable ? sign : null,
+            tooltip: signTip('e-imza kartıyla', here: desktopSigningAvailable),
             key: const ValueKey('legal-sign-card'),
           ),
           const SizedBox(width: 4),
@@ -3238,8 +3305,9 @@ class _EditorWidgetState extends State<EditorWidget>
             context,
             Icons.phone_android_rounded,
             'Mobil\nimza',
-            null,
-            tooltip: 'Mobil imzayla UDF imzalama yakında',
+            signMobile,
+            tooltip: signTip('mobil imzayla', here: mobileSigningAvailable),
+            key: const ValueKey('legal-sign-mobile'),
           ),
           if (_desktop) ...[
             const SizedBox(width: 4),
@@ -3267,7 +3335,7 @@ class _EditorWidgetState extends State<EditorWidget>
             context,
             Icons.calendar_month_outlined,
             'Duruşmaya bağla',
-            linked ? () => unawaited(_tieToHearing()) : null,
+            needsCase(() => unawaited(_tieToHearing())),
             tooltip: linked ? null : unlinked,
           ),
         ],
@@ -3276,7 +3344,7 @@ class _EditorWidgetState extends State<EditorWidget>
             context,
             Icons.mark_email_unread_outlined,
             'Tebligattan süre',
-            linked ? () => unawaited(_noticeDeadlines()) : null,
+            needsCase(() => unawaited(_noticeDeadlines())),
             tooltip: linked
                 ? 'Dosyanın UETS tebligatlarındaki süreler'
                 : unlinked,
@@ -3652,14 +3720,16 @@ class _EditorWidgetState extends State<EditorWidget>
     }
   }
 
-  Future<void> _signNew() async {
+  Future<void> _signNew({bool? mobile}) async {
     if (!_canSignNew || _signingNew || _isSaving) return;
+    EditorWidget.signingWay = mobile;
     setState(() => _signingNew = true);
     try {
       if ((_savedPath == null || _hasChanges) && !await _save()) return;
       final path = _savedPath;
       if (!mounted || path == null || _savedFormat != EvrakFormat.udf) return;
       final signed = await EditorWidget.sign(context, path);
+      EditorWidget.signingWay = null;
       if (!mounted || signed == null) return;
       await _takeSignature(signed);
       widget.onSigned?.call(signed);
@@ -4029,6 +4099,9 @@ class _EditorWidgetState extends State<EditorWidget>
     } finally {
       if (mounted && generation == _loadGeneration) {
         setState(() => _isLoading = false);
+        if (_desktop && _loadError == null) {
+          unawaited(_uyap.bind(_documentPath));
+        }
         if (readByOcr && _loadError == null) {
           showNotice(
             context,
@@ -4419,203 +4492,241 @@ class _EditorWidgetState extends State<EditorWidget>
         },
         child: Column(
           children: [
-            FoldingChrome(
-              // On a phone the toolbar folds away while the text is
-              // scrolled, and returns when it is pulled back.
-              enabled: MediaQuery.sizeOf(context).width < 700,
-              child: Container(
-                key: const ValueKey('editor-toolbar'),
-                height:
-                    MediaQuery.sizeOf(context).width >= 1000 &&
-                        MediaQuery.sizeOf(context).height >= 550
-                    ? 88
-                    : 44,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.darkSurface
-                      : AppColors.lightSurface,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isDark
-                          ? AppColors.darkBorder
-                          : AppColors.lightBorder,
+            // In full screen (F11) the ribbon is put away: it comes back
+            // while the pointer is at the top edge, and goes again once the
+            // page is clicked.
+            ValueListenableBuilder<bool>(
+              valueListenable: windowFullScreen,
+              builder: (context, full, toolbar) {
+                if (!full) return toolbar!;
+                if (!_ribbonPeek) {
+                  return MouseRegion(
+                    onEnter: (_) => setState(() => _ribbonPeek = true),
+                    child: Container(
+                      key: const ValueKey('editor-ribbon-edge'),
+                      height: 6,
+                      color: Colors.transparent,
+                    ),
+                  );
+                }
+                return TapRegion(
+                  onTapOutside: (_) => Future<void>.delayed(
+                    const Duration(milliseconds: 300),
+                    () {
+                      if (mounted) setState(() => _ribbonPeek = false);
+                    },
+                  ),
+                  child: toolbar!,
+                );
+              },
+              child: FoldingChrome(
+                // On a phone the toolbar folds away while the text is
+                // scrolled, and returns when it is pulled back.
+                enabled: MediaQuery.sizeOf(context).width < 700,
+                child: Container(
+                  key: const ValueKey('editor-toolbar'),
+                  height:
+                      MediaQuery.sizeOf(context).width >= 1000 &&
+                          MediaQuery.sizeOf(context).height >= 550
+                      ? 88
+                      : 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.darkSurface
+                        : AppColors.lightSurface,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
+                      ),
                     ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    EditorFileMenu(
-                      controller: _fileMenu,
-                      host: widget.fileHost,
-                      currentPath: _documentPath,
-                      busy: _isSaving || _signingNew || _sendingUyap,
-                      // The short toolbar has no room for a label under an icon.
-                      compact:
-                          MediaQuery.sizeOf(context).width < 1000 ||
-                          MediaQuery.sizeOf(context).height < 550,
-                      onSave: () => unawaited(_save()),
-                      onSaveAs: () => unawaited(_saveAs(_ownFormat)),
-                      onSaveIn: (format) => unawaited(_saveAs(format)),
-                      onPrint: () => unawaited(_print()),
-                      onHistory: () => unawaited(_history()),
-                      onSign: _canSignNew ? () => unawaited(_signNew()) : null,
-                      onSendUyap:
-                          Platform.isLinux ||
-                              Platform.isWindows ||
-                              Platform.isMacOS
-                          ? () => unawaited(_sendToUyap())
-                          : null,
-                      onUyapOperations:
-                          Platform.isLinux ||
-                              Platform.isWindows ||
-                              Platform.isMacOS
-                          ? () => unawaited(_openUyapOperations())
-                          : null,
-                      onNewWindow: EditorWindow.available
-                          ? () => unawaited(EditorWindow.open())
-                          : null,
-                    ),
-                    if (!widget.hostTabs) ...[
-                      const SizedBox(width: 4),
-                      const RibbonTabPicker(),
-                      const SizedBox(width: 2),
-                    ],
-                    Expanded(
-                      child: ValueListenableBuilder<RibbonTab>(
-                        valueListenable: editorRibbonTab,
-                        builder: (context, tab, toolbar) => ListenableBuilder(
-                          listenable: _uyap,
-                          builder: (context, _) {
-                            final expanded =
-                                MediaQuery.sizeOf(context).width >= 1000 &&
-                                MediaQuery.sizeOf(context).height >= 550;
-                            return switch (tab) {
-                              RibbonTab.home => toolbar!,
-                              RibbonTab.legal => _legalRibbon(
-                                context,
-                                expanded,
-                              ),
-                              RibbonTab.insert => _insertRibbon(
-                                context,
-                                expanded,
-                              ),
-                              RibbonTab.view => _viewRibbon(context, expanded),
-                            };
-                          },
-                        ),
-                        child: EditorToolbar(
-                          controller: _active,
-                          onFind: _find,
-                          onHistory: _history,
-                          onSnippets: () => unawaited(_snippets()),
-                          onReadAloud: speechAvailable
-                              ? () => unawaited(_readAloud())
-                              : null,
-                          onDictate: speechAvailable
-                              ? () => unawaited(_dictate())
-                              : null,
-                          onReplace: () => _find(replace: true),
-                          onPrint: _print,
-                          onInsertImage: _insertImage,
-                          onInsertTable: _insertTable,
-                          hasHeader: _regions.containsKey('header'),
-                          hasFooter: _regions.containsKey('footer'),
-                          onToggleRegion: (key) => switch (key) {
-                            'page-numbers' => _pageNumbers(),
-                            'letterheads' => _letterheads(),
-                            _ => _toggleRegion(key),
-                          },
-                          onHelp: _showShortcuts,
-                          onHorizontalRuler: () => setState(
-                            () => _showHorizontalRuler = !_showHorizontalRuler,
-                          ),
-                          onVerticalRuler: () => setState(
-                            () => _showVerticalRuler = !_showVerticalRuler,
-                          ),
-                          showHorizontalRuler: _showHorizontalRuler,
-                          showVerticalRuler: _showVerticalRuler,
-                          onFontSelected: (name) async {
-                            try {
-                              await DocumentFonts.loadEditorFamilies([name]);
-                              if (mounted) setState(() {});
-                            } catch (e) {
-                              if (context.mounted) {
-                                showNotice(
-                                  context,
-                                  'Yazı tipi yüklenemedi',
-                                  detail: '$e',
-                                  kind: NoticeKind.error,
-                                );
-                              }
-                            }
-                          },
-                        ),
+                  child: Row(
+                    children: [
+                      EditorFileMenu(
+                        controller: _fileMenu,
+                        host: widget.fileHost,
+                        currentPath: _documentPath,
+                        busy: _isSaving || _signingNew || _sendingUyap,
+                        // The short toolbar has no room for a label under an icon.
+                        compact:
+                            MediaQuery.sizeOf(context).width < 1000 ||
+                            MediaQuery.sizeOf(context).height < 550,
+                        onSave: () => unawaited(_save()),
+                        onSaveAs: () => unawaited(_saveAs(_ownFormat)),
+                        onSaveIn: (format) => unawaited(_saveAs(format)),
+                        onPrint: () => unawaited(_print()),
+                        onHistory: () => unawaited(_history()),
+                        onSign: _canSignNew
+                            ? () => unawaited(_signNew())
+                            : null,
+                        onSendUyap:
+                            Platform.isLinux ||
+                                Platform.isWindows ||
+                                Platform.isMacOS
+                            ? () => unawaited(_sendToUyap())
+                            : null,
+                        onUyapOperations:
+                            Platform.isLinux ||
+                                Platform.isWindows ||
+                                Platform.isMacOS
+                            ? () => unawaited(_openUyapOperations())
+                            : null,
+                        onNewWindow: EditorWindow.available
+                            ? () => unawaited(EditorWindow.open())
+                            : null,
                       ),
-                    ),
-                    // The case the document belongs to, every tab.
-                    ListenableBuilder(
-                      listenable: _uyap,
-                      builder: (context, _) {
-                        final link = _uyap.link;
-                        final width = MediaQuery.sizeOf(context).width;
-                        if (link == null || width < 700) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: RibbonCaseChip(
-                            court: link.court,
-                            number: link.number,
-                            short: width < 1400,
-                            onPressed: () {
-                              if (!_uyapOpen) _toggleUyap();
+                      if (!widget.hostTabs) ...[
+                        const SizedBox(width: 4),
+                        const RibbonTabPicker(),
+                        const SizedBox(width: 2),
+                      ],
+                      Expanded(
+                        child: ValueListenableBuilder<RibbonTab>(
+                          valueListenable: editorRibbonTab,
+                          builder: (context, tab, toolbar) => ListenableBuilder(
+                            listenable: _uyap,
+                            builder: (context, _) {
+                              final expanded =
+                                  MediaQuery.sizeOf(context).width >= 1000 &&
+                                  MediaQuery.sizeOf(context).height >= 550;
+                              return switch (tab) {
+                                RibbonTab.home => toolbar!,
+                                RibbonTab.legal => _legalRibbon(
+                                  context,
+                                  expanded,
+                                ),
+                                RibbonTab.insert => _insertRibbon(
+                                  context,
+                                  expanded,
+                                ),
+                                RibbonTab.view => _viewRibbon(
+                                  context,
+                                  expanded,
+                                ),
+                              };
                             },
                           ),
-                        );
-                      },
-                    ),
-                    if (_leftDraft != null)
-                      LeftDraftButton(
-                        draft: _leftDraft!,
-                        onPressed: _leftDraftMenu,
+                          child: EditorToolbar(
+                            controller: _active,
+                            onFind: _find,
+                            onHistory: _history,
+                            onSnippets: () => unawaited(_snippets()),
+                            onReadAloud: speechAvailable
+                                ? () => unawaited(_readAloud())
+                                : null,
+                            onDictate: speechAvailable
+                                ? () => unawaited(_dictate())
+                                : null,
+                            onReplace: () => _find(replace: true),
+                            onPrint: _print,
+                            onInsertImage: _insertImage,
+                            onInsertTable: _insertTable,
+                            hasHeader: _regions.containsKey('header'),
+                            hasFooter: _regions.containsKey('footer'),
+                            onToggleRegion: (key) => switch (key) {
+                              'page-numbers' => _pageNumbers(),
+                              'letterheads' => _letterheads(),
+                              _ => _toggleRegion(key),
+                            },
+                            onHelp: _showShortcuts,
+                            onHorizontalRuler: () => setState(
+                              () =>
+                                  _showHorizontalRuler = !_showHorizontalRuler,
+                            ),
+                            onVerticalRuler: () => setState(
+                              () => _showVerticalRuler = !_showVerticalRuler,
+                            ),
+                            showHorizontalRuler: _showHorizontalRuler,
+                            showVerticalRuler: _showVerticalRuler,
+                            onFontSelected: (name) async {
+                              try {
+                                await DocumentFonts.loadEditorFamilies([name]);
+                                if (mounted) setState(() {});
+                              } catch (e) {
+                                if (context.mounted) {
+                                  showNotice(
+                                    context,
+                                    'Yazı tipi yüklenemedi',
+                                    detail: '$e',
+                                    kind: NoticeKind.error,
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        ),
                       ),
-                    if (_canSignNew)
+                      // The case the document belongs to, every tab.
+                      ListenableBuilder(
+                        listenable: _uyap,
+                        builder: (context, _) {
+                          final link = _uyap.link;
+                          final width = MediaQuery.sizeOf(context).width;
+                          if (link == null || width < 700) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: RibbonCaseChip(
+                              court: link.court,
+                              number: link.number,
+                              short: width < 1400,
+                              onPressed: () {
+                                if (!_uyapOpen) _toggleUyap();
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                      if (_leftDraft != null)
+                        LeftDraftButton(
+                          draft: _leftDraft!,
+                          onPressed: _leftDraftMenu,
+                        ),
+                      if (_canSignNew)
+                        IconButton(
+                          tooltip: 'UDF e-imzala',
+                          onPressed: _isSaving || _signingNew ? null : _signNew,
+                          icon: const Icon(Icons.draw_outlined, size: 20),
+                        ),
+                      if (_sourceModel?.metadata['hasSignature'] == true)
+                        SizedBox(
+                          width: MediaQuery.sizeOf(context).width < 700
+                              ? 120
+                              : 180,
+                          child: SignatureBanner(
+                            model: _sourceModel!,
+                            compact: true,
+                          ),
+                        ),
                       IconButton(
-                        tooltip: 'UDF e-imzala',
-                        onPressed: _isSaving || _signingNew ? null : _signNew,
-                        icon: const Icon(Icons.draw_outlined, size: 20),
-                      ),
-                    if (_sourceModel?.metadata['hasSignature'] == true)
-                      SizedBox(
-                        width: MediaQuery.sizeOf(context).width < 700
-                            ? 120
-                            : 180,
-                        child: SignatureBanner(
-                          model: _sourceModel!,
-                          compact: true,
+                        tooltip: 'Kaydet · Ctrl+S',
+                        onPressed: _isSaving ? null : _save,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined, size: 19),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary
+                              .withValues(alpha: .10),
+                          foregroundColor: Theme.of(context)
+                              .colorScheme
+                              .primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                         ),
                       ),
-                    IconButton(
-                      tooltip: 'Kaydet · Ctrl+S',
-                      onPressed: _isSaving ? null : _save,
-                      icon: _isSaving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.save_outlined, size: 19),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary
-                            .withValues(alpha: .10),
-                        foregroundColor: Theme.of(context).colorScheme.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../portal/observed.dart' show caseKey;
 import '../portal/portal_sync.dart';
@@ -93,7 +94,9 @@ class UyapCasePanelController extends ChangeNotifier {
   /// document opened in its place does not.
   Future<void> bind(String? path, {bool carry = false}) async {
     if (path == _path && (_link != null || path == null)) return;
-    final kept = path == null ? null : await links.of(path);
+    final kept = path == null
+        ? null
+        : await links.of(path) ?? await _caseOfFolder(path);
     final had = _link;
     _path = path;
     if (kept == null && had != null && path != null && carry) {
@@ -114,6 +117,28 @@ class UyapCasePanelController extends ChangeNotifier {
     // petition shows on its case's page.
     if (kept != null && path != null) await links.link(path, kept);
     _changed();
+  }
+
+  /// The case whose folder [path] is in: a document UYAP gave, or one
+  /// saved beside it, is that case's without being tied by hand.
+  Future<UyapCaseLink?> _caseOfFolder(String path) async {
+    try {
+      final folder = p.normalize(p.dirname(path)).toLowerCase();
+      for (final (record, _) in await store.cases()) {
+        if (p.normalize(store.folderOf(record)).toLowerCase() != folder) {
+          continue;
+        }
+        return record.link ??
+            UyapCaseLink(
+              jurisdiction: '',
+              courtType: '',
+              courtId: '',
+              court: record.court,
+              number: record.number,
+            );
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Ties the document to [link], found as [live] in this session, and

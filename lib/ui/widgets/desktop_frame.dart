@@ -41,6 +41,17 @@ class DesktopFrame extends StatefulWidget {
   State<DesktopFrame> createState() => _DesktopFrameState();
 }
 
+/// Whether the window fills the screen (F11): the pages under the frame
+/// put their own headings and toolbars away while it does.
+final windowFullScreen = ValueNotifier<bool>(false);
+
+/// Leaves full screen, from a page's own button.
+Future<void> leaveWindowFullScreen() async {
+  try {
+    await windowManager.setFullScreen(false);
+  } catch (_) {}
+}
+
 class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
   bool _maximized = false;
   bool _fullScreen = false;
@@ -62,6 +73,7 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
         _maximized = maximized;
         _fullScreen = fullscreen;
       });
+      windowFullScreen.value = fullscreen;
     }
   }
 
@@ -207,151 +219,154 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
             children: [
               Column(
                 children: [
-                  RepaintBoundary(
-                    child: Material(
-                      key: const ValueKey('folio-titlebar'),
-                      color: colors.surface,
-                      child: Container(
-                        height: 38,
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: colors.outlineVariant),
+                  // Full screen is the page alone; Esc or F11 brings the
+                  // bar back.
+                  if (!_fullScreen)
+                    RepaintBoundary(
+                      child: Material(
+                        key: const ValueKey('folio-titlebar'),
+                        color: colors.surface,
+                        child: Container(
+                          height: 38,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: colors.outlineVariant),
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 12),
-                            InkWell(
-                              onTap: widget.onAbout,
-                              borderRadius: BorderRadius.circular(6),
-                              child: Tooltip(
-                                message: widget.iconTooltip,
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(5),
-                                  child: Image.asset(
-                                    widget.icon,
-                                    width: 23,
-                                    height: 23,
-                                    // The artwork is 1254 pixels square:
-                                    // decoded at the size it is shown,
-                                    // not in full on the first frame.
-                                    cacheWidth:
-                                        (23 *
-                                                MediaQuery.devicePixelRatioOf(
-                                                  context,
-                                                ))
-                                            .ceil(),
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 12),
+                              InkWell(
+                                onTap: widget.onAbout,
+                                borderRadius: BorderRadius.circular(6),
+                                child: Tooltip(
+                                  message: widget.iconTooltip,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(5),
+                                    child: Image.asset(
+                                      widget.icon,
+                                      width: 23,
+                                      height: 23,
+                                      // The artwork is 1254 pixels square:
+                                      // decoded at the size it is shown,
+                                      // not in full on the first frame.
+                                      cacheWidth:
+                                          (23 *
+                                                  MediaQuery.devicePixelRatioOf(
+                                                    context,
+                                                  ))
+                                              .ceil(),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            if (widget.leading.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              ...widget.leading,
-                              const SizedBox(width: 6),
-                              SizedBox(
-                                height: 20,
-                                child: VerticalDivider(
-                                  width: 1,
-                                  thickness: 1,
-                                  color: colors.outlineVariant,
+                              if (widget.leading.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                ...widget.leading,
+                                const SizedBox(width: 6),
+                                SizedBox(
+                                  height: 20,
+                                  child: VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: colors.outlineVariant,
+                                  ),
                                 ),
-                              ),
-                            ],
-                            Expanded(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onPanStart: (_) =>
-                                    _run(windowManager.startDragging),
-                                onDoubleTap: () => _run(_toggleMaximize),
-                                child: SizedBox.expand(
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (widget.titleIcon != null &&
-                                              _error == null) ...[
-                                            Icon(
-                                              widget.titleIcon,
-                                              size: 16,
-                                              color: colors.onSurfaceVariant,
-                                            ),
-                                            const SizedBox(width: 6),
-                                          ],
-                                          Flexible(
-                                            child: Text(
-                                              _error ?? widget.title,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: .2,
-                                                color: _focused
-                                                    ? colors.onSurface
-                                                    : colors.onSurfaceVariant,
+                              ],
+                              Expanded(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onPanStart: (_) =>
+                                      _run(windowManager.startDragging),
+                                  onDoubleTap: () => _run(_toggleMaximize),
+                                  child: SizedBox.expand(
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (widget.titleIcon != null &&
+                                                _error == null) ...[
+                                              Icon(
+                                                widget.titleIcon,
+                                                size: 16,
+                                                color: colors.onSurfaceVariant,
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            Flexible(
+                                              child: Text(
+                                                _error ?? widget.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: .2,
+                                                  color: _focused
+                                                      ? colors.onSurface
+                                                      : colors.onSurfaceVariant,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          if (widget.titleTrailing != null &&
-                                              _error == null)
-                                            widget.titleTrailing!,
-                                        ],
+                                            if (widget.titleTrailing != null &&
+                                                _error == null)
+                                              widget.titleTrailing!,
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            _control(
-                              'Hakkında',
-                              Icons.info_outline_rounded,
-                              widget.onAbout,
-                            ),
-                            _control(
-                              _fullScreen
-                                  ? 'Tam ekrandan çık (F11)'
-                                  : 'Tam ekran (F11)',
-                              _fullScreen
-                                  ? Icons.fullscreen_exit_rounded
-                                  : Icons.fullscreen_rounded,
-                              _toggleFullScreen,
-                            ),
-                            const VerticalDivider(
-                              indent: 11,
-                              endIndent: 11,
-                              width: 1,
-                            ),
-                            _control(
-                              'Simge durumuna küçült',
-                              Icons.remove_rounded,
-                              () => _run(windowManager.minimize),
-                            ),
-                            _control(
-                              _maximized ? 'Önceki boyut' : 'Ekranı kapla',
-                              _maximized
-                                  ? Icons.filter_none_rounded
-                                  : Icons.crop_square_rounded,
-                              () => _run(_toggleMaximize),
-                            ),
-                            _control(
-                              widget.closeToTray
-                                  ? 'Tepsiye gizle'
-                                  : 'Uygulamayı kapat',
-                              Icons.close_rounded,
-                              () => _run(windowManager.close),
-                              close: true,
-                            ),
-                          ],
+                              _control(
+                                'Hakkında',
+                                Icons.info_outline_rounded,
+                                widget.onAbout,
+                              ),
+                              _control(
+                                _fullScreen
+                                    ? 'Tam ekrandan çık (F11)'
+                                    : 'Tam ekran (F11)',
+                                _fullScreen
+                                    ? Icons.fullscreen_exit_rounded
+                                    : Icons.fullscreen_rounded,
+                                _toggleFullScreen,
+                              ),
+                              const VerticalDivider(
+                                indent: 11,
+                                endIndent: 11,
+                                width: 1,
+                              ),
+                              _control(
+                                'Simge durumuna küçült',
+                                Icons.remove_rounded,
+                                () => _run(windowManager.minimize),
+                              ),
+                              _control(
+                                _maximized ? 'Önceki boyut' : 'Ekranı kapla',
+                                _maximized
+                                    ? Icons.filter_none_rounded
+                                    : Icons.crop_square_rounded,
+                                () => _run(_toggleMaximize),
+                              ),
+                              _control(
+                                widget.closeToTray
+                                    ? 'Tepsiye gizle'
+                                    : 'Uygulamayı kapat',
+                                Icons.close_rounded,
+                                () => _run(windowManager.close),
+                                close: true,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   Expanded(child: widget.child),
                 ],
               ),
