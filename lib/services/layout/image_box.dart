@@ -29,8 +29,9 @@ abstract final class ImageBox {
     final h = (pixels?.height ?? 0).toDouble();
     if (w <= 0 || h <= 0) return (width: 0, height: 0);
     // One given, the other kept in proportion.
-    if (width != null && width > 0)
+    if (width != null && width > 0) {
       return (width: width, height: h * width / w);
+    }
     if (height != null && height > 0) {
       return (width: w * height / h, height: height);
     }

@@ -206,12 +206,7 @@ void main() {
     expect(find.text('Sesli yaz'), findsOneWidget);
     expect(find.text('Yazdır'), findsOneWidget);
     // The tools that are only icons on a narrower screen are named too.
-    for (final name in [
-      'Kalıp metin',
-      'Belge geçmişi',
-      'İçtihat ara',
-      'Kısayollar',
-    ]) {
+    for (final name in ['Kalıp metin', 'Belge geçmişi', 'Kısayollar']) {
       expect(find.text(name), findsOneWidget, reason: name);
     }
     // And nothing has been pushed out of sight for it.

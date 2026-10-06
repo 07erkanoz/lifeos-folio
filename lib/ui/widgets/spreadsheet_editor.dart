@@ -674,8 +674,9 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
   static CellValue? _parse(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
-    if (trimmed.startsWith('='))
+    if (trimmed.startsWith('=')) {
       return CellValue.formula(excelFormula(trimmed));
+    }
     if (RegExp(r'^-?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?$').hasMatch(trimmed)) {
       return CellValue.number(
         double.parse(trimmed.replaceAll('.', '').replaceAll(',', '.')),

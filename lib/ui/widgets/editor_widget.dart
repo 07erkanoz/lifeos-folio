@@ -111,6 +111,11 @@ import '../theme/app_theme.dart';
 import 'editor_line_layout.dart';
 import '../mobile/scroll_chrome.dart';
 import 'editor_units.dart';
+import 'editor_ribbon.dart';
+import '../../services/portal/observed.dart';
+import '../../services/portal/portal_database.dart';
+import '../../services/portal/portal_hearing.dart';
+import '../../services/uets/notice_matcher.dart';
 
 List<dynamic> _pdfDeltaJson(DocModel model) =>
     DocDeltaMap.modeldenDelta(model).delta.toJson();
@@ -153,6 +158,11 @@ class EditorWidget extends StatefulWidget {
   /// The program's part of the Dosya menu: new, open, recents, drafts.
   final EditorFileHost? fileHost;
 
+  /// Whether the heading above shows the ribbon's tabs (EditorRibbonTabs);
+  /// false where none does, a phone: the ribbon then begins with a button
+  /// that picks them.
+  final bool hostTabs;
+
   /// For screenshots and tests: the decision bank to ask.
   @visibleForTesting
   final CaseLaw? caseLaw;
@@ -172,6 +182,7 @@ class EditorWidget extends StatefulWidget {
     this.reveal,
     this.fileHost,
     this.caseLaw,
+    this.hostTabs = true,
   });
 
   @override
@@ -2688,6 +2699,816 @@ class _EditorWidgetState extends State<EditorWidget>
     );
   }
 
+  // The ribbon's other tabs (docs/design/editor-serit-taslak.png).
+
+  /// The lawyer's name for a petition's signature, once known.
+  String? _lawyerName;
+  bool _lawyerAsked = false;
+
+  void _askLawyer() {
+    if (_lawyerAsked) return;
+    _lawyerAsked = true;
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+    unawaited(
+      LawyerProfile.load().then((profile) {
+        final name = profile.lawyer?.titled ?? '';
+        if (mounted && name.isNotEmpty) _lawyerName = name;
+      }, onError: (Object _) {}),
+    );
+  }
+
+  PetitionTools get _petition => PetitionTools(_active);
+
+  void _petitionEdit(void Function(PetitionTools tools) edit) {
+    final body = identical(_active, _quillController);
+    edit(_petition);
+    if (body) _editorFocus.requestFocus();
+    setState(() {});
+  }
+
+  Future<void> _applyTemplate(PetitionTemplate template) async {
+    final tools = _petition;
+    var replace = true;
+    if (!tools.empty) {
+      final choice = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('“${template.name}” şablonu'),
+          content: const Text(
+            'Belgede metin var. Şablon belgenin yerine mi geçsin, yoksa '
+            'imlecin olduğu yere mi eklensin?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Vazgeç'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('İmlece ekle'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Belgenin yerine'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+      replace = choice;
+    }
+    final link = _uyap.link;
+    final lines = template.build(
+      link == null
+          ? null
+          : PetitionCase(
+              court: link.court,
+              number: link.number,
+              lawyer: _lawyerName,
+            ),
+    );
+    _petitionEdit((tools) {
+      if (replace) {
+        tools.replaceWith(lines);
+      } else {
+        for (final (text, align, bold) in lines) {
+          tools.paragraph(text, bold: bold, align: align);
+        }
+      }
+    });
+    showNotice(
+      context,
+      '“${template.name}” şablonu eklendi',
+      detail: link == null
+          ? 'Köşeli parantezli yerleri doldurun.'
+          : 'Mahkeme ve dosya numarası bağlı dosyadan yazıldı.',
+      kind: NoticeKind.success,
+    );
+  }
+
+  /// The case's key in the agenda, when the document is tied to one.
+  String? get _caseKey {
+    final link = _uyap.link;
+    return link == null ? null : caseKey(link.number, link.court);
+  }
+
+  String get _documentName => _documentPath == null
+      ? 'Yeni belge'
+      : p.basenameWithoutExtension(_documentPath!);
+
+  /// Süre ekle: a deadline in the agenda, for the document's case.
+  Future<void> _addDeadline() async {
+    final title = TextEditingController(text: 'Süre — $_documentName');
+    final note = TextEditingController();
+    var day = DateTime.now().add(const Duration(days: 14));
+    final link = _uyap.link;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('Süre ekle'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (link != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      '${link.court} · ${link.number}',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                TextField(
+                  key: const ValueKey('deadline-title'),
+                  controller: title,
+                  decoration: const InputDecoration(labelText: 'Süre'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const ValueKey('deadline-day'),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: day,
+                      firstDate: DateTime.now().subtract(
+                        const Duration(days: 30),
+                      ),
+                      lastDate: DateTime.now().add(const Duration(days: 730)),
+                    );
+                    if (picked != null) setDialog(() => day = picked);
+                  },
+                  icon: const Icon(Icons.event_rounded, size: 18),
+                  label: Text('Son gün: ${todayDotted(day)}'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: note,
+                  decoration: const InputDecoration(labelText: 'Not'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('deadline-save'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Ajandaya ekle'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final name = title.text.trim();
+    final body = note.text.trim();
+    title.dispose();
+    note.dispose();
+    if (saved != true || !mounted || name.isEmpty) return;
+    try {
+      final db = await PortalDatabase.shared();
+      db.saveAgenda(
+        AgendaItem(
+          id: AgendaItem.newId(),
+          kind: 'deadline',
+          title: name,
+          body: [if (body.isNotEmpty) body, ?_documentPath].join('\n'),
+          at: DateTime(day.year, day.month, day.day, 23, 59),
+          allDay: true,
+          caseKey: _caseKey,
+          updated: DateTime.now(),
+        ),
+      );
+      if (mounted) {
+        showNotice(
+          context,
+          'Süre ajandaya eklendi',
+          detail: '$name · ${todayDotted(day)}',
+          kind: NoticeKind.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Süre eklenemedi',
+          detail: '$e',
+          kind: NoticeKind.error,
+        );
+      }
+    }
+  }
+
+  /// Duruşmaya bağla: the document noted under one of the case's hearings.
+  Future<void> _tieToHearing() async {
+    final key = _caseKey;
+    if (key == null) return;
+    try {
+      final db = await PortalDatabase.shared();
+      final now = DateTime.now();
+      final hearings = db
+          .hearings(
+            from: now.subtract(const Duration(days: 1)),
+            to: now.add(const Duration(days: 400)),
+          )
+          .where((h) => h.caseKey == key)
+          .toList();
+      if (!mounted) return;
+      if (hearings.isEmpty) {
+        showNotice(
+          context,
+          'Bu dosyanın yaklaşan duruşması yok',
+          detail: 'Ajanda UYAP’tan güncellendiğinde duruşmalar burada çıkar.',
+        );
+        return;
+      }
+      String two(int v) => v.toString().padLeft(2, '0');
+      final hearing = await showDialog<PortalHearing>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('Duruşmaya bağla'),
+          children: [
+            for (final h in hearings)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, h),
+                child: Text(
+                  '${todayDotted(h.at)} ${two(h.at.hour)}:${two(h.at.minute)}'
+                  ' · ${h.isEHearing ? 'E-duruşma' : 'Duruşma'}',
+                ),
+              ),
+          ],
+        ),
+      );
+      if (hearing == null || !mounted) return;
+      db.saveAgenda(
+        AgendaItem(
+          id: AgendaItem.newId(),
+          kind: 'note',
+          title: 'Evrak: $_documentName',
+          body: _documentPath ?? '',
+          at: hearing.at,
+          caseKey: key,
+          hearingKey: hearing.key,
+          updated: DateTime.now(),
+        ),
+      );
+      showNotice(
+        context,
+        'Belge duruşmaya bağlandı',
+        detail: 'Ajandada ${todayDotted(hearing.at)} duruşmasının altında.',
+        kind: NoticeKind.success,
+      );
+    } catch (e) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Duruşmaya bağlanamadı',
+          detail: '$e',
+          kind: NoticeKind.error,
+        );
+      }
+    }
+  }
+
+  /// Tebligattan süre: the case's UETS notices read again for their
+  /// deadlines, which go into the agenda.
+  Future<void> _noticeDeadlines() async {
+    final key = _caseKey;
+    if (key == null) return;
+    try {
+      final db = await PortalDatabase.shared();
+      matchNotices(db);
+      final notices = db.notices().where((n) => n.caseKey == key).length;
+      final deadlines = db
+          .agenda()
+          .where((i) => i.caseKey == key && i.id.startsWith('uets:'))
+          .length;
+      if (!mounted) return;
+      showNotice(
+        context,
+        notices == 0
+            ? 'Bu dosyaya bağlı tebligat yok'
+            : '$notices tebligattan $deadlines süre ajandada',
+        detail: notices == 0
+            ? 'UETS bağlıyken tebligatlar dosyalara kendiliğinden bağlanır.'
+            : 'Süreler tebliğ tarihinden hesaplandı.',
+        kind: notices == 0 ? NoticeKind.info : NoticeKind.success,
+      );
+    } catch (e) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Tebligatlar okunamadı',
+          detail: '$e',
+          kind: NoticeKind.error,
+        );
+      }
+    }
+  }
+
+  bool get _desktop =>
+      Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+
+  /// Hukuk: the petition, the case, signing and sending, the agenda,
+  /// research.
+  Widget _legalRibbon(BuildContext context, bool expanded) {
+    _askLawyer();
+    final linked = _uyap.link != null;
+    const unlinked = 'Belge bir UYAP dosyasına bağlı değil';
+    final templates = [
+      for (final t in petitionTemplates)
+        MenuItemButton(
+          key: ValueKey('petition-template-${t.name}'),
+          onPressed: () => unawaited(_applyTemplate(t)),
+          leadingIcon: const Icon(Icons.description_outlined, size: 18),
+          child: Text(t.name),
+        ),
+    ];
+    final parties = [
+      for (final t in PetitionTools.parties)
+        MenuItemButton(
+          onPressed: () => _petitionEdit((x) => x.party(t)),
+          child: Text(t),
+        ),
+    ];
+    final styles = [
+      for (final e in PetitionTools.styles.entries)
+        MenuItemButton(
+          onPressed: () => _petitionEdit((x) => x.style(e.key)),
+          child: Text(e.value),
+        ),
+    ];
+    final sections = [
+      for (final s in PetitionTools.sections)
+        MenuItemButton(
+          onPressed: () => _petitionEdit((x) => x.section(s)),
+          child: Text(s),
+        ),
+    ];
+    void date() => _petitionEdit((x) => x.date());
+    void signature() => _petitionEdit(
+      (x) => x.signature(lawyer: _lawyerName ?? 'Av. [Ad Soyad]'),
+    );
+    final send = _desktop ? () => unawaited(_sendToUyap()) : null;
+    final sign = _canSignNew && !_isSaving && !_signingNew
+        ? () => unawaited(_signNew())
+        : null;
+
+    if (!expanded) {
+      return ribbonStrip(
+        [
+          const SizedBox(width: 2),
+          ribbonMenu(context, Icons.auto_stories_outlined, 'Şablon', templates),
+          ribbonMenu(context, Icons.people_outline, 'Taraf', parties),
+          ribbonDivider(context),
+          if (_desktop)
+            ribbonMenu(context, Icons.gavel_rounded, 'UYAP', [
+              MenuItemButton(
+                onPressed: _toggleUyap,
+                child: const Text('UYAP dosyası'),
+              ),
+              MenuItemButton(
+                onPressed: send,
+                child: const Text('UYAP’a gönder'),
+              ),
+              MenuItemButton(
+                onPressed: () => unawaited(_openUyapOperations()),
+                child: const Text('İşlemlerim'),
+              ),
+            ]),
+          ribbonMenu(context, Icons.draw_outlined, 'İmzala', [
+            MenuItemButton(
+              onPressed: sign,
+              leadingIcon: const Icon(Icons.usb_rounded, size: 18),
+              child: const Text('E-imza kartıyla'),
+            ),
+            const MenuItemButton(
+              leadingIcon: Icon(Icons.phone_android_rounded, size: 18),
+              child: Text('Mobil imzayla (yakında)'),
+            ),
+          ]),
+          ribbonButton(
+            context,
+            Icons.event_available_outlined,
+            'Süre',
+            () => unawaited(_addDeadline()),
+          ),
+          ribbonDivider(context),
+          ribbonButton(
+            context,
+            Icons.balance_outlined,
+            'İçtihat',
+            () => setState(() => _caseLawOpen = !_caseLawOpen),
+            selected: _caseLawOpen,
+          ),
+        ],
+        more: ribbonMore('Diğer hukuk araçları', [
+          SubmenuButton(
+            menuChildren: styles,
+            leadingIcon: const Icon(Icons.format_paint_outlined, size: 18),
+            child: const Text('Dilekçe stili'),
+          ),
+          SubmenuButton(
+            menuChildren: sections,
+            leadingIcon: const Icon(Icons.segment, size: 18),
+            child: const Text('Bölüm başlığı'),
+          ),
+          MenuItemButton(
+            onPressed: date,
+            leadingIcon: const Icon(Icons.event_outlined, size: 18),
+            child: const Text('Bugünün tarihi'),
+          ),
+          MenuItemButton(
+            onPressed: signature,
+            leadingIcon: const Icon(Icons.edit_note_outlined, size: 18),
+            child: const Text('İmza bloğu'),
+          ),
+          const Divider(height: 8),
+          MenuItemButton(
+            onPressed: linked ? () => unawaited(_tieToHearing()) : null,
+            leadingIcon: const Icon(Icons.calendar_month_outlined, size: 18),
+            child: const Text('Duruşmaya bağla'),
+          ),
+          MenuItemButton(
+            onPressed: () => unawaited(_snippets()),
+            leadingIcon: const Icon(Icons.bolt_outlined, size: 18),
+            child: const Text('Kalıp metin'),
+          ),
+          MenuItemButton(
+            onPressed: () => unawaited(_history()),
+            leadingIcon: const Icon(Icons.history_rounded, size: 18),
+            child: const Text('Belge geçmişi'),
+          ),
+        ], key: const ValueKey('legal-more')),
+      );
+    }
+    return ribbonStrip([
+      ribbonGroup(context, 'Dilekçe', [
+        [
+          ribbonMenu(
+            context,
+            Icons.auto_stories_outlined,
+            'Şablon',
+            templates,
+            key: const ValueKey('legal-templates'),
+          ),
+          ribbonMenu(context, Icons.people_outline, 'Taraf satırı', parties),
+          ribbonButton(
+            context,
+            Icons.event_outlined,
+            'Tarih',
+            date,
+            tooltip: 'Bugünün tarihi, sağa yaslı',
+          ),
+        ],
+        [
+          ribbonMenu(
+            context,
+            Icons.format_paint_outlined,
+            'Dilekçe stili',
+            styles,
+          ),
+          ribbonMenu(context, Icons.segment, 'Bölüm başlığı', sections),
+          ribbonButton(
+            context,
+            Icons.edit_note_outlined,
+            'İmza bloğu',
+            signature,
+          ),
+        ],
+      ]),
+      if (_desktop)
+        ribbonGroup(context, 'Dosya', [
+          [
+            ribbonButton(
+              context,
+              Icons.gavel_rounded,
+              'UYAP dosyası',
+              _toggleUyap,
+              selected: _uyapOpen,
+              key: const ValueKey('legal-uyap-case'),
+              tooltip: 'Belgenin dosyası sayfanın yanında',
+            ),
+            ribbonButton(context, Icons.description_outlined, 'Evraklar', () {
+              if (!_uyapOpen) _toggleUyap();
+            }, tooltip: 'Dosyanın evrakları, sayfanın yanında'),
+          ],
+          [
+            ribbonButton(
+              context,
+              Icons.checklist_rounded,
+              'İşlemlerim',
+              () => unawaited(_openUyapOperations()),
+              tooltip: 'UYAP gönderimleri',
+            ),
+            ribbonButton(
+              context,
+              Icons.sync_rounded,
+              'Güncelle',
+              linked
+                  ? () {
+                      if (!_uyapOpen) _toggleUyap();
+                      unawaited(_uyap.refresh());
+                    }
+                  : null,
+              tooltip: linked ? 'Dosyayı UYAP’tan yenile' : unlinked,
+            ),
+          ],
+        ]),
+      ribbonGroup(context, 'İmzala ve gönder', [
+        [
+          ribbonBigButton(
+            context,
+            Icons.usb_rounded,
+            'E-imza\nkartı',
+            sign,
+            tooltip: 'UDF olarak e-imza kartıyla imzala',
+            key: const ValueKey('legal-sign-card'),
+          ),
+          const SizedBox(width: 4),
+          ribbonBigButton(
+            context,
+            Icons.phone_android_rounded,
+            'Mobil\nimza',
+            null,
+            tooltip: 'Mobil imzayla UDF imzalama yakında',
+          ),
+          if (_desktop) ...[
+            const SizedBox(width: 4),
+            ribbonBigButton(
+              context,
+              Icons.send_rounded,
+              'UYAP’a\ngönder',
+              send,
+              primary: true,
+              key: const ValueKey('legal-send'),
+            ),
+          ],
+        ],
+      ]),
+      ribbonGroup(context, 'Ajanda', [
+        [
+          ribbonButton(
+            context,
+            Icons.event_available_outlined,
+            'Süre ekle',
+            () => unawaited(_addDeadline()),
+            key: const ValueKey('legal-deadline'),
+          ),
+          ribbonButton(
+            context,
+            Icons.calendar_month_outlined,
+            'Duruşmaya bağla',
+            linked ? () => unawaited(_tieToHearing()) : null,
+            tooltip: linked ? null : unlinked,
+          ),
+        ],
+        [
+          ribbonButton(
+            context,
+            Icons.mark_email_unread_outlined,
+            'Tebligattan süre',
+            linked ? () => unawaited(_noticeDeadlines()) : null,
+            tooltip: linked
+                ? 'Dosyanın UETS tebligatlarındaki süreler'
+                : unlinked,
+          ),
+        ],
+      ]),
+      ribbonGroup(context, 'Araştırma', last: true, [
+        [
+          ribbonButton(
+            context,
+            Icons.balance_outlined,
+            'İçtihat ara',
+            () => setState(() => _caseLawOpen = !_caseLawOpen),
+            selected: _caseLawOpen,
+            key: const ValueKey('legal-case-law'),
+          ),
+          ribbonButton(
+            context,
+            Icons.bolt_outlined,
+            'Kalıp metin',
+            () => unawaited(_snippets()),
+          ),
+        ],
+        [
+          ribbonButton(
+            context,
+            Icons.history_rounded,
+            'Belge geçmişi',
+            () => unawaited(_history()),
+          ),
+          ribbonButton(
+            context,
+            Icons.compare_outlined,
+            'Karşılaştır',
+            () => unawaited(_history()),
+            tooltip: 'Kaydedilmiş sürümlerle karşılaştır',
+          ),
+        ],
+      ]),
+    ]);
+  }
+
+  /// Ekle: what is put in a document.
+  Widget _insertRibbon(BuildContext context, bool expanded) {
+    final header = _regions.containsKey('header');
+    final footer = _regions.containsKey('footer');
+    final table = MenuAnchor(
+      menuChildren: [
+        for (final (rows, columns) in const [(2, 2), (3, 3), (4, 3), (5, 4)])
+          MenuItemButton(
+            onPressed: () => _insertTable(rows, columns),
+            child: Text('$rows × $columns tablo'),
+          ),
+      ],
+      builder: (context, menu, _) => expanded
+          ? ribbonBigButton(
+              context,
+              Icons.table_chart_outlined,
+              'Tablo',
+              () => menu.isOpen ? menu.close() : menu.open(),
+            )
+          : ribbonButton(
+              context,
+              Icons.table_chart_outlined,
+              'Tablo',
+              () => menu.isOpen ? menu.close() : menu.open(),
+            ),
+    );
+    final image = expanded
+        ? ribbonBigButton(
+            context,
+            Icons.image_outlined,
+            'Görsel',
+            () => unawaited(_insertImage()),
+          )
+        : ribbonButton(
+            context,
+            Icons.image_outlined,
+            'Görsel',
+            () => unawaited(_insertImage()),
+          );
+    final bands = [
+      ribbonButton(
+        context,
+        Icons.vertical_align_top_rounded,
+        'Üst bilgi',
+        () => unawaited(_toggleRegion('header')),
+        selected: header,
+      ),
+      ribbonButton(
+        context,
+        Icons.vertical_align_bottom_rounded,
+        'Alt bilgi',
+        () => unawaited(_toggleRegion('footer')),
+        selected: footer,
+      ),
+    ];
+    final page = [
+      ribbonButton(
+        context,
+        Icons.tag_rounded,
+        'Sayfa numarası',
+        () => unawaited(_pageNumbers()),
+      ),
+      ribbonButton(
+        context,
+        Icons.branding_watermark_outlined,
+        'Antet',
+        () => unawaited(_letterheads()),
+      ),
+    ];
+    final text = [
+      ribbonButton(
+        context,
+        Icons.bolt_outlined,
+        'Kalıp metin',
+        () => unawaited(_snippets()),
+      ),
+      ribbonButton(
+        context,
+        Icons.event_outlined,
+        'Tarih',
+        () => _petitionEdit((x) => x.date()),
+      ),
+    ];
+    if (!expanded) {
+      return ribbonStrip([
+        table,
+        image,
+        ribbonDivider(context),
+        ...bands,
+        ...page,
+        ribbonDivider(context),
+        ...text,
+      ]);
+    }
+    return ribbonStrip([
+      ribbonGroup(context, 'Tablo ve görsel', [
+        [table, const SizedBox(width: 4), image],
+      ]),
+      ribbonGroup(context, 'Üst ve alt bilgi', [bands, page]),
+      ribbonGroup(context, 'Metin', last: true, [
+        text,
+        [
+          ribbonButton(
+            context,
+            Icons.edit_note_outlined,
+            'İmza bloğu',
+            () => _petitionEdit(
+              (x) => x.signature(lawyer: _lawyerName ?? 'Av. [Ad Soyad]'),
+            ),
+          ),
+        ],
+      ]),
+    ]);
+  }
+
+  /// Görünüm: how the document is looked at.
+  Widget _viewRibbon(BuildContext context, bool expanded) {
+    final flows = _flowsAt(MediaQuery.sizeOf(context).width);
+    final views = [
+      ribbonButton(
+        context,
+        Icons.description_outlined,
+        'Sayfa görünümü',
+        () => _flowChoice.value = false,
+        selected: !flows,
+      ),
+      ribbonButton(
+        context,
+        Icons.smartphone_rounded,
+        'Mobil görünüm',
+        () => _flowChoice.value = true,
+        selected: flows,
+      ),
+    ];
+    final rulers = [
+      ribbonButton(
+        context,
+        Icons.straighten_rounded,
+        'Yatay cetvel',
+        () => setState(() => _showHorizontalRuler = !_showHorizontalRuler),
+        selected: _showHorizontalRuler,
+      ),
+      ribbonButton(
+        context,
+        Icons.height_rounded,
+        'Dikey cetvel',
+        () => setState(() => _showVerticalRuler = !_showVerticalRuler),
+        selected: _showVerticalRuler,
+      ),
+    ];
+    final other = [
+      if (speechAvailable)
+        ribbonButton(
+          context,
+          Icons.record_voice_over_outlined,
+          'Sesli oku',
+          () => unawaited(_readAloud()),
+        ),
+      ribbonButton(
+        context,
+        Icons.keyboard_outlined,
+        'Kısayollar',
+        _showShortcuts,
+      ),
+    ];
+    if (!expanded) {
+      return ribbonStrip([
+        ...views,
+        ribbonDivider(context),
+        ...rulers,
+        ribbonDivider(context),
+        ...other,
+      ]);
+    }
+    return ribbonStrip([
+      ribbonGroup(context, 'Görünüm', [
+        [views.first],
+        [views.last],
+      ]),
+      ribbonGroup(context, 'Cetveller', [
+        [rulers.first],
+        [rulers.last],
+      ]),
+      ribbonGroup(context, 'Diğer', last: true, [
+        [other.first],
+        if (other.length > 1) [other.last],
+      ]),
+    ]);
+  }
+
   void _showShortcuts() => showDialog<void>(
     context: context,
     builder: (_) => AlertDialog(
@@ -3655,64 +4476,104 @@ class _EditorWidgetState extends State<EditorWidget>
                           ? () => unawaited(EditorWindow.open())
                           : null,
                     ),
+                    if (!widget.hostTabs) ...[
+                      const SizedBox(width: 4),
+                      const RibbonTabPicker(),
+                      const SizedBox(width: 2),
+                    ],
                     Expanded(
-                      child: EditorToolbar(
-                        controller: _active,
-                        onFind: _find,
-                        onHistory: _history,
-                        onSnippets: () => unawaited(_snippets()),
-                        onReadAloud: speechAvailable
-                            ? () => unawaited(_readAloud())
-                            : null,
-                        onDictate: speechAvailable
-                            ? () => unawaited(_dictate())
-                            : null,
-                        onCaseLaw: () =>
-                            setState(() => _caseLawOpen = !_caseLawOpen),
-                        caseLawOpen: _caseLawOpen,
-                        onUyapCase:
-                            Platform.isLinux ||
-                                Platform.isWindows ||
-                                Platform.isMacOS
-                            ? _toggleUyap
-                            : null,
-                        uyapCaseOpen: _uyapOpen,
-                        onReplace: () => _find(replace: true),
-                        onPrint: _print,
-                        onInsertImage: _insertImage,
-                        onInsertTable: _insertTable,
-                        hasHeader: _regions.containsKey('header'),
-                        hasFooter: _regions.containsKey('footer'),
-                        onToggleRegion: (key) => switch (key) {
-                          'page-numbers' => _pageNumbers(),
-                          'letterheads' => _letterheads(),
-                          _ => _toggleRegion(key),
-                        },
-                        onHelp: _showShortcuts,
-                        onHorizontalRuler: () => setState(
-                          () => _showHorizontalRuler = !_showHorizontalRuler,
-                        ),
-                        onVerticalRuler: () => setState(
-                          () => _showVerticalRuler = !_showVerticalRuler,
-                        ),
-                        showHorizontalRuler: _showHorizontalRuler,
-                        showVerticalRuler: _showVerticalRuler,
-                        onFontSelected: (name) async {
-                          try {
-                            await DocumentFonts.loadEditorFamilies([name]);
-                            if (mounted) setState(() {});
-                          } catch (e) {
-                            if (context.mounted) {
-                              showNotice(
+                      child: ValueListenableBuilder<RibbonTab>(
+                        valueListenable: editorRibbonTab,
+                        builder: (context, tab, toolbar) => ListenableBuilder(
+                          listenable: _uyap,
+                          builder: (context, _) {
+                            final expanded =
+                                MediaQuery.sizeOf(context).width >= 1000 &&
+                                MediaQuery.sizeOf(context).height >= 550;
+                            return switch (tab) {
+                              RibbonTab.home => toolbar!,
+                              RibbonTab.legal => _legalRibbon(
                                 context,
-                                'Yazı tipi yüklenemedi',
-                                detail: '$e',
-                                kind: NoticeKind.error,
-                              );
+                                expanded,
+                              ),
+                              RibbonTab.insert => _insertRibbon(
+                                context,
+                                expanded,
+                              ),
+                              RibbonTab.view => _viewRibbon(context, expanded),
+                            };
+                          },
+                        ),
+                        child: EditorToolbar(
+                          controller: _active,
+                          onFind: _find,
+                          onHistory: _history,
+                          onSnippets: () => unawaited(_snippets()),
+                          onReadAloud: speechAvailable
+                              ? () => unawaited(_readAloud())
+                              : null,
+                          onDictate: speechAvailable
+                              ? () => unawaited(_dictate())
+                              : null,
+                          onReplace: () => _find(replace: true),
+                          onPrint: _print,
+                          onInsertImage: _insertImage,
+                          onInsertTable: _insertTable,
+                          hasHeader: _regions.containsKey('header'),
+                          hasFooter: _regions.containsKey('footer'),
+                          onToggleRegion: (key) => switch (key) {
+                            'page-numbers' => _pageNumbers(),
+                            'letterheads' => _letterheads(),
+                            _ => _toggleRegion(key),
+                          },
+                          onHelp: _showShortcuts,
+                          onHorizontalRuler: () => setState(
+                            () => _showHorizontalRuler = !_showHorizontalRuler,
+                          ),
+                          onVerticalRuler: () => setState(
+                            () => _showVerticalRuler = !_showVerticalRuler,
+                          ),
+                          showHorizontalRuler: _showHorizontalRuler,
+                          showVerticalRuler: _showVerticalRuler,
+                          onFontSelected: (name) async {
+                            try {
+                              await DocumentFonts.loadEditorFamilies([name]);
+                              if (mounted) setState(() {});
+                            } catch (e) {
+                              if (context.mounted) {
+                                showNotice(
+                                  context,
+                                  'Yazı tipi yüklenemedi',
+                                  detail: '$e',
+                                  kind: NoticeKind.error,
+                                );
+                              }
                             }
-                          }
-                        },
+                          },
+                        ),
                       ),
+                    ),
+                    // The case the document belongs to, every tab.
+                    ListenableBuilder(
+                      listenable: _uyap,
+                      builder: (context, _) {
+                        final link = _uyap.link;
+                        final width = MediaQuery.sizeOf(context).width;
+                        if (link == null || width < 700) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: RibbonCaseChip(
+                            court: link.court,
+                            number: link.number,
+                            short: width < 1400,
+                            onPressed: () {
+                              if (!_uyapOpen) _toggleUyap();
+                            },
+                          ),
+                        );
+                      },
                     ),
                     if (_leftDraft != null)
                       LeftDraftButton(

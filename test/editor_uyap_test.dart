@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:evrak_convert/ui/widgets/editor_ribbon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -40,7 +41,10 @@ void main() {
     );
     await tester.pump();
     expect(find.byType(UyapCasePanel), findsNothing);
-    // Named, on a screen this wide.
+    // On the Hukuk tab, named on a screen this wide.
+    editorRibbonTab.value = RibbonTab.legal;
+    addTearDown(() => editorRibbonTab.value = RibbonTab.home);
+    await tester.pump();
     await tester.tap(find.text('UYAP dosyası'));
     await tester.pump();
     expect(find.byType(UyapCasePanel), findsOneWidget);

@@ -36,6 +36,7 @@ import 'widgets/spreadsheet_editor.dart';
 import 'widgets/spreadsheet_viewer.dart';
 import 'widgets/hover_document_preview.dart';
 import 'desktop/desktop_home.dart';
+import 'widgets/editor_ribbon.dart';
 import 'library/search_controls.dart';
 import 'library/collapsing_overview.dart';
 
@@ -1813,6 +1814,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                                           _saved,
                                                                     )
                                                                   : EditorWidget(
+                                                                      hostTabs:
+                                                                          MediaQuery.sizeOf(
+                                                                            context,
+                                                                          ).width >=
+                                                                          700,
                                                                       fileHost:
                                                                           _editorFileHost,
                                                                       library:
@@ -2949,26 +2955,40 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         icon: const Icon(Icons.arrow_back_rounded, size: 20),
                       ),
                       Expanded(
-                        child: Tooltip(
-                          message: _shownPath(file),
-                          child: Row(
-                            children: [
-                              FileBadge(file: file, size: 28),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  p.basename(_shownPath(file)),
-                                  key: const ValueKey('workspace-title'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Tooltip(
+                                message: _shownPath(file),
+                                child: Row(
+                                  children: [
+                                    FileBadge(file: file, size: 28),
+                                    const SizedBox(width: 10),
+                                    Flexible(
+                                      child: Text(
+                                        p.basename(_shownPath(file)),
+                                        key: const ValueKey('workspace-title'),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+                            ),
+                            // The editor's ribbon tabs, after the name.
+                            if (_isEditorMode &&
+                                !phone &&
+                                file.format != EvrakFormat.spreadsheet &&
+                                !file.format.usesPlainTextEditor) ...[
+                              const SizedBox(width: 18),
+                              const EditorRibbonTabs(height: 56),
                             ],
-                          ),
+                          ],
                         ),
                       ),
                       if (phone && !_isEditorMode)
@@ -3167,6 +3187,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               onSaved: _saved,
                             )
                           : EditorWidget(
+                              hostTabs: MediaQuery.sizeOf(context).width >= 700,
                               fileHost: _editorFileHost,
                               draft: _fileDraft(opened),
                               library: _library,

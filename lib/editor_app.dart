@@ -20,6 +20,7 @@ import 'services/platform/document_launch.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
 import 'ui/widgets/desktop_frame.dart';
+import 'ui/widgets/editor_ribbon.dart';
 import 'ui/widgets/document_history_dialog.dart';
 import 'ui/widgets/editor_file_menu.dart';
 import 'ui/widgets/editor_widget.dart';
@@ -323,7 +324,14 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
           ? DesktopFrame(
               title: _documentName,
               titleIcon: Icons.description_outlined,
-              titleTrailing: _EditedDot(_draft.edited),
+              titleTrailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _EditedDot(_draft.edited),
+                  const SizedBox(width: 16),
+                  const EditorRibbonTabs(height: 38),
+                ],
+              ),
               icon: 'assets/branding/lifeos_editor.png',
               iconTooltip: 'LifeOS Editör hakkında',
               leading: [
@@ -364,6 +372,7 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
         },
         child: Scaffold(
           body: EditorWidget(
+            hostTabs: widget.desktopChrome,
             // A fresh editor for each document: its own draft, history and
             // unsaved-changes state.
             key: ValueKey('standalone-editor-$_generation'),

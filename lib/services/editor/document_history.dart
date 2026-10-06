@@ -332,8 +332,9 @@ class DocumentHistory {
       bytes: content,
       kind: kind,
     );
-    if (await file.exists())
+    if (await file.exists()) {
       await keep(await file.readAsBytes(), 'before-restore');
+    }
     await file.writeAsBytes(bytes, flush: true);
     await keep(bytes, 'restored');
   }
