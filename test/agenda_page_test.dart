@@ -163,6 +163,47 @@ void main() {
     expect(saved.body, contains('tebliğ 6.10.2026'));
   });
 
+  testWidgets('hearings at overlapping times are drawn side by side', (
+    tester,
+  ) async {
+    final db = await pump(tester);
+    final asked = DateTime.utc(2026, 10, 6);
+    db.mergeHearings(
+      PortalChannel.uyapWeb,
+      DateTime(2026, 9, 6),
+      DateTime(2026, 12, 5),
+      [
+        for (final (m, c) in [
+          (25, 'Konya 1. Asliye Ceza'),
+          (35, 'Kepez 2. Sulh Hukuk'),
+        ])
+          PortalHearing.create(
+            number: '2026/$m',
+            court: c,
+            at: DateTime(2026, 10, 6, 9, m),
+            channel: PortalChannel.uyapWeb,
+            id: '$m',
+            kind: Observed('Duruşma', PortalChannel.uyapWeb, asked),
+          ),
+      ],
+      complete: false,
+    );
+    // Back a week and forward again, to read what is kept anew.
+    await tester.tap(find.byTooltip('Önceki'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Sonraki'));
+    await tester.pumpAndSettle();
+    final blocks = [
+      for (final t in ['09:20 Duruşma', '09:25 Duruşma', '09:35 Duruşma'])
+        tester.getRect(find.text(t)),
+    ];
+    for (var i = 0; i < blocks.length; i++) {
+      for (var j = i + 1; j < blocks.length; j++) {
+        expect(blocks[i].overlaps(blocks[j]), isFalse, reason: '$i ve $j');
+      }
+    }
+  });
+
   testWidgets('the list shows what is coming, day by day', (tester) async {
     await pump(tester);
     await tester.tap(find.byKey(const ValueKey('agenda-view-list')));

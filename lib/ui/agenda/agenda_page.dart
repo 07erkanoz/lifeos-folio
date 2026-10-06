@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../services/legal/deadlines/belge_turu.dart';
 import '../../services/legal/deadlines/deadline_service.dart';
 import '../../services/legal/deadlines/mahkeme_kategori.dart';
 import '../../services/legal/deadlines/sure_katalogu.dart' show SureGuveni;
+import '../../services/platform/app_directories.dart';
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
@@ -126,6 +130,30 @@ class _AgendaPageState extends State<AgendaPage> {
       if (mounted) setState(() {});
     });
     unawaited(_open());
+    unawaited(_loadView());
+  }
+
+  /// The view last chosen, kept beside Folio's other settings.
+  Future<File> _viewFile() async =>
+      File(p.join((await folioSupportDirectory()).path, 'agenda.json'));
+
+  Future<void> _loadView() async {
+    try {
+      final json = jsonDecode(await (await _viewFile()).readAsString());
+      final view = _View.values.asNameMap()[json is Map ? json['view'] : null];
+      if (view != null && mounted && view != _view) {
+        setState(() => _view = view);
+        _reload();
+      }
+    } catch (_) {
+      // First time, or no settings folder: the week.
+    }
+  }
+
+  Future<void> _saveView() async {
+    try {
+      await (await _viewFile()).writeAsString(jsonEncode({'view': _view.name}));
+    } catch (_) {}
   }
 
   @override
@@ -300,6 +328,7 @@ class _AgendaPageState extends State<AgendaPage> {
                         width: math.min(380, box.maxWidth * .3),
                         child: SingleChildScrollView(
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _prepCard(context),
                               const SizedBox(height: 12),
@@ -402,6 +431,7 @@ class _AgendaPageState extends State<AgendaPage> {
                     key: ValueKey('agenda-view-${view.name}'),
                     onTap: () {
                       setState(() => _view = view);
+                      unawaited(_saveView());
                       _reload();
                     },
                     child: Container(
@@ -826,82 +856,111 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
+  /// An entry of the day's grid: when it starts and what it shows.
+  static const _span = 53; // minutes a block covers: 46 of the hour's 52 px
+
   Widget _column(BuildContext context, DateTime day, bool today) {
     final scheme = Theme.of(context).colorScheme;
-    final hearings = _hearings.where((h) => _day(h.at) == day);
     final items = _itemsOn(day);
     final allDay = [
       for (final i in items)
         if (i.kind == 'deadline' || i.allDay) i,
     ];
-    final timed = [
+    final timed = <(DateTime, Widget)>[
+      for (final h in _hearings)
+        if (_day(h.at) == day) (h.at, _hearingBlock(h)),
       for (final i in items)
-        if (!(i.kind == 'deadline' || i.allDay)) i,
-    ];
+        if (!(i.kind == 'deadline' || i.allDay)) (i.at!, _itemBlock(i)),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    // Entries that overlap share the column in lanes, side by side, so
+    // that none is drawn over another (UYGULAMAPLANI §10).
+    final lane = List<int>.filled(timed.length, 0);
+    final lanes = List<int>.filled(timed.length, 1);
+    var clusterStart = 0;
+    var clusterEnd = -1;
+    final ends = <int>[];
+    void closeCluster(int upTo) {
+      for (var k = clusterStart; k < upTo; k++) {
+        lanes[k] = ends.length;
+      }
+    }
+
+    for (var n = 0; n < timed.length; n++) {
+      final from = timed[n].$1.hour * 60 + timed[n].$1.minute;
+      if (from >= clusterEnd) {
+        closeCluster(n);
+        clusterStart = n;
+        ends.clear();
+      }
+      var free = ends.indexWhere((e) => e <= from);
+      if (free < 0) {
+        ends.add(from + _span);
+        free = ends.length - 1;
+      } else {
+        ends[free] = from + _span;
+      }
+      lane[n] = free;
+      clusterEnd = math.max(clusterEnd, from + _span);
+    }
+    closeCluster(timed.length);
     final now = _now();
     return Container(
       decoration: BoxDecoration(
         color: today ? scheme.primary.withValues(alpha: .025) : null,
         border: Border(left: BorderSide(color: scheme.outlineVariant)),
       ),
-      child: Stack(
-        children: [
-          for (var h = 0; h <= _lastHour - _firstHour; h++)
-            Positioned(
-              top: h * _hourHeight,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 1,
-                color: scheme.outlineVariant.withValues(alpha: .5),
+      child: LayoutBuilder(
+        builder: (context, box) => Stack(
+          children: [
+            for (var h = 0; h <= _lastHour - _firstHour; h++)
+              Positioned(
+                top: h * _hourHeight,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 1,
+                  color: scheme.outlineVariant.withValues(alpha: .5),
+                ),
               ),
-            ),
-          for (final h in hearings)
-            Positioned(
-              top: _top(h.at),
-              left: 5,
-              right: 5,
-              height: 46,
-              child: _hearingBlock(h),
-            ),
-          for (final i in timed)
-            Positioned(
-              top: _top(i.at!),
-              left: 5,
-              right: 5,
-              height: 46,
-              child: _itemBlock(i),
-            ),
-          for (var n = 0; n < allDay.length; n++)
-            Positioned(
-              top: 8 + n * 34,
-              left: 5,
-              right: 5,
-              height: 30,
-              child: _itemBlock(allDay[n]),
-            ),
-          if (today && now.hour >= _firstHour && now.hour <= _lastHour)
-            Positioned(
-              top: _top(now),
-              left: 0,
-              right: 0,
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AgendaColors.deadline,
-                      shape: BoxShape.circle,
+            for (var n = 0; n < timed.length; n++)
+              Positioned(
+                top: _top(timed[n].$1),
+                left: 4 + lane[n] * (box.maxWidth - 8) / lanes[n],
+                width: (box.maxWidth - 8) / lanes[n] - (lanes[n] > 1 ? 3 : 0),
+                height: 46,
+                child: timed[n].$2,
+              ),
+            for (var n = 0; n < allDay.length; n++)
+              Positioned(
+                top: 8 + n * 34,
+                left: 5,
+                right: 5,
+                height: 30,
+                child: _itemBlock(allDay[n]),
+              ),
+            if (today && now.hour >= _firstHour && now.hour <= _lastHour)
+              Positioned(
+                top: _top(now),
+                left: 0,
+                right: 0,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AgendaColors.deadline,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: Container(height: 2, color: AgendaColors.deadline),
-                  ),
-                ],
+                    Expanded(
+                      child: Container(height: 2, color: AgendaColors.deadline),
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1462,7 +1521,12 @@ class _AgendaPageState extends State<AgendaPage> {
                           }
                         },
                   style: _buttonStyle(),
-                  child: const Text('Dosyayı aç'),
+                  child: const Text(
+                    'Dosyayı aç',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.fade,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1478,7 +1542,12 @@ class _AgendaPageState extends State<AgendaPage> {
                               ),
                         ),
                   style: _buttonStyle(),
-                  child: const Text('Dilekçe başlat'),
+                  child: const Text(
+                    'Dilekçe başlat',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.fade,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1488,7 +1557,12 @@ class _AgendaPageState extends State<AgendaPage> {
                   child: OutlinedButton(
                     onPressed: null,
                     style: _buttonStyle(),
-                    child: const Text('Mazeret'),
+                    child: const Text(
+                      'Mazeret',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.fade,
+                    ),
                   ),
                 ),
               ),
@@ -1500,7 +1574,10 @@ class _AgendaPageState extends State<AgendaPage> {
   }
 
   ButtonStyle _buttonStyle() => ButtonStyle(
-    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 12)),
+    minimumSize: const WidgetStatePropertyAll(Size(0, 36)),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    alignment: Alignment.center,
+    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 6)),
     shape: WidgetStatePropertyAll(
       RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
