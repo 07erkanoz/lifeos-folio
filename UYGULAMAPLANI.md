@@ -528,20 +528,20 @@ Bu bölüm 6 Ekim 2026'da Banaozel'in Windows çalışma kopyası (`C:\Projeler\
 
 | İşlem | Birincil | Yedek | Not |
 |---|---|---|---|
-| Yargı dosyası listesi (hukuk, ceza, icra, idari, istinaf) | Mobil | Web | Mobil arama mahkeme ya da yıl/sıra ister; web toplu döküm verir |
+| Yargı dosyası listesi (hukuk, ceza, icra, idari, istinaf) | Web + mobil | — | İkisi de sorulur ve birleştirilir; web toplu döküm verir, mobil web'in kapalı olduğu sürede tamamlar |
 | Yargıtay dosyaları | Web | — | Mobil adaptörde bağlı değil |
 | Cumhuriyet Başsavcılığı (soruşturma) dosyaları | Web | — | İl → birim → dosya; mobilde yok |
-| Danıştay dosyaları | Mobil veya web | Diğeri | İki kanalda da var |
-| Taraflar | Bağlı kanal | Diğeri | Web duruşma kaydında da taraf gelir |
+| Danıştay dosyaları | Web + mobil | — | İki kanalda da var; birleştirilir |
+| Taraflar | Web | Mobil | Web duruşma kaydında da taraf gelir |
 | Safahat, para/hesap, işlemler | Web | — | Safahat sorgusu kotalı ve kısmen ücretli |
-| Künye | Bağlı kanal | Diğeri | Web'de ayrı uç; mobilde dosya detayıyla gelir |
-| Evrak listesi | Bağlı kanal | Diğeri | Yargıtay ve Başsavcılık yalnız web |
-| Evrak indirme | Bağlı kanal | Diğeri | Yargıtay ve Başsavcılık yalnız web |
-| Duruşma listesi | Mobil ve web | — | İkisi de alınır ve birleştirilir (§9.7) |
+| Künye | Web | Mobil | Web'de ayrı uç; mobilde dosya detayıyla gelir |
+| Evrak listesi | Web | Mobil | Yargıtay ve Başsavcılık yalnız web |
+| Evrak indirme | Web | Mobil | Yargıtay ve Başsavcılık yalnız web |
+| Duruşma listesi | Web + mobil | — | İkisi de alınır ve birleştirilir (§9.7) |
 | Evrak gönderme | Web | — | Mobil token web yetkisi yerine geçmez |
 | Mazeret, e-duruşma | Mobil | — | Yazma işlemi; otomatik tekrar yok |
 
-"Bağlı kanal": o anda oturumu doğrulanmış kanal; ikisi de bağlıysa tabloda birincil olan. Birincil başarısız olursa yalnız **okuma** işlemleri yedeğe düşer; yazma işlemleri düşmez.
+Web daha çok veri verir, mobil daha az ama daha uzun oturumludur: ikisi de bağlıysa okumada web önce sorulur, mobil web'in ulaşamadığını veya kapalı olduğu süreyi tamamlar; "Web + mobil" satırlarında iki kanalın sonucu §9.4 kuralıyla birleştirilir. Birincil bağlı değil ya da başarısızsa yalnız **okuma** yedeğe düşer; yazma düşmez. Kod: `lib/services/portal/portal_channel.dart`.
 
 ### 9.3 Web Portal ile Mobil API farkları
 
@@ -631,6 +631,16 @@ Kullanıcı `docs/design/ajanda-taslak.png` taslağını onayladı; uygulama bu 
 - **Sağ panel:** seçili duruşmanın hazırlık kartı (mahkeme, esas, taraflar, işlem, salon, kaynak kanal, son evraklar, notlarım ve işlerim, Dosyayı aç / Dilekçe başlat / Mazeret) ve yaklaşan süreler.
 - Bağlantı kartları, ilgili ekranın kanal çipine tıklanınca açılır; Ayarlar'da da bulunur. UETS Tebligatlarım ve mobil yerleşimi aynı görsel dille ayrıca tasarlanır.
 
+## 12. Süre motoru kararı
+
+Banaozel'in süre motoru (`app/lib/uyap/legal/` ve `app/lib/legal/sure_katalogu.dart`) saf Dart'tır: ağ, yapay zekâ, veritabanı ve Flutter bağımlılığı yoktur; `now` parametreyle verilir. Folio'ya `lib/services/legal/deadlines/` altına taşınacak (T8).
+
+- Taşınacak dosyalar: `sure_katalogu.dart`, `mahkeme_kategori.dart`, `belge_turu.dart`, `turkish_legal_calendar.dart`, `tebligat_parser.dart`, `yasal_sure.dart`, `deadline_service.dart`; isteğe bağlı `icra_sure.dart`. `yasal_sure.dart` içindeki göreli katalog yolu yeni dizine göre düzeltilecek.
+- Kapsam: HMK istinaf/temyiz/cevap/bilirkişi itirazı, İİK m.16/62/67/168/32-33/89, CMK m.273/291 (7499 geçişiyle), İYUK m.45/46; e-tebligatta gönderim +5 gün; adli tatil (hukuk/idare/vergi 7 Eylül, ceza +3 gün ve 1 Eylül başlangıcı, icra uzamaz, HMK m.103 kapısı); mali tatil; hafta sonu/resmî tatil/bayram kaydırması (dini bayramlar 2026'ya kadar resmî, sonrası projeksiyon).
+- Taşırken düzeltilecekler: (1) ay/yıl eklemesi `DateTime(y, m+n, d)` taşması (31 Ocak + 1 ay = 3 Mart) ayın son gününe kıstırılacak (HMK m.92), `icra_sure.dart` ile aynı kural; (2) projeksiyon yılı (2027+) ve tanımsız yıl (2031+) bütün yollarda uyarı/güven düşürme üretecek; bayram tanımsızsa süre "doğrulanamadı" olur, sessizce iş günü sayılmaz.
+- Alınmayacaklar: LLM ile belge türü, m.103 tabiiyeti ve zabıttan süre çıkarımı (`server/tebligat_tur.py`, `adli_tatil_kapsami.py`, `zabit_sure.py`, `uets_belge_suresi.py`). Folio'da belge türü ve m.103 bilgisi kullanıcı seçimi veya kurallı ayrıştırmayla gelir; bilinmiyorsa motorun güvenli (erken) yönü kullanılır ve not gösterilir.
+- Testler taşınır (`deadline_service_test`, `icra_sure_test`, `karar_tarihi_sure_baslangici_degil_test`); eksik olanlar eklenir: bayram/resmî tatil kaydırması, iş günü birimi, mali tatil, ay/yıl sonu kıstırma, projeksiyon uyarısı.
+
 ## 11. Uygulama sırası ve durum
 
 Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
@@ -638,7 +648,7 @@ Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 | # | İş | Paket | Durum |
 |---|---|---|---|
 | T1 | Ekran kararı ve iş sırası plana işlendi | §10 | Tamam |
-| T2 | Banaozel süre motoru incelemesi; kullanılabilirse taşıma kararı | P10 | Sırada |
+| T2 | Banaozel süre motoru incelemesi; kullanılabilirse taşıma kararı | P10 | Tamam: taşınacak (§12) |
 | T3 | Kanal ve işlem → kanal tablosu (§9.2), testleriyle | P01 | Sırada |
 | T4 | Gözlem damgalı birleştirme: web ve mobil birbirini ezmez, eksiklerini tamamlar (§9.4) | P06/P07 | Sırada |
 | T5 | Yerel portal veritabanı: dosya, duruşma, not/iş | P02 | Sırada |
