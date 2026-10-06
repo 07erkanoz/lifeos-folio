@@ -4,6 +4,8 @@ Tarih: 6 Ekim 2026
 
 Durum: Kaynak incelemesi ve plan hazırlandı. Uygulama geliştirmesi başlatılmadı.
 
+Ek inceleme (6 Ekim 2026): Banaozel'in senkron, portföy, evrak, duruşma ve UETS eşleştirme mantığı incelendi; Folio kuralları §9'a, paket maddeleri ilgili paketlere işlendi. Yeni ekranların Folio'daki yeri §10'da açık karar olarak duruyor.
+
 Hedef proje: `/home/erkanoz/projeler/evrak convert`
 
 Referans proje: `/home/erkanoz/projeler/banaozel`
@@ -178,6 +180,7 @@ Her paket için çıktı ve yerel kabul koşulu tamamlanmadan bağlı paket bitm
 - [ ] `PortalChannel`, kanal bağlantı durumu ve iptal edilebilir giriş akışı sözleşmelerini tanımla.
 - [ ] `UyapOp` benzeri işlem tablosu ve normalize sonuç modeli oluştur: başarılı, boş, kısmi, bağlantı gerekli, yetki, ağ, format, belirsiz yazma sonucu.
 - [ ] HTTP GET/POST ayrımı yerine **işlemin etkisine** göre politika tanımla; salt okunur POST sorguları ile yazan POST taleplerini ayır.
+- [ ] §9.2 işlem → kanal tablosunu tek bir çözümleyici olarak kur. Senkron, indirme, UI ve gönderim katmanları kendi kanal kuralını içermesin; tablo testlerle sabitlensin.
 - [ ] Sahte saat, HTTP sunucusu, güvenli kasa, kart worker ve giriş tarayıcısı adaptörlerini testlerde kullanılabilir yap.
 - [ ] Anonim örnek setini hazırla: UDF/DOCX tablo/antet/görsel/listeler, imzalı/bozuk belge, PDF, çok sayfalı TIFF, EYP ve iki hesap/dosya çakışması.
 
@@ -251,6 +254,10 @@ Her paket için çıktı ve yerel kabul koşulu tamamlanmadan bağlı paket bitm
 - [ ] Oturum kaybı yalnız ilgili kanalın işlerini bekletsin. Yeni oturumda kimlikler taze çözülsün.
 - [ ] UI'da kanal bazlı son kontrol, kalan kapsam, indirme/hata sayıları ve depolama durumunu göster.
 
+- [ ] Mobil ve web turları aynı dosyaya yazabilir. Birleşme §9.4'teki alan bazlı gözlem damgasıyla ve tek transaction'da yapılsın; eski gözlem yeniyi, boş değer veya boş liste dolu veriyi ezmesin.
+- [ ] Yeni evrak eşiğini kanal geneli değil **dosya başına** tut (§9.6). Bir belgenin indirilememesi yalnız o belgeyi işaretlesin; dosyanın kalanını ve turu kesmesin.
+- [ ] Açık dosyaların evrak listesi tazeliği, eksik dosya dilimleri ve dosya açılışındaki canlı tazeleme ayrı bütçelerle planlansın; turlar kaldığı yerden devam etsin.
+
 **Çıktı:** Kapanma/kesintiden devam edebilen senkron ve indirme kuyruğu.
 
 **Kabul:** Yarım iş tam sayılmaz; hata güncellik zamanını ilerletmez; başka kanalın kuyruğu iptal edilmez; bağlantı hiçbir gönderim/talep üretmez.
@@ -263,6 +270,11 @@ Her paket için çıktı ve yerel kabul koşulu tamamlanmadan bağlı paket bitm
 - [ ] Web'in zengin taraf/künye/safahat/para bilgisi mobilin eksik snapshot'ıyla ezilmesin; kaynak ve eksik alan görünür olsun.
 - [ ] Evrak envanteri, alt dosya/ek ilişkisi, tekli/toplu indirme ve çevrimdışı açmayı ortak modele bağla.
 - [ ] Dilekçeler ve yerel belge–dosya ilişkilerini koru; indirilen evrakları mevcut arama/görüntüleyiciye bağla.
+
+- [ ] Portföyü iki kanaldan doldur (§9.4): mobil açık/kapalı yargı dosyaları ve taraflar; web Yargıtay, Cumhuriyet Başsavcılığı (il → birim → dosya), safahat, para/işlem bilgisi ve mobilde gelmeyenler. Danıştay ve istinaf için §9.2 tablosu esas.
+- [ ] Mobil ve web kayıtları `dosya_key` (sadeleştirilmiş dosya no | birim adı; icra yenileme eki kırpılmış) üzerinde birleşsin. Oturumluk `dosyaId`/birim kimlikleri kalıcı anahtar yapılmasın; web kimliği yalnız ipucu olarak tutulup bayatlayınca taze çözülsün.
+- [ ] Evrakı bağlı kanaldan indir; seçilen kanal başarısızsa diğer bağlı kanala düş (§9.5). Yargıtay ve Cumhuriyet Başsavcılığı evrakı yalnız web'den. Evrak kaydında indiği kanal tutulsun.
+- [ ] Evrak kimliği `stabil_no` (birim evrak no, yoksa evrak id; ekler `<ana>:ek:<n>`). Asıl içerik özetiyle adlandırılıp benzersiz geçici dosyadan yeniden adlandırma ile yazılsın; HTML/giriş sayfası yanıtı oturum hatası sayılsın. UDF/DOCX/ZIP/EYP içerikten ayrılsın; her ZIP UDF sayılmasın.
 
 **Çıktı:** Aynı veri modelini kullanan mobil/masaüstü UYAP dosya ekranları.
 
@@ -290,6 +302,9 @@ Her paket için çıktı ve yerel kabul koşulu tamamlanmadan bağlı paket bitm
 - [ ] Manuel bağ/düzelt/ayır ve gerektiğinde çoklu ilişki ekle; yöntemi/kanıtı/observedAt bilgisini sakla.
 - [ ] Portföy sonradan gelirse bekleyenleri yeniden değerlendir; manuel bağı geçici/kısmi portföy yüzünden silme.
 
+- [ ] §9.8'deki üç kademeli ve her kademede tek aday şartlı kuralı uygula: tam birim + no → birim öneki (Yargıtay tebligat bölümü) → yer adı (savcılık bürosu → Cumhuriyet Başsavcılığı). Banaozel masaüstündeki "o numarada tek dosya varsa bağla" gevşek kuralı alınmasın.
+- [ ] Portföy değişince bağsız ve belirsiz tebligatların tamamı yeniden değerlendirilsin; yalnız en yeni N kayıtla sınırlanmasın.
+
 **Çıktı:** Açıklanabilir ve düzeltilebilir tebligat–dosya ilişkisi.
 
 **Kabul:** Aynı esas farklı mahkemede, yanlış şehir, Yargıtay tebligat bölümü, iki aday ve manuel bağ senaryoları yanlış otomatik ilişki üretmez.
@@ -303,6 +318,10 @@ Her paket için çıktı ve yerel kabul koşulu tamamlanmadan bağlı paket bitm
 - [ ] Kaynak alanlarını güncellerken kullanıcı açıklama/not/tamamlama/hatırlatmasını koru; başarılı boş pencere, kısmi pencere ve doğrulanmış iptali ayır.
 - [ ] Yerel hatırlatma planla; değişiklikte eskisini kaldır; olay kimliğiyle yeni evrak/duruşma bildirimi tekilleştir.
 - [ ] İzin durumu, bildirimden ilgili kayda geçiş, kilit ekranında genel metin ve masaüstü/mobil zaman davranışını uygula.
+
+- [ ] Duruşmaları iki kanaldan al (§9.7): mobil `durusmalarim` 30 günlük, web `avukat_durusma_sorgula_brd.ajx` 29 günlük dilimlerle. `olay_key` (kırpılmış dosya no | birim | dakika) ile birleştir; alan bazlı gözlem damgası kullan; hâkim notu ve e-duruşma alanları yalnız mobilden gelir.
+- [ ] Duruşmayı dosyaya `dosya_key` ile bağla; birimi dosyayla çelişen duruşmayı o dosyaya yazma.
+- [ ] Silmeyi yalnız hatasız ve dolu bir tarama penceresinde, pencere içinde artık görünmeyen kayıt için yap. Yalnız mobil bağlıyken eski kayıt "doğrulanamadı" durumunda kalsın; yerel duruşmalar aynı gün aynı türde birbirini ezmesin.
 
 **Çıktı:** Portal yeniden açılmadan çalışan yerel ajanda ve manuel işler.
 
@@ -421,6 +440,12 @@ Her paket için çıktı ve yerel kabul koşulu tamamlanmadan bağlı paket bitm
 | K16 | Mazeret hakkı kapalı/eski kayıt/yanıt kayıp | Talep gönderilmez veya belirsiz kaydedilir; otomatik tekrar yok |
 | K17 | İki cihazda aynı kayıt değişir/QR tekrarlanır | Çatışma korunur; davet tekrar kullanılamaz; portal tokenı aktarılmaz |
 | K18 | UETS/ajanda/senkron akışları izlenir | Model/analiz/süre üretimi veya merkezi kullanıcı kasası çağrısı yok |
+| K19 | Mobil ve web aynı dosyayı yazar; biri boş liste döner | Eski gözlem yeniyi ezmez; boş liste dolu evrak/taraf listesini silmez |
+| K20 | Yalnız mobil bağlı; Yargıtay veya Başsavcılık dosyası istenir | Mobilde denenmez; web bağlantı kartı gösterilir |
+| K21 | Yalnız mobil bağlıyken evrak indirilir; sonra web bağlanır | Mobilden iner, kaynak kanal kaydedilir; web kimliği taze çözülür, evrak kopyalanmaz |
+| K22 | Bir dosyanın sırası 3 gün sonra gelir; arada yeni evrak eklenmiş | Yeni evrak kaçırılmaz; ilk toplu arşiv "yeni" bildirilmez |
+| K23 | Aynı gün aynı türde iki duruşma; icra numarasında yenileme eki | İki ayrı kayıt kalır; aynı olay tek kayıttır |
+| K24 | Tebligat için iki aday dosya var; portföy sonradan tamamlanır | Otomatik bağ yok, öneri gösterilir; portföy gelince yeniden değerlendirilir |
 
 ### Mevcut regresyon temelinden kullanılacak testler
 
@@ -489,6 +514,124 @@ Mevcut araştırma, belge dönüştürme ve masaüstü ses işlevlerini korumak 
 | [Folio gönderim](</home/erkanoz/projeler/evrak convert/lib/ui/widgets/editor_widget.dart:2556>) | Snapshot/hash/imza ve son kontrol korunacak; masaüstü engeli yetenekle değişecek |
 | [Folio zoom](</home/erkanoz/projeler/evrak convert/lib/ui/widgets/page_zoom.dart:25>) | Dar ekran ve otomatik/manuel sığdırma düzeltmesinin kaynağı |
 | [Folio platform yetenekleri](</home/erkanoz/projeler/evrak convert/lib/services/platform/platform_capabilities.dart:1>) | iOS mobil imza ve platforma göre giriş adaptörü çalışması |
+
+## 9. Portal verisi kuralları — Banaozel senkron incelemesi
+
+Bu bölüm 6 Ekim 2026'da Banaozel'in Windows çalışma kopyası (`C:\Projeler\banaozel`) üzerinde yapılan incelemeye dayanır; kaynak atıfları §9.10'dadır. Banaozel'in sunucu, yapay zekâ ve korpus kısımları Folio'ya taşınmaz; yalnız protokol ve kural bilgisi alınır.
+
+### 9.1 İncelemede bulunan durum
+
+- Kanal seçimi Banaozel'de dört yerde ve birbiriyle çelişen kurallarla yapılıyor: `uyapKanalCoz` üretimde hiç çağrılmıyor (yalnız testte); masaüstü her işlemde önce web'i, sunucu önce mobili deniyor; sunucunun evrak tazelemesi Danıştay'ı mobilde desteklendiği hâlde web'e zorluyor. Folio'da kanal kuralı tek yerde olacak (§9.2).
+- Mobil ve web turları arasında kilit yok; çakışmayı alan bazlı gözlem damgası önlüyor. Folio da bu modeli kullanacak (§9.4).
+
+### 9.2 İşlem → kanal tablosu
+
+| İşlem | Birincil | Yedek | Not |
+|---|---|---|---|
+| Yargı dosyası listesi (hukuk, ceza, icra, idari, istinaf) | Mobil | Web | Mobil arama mahkeme ya da yıl/sıra ister; web toplu döküm verir |
+| Yargıtay dosyaları | Web | — | Mobil adaptörde bağlı değil |
+| Cumhuriyet Başsavcılığı (soruşturma) dosyaları | Web | — | İl → birim → dosya; mobilde yok |
+| Danıştay dosyaları | Mobil veya web | Diğeri | İki kanalda da var |
+| Taraflar | Bağlı kanal | Diğeri | Web duruşma kaydında da taraf gelir |
+| Safahat, para/hesap, işlemler | Web | — | Safahat sorgusu kotalı ve kısmen ücretli |
+| Künye | Bağlı kanal | Diğeri | Web'de ayrı uç; mobilde dosya detayıyla gelir |
+| Evrak listesi | Bağlı kanal | Diğeri | Yargıtay ve Başsavcılık yalnız web |
+| Evrak indirme | Bağlı kanal | Diğeri | Yargıtay ve Başsavcılık yalnız web |
+| Duruşma listesi | Mobil ve web | — | İkisi de alınır ve birleştirilir (§9.7) |
+| Evrak gönderme | Web | — | Mobil token web yetkisi yerine geçmez |
+| Mazeret, e-duruşma | Mobil | — | Yazma işlemi; otomatik tekrar yok |
+
+"Bağlı kanal": o anda oturumu doğrulanmış kanal; ikisi de bağlıysa tabloda birincil olan. Birincil başarısız olursa yalnız **okuma** işlemleri yedeğe düşer; yazma işlemleri düşmez.
+
+### 9.3 Web Portal ile Mobil API farkları
+
+| | Web Portal (`avukat.uyap.gov.tr`) | Mobil API (`mobilws.uyap.gov.tr/portaldmz/services`) |
+|---|---|---|
+| Giriş | Adalet E-İmza ya da e-Devlet (e-imza/mobil imza); `code`/`state` aynı çerezlerle tamamlanır | e-Devlet → access + refresh token (Bearer) |
+| Oturum | Yaklaşık 2 sa 55 dk; yenilemek yeniden imza ister | Yaklaşık 7 gün; gözetimsiz yenilenir |
+| Yalnız bu kanalda | Yargıtay, Cumhuriyet Başsavcılığı, safahat, para, işlemler, evrak gönderme, harç/faiz | Mazeret, e-duruşma, hâkim notu, baro/TBB bilgisi |
+| Dosya listesi | Yargı türleri 1/0/2/6/11/13; `search_phrase_detayli.ajx`, 500'lük sayfa | `yargibirimleri` → `mahkeme` → `dosya`; 100'lük sayfa |
+| Evrak | `list_dosya_evraklar.ajx` (sayfalı), `view_document_brd.uyap` | `dosya/{id}/1` (`son20Evrak`, `tumEvraklar`), `evrakV2/{evrakId}/{dosyaId}` (base64) |
+| Duruşma | `avukat_durusma_sorgula_brd.ajx`, en çok ~30 günlük pencere | `durusmalarim/{başlangıç}/{bitiş}`, 30 günlük dilim |
+| Sınırlar | Aynı anda tek istek; safahat kotası | Arama mahkeme ya da yıl/sıra ister; `evrakV2` ara sıra 500 döner |
+| Kimlikler | `dosyaId` oturuma bağlı; bayatlayınca `PRTL_GNL_10001-4` | `dosyaId` ve birim kimliği oturumluk; birim kimliği şifreli |
+| Hata biçimi | 200 içinde `errorCode`; HTML/giriş sayfası oturum kaybıdır | Gövdedeki `status` ≠ 200 hatadır |
+
+Web oturumu kısa olduğu için web turunda önce yalnız web'den gelen aileler (Yargıtay, Başsavcılık) ve web'e özgü alanlar alınır.
+
+### 9.4 Portföy doldurma ve birleştirme
+
+- Portföy iki kanaldan dolar: mobil yargı dosyalarını (açık/kapalı) ve tarafları; web §9.2'deki yalnız-web aileleri ve alanları ekler. Hangi kanal bağlıysa o doldurur; ikisi de bağlıysa her kanal kendi payını alır.
+- Ortak anahtar `dosya_key` = sadeleştirilmiş (Türkçe harf katlama, küçük harf, boşluk sıkıştırma) dosya no | birim adı; icra yenileme eki kırpılır. Kanallar arası ayrı bir kimlik eşleme tablosu tutulmaz.
+- Oturumluk kimlikler (`dosyaId`, mobil birim kimliği) kalıcı anahtar değildir. Web dosya kimliği yalnız ipucu olarak saklanır; bayatlarsa taze çözülüp güncellenir.
+- Her bileşenin (künye, taraflar, safahat, para, evrak listesi) kendi gözlem anı vardır. Daha eski gözlem yeniyi ezmez; damgasız yazıcı en eski sayılır; boş değer dolu alanı, boş "tam" liste dolu listeyi silmez. Liste yazımı tek transaction'dır; iptalde eski hâl kalır.
+- Kısmi veya hatalı tur "tamam" damgası almaz; yeniden deneme bekleme süresi artarak uzar. Bir aile (ör. Yargıtay) düşerse diğerleri devam eder.
+- Yargıtay kaydının yerel mahkeme dosyasıyla bağı ve Başsavcılık tebliğnamesi ayrı dosya değil, ilgili dosyanın ilişkisi olarak tutulur.
+
+### 9.5 Evrak indirme ve saklama
+
+- Evrak §9.2'ye göre bağlı kanaldan iner; okuma olduğu için birincil başarısızsa diğer bağlı kanala düşülür. Mobilde 5xx için kısa aralıklarla sınırlı tekrar yapılır; her denemede dosya ve evrak kimliği taze çözülür.
+- Evrak kimliği `stabil_no`: birim evrak numarası, yoksa evrak id; ekler `<ana>:ek:<n>`.
+- Asıl ham baytıyla saklanır: içerik özetiyle adlandırılır, benzersiz geçici dosyaya yazılıp yeniden adlandırılır; kayıt tablosunda kaynak kanal, hash, MIME, boyut, tarih ve durum tutulur. Aynı içerik ikinci kez saklanmaz; okurken özet doğrulanır.
+- Gösterim kopyası (TIFF → PDF vb.) asılın yerine yazılmaz. İmzalı asıl değiştirilmez; aynı evrak için farklı içerik gelirse yeni sürüm olarak kaydedilir.
+- Biçim içerikten anlaşılır: ZIP içinde `content.xml` UDF, `word/` DOCX, EYP ayrıca tanınır; diğer ZIP'ler ZIP kalır.
+- Boş yanıt, HTML veya giriş sayfası indirme başarısı sayılmaz.
+
+### 9.6 Yeni evrak denetimi ve zamanlama
+
+- "Yeni evrak" kararı dosya başına tutulan eşikle verilir. Dosya ilk kez incelendiğinde mevcut evraklar taban kabul edilir; ilk toplu arşiv yeni diye bildirilmez.
+- Banaozel masaüstündeki hata alınmayacak: tur yalnız birkaç dosyaya bakarken eşik bütün kanal için ilerletiliyor, sırası seyrek gelen dosyadaki evrak kaçırılabiliyordu.
+- Zamanlama: bağlantı anında ilgili kanalın turu; açık dosyaların evrak listesi tazelik süresi dolunca (Banaozel: 20 saat); hiç doldurulmamış dosyalar sınırlı dilimlerle, imleçle sırayla; dosya açılınca kısa soğuma süreli canlı tazeleme. Kesin süreler kullanıcı ayarı ve ölçümle belirlenir.
+- Bir belgenin hatası yalnız o belgeyi işaretler; dosyanın kalanı ve tur devam eder. Sürekli düşen belgeler adıyla gösterilir.
+
+### 9.7 Duruşma listesi ve dosya ilişkisi
+
+- Mobil: `durusmalarim/{dd.MM.yyyy}/{dd.MM.yyyy}`, 30 günlük dilimler; hâkim notu ve e-duruşma alanları yalnız burada. Web: `avukat_durusma_sorgula_brd.ajx`, `d.M.yyyy`, 29 günlük dilimler. Düşen pencere eksik olarak işaretlenir.
+- Tekil kimlik `olay_key` = sadeleştirilmiş, kırpılmış dosya no | birim adı | dakika. Web ve mobil kayıt kimlikleri ayrı alanlarda tutulur; alan bazlı gözlem damgası uygulanır; mobilin genel "Duruşma" türü web'in özel türünü ezmez.
+- Duruşma dosyaya `dosya_key` ile bağlanır (yanıt başına değişen `dosyaId` kullanılmaz). Birimi dosyayla çelişen duruşma o dosyaya yazılmaz.
+- Tarih değişirse yeni olay oluşur; eski kayıt yalnız hatasız ve dolu bir tarama penceresinde artık görünmüyorsa kaldırılır. Yalnız mobil bağlıyken eski kayıt silinmez, "doğrulanamadı" olarak kalır. Kullanıcının notu ve görevi kaynaktan ayrı sahiplikle korunur.
+
+### 9.8 UETS tebligatının dosyayla ilişkisi
+
+- Konu satırından `Birim adı [YYYY/N]` okunur; ilk köşeli parantez esas no, öncesi birim adıdır. Türkçe harfler katlanır, noktalama boşluğa çevrilir.
+- Üç kademe; her kademede yalnız tek aday varsa bağ kurulur: (1) esas no + birim tam eşleşir; (2) dosya birimi tebligat biriminin önekidir (Yargıtay "… Tebligat Bölümü"); (3) ilk sözcük (yer adı) aynıdır (savcılık bürosu → Cumhuriyet Başsavcılığı). İki ve üstü aday belirsizdir, öneri olarak gösterilir.
+- Elle bağ, düzeltme ve ayırma vardır; elle bağ otomatik değerlendirmeyle bozulmaz. Bağın yöntemi ve kanıtı saklanır.
+- Portföy değiştiğinde bağsız ve belirsiz tebligatların tamamı yeniden değerlendirilir.
+
+### 9.9 Banaozel'de bulunan, Folio'ya taşınmayacak hatalar
+
+1. Çelişen kanal kuralları (§9.1).
+2. Web yedeğinden indirilen evrakın arşivlenmemesi. Folio'da evrak hangi kanaldan inerse insin aynı saklama yolunu kullanır.
+3. Kanal geneli yeni evrak eşiği (§9.6) ve tek belge hatasının turu kesmesi.
+4. İndirmede paylaşılan sabit `.part` adı. Her yazım benzersiz geçici ad kullanır.
+5. Her ZIP'in UDF sayılması ve EYP'nin tanınmaması.
+6. Yerel duruşmaların aynı gün aynı türde birbirini ezmesi; kırpılmamış icra numarasıyla aynı olayın iki satıra bölünmesi.
+7. Tebligatta "o numarada tek dosya varsa bağla" gevşek kuralı; yeniden değerlendirmenin en yeni 60 kayıtla sınırlı olması.
+
+### 9.10 Kaynak atıflar (banaozel kökünden)
+
+| Konu | Kaynak |
+|---|---|
+| Web portföy, Yargıtay, Danıştay, Başsavcılık, safahat, evrak, duruşma | `server/uyap_web.py` (dosya listesi 842-890, döküm 962-1156, duruşma 1187-1333, CBS 1503-1549, safahat 1840/1974, Yargıtay 2016-2303, evrak 2345-2459, kimlik 2490-2606, Danıştay 2688) |
+| Mobil portföy, evrak, duruşma, kimlikler | `server/uyap_mobil.py` (84-99, 555-743, 1093-1108, 1769-1873, 3067-3145, 4029-4170) |
+| Turlar, zamanlama, kanal düşmesi | `server/katip_service.py` (5622-6092, 12044-12341, 12785-13014, 13714-13963) |
+| Gözlem damgası, anahtarlar | `server/katip_db.py` (229-261, 2806-2997, 5503-5507), `server/db/migrations/2026-10-31_denetim_kaynak_korumasi.sql` |
+| UETS eşleştirme | `server/uets_web.py` (1937-2074), `app/lib/uyap/legal/tebligat_parser.dart` |
+| Masaüstü kanal ve tazeleme | `app/lib/uyap/uyap_canli.dart`, `app/lib/uyap/core/uyap/uyap_sonuc.dart`, `app/lib/uyap/akilli_senkron.dart` |
+| Yerel saklama ve kuyruk | `app/lib/uyap/uyap_db.dart`, `app/lib/arsiv/arsiv_kuyrugu.dart`, `app/lib/yardimci/runtime/work_coordinator.dart` |
+
+## 10. Açık karar: yeni ekranların Folio'daki yeri
+
+Uygulamaya geçmeden önce kullanıcıyla birlikte belirlenecek. Bugün Folio'da kenar çubuğunda **UYAP Dosyalarım** girişi var; UYAP girişi ayrı bir ekran değil, evrak gönderme ve dosya seçme pencerelerinin içinde açılıyor (`lib/ui/widgets/uyap_connect_view.dart`). Karar verilecek sorular:
+
+- Üç bağlantı kartı (UETS, UYAP Web, UYAP Mobil) nerede duracak: Ayarlar içinde mi, kenar çubuğunda ayrı bir "Bağlantılar" girişi mi, yoksa ilgili ekranın başında mı?
+- UETS tebligat kutusu masaüstünde kenar çubuğunda ayrı bir giriş mi olacak, UYAP Dosyalarım ile aynı bölümde mi?
+- Ajanda (duruşmalar, notlar, işler) ana sayfada mı, ayrı bir ekranda mı?
+- Senkron ve indirme durumu nerede gösterilecek: durum çubuğu, bağlantı kartı, dosya ekranı?
+- Bir işlem bağlı olmayan kanalı gerektirdiğinde (ör. Yargıtay için web) bağlantı kartı nasıl ve nerede çıkacak?
+- Mobilde alt gezinme (P11: Dosyalar, UETS, Ajanda, Belgeler, Ayarlar) masaüstü yerleşimiyle nasıl eşleşecek?
+
+Yöntem: önce kullanıcının verdiği bir referans (ekran görüntüsü veya mevcut Folio ekranı) üzerinde anlaşılır, ardından tek bir odaklı taslak yapılır. P03, P05, P07, P08 ve P10'un ekran işleri bu karar verilmeden başlamaz; servis ve test işleri karardan bağımsız ilerleyebilir.
 
 ## Ek A — İncelenen Banaozel dosyalarının içerik hash'leri
 
