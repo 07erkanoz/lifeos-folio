@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../security/secret_store.dart';
 import '../uyap/uyap_mobile_api.dart';
 import '../uyap/uyap_web_service.dart';
 import 'hearing_sync.dart';
@@ -29,7 +30,9 @@ class PortalSync extends ChangeNotifier {
     UyapWebService? web,
     UyapMobileApi? mobile,
     Future<PortalDatabase> Function()? database,
-  }) : _web = web ?? UyapWebService.instance,
+    SecretStore? secrets,
+  }) : _secrets = secrets ?? SecretStore(),
+       _web = web ?? UyapWebService.instance,
        _mobile = mobile ?? UyapMobileApi.instance,
        _database = database ?? PortalDatabase.shared;
 
@@ -39,6 +42,9 @@ class PortalSync extends ChangeNotifier {
   final UyapWebService _web;
   final UyapMobileApi _mobile;
   final Future<PortalDatabase> Function() _database;
+  final SecretStore _secrets;
+
+  static const _mobileSecret = 'uyap-mobile';
   final _state = <PortalChannel, ChannelSync>{};
   bool _started = false;
 
@@ -53,6 +59,20 @@ class PortalSync extends ChangeNotifier {
     _started = true;
     _web.session.addListener(_webChanged);
     _mobile.session.addListener(_mobileChanged);
+    // The mobile session lasts a week: kept sealed between runs, and taken
+    // up again here. The web portal's three hours are not kept.
+    _mobile.onTokens = (tokens) => unawaited(
+      tokens == null
+          ? _secrets.remove(_mobileSecret)
+          : _secrets.write(_mobileSecret, tokens.toJson()),
+    );
+    unawaited(_restoreMobile());
+  }
+
+  Future<void> _restoreMobile() async {
+    if (_mobile.connected) return;
+    final kept = MobileTokens.fromJson(await _secrets.read(_mobileSecret));
+    if (kept != null) await _mobile.restore(kept);
   }
 
   @override

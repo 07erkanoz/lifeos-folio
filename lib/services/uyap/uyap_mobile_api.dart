@@ -77,6 +77,15 @@ class UyapMobileApi {
 
   MobileTokens? get tokens => _tokens;
 
+  /// Told whenever the tokens change, null when the session ends: where
+  /// they are kept between runs (`SecretStore`).
+  void Function(MobileTokens? tokens)? onTokens;
+
+  void _setTokens(MobileTokens? tokens) {
+    _tokens = tokens;
+    onTokens?.call(tokens);
+  }
+
   /// Exchanges e-Devlet's [code] for this API's tokens and reads who the
   /// lawyer is. A login started later replaces this one; nothing it does
   /// reaches the web portal.
@@ -93,7 +102,7 @@ class UyapMobileApi {
     if (generation != _generation) {
       throw StateError('Daha yeni bir giriş başladı.');
     }
-    _tokens = tokens;
+    _setTokens(tokens);
     return _identify();
   }
 
@@ -105,7 +114,7 @@ class UyapMobileApi {
     try {
       return await _identify();
     } catch (_) {
-      _tokens = null;
+      _setTokens(null);
       return null;
     }
   }
@@ -136,7 +145,7 @@ class UyapMobileApi {
       // Ended here whatever UYAP answers.
     } finally {
       _generation++;
-      _tokens = null;
+      _setTokens(null);
       session.value = null;
     }
   }
@@ -152,10 +161,10 @@ class UyapMobileApi {
         'refreshToken': had.refresh,
       }, authorized: false);
       if (generation != _generation || !identical(_tokens, had)) return;
-      _tokens = had.renewed(data, DateTime.now());
+      _setTokens(had.renewed(data, DateTime.now()));
     } on _HttpError {
       if (generation == _generation) {
-        _tokens = null;
+        _setTokens(null);
         session.value = null;
       }
       throw StateError('UYAP Mobil oturumu sona erdi. Yeniden bağlanın.');
