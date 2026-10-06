@@ -911,6 +911,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _library.filter(types: types, clearFolder: true);
   }
 
+  /// The office's own pages, which bring their headings and fill the page.
+  static bool _isFullPage(String group) => group == 'agenda' || group == 'uets';
+
   static bool _isUyapGroup(String group) =>
       group == 'uyap' || group.startsWith('uyap:');
 
@@ -1164,7 +1167,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     ],
                                   ),
                                 ),
-                              if (_showLibrary && !mobileHome)
+                              // The agenda and UETS fill the page with their
+                              // own heading; on a phone the menu button stays.
+                              if (_showLibrary &&
+                                  !mobileHome &&
+                                  (mobile || !_isFullPage(_group)))
                                 Container(
                                   height: 72,
                                   padding: EdgeInsets.symmetric(
@@ -1302,7 +1309,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               if (_showLibrary &&
                                   !mobileHome &&
                                   _group != 'images' &&
-                                  !_isUyapGroup(_group))
+                                  !_isUyapGroup(_group) &&
+                                  !_isFullPage(_group))
                                 _searchArea(compact),
                               if (_showLibrary &&
                                   !mobileHome &&
