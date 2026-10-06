@@ -56,6 +56,7 @@ import '../services/platform/document_scan.dart';
 import 'mobile/document_home.dart';
 import 'mobile/mobile_drawer.dart';
 import 'mobile/mobile_settings_page.dart';
+import 'mobile/scroll_chrome.dart';
 import 'mobile/profile_from_uyap.dart';
 import '../services/editor/lawyer_profile.dart';
 import '../services/uyap/uyap_mobile_api.dart';
@@ -925,6 +926,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _selectGroup(String value) async {
     if (!await _leaveEditor()) return;
+    ScrollChrome.show();
     setState(() {
       _group = value;
       _mobileArchive = true;
@@ -1385,135 +1387,142 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               if (_showLibrary &&
                                   !mobileHome &&
                                   (mobile || !_isFullPage(_group)))
-                                Container(
-                                  height: 72,
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: mobile ? 8 : 24,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: scheme.surface,
-                                    border: Border(
-                                      bottom: BorderSide(
-                                        color: scheme.outlineVariant,
+                                FoldingChrome(
+                                  // On a phone the heading folds away while
+                                  // a UYAP case's documents are scrolled.
+                                  enabled: mobile && _isUyapGroup(_group),
+                                  child: Container(
+                                    height: 72,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: mobile ? 8 : 24,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: scheme.surface,
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: scheme.outlineVariant,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      if (mobile)
-                                        Builder(
-                                          builder: (context) => IconButton(
-                                            tooltip: 'Menü',
-                                            onPressed: () =>
-                                                Scaffold.of(context)
-                                                    .openDrawer(),
+                                    child: Row(
+                                      children: [
+                                        if (mobile)
+                                          Builder(
+                                            builder: (context) => IconButton(
+                                              tooltip: 'Menü',
+                                              onPressed: () =>
+                                                  Scaffold.of(context)
+                                                      .openDrawer(),
+                                              icon: const Icon(
+                                                Icons.menu_rounded,
+                                              ),
+                                            ),
+                                          ),
+                                        Text(
+                                          compact
+                                              ? 'LifeOS Folio'
+                                              : 'Kütüphane',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        SizedBox(width: mobile ? 4 : 12),
+                                        if (!compact)
+                                          Text(
+                                            '/  ${_showLibrary
+                                                ? _isUyapGroup(_group)
+                                                      ? 'UYAP Dosyalarım'
+                                                      : 'Evrak arşivi'
+                                                : _isNewDocument
+                                                ? _newTitle
+                                                : 'Önizleme'}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        const Spacer(),
+                                        if (_files.isNotEmpty)
+                                          PopupMenuButton<int>(
+                                            tooltip: 'Açık evraklar',
                                             icon: const Icon(
-                                              Icons.menu_rounded,
+                                              Icons.tab_outlined,
+                                              size: 20,
+                                            ),
+                                            onSelected: (i) =>
+                                                _selectFile(_files[i]),
+                                            itemBuilder: (_) => [
+                                              for (
+                                                var i = 0;
+                                                i < _files.length;
+                                                i++
+                                              )
+                                                PopupMenuItem(
+                                                  value: i,
+                                                  child: Text(_files[i].name),
+                                                ),
+                                            ],
+                                          ),
+                                        if (mobile)
+                                          IconButton(
+                                            tooltip: 'Dosya aç',
+                                            onPressed: _pickFiles,
+                                            icon: const Icon(
+                                              Icons.upload_file_outlined,
+                                            ),
+                                          ),
+                                        if (!mobile &&
+                                            (Platform.isLinux ||
+                                                Platform.isWindows))
+                                          IconButton(
+                                            tooltip: 'UYAP Devam Eden İşlemler',
+                                            onPressed: () => showDialog<void>(
+                                              context: context,
+                                              builder: (_) =>
+                                                  const UyapOperationsDialog(),
+                                            ),
+                                            icon: const Icon(
+                                              Icons.pending_actions_outlined,
+                                            ),
+                                          ),
+                                        IconButton(
+                                          tooltip: 'Kurtarılabilir taslaklar',
+                                          onPressed: _openRecovery,
+                                          icon: Badge(
+                                            isLabelVisible: _recoveryCount > 0,
+                                            label: Text('$_recoveryCount'),
+                                            child: const Icon(
+                                              Icons.restore_rounded,
                                             ),
                                           ),
                                         ),
-                                      Text(
-                                        compact ? 'LifeOS Folio' : 'Kütüphane',
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      SizedBox(width: mobile ? 4 : 12),
-                                      if (!compact)
-                                        Text(
-                                          '/  ${_showLibrary
-                                              ? _isUyapGroup(_group)
-                                                    ? 'UYAP Dosyalarım'
-                                                    : 'Evrak arşivi'
-                                              : _isNewDocument
-                                              ? _newTitle
-                                              : 'Önizleme'}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: scheme.onSurfaceVariant,
+                                        if (!mobile)
+                                          IconButton(
+                                            tooltip: 'İndeksi güncelle',
+                                            onPressed: _library.ready
+                                                ? () => _library.refresh()
+                                                : null,
+                                            icon: const Icon(
+                                              Icons.refresh_rounded,
+                                              size: 20,
+                                            ),
                                           ),
-                                        ),
-                                      const Spacer(),
-                                      if (_files.isNotEmpty)
-                                        PopupMenuButton<int>(
-                                          tooltip: 'Açık evraklar',
-                                          icon: const Icon(
-                                            Icons.tab_outlined,
-                                            size: 20,
+                                        SizedBox(width: mobile ? 0 : 12),
+                                        if (!mobile)
+                                          FilledButton.icon(
+                                            onPressed: _newDocument,
+                                            icon: const Icon(
+                                              Icons.note_add_outlined,
+                                              size: 16,
+                                            ),
+                                            label: const Text(
+                                              'Yeni belge oluştur',
+                                              style: TextStyle(fontSize: 12),
+                                            ),
                                           ),
-                                          onSelected: (i) =>
-                                              _selectFile(_files[i]),
-                                          itemBuilder: (_) => [
-                                            for (
-                                              var i = 0;
-                                              i < _files.length;
-                                              i++
-                                            )
-                                              PopupMenuItem(
-                                                value: i,
-                                                child: Text(_files[i].name),
-                                              ),
-                                          ],
-                                        ),
-                                      if (mobile)
-                                        IconButton(
-                                          tooltip: 'Dosya aç',
-                                          onPressed: _pickFiles,
-                                          icon: const Icon(
-                                            Icons.upload_file_outlined,
-                                          ),
-                                        ),
-                                      if (!mobile &&
-                                          (Platform.isLinux ||
-                                              Platform.isWindows))
-                                        IconButton(
-                                          tooltip: 'UYAP Devam Eden İşlemler',
-                                          onPressed: () => showDialog<void>(
-                                            context: context,
-                                            builder: (_) =>
-                                                const UyapOperationsDialog(),
-                                          ),
-                                          icon: const Icon(
-                                            Icons.pending_actions_outlined,
-                                          ),
-                                        ),
-                                      IconButton(
-                                        tooltip: 'Kurtarılabilir taslaklar',
-                                        onPressed: _openRecovery,
-                                        icon: Badge(
-                                          isLabelVisible: _recoveryCount > 0,
-                                          label: Text('$_recoveryCount'),
-                                          child: const Icon(
-                                            Icons.restore_rounded,
-                                          ),
-                                        ),
-                                      ),
-                                      if (!mobile)
-                                        IconButton(
-                                          tooltip: 'İndeksi güncelle',
-                                          onPressed: _library.ready
-                                              ? () => _library.refresh()
-                                              : null,
-                                          icon: const Icon(
-                                            Icons.refresh_rounded,
-                                            size: 20,
-                                          ),
-                                        ),
-                                      SizedBox(width: mobile ? 0 : 12),
-                                      if (!mobile)
-                                        FilledButton.icon(
-                                          onPressed: _newDocument,
-                                          icon: const Icon(
-                                            Icons.note_add_outlined,
-                                            size: 16,
-                                          ),
-                                          label: const Text(
-                                            'Yeni belge oluştur',
-                                            style: TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               // The gallery and the UYAP cases bring their own

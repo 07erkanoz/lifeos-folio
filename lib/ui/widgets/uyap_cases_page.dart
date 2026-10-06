@@ -12,6 +12,7 @@ import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/channel_bar.dart';
+import '../mobile/scroll_chrome.dart';
 import 'portfolio_picker.dart';
 import 'uyap_case_panel.dart';
 import 'uyap_case_picker.dart';
@@ -77,11 +78,15 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
   @override
   void didUpdateWidget(UyapCasesPage old) {
     super.didUpdateWidget(old);
-    if (old.caseKey != widget.caseKey) unawaited(_showCase());
+    if (old.caseKey != widget.caseKey) {
+      ScrollChrome.show();
+      unawaited(_showCase());
+    }
   }
 
   @override
   void dispose() {
+    ScrollChrome.show();
     UyapCaseStore.changes.removeListener(_reload);
     _web.session.removeListener(_changed);
     UyapMobileApi.instance.session.removeListener(_changed);
@@ -220,24 +225,35 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final key = widget.caseKey;
+    final narrow = MediaQuery.sizeOf(context).width < 700;
     return Material(
       color: theme.colorScheme.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _top(theme),
-          const Divider(height: 1),
-          Expanded(
-            child: key == null
-                ? _list(theme)
-                : UyapCasePanel(
-                    controller: _controller,
-                    onOpen: (file, _) => widget.onOpen(file),
-                    onOpenFile: widget.onOpen,
-                    onRemoved: () => widget.onShowCase(null),
-                  ),
-          ),
-        ],
+      // On a phone a scrolled list takes the screen; pulled back, the
+      // headings return.
+      child: ChromeScrollWatcher(
+        enabled: narrow,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FoldingChrome(
+              enabled: narrow,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [_top(theme), const Divider(height: 1)],
+              ),
+            ),
+            Expanded(
+              child: key == null
+                  ? _list(theme)
+                  : UyapCasePanel(
+                      controller: _controller,
+                      onOpen: (file, _) => widget.onOpen(file),
+                      onOpenFile: widget.onOpen,
+                      onRemoved: () => widget.onShowCase(null),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

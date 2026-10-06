@@ -10,6 +10,7 @@ import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/mobile_connect.dart';
+import '../mobile/scroll_chrome.dart';
 import 'uyap_case_picker.dart';
 import 'uyap_connect_view.dart';
 import 'uyap_session_chip.dart';
@@ -300,8 +301,15 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _header(theme),
-              const Divider(height: 1),
+              // On a phone the case's heading folds away while its
+              // documents are scrolled.
+              FoldingChrome(
+                enabled: widget.page && MediaQuery.sizeOf(context).width < 700,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [_header(theme), const Divider(height: 1)],
+                ),
+              ),
               if (_c.busy != null) ...[
                 const LinearProgressIndicator(minHeight: 2),
                 Padding(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -107,6 +108,15 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
     ),
   );
 
+  /// "6 g", "3 sa", "24 dk": a phone's chip's time left.
+  static String shortLeft(DateTime until) {
+    final d = until.difference(DateTime.now());
+    if (d.isNegative) return 'doldu';
+    if (d.inDays > 0) return '${d.inDays} g';
+    if (d.inHours > 0) return '${d.inHours} sa';
+    return '${d.inMinutes} dk';
+  }
+
   Widget _chip({
     required Key key,
     required Color dot,
@@ -114,32 +124,54 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
     String? tooltip,
     VoidCallback? onTap,
     List<(String, VoidCallback)>? menu,
+    bool compact = false,
+    bool busy = false,
+    IconData? tail,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final body = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: compact
+          ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
+          : const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: scheme.surface,
         border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(compact ? 12 : 14),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
+          if (busy)
+            const SizedBox(
+              width: 9,
+              height: 9,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.6,
+                color: AgendaColors.ok,
+              ),
+            )
+          else
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            ),
+          SizedBox(width: compact ? 5 : 6),
           Flexible(
             child: Text(
               text,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: compact ? 11 : 11.5,
+                fontWeight: compact ? FontWeight.w600 : FontWeight.w400,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ),
-          if (menu != null) ...[
+          if (tail != null) ...[
+            const SizedBox(width: 3),
+            Icon(tail, size: 13, color: scheme.onSurfaceVariant),
+          ] else if (menu != null && !compact) ...[
             const SizedBox(width: 2),
             Icon(Icons.expand_more, size: 14, color: scheme.onSurfaceVariant),
           ],
@@ -172,12 +204,16 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // On a phone the chips are small and in one row: "● Mobil 6 g".
+    final compact = widget.phone || MediaQuery.sizeOf(context).width < 700;
+    final onPhone = Platform.isAndroid || Platform.isIOS;
     final web = _sync.web;
     final mobile = _sync.mobile;
     final uets = _sync.uets;
 
     Widget channel({
       required String name,
+      required String short,
       required PortalChannel channel,
       required bool connected,
       required DateTime? until,
@@ -193,12 +229,42 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
         return _chip(
           key: key,
           dot: scheme.outline,
-          text: '$name · bağlan',
-          tooltip: '$name bağlı değil',
+          text: compact ? short : '$name · bağlan',
+          tooltip: '$name bağlı değil · bağlanmak için dokunun',
           onTap: connect,
+          compact: compact,
+          tail: compact ? Icons.add_rounded : null,
         );
       }
       final state = _sync.state(channel);
+      if (compact) {
+        final problem = state.problem != null;
+        return _chip(
+          key: key,
+          dot:
+              problem ||
+                  (until != null &&
+                      until.difference(DateTime.now()).inMinutes < 10)
+              ? AgendaColors.task
+              : AgendaColors.ok,
+          busy: state.running,
+          text: state.running || problem || until == null
+              ? short
+              : '$short ${shortLeft(until)}',
+          tail: problem ? Icons.error_outline_rounded : null,
+          compact: true,
+          tooltip: [
+            if (problem) state.problem!.replaceFirst('Bad state: ', ''),
+            if (until != null) '$validity ${_date(until)}',
+            if (state.finished != null) 'Son senkron ${_date(state.finished!)}',
+          ].join('\n'),
+          menu: [
+            ('Senkronize et', () => unawaited(syncNow())),
+            ...more,
+            ('Bağlantıyı kes', disconnect),
+          ],
+        );
+      }
       final time = until == null ? '' : ' · ${left(until)}';
       final (dot, text) = state.running
           ? (AgendaColors.ok, '$name · güncelleniyor…')
@@ -233,83 +299,108 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
     final mobileSession = mobile.session.value;
     final uetsSession = uets.session.value;
     final any = web.connected || mobile.connected || uets.connected;
+    final chips = [
+      // A phone has no card reader for the web portal.
+      if (!widget.phone && !onPhone)
+        channel(
+          name: 'UYAP Web',
+          short: 'Web',
+          channel: PortalChannel.uyapWeb,
+          connected: web.connected,
+          until: webSession == null
+              ? null
+              : DateTime.now().add(webSession.remaining()),
+          who: webSession?.user,
+          validity: 'Oturum şu saate kadar açık:',
+          connect: () => unawaited(_connectWeb()),
+          syncNow: _sync.syncWeb,
+          disconnect: () {
+            web.disconnect();
+            _changed();
+          },
+          more: [
+            (
+              'Oturumu denetle',
+              () => unawaited(web.check().then((_) => _changed())),
+            ),
+          ],
+        ),
+      channel(
+        name: 'UYAP Mobil',
+        short: 'Mobil',
+        channel: PortalChannel.uyapMobile,
+        connected: mobile.connected,
+        until: mobileSession?.expires,
+        who: widget.phone ? null : mobileSession?.user,
+        validity:
+            'Erişim kendiliğinden yenilenir; oturum yeniden giriş '
+            'gerekmeden şu tarihe kadar geçerli:',
+        connect: () async {
+          if (await connectUyapMobile(context, api: mobile)) {
+            unawaited(_sync.syncMobile());
+          }
+        },
+        syncNow: _sync.syncMobile,
+        disconnect: () => unawaited(mobile.logout()),
+      ),
+      channel(
+        name: 'UETS',
+        short: 'UETS',
+        channel: PortalChannel.uets,
+        connected: uets.connected,
+        until: uetsSession?.expires,
+        who: null,
+        validity: 'UETS oturumu şu saate kadar açık:',
+        connect: () =>
+            unawaited(connectUets(context, api: uets, secrets: _sync.secrets)),
+        syncNow: _sync.syncUets,
+        disconnect: () {
+          uets.logout();
+          _changed();
+        },
+      ),
+    ];
+    void syncAll() {
+      if (web.connected) unawaited(_sync.syncWeb());
+      if (mobile.connected) unawaited(_sync.syncMobile());
+      if (uets.connected) unawaited(_sync.syncUets());
+    }
+
+    if (compact) {
+      return Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final (i, c) in chips.indexed) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    c,
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (widget.showSyncAll && !widget.phone)
+            IconButton(
+              key: const ValueKey('agenda-sync'),
+              tooltip: 'Senkronize et',
+              visualDensity: VisualDensity.compact,
+              onPressed: any ? syncAll : null,
+              icon: const Icon(Icons.sync_rounded, size: 19),
+            ),
+        ],
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              if (!widget.phone)
-                channel(
-                  name: 'UYAP Web',
-                  channel: PortalChannel.uyapWeb,
-                  connected: web.connected,
-                  until: webSession == null
-                      ? null
-                      : DateTime.now().add(webSession.remaining()),
-                  who: webSession?.user,
-                  validity: 'Oturum şu saate kadar açık:',
-                  connect: () => unawaited(_connectWeb()),
-                  syncNow: _sync.syncWeb,
-                  disconnect: () {
-                    web.disconnect();
-                    _changed();
-                  },
-                  more: [
-                    (
-                      'Oturumu denetle',
-                      () => unawaited(web.check().then((_) => _changed())),
-                    ),
-                  ],
-                ),
-              channel(
-                name: 'UYAP Mobil',
-                channel: PortalChannel.uyapMobile,
-                connected: mobile.connected,
-                until: mobileSession?.expires,
-                who: widget.phone ? null : mobileSession?.user,
-                validity:
-                    'Erişim kendiliğinden yenilenir; oturum yeniden giriş '
-                    'gerekmeden şu tarihe kadar geçerli:',
-                connect: () async {
-                  if (await connectUyapMobile(context, api: mobile)) {
-                    unawaited(_sync.syncMobile());
-                  }
-                },
-                syncNow: _sync.syncMobile,
-                disconnect: () => unawaited(mobile.logout()),
-              ),
-              channel(
-                name: 'UETS',
-                channel: PortalChannel.uets,
-                connected: uets.connected,
-                until: uetsSession?.expires,
-                who: null,
-                validity: 'UETS oturumu şu saate kadar açık:',
-                connect: () => unawaited(
-                  connectUets(context, api: uets, secrets: _sync.secrets),
-                ),
-                syncNow: _sync.syncUets,
-                disconnect: () {
-                  uets.logout();
-                  _changed();
-                },
-              ),
-            ],
-          ),
-        ),
+        Expanded(child: Wrap(spacing: 8, runSpacing: 6, children: chips)),
         if (widget.showSyncAll && !widget.phone)
           TextButton.icon(
             key: const ValueKey('agenda-sync'),
-            onPressed: any
-                ? () {
-                    if (web.connected) unawaited(_sync.syncWeb());
-                    if (mobile.connected) unawaited(_sync.syncMobile());
-                    if (uets.connected) unawaited(_sync.syncUets());
-                  }
-                : null,
+            onPressed: any ? syncAll : null,
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,
               textStyle: const TextStyle(
