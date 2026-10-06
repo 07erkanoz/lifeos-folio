@@ -657,6 +657,34 @@ Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 | T8 | Süre motoru ve yaklaşan süreler | P10 | Tamam (`lib/services/legal/deadlines`, Ajanda'da "Süreyi hesapla") |
 | T9 | UYAP Mobil API girişi, portföy ve duruşma; web ile birleştirme | P04/P07 | Tamam (gerçek hesapla kabul P16'da) |
 | T10 | UETS girişi, Tebligatlarım ekranı ve dosya eşleştirme | P05/P08/P09 | Tamam (mobil imza ve kartla giriş, §9.8 eşleştirme, konudan kesin belge türünde süreler ajandaya; gerçek hesapla kabul P16'da) |
+| T11 | Sayfalar birbirinden haberli: ortak kanal çubuğu, UYAP Dosyalarım/editör UYAP Mobil ile, portföyden birim ya da tek tek ekleme, ajandadan dosya açınca ekleme | §9.2/§9.4 | Tamam |
+| T12 | Mobil dosya kimliği her seferinde dar sorguyla (birim türü → mahkeme → yıl/sıra), portföy taranmaz; mobil evrak listesi yalnız ekler | §9.3 | Tamam |
+| T13 | Telefonda Büro: Ajanda, UETS, UYAP (§13) | P11/P14 | Sırada |
+
+## 13. Telefonda Büro: Ajanda, UETS Tebligatlarım, UYAP Dosyalarım
+
+Aynı ekranlar, aynı veritabanı kuralları; telefonda yalnız telefonun yapabildiği kanallar.
+
+**Kanallar telefonda**
+
+| Kanal | Telefonda | Not |
+|---|---|---|
+| UYAP Mobil | Var, birincil | e-Devlet girişi telefonun kendi web görünümünde (Android WebView / iOS WKWebView; `webview_flutter`), dönüş adresi masaüstüyle aynı kuralla yakalanır. Oturum anahtarları Android Keystore / iOS Keychain ile saklanır (masaüstünde DPAPI). |
+| UETS | Var, mobil imza ile | Saf HTTP; kartla giriş telefonda yok. |
+| UYAP Web | Yok | E-imza kartı ve Adalet E-İmza gerekir. Yargıtay/Başsavcılık dosyaları ve web'e özgü bilgiler masaüstünden aktarılırsa görünür. |
+
+**Ekranlar**
+- Kenar çubuğu çekmecede: UYAP Dosyalarım → Ajanda → UETS Tebligatlarım, rozetlerle.
+- Ajanda: dar ekranda varsayılan görünüm **Liste** (gün gün); Gün görünümü tek sütun; hazırlık kartı satıra dokununca alttan açılan sayfa. Hafta/Ay yalnız tablet genişliğinde.
+- UETS: liste tam ekran; dokununca ayrıntı ayrı sayfada (ekler, dosya, süreler). Ek indirme telefonda paylaş/aç ile.
+- UYAP Dosyalarım: liste → dosya sayfası; evrak açma telefonda önizlemeyle.
+- Kanal çubuğu yatay kaydırılır; durum ve kalan süre aynı.
+
+**Veri**
+- Telefon kendi `portal.sqlite`'ını tutar; birleştirme kuralları (§9.4) aynı kod.
+- Masaüstü ↔ telefon: P14'teki QR/LAN aktarımıyla ajanda notları/işleri, takip edilen dosyalar ve UETS eşleştirmeleri mantıksal kayıt olarak aktarılır; portal oturumu aktarılmaz, her cihaz kendi girişini yapar.
+
+**Sıra:** (1) dar ekran düzenleri ve testleri (360–430 px), (2) telefon giriş görünümü adaptörü ve güvenli saklama, (3) telefon kabulü P16'da.
 
 ## Ek A — İncelenen Banaozel dosyalarının içerik hash'leri
 
