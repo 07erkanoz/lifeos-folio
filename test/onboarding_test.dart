@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/platform/onboarding_store.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
@@ -80,6 +81,7 @@ void main() {
       );
       final library = _Library();
       var done = 0;
+      final saved = <LawyerProfile>[];
       await tester.pumpWidget(
         MaterialApp(
           home: OnboardingScreen(
@@ -89,6 +91,8 @@ void main() {
             status: const OnboardingStatus(),
             onDone: () => done++,
             pickFolder: () async => '/documents',
+            loadProfile: () async => const LawyerProfile(),
+            saveProfile: (p) async => saved.add(p),
           ),
         ),
       );
@@ -103,6 +107,20 @@ void main() {
       await tester.pump();
       await tester.runAsync(() => tester.tap(button));
       await _io(tester);
+      // The lawyer's profile: typed, kept, and on to the folders.
+      expect(find.text('03 / AVUKAT PROFİLİ'), findsOneWidget);
+      expect(find.text('UYAP Mobil ile doldur'), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Ad soyad'),
+        'Deniz Yılmaz',
+      );
+      await tester.enterText(find.widgetWithText(TextField, 'Baro'), 'Antalya');
+      await tester.runAsync(
+        () => tester.tap(find.byKey(const ValueKey('onboarding-profile-next'))),
+      );
+      await _io(tester);
+      expect(saved.single.lawyer?.titled, 'Av. Deniz Yılmaz');
+      expect(saved.single.lawyer?.barName, 'Antalya Barosu');
       expect(find.text('Klasör seç ve ekle'), findsOneWidget);
       expect((await tester.runAsync(store.load))!.licenseAccepted, isTrue);
       await tester.runAsync(() => tester.tap(find.text('Klasör seç ve ekle')));

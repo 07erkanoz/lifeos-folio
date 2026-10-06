@@ -129,7 +129,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ayarlar'));
     await tester.pumpAndSettle();
-    expect(find.text('Klasör seç ve ekle'), findsOneWidget);
+    // A phone's settings are a page of their own, not a dialog.
+    expect(find.text('BAĞLANTILAR'), findsOneWidget);
+    expect(find.text('Arşiv klasörleri'), findsOneWidget);
+    await tester.tap(find.text('Arşiv klasörleri'));
+    await tester.pumpAndSettle();
+    expect(find.text('Klasör ekle'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../services/editor/lawyer_profile.dart';
 import '../../services/platform/document_intents.dart';
 import '../../services/platform/onboarding_store.dart';
 import '../../services/search/library_controller.dart';
 import 'folio_about_dialog.dart';
 import '../theme/theme_controller.dart';
+import '../agenda/agenda_page.dart' show AgendaColors;
+import '../mobile/profile_from_uyap.dart';
+import '../mobile/settings_parts.dart';
 
 class OnboardingGate extends StatefulWidget {
   final Widget child;
@@ -76,6 +80,11 @@ class OnboardingScreen extends StatefulWidget {
   final bool externalDocument;
   final VoidCallback onDone;
   final Future<String?> Function()? pickFolder;
+
+  /// Where the lawyer's profile is read from and kept; the profile file
+  /// when not given.
+  final Future<LawyerProfile> Function()? loadProfile;
+  final Future<void> Function(LawyerProfile profile)? saveProfile;
   const OnboardingScreen({
     super.key,
     required this.library,
@@ -85,6 +94,8 @@ class OnboardingScreen extends StatefulWidget {
     required this.onDone,
     this.externalDocument = false,
     this.pickFolder,
+    this.loadProfile,
+    this.saveProfile,
   });
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -92,6 +103,127 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   late int _step = widget.status.licenseAccepted ? 2 : 0;
+
+  // The lawyer's profile (step 3): filled from UYAP Mobil or typed.
+  LawyerProfile _profile = const LawyerProfile();
+  final _name = TextEditingController();
+  final _bar = TextEditingController();
+  final _barNumber = TextEditingController();
+  final _tbbNumber = TextEditingController();
+  final _idNumber = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
+  bool _fromUyap = false;
+  bool _filling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // A test reads no lawyer's real profile unless it gives one.
+    if (widget.loadProfile == null &&
+        Platform.environment.containsKey('FLUTTER_TEST')) {
+      return;
+    }
+    (widget.loadProfile ?? LawyerProfile.load)().then((p) {
+      if (mounted) setState(() => _showProfile(p));
+    }, onError: (Object _) {});
+  }
+
+  @override
+  void dispose() {
+    for (final c in [
+      _name,
+      _bar,
+      _barNumber,
+      _tbbNumber,
+      _idNumber,
+      _phone,
+      _email,
+    ]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _showProfile(LawyerProfile p) {
+    _profile = p;
+    final l = p.lawyer ?? const Lawyer();
+    _name.text = l.name;
+    _bar.text = l.barName;
+    _barNumber.text = l.barNumber;
+    _tbbNumber.text = l.tbbNumber;
+    _idNumber.text = l.idNumber;
+    _phone.text = p.phone;
+    _email.text = p.email;
+  }
+
+  LawyerProfile get _typed {
+    final lawyer = Lawyer(
+      name: _name.text.trim(),
+      bar: _bar.text.trim(),
+      barNumber: _barNumber.text.trim(),
+      tbbNumber: _tbbNumber.text.trim(),
+      idNumber: _idNumber.text.trim(),
+    );
+    final lawyers = [..._profile.lawyers];
+    final at = lawyers.isEmpty
+        ? -1
+        : _profile.main.clamp(0, lawyers.length - 1);
+    if (at < 0) {
+      lawyers.add(lawyer);
+    } else {
+      lawyers[at] = lawyer;
+    }
+    return LawyerProfile(
+      lawyers: lawyers,
+      main: at < 0 ? 0 : at,
+      address: _profile.address,
+      phone: _phone.text.trim(),
+      email: _email.text.trim(),
+      kep: _profile.kep,
+    );
+  }
+
+  Future<void> _fillFromUyap() async {
+    setState(() {
+      _filling = true;
+      _error = null;
+    });
+    try {
+      final filled = await profileFromUyap(context, _typed);
+      if (!mounted) return;
+      if (filled == null) {
+        setState(() => _error = 'UYAP Mobil’den bilgi alınamadı.');
+        return;
+      }
+      setState(() {
+        _showProfile(filled);
+        _fromUyap = true;
+      });
+    } finally {
+      if (mounted) setState(() => _filling = false);
+    }
+  }
+
+  /// The profile kept, when a name was given; on to the folders.
+  Future<void> _saveProfile() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final profile = _typed;
+      if (profile.lawyer != null) {
+        await (widget.saveProfile ?? (p) => p.save())(profile);
+      }
+      if (mounted) setState(() => _step = 3);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Profil kaydedilemedi: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   bool _accepted = false;
   bool _busy = false;
   String? _error;
@@ -231,7 +363,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       const SizedBox(height: 28),
                       Row(
                         children: [
-                          for (var i = 0; i < 3; i++)
+                          for (var i = 0; i < 4; i++)
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.only(right: 6),
@@ -254,7 +386,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         [
                           '01 / HOŞ GELDİNİZ',
                           '02 / KULLANIM LİSANSI',
-                          '03 / BELGE KÜTÜPHANENİZ',
+                          '03 / AVUKAT PROFİLİ',
+                          '04 / BELGE KÜTÜPHANENİZ',
                         ][_step],
                         style: TextStyle(
                           fontSize: 11,
@@ -324,6 +457,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ],
                           if (_step == 2) ...[
                             FilledButton.icon(
+                              key: const ValueKey('onboarding-profile-next'),
+                              onPressed: _busy || _filling
+                                  ? null
+                                  : _saveProfile,
+                              icon: const Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 18,
+                              ),
+                              label: const Text('Devam et'),
+                            ),
+                            TextButton(
+                              key: const ValueKey('onboarding-profile-later'),
+                              onPressed: _busy
+                                  ? null
+                                  : () => setState(() => _step = 3),
+                              child: const Text('Sonra'),
+                            ),
+                          ],
+                          if (_step == 3) ...[
+                            FilledButton.icon(
                               onPressed: _busy ? null : _finish,
                               icon: const Icon(
                                 Icons.arrow_forward_rounded,
@@ -361,6 +514,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       letterSpacing: -.8,
       height: 1.15,
     );
+    if (_step == 2) return _profileStep(colors, titleStyle);
     if (_step == 1) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,6 +664,91 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Step 3: the lawyer, from UYAP Mobil in one tap or typed.
+  Widget _profileStep(ColorScheme colors, TextStyle titleStyle) {
+    Widget field(
+      TextEditingController c,
+      String label, {
+      bool digits = false,
+      int? maxLength,
+      TextInputType? keyboard,
+    }) => ListenableBuilder(
+      listenable: c,
+      builder: (context, _) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: TextField(
+          controller: c,
+          maxLength: maxLength,
+          keyboardType: digits ? TextInputType.number : keyboard,
+          inputFormatters: digits
+              ? [FilteringTextInputFormatter.digitsOnly]
+              : null,
+          decoration: InputDecoration(
+            isDense: true,
+            labelText: label,
+            counterText: '',
+            border: const OutlineInputBorder(),
+            // What UYAP filled in, in its teal.
+            enabledBorder: _fromUyap && c.text.isNotEmpty
+                ? const OutlineInputBorder(
+                    borderSide: BorderSide(color: AgendaColors.eHearing),
+                  )
+                : null,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Dilekçeleriniz\nsizi tanısın.', style: titleStyle),
+          const SizedBox(height: 10),
+          Text(
+            'Adınız, baronuz ve sicil numaranız kalıplara ve imza bloğuna '
+            'kendiliğinden yazılır. Bilgiler yalnız bu cihazda kalır.',
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.5,
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 14),
+          UyapFillCard(
+            title: 'UYAP Mobil ile doldur',
+            subtitle: 'e-Devlet ile giriş; bilgiler UYAP’tan gelir',
+            button: 'Doldur',
+            busy: _filling,
+            onTap: _busy ? null : _fillFromUyap,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'ya da elle girin',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
+          ),
+          field(_name, 'Ad soyad'),
+          fieldPair(
+            field(_bar, 'Baro'),
+            field(_barNumber, 'Baro sicil no', digits: true),
+          ),
+          fieldPair(
+            field(_tbbNumber, 'TBB sicil no', digits: true),
+            field(_idNumber, 'TC kimlik no', digits: true, maxLength: 11),
+          ),
+          field(_phone, 'Telefon', keyboard: TextInputType.phone),
+          field(_email, 'E-posta', keyboard: TextInputType.emailAddress),
         ],
       ),
     );

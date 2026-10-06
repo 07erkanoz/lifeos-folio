@@ -128,11 +128,24 @@ class UyapMobileApi {
       field('soyadi'),
     ].where((s) => s.isNotEmpty).join(' ');
     final phones = map['telefonList'];
+    final mails = map['epostaList'];
+    String listed(Object? item, List<String> keys) => item is Map
+        ? keys
+              .map((k) => '${item[k] ?? ''}'.trim())
+              .firstWhere((v) => v.isNotEmpty, orElse: () => '')
+        : '$item'.trim();
     final s = MobileSession(
       user: name.isEmpty ? 'UYAP Mobil' : name,
       since: DateTime.now(),
       expires: _tokens!.refreshExpires,
       bar: field('baroAdi'),
+      barNumber: field('baroNo'),
+      tbbNumber: field('tbbNo'),
+      emails: [
+        for (final m in mails is List ? mails : const [])
+          if (listed(m, const ['eposta', 'adres', 'email']).contains('@'))
+            listed(m, const ['eposta', 'adres', 'email']),
+      ],
       tckn: RegExp(r'^\d{11}$').hasMatch(field('tcKimlikNo'))
           ? field('tcKimlikNo')
           : '',
@@ -537,6 +550,11 @@ class MobileSession {
   /// asks for neither again (Banaozel: "TC varsayılanı oturum sahibi").
   final String tckn;
   final List<String> phones;
+
+  /// The bar's register number and the TBB's, and the e-mail addresses, as
+  /// UYAP keeps them: the lawyer's profile is filled from them.
+  final String barNumber, tbbNumber;
+  final List<String> emails;
   const MobileSession({
     required this.user,
     required this.since,
@@ -544,6 +562,9 @@ class MobileSession {
     this.bar = '',
     this.tckn = '',
     this.phones = const [],
+    this.barNumber = '',
+    this.tbbNumber = '',
+    this.emails = const [],
   });
 }
 

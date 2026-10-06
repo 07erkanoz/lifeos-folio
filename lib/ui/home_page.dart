@@ -55,6 +55,8 @@ import '../services/update/update_check.dart';
 import '../services/platform/document_scan.dart';
 import 'mobile/document_home.dart';
 import 'mobile/mobile_drawer.dart';
+import 'mobile/mobile_settings_page.dart';
+import 'mobile/profile_from_uyap.dart';
 import '../services/editor/lawyer_profile.dart';
 import '../services/uyap/uyap_mobile_api.dart';
 import '../services/search/library_controller.dart';
@@ -761,11 +763,27 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  void _pickFolder() => showDialog<void>(
-    context: context,
-    builder: (_) =>
-        LibrarySettingsDialog(library: _library, appearance: widget.appearance),
-  );
+  /// The settings: a page of their own on a phone (docs/design/mobil-
+  /// ayarlar-taslak.png), the dialog on a computer.
+  void _pickFolder() {
+    if (MediaQuery.sizeOf(context).width < 700) {
+      unawaited(
+        MobileSettingsPage.open(
+          context,
+          library: _library,
+          appearance: widget.appearance,
+        ).then((_) => _loadLawyerName()),
+      );
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (_) => LibrarySettingsDialog(
+        library: _library,
+        appearance: widget.appearance,
+      ),
+    );
+  }
 
   Future<void> _addFiles(
     List<String> paths, {
@@ -966,25 +984,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (name.isEmpty) {
       final user = UyapMobileApi.instance.session.value?.user ?? '';
       if (user.isNotEmpty && user != 'UYAP Mobil') {
-        name = 'Av. ${_titleCase(user)}';
+        name = 'Av. ${titleCaseTr(user)}';
       }
     }
     if (mounted && name != _lawyerName) setState(() => _lawyerName = name);
   }
-
-  /// "ERKAN ÖZ" as "Erkan Öz", with Turkish's dotted and dotless i.
-  static String _titleCase(String text) => text
-      .split(RegExp(r'\s+'))
-      .where((w) => w.isNotEmpty)
-      .map((w) {
-        final rest = w
-            .substring(1)
-            .replaceAll('I', 'ı')
-            .replaceAll('İ', 'i')
-            .toLowerCase();
-        return '${w[0]}$rest';
-      })
-      .join(' ');
 
   static const _shortMonths = [
     'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', //
@@ -1833,7 +1837,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     },
     onFolders: () {
       _closeDrawer();
-      _pickFolder();
+      unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ArchiveFoldersPage(library: _library),
+          ),
+        ),
+      );
     },
     onSettings: () {
       _closeDrawer();

@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Mobil Ayarlar Taslağı</title>
+<style>
+  :root {
+    --page: #F4F6F9; --line: #E3E7EE; --muted: #6B7383; --ink: #1B2130;
+    --blue: #2D5AA8; --blueFill: #E8EEF8; --red: #D93B3B; --teal: #139C8B;
+    --tealFill: #E3F4F1; --primary: #2B5DAB; --ok: #1FA37A;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #DDE2EA; font-family: "Segoe UI", Roboto, Arial, sans-serif;
+         color: var(--ink); display: flex; gap: 34px; justify-content: center; padding: 30px; }
+  .phone { width: 390px; height: 844px; background: var(--page); border-radius: 36px; overflow: hidden;
+           box-shadow: 0 20px 50px rgba(20,30,50,.25); border: 10px solid #11151C; position: relative; }
+  .status { height: 30px; display: flex; justify-content: space-between; align-items: center;
+            padding: 0 22px; font-size: 13px; font-weight: 600; background: #fff; }
+  .label { text-align: center; font-size: 13px; color: #4B5465; margin-top: 10px; font-weight: 600; }
+  .bar { height: 54px; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: #fff;
+         border-bottom: 1px solid var(--line); }
+  .bar .t { flex: 1; font-size: 17px; font-weight: 700; }
+  .ib { width: 40px; height: 40px; display: grid; place-items: center; font-size: 20px; color: #3B4352; }
+  .save { color: var(--primary); font-weight: 700; font-size: 14px; padding: 0 12px; }
+  .scroll { padding: 12px 14px 20px; height: calc(844px - 20px - 30px - 54px); overflow: hidden; }
+  .sec { font-size: 11px; font-weight: 800; letter-spacing: .8px; color: var(--muted); margin: 14px 6px 6px; }
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row .ic { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
+             font-size: 15px; flex: none; background: var(--blueFill); color: var(--blue); }
+  .row .g { flex: 1; min-width: 0; }
+  .row .a { font-size: 14px; font-weight: 600; }
+  .row .b { font-size: 12px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chev { color: #9AA2B1; font-size: 18px; }
+  .sw { width: 40px; height: 24px; border-radius: 12px; background: var(--primary); position: relative; flex: none; }
+  .sw::after { content: ""; position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+  .sw.off { background: #C9CFD9; } .sw.off::after { left: 3px; right: auto; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; font-size: 12px; }
+  .seg span { padding: 6px 10px; border-right: 1px solid var(--line); } .seg span:last-child { border-right: 0; }
+  .seg .on { background: #EAF0F9; color: var(--primary); font-weight: 700; }
+  .profile { display: flex; align-items: center; gap: 12px; padding: 14px 12px; }
+  .avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--primary); color: #fff;
+            display: grid; place-items: center; font-weight: 800; font-size: 17px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  /* onboarding */
+  .ob { background: #fff; height: calc(844px - 20px - 30px); padding: 18px 20px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+  .logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg,#2B5DAB,#139C8B); }
+  .steps { display: flex; gap: 6px; margin: 18px 0 14px; } .steps i { flex: 1; height: 3px; border-radius: 3px; background: var(--line); }
+  .steps i.on { background: var(--primary); }
+  .kick { font-size: 11px; letter-spacing: 1.5px; font-weight: 700; color: var(--primary); }
+  .h1 { font-size: 25px; font-weight: 700; letter-spacing: -.6px; line-height: 1.15; margin: 8px 0 8px; }
+  .p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .uyap { margin-top: 14px; background: var(--tealFill); border: 1px solid #BFE5DE; border-radius: 14px; padding: 12px; display: flex; gap: 12px; align-items: center; }
+  .uyap .btn { margin-left: auto; background: var(--teal); color: #fff; font-weight: 700; font-size: 13px; padding: 9px 12px; border-radius: 10px; white-space: nowrap; }
+  .or { text-align: center; color: var(--muted); font-size: 12px; margin: 12px 0 8px; }
+  .f { border: 1px solid #C9CFD9; border-radius: 8px; padding: 9px 11px 8px; margin-bottom: 8px; font-size: 14px; position: relative; }
+  .f small { position: absolute; top: -8px; left: 9px; background: #fff; padding: 0 4px; font-size: 11px; color: var(--muted); }
+  .f.filled { border-color: var(--teal); }
+  .two { display: flex; gap: 8px; } .two .f { flex: 1; }
+  .actions { margin-top: auto; display: flex; gap: 10px; align-items: center; }
+  .primaryb { background: var(--primary); color: #fff; font-weight: 700; padding: 12px 18px; border-radius: 12px; font-size: 14px; }
+  .textb { color: var(--primary); font-weight: 600; font-size: 14px; }
+  .lawyer { background: #fff; border: 1.5px solid var(--primary); border-radius: 14px; padding: 12px; }
+  .chip { font-size: 11px; font-weight: 800; color: var(--primary); background: #EAF0F9; padding: 2px 8px; border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<div>
+<div class="phone">
+  <div class="status"><span>11:19</span><span>%82</span></div>
+  <div class="ob">
+    <div class="brand"><div class="logo"></div>LifeOS Folio</div>
+    <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+    <div class="kick">03 / AVUKAT PROFİLİ</div>
+    <div class="h1">Dilekçeleriniz<br>sizi tanısın.</div>
+    <div class="p">Adınız, baronuz ve sicil numaranız kalıplara ve imza bloğuna kendiliğinden yazılır. Bilgiler yalnız bu cihazda kalır.</div>
+    <div class="uyap">
+      <div style="font-size:22px">⚖</div>
+      <div><div style="font-weight:700;font-size:13.5px">UYAP Mobil ile doldur</div>
+        <div style="font-size:11.5px;color:#0C6B5F">e-Devlet ile giriş; bilgiler UYAP'tan gelir</div></div>
+      <div class="btn">Doldur</div>
+    </div>
+    <div class="or">ya da elle girin</div>
+    <div class="f filled"><small>Ad soyad</small>Erkan Öz</div>
+    <div class="two"><div class="f filled"><small>Baro</small>Antalya Barosu</div><div class="f filled"><small>Baro sicil no</small>2758</div></div>
+    <div class="two"><div class="f filled"><small>TBB sicil no</small>51234</div><div class="f"><small>TC kimlik no</small>&nbsp;</div></div>
+    <div class="f filled"><small>Telefon</small>0532 000 00 00</div>
+    <div class="f filled"><small>E-posta</small>erkan@ornek.av.tr</div>
+    <div class="actions"><div class="primaryb">Devam et →</div><div class="textb">Sonra</div></div>
+  </div>
+</div>
+<div class="label">İlk kurulum · yeni adım</div>
+</div>
+
+<div>
+<div class="phone">
+  <div class="status"><span>11:19</span><span>%82</span></div>
+  <div class="bar"><div class="ib">←</div><div class="t">Ayarlar</div></div>
+  <div class="scroll">
+    <div class="group"><div class="profile">
+      <div class="avatar">EÖ</div>
+      <div class="g" style="flex:1"><div style="font-weight:700;font-size:15px">Av. Erkan Öz</div>
+        <div style="font-size:12px;color:var(--muted)">Antalya Barosu · Sicil 2758</div></div>
+      <span class="chev">›</span></div></div>
+
+    <div class="sec">BAĞLANTILAR</div>
+    <div class="group">
+      <div class="row"><div class="ic" style="background:var(--tealFill);color:var(--teal)">⚖</div><div class="g"><div class="a">UYAP Mobil</div><div class="b"><span class="dot" style="background:var(--ok)"></span>Bağlı · 6 gün 22 sa geçerli</div></div><span class="chev">›</span></div>
+      <div class="row"><div class="ic" style="background:#FDECEC;color:var(--red)">✉</div><div class="g"><div class="a">UETS</div><div class="b"><span class="dot" style="background:#9AA2B1"></span>Bağlı değil</div></div><span class="chev">›</span></div>
+      <div class="row"><div class="ic">⇄</div><div class="g"><div class="a">Bilgisayarla senkronla</div><div class="b">QR ile, aynı ağda</div></div><span class="chev">›</span></div>
+    </div>
+
+    <div class="sec">BELGELER VE ARŞİV</div>
+    <div class="group">
+      <div class="row"><div class="ic">📁</div><div class="g"><div class="a">Arşiv klasörleri</div><div class="b">2 klasör · 5.079 evrak</div></div><span class="chev">›</span></div>
+      <div class="row"><div class="ic">⌕</div><div class="g"><div class="a">Taranmış belgeleri oku (OCR)</div><div class="b">Görsel ve taranmış PDF'lerde arama</div></div><div class="sw"></div></div>
+    </div>
+
+    <div class="sec">EDİTÖR</div>
+    <div class="group">
+      <div class="row"><div class="ic">✎</div><div class="g"><div class="a">Yazarken öneri</div><div class="b">Kalıplar ve öğrenilen ifadeler</div></div><div class="sw"></div></div>
+      <div class="row"><div class="ic">☰</div><div class="g"><div class="a">Kalıplarım</div><div class="b">12 kalıp</div></div><span class="chev">›</span></div>
+      <div class="row"><div class="ic">⟳</div><div class="g"><div class="a">Öğrenme</div><div class="b">Belgelerimden · arşivden · ifadeler</div></div><span class="chev">›</span></div>
+    </div>
+
+    <div class="sec">ATIFLAR</div>
+    <div class="group">
+      <div class="row"><div class="ic">§</div><div class="g"><div class="a">Kanun maddeleri</div><div class="b">TMK m.166 tıklanınca resmî metin</div></div><div class="sw"></div></div>
+      <div class="row"><div class="ic">⚖</div><div class="g"><div class="a">Mahkeme kararları</div><div class="b">Yargıtay, BAM, Danıştay · Bedesten</div></div><div class="sw"></div></div>
+    </div>
+
+    <div class="sec">GÖRÜNÜM</div>
+    <div class="group">
+      <div class="row"><div class="ic">◐</div><div class="g"><div class="a">Tema</div></div><div class="seg"><span class="on">Beyaz</span><span>Siyah</span><span>Sistem</span></div></div>
+    </div>
+  </div>
+</div>
+<div class="label">Ayarlar · tam sayfa</div>
+</div>
+
+<div>
+<div class="phone">
+  <div class="status"><span>11:19</span><span>%82</span></div>
+  <div class="bar"><div class="ib">←</div><div class="t">Avukat profili</div><div class="save">Kaydet</div></div>
+  <div class="scroll">
+    <div class="uyap" style="margin-top:0">
+      <div style="font-size:22px">⚖</div>
+      <div><div style="font-weight:700;font-size:13.5px">UYAP Mobil'den güncelle</div>
+        <div style="font-size:11.5px;color:#0C6B5F">Ad, baro, sicil, TBB no, iletişim</div></div>
+      <div class="btn">Güncelle</div>
+    </div>
+    <div class="sec">AVUKATLAR</div>
+    <div class="lawyer">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span class="chip">VARSAYILAN</span><span style="color:#9AA2B1">🗑</span></div>
+      <div class="f"><small>Ad soyad</small>Erkan Öz</div>
+      <div class="two"><div class="f"><small>Baro</small>Antalya Barosu</div><div class="f"><small>Sicil no</small>2758</div></div>
+      <div class="two" style="margin-bottom:-8px"><div class="f"><small>TBB sicil no</small>51234</div><div class="f"><small>TC kimlik no</small>•••••••••01</div></div>
+    </div>
+    <div style="text-align:center;margin:10px 0 4px" class="textb">＋ Avukat ekle</div>
+    <div class="sec">BÜRO</div>
+    <div class="group" style="padding:12px 12px 4px">
+      <div class="f"><small>Büro adresi</small>Kızıltoprak Mah. ... Muratpaşa/Antalya</div>
+      <div class="two"><div class="f"><small>Telefon</small>0242 000 00 00</div><div class="f"><small>KEP</small>erkan.oz@hs01.kep.tr</div></div>
+      <div class="f"><small>E-posta</small>erkan@ornek.av.tr</div>
+    </div>
+    <div class="p" style="margin:12px 6px">Kalıplarda [AVUKAT], [BARO], [BARO SİCİL NO] gibi boşluklar bu bilgilerle dolar.</div>
+  </div>
+</div>
+<div class="label">Ayarlar › Avukat profili</div>
+</div>
+
+</body>
+</html>
