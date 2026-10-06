@@ -145,7 +145,7 @@ class UyapCasePanelController extends ChangeNotifier {
           court: record.court,
           number: record.number,
         );
-    _record = record;
+    _record = await store.dropSameContent(record);
     _live = null;
     _liveDocuments = const {};
     selected.clear();
@@ -156,7 +156,8 @@ class UyapCasePanelController extends ChangeNotifier {
   /// asking UYAP: what was fetched of it before is there already.
   Future<void> attach(UyapCaseLink link) async {
     _link = link;
-    _record = await store.load(link.court, link.number);
+    final kept = await store.load(link.court, link.number);
+    _record = kept == null ? null : await store.dropSameContent(kept);
     _live = null;
     _liveDocuments = const {};
     selected.clear();
@@ -512,28 +513,49 @@ class UyapCasePanelController extends ChangeNotifier {
         throw StateError('${document.title} UYAP Mobil’deki listede yok.');
       }
     }
+    // The document's id goes with the case's id this session resolved,
+    // never with the dosyaId its row carries: a tied case's row names that
+    // case, and UYAP then answers with another document (Banaozel's
+    // `evrak_indir`, the contract of the working KararArama app).
     Uint8List bytes;
     try {
-      bytes = await mobile.documentBytes(
-        live.documentId,
-        live.caseId.isNotEmpty ? live.caseId : id,
-      );
+      bytes = _checked(await mobile.documentBytes(live.documentId, id));
     } catch (_) {
-      // The case's id and the document's go together and are the
-      // session's: both are looked up again, once.
+      // Both ids are the session's: looked up again, once.
       _mobileCaseId = null;
       await _refreshMobile();
       final again = _liveDocuments[document.key];
       if (again == null || _mobileCaseId == null) rethrow;
-      bytes = await mobile.documentBytes(
-        again.documentId,
-        again.caseId.isNotEmpty ? again.caseId : _mobileCaseId!,
+      bytes = _checked(
+        await mobile.documentBytes(again.documentId, _mobileCaseId!),
+      );
+    }
+    if (store.sameAsAnother(_record!, document.key, bytes)) {
+      throw StateError(
+        '${document.title}: UYAP Mobil başka bir evrakın içeriğini döndürdü; '
+        'kaydedilmedi. UYAP Web ile deneyin.',
       );
     }
     final (record, file) = await store.save(_record!, document, bytes);
     _record = await store.seen(record, document.key);
     onSaved?.call(file);
     return file;
+  }
+
+  /// UYAP's document store's own failure, sent as a document's content
+  /// (Banaozel's `_DSS_HATA_ISARETLERI`), is not a document.
+  static Uint8List _checked(Uint8List bytes) {
+    final head = String.fromCharCodes(bytes.take(400).where((b) => b < 128))
+        .toLowerCase();
+    const marks = [
+      'dssreadexception',
+      'dokuman saklama sistemine ulasirken hata olustu',
+      'belge alma isleminde hata olustu',
+    ];
+    if (bytes.isEmpty || marks.any(head.contains)) {
+      throw StateError('UYAP belge saklama servisi geçici hata verdi.');
+    }
+    return bytes;
   }
 
   /// Downloads [keys], or every document when none are given, one after

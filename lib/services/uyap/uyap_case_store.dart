@@ -385,6 +385,58 @@ class UyapCaseStore {
     return next;
   }
 
+  /// Whether [bytes] are already on disk as another document of [record]:
+  /// two documents are never one file.
+  bool sameAsAnother(UyapCaseRecord record, String key, List<int> bytes) {
+    final digest = sha256.convert(bytes);
+    for (final MapEntry(key: other, value: path) in record.files.entries) {
+      if (other == key) continue;
+      final file = File(path);
+      try {
+        if (file.lengthSync() == bytes.length &&
+            sha256.convert(file.readAsBytesSync()) == digest) {
+          return true;
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  /// [record] without the files two documents or more share by content: an
+  /// earlier Folio's mobile download could save one document's content for
+  /// several. Those files Folio put in the case's folders are deleted, the
+  /// documents are no longer marked downloaded, and are fetched again.
+  Future<UyapCaseRecord> dropSameContent(UyapCaseRecord record) async {
+    if (record.files.length < 2) return record;
+    final byDigest = <String, List<String>>{};
+    for (final MapEntry(key: key, value: path) in record.files.entries) {
+      try {
+        final digest = sha256.convert(await File(path).readAsBytes());
+        (byDigest['$digest'] ??= []).add(key);
+      } catch (_) {}
+    }
+    final shared = {
+      for (final keys in byDigest.values)
+        if (keys.length > 1) ...keys,
+    };
+    if (shared.isEmpty) return record;
+    await settings.load();
+    final ours = [settings.folder, p.join((await _root()).path, 'belgeler')];
+    final files = {...record.files};
+    for (final key in shared) {
+      final path = files.remove(key)!;
+      if (ours.any((root) => p.isWithin(root, path))) {
+        try {
+          final file = File(path);
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+      }
+    }
+    final next = record.copyWith(files: files);
+    await _write(next);
+    return next;
+  }
+
   /// The document of [key] on disk, if it is there still.
   File? fileOf(UyapCaseRecord record, String key) {
     final path = record.files[key];
