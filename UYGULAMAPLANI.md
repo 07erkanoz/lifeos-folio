@@ -4,7 +4,7 @@ Tarih: 6 Ekim 2026
 
 Durum: Kaynak incelemesi ve plan hazırlandı. Uygulama geliştirmesi başlatılmadı.
 
-Ek inceleme (6 Ekim 2026): Banaozel'in senkron, portföy, evrak, duruşma ve UETS eşleştirme mantığı incelendi; Folio kuralları §9'a, paket maddeleri ilgili paketlere işlendi. Yeni ekranların Folio'daki yeri §10'da açık karar olarak duruyor.
+Ek inceleme (6 Ekim 2026): Banaozel'in senkron, portföy, evrak, duruşma ve UETS eşleştirme mantığı incelendi; Folio kuralları §9'a, paket maddeleri ilgili paketlere işlendi. Ekran yerleşimi §10'da karara bağlandı; uygulama sırası §11'de.
 
 Hedef proje: `/home/erkanoz/projeler/evrak convert`
 
@@ -620,18 +620,33 @@ Web oturumu kısa olduğu için web turunda önce yalnız web'den gelen aileler 
 | Masaüstü kanal ve tazeleme | `app/lib/uyap/uyap_canli.dart`, `app/lib/uyap/core/uyap/uyap_sonuc.dart`, `app/lib/uyap/akilli_senkron.dart` |
 | Yerel saklama ve kuyruk | `app/lib/uyap/uyap_db.dart`, `app/lib/arsiv/arsiv_kuyrugu.dart`, `app/lib/yardimci/runtime/work_coordinator.dart` |
 
-## 10. Açık karar: yeni ekranların Folio'daki yeri
+## 10. Ekran kararı: Büro bölümü ve Ajanda (karar verildi, 6 Ekim 2026)
 
-Uygulamaya geçmeden önce kullanıcıyla birlikte belirlenecek. Bugün Folio'da kenar çubuğunda **UYAP Dosyalarım** girişi var; UYAP girişi ayrı bir ekran değil, evrak gönderme ve dosya seçme pencerelerinin içinde açılıyor (`lib/ui/widgets/uyap_connect_view.dart`). Karar verilecek sorular:
+Kullanıcı `docs/design/ajanda-taslak.png` taslağını onayladı; uygulama bu görselin aynısı olacak (renk, yazı, kart, boşluklar). Kaynak HTML: `docs/design/ajanda-taslak.html`.
 
-- Üç bağlantı kartı (UETS, UYAP Web, UYAP Mobil) nerede duracak: Ayarlar içinde mi, kenar çubuğunda ayrı bir "Bağlantılar" girişi mi, yoksa ilgili ekranın başında mı?
-- UETS tebligat kutusu masaüstünde kenar çubuğunda ayrı bir giriş mi olacak, UYAP Dosyalarım ile aynı bölümde mi?
-- Ajanda (duruşmalar, notlar, işler) ana sayfada mı, ayrı bir ekranda mı?
-- Senkron ve indirme durumu nerede gösterilecek: durum çubuğu, bağlantı kartı, dosya ekranı?
-- Bir işlem bağlı olmayan kanalı gerektirdiğinde (ör. Yargıtay için web) bağlantı kartı nasıl ve nerede çıkacak?
-- Mobilde alt gezinme (P11: Dosyalar, UETS, Ajanda, Belgeler, Ayarlar) masaüstü yerleşimiyle nasıl eşleşecek?
+- **Kenar çubuğu:** Tüm Evraklar, Belgeler, Galeri'nin altında **BÜRO** bölümü: `UYAP Dosyalarım` (dosya sayısı) → `Ajanda` (bugünkü duruşma rozeti) → `UETS Tebligatlarım` (okunmamış sayısı). Klasörler altta kalır.
+- **Ajanda üst satırı:** başlık, tarih gezinmesi (‹ Bugün ›), Gün/Hafta/Ay/Liste, `Not / iş ekle`; altında kanal durumu çipleri (UYAP Mobil, UYAP Web, UETS: güncellik veya yeniden bağlan).
+- **Özet kartları:** bugünkü duruşma, bu hafta duruşma, süresi yaklaşan, açık iş/not.
+- **Haftalık takvim:** duruşma mavi, e-duruşma yeşil, süre kırmızı, not/iş turuncu; şimdiki saat çizgisi; "Duruşmalar UYAP Mobil ve Web'den birleştirildi" notu.
+- **Sağ panel:** seçili duruşmanın hazırlık kartı (mahkeme, esas, taraflar, işlem, salon, kaynak kanal, son evraklar, notlarım ve işlerim, Dosyayı aç / Dilekçe başlat / Mazeret) ve yaklaşan süreler.
+- Bağlantı kartları, ilgili ekranın kanal çipine tıklanınca açılır; Ayarlar'da da bulunur. UETS Tebligatlarım ve mobil yerleşimi aynı görsel dille ayrıca tasarlanır.
 
-Yöntem: önce kullanıcının verdiği bir referans (ekran görüntüsü veya mevcut Folio ekranı) üzerinde anlaşılır, ardından tek bir odaklı taslak yapılır. P03, P05, P07, P08 ve P10'un ekran işleri bu karar verilmeden başlamaz; servis ve test işleri karardan bağımsız ilerleyebilir.
+## 11. Uygulama sırası ve durum
+
+Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
+
+| # | İş | Paket | Durum |
+|---|---|---|---|
+| T1 | Ekran kararı ve iş sırası plana işlendi | §10 | Tamam |
+| T2 | Banaozel süre motoru incelemesi; kullanılabilirse taşıma kararı | P10 | Sırada |
+| T3 | Kanal ve işlem → kanal tablosu (§9.2), testleriyle | P01 | Sırada |
+| T4 | Gözlem damgalı birleştirme: web ve mobil birbirini ezmez, eksiklerini tamamlar (§9.4) | P06/P07 | Sırada |
+| T5 | Yerel portal veritabanı: dosya, duruşma, not/iş | P02 | Sırada |
+| T6 | Web duruşma listesi (29 günlük pencereler), normalize ve birleştirme | P10 | Sırada |
+| T7 | Kenar çubuğu BÜRO bölümü ve Ajanda ekranı (taslağın aynısı) | P10/P11 | Sırada |
+| T8 | Süre motoru ve yaklaşan süreler | P10 | Sırada |
+| T9 | UYAP Mobil API girişi, portföy ve duruşma; web ile birleştirme | P04/P07 | Sırada |
+| T10 | UETS girişi, Tebligatlarım ekranı ve dosya eşleştirme | P05/P08/P09 | Sırada |
 
 ## Ek A — İncelenen Banaozel dosyalarının içerik hash'leri
 

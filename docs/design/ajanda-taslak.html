@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>Folio Ajanda taslağı</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Liberation Sans",Arial,sans-serif;color:#1d2433;background:#e9ecf1;width:1440px;height:900px;overflow:hidden;font-size:13px}
+.win{position:absolute;inset:0;background:#f4f6f9;display:flex;flex-direction:column}
+.title{height:34px;background:#fff;border-bottom:1px solid #e3e7ee;display:flex;align-items:center;padding:0 12px;gap:8px;font-size:12px;font-weight:700}
+.logo{width:18px;height:18px;border-radius:4px;background:#3d526a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+.title .sp{flex:1}.wc{color:#555;font-weight:400;letter-spacing:14px}
+.body{flex:1;display:flex;min-height:0}
+.side{width:244px;background:#fff;border-right:1px solid #e3e7ee;padding:14px 14px;display:flex;flex-direction:column;gap:4px}
+.btnp{background:#2d5aa8;color:#fff;border-radius:8px;height:38px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;margin-bottom:6px}
+.btno{border:1px solid #d5dbe5;border-radius:8px;height:34px;display:flex;align-items:center;justify-content:center;font-size:13px;margin-bottom:14px}
+.nav{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:8px;color:#2b3445;white-space:nowrap}
+.nav .ic{width:18px;text-align:center;color:#5b6576}
+.nav .n{margin-left:auto;font-size:11px;color:#6b7383}
+.nav.on{background:#e8eef8;color:#2d5aa8;font-weight:700}.nav.on .ic{color:#2d5aa8}
+.pill{margin-left:auto;font-size:10.5px;font-weight:700;border-radius:9px;padding:2px 7px}
+.pb{background:#2d5aa8;color:#fff}.pr{background:#d93b3b;color:#fff}
+.sec{font-size:10px;font-weight:700;letter-spacing:1px;color:#7a8394;margin:14px 10px 4px}
+.side .grow{flex:1}
+.arch{border:1px solid #e3e7ee;border-radius:10px;padding:10px;font-size:11px;color:#6b7383}
+.arch b{display:block;color:#1d2433;font-size:12px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:58px;background:#fff;border-bottom:1px solid #e3e7ee;display:flex;align-items:center;padding:0 20px;gap:12px}
+.top h1{font-size:17px}.crumb{color:#7a8394;font-size:12px}
+.top .sp{flex:1}
+.seg{display:flex;border:1px solid #d5dbe5;border-radius:8px;overflow:hidden}
+.seg span{padding:7px 13px;font-size:12px;border-right:1px solid #d5dbe5}.seg span:last-child{border-right:none}
+.seg .on{background:#e8eef8;color:#2d5aa8;font-weight:700}
+.dnav{display:flex;align-items:center;gap:6px;font-size:13px}
+.dnav .b{border:1px solid #d5dbe5;border-radius:8px;padding:6px 10px}
+.add{background:#2d5aa8;color:#fff;border-radius:8px;padding:9px 14px;font-weight:700;font-size:12.5px}
+.chan{display:flex;gap:8px;padding:10px 20px 0;font-size:11.5px}
+.chip{display:flex;align-items:center;gap:6px;border:1px solid #e3e7ee;background:#fff;border-radius:14px;padding:4px 10px;color:#4b5465}
+.dot{width:7px;height:7px;border-radius:50%}
+.content{flex:1;display:flex;gap:16px;padding:12px 20px 16px;min-height:0}
+.left{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
+.stats{display:flex;gap:12px}
+.stat{flex:1;background:#fff;border:1px solid #e3e7ee;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px}
+.stat .v{font-size:22px;font-weight:700}.stat .l{font-size:11.5px;color:#6b7383}
+.si{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.cal{flex:1;background:#fff;border:1px solid #e3e7ee;border-radius:10px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.days{display:grid;grid-template-columns:52px repeat(5,1fr);border-bottom:1px solid #e3e7ee}
+.days div{padding:8px 10px;font-size:11.5px;color:#6b7383;border-left:1px solid #eef1f5}
+.days div b{display:block;font-size:16px;color:#1d2433}
+.days .today b{color:#2d5aa8}.days .today{background:#f5f8fd}
+.grid{flex:1;display:grid;grid-template-columns:52px repeat(5,1fr);position:relative}
+.hours div{height:52px;font-size:10.5px;color:#9aa1ad;text-align:right;padding:2px 8px 0 0;border-top:1px solid #f1f3f6}
+.col{border-left:1px solid #eef1f5;position:relative;background:repeating-linear-gradient(#fff 0 51px,#f1f3f6 51px 52px)}
+.col.today{background:repeating-linear-gradient(#f9fbfe 0 51px,#eef2f8 51px 52px)}
+.ev{position:absolute;left:5px;right:5px;border-radius:7px;padding:5px 7px;font-size:11px;line-height:1.3;overflow:hidden;border-left:3px solid}
+.ev b{display:block;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .m{color:#5b6576;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.d{background:#e8eef8;border-color:#2d5aa8}.d b{color:#1f467f}
+.e{background:#e3f4f1;border-color:#139c8b}.e b{color:#0c6b5f}
+.t{background:#fff3e0;border-color:#e08a00}.t b{color:#8a5300}
+.s{background:#fdecec;border-color:#d93b3b}.s b{color:#9c2525}
+.ev.sel{box-shadow:0 0 0 2px #2d5aa8}
+.now{position:absolute;left:0;right:0;border-top:2px solid #d93b3b}
+.now:before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:#d93b3b}
+.legend{display:flex;gap:14px;padding:8px 12px;border-top:1px solid #e3e7ee;font-size:11px;color:#6b7383}
+.legend span{display:flex;align-items:center;gap:5px}.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.right{width:380px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.card{background:#fff;border:1px solid #e3e7ee;border-radius:10px;padding:14px}
+.kicker{font-size:10.5px;font-weight:700;letter-spacing:.8px;color:#2d5aa8}
+.card h2{font-size:15px;margin:4px 0 2px}
+.muted{color:#6b7383;font-size:11.5px}
+.kv{display:grid;grid-template-columns:78px 1fr;gap:5px 8px;margin:10px 0;font-size:12px}
+.kv dt{color:#7a8394}.kv dd{color:#1d2433}
+.h3{font-size:11px;font-weight:700;color:#4b5465;margin:12px 0 6px;letter-spacing:.3px}
+.doc{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;border-top:1px solid #f1f3f6}
+.tag{font-size:9.5px;font-weight:700;border-radius:4px;padding:2px 5px}
+.new{background:#e3f4f1;color:#0c6b5f}
+.task{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0}
+.cb{width:14px;height:14px;border:1.5px solid #9aa1ad;border-radius:3px}
+.cb.ok{background:#2d5aa8;border-color:#2d5aa8;position:relative}
+.cb.ok:after{content:"✓";color:#fff;font-size:10px;position:absolute;left:2px;top:-1px}
+.task.done{color:#9aa1ad;text-decoration:line-through}
+.acts{display:flex;gap:8px;margin-top:12px}
+.ab{flex:1;text-align:center;border:1px solid #d5dbe5;border-radius:8px;padding:8px 0;font-size:12px;font-weight:700;color:#2d5aa8}
+.ab.p{background:#2d5aa8;color:#fff;border-color:#2d5aa8}
+.list .row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #f1f3f6;font-size:12px}
+.list .row:first-of-type{border-top:none}
+.when{width:58px;font-size:11px;color:#6b7383}.when b{display:block;color:#1d2433;font-size:12px}
+.status{height:26px;background:#fff;border-top:1px solid #e3e7ee;display:flex;align-items:center;padding:0 16px;font-size:11px;color:#6b7383;gap:6px}
+</style></head><body><div class="win">
+<div class="title"><div class="logo">F</div>LifeOS Folio<div class="sp"></div><span class="wc">ⓘ ⛶ — ▢ ✕</span></div>
+<div class="body">
+<aside class="side">
+ <div class="btnp">＋&nbsp; Dosya Aç</div>
+ <div class="btno">▣&nbsp; Klasör Ekle</div>
+ <div class="nav"><span class="ic">▦</span>Tüm Evraklar<span class="n">5079</span></div>
+ <div class="nav"><span class="ic">▤</span>Belgeler</div>
+ <div class="nav"><span class="ic">▨</span>Galeri</div>
+ <div class="sec">BÜRO</div>
+ <div class="nav"><span class="ic">⚖</span>UYAP Dosyalarım<span class="n">124</span></div>
+ <div class="nav on"><span class="ic">▣</span>Ajanda<span class="pill pb">Bugün 2</span></div>
+ <div class="nav"><span class="ic">✉</span>UETS Tebligatlarım<span class="pill pr">3</span></div>
+ <div class="sec">KLASÖRLER</div>
+ <div class="nav"><span class="ic">▭</span>UYAP Dosyaları<span class="n">1</span></div>
+ <div class="nav"><span class="ic">▭</span>Masaüstü<span class="n">5076</span></div>
+ <div class="grow"></div>
+ <div class="arch"><b>Yerel arşiv</b>4046 içerik aranabilir</div>
+</aside>
+<main class="main">
+ <div class="top"><h1>Ajanda</h1><span class="crumb">/ Duruşmalar, süreler ve işleriniz</span><div class="sp"></div>
+  <div class="dnav"><span class="b">‹</span><span class="b">Bugün</span><span class="b">›</span>&nbsp;<b>6 – 10 Ekim 2026</b></div>
+  <div class="seg"><span>Gün</span><span class="on">Hafta</span><span>Ay</span><span>Liste</span></div>
+  <div class="add">＋ Not / iş ekle</div></div>
+ <div class="chan">
+  <span class="chip"><i class="dot" style="background:#1fa37a"></i>UYAP Mobil · 5 dk önce güncellendi</span>
+  <span class="chip"><i class="dot" style="background:#1fa37a"></i>UYAP Web · bağlı, 2 sa 41 dk</span>
+  <span class="chip"><i class="dot" style="background:#e08a00"></i>UETS · yeniden bağlan</span>
+ </div>
+ <div class="content">
+  <div class="left">
+   <div class="stats">
+    <div class="stat"><div class="si" style="background:#e8eef8;color:#2d5aa8">⚖</div><div><div class="v">2</div><div class="l">Bugünkü duruşma</div></div></div>
+    <div class="stat"><div class="si" style="background:#e8eef8;color:#2d5aa8">▣</div><div><div class="v">9</div><div class="l">Bu hafta duruşma</div></div></div>
+    <div class="stat"><div class="si" style="background:#fdecec;color:#d93b3b">⏱</div><div><div class="v">3</div><div class="l">Süresi yaklaşan</div></div></div>
+    <div class="stat"><div class="si" style="background:#fff3e0;color:#e08a00">✓</div><div><div class="v">5</div><div class="l">Açık iş / not</div></div></div>
+   </div>
+   <div class="cal">
+    <div class="days"><div></div>
+     <div class="today">Pazartesi<b>6 Eki</b></div><div>Salı<b>7 Eki</b></div><div>Çarşamba<b>8 Eki</b></div><div>Perşembe<b>9 Eki</b></div><div>Cuma<b>10 Eki</b></div></div>
+    <div class="grid">
+     <div class="hours"><div>08:00</div><div>09:00</div><div>10:00</div><div>11:00</div><div>12:00</div><div>13:00</div><div>14:00</div><div>15:00</div><div>16:00</div><div>17:00</div><div>18:00</div></div>
+     <div class="col today">
+      <div class="ev d sel" style="top:70px;height:46px"><b>09:20 Duruşma</b><span class="m">Antalya 3. Asliye Hukuk · 2025/412</span></div>
+      <div class="ev t" style="top:186px;height:38px"><b>Bilirkişi raporuna itiraz</b><span class="m">Not · 2024/88</span></div>
+      <div class="ev d" style="top:320px;height:46px"><b>14:10 Duruşma</b><span class="m">Manavgat 2. İş · 2026/57</span></div>
+      <div class="now" style="top:262px"></div>
+     </div>
+     <div class="col">
+      <div class="ev e" style="top:96px;height:46px"><b>09:45 E-duruşma</b><span class="m">İzmir BAM 4. HD · 2025/1903</span></div>
+      <div class="ev s" style="top:8px;height:30px"><b>⏱ İstinaf süresi · son gün</b></div>
+     </div>
+     <div class="col">
+      <div class="ev d" style="top:130px;height:46px"><b>10:30 Duruşma</b><span class="m">Antalya 1. Ağır Ceza · 2026/31</span></div>
+      <div class="ev d" style="top:240px;height:46px"><b>12:40 Duruşma</b><span class="m">Kepez 2. Sulh Hukuk · 2026/210</span></div>
+     </div>
+     <div class="col">
+      <div class="ev t" style="top:60px;height:38px"><b>Müvekkil görüşmesi</b><span class="m">İş · 09:00</span></div>
+      <div class="ev d" style="top:290px;height:46px"><b>13:30 Duruşma</b><span class="m">Alanya 1. Aile · 2025/980</span></div>
+     </div>
+     <div class="col">
+      <div class="ev s" style="top:8px;height:30px"><b>⏱ Cevap dilekçesi · son gün</b></div>
+      <div class="ev d" style="top:110px;height:46px"><b>10:00 Duruşma</b><span class="m">Antalya 6. İcra Hukuk · 2026/77</span></div>
+     </div>
+    </div>
+    <div class="legend"><span><i style="background:#2d5aa8"></i>Duruşma</span><span><i style="background:#139c8b"></i>E-duruşma</span><span><i style="background:#d93b3b"></i>Süre</span><span><i style="background:#e08a00"></i>Not / iş</span><span style="margin-left:auto">Duruşmalar UYAP Mobil ve Web'den birleştirildi</span></div>
+   </div>
+  </div>
+  <div class="right">
+   <div class="card">
+    <div class="kicker">BUGÜN 09:20 · DURUŞMA · 2 SA SONRA</div>
+    <h2>Antalya 3. Asliye Hukuk Mahkemesi</h2>
+    <div class="muted">2025/412 Esas · Alacak davası</div>
+    <dl class="kv"><dt>Taraflar</dt><dd>Davacı Ayşe K. — Davalı B. İnşaat Ltd.</dd><dt>İşlem</dt><dd>Ön inceleme duruşması</dd><dt>Salon</dt><dd>2. kat, 214</dd><dt>Kaynak</dt><dd>UYAP Mobil + Web</dd></dl>
+    <div class="h3">SON EVRAKLAR</div>
+    <div class="doc"><span class="tag new">YENİ</span>Bilirkişi raporu<span class="muted" style="margin-left:auto">03 Eki</span></div>
+    <div class="doc"><span class="tag" style="background:#eef1f5;color:#4b5465">UDF</span>Ara karar<span class="muted" style="margin-left:auto">28 Eyl</span></div>
+    <div class="doc"><span class="tag" style="background:#eef1f5;color:#4b5465">PDF</span>Tebligat mazbatası<span class="muted" style="margin-left:auto">21 Eyl</span></div>
+    <div class="h3">NOTLARIM VE İŞLERİM</div>
+    <div class="task done"><span class="cb ok"></span>Tanık listesini hazırla</div>
+    <div class="task"><span class="cb"></span>Bilirkişi raporuna itiraz taslağı</div>
+    <div class="task"><span class="cb"></span>Müvekkile duruşma saatini bildir</div>
+    <div class="acts"><div class="ab p">Dosyayı aç</div><div class="ab">Dilekçe başlat</div><div class="ab">Mazeret</div></div>
+   </div>
+   <div class="card list">
+    <div class="h3" style="margin-top:0">YAKLAŞAN SÜRELER</div>
+    <div class="row"><div class="when"><b>7 Eki</b>Salı</div><div>İstinaf süresi son gün<div class="muted">Antalya 2. Asliye Ticaret · 2024/615</div></div></div>
+    <div class="row"><div class="when"><b>10 Eki</b>Cuma</div><div>Cevap dilekçesi<div class="muted">Kepez 1. Asliye Hukuk · 2026/144</div></div></div>
+    <div class="row"><div class="when"><b>14 Eki</b>Salı</div><div>Tebligattan itibaren 2 hafta<div class="muted">UETS · Manavgat İcra Dairesi</div></div></div>
+   </div>
+  </div>
+ </div>
+ <div class="status"><i class="dot" style="background:#1fa37a"></i>Yerel arşiv · 5079 evrak<span style="margin-left:auto;color:#2d5aa8">Senkron durumu</span></div>
+</main></div></div></body></html>
