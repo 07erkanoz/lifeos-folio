@@ -56,9 +56,6 @@ class UyapCasesPage extends StatefulWidget {
 class _UyapCasesPageState extends State<UyapCasesPage> {
   UyapWebService get _web => UyapWebService.instance;
 
-  /// The web portal is reached from a computer; UYAP Mobil from anywhere.
-  static bool get _desktop =>
-      Platform.isLinux || Platform.isWindows || Platform.isMacOS;
   late final _controller = UyapCasePanelController()..onSaved = widget.onSaved;
   List<(UyapCaseRecord, int)>? _cases;
   bool _adding = false;
@@ -276,8 +273,138 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
     );
   }
 
+  /// The ways a case is added, from below on a phone: the portfolio, or
+  /// the web portal's search by court and number.
+  Future<void> _addSheet() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheet) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            key: const ValueKey('uyap-cases-add-portfolio'),
+            leading: const Icon(Icons.account_tree_outlined),
+            title: const Text('Portföyden seç'),
+            subtitle: const Text('Bir birimin tüm dosyaları ya da tek tek'),
+            onTap: () {
+              Navigator.pop(sheet);
+              unawaited(_addFromPortfolio());
+            },
+          ),
+          ListTile(
+            key: const ValueKey('uyap-cases-add-search'),
+            leading: const Icon(Icons.search),
+            title: const Text('Mahkeme ve esas no ile ara'),
+            subtitle: Text(
+              _web.connected ? 'UYAP Web üzerinden' : 'UYAP Web bağlı değil',
+            ),
+            enabled: _web.connected,
+            onTap: () {
+              Navigator.pop(sheet);
+              unawaited(_add());
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+
+  /// The top on a phone: one row, small buttons, the chips under it.
+  Widget _topNarrow(ThemeData theme) {
+    final inCase = widget.caseKey != null;
+    final small = ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 12),
+      ),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              if (inCase)
+                TextButton.icon(
+                  key: const ValueKey('uyap-cases-back'),
+                  onPressed: () => widget.onShowCase(null),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('Dosyalarım'),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    'UYAP Dosyalarım',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 20,
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              if (inCase && widget.onNewPetition != null)
+                ListenableBuilder(
+                  listenable: _controller,
+                  builder: (context, _) {
+                    final link = _controller.link;
+                    return FilledButton.tonalIcon(
+                      key: const ValueKey('uyap-case-new-petition'),
+                      style: small,
+                      onPressed: link == null
+                          ? null
+                          : () => widget.onNewPetition!(link),
+                      icon: const Icon(Icons.edit_document, size: 16),
+                      label: const Text('Yeni dilekçe'),
+                    );
+                  },
+                ),
+              if (!inCase)
+                FilledButton.icon(
+                  key: const ValueKey('uyap-cases-add'),
+                  style: small,
+                  onPressed: _adding ? null : () => unawaited(_addSheet()),
+                  icon: _adding
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Ekle'),
+                ),
+            ],
+          ),
+          if (_progress != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 2, 0, 0),
+              child: Text(
+                _progress!,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+          if (PortalSync.started != null)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(8, 6, 0, 0),
+              child: PortalChannelBar(showSyncAll: false),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _top(ThemeData theme) {
     final inCase = widget.caseKey != null;
+    if (MediaQuery.sizeOf(context).width < 700) return _topNarrow(theme);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
       child: Wrap(
@@ -326,17 +453,16 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
                   onPressed: () => unawaited(_addFromPortfolio()),
                   child: const Text('Portföyden seç (birim ya da tek tek)'),
                 ),
-                if (_desktop)
-                  MenuItemButton(
-                    key: const ValueKey('uyap-cases-add-search'),
-                    leadingIcon: const Icon(Icons.search),
-                    onPressed: _web.connected ? () => unawaited(_add()) : null,
-                    child: Text(
-                      _web.connected
-                          ? 'Mahkeme ve esas no ile ara (UYAP Web)'
-                          : 'Mahkeme ve esas no ile ara (UYAP Web bağlı değil)',
-                    ),
+                MenuItemButton(
+                  key: const ValueKey('uyap-cases-add-search'),
+                  leadingIcon: const Icon(Icons.search),
+                  onPressed: _web.connected ? () => unawaited(_add()) : null,
+                  child: Text(
+                    _web.connected
+                        ? 'Mahkeme ve esas no ile ara (UYAP Web)'
+                        : 'Mahkeme ve esas no ile ara (UYAP Web bağlı değil)',
                   ),
+                ),
               ],
               builder: (context, menu, _) => FilledButton.icon(
                 key: const ValueKey('uyap-cases-add'),

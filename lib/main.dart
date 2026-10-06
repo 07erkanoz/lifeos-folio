@@ -365,6 +365,30 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                 child: child ?? const SizedBox.shrink(),
               )
             : child ?? const SizedBox.shrink();
+        // On a phone a dialog opens from below, the screen's width, its top
+        // corners rounded, as a phone's own sheets do.
+        final phone = constraints.maxWidth < 700;
+        final themed = !phone
+            ? main
+            : Builder(
+                builder: (context) {
+                  final theme = Theme.of(context);
+                  return Theme(
+                    data: theme.copyWith(
+                      dialogTheme: theme.dialogTheme.copyWith(
+                        alignment: Alignment.bottomCenter,
+                        insetPadding: EdgeInsets.zero,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(20),
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: main,
+                  );
+                },
+              );
         return Stack(
           children: [
             Positioned(
@@ -378,7 +402,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                   : constraints.maxHeight,
               child: Offstage(
                 offstage: quick,
-                child: TickerMode(enabled: !quick, child: main),
+                child: TickerMode(enabled: !quick, child: themed),
               ),
             ),
             if (quick)

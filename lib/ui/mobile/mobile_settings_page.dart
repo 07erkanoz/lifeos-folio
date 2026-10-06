@@ -440,32 +440,52 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
               const SettingsSection('GÖRÜNÜM'),
               SettingsGroup(
                 children: [
-                  SettingsRow(
-                    icon: Icons.contrast_rounded,
-                    title: 'Tema',
-                    trailing: SegmentedButton<ThemeMode>(
-                      showSelectedIcon: false,
-                      style: const ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      segments: const [
-                        ButtonSegment(
-                          value: ThemeMode.light,
-                          label: Text('Beyaz'),
+                  // The choice under its name: beside it, it runs off a
+                  // phone with large type.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Row(
+                          children: [
+                            _Badge(Icons.contrast_rounded),
+                            SizedBox(width: 12),
+                            Text(
+                              'Tema',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                        ButtonSegment(
-                          value: ThemeMode.dark,
-                          label: Text('Siyah'),
-                        ),
-                        ButtonSegment(
-                          value: ThemeMode.system,
-                          label: Text('Sistem'),
+                        const SizedBox(height: 10),
+                        SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          style: const ButtonStyle(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          segments: const [
+                            ButtonSegment(
+                              value: ThemeMode.light,
+                              label: Text('Beyaz'),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.dark,
+                              label: Text('Siyah'),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.system,
+                              label: Text('Sistem'),
+                            ),
+                          ],
+                          selected: {widget.appearance.mode},
+                          onSelectionChanged: (v) =>
+                              widget.appearance.setMode(v.first),
                         ),
                       ],
-                      selected: {widget.appearance.mode},
-                      onSelectionChanged: (v) =>
-                          widget.appearance.setMode(v.first),
                     ),
                   ),
                 ],
@@ -496,6 +516,23 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
       },
     );
   }
+}
+
+/// A row's tinted icon, outside a [SettingsRow].
+class _Badge extends StatelessWidget {
+  const _Badge(this.icon);
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 32,
+    height: 32,
+    decoration: BoxDecoration(
+      color: AgendaColors.hearingFill,
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Icon(icon, size: 17, color: AgendaColors.hearing),
+  );
 }
 
 /// The archive's folders, on a page: each with its documents, rescanned or

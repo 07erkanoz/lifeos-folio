@@ -258,9 +258,11 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
         children: [
           Icon(Icons.mark_email_unread_outlined, color: AgendaColors.hearing),
           SizedBox(width: 10),
-          Text(
-            'UETS’ye bağlan',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          Flexible(
+            child: Text(
+              'UETS’ye bağlan',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -337,23 +339,22 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
                     ],
                   ),
                 ),
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      key: const ValueKey('uets-phone'),
-                      controller: _phone,
-                      enabled: !_busy,
-                      keyboardType: TextInputType.phone,
-                      decoration: _field('Cep telefonu'),
-                    ),
+                  TextField(
+                    key: const ValueKey('uets-phone'),
+                    controller: _phone,
+                    enabled: !_busy,
+                    keyboardType: TextInputType.phone,
+                    decoration: _field('Cep telefonu'),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(height: 12),
                   SizedBox(
-                    width: 150,
                     child: DropdownButtonFormField<MobileOperator>(
                       initialValue: _operator,
                       isDense: true,
+                      isExpanded: true,
                       decoration: _field('Operatör'),
                       items: [
                         for (final o in MobileOperator.values)
