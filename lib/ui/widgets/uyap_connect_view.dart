@@ -10,6 +10,39 @@ import '../../services/uyap/edevlet_window.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import 'edevlet_web_dialog.dart';
 
+/// Opens a UYAP web portal session in a dialog: the card with Adalet
+/// E-İmza on a computer, the mobile signature or the e-signature through
+/// e-Devlet anywhere, a phone's own web view on a phone.
+Future<void> connectUyapWeb(
+  BuildContext context, {
+  VoidCallback? onConnected,
+}) => showDialog<void>(
+  context: context,
+  builder: (context) => AlertDialog(
+    title: const Text('UYAP Web’e bağlan'),
+    content: SizedBox(
+      width: 520,
+      child: SingleChildScrollView(
+        child: UyapConnectView(
+          note:
+              'UYAP Web her şeyi verir: dosya bilgileri, tam evrak listesi, '
+              'Yargıtay ve Cumhuriyet Başsavcılığı dosyaları.',
+          onConnected: (_) async {
+            if (context.mounted) Navigator.pop(context);
+            onConnected?.call();
+          },
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Kapat'),
+      ),
+    ],
+  ),
+);
+
 /// The ways into the Avukat Portal, in one place for everything that needs
 /// a session: a mobile signature or an e-signature through e-Devlet, or the
 /// card with its PIN through the Adalet E-İmza application.
@@ -57,12 +90,16 @@ class _UyapConnectViewState extends State<UyapConnectView> {
     unawaited(_check());
   }
 
+  /// A phone signs in through e-Devlet in its own web view; it has no card
+  /// reader for Adalet E-İmza.
+  static bool get _phone => Platform.isAndroid || Platform.isIOS;
+
   Future<void> _check() async {
     final (edevlet, tray) = await (
-      Platform.isWindows
+      Platform.isWindows || _phone
           ? EdevletWebDialog.available()
           : Future.value(EdevletWindow.available),
-      AdaletEimza.installed(),
+      _phone ? Future.value(false) : AdaletEimza.installed(),
     ).wait;
     if (!mounted) return;
     setState(() {
@@ -147,7 +184,7 @@ class _UyapConnectViewState extends State<UyapConnectView> {
   }
 
   Future<String?> _edevletCode(Uri page) async {
-    if (Platform.isWindows) {
+    if (Platform.isWindows || _phone) {
       return EdevletWebDialog.show(context, page: page, hint: _hint);
     }
     final window = _window = await EdevletWindow.open(page, hint: _hint);
@@ -198,14 +235,15 @@ class _UyapConnectViewState extends State<UyapConnectView> {
           },
           child: Column(
             children: [
-              _choice(
-                _Route.tray,
-                'Adalet E-İmza ile',
-                'Kartınız ve PIN’inizle, bu bilgisayardaki Adalet E-İmza '
-                    'uygulaması üzerinden.',
-                Icons.credit_card_rounded,
-              ),
-              if (_tray == false)
+              if (!_phone)
+                _choice(
+                  _Route.tray,
+                  'Adalet E-İmza ile',
+                  'Kartınız ve PIN’inizle, bu bilgisayardaki Adalet E-İmza '
+                      'uygulaması üzerinden.',
+                  Icons.credit_card_rounded,
+                ),
+              if (_tray == false && !_phone)
                 Padding(
                   padding: const EdgeInsets.only(left: 40, bottom: 6),
                   child: Wrap(

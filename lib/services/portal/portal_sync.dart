@@ -21,7 +21,15 @@ class ChannelSync {
 
   /// What could not be fetched, or null.
   final String? problem;
-  const ChannelSync({this.running = false, this.finished, this.problem});
+
+  /// How far a long run has come: "Portföy 34/145".
+  final String? progress;
+  const ChannelSync({
+    this.running = false,
+    this.finished,
+    this.problem,
+    this.progress,
+  });
 }
 
 /// Runs each connected channel's sync when it connects, whether or not the
@@ -128,6 +136,18 @@ class PortalSync extends ChangeNotifier {
   void _mobileChanged() {
     notifyListeners();
     if (_mobile.connected) unawaited(syncMobile());
+  }
+
+  /// Says how far [channel]'s running sync has come.
+  void _progress(PortalChannel channel, String text) {
+    final now = state(channel);
+    if (!now.running) return;
+    _state[channel] = ChannelSync(
+      running: true,
+      finished: now.finished,
+      progress: text,
+    );
+    notifyListeners();
   }
 
   Future<void> _run(
@@ -254,22 +274,43 @@ class PortalSync extends ChangeNotifier {
     return result.complete ? null : 'Bazı tarihler alınamadı';
   });
 
-  /// The mobile API's hearings, then its cases. A second call while one
-  /// runs waits for that one.
-  Future<void> syncMobile() =>
+  /// The mobile API's hearings, then its cases. The whole portfolio is read
+  /// court by court, hundreds of requests: at the first sync of a session,
+  /// when [full] is asked (the lawyer's own "Senkronize et", adding cases)
+  /// or six hours after the last; otherwise only the hearings. A second
+  /// call while one runs waits for that one.
+  Future<void> syncMobile({bool full = false}) =>
       _mobileSync ??= _run(PortalChannel.uyapMobile, (db) async {
         if (!_mobile.connected) return null;
+        _progress(PortalChannel.uyapMobile, 'Duruşmalar');
         final hearings = await syncHearings(
           PortalChannel.uyapMobile,
           db,
           _mobile.hearingRows,
         );
-        final cases = await syncMobilePortfolio(_mobile, db);
+        final read = _portfolioAt;
+        var cases = const PortfolioResult(0, true);
+        if (full ||
+            read == null ||
+            DateTime.now().difference(read) > const Duration(hours: 6)) {
+          cases = await syncMobilePortfolio(
+            _mobile,
+            db,
+            onProgress: (done, total) => _progress(
+              PortalChannel.uyapMobile,
+              total == 0 ? 'Portföy' : 'Portföy $done/$total',
+            ),
+          );
+          _portfolioAt = DateTime.now();
+        }
         return hearings.complete && cases.complete
             ? null
             : 'Bazı kayıtlar alınamadı';
       }).whenComplete(() => _mobileSync = null);
   Future<void>? _mobileSync;
+
+  /// When the whole portfolio was last read.
+  DateTime? _portfolioAt;
 
   late final _finder = MobileCaseFinder(_mobile);
 
@@ -369,8 +410,9 @@ const mobileJurisdictions = [1, 0, 2, 6];
 /// are still asked.
 Future<PortfolioResult> syncMobilePortfolio(
   UyapMobileApi api,
-  PortalDatabase db,
-) async {
+  PortalDatabase db, {
+  void Function(int done, int total)? onProgress,
+}) async {
   final asked = DateTime.now().toUtc();
   const mobile = PortalChannel.uyapMobile;
   var complete = true;
@@ -419,6 +461,11 @@ Future<PortfolioResult> syncMobilePortfolio(
     found[one.key] = found[one.key]?.merge(one) ?? one;
   }
 
+  // The courts first, so that how far the reading has come can be said;
+  // then each court's cases, kept as soon as they come, so that a case can
+  // be added while the rest is still being read.
+  final courts = <(int, String, String, bool)>[];
+  onProgress?.call(0, 0);
   for (final type in mobileJurisdictions) {
     List<Map<String, Object?>> units;
     try {
@@ -434,19 +481,7 @@ Future<PortfolioResult> syncMobilePortfolio(
         try {
           for (final court in await api.courts(type, kind, closed: closed)) {
             final id = '${court['birimId'] ?? ''}'.trim();
-            if (id.isEmpty) continue;
-            try {
-              for (final row in await api.cases(
-                type,
-                kind,
-                id,
-                closed: closed,
-              )) {
-                add(row, CaseFamily.court, jurisdiction: type, unit: kind);
-              }
-            } catch (_) {
-              complete = false;
-            }
+            if (id.isNotEmpty) courts.add((type, kind, id, closed));
           }
         } catch (_) {
           complete = false;
@@ -454,6 +489,21 @@ Future<PortfolioResult> syncMobilePortfolio(
       }
     }
   }
+  for (final (i, (type, kind, id, closed)) in courts.indexed) {
+    onProgress?.call(i, courts.length);
+    try {
+      for (final row in await api.cases(type, kind, id, closed: closed)) {
+        add(row, CaseFamily.court, jurisdiction: type, unit: kind);
+      }
+      if (found.isNotEmpty) {
+        db.mergeCases(found.values);
+        found.clear();
+      }
+    } catch (_) {
+      complete = false;
+    }
+  }
+  onProgress?.call(courts.length, courts.length);
   try {
     for (final chamber in await api.danistayChambers()) {
       final id = '${chamber['birimId'] ?? ''}'.trim();
@@ -466,5 +516,5 @@ Future<PortfolioResult> syncMobilePortfolio(
     complete = false;
   }
   db.mergeCases(found.values);
-  return PortfolioResult(found.length, complete);
+  return PortfolioResult(courts.length, complete);
 }

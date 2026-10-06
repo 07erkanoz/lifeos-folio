@@ -12,6 +12,8 @@ import '../../services/portal/portal_sync.dart';
 import '../../services/search/library_controller.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
+import '../../services/uyap/uyap_web_service.dart';
+import '../widgets/uyap_connect_view.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
 import '../agenda/uets_connect.dart';
@@ -210,6 +212,7 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
     // when one is used here, so that looking at the settings wakes none.
     final mobile = UyapMobileApi.instance;
     final uets = UetsApi.instance;
+    final web = UyapWebService.instance;
     return ListenableBuilder(
       listenable: Listenable.merge([
         widget.library,
@@ -217,6 +220,7 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
         ?PortalSync.started,
         mobile.session,
         uets.session,
+        web.session,
       ]),
       builder: (context, _) {
         final library = widget.library;
@@ -249,7 +253,7 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
                       if (mobile.connected) {
                         await _portalMenu(
                           name: 'UYAP Mobil',
-                          sync: _sync.syncMobile,
+                          sync: () => _sync.syncMobile(full: true),
                           disconnect: mobile.logout,
                         );
                       } else if (await connectUyapMobile(
@@ -257,6 +261,29 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
                         api: mobile,
                       )) {
                         unawaited(_sync.syncMobile());
+                      }
+                    },
+                  ),
+                  SettingsRow(
+                    key: const ValueKey('settings-uyap-web'),
+                    icon: Icons.account_balance_outlined,
+                    title: 'UYAP Web',
+                    status: web.connected ? AgendaColors.ok : off,
+                    subtitle: web.connected
+                        ? 'Bağlı · ${_left(DateTime.now().add(web.session.value?.remaining() ?? Duration.zero))} geçerli'
+                        : 'Mobil imza ile, e-Devlet üzerinden',
+                    onTap: () async {
+                      if (web.connected) {
+                        await _portalMenu(
+                          name: 'UYAP Web',
+                          sync: _sync.syncWeb,
+                          disconnect: () async => web.disconnect(),
+                        );
+                      } else {
+                        await connectUyapWeb(
+                          context,
+                          onConnected: () => unawaited(_sync.syncWeb()),
+                        );
                       }
                     },
                   ),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/portal/case_import.dart';
 import '../../services/portal/observed.dart' show caseKey;
+import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
@@ -129,8 +130,25 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
     }
     var all = await _sync.portfolio();
     if (all.isEmpty && _sync.mobile.connected) {
-      setState(() => _progress = 'UYAP Mobil’den portföy okunuyor…');
-      await _sync.syncMobile();
+      // The portfolio is read court by court; how far it has come is
+      // shown, and the cases come as they are read.
+      void tick() {
+        final p = _sync.state(PortalChannel.uyapMobile).progress;
+        if (mounted) {
+          setState(
+            () => _progress =
+                'UYAP Mobil’den portföy okunuyor${p == null ? '…' : ' · $p'}',
+          );
+        }
+      }
+
+      tick();
+      _sync.addListener(tick);
+      try {
+        await _sync.syncMobile(full: true);
+      } finally {
+        _sync.removeListener(tick);
+      }
       all = await _sync.portfolio();
       if (mounted) setState(() => _progress = null);
     }

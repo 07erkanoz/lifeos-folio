@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -81,32 +80,8 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
     return '${two(t.day)}.${two(t.month)}.${t.year} ${two(t.hour)}:${two(t.minute)}';
   }
 
-  Future<void> _connectWeb() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('UYAP Web’e bağlan'),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          child: UyapConnectView(
-            note:
-                'UYAP Web her şeyi verir: dosya bilgileri, tam evrak listesi, '
-                'Yargıtay ve Cumhuriyet Başsavcılığı dosyaları.',
-            onConnected: (_) async {
-              if (context.mounted) Navigator.pop(context);
-              unawaited(_sync.syncWeb());
-            },
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Kapat'),
-        ),
-      ],
-    ),
-  );
+  Future<void> _connectWeb() =>
+      connectUyapWeb(context, onConnected: () => unawaited(_sync.syncWeb()));
 
   /// "6 g", "3 sa", "24 dk": a phone's chip's time left.
   static String shortLeft(DateTime until) {
@@ -206,7 +181,6 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
     final scheme = Theme.of(context).colorScheme;
     // On a phone the chips are small and in one row: "● Mobil 6 g".
     final compact = widget.phone || MediaQuery.sizeOf(context).width < 700;
-    final onPhone = Platform.isAndroid || Platform.isIOS;
     final web = _sync.web;
     final mobile = _sync.mobile;
     final uets = _sync.uets;
@@ -248,7 +222,9 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
               ? AgendaColors.task
               : AgendaColors.ok,
           busy: state.running,
-          text: state.running || problem || until == null
+          text: state.running
+              ? (state.progress == null ? short : '$short · ${state.progress}')
+              : problem || until == null
               ? short
               : '$short ${shortLeft(until)}',
           tail: problem ? Icons.error_outline_rounded : null,
@@ -267,7 +243,12 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
       }
       final time = until == null ? '' : ' · ${left(until)}';
       final (dot, text) = state.running
-          ? (AgendaColors.ok, '$name · güncelleniyor…')
+          ? (
+              AgendaColors.ok,
+              state.progress == null
+                  ? '$name · güncelleniyor…'
+                  : '$name · ${state.progress}…',
+            )
           : state.problem != null
           ? (
               AgendaColors.task,
@@ -300,31 +281,31 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
     final uetsSession = uets.session.value;
     final any = web.connected || mobile.connected || uets.connected;
     final chips = [
-      // A phone has no card reader for the web portal.
-      if (!widget.phone && !onPhone)
-        channel(
-          name: 'UYAP Web',
-          short: 'Web',
-          channel: PortalChannel.uyapWeb,
-          connected: web.connected,
-          until: webSession == null
-              ? null
-              : DateTime.now().add(webSession.remaining()),
-          who: webSession?.user,
-          validity: 'Oturum şu saate kadar açık:',
-          connect: () => unawaited(_connectWeb()),
-          syncNow: _sync.syncWeb,
-          disconnect: () {
-            web.disconnect();
-            _changed();
-          },
-          more: [
-            (
-              'Oturumu denetle',
-              () => unawaited(web.check().then((_) => _changed())),
-            ),
-          ],
-        ),
+      // On a phone the web portal is entered with the mobile signature,
+      // through e-Devlet in the phone's own web view.
+      channel(
+        name: 'UYAP Web',
+        short: 'Web',
+        channel: PortalChannel.uyapWeb,
+        connected: web.connected,
+        until: webSession == null
+            ? null
+            : DateTime.now().add(webSession.remaining()),
+        who: webSession?.user,
+        validity: 'Oturum şu saate kadar açık:',
+        connect: () => unawaited(_connectWeb()),
+        syncNow: _sync.syncWeb,
+        disconnect: () {
+          web.disconnect();
+          _changed();
+        },
+        more: [
+          (
+            'Oturumu denetle',
+            () => unawaited(web.check().then((_) => _changed())),
+          ),
+        ],
+      ),
       channel(
         name: 'UYAP Mobil',
         short: 'Mobil',
@@ -340,7 +321,7 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
             unawaited(_sync.syncMobile());
           }
         },
-        syncNow: _sync.syncMobile,
+        syncNow: () => _sync.syncMobile(full: true),
         disconnect: () => unawaited(mobile.logout()),
       ),
       channel(
@@ -362,7 +343,7 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
     ];
     void syncAll() {
       if (web.connected) unawaited(_sync.syncWeb());
-      if (mobile.connected) unawaited(_sync.syncMobile());
+      if (mobile.connected) unawaited(_sync.syncMobile(full: true));
       if (uets.connected) unawaited(_sync.syncUets());
     }
 

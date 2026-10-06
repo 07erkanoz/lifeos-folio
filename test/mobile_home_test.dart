@@ -26,6 +26,7 @@ void main() {
               onFolders: () {},
               onSettings: () {},
               onConnectMobile: () {},
+              onConnectWeb: () {},
               onConnectUets: () {},
               onSyncComputer: () {},
             ),

@@ -16,6 +16,7 @@ class MobileDrawer extends StatelessWidget {
     required this.onFolders,
     required this.onSettings,
     required this.onConnectMobile,
+    required this.onConnectWeb,
     required this.onConnectUets,
     required this.onSyncComputer,
     this.agendaToday = 0,
@@ -29,7 +30,8 @@ class MobileDrawer extends StatelessWidget {
   final bool home;
   final VoidCallback onHome, onFolders, onSettings;
   final ValueChanged<String> onGroup;
-  final VoidCallback onConnectMobile, onConnectUets, onSyncComputer;
+  final VoidCallback onConnectMobile, onConnectWeb, onConnectUets;
+  final VoidCallback onSyncComputer;
   final int agendaToday, uetsUnread, uyapCases;
   final PortalSync? sync;
 
@@ -128,9 +130,11 @@ class MobileDrawer extends StatelessWidget {
             ?portals,
             ?portals?.mobile.session,
             ?portals?.uets.session,
+            ?portals?.web.session,
           ]),
           builder: (context, _) {
             final mobile = portals?.mobile.connected ?? false;
+            final web = portals?.web.connected ?? false;
             final uets = portals?.uets.connected ?? false;
             return Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -232,6 +236,15 @@ class MobileDrawer extends StatelessWidget {
                           onTap: onFolders,
                         ),
                         _section('BAĞLANTILAR'),
+                        _item(
+                          context,
+                          key: const ValueKey('drawer-web'),
+                          icon: _dot(
+                            web ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                          ),
+                          label: web ? 'UYAP Web · bağlı' : 'UYAP Web · bağlan',
+                          onTap: onConnectWeb,
+                        ),
                         _item(
                           context,
                           key: const ValueKey('drawer-mobile'),

@@ -57,6 +57,7 @@ import 'mobile/document_home.dart';
 import 'mobile/mobile_drawer.dart';
 import 'mobile/mobile_settings_page.dart';
 import 'mobile/scroll_chrome.dart';
+import 'widgets/uyap_connect_view.dart';
 import 'mobile/profile_from_uyap.dart';
 import '../services/editor/lawyer_profile.dart';
 import '../services/uyap/uyap_mobile_api.dart';
@@ -1895,6 +1896,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         unawaited(sync.syncMobile());
       } else if (await connectUyapMobile(context, api: sync.mobile)) {
         unawaited(sync.syncMobile());
+      }
+    },
+    onConnectWeb: () {
+      _closeDrawer();
+      final sync = PortalSync.instance;
+      if (sync.web.connected) {
+        unawaited(sync.syncWeb());
+      } else {
+        unawaited(
+          connectUyapWeb(context, onConnected: () => unawaited(sync.syncWeb())),
+        );
       }
     },
     onConnectUets: () {
