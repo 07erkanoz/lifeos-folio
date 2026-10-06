@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../security/secret_store.dart';
+import '../uets/notice_matcher.dart';
+import '../uets/uets_api.dart';
 import '../uyap/uyap_mobile_api.dart';
 import '../uyap/uyap_web_service.dart';
 import 'hearing_sync.dart';
@@ -29,11 +31,13 @@ class PortalSync extends ChangeNotifier {
   PortalSync({
     UyapWebService? web,
     UyapMobileApi? mobile,
+    UetsApi? uets,
     Future<PortalDatabase> Function()? database,
     SecretStore? secrets,
   }) : _secrets = secrets ?? SecretStore(),
        _web = web ?? UyapWebService.instance,
        _mobile = mobile ?? UyapMobileApi.instance,
+       _uets = uets ?? UetsApi.instance,
        _database = database ?? PortalDatabase.shared;
 
   static PortalSync? _instance;
@@ -41,6 +45,7 @@ class PortalSync extends ChangeNotifier {
 
   final UyapWebService _web;
   final UyapMobileApi _mobile;
+  final UetsApi _uets;
   final Future<PortalDatabase> Function() _database;
   final SecretStore _secrets;
 
@@ -53,12 +58,15 @@ class PortalSync extends ChangeNotifier {
 
   UyapWebService get web => _web;
   UyapMobileApi get mobile => _mobile;
+  UetsApi get uets => _uets;
+  SecretStore get secrets => _secrets;
 
   void start() {
     if (_started) return;
     _started = true;
     _web.session.addListener(_webChanged);
     _mobile.session.addListener(_mobileChanged);
+    _uets.session.addListener(_uetsChanged);
     // The mobile session lasts a week: kept sealed between runs, and taken
     // up again here. The web portal's three hours are not kept.
     _mobile.onTokens = (tokens) => unawaited(
@@ -79,6 +87,7 @@ class PortalSync extends ChangeNotifier {
   void dispose() {
     _web.session.removeListener(_webChanged);
     _mobile.session.removeListener(_mobileChanged);
+    _uets.session.removeListener(_uetsChanged);
     super.dispose();
   }
 
@@ -86,6 +95,26 @@ class PortalSync extends ChangeNotifier {
     notifyListeners();
     if (_web.connected) unawaited(syncWeb());
   }
+
+  void _uetsChanged() {
+    notifyListeners();
+    if (_uets.connected) unawaited(syncUets());
+  }
+
+  /// The UETS inbox, from a day before the newest notice kept (or the last
+  /// ninety days the first time), merged into the database; then each
+  /// untied notice is matched to a case (§9.8).
+  Future<void> syncUets() => _run(PortalChannel.uets, (db) async {
+    if (!_uets.connected) return null;
+    final kept = db.notices();
+    final newest = kept.isEmpty ? null : kept.first.message.sent;
+    final since = newest == null
+        ? DateTime.now().subtract(const Duration(days: 90))
+        : newest.subtract(const Duration(days: 1));
+    db.mergeNotices(await _uets.allMessages(since: since));
+    matchNotices(db);
+    return null;
+  });
 
   void _mobileChanged() {
     notifyListeners();

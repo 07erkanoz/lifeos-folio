@@ -8,7 +8,18 @@ import 'package:sqlite3/sqlite3.dart';
 import '../platform/app_directories.dart';
 import 'portal_case.dart';
 import 'portal_channel.dart';
+import '../uets/uets_api.dart';
 import 'portal_hearing.dart';
+
+/// A UETS notification as kept, with the case it is tied to.
+class KeptNotice {
+  final UetsMessage message;
+  final String? caseKey;
+
+  /// "auto" or "manual"; null while untied.
+  final String? link;
+  const KeptNotice(this.message, {this.caseKey, this.link});
+}
 
 /// A note, a task or a deadline in the agenda: the lawyer's own, kept apart
 /// from what the portals report so that no sync ever touches it.
@@ -92,6 +103,10 @@ class PortalDatabase {
         done INTEGER NOT NULL DEFAULT 0, case_key TEXT, hearing_key TEXT,
         updated TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS agenda_at ON agenda(at);
+      CREATE TABLE IF NOT EXISTS uets (
+        id TEXT PRIMARY KEY, sent TEXT, json TEXT NOT NULL,
+        case_key TEXT, link TEXT);
+      CREATE INDEX IF NOT EXISTS uets_sent ON uets(sent);
     ''');
   }
 
@@ -238,6 +253,50 @@ class PortalDatabase {
       }
     }
   });
+
+  // UETS
+
+  /// The notifications kept, newest first, each with the case it was tied
+  /// to (UYGULAMAPLANI §9.8) and how.
+  List<KeptNotice> notices() => [
+    for (final r in _db.select(
+      'SELECT json, case_key, link FROM uets ORDER BY sent DESC',
+    ))
+      KeptNotice(
+        UetsMessage.fromJson(
+          Map<String, Object?>.from(jsonDecode(r['json'] as String) as Map),
+        ),
+        caseKey: r['case_key'] as String?,
+        link: r['link'] as String?,
+      ),
+  ];
+
+  /// Keeps [messages] as UETS gave them; the tie to a case stays.
+  void mergeNotices(Iterable<UetsMessage> messages) => _transaction(() {
+    final write = _db.prepare('''
+      INSERT INTO uets(id, sent, json) VALUES(?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET sent=excluded.sent, json=excluded.json''');
+    try {
+      for (final m in messages) {
+        if (m.id.isEmpty) continue;
+        write.execute([
+          m.id,
+          m.sent?.toIso8601String(),
+          jsonEncode(m.toJson()),
+        ]);
+      }
+    } finally {
+      write.dispose();
+    }
+  });
+
+  /// Ties notification [id] to [caseKey]; [link] says how: "auto" for the
+  /// matcher's single candidate, "manual" for the lawyer's choice, which
+  /// the matcher never undoes.
+  void linkNotice(String id, String? caseKey, String? link) => _db.execute(
+    'UPDATE uets SET case_key=?, link=? WHERE id=?',
+    [caseKey, link, id],
+  );
 
   // Agenda
 
