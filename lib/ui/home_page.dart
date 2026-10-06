@@ -1,4 +1,7 @@
 import 'agenda/agenda_page.dart';
+import 'agenda/channel_bar.dart';
+import 'agenda/mobile_connect.dart';
+import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import '../services/portal/case_import.dart';
 import '../services/portal/observed.dart' show caseKey;
@@ -51,6 +54,9 @@ import '../services/library/recent_documents.dart';
 import '../services/update/update_check.dart';
 import '../services/platform/document_scan.dart';
 import 'mobile/document_home.dart';
+import 'mobile/mobile_drawer.dart';
+import '../services/editor/lawyer_profile.dart';
+import '../services/uyap/uyap_mobile_api.dart';
 import '../services/search/library_controller.dart';
 import '../services/convert/converter_service.dart';
 import '../services/pdf/pdf_service.dart';
@@ -232,6 +238,19 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     recoveryCount: _recoveryCount,
     onRecent: _openRecent,
     onShare: (file) => _previewAction('share', file),
+    agendaToday: _agendaToday,
+    deadlinesToday: _deadlinesToday,
+    next: _nextHearing,
+    uetsUnread: _uetsUnread,
+    uyapCases: _uyapCases.length,
+    uyapFresh: _uyapCases.fold(0, (sum, c) => sum + c.$1.fresh.length),
+    name: _lawyerName,
+    channels: PortalSync.started == null
+        ? null
+        : const PortalChannelBar(phone: true),
+    onAgenda: () => unawaited(_selectGroup('agenda')),
+    onUets: () => unawaited(_selectGroup('uets')),
+    onUyap: () => unawaited(_selectGroup('uyap')),
   );
   final _intents = DocumentIntents();
   StreamSubscription<List<String>>? _incoming;
@@ -622,6 +641,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(searchUyapFolder(_library).catchError((Object _) => false));
       unawaited(_countAgenda());
+      unawaited(_loadLawyerName());
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
     }
@@ -925,21 +945,103 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// The UETS notices not yet read, for the badge beside UETS Tebligatlarım.
   int _uetsUnread = 0;
 
-  void _portalSynced() => unawaited(_countAgenda());
+  /// The deadlines that end today, and the next hearing, for the phone's
+  /// first page.
+  int _deadlinesToday = 0;
+  NextHearingLine? _nextHearing;
+
+  /// "Av. Erkan Öz": the profile's lawyer, else the UYAP Mobil user.
+  String _lawyerName = '';
+
+  void _portalSynced() {
+    unawaited(_countAgenda());
+    if (_lawyerName.isEmpty) unawaited(_loadLawyerName());
+  }
+
+  Future<void> _loadLawyerName() async {
+    var name = '';
+    try {
+      name = (await LawyerProfile.load()).lawyer?.titled ?? '';
+    } catch (_) {}
+    if (name.isEmpty) {
+      final user = UyapMobileApi.instance.session.value?.user ?? '';
+      if (user.isNotEmpty && user != 'UYAP Mobil') {
+        name = 'Av. ${_titleCase(user)}';
+      }
+    }
+    if (mounted && name != _lawyerName) setState(() => _lawyerName = name);
+  }
+
+  /// "ERKAN ÖZ" as "Erkan Öz", with Turkish's dotted and dotless i.
+  static String _titleCase(String text) => text
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .map((w) {
+        final rest = w
+            .substring(1)
+            .replaceAll('I', 'ı')
+            .replaceAll('İ', 'i')
+            .toLowerCase();
+        return '${w[0]}$rest';
+      })
+      .join(' ');
+
+  static const _shortMonths = [
+    'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', //
+    'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara',
+  ];
 
   Future<void> _countAgenda() async {
     try {
       final db = await PortalDatabase.shared();
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final count = db
-          .hearings(from: today, to: today.add(const Duration(days: 1)))
-          .length;
+      final tomorrow = today.add(const Duration(days: 1));
+      final count = db.hearings(from: today, to: tomorrow).length;
       final unread = db.notices().where((n) => n.message.read == null).length;
-      if (mounted && (count != _agendaToday || unread != _uetsUnread)) {
+      final deadlines = db
+          .agenda(from: today, to: tomorrow)
+          .where((i) => i.kind == 'deadline' && !i.done)
+          .length;
+      final next = db
+          .hearings(from: now, to: today.add(const Duration(days: 31)))
+          .firstOrNull;
+      NextHearingLine? line;
+      if (next != null) {
+        String two(int v) => v.toString().padLeft(2, '0');
+        final t = next.at;
+        final day = DateTime(t.year, t.month, t.day);
+        final clock = '${two(t.hour)}:${two(t.minute)}';
+        final when = day == today
+            ? clock
+            : day == tomorrow
+            ? 'Yarın $clock'
+            : '${t.day} ${_shortMonths[t.month - 1]} $clock';
+        final court = next.court.replaceFirst(
+          RegExp(r'\s+Mahkemesi$', caseSensitive: false),
+          '',
+        );
+        final left = t.difference(now);
+        final relative = left.inHours < 24
+            ? '${left.inHours == 0 ? left.inMinutes : left.inHours} '
+                  '${left.inHours == 0 ? 'dk' : 'sa'} sonra'
+            : '${left.inDays} gün sonra';
+        line = NextHearingLine(
+          '$when · $court · ${next.number}',
+          [
+            (next.kind?.value ?? '').trim().isEmpty
+                ? (next.isEHearing ? 'E-duruşma' : 'Duruşma')
+                : next.kind!.value.trim(),
+            relative,
+          ].join(' · '),
+        );
+      }
+      if (mounted) {
         setState(() {
           _agendaToday = count;
           _uetsUnread = unread;
+          _deadlinesToday = deadlines;
+          _nextHearing = line;
         });
       }
     } catch (_) {
@@ -1190,9 +1292,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: DropZoneOverlay(
               onFilesDropped: _addFiles,
               child: Scaffold(
-                drawer: mobile
-                    ? Drawer(child: SafeArea(child: _sidebar(false)))
-                    : null,
+                drawer: mobile ? _mobileDrawer(mobileHome) : null,
                 body: Actions(
                   actions: {
                     DismissIntent: CallbackAction<DismissIntent>(
@@ -1228,15 +1328,30 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           child: Column(
                             children: [
                               if (_showLibrary && mobileHome)
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    20,
-                                    8,
-                                    8,
-                                    0,
+                                Container(
+                                  height: 56,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: scheme.surface,
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: scheme.outlineVariant,
+                                      ),
+                                    ),
                                   ),
                                   child: Row(
                                     children: [
+                                      Builder(
+                                        builder: (context) => IconButton(
+                                          key: const ValueKey('mobile-menu'),
+                                          tooltip: 'Menü',
+                                          onPressed: () =>
+                                              Scaffold.of(context).openDrawer(),
+                                          icon: const Icon(Icons.menu_rounded),
+                                        ),
+                                      ),
                                       const Expanded(
                                         child: Text(
                                           'LifeOS Folio',
@@ -1686,7 +1801,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uyapFolder: UyapSettings.instance.folder,
     agendaToday: _agendaToday,
     uetsUnread: _uetsUnread,
-    uyapAvailable: Platform.isLinux || Platform.isWindows || Platform.isMacOS,
+    uyapAvailable: true,
     selectFolder: (id) async {
       _closeDrawer();
       if (!await _leaveEditor()) return;
@@ -1697,6 +1812,63 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _library.filter(folder: id);
     },
   );
+
+  /// The phone's menu (docs/design/mobil-anasayfa-taslak.png).
+  Widget _mobileDrawer(bool home) => MobileDrawer(
+    group: _group,
+    home: home,
+    agendaToday: _agendaToday,
+    uetsUnread: _uetsUnread,
+    uyapCases: _uyapCases.length,
+    onHome: () {
+      _closeDrawer();
+      setState(() {
+        _mobileArchive = false;
+        _showLibrary = true;
+      });
+    },
+    onGroup: (value) {
+      _closeDrawer();
+      unawaited(_selectGroup(value));
+    },
+    onFolders: () {
+      _closeDrawer();
+      _pickFolder();
+    },
+    onSettings: () {
+      _closeDrawer();
+      _pickFolder();
+    },
+    onConnectMobile: () async {
+      _closeDrawer();
+      final sync = PortalSync.instance;
+      if (sync.mobile.connected) {
+        unawaited(sync.syncMobile());
+      } else if (await connectUyapMobile(context, api: sync.mobile)) {
+        unawaited(sync.syncMobile());
+      }
+    },
+    onConnectUets: () {
+      _closeDrawer();
+      final sync = PortalSync.instance;
+      if (sync.uets.connected) {
+        unawaited(sync.syncUets());
+      } else {
+        unawaited(connectUets(context, api: sync.uets, secrets: sync.secrets));
+      }
+    },
+    onSyncComputer: () {
+      _closeDrawer();
+      showNotice(
+        context,
+        'Bilgisayarla senkron hazırlanıyor',
+        detail:
+            'Masaüstünde “Telefonla senkronla” deyip QR’ı okutarak '
+            'eşitleyeceksiniz; bu özellik bir sonraki sürümde.',
+      );
+    },
+  );
+
   void _closeDrawer() {
     if (MediaQuery.sizeOf(context).width < 700) Navigator.of(context).pop();
   }

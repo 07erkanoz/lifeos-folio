@@ -28,7 +28,7 @@ void main() {
     addTearDown(tester.view.reset);
     var scans = 0;
     await tester.pumpWidget(home(onScan: () => scans++));
-    await tester.tap(find.text('Kameradan PDF tara'));
+    await tester.tap(find.text('Tara (PDF)'));
     expect(scans, 1);
     expect(tester.takeException(), isNull);
   });

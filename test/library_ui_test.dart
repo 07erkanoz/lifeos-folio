@@ -119,7 +119,7 @@ void main() {
     await tester.pumpWidget(const EvrakConvertApp());
     await tester.pumpAndSettle();
     expect(find.text('Belge aç'), findsOneWidget);
-    expect(find.text('Yeni belge oluştur'), findsOneWidget);
+    expect(find.text('Yeni belge'), findsOneWidget);
     await tester.tap(find.text('Arşivde ara'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget);

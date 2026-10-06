@@ -138,7 +138,7 @@ void main() {
       await tester.tap(find.byTooltip('Arşive dön'));
       await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('Belge aç'), findsOneWidget);
-      expect(find.text('Yeni belge oluştur'), findsOneWidget);
+      expect(find.text('Yeni belge'), findsOneWidget);
       await tester.tap(find.byTooltip('Ayarlar'));
       await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('E-imza ayarları'), findsNothing);

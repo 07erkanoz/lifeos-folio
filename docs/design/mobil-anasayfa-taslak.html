@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Mobil Anasayfa Taslağı</title>
+<style>
+  :root {
+    --page: #F4F6F9; --line: #E3E7EE; --muted: #6B7383; --ink: #1B2130;
+    --blue: #2D5AA8; --blueFill: #E8EEF8; --red: #D93B3B; --redFill: #FDECEC;
+    --teal: #139C8B; --tealFill: #E3F4F1; --amber: #E08A00; --amberFill: #FFF3E0;
+    --primary: #2B5DAB;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #DDE2EA; font-family: "Segoe UI", Roboto, Arial, sans-serif;
+         color: var(--ink); display: flex; gap: 40px; justify-content: center; padding: 32px; }
+  .phone { width: 390px; height: 844px; background: var(--page); border-radius: 36px;
+           overflow: hidden; box-shadow: 0 20px 50px rgba(20,30,50,.25); position: relative;
+           border: 10px solid #11151C; }
+  .status { height: 34px; display: flex; justify-content: space-between; align-items: center;
+            padding: 0 22px; font-size: 13px; font-weight: 600; background: #fff; }
+  .top { height: 56px; display: flex; align-items: center; gap: 4px; padding: 0 8px;
+         background: #fff; border-bottom: 1px solid var(--line); }
+  .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 20px;
+              color: #3B4352; font-size: 22px; }
+  .top .title { flex: 1; font-size: 17px; font-weight: 700; }
+  .content { padding: 12px 16px 24px; height: calc(844px - 20px - 34px - 56px); overflow: hidden; }
+  .date { font-size: 21px; font-weight: 700; letter-spacing: -.3px; margin: 4px 4px 2px; }
+  .sub { font-size: 12.5px; color: var(--muted); margin: 0 4px 16px; }
+  .heading { font-size: 11.5px; font-weight: 800; letter-spacing: .8px; color: var(--muted);
+             margin: 0 4px 8px; display: flex; justify-content: space-between; align-items: center; }
+  .heading a { color: var(--primary); font-weight: 700; letter-spacing: 0; font-size: 12.5px;
+               text-decoration: none; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; display: flex;
+          align-items: center; gap: 12px; padding: 12px 10px 12px 12px; margin-bottom: 8px; }
+  .badge { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+           font-size: 20px; flex: none; }
+  .card .t { font-size: 14.5px; font-weight: 700; }
+  .card .d { font-size: 12.5px; color: var(--muted); margin-top: 2px; white-space: nowrap;
+             overflow: hidden; text-overflow: ellipsis; }
+  .card .d.hot { font-weight: 700; }
+  .card .grow { flex: 1; min-width: 0; }
+  .chev { color: #9AA2B1; font-size: 20px; }
+  .count { min-width: 22px; height: 22px; border-radius: 11px; font-size: 12px; font-weight: 800;
+           color: #fff; display: grid; place-items: center; padding: 0 6px; }
+  .next { background: var(--blueFill); border-left: 3px solid var(--blue); border-radius: 8px;
+          padding: 8px 10px; margin: -2px 0 8px; font-size: 12px; color: #1F467F; }
+  .next b { display: block; font-size: 12.5px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+  .act { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 12px;
+         display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 600; }
+  .act .i { color: var(--primary); font-size: 18px; }
+  .act.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .act.primary .i { color: #fff; }
+  .recent { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 10px 10px 12px;
+            display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .doc { width: 38px; height: 42px; border-radius: 10px; background: #E9EFF8; color: var(--primary);
+         display: grid; place-items: center; font-size: 11px; font-weight: 800; flex: none; }
+  .recent .n { font-size: 13px; font-weight: 600; }
+  .recent .k { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .chips { display: flex; gap: 6px; margin: 0 0 14px; flex-wrap: wrap; }
+  .chip { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 4px 10px;
+          font-size: 11.5px; color: #4B5465; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .label { text-align: center; font-size: 13px; color: #4B5465; margin-top: 10px; font-weight: 600; }
+  /* drawer */
+  .drawer { position: absolute; inset: 0; display: flex; }
+  .drawer .panel { width: 300px; background: #fff; height: 100%; padding: 44px 12px 12px; }
+  .drawer .shade { flex: 1; background: rgba(20,25,35,.35); }
+  .dh { font-size: 17px; font-weight: 700; padding: 6px 10px 14px; }
+  .sec { font-size: 11px; font-weight: 800; letter-spacing: .8px; color: var(--muted); padding: 14px 12px 6px; }
+  .nav { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px;
+         font-size: 14px; }
+  .nav.sel { background: #EAF0F9; color: var(--primary); font-weight: 700; }
+  .nav .ni { width: 22px; text-align: center; color: #5A6273; }
+  .nav.sel .ni { color: var(--primary); }
+  .nav .pill { margin-left: auto; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; }
+</style>
+</head>
+<body>
+<div>
+<div class="phone">
+  <div class="status"><span>10:57</span><span>▾ ▮ %82</span></div>
+  <div class="top">
+    <div class="icon-btn">☰</div>
+    <div class="title">LifeOS Folio</div>
+    <div class="icon-btn">⟲</div>
+    <div class="icon-btn">⚙</div>
+  </div>
+  <div class="content">
+    <div class="date">6 Ekim Salı</div>
+    <div class="sub">Günaydın, Av. Erkan Öz</div>
+
+    <div class="chips">
+      <span class="chip"><span class="dot" style="background:#1FA37A"></span>UYAP Mobil · 6 gün 22 sa</span>
+      <span class="chip"><span class="dot" style="background:#9AA2B1"></span>UETS · bağlan</span>
+    </div>
+
+    <div class="heading">BÜRO</div>
+    <div class="card">
+      <div class="badge" style="background:var(--blueFill);color:var(--blue)">📅</div>
+      <div class="grow"><div class="t">Ajanda</div><div class="d hot" style="color:var(--blue)">Bugün 2 duruşma · 1 süre dolacak</div></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="next"><b>09:20 · Antalya 3. Asliye Hukuk · 2025/412</b>Ön inceleme duruşması · 2 sa sonra</div>
+    <div class="card">
+      <div class="badge" style="background:var(--redFill);color:var(--red)">✉</div>
+      <div class="grow"><div class="t">UETS Tebligatlarım</div><div class="d hot" style="color:var(--red)">3 okunmamış tebligat</div></div>
+      <span class="count" style="background:var(--red)">3</span><span class="chev">›</span>
+    </div>
+    <div class="card">
+      <div class="badge" style="background:var(--tealFill);color:var(--teal)">⚖</div>
+      <div class="grow"><div class="t">UYAP Dosyalarım</div><div class="d">12 dosya · 4 yeni evrak</div></div>
+      <span class="chev">›</span>
+    </div>
+
+    <div class="heading" style="margin-top:14px">BELGELER</div>
+    <div class="grid">
+      <div class="act primary"><span class="i">⇪</span>Belge aç</div>
+      <div class="act"><span class="i">＋</span>Yeni belge</div>
+      <div class="act"><span class="i">⎙</span>Tara (PDF)</div>
+      <div class="act"><span class="i">🖼</span>Galeri</div>
+    </div>
+
+    <div class="heading">SON AÇILANLAR <a>⌕ Arşivde ara</a></div>
+    <div class="recent"><div class="doc">UDF</div><div><div class="n">Savunma Dilekçesi 2024-700.udf</div><div class="k">UDF · dün</div></div></div>
+    <div class="recent"><div class="doc">PDF</div><div><div class="n">Bilirkişi Raporu.pdf</div><div class="k">PDF · 3 gün önce</div></div></div>
+  </div>
+</div>
+<div class="label">Anasayfa</div>
+</div>
+
+<div>
+<div class="phone">
+  <div class="status"><span>10:57</span><span>▾ ▮ %82</span></div>
+  <div class="top">
+    <div class="icon-btn">☰</div>
+    <div class="title">LifeOS Folio</div>
+    <div class="icon-btn">⟲</div>
+    <div class="icon-btn">⚙</div>
+  </div>
+  <div class="drawer">
+    <div class="panel">
+      <div class="dh">LifeOS Folio</div>
+      <div class="nav sel"><span class="ni">⌂</span>Anasayfa</div>
+      <div class="sec">BÜRO</div>
+      <div class="nav"><span class="ni">📅</span>Ajanda<span class="pill" style="background:var(--blue);color:#fff">Bugün 2</span></div>
+      <div class="nav"><span class="ni">✉</span>UETS Tebligatlarım<span class="pill" style="background:var(--red);color:#fff">3</span></div>
+      <div class="nav"><span class="ni">⚖</span>UYAP Dosyalarım<span class="pill" style="background:#EEF1F6;color:#4B5465">12</span></div>
+      <div class="sec">BELGELER</div>
+      <div class="nav"><span class="ni">▦</span>Tüm Evraklar</div>
+      <div class="nav"><span class="ni">🖼</span>Galeri</div>
+      <div class="nav"><span class="ni">📁</span>Klasörler</div>
+      <div class="sec">BAĞLANTILAR</div>
+      <div class="nav"><span class="ni" style="color:#1FA37A">●</span>UYAP Mobil · bağlı</div>
+      <div class="nav"><span class="ni" style="color:#9AA2B1">●</span>UETS · bağlan</div>
+      <div class="nav"><span class="ni">⇄</span>Bilgisayarla senkronla</div>
+      <div class="nav" style="position:absolute;bottom:20px"><span class="ni">⚙</span>Ayarlar</div>
+    </div>
+    <div class="shade"></div>
+  </div>
+</div>
+<div class="label">Menü (☰ ile açılır)</div>
+</div>
+</body>
+</html>

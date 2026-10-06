@@ -37,7 +37,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Belge aç'), findsOneWidget);
-      expect(find.text('Yeni belge oluştur'), findsOneWidget);
+      expect(find.text('Yeni belge'), findsOneWidget);
       await tester.tap(find.text('Arşivde ara'));
       await tester.pumpAndSettle();
       for (final mode in [ThemeMode.light, ThemeMode.dark]) {

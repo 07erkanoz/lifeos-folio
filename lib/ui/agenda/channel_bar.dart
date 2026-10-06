@@ -14,9 +14,18 @@ import 'uets_connect.dart';
 /// connected, for how much longer, and what it is doing; a tap connects,
 /// syncs or ends it.
 class PortalChannelBar extends StatefulWidget {
-  const PortalChannelBar({super.key, this.sync, this.showSyncAll = true});
+  const PortalChannelBar({
+    super.key,
+    this.sync,
+    this.showSyncAll = true,
+    this.phone = false,
+  });
 
   final PortalSync? sync;
+
+  /// The phone's first page: no web portal (a phone has no card), no names,
+  /// no "Senkronize et" of its own.
+  final bool phone;
 
   /// "Senkronize et" for every connected portal at the end of the row.
   final bool showSyncAll;
@@ -232,34 +241,35 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
             spacing: 8,
             runSpacing: 6,
             children: [
-              channel(
-                name: 'UYAP Web',
-                channel: PortalChannel.uyapWeb,
-                connected: web.connected,
-                until: webSession == null
-                    ? null
-                    : DateTime.now().add(webSession.remaining()),
-                who: webSession?.user,
-                validity: 'Oturum şu saate kadar açık:',
-                connect: () => unawaited(_connectWeb()),
-                syncNow: _sync.syncWeb,
-                disconnect: () {
-                  web.disconnect();
-                  _changed();
-                },
-                more: [
-                  (
-                    'Oturumu denetle',
-                    () => unawaited(web.check().then((_) => _changed())),
-                  ),
-                ],
-              ),
+              if (!widget.phone)
+                channel(
+                  name: 'UYAP Web',
+                  channel: PortalChannel.uyapWeb,
+                  connected: web.connected,
+                  until: webSession == null
+                      ? null
+                      : DateTime.now().add(webSession.remaining()),
+                  who: webSession?.user,
+                  validity: 'Oturum şu saate kadar açık:',
+                  connect: () => unawaited(_connectWeb()),
+                  syncNow: _sync.syncWeb,
+                  disconnect: () {
+                    web.disconnect();
+                    _changed();
+                  },
+                  more: [
+                    (
+                      'Oturumu denetle',
+                      () => unawaited(web.check().then((_) => _changed())),
+                    ),
+                  ],
+                ),
               channel(
                 name: 'UYAP Mobil',
                 channel: PortalChannel.uyapMobile,
                 connected: mobile.connected,
                 until: mobileSession?.expires,
-                who: mobileSession?.user,
+                who: widget.phone ? null : mobileSession?.user,
                 validity:
                     'Erişim kendiliğinden yenilenir; oturum yeniden giriş '
                     'gerekmeden şu tarihe kadar geçerli:',
@@ -290,7 +300,7 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
             ],
           ),
         ),
-        if (widget.showSyncAll)
+        if (widget.showSyncAll && !widget.phone)
           TextButton.icon(
             key: const ValueKey('agenda-sync'),
             onPressed: any

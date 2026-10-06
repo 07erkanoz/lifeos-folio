@@ -53,6 +53,8 @@ class UyapCasesPage extends StatefulWidget {
 
 class _UyapCasesPageState extends State<UyapCasesPage> {
   UyapWebService get _web => UyapWebService.instance;
+
+  /// The web portal is reached from a computer; UYAP Mobil from anywhere.
   static bool get _desktop =>
       Platform.isLinux || Platform.isWindows || Platform.isMacOS;
   late final _controller = UyapCasePanelController()..onSaved = widget.onSaved;
@@ -281,7 +283,7 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
                 );
               },
             ),
-          if (!inCase && _desktop)
+          if (!inCase)
             MenuAnchor(
               menuChildren: [
                 MenuItemButton(
@@ -290,16 +292,17 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
                   onPressed: () => unawaited(_addFromPortfolio()),
                   child: const Text('Portföyden seç (birim ya da tek tek)'),
                 ),
-                MenuItemButton(
-                  key: const ValueKey('uyap-cases-add-search'),
-                  leadingIcon: const Icon(Icons.search),
-                  onPressed: _web.connected ? () => unawaited(_add()) : null,
-                  child: Text(
-                    _web.connected
-                        ? 'Mahkeme ve esas no ile ara (UYAP Web)'
-                        : 'Mahkeme ve esas no ile ara (UYAP Web bağlı değil)',
+                if (_desktop)
+                  MenuItemButton(
+                    key: const ValueKey('uyap-cases-add-search'),
+                    leadingIcon: const Icon(Icons.search),
+                    onPressed: _web.connected ? () => unawaited(_add()) : null,
+                    child: Text(
+                      _web.connected
+                          ? 'Mahkeme ve esas no ile ara (UYAP Web)'
+                          : 'Mahkeme ve esas no ile ara (UYAP Web bağlı değil)',
+                    ),
                   ),
-                ),
               ],
               builder: (context, menu, _) => FilledButton.icon(
                 key: const ValueKey('uyap-cases-add'),
@@ -322,7 +325,7 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
               style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
             ),
           // UYAP is reached from a computer; a phone shows what was kept.
-          if (_desktop && PortalSync.started != null)
+          if (PortalSync.started != null)
             const SizedBox(
               width: double.infinity,
               child: PortalChannelBar(showSyncAll: false),
