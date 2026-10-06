@@ -66,6 +66,43 @@ class PortalCase {
   }
 }
 
+extension PortalCaseJson on PortalCase {
+  Map<String, Object?> toJson() => {
+    'key': key,
+    'number': number,
+    'court': court,
+    'family': family.name,
+    'ids': {for (final e in ids.entries) e.key.name: e.value},
+    'status': status?.toJson((v) => v),
+    'parties': parties?.toJson((v) => v),
+    'details': details?.toJson((v) => v),
+    'documents': documents?.toJson((v) => v),
+  };
+
+  static PortalCase fromJson(Map<String, Object?> json) {
+    List<Map<String, Object?>> list(Object? v) => [
+      for (final e in v as List? ?? const []) Map<String, Object?>.from(e),
+    ];
+    return PortalCase(
+      key: json['key'] as String,
+      number: json['number'] as String,
+      court: json['court'] as String,
+      family: CaseFamily.values.asNameMap()[json['family']] ?? CaseFamily.court,
+      ids: {
+        for (final e in (json['ids'] as Map? ?? const {}).entries)
+          ?PortalChannel.values.asNameMap()[e.key]: '${e.value}',
+      },
+      status: Observed.fromJson(json['status'], (v) => '$v'),
+      parties: Observed.fromJson(json['parties'], list),
+      details: Observed.fromJson(
+        json['details'],
+        (v) => Map<String, Object?>.from(v as Map? ?? const {}),
+      ),
+      documents: Observed.fromJson(json['documents'], list),
+    );
+  }
+}
+
 /// [current] with every case of [incoming] merged in by key; cases the
 /// answer did not mention stay, since an answer that leaves one out does
 /// not say it is gone.

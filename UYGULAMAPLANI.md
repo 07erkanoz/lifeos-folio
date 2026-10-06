@@ -651,7 +651,7 @@ Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 | T2 | Banaozel süre motoru incelemesi; kullanılabilirse taşıma kararı | P10 | Tamam: taşınacak (§11) |
 | T3 | Kanal ve işlem → kanal tablosu (§9.2), testleriyle | P01 | Tamam |
 | T4 | Gözlem damgalı birleştirme: web ve mobil birbirini ezmez, eksiklerini tamamlar (§9.4) | P06/P07 | Tamam |
-| T5 | Yerel portal veritabanı: dosya, duruşma, not/iş | P02 | Sırada |
+| T5 | Yerel portal veritabanı: dosya, duruşma, not/iş | P02 | Tamam |
 | T6 | Web duruşma listesi (29 günlük pencereler), normalize ve birleştirme | P10 | Sırada |
 | T7 | Kenar çubuğu BÜRO bölümü ve Ajanda ekranı (taslağın aynısı) | P10/P11 | Sırada |
 | T8 | Süre motoru ve yaklaşan süreler | P10 | Sırada |
