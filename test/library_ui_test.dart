@@ -151,6 +151,8 @@ void main() {
     expect(find.byTooltip('Ayarlar'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(tester.takeException(), isNull);
+    // The sidebar scrolls in a low window.
+    await tester.ensureVisible(find.byTooltip('Ayarlar'));
     await tester.tap(find.byTooltip('Ayarlar'));
     await tester.pumpAndSettle();
     expect(find.text('Klasör seç ve ekle'), findsOneWidget);

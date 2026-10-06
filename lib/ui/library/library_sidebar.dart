@@ -63,8 +63,8 @@ class LibrarySidebar extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final content = _content(context);
-      return constraints.maxHeight < 650
-          ? SingleChildScrollView(child: SizedBox(height: 650, child: content))
+      return constraints.maxHeight < 700
+          ? SingleChildScrollView(child: SizedBox(height: 700, child: content))
           : content;
     },
   );
