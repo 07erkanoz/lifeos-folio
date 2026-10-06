@@ -14,12 +14,14 @@ Future<bool> connectUyapMobile(
 }) async {
   final mobile = api ?? UyapMobileApi.instance;
   final messenger = ScaffoldMessenger.maybeOf(context);
-  if (!Platform.isWindows || !await EdevletWebDialog.available()) {
+  if (!await EdevletWebDialog.available()) {
     messenger?.showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'UYAP Mobil girişi bu bilgisayarda Microsoft WebView2 ile açılır; '
-          'WebView2 bulunamadı.',
+          Platform.isWindows
+              ? 'UYAP Mobil girişi bu bilgisayarda Microsoft WebView2 ile '
+                    'açılır; WebView2 bulunamadı.'
+              : 'UYAP Mobil girişi bu cihazda henüz açılamıyor.',
         ),
       ),
     );

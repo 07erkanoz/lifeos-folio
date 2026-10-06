@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -43,6 +44,7 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
   static const _remembered = 'uets-login';
 
   _Method _method = _Method.mobile;
+  static bool get _onPhone => Platform.isAndroid || Platform.isIOS;
   final _tckn = TextEditingController();
   final _phone = TextEditingController();
   final _pin = TextEditingController();
@@ -73,7 +75,9 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
         _operator =
             MobileOperator.values.asNameMap()['${kept['operator']}'] ??
             _operator;
-        if (kept['method'] == _Method.card.name) _method = _Method.card;
+        if (kept['method'] == _Method.card.name && !_onPhone) {
+          _method = _Method.card;
+        }
       });
       if (_method == _Method.card) unawaited(_scan());
     } catch (_) {}
@@ -232,34 +236,36 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SegmentedButton<_Method>(
-              segments: const [
-                ButtonSegment(
-                  value: _Method.mobile,
-                  icon: Icon(Icons.smartphone, size: 16),
-                  label: Text('Mobil imza'),
-                ),
-                ButtonSegment(
-                  value: _Method.card,
-                  icon: Icon(Icons.credit_card, size: 16),
-                  label: Text('E-imza kartı'),
-                ),
-              ],
-              selected: {_method},
-              showSelectedIcon: false,
-              onSelectionChanged: _busy
-                  ? null
-                  : (s) {
-                      setState(() {
-                        _method = s.first;
-                        _error = null;
-                        _status = null;
-                      });
-                      if (_method == _Method.card && _cards.isEmpty) {
-                        unawaited(_scan());
-                      }
-                    },
-            ),
+            // A phone has no card reader: the mobile signature alone.
+            if (!_onPhone)
+              SegmentedButton<_Method>(
+                segments: const [
+                  ButtonSegment(
+                    value: _Method.mobile,
+                    icon: Icon(Icons.smartphone, size: 16),
+                    label: Text('Mobil imza'),
+                  ),
+                  ButtonSegment(
+                    value: _Method.card,
+                    icon: Icon(Icons.credit_card, size: 16),
+                    label: Text('E-imza kartı'),
+                  ),
+                ],
+                selected: {_method},
+                showSelectedIcon: false,
+                onSelectionChanged: _busy
+                    ? null
+                    : (s) {
+                        setState(() {
+                          _method = s.first;
+                          _error = null;
+                          _status = null;
+                        });
+                        if (_method == _Method.card && _cards.isEmpty) {
+                          unawaited(_scan());
+                        }
+                      },
+              ),
             const SizedBox(height: 16),
             if (mobile) ...[
               TextField(

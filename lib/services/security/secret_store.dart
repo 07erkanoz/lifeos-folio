@@ -4,14 +4,16 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
 
 import '../platform/app_directories.dart';
 
-/// Where a portal's tokens are kept on this computer (UYGULAMAPLANI §4,
-/// P02): encrypted for the Windows user with DPAPI, readable by no one
-/// else. Where there is no such protection, nothing is written: the
-/// session lasts as long as Folio is open, never as a plain token file.
+/// Where a portal's tokens are kept on this device (UYGULAMAPLANI §4,
+/// P02, §13): encrypted for the Windows user with DPAPI; on a phone in the
+/// Android Keystore or the iOS Keychain. Where there is no such
+/// protection, nothing is written: the session lasts as long as Folio is
+/// open, never as a plain token file.
 class SecretStore {
   SecretStore({Future<Directory> Function()? directory})
     : _directory = directory ?? _default;
@@ -21,7 +23,12 @@ class SecretStore {
 
   final Future<Directory> Function() _directory;
 
-  static bool get available => Platform.isWindows;
+  static bool get available =>
+      Platform.isWindows || Platform.isAndroid || Platform.isIOS;
+
+  static bool get _phone => Platform.isAndroid || Platform.isIOS;
+  static const _keychain = FlutterSecureStorage();
+  static String _key(String name) => 'folio.$name';
 
   Future<File> _file(String name) async {
     final dir = await _directory();
@@ -32,6 +39,14 @@ class SecretStore {
   /// Keeps [value] under [name]; false where it cannot be kept safely.
   Future<bool> write(String name, Map<String, Object?> value) async {
     if (!available) return false;
+    if (_phone) {
+      try {
+        await _keychain.write(key: _key(name), value: jsonEncode(value));
+        return await read(name) != null;
+      } catch (_) {
+        return false;
+      }
+    }
     try {
       final sealed = Dpapi.protect(utf8.encode(jsonEncode(value)));
       final file = await _file(name);
@@ -47,6 +62,15 @@ class SecretStore {
 
   Future<Map<String, Object?>?> read(String name) async {
     if (!available) return null;
+    if (_phone) {
+      try {
+        final text = await _keychain.read(key: _key(name));
+        final data = text == null ? null : jsonDecode(text);
+        return data is Map ? Map<String, Object?>.from(data) : null;
+      } catch (_) {
+        return null;
+      }
+    }
     try {
       final file = await _file(name);
       if (!await file.exists()) return null;
@@ -59,6 +83,12 @@ class SecretStore {
   }
 
   Future<void> remove(String name) async {
+    if (_phone) {
+      try {
+        await _keychain.delete(key: _key(name));
+      } catch (_) {}
+      return;
+    }
     try {
       final file = await _file(name);
       if (await file.exists()) await file.delete();

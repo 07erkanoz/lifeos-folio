@@ -6,10 +6,12 @@ import 'package:path/path.dart' as p;
 import 'package:webview_windows/webview_windows.dart' as edge;
 
 import '../../services/uyap/uyap_web_service.dart';
+import 'edevlet_phone_page.dart';
 
-/// The e-Devlet page inside Folio on Windows, in Microsoft's WebView2. It
-/// closes with the code e-Devlet sends the lawyer back with, or with null
-/// when it is closed first.
+/// The e-Devlet page inside Folio on Windows, in Microsoft's WebView2; on
+/// a phone, on a page of its own in the phone's web view
+/// ([EdevletPhonePage]). It closes with the code e-Devlet sends the lawyer
+/// back with, or with null when it is closed first.
 class EdevletWebDialog extends StatefulWidget {
   const EdevletWebDialog({
     super.key,
@@ -36,16 +38,24 @@ class EdevletWebDialog extends StatefulWidget {
     required String hint,
     bool Function(Uri url)? isReturn,
     String? state,
-  }) => showDialog<String>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => EdevletWebDialog(
-      page: page,
-      hint: hint,
-      isReturn: isReturn,
-      state: state,
-    ),
-  );
+  }) => Platform.isAndroid || Platform.isIOS
+      ? EdevletPhonePage.show(
+          context,
+          page: page,
+          hint: hint,
+          isReturn: isReturn,
+          state: state,
+        )
+      : showDialog<String>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => EdevletWebDialog(
+            page: page,
+            hint: hint,
+            isReturn: isReturn,
+            state: state,
+          ),
+        );
 
   /// WebView2 keeps its profile beside the program by default, which an
   /// installation under Program Files cannot write to.
@@ -55,8 +65,10 @@ class EdevletWebDialog extends StatefulWidget {
         userDataPath: p.join(Directory.systemTemp.path, 'folio-edevlet'),
       ).catchError((Object _) {});
 
-  /// Whether WebView2 is there to show the page.
+  /// Whether a web view is there to show the page: WebView2 on Windows,
+  /// the system's own on a phone.
   static Future<bool> available() async {
+    if (Platform.isAndroid || Platform.isIOS) return true;
     if (!Platform.isWindows) return false;
     try {
       return await edge.WebviewController.getWebViewVersion() != null;
