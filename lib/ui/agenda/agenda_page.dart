@@ -1419,6 +1419,11 @@ class _AgendaPageState extends State<AgendaPage> {
             style: const TextStyle(fontSize: 11.5, color: AgendaColors.muted),
           ),
           const SizedBox(height: 10),
+          row(
+            'Tarih',
+            '${h.at.day} ${_months[h.at.month - 1]} ${h.at.year} '
+                '${_days[h.at.weekday - 1]} · ${_hm(h.at)}',
+          ),
           if (parties != null && parties.isNotEmpty) row('Taraflar', parties),
           if ('${details['davaTuru'] ?? details['dosyaTuru'] ?? ''}'.isNotEmpty)
             row('Dava türü', '${details['davaTuru'] ?? details['dosyaTuru']}'),
