@@ -51,6 +51,24 @@ class UdfSigningService {
       _exclusive(_cards, driver);
   Future<List<SigningCertificate>> certificates(SigningCard card, String pin) =>
       _exclusive(_certificates, (card: card, pin: pin));
+
+  /// A CAdES-BES signature of [data] with the card, for a login that asks
+  /// for one (UETS): the data inside the signature when [attached], beside
+  /// it otherwise. Checked against the certificate before it is handed back.
+  Future<Uint8List> signBytes(
+    Uint8List data,
+    SigningCard card,
+    SigningCertificate certificate,
+    String pin, {
+    bool attached = false,
+  }) => _exclusive(_signBytes, (
+    data: data,
+    card: card,
+    certificate: certificate,
+    pin: pin,
+    attached: attached,
+  ));
+
   Future<String> sign(
     String path,
     SigningCard card,
@@ -155,9 +173,9 @@ class UdfSigningService {
   /// Whether [udf] already carries a signature.
   static bool isSigned(List<int> udf) {
     try {
-      return ZipDecoder().decodeBytes(udf).any(
-        (e) => e.isFile && e.name.toLowerCase().endsWith('.sgn'),
-      );
+      return ZipDecoder()
+          .decodeBytes(udf)
+          .any((e) => e.isFile && e.name.toLowerCase().endsWith('.sgn'));
     } catch (_) {
       return false;
     }
@@ -285,6 +303,57 @@ String _sign(
       CadesBuilder.buildCadesSignature(params),
     );
     return UdfSigningService.saveSigned(args.path, original, output);
+  } on Pkcs11Exception catch (e) {
+    throw StateError(_error(e));
+  } finally {
+    session.dispose();
+  }
+}
+
+Uint8List _signBytes(
+  ({
+    Uint8List data,
+    SigningCard card,
+    SigningCertificate certificate,
+    String pin,
+    bool attached,
+  })
+  args,
+) {
+  if (!args.certificate.info.isValid) {
+    throw StateError('Sertifikanın geçerlilik tarihleri uygun değil.');
+  }
+  final cert = args.certificate.certificate;
+  final params = CadesSigningParams(
+    documentBytes: args.data,
+    signerCertDer: cert.derBytes,
+    issuerDer: args.certificate.info.issuerDer,
+    serialNumberDer: args.certificate.info.serialNumberDer,
+    signingTime: DateTime.now().toUtc(),
+  );
+  final signed = CadesBuilder.buildSignedAttributes(params);
+  final session = Pkcs11Session(args.card.module.path);
+  try {
+    session.initialize();
+    session.openSession(args.card.token.slotId);
+    session.login(args.pin);
+    try {
+      params.signatureValue = session.sign(signed, cert.keyId);
+    } on Pkcs11Exception catch (e) {
+      if (e.returnValue != CKR_MECHANISM_INVALID) rethrow;
+      params.signatureValue = session.signRaw(
+        CadesBuilder.buildSignedAttributes(params, forRawRsa: true),
+        cert.keyId,
+      );
+    }
+    if (!UdfSigningService.verifyRsa(
+      cert.derBytes,
+      signed,
+      params.signatureValue!,
+    )) {
+      throw StateError('Üretilen imza seçili sertifikayla doğrulanamadı.');
+    }
+    return CadesBuilder.buildCadesSignature(params, attached: args.attached);
   } on Pkcs11Exception catch (e) {
     throw StateError(_error(e));
   } finally {
