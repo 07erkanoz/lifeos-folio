@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>UYAP Portföy Taslağı</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet">
+<style>
+  :root { --page:#F4F6F9; --line:#E3E7EE; --muted:#6B7383; --ink:#1B2130; --primary:#2B5EA8; --pfill:#EAF0F9;
+          --hukuk:#2B5EA8; --hukukF:#EAF0F9; --ceza:#B2453E; --cezaF:#FBF0EF; --icra:#97600D; --icraF:#FDF4E6; --idari:#5B4BB7; --idariF:#F1EEFB;
+          --ok:#157A52; --okF:#EAF7F1; --amber:#97600D; --amberF:#FDF4E6; --red:#C0322B; --redF:#FDECEC; --teal:#139C8B; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:18px; line-height:1; font-style:normal; display:inline-block; font-feature-settings:"liga"; }
+  h2.cap { width:1440px; margin:0 auto 10px; font-size:15px; color:#2A3040; }
+  h2.cap small { font-weight:400; color:#4B5465; margin-left:8px; }
+  .win { width:1440px; height:900px; margin:0 auto 34px; background:var(--page); border-radius:12px; overflow:hidden; box-shadow:0 20px 60px rgba(20,30,50,.28); display:flex; flex-direction:column; }
+  .tb { height:34px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; padding:0 14px; gap:8px; font-size:12px; color:var(--muted); }
+  .tb .r { margin-left:auto; letter-spacing:12px; }
+  .body { flex:1; display:flex; min-height:0; }
+  .side { width:236px; background:#fff; border-right:1px solid var(--line); padding:16px 12px; display:flex; flex-direction:column; gap:3px; }
+  .btn1 { background:var(--primary); color:#fff; border-radius:10px; padding:10px; text-align:center; font-weight:700; font-size:13px; margin-bottom:4px; }
+  .btn2 { border:1px solid var(--line); border-radius:10px; padding:9px; text-align:center; font-size:13px; margin-bottom:14px; }
+  .nav { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; font-size:13.5px; }
+  .nav .ms { color:#6B7383; }
+  .nav.on { background:var(--pfill); color:var(--primary); font-weight:700; } .nav.on .ms { color:var(--primary); }
+  .pill { margin-left:auto; font-size:11px; font-weight:800; padding:1px 7px; border-radius:9px; }
+  .sec { font-size:10.5px; font-weight:800; letter-spacing:.9px; color:var(--muted); padding:12px 10px 4px; }
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  /* page head */
+  .ph { background:#fff; border-bottom:1px solid var(--line); padding:14px 24px; display:flex; align-items:center; gap:14px; }
+  .ph h1 { margin:0; font-size:18px; letter-spacing:-.2px; }
+  .ph .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .sync { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .src { display:flex; align-items:center; gap:7px; font-size:12px; color:#3F4656; border:1px solid var(--line); border-radius:999px; padding:5px 11px; background:#fff; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); }
+  .tog { display:flex; align-items:center; gap:8px; font-size:12.5px; color:#3F4656; }
+  .sw { width:32px; height:18px; border-radius:9px; background:#CBD2DD; position:relative; }
+  .sw::after { content:""; position:absolute; left:2px; top:2px; width:14px; height:14px; border-radius:50%; background:#fff; }
+  .sw.on { background:var(--primary); } .sw.on::after { left:16px; }
+  .fb { background:var(--primary); color:#fff; border-radius:9px; padding:8px 13px; font-size:12.5px; font-weight:700; display:flex; gap:6px; align-items:center; }
+  .fb .ms { color:#fff; font-size:17px; }
+  .ob { border:1px solid var(--line); border-radius:9px; padding:7px 12px; font-size:12.5px; font-weight:600; display:flex; gap:6px; align-items:center; background:#fff; }
+  .ob .ms { font-size:17px; color:var(--primary); }
+  /* progress */
+  .prog { background:#F3F7FC; border-bottom:1px solid #DCE6F4; padding:8px 24px; font-size:12px; color:#1F467F; display:flex; align-items:center; gap:12px; }
+  .bar { flex:0 0 260px; height:5px; border-radius:3px; background:#D5E1F2; overflow:hidden; } .bar i { display:block; height:100%; width:62%; background:var(--primary); }
+  /* list layout */
+  .grid { flex:1; min-height:0; display:grid; grid-template-columns:206px 1fr; column-gap:22px; padding:16px 24px 0; }
+  .rail { font-size:12.5px; }
+  .rh { font-size:10px; font-weight:800; letter-spacing:1px; color:var(--muted); margin:14px 0 6px; }
+  .rh:first-child { margin-top:2px; }
+  .ri { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:7px; }
+  .ri .c { margin-left:auto; color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
+  .ri.on { background:var(--pfill); color:var(--primary); font-weight:700; } .ri.on .c { color:var(--primary); }
+  .sws { width:3px; height:11px; border-radius:2px; }
+  .ri .new { background:var(--primary); color:#fff; border-radius:8px; font-size:10px; font-weight:800; padding:0 6px; margin-left:auto; }
+  .clear { color:var(--primary); font-weight:700; font-size:12px; margin-top:12px; padding-left:8px; }
+  .list { min-width:0; display:flex; flex-direction:column; }
+  .search { background:#fff; border:1px solid var(--line); border-radius:11px; height:42px; display:flex; align-items:center; gap:9px; padding:0 12px; color:#8A92A3; font-size:13.5px; }
+  .scopes { display:flex; gap:6px; margin:9px 0 2px; align-items:center; }
+  .chip { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:3px 10px; background:#fff; }
+  .chip.on { background:var(--pfill); border-color:#CFDDF1; color:var(--primary); font-weight:700; }
+  .hint { font-size:11.5px; color:var(--muted); margin-left:6px; }
+  .sort { margin-left:auto; font-size:12px; color:#3F4656; border:1px solid var(--line); border-radius:8px; padding:4px 10px; background:#fff; }
+  .rows { margin-top:8px; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; flex:1; }
+  .row { display:flex; gap:14px; padding:11px 16px 11px 14px; border-top:1px solid #EEF1F5; position:relative; }
+  .row:first-child { border-top:0; }
+  .row::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; }
+  .row.hk::before { background:var(--hukuk); } .row.cz::before { background:var(--ceza); } .row.ic::before { background:var(--icra); } .row.id::before { background:var(--idari); }
+  .row.hov { background:#F8FAFD; }
+  .rc { flex:1; min-width:0; }
+  .l1 { display:flex; align-items:center; gap:9px; }
+  .no { font-family:Consolas,"Cascadia Mono",monospace; font-size:13.5px; font-weight:700; }
+  .tb2 { font-size:10px; font-weight:800; letter-spacing:.4px; padding:1px 6px; border-radius:4px; }
+  .tb2.hk { background:var(--hukukF); color:var(--hukuk); } .tb2.cz { background:var(--cezaF); color:var(--ceza); } .tb2.ic { background:var(--icraF); color:var(--icra); } .tb2.id { background:var(--idariF); color:var(--idari); }
+  .court { font-size:13px; color:#2D3445; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chips { margin-left:auto; display:flex; gap:6px; flex-shrink:0; }
+  .st { font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .st.open { background:var(--okF); color:var(--ok); } .st.closed { background:#EEF0F3; color:#5D6474; } .st.mid { background:var(--amberF); color:var(--amber); }
+  .st.hear { background:var(--amberF); color:var(--amber); } .st.new { background:var(--primary); color:#fff; } .st.today { background:var(--redF); color:var(--red); }
+  .pt { display:grid; grid-template-columns:72px 1fr; column-gap:10px; row-gap:1px; margin-top:6px; font-size:12.5px; }
+  .pt .lb { text-align:right; font-size:10px; font-weight:800; letter-spacing:.6px; padding-top:2px; }
+  .pt .us { color:var(--ok); } .pt .them { color:#8A92A3; }
+  .pt b { font-weight:700; } .pt small { color:var(--muted); font-size:11.5px; }
+  .ft { font-size:11.5px; color:var(--muted); margin-top:5px; }
+  .ft .newdoc { color:var(--primary); font-weight:700; }
+  .more { text-align:center; padding:10px; font-size:12.5px; font-weight:700; color:var(--primary); border-top:1px solid #EEF1F5; }
+  /* detail */
+  .dscroll { flex:1; overflow:hidden; padding:16px 28px; display:flex; flex-direction:column; gap:12px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; }
+  .dh { padding:16px 20px; display:flex; gap:16px; align-items:flex-start; }
+  .crumb { font-size:12px; color:var(--muted); }
+  .crumb b { color:var(--primary); font-weight:600; }
+  .esas { font-family:Consolas,"Cascadia Mono",monospace; font-size:26px; font-weight:600; margin:4px 0 6px; display:flex; align-items:center; gap:10px; }
+  .dcourt { font-size:15px; }
+  .dsub { font-size:12px; color:var(--muted); margin-top:3px; }
+  .acts { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .parties { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .pc { padding:12px 16px; border-top-width:3px; }
+  .pc.us { border-top:3px solid var(--ok); } .pc.them { border-top:3px solid #E0A23B; }
+  .pc .k { font-size:10.5px; font-weight:800; letter-spacing:.8px; color:var(--muted); margin-bottom:6px; }
+  .pr { display:flex; align-items:center; gap:10px; padding:5px 0; }
+  .av { width:32px; height:32px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; background:#EEF1F5; color:#4B5465; }
+  .pr .n { font-size:13.5px; font-weight:600; } .pr .v { font-size:11.5px; color:var(--muted); }
+  .rc2 { margin-left:auto; font-size:11px; padding:2px 8px; border-radius:7px; background:#EEF1F5; color:#4B5465; }
+  .sums { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .sm { padding:11px 14px; }
+  .sm .k { font-size:10.5px; font-weight:800; letter-spacing:.8px; color:var(--muted); }
+  .sm .v { font-size:15px; font-weight:700; margin-top:4px; }
+  .sm .s { font-size:12px; color:var(--muted); margin-top:2px; }
+  .sm.warn { border-color:#F0B4AF; }
+  .tabs { display:flex; gap:22px; border-bottom:1px solid var(--line); padding:0 18px; }
+  .tab { padding:12px 0 10px; font-size:13.5px; color:var(--muted); border-bottom:2px solid transparent; }
+  .tab.on { color:var(--ink); font-weight:600; border-bottom-color:var(--primary); }
+  .tab small { font-size:12px; color:var(--muted); margin-left:4px; }
+  .tab .nb { background:var(--primary); color:#fff; border-radius:8px; font-size:10px; font-weight:800; padding:0 6px; margin-left:5px; }
+  .etb { display:flex; align-items:center; gap:8px; padding:12px 18px 6px; }
+  .es { flex:0 0 340px; height:34px; border:1px solid var(--line); border-radius:9px; display:flex; align-items:center; gap:8px; padding:0 10px; font-size:12.5px; color:#8A92A3; }
+  .mh { font-size:10.5px; font-weight:800; letter-spacing:.9px; color:var(--muted); padding:10px 18px 4px; }
+  .er { display:grid; grid-template-columns:28px 1fr auto; gap:10px; align-items:center; padding:8px 18px; border-top:1px solid #F0F2F6; }
+  .er.nw { background:#F6F9FE; }
+  .er .ic { width:28px; height:28px; border-radius:7px; display:grid; place-items:center; background:#F1F3F7; }
+  .er .ic.dec .ms { color:var(--red); } .er .ic.pet .ms { color:var(--primary); }
+  .er .t { font-size:13.5px; font-weight:600; } .er .m { font-size:11.5px; color:var(--muted); }
+  .er .r { display:flex; gap:8px; align-items:center; font-size:11.5px; }
+  .ynew { background:var(--primary); color:#fff; font-weight:800; font-size:10px; border-radius:6px; padding:1px 6px; letter-spacing:.4px; }
+  .note { width:1440px; margin:-18px auto 30px; font-size:12.5px; color:#3A4252; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .note div { background:#fff; border-radius:10px; padding:10px 12px; border:1px solid #DADFE7; line-height:1.5; }
+  .note b { color:var(--primary); }
+</style>
+</head>
+<body>
+
+<h2 class="cap">1 · UYAP Dosyalarım — portföyün tamamı <small>Açık dosyalar UYAP Mobil + Web’den kendiliğinden gelir · kapalılar isteğe bağlı · yeni evrak işaretli</small></h2>
+<div class="win">
+  <div class="tb">LifeOS Folio <span class="r">— ▢ ✕</span></div>
+  <div class="body">
+    <div class="side">
+      <div class="btn1">+ Dosya Aç</div><div class="btn2">Klasör Ekle</div>
+      <div class="nav"><span class="ms">home</span>Anasayfa</div>
+      <div class="nav"><span class="ms">grid_view</span>Tüm Evraklar</div>
+      <div class="nav"><span class="ms">description</span>Belgeler</div>
+      <div class="nav"><span class="ms">photo_library</span>Galeri</div>
+      <div class="sec">BÜRO</div>
+      <div class="nav on"><span class="ms">gavel</span>UYAP Dosyalarım<span class="pill" style="background:var(--primary);color:#fff">12 yeni</span></div>
+      <div class="nav"><span class="ms">event_note</span>Ajanda<span class="pill" style="background:#EAF0F9;color:var(--primary)">Bugün 2</span></div>
+      <div class="nav"><span class="ms">mark_email_unread</span>UETS Tebligatlarım<span class="pill" style="background:var(--red);color:#fff">3</span></div>
+    </div>
+    <div class="main">
+      <div class="ph">
+        <div>
+          <h1>UYAP Dosyalarım</h1>
+          <div class="sub">338 dosya · 214 açık · 124 kapalı · 18 dosyada 31 yeni evrak</div>
+        </div>
+        <div class="sync">
+          <div class="src"><span class="dot"></span>UYAP Mobil · tam tarama dün 21:14</div>
+          <div class="src"><span class="dot"></span>UYAP Web · evraklar 08:47</div>
+          <div class="tog"><div class="sw on"></div>Kapalı dosyaları da indir</div>
+          <div class="fb"><span class="ms">sync</span>Portföyü yenile</div>
+        </div>
+      </div>
+      <div class="prog"><span class="ms" style="font-size:16px;color:var(--primary)">downloading</span>Portföy dolduruluyor · Antalya 3. Asliye Hukuk · 210 / 338 dosya — evrak listeleri arka planda, uygulamayı kullanmaya devam edebilirsiniz<div class="bar"><i></i></div></div>
+      <div class="grid">
+        <div class="rail">
+          <div class="rh">DURUM</div>
+          <div class="ri on">Açık<span class="c">214</span></div>
+          <div class="ri">Kapalı / Arşiv<span class="c">124</span></div>
+          <div class="rh">GELİŞME</div>
+          <div class="ri">Yeni evrak gelen<span class="new">18</span></div>
+          <div class="ri">Duruşması olan<span class="c">41</span></div>
+          <div class="ri">Bu hafta duruşma<span class="c">6</span></div>
+          <div class="rh">TÜR</div>
+          <div class="ri"><span class="sws" style="background:var(--hukuk)"></span>Hukuk<span class="c">126</span></div>
+          <div class="ri"><span class="sws" style="background:var(--ceza)"></span>Ceza<span class="c">58</span></div>
+          <div class="ri"><span class="sws" style="background:var(--icra)"></span>İcra<span class="c">137</span></div>
+          <div class="ri"><span class="sws" style="background:var(--idari)"></span>İdari<span class="c">17</span></div>
+          <div class="rh">TARAFIMIZ</div>
+          <div class="ri">Davacı<span class="c">71</span></div>
+          <div class="ri">Davalı<span class="c">49</span></div>
+          <div class="ri">Alacaklı<span class="c">118</span></div>
+          <div class="ri">Sanık<span class="c">33</span></div>
+          <div class="ri">Katılan<span class="c">21</span></div>
+          <div class="rh">BİRİM</div>
+          <div class="ri">Antalya Adliyesi<span class="c">174</span></div>
+          <div class="ri">Manavgat Adliyesi<span class="c">96</span></div>
+          <div class="ri">Diğer<span class="c">68</span></div>
+        </div>
+        <div class="list">
+          <div class="search"><span class="ms">search</span>2024/318 · manavgat asliye · ozturk · icra</div>
+          <div class="scopes">
+            <span class="chip on">Hepsi</span><span class="chip">Taraf</span><span class="chip">Dosya no</span><span class="chip">Mahkeme</span>
+            <span class="hint">büyük/küçük harf ve aksan farkı aramayı bozmaz (ozturk = ÖZTÜRK)</span>
+            <span class="sort">Sırala: Son gelişme önce ▾</span>
+          </div>
+          <div class="rows">
+            <div class="row hk hov">
+              <div class="rc">
+                <div class="l1"><span class="no">2024/318 Esas</span><span class="tb2 hk">HUKUK</span><span class="court">Antalya 3. Asliye Hukuk Mahkemesi</span>
+                  <div class="chips"><span class="st new">3 yeni evrak</span><span class="st today">duruşma bugün 09:35</span><span class="st open">Açık</span></div></div>
+                <div class="pt"><span class="lb us">MÜVEKKİL</span><span><b>Ayşe Karaca</b> <small>Davacı</small></span><span class="lb them">KARŞI</span><span>B. İnşaat Ltd. Şti. <small>Davalı · +1 taraf</small></span></div>
+                <div class="ft"><span class="newdoc">Yeni: Bilirkişi raporu, Ara karar, Tensip zaptı</span> · açılış 12.03.2024 · senkron 08:47</div>
+              </div>
+            </div>
+            <div class="row cz">
+              <div class="rc">
+                <div class="l1"><span class="no">2026/295 Esas</span><span class="tb2 cz">CEZA</span><span class="court">Manavgat 1. Ağır Ceza Mahkemesi</span>
+                  <div class="chips"><span class="st new">1 yeni evrak</span><span class="st hear">duruşma 09.10.2026 · 2 gün</span><span class="st open">Açık</span></div></div>
+                <div class="pt"><span class="lb us">MÜVEKKİL</span><span><b>K. H.</b> <small>Sanık</small></span><span class="lb them">KARŞI</span><span>Kamu Hukuku <small>Müşteki</small></span></div>
+                <div class="ft"><span class="newdoc">Yeni: İddianame</span> · açılış 02.09.2026 · senkron 08:47</div>
+              </div>
+            </div>
+            <div class="row ic">
+              <div class="rc">
+                <div class="l1"><span class="no">2025/9184 Esas</span><span class="tb2 ic">İCRA</span><span class="court">Antalya 5. İcra Dairesi</span>
+                  <div class="chips"><span class="st mid">Haciz aşamasında</span></div></div>
+                <div class="pt"><span class="lb us">MÜVEKKİL</span><span><b>Deniz Gıda A.Ş.</b> <small>Alacaklı</small></span><span class="lb them">KARŞI</span><span>M*** Ö*** <small>Borçlu</small></span></div>
+                <div class="ft">açılış 21.11.2025 · senkron dün 21:14</div>
+              </div>
+            </div>
+            <div class="row hk">
+              <div class="rc">
+                <div class="l1"><span class="no">2025/77 Esas</span><span class="tb2 hk">HUKUK</span><span class="court">Antalya 5. İş Mahkemesi</span>
+                  <div class="chips"><span class="st hear">duruşma 15.10.2026 · 8 gün</span><span class="st open">Açık</span></div></div>
+                <div class="pt"><span class="lb us">MÜVEKKİL</span><span><b>Mehmet Yıldız</b> <small>Davacı</small></span><span class="lb them">KARŞI</span><span>A. Otelcilik A.Ş. <small>Davalı</small></span></div>
+                <div class="ft">açılış 04.02.2025 · senkron dün 21:14</div>
+              </div>
+            </div>
+            <div class="row id">
+              <div class="rc">
+                <div class="l1"><span class="no">2026/1102 Esas</span><span class="tb2 id">İDARİ</span><span class="court">Antalya 2. İdare Mahkemesi</span>
+                  <div class="chips"><span class="st mid">Karara çıkmış</span></div></div>
+                <div class="pt"><span class="lb us">MÜVEKKİL</span><span><b>Selin Aydın</b> <small>Davacı</small></span><span class="lb them">KARŞI</span><span>Antalya Büyükşehir Belediyesi <small>Davalı</small></span></div>
+                <div class="ft">açılış 18.06.2026 · senkron dün 21:14</div>
+              </div>
+            </div>
+            <div class="more">Daha fazla (209 dosya daha)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="note">
+  <div><b>Ekleme yok, portföy dolu:</b> UYAP Mobil portföyü çeker, Web taraf ve evrakları zenginleştirir. Açıklar kendiliğinden; kapalılar anahtarla. Tam tarama günde bir kez ya da “Portföyü yenile” ile — her açılışta değil.</div>
+  <div><b>Banaozel’den:</b> solda sayılı süzgeç rafı, arama kapsamları (Hepsi/Taraf/Dosya no/Mahkeme), türe göre renk şeridi, MÜVEKKİL/KARŞI satırları, durum ve duruşma çipleri.</div>
+  <div><b>Folio’ya özgü:</b> “N yeni evrak” çipi ve altında yeni gelenlerin adları; kenar çubuğunda “12 yeni”; “Yeni evrak gelen” süzgeci; sıralama “Son gelişme önce”.</div>
+</div>
+
+<h2 class="cap">2 · Dava detay <small>Taraf kartları · özet kartları · sekmeler · yeni evraklar en üstte ve işaretli</small></h2>
+<div class="win">
+  <div class="tb">LifeOS Folio <span class="r">— ▢ ✕</span></div>
+  <div class="body">
+    <div class="side">
+      <div class="btn1">+ Dosya Aç</div><div class="btn2">Klasör Ekle</div>
+      <div class="nav"><span class="ms">home</span>Anasayfa</div>
+      <div class="nav"><span class="ms">grid_view</span>Tüm Evraklar</div>
+      <div class="nav"><span class="ms">description</span>Belgeler</div>
+      <div class="nav"><span class="ms">photo_library</span>Galeri</div>
+      <div class="sec">BÜRO</div>
+      <div class="nav on"><span class="ms">gavel</span>UYAP Dosyalarım<span class="pill" style="background:var(--primary);color:#fff">12 yeni</span></div>
+      <div class="nav"><span class="ms">event_note</span>Ajanda</div>
+      <div class="nav"><span class="ms">mark_email_unread</span>UETS Tebligatlarım</div>
+    </div>
+    <div class="main">
+      <div class="dscroll">
+        <div class="card dh">
+          <div style="flex:1;min-width:0">
+            <div class="crumb"><b>UYAP Dosyalarım</b> › Hukuk</div>
+            <div class="esas">2024/318 Esas <span class="tb2 hk" style="font-family:Segoe UI;font-size:11px">HUKUK · İLK DERECE</span><span class="st open" style="font-family:Segoe UI">Açık</span></div>
+            <div class="dcourt">Antalya 3. Asliye Hukuk Mahkemesi</div>
+            <div class="dsub">Alacak (İtirazın İptali) · açılış 12.03.2024 · son senkron bugün 08:47 (Web + Mobil)</div>
+          </div>
+          <div class="acts">
+            <div class="fb"><span class="ms">edit_note</span>Dilekçe yaz</div>
+            <div class="ob"><span class="ms">sync</span>UYAP’tan tazele</div>
+            <div class="ob"><span class="ms">download</span>Yeni evrakları indir</div>
+            <div class="ob" style="padding:7px 9px"><span class="ms">more_horiz</span></div>
+          </div>
+        </div>
+        <div class="parties">
+          <div class="card pc us">
+            <div class="k">BİZİM TARAF · 1</div>
+            <div class="pr"><div class="av">AK</div><div><div class="n">Ayşe Karaca</div><div class="v">Vekil: Av. Deniz Kaya</div></div><span class="rc2">Davacı · müvekkil</span></div>
+          </div>
+          <div class="card pc them">
+            <div class="k">KARŞI TARAF · 2</div>
+            <div class="pr"><div class="av"><span class="ms" style="font-size:16px">apartment</span></div><div><div class="n">B. İnşaat Ltd. Şti.</div><div class="v">Vekil: Av. Murat Er · 4 dosyada daha</div></div><span class="rc2">Davalı</span></div>
+          </div>
+        </div>
+        <div class="sums">
+          <div class="card sm"><div class="k">SON GELİŞME</div><div class="v">Bilirkişi raporu</div><div class="s">bugün 08:12 · yeni</div></div>
+          <div class="card sm warn"><div class="k">DURUŞMA</div><div class="v" style="color:var(--red)">Bugün 09:35</div><div class="s">E-duruşma · Ön inceleme</div></div>
+          <div class="card sm"><div class="k">SÜRE</div><div class="v">Rapora itiraz · 14 gün</div><div class="s">21.10.2026 son gün</div></div>
+          <div class="card sm"><div class="k">DİLEKÇELERİM</div><div class="v">2 belge</div><div class="s">Cevaba cevap · taslak</div></div>
+        </div>
+        <div class="card" style="flex:1;min-height:0;overflow:hidden">
+          <div class="tabs">
+            <div class="tab on">Evraklar<small>46</small><span class="nb">3 yeni</span></div>
+            <div class="tab">Duruşmalar<small>5</small></div>
+            <div class="tab">Süreler &amp; Tebligat<small>2</small></div>
+            <div class="tab">Taraflar<small>3</small></div>
+            <div class="tab">Safahat</div>
+            <div class="tab">Dilekçelerim<small>2</small></div>
+          </div>
+          <div class="etb">
+            <div class="es"><span class="ms" style="font-size:16px">search</span>Evrak ara: bilirkişi, gerekçeli karar, 2025</div>
+            <span class="chip on">Tümü</span><span class="chip">Yeni gelenler · 3</span><span class="chip">Kararlar</span><span class="chip">Dilekçeler</span><span class="chip">İndirilmemiş</span>
+            <span class="hint" style="margin-left:auto">Evrak listesi 08:47’de tazelendi</span>
+          </div>
+          <div class="mh">BU HAFTA</div>
+          <div class="er nw"><div class="ic"><span class="ms">description</span></div><div><div class="t">Bilirkişi raporu <span class="ynew">YENİ</span></div><div class="m">07.10.2026 · Bilirkişi · 14 sayfa</div></div><div class="r"><span style="color:var(--amber)">okunmadı</span><span class="ms" style="color:var(--primary)">download</span></div></div>
+          <div class="er nw"><div class="ic dec"><span class="ms">gavel</span></div><div><div class="t">Ara karar <span class="ynew">YENİ</span></div><div class="m">06.10.2026 · Mahkeme · 1 sayfa</div></div><div class="r"><span style="color:var(--amber)">okunmadı</span><span class="ms" style="color:var(--primary)">download</span></div></div>
+          <div class="er nw"><div class="ic"><span class="ms">receipt_long</span></div><div><div class="t">Tensip zaptı <span class="ynew">YENİ</span></div><div class="m">05.10.2026 · Mahkeme · 2 sayfa</div></div><div class="r"><span style="color:var(--amber)">okunmadı</span><span class="ms" style="color:var(--primary)">download</span></div></div>
+          <div class="mh">EYLÜL 2026</div>
+          <div class="er"><div class="ic pet"><span class="ms">edit_note</span></div><div><div class="t">Cevaba cevap dilekçesi</div><div class="m">22.09.2026 · Davacı vekili · Folio’da yazıldı</div></div><div class="r"><span style="color:var(--ok)">indirildi</span><span class="ms" style="color:#9AA2B1">folder_open</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
