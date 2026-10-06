@@ -45,6 +45,19 @@ class FileActions {
     });
   }
 
+  /// Several files at once: the gallery's chosen photographs.
+  static Future<void> shareMany(List<String> paths) async {
+    if (paths.length == 1) return invoke('share', paths.single);
+    for (final path in paths) {
+      if (!await File(path).exists()) {
+        throw const FileSystemException('Belge bulunamadı.');
+      }
+    }
+    await channel.invokeMethod<void>('shareMany', {
+      'paths': [for (final path in paths) File(path).absolute.path],
+    });
+  }
+
   static Future<void> composeEmail(String path) async {
     if (!Platform.isLinux) return invoke('email', path);
     final file = File(path).absolute;

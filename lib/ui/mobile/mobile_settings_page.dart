@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/editor/editor_settings.dart';
@@ -513,7 +514,11 @@ class _ArchiveFoldersPageState extends State<ArchiveFoldersPage> {
   Future<void> _add() async {
     setState(() => _picking = true);
     try {
-      final path = await DocumentIntents.pickFolder();
+      final path = Platform.isAndroid
+          ? await DocumentIntents.pickFolder()
+          : await FilePicker.getDirectoryPath(
+              dialogTitle: 'İndekslenecek klasörü seçin',
+            );
       if (path != null && mounted) {
         await widget.library.addPaths([path], recursive: true);
       }

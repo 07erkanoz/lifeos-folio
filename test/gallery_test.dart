@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:evrak_convert/ui/mobile/mobile_gallery.dart';
+import 'package:evrak_convert/ui/mobile/photo_viewer.dart';
 
 import 'support/temp_directory.dart';
 
@@ -15,11 +17,9 @@ import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/services/search/search_models.dart';
 import 'package:evrak_convert/ui/library/gallery_view.dart';
 import 'package:evrak_convert/ui/widgets/image_viewer_widget.dart';
-import 'package:evrak_convert/ui/widgets/swipe_pages.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
 import 'package:evrak_convert/ui/library/library_sidebar.dart';
 
-import 'swipe_pages_test.dart' show swipe;
 
 Future<Directory> pictures(WidgetTester tester, int count) async {
   final dir = (await tester.runAsync(
@@ -182,8 +182,9 @@ void main() {
 
     await tester.tap(find.text('Galeri'));
     await tester.pumpAndSettle();
-    expect(find.byType(GalleryView), findsOneWidget);
-    expect(find.text('Resim klasörlerimi ekle'), findsOneWidget);
+    // A phone's gallery is its own: the photographs edge to edge.
+    expect(find.byType(MobileGallery), findsOneWidget);
+    expect(find.text('Galeri boş'), findsOneWidget);
 
     // A photograph has no text to search, no file type to filter by and no
     // relevance to sort on; none of those belong on this screen.
@@ -192,8 +193,10 @@ void main() {
     expect(find.text('Yeni eklenenler'), findsNothing);
     expect(find.text('Evrak adı veya içeriğinde ara…'), findsNothing);
 
-    // And back returns to the home screen rather than to the document list.
-    await tester.tap(find.byTooltip('Geri'));
+    // And the menu's first page returns to the home screen.
+    await tester.tap(find.byKey(const ValueKey('gallery-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('drawer-home')));
     await tester.pumpAndSettle();
     expect(find.text('Belge aç'), findsOneWidget);
 
@@ -250,17 +253,19 @@ void main() {
     await tester.tap(find.byType(Image).first);
     await tester.pumpAndSettle();
     final first = library.hits.first.file.path;
-    expect(find.byType(ImageViewerWidget), findsOneWidget);
-    expect(
-      tester.widget<ImageViewerWidget>(find.byType(ImageViewerWidget)).filePath,
-      first,
-    );
+    // On a phone: full screen, the whole folder to swipe through.
+    expect(find.byType(PhotoViewerPage), findsOneWidget);
+    expect(find.byKey(ValueKey('photo-$first')), findsOneWidget);
+    expect(find.text('1 / 5'), findsOneWidget);
 
-    await swipe(tester, find.byType(SwipePages), -200);
+    await tester.drag(
+      find.byKey(const ValueKey('photo-pages')),
+      const Offset(-300, 0),
+    );
     await tester.pumpAndSettle();
     expect(
-      tester.widget<ImageViewerWidget>(find.byType(ImageViewerWidget)).filePath,
-      library.hits[1].file.path,
+      find.text('2 / 5'),
+      findsOneWidget,
       reason: 'hiç açılmamış olsa da sıradaki fotoğrafa gitmeli',
     );
 

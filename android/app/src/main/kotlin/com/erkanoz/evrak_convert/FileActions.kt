@@ -20,6 +20,10 @@ class FileActions(private val activity: Activity, messenger: BinaryMessenger) {
     init {
         channel.setMethodCallHandler { call, result ->
             val action = call.method
+            if (action == "shareMany") {
+                shareMany(call.argument<List<String>>("paths") ?: emptyList(), result)
+                return@setMethodCallHandler
+            }
             if (action !in setOf("openDefault", "openWith", "share")) {
                 result.notImplemented()
                 return@setMethodCallHandler
@@ -65,6 +69,49 @@ class FileActions(private val activity: Activity, messenger: BinaryMessenger) {
                 } catch (e: Exception) {
                     activity.runOnUiThread { result.error("FILE_ACTION", e.message, null) }
                 }
+            }
+        }
+    }
+
+    /** Several files at once (the gallery's chosen photographs), each copied into outgoing/ first. */
+    private fun shareMany(paths: List<String>, result: MethodChannel.Result) {
+        io.execute {
+            try {
+                require(paths.isNotEmpty()) { "Paylaşılacak dosya yok." }
+                val root = File(activity.cacheDir, "outgoing").apply { mkdirs() }
+                val folder = File(root, UUID.randomUUID().toString()).apply { mkdirs() }
+                val uris = ArrayList<android.net.Uri>()
+                for (path in paths) {
+                    val source = File(path)
+                    require(source.isFile) { "Belge bulunamadı." }
+                    var copy = File(folder, source.name)
+                    var n = 2
+                    while (copy.exists()) copy = File(folder, "${source.nameWithoutExtension} ($n).${source.extension}").also { n++ }
+                    source.copyTo(copy, bufferSize = 256 * 1024)
+                    uris.add(FileProvider.getUriForFile(activity, "${activity.packageName}.outgoing", copy))
+                }
+                val images = paths.all { it.lowercase().matches(Regex(".*\\.(jpe?g|png|webp|gif|bmp|heic|heif)$")) }
+                activity.runOnUiThread {
+                    try {
+                        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                            type = if (images) "image/*" else "*/*"
+                            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                            val clip = ClipData.newUri(activity.contentResolver, "Folio", uris.first())
+                            for (uri in uris.drop(1)) clip.addItem(ClipData.Item(uri))
+                            clipData = clip
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        activity.startActivity(Intent.createChooser(intent, "Paylaş").apply {
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            if (Build.VERSION.SDK_INT >= 24) putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(activity, MainActivity::class.java)))
+                        })
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("FILE_ACTION", "Paylaşılamadı: ${e.message}", null)
+                    }
+                }
+            } catch (e: Exception) {
+                activity.runOnUiThread { result.error("FILE_ACTION", e.message, null) }
             }
         }
     }

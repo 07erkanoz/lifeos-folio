@@ -134,6 +134,13 @@ enum FileActions {
     let channel = FlutterMethodChannel(
       name: "lifeos_evrak/file_actions", binaryMessenger: messenger)
     channel.setMethodCallHandler { call, result in
+      if call.method == "shareMany" {
+        let paths = (call.arguments as? [String: Any])?["paths"] as? [String] ?? []
+        let picker = NSSharingServicePicker(items: paths.map { URL(fileURLWithPath: $0) })
+        picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+        result(nil)
+        return
+      }
       guard let path = (call.arguments as? [String: Any])?["path"] as? String else {
         result(FlutterError(code: "file_action", message: "Belge bulunamadı.", details: nil))
         return

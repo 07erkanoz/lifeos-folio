@@ -55,6 +55,9 @@ import '../services/update/update_check.dart';
 import '../services/platform/document_scan.dart';
 import 'mobile/document_home.dart';
 import 'mobile/mobile_drawer.dart';
+import 'mobile/mobile_gallery.dart';
+import 'mobile/photo_editor.dart';
+import 'mobile/photo_viewer.dart';
 import 'mobile/mobile_settings_page.dart';
 import 'mobile/scroll_chrome.dart';
 import 'widgets/uyap_connect_view.dart';
@@ -1407,7 +1410,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               // own heading; on a phone the menu button stays.
                               if (_showLibrary &&
                                   !mobileHome &&
-                                  (mobile || !_isFullPage(_group)))
+                                  (mobile
+                                      ? _group != 'images'
+                                      : !_isFullPage(_group)))
                                 FoldingChrome(
                                   // On a phone the heading folds away while
                                   // a page's list is scrolled.
@@ -2023,7 +2028,137 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// relevance to sort on. Leaving the archive's search field, its type chips
   /// and its sort chips above a wall of thumbnails takes a third of a phone
   /// screen to offer three things that mean nothing here.
+  /// The phone's gallery (docs/design/mobil-galeri-taslak.png): its own
+  /// heading, the photographs full screen, edited, made a PDF, shared or
+  /// put in a UYAP case's folder.
+  Widget _phoneGallery() => MobileGallery(
+    hits: _library.hits,
+    library: _library,
+    hasMore: _library.hits.length < _library.matches,
+    loadMore: () => _library.searchNow(more: true),
+    pickFolder: () => Platform.isAndroid
+        ? DocumentIntents.pickPictureFolder()
+        : FilePicker.getDirectoryPath(
+            dialogTitle: 'Galeriye eklenecek klasörü seçin',
+          ),
+    onScan: DocumentScan.available ? () => unawaited(_scanToPdf()) : null,
+    onOpen: (index) => unawaited(
+      PhotoViewerPage.open(
+        context,
+        files: [for (final h in _library.hits) h.file],
+        initial: index,
+        onShare: (file) => unawaited(_previewAction('share', file)),
+        onPdf: (file) => _openConvertDialog(specificFiles: [file]),
+        onEdit: _editPhoto,
+        onToCase: (file) => unawaited(_photosToCase([file])),
+      ),
+    ),
+    onMakePdf: (files) => _openConvertDialog(specificFiles: files),
+    onShare: (files) => unawaited(_sharePhotos(files)),
+    onToCase: (files) => unawaited(_photosToCase(files)),
+  );
+
+  /// The photograph edited, its copy written beside it and announced.
+  Future<String?> _editPhoto(EvrakFile file) async {
+    final path = await PhotoEditorPage.open(context, file.path);
+    if (path != null) {
+      _cropSaved(path);
+      unawaited(_library.searchNow());
+    }
+    return path;
+  }
+
+  Future<void> _sharePhotos(List<EvrakFile> files) async {
+    try {
+      await FileActions.shareMany([for (final f in files) f.path]);
+    } catch (e) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Paylaşılamadı',
+          detail: '$e',
+          kind: NoticeKind.error,
+        );
+      }
+    }
+  }
+
+  /// Photographs copied into a UYAP case's folder, where the case's
+  /// documents are kept and searched.
+  Future<void> _photosToCase(List<EvrakFile> files) async {
+    if (_uyapCases.isEmpty) {
+      showNotice(
+        context,
+        'UYAP Dosyalarım boş',
+        detail: 'Önce UYAP Dosyalarım’a bir dosya ekleyin.',
+      );
+      return;
+    }
+    final record = await showModalBottomSheet<UyapCaseRecord>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheet) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheet).height * .7,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  'Hangi dosyaya?',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
+              for (final (r, _) in _uyapCases)
+                ListTile(
+                  leading: const Icon(Icons.gavel_rounded),
+                  title: Text(r.number),
+                  subtitle: Text(r.court),
+                  onTap: () => Navigator.pop(sheet, r),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (record == null || !mounted) return;
+    try {
+      await UyapSettings.instance.load();
+      final folder = Directory(
+        p.join(
+          UyapSettings.instance.folder,
+          UyapCaseStore.caseFolderName(record),
+        ),
+      );
+      await folder.create(recursive: true);
+      for (final f in files) {
+        await FileActions.copyToDirectory(f.path, folder.path);
+      }
+      if (!mounted) return;
+      showNotice(
+        context,
+        '${files.length} resim ${record.number} dosyasına kopyalandı.',
+        kind: NoticeKind.success,
+      );
+      unawaited(searchUyapFolder(_library).catchError((Object _) => false));
+    } catch (e) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Kopyalanamadı',
+          detail: '$e',
+          kind: NoticeKind.error,
+        );
+      }
+    }
+  }
+
   Widget _gallery(bool mobile) {
+    if (mobile) return _phoneGallery();
     final scheme = Theme.of(context).colorScheme;
     final indexing = _library.active;
     return Column(
