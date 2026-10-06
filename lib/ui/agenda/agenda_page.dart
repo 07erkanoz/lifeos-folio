@@ -117,6 +117,20 @@ class _AgendaPageState extends State<AgendaPage> {
   Timer? _clock;
   String? _caseSyncing;
 
+  /// A phone's width: two rows on top, the list for the week and the
+  /// month, and the preparation card in a sheet from below (§13).
+  bool _narrow = false;
+  static const narrowWidth = 700.0;
+
+  /// Ticks with every change, for the sheet that shows the card.
+  final _changes = ValueNotifier<int>(0);
+
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    _changes.value++;
+  }
+
   DateTime _now() => (widget.now ?? DateTime.now)();
   PortalSync get _sync => widget.sync ?? PortalSync.instance;
   UyapWebService get _web => _sync.web;
@@ -160,6 +174,7 @@ class _AgendaPageState extends State<AgendaPage> {
   void dispose() {
     _clock?.cancel();
     _sync.removeListener(_syncChanged);
+    _changes.dispose();
     super.dispose();
   }
 
@@ -297,16 +312,25 @@ class _AgendaPageState extends State<AgendaPage> {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    _narrow = MediaQuery.sizeOf(context).width < narrowWidth;
+    // The week's and the month's grids need a wide screen; a phone lists.
+    if (_narrow && (_view == _View.week || _view == _View.month)) {
+      _view = _View.list;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _reload();
+      });
+    }
+    final gutter = _narrow ? 12.0 : 20.0;
     return ColoredBox(
       color: dark ? Theme.of(context).colorScheme.surface : AgendaColors.page,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _topBar(context),
+          _narrow ? _topBarNarrow(context) : _topBar(context),
           _channels(context),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 16),
               child: LayoutBuilder(
                 builder: (context, box) {
                   final side = box.maxWidth >= 1000;
@@ -487,8 +511,115 @@ class _AgendaPageState extends State<AgendaPage> {
   }
 
   Widget _channels(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+    padding: EdgeInsets.fromLTRB(_narrow ? 12 : 20, 10, _narrow ? 12 : 20, 0),
     child: PortalChannelBar(sync: _sync),
+  );
+
+  /// The top on a phone: the title and adding on one row, the days and the
+  /// view on the next.
+  Widget _topBarNarrow(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget arrow(IconData icon, int step, String tip) => IconButton(
+      tooltip: tip,
+      visualDensity: VisualDensity.compact,
+      onPressed: () => _move(step),
+      icon: Icon(icon, size: 20),
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 4, 4),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Ajanda',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              IconButton(
+                key: const ValueKey('agenda-add'),
+                tooltip: 'Not / iş ekle',
+                onPressed: _db == null ? null : () => _addItem(),
+                icon: const Icon(Icons.add_circle, color: AgendaColors.hearing),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              if (_view == _View.day) ...[
+                arrow(Icons.chevron_left, -1, 'Önceki'),
+                TextButton(
+                  onPressed: () {
+                    setState(() => _anchor = _day(_now()));
+                    _reload();
+                  },
+                  child: const Text('Bugün'),
+                ),
+                arrow(Icons.chevron_right, 1, 'Sonraki'),
+              ],
+              Expanded(
+                child: Text(
+                  _rangeLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              SegmentedButton<_View>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                segments: const [
+                  ButtonSegment(value: _View.day, label: Text('Gün')),
+                  ButtonSegment(value: _View.list, label: Text('Liste')),
+                ],
+                selected: {_view},
+                onSelectionChanged: (v) {
+                  setState(() => _view = v.first);
+                  unawaited(_saveView());
+                  _reload();
+                },
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The chosen hearing's card and the deadlines, from below.
+  void _showPrep() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheet) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: .7,
+      maxChildSize: .95,
+      builder: (sheet, scroll) => ValueListenableBuilder<int>(
+        valueListenable: _changes,
+        builder: (sheet, _, _) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+          children: [
+            _prepCard(sheet),
+            const SizedBox(height: 12),
+            _deadlinesCard(sheet),
+          ],
+        ),
+      ),
+    ),
   );
 
   Widget _stats(BuildContext context) {
@@ -519,7 +650,8 @@ class _AgendaPageState extends State<AgendaPage> {
       Color tint,
       int value,
       String label,
-    ) => Expanded(
+    ) => _StatSlot(
+      narrow: _narrow,
       child: _card(
         context,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -563,7 +695,7 @@ class _AgendaPageState extends State<AgendaPage> {
         ),
       ),
     );
-    return Row(
+    final row = Row(
       children: [
         stat(
           Icons.gavel_rounded,
@@ -598,6 +730,9 @@ class _AgendaPageState extends State<AgendaPage> {
         ),
       ],
     );
+    return _narrow
+        ? SingleChildScrollView(scrollDirection: Axis.horizontal, child: row)
+        : row;
   }
 
   Widget _card(
@@ -923,7 +1058,10 @@ class _AgendaPageState extends State<AgendaPage> {
       title: '${_hm(h.at)} ${e ? 'E-duruşma' : 'Duruşma'}',
       subtitle: '${h.court} · ${h.number}',
       selected: h.key == _selected,
-      onTap: () => setState(() => _selected = h.key),
+      onTap: () {
+        setState(() => _selected = h.key);
+        if (_narrow) _showPrep();
+      },
     );
   }
 
@@ -1558,6 +1696,18 @@ class _AgendaPageState extends State<AgendaPage> {
 }
 
 /// A note, a task or a deadline of the lawyer's own.
+/// A stat card's place: a share of the row on a wide screen, 168 px in
+/// the strip a phone scrolls.
+class _StatSlot extends StatelessWidget {
+  const _StatSlot({required this.narrow, required this.child});
+  final bool narrow;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      narrow ? SizedBox(width: 168, child: child) : Expanded(child: child);
+}
+
 class _AddItemDialog extends StatefulWidget {
   const _AddItemDialog({required this.day, this.caseKey, this.hearingKey});
   final DateTime day;

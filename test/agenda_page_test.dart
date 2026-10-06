@@ -13,8 +13,11 @@ void main() {
   const court = 'Antalya 3. Asliye Hukuk Mahkemesi';
   final now = DateTime(2026, 10, 6, 7, 20);
 
-  Future<PortalDatabase> pump(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1440, 900);
+  Future<PortalDatabase> pump(
+    WidgetTester tester, {
+    Size size = const Size(1440, 900),
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final db = PortalDatabase.memory();
@@ -210,5 +213,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('6 Ekim Salı'), findsOneWidget);
     expect(find.text('7 Ekim Çarşamba'), findsOneWidget);
+  });
+
+  testWidgets('on a phone the agenda lists, and a hearing opens its card '
+      'from below', (tester) async {
+    for (final size in const [Size(360, 760), Size(390, 844)]) {
+      await pump(tester, size: size);
+      expect(find.text('Liste'), findsOneWidget);
+      expect(find.text('Hafta'), findsNothing);
+      final hearing = find.byWidgetPredicate(
+        (w) =>
+            w.key is ValueKey<String> &&
+            (w.key! as ValueKey<String>).value.startsWith('agenda-hearing-'),
+      );
+      expect(hearing, findsOneWidget);
+      await tester.tap(hearing);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('agenda-prep')), findsOneWidget);
+      expect(find.text('Dilekçe başlat'), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+    }
   });
 }

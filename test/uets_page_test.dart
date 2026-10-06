@@ -13,8 +13,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final now = DateTime(2026, 10, 6, 9);
 
-  Future<PortalDatabase> pump(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1440, 900);
+  Future<PortalDatabase> pump(
+    WidgetTester tester, {
+    Size size = const Size(1440, 900),
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final db = PortalDatabase.memory();
@@ -90,5 +93,19 @@ void main() {
     expect(m2.link, 'manual');
     expect(m2.caseKey, caseKey('2026/77', 'Antalya 1. İcra Dairesi'));
     expect(find.textContaining('elle eşleştirildi'), findsOne);
+  });
+
+  testWidgets('on a phone a notice opens on a page of its own', (tester) async {
+    for (final size in const [Size(360, 760), Size(390, 844)]) {
+      await pump(tester, size: size);
+      expect(find.byKey(const ValueKey('uets-row-m1')), findsOne);
+      // No side panel on a phone.
+      expect(find.textContaining('otomatik eşleşti'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('uets-row-m1')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('otomatik eşleşti'), findsOne);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
   });
 }
