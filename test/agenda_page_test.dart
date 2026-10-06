@@ -115,6 +115,45 @@ void main() {
     );
   });
 
+  testWidgets('a deadline is calculated from the day it was served', (
+    tester,
+  ) async {
+    final db = await pump(tester);
+    await tester.tap(find.byKey(const ValueKey('agenda-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SegmentedButton<String>),
+        matching: find.text('Süre'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Served today, 6 October 2026: a judgment with its reasons.
+    await tester.tap(find.byKey(const ValueKey('agenda-served')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('agenda-calculate')));
+    await tester.pumpAndSettle();
+    final results = find.byWidgetPredicate(
+      (w) =>
+          w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith('agenda-result-'),
+    );
+    expect(results, findsWidgets);
+    await tester.tap(results.first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('agenda-save')));
+    await tester.pumpAndSettle();
+    final saved = db
+        .agenda()
+        .where((i) => i.kind == 'deadline' && i.id != 'd1')
+        .single;
+    // Two weeks, and 20 October is a working day.
+    expect(saved.at, DateTime(2026, 10, 20));
+    expect(saved.body, contains('tebliğ 6.10.2026'));
+  });
+
   testWidgets('the list shows what is coming, day by day', (tester) async {
     await pump(tester);
     await tester.tap(find.byKey(const ValueKey('agenda-view-list')));

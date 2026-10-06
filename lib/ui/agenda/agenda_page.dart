@@ -3,6 +3,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../services/legal/deadlines/belge_turu.dart';
+import '../../services/legal/deadlines/deadline_service.dart';
+import '../../services/legal/deadlines/mahkeme_kategori.dart';
+import '../../services/legal/deadlines/sure_katalogu.dart' show SureGuveni;
 import '../../services/portal/hearing_sync.dart';
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
@@ -1511,8 +1515,269 @@ class _AddItemDialog extends StatefulWidget {
   State<_AddItemDialog> createState() => _AddItemDialogState();
 }
 
+/// What the deadline calculator offers, in the lawyer's words.
+const _documents = {
+  BelgeTuru.gerekceliKarar: 'Gerekçeli karar',
+  BelgeTuru.kararIlami: 'Karar ilamı',
+  BelgeTuru.istinafKarari: 'İstinaf kararı',
+  BelgeTuru.davaDilekcesi: 'Dava dilekçesi',
+  BelgeTuru.bilirkisiRaporu: 'Bilirkişi raporu',
+  BelgeTuru.odemeEmri: 'Ödeme emri',
+  BelgeTuru.odemeEmriKambiyo: 'Kambiyo ödeme emri',
+  BelgeTuru.icraEmri: 'İcra emri',
+  BelgeTuru.hacizIhbarnamesi: 'Haciz ihbarnamesi',
+  BelgeTuru.iddianame: 'İddianame',
+};
+const _courts = {
+  MahkemeKategorisi.hukuk: 'Hukuk',
+  MahkemeKategorisi.icra: 'İcra',
+  MahkemeKategorisi.ceza: 'Ceza',
+  MahkemeKategorisi.idare: 'İdare',
+  MahkemeKategorisi.vergi: 'Vergi',
+};
+
 class _AddItemDialogState extends State<_AddItemDialog> {
   String _kind = 'task';
+
+  // The deadline calculator (UYGULAMAPLANI §11): from what was served, on
+  // which day, before which kind of court.
+  BelgeTuru _document = BelgeTuru.gerekceliKarar;
+  MahkemeKategorisi _court = MahkemeKategorisi.hukuk;
+  DateTime? _served;
+  bool _holiday = true;
+  List<DeadlineItem> _results = const [];
+
+  void _calculate() {
+    final served = _served;
+    if (served == null) return;
+    setState(() {
+      _results = DeadlineService.computeFromUsuliTebligTarihi(
+        usuliTebligTarihi: served,
+        belgeTuru: _document,
+        kategori: _court,
+        adliTatileTabi: _holiday,
+      ).items;
+    });
+  }
+
+  void _take(DeadlineItem item) {
+    final served = item.baslangicTarihi;
+    setState(() {
+      _title.text = item.sureAdi;
+      _body.text = [
+        item.kanun,
+        'tebliğ ${served.day}.${served.month}.${served.year}',
+        ...item.dayanakNotlari,
+      ].where((t) => t.isNotEmpty).join(' · ');
+      _date = item.etkiliSonGun;
+      _error = null;
+    });
+  }
+
+  String _long(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
+
+  Widget _calculator() {
+    final scheme = Theme.of(context).colorScheme;
+    InputDecoration field(String label) => InputDecoration(
+      labelText: label,
+      isDense: true,
+      labelStyle: const TextStyle(fontSize: 13),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+    );
+    final text = TextStyle(fontSize: 13, color: scheme.onSurface);
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AgendaColors.deadlineFill.withValues(alpha: .5),
+        border: Border.all(color: AgendaColors.deadline.withValues(alpha: .25)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Süreyi hesapla',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AgendaColors.deadlineText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<BelgeTuru>(
+                  initialValue: _document,
+                  isExpanded: true,
+                  iconSize: 20,
+                  style: text,
+                  decoration: field('Tebliğ edilen'),
+                  items: [
+                    for (final e in _documents.entries)
+                      DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _document = v ?? _document;
+                    _results = const [];
+                  }),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 110,
+                child: DropdownButtonFormField<MahkemeKategorisi>(
+                  initialValue: _court,
+                  isExpanded: true,
+                  iconSize: 20,
+                  style: text,
+                  decoration: field('Yargı'),
+                  items: [
+                    for (final e in _courts.entries)
+                      DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _court = v ?? _court;
+                    _results = const [];
+                  }),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const ValueKey('agenda-served'),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _served ?? widget.day,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _served = picked;
+                        _results = const [];
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.mark_email_read_outlined, size: 16),
+                  label: Text(
+                    _served == null
+                        ? 'Tebliğ tarihi'
+                        : 'Tebliğ ${_long(_served!)}',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                key: const ValueKey('agenda-calculate'),
+                onPressed: _served == null ? null : _calculate,
+                child: const Text('Hesapla'),
+              ),
+            ],
+          ),
+          GestureDetector(
+            onTap: () => setState(() {
+              _holiday = !_holiday;
+              _results = const [];
+            }),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: _holiday,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) => setState(() {
+                    _holiday = v ?? _holiday;
+                    _results = const [];
+                  }),
+                ),
+                const Text(
+                  'Adli tatile tabi iş (HMK m.103)',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          for (final item in _results)
+            InkWell(
+              key: ValueKey('agenda-result-${item.sureAdi}'),
+              onTap: () => _take(item),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                margin: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  border: Border.all(color: AgendaColors.line),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.sureAdi,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            '${item.kanun} · ${item.sureMetni}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AgendaColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          _long(item.etkiliSonGun),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: AgendaColors.deadlineText,
+                          ),
+                        ),
+                        if (item.guven != SureGuveni.yuksek)
+                          const Text(
+                            'kontrol edin',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AgendaColors.task,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (_served != null && _results.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                'Hesapla’ya basın; bir sonuca dokunmak başlığı ve son günü doldurur.',
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   final _title = TextEditingController();
   final _body = TextEditingController();
   late DateTime _date = widget.day;
@@ -1568,84 +1833,87 @@ class _AddItemDialogState extends State<_AddItemDialog> {
     return AlertDialog(
       title: const Text('Not / iş ekle'),
       content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SegmentedButton<String>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: 'task', label: Text('İş')),
-                ButtonSegment(value: 'note', label: Text('Not')),
-                ButtonSegment(value: 'deadline', label: Text('Süre')),
-              ],
-              selected: {_kind},
-              onSelectionChanged: (v) => setState(() => _kind = v.first),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              key: const ValueKey('agenda-title'),
-              controller: _title,
-              autofocus: true,
-              style: const TextStyle(fontSize: 13),
-              decoration: field('Başlık').copyWith(errorText: _error),
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-              },
-              onSubmitted: (_) => _save(),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _body,
-              style: const TextStyle(fontSize: 13),
-              decoration: field('Açıklama (isteğe bağlı)'),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _date,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2035),
-                        locale: const Locale('tr', 'TR'),
-                      );
-                      if (picked != null) setState(() => _date = picked);
-                    },
-                    icon: const Icon(Icons.event, size: 16),
-                    label: Text(
-                      '${_date.day} ${_months[_date.month - 1]} ${_date.year}',
-                    ),
-                  ),
-                ),
-                if (_kind != 'deadline') ...[
-                  const SizedBox(width: 8),
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 'task', label: Text('İş')),
+                  ButtonSegment(value: 'note', label: Text('Not')),
+                  ButtonSegment(value: 'deadline', label: Text('Süre')),
+                ],
+                selected: {_kind},
+                onSelectionChanged: (v) => setState(() => _kind = v.first),
+              ),
+              if (_kind == 'deadline') _calculator(),
+              const SizedBox(height: 14),
+              TextField(
+                key: const ValueKey('agenda-title'),
+                controller: _title,
+                autofocus: true,
+                style: const TextStyle(fontSize: 13),
+                decoration: field('Başlık').copyWith(errorText: _error),
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
+                onSubmitted: (_) => _save(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _body,
+                style: const TextStyle(fontSize: 13),
+                decoration: field('Açıklama (isteğe bağlı)'),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        final picked = await showTimePicker(
+                        final picked = await showDatePicker(
                           context: context,
-                          initialTime:
-                              _time ?? const TimeOfDay(hour: 9, minute: 0),
+                          initialDate: _date,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2035),
+                          locale: const Locale('tr', 'TR'),
                         );
-                        if (picked != null) setState(() => _time = picked);
+                        if (picked != null) setState(() => _date = picked);
                       },
-                      icon: const Icon(Icons.schedule, size: 16),
+                      icon: const Icon(Icons.event, size: 16),
                       label: Text(
-                        _time == null
-                            ? 'Tüm gün'
-                            : '${_two(_time!.hour)}:${_two(_time!.minute)}',
+                        '${_date.day} ${_months[_date.month - 1]} ${_date.year}',
                       ),
                     ),
                   ),
+                  if (_kind != 'deadline') ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime:
+                                _time ?? const TimeOfDay(hour: 9, minute: 0),
+                          );
+                          if (picked != null) setState(() => _time = picked);
+                        },
+                        icon: const Icon(Icons.schedule, size: 16),
+                        label: Text(
+                          _time == null
+                              ? 'Tüm gün'
+                              : '${_two(_time!.hour)}:${_two(_time!.minute)}',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
