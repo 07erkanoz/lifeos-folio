@@ -2,6 +2,7 @@ import 'agenda/agenda_page.dart';
 import 'agenda/uets_placeholder_page.dart';
 import '../services/portal/observed.dart' show caseKey;
 import '../services/portal/portal_database.dart';
+import '../services/portal/portal_sync.dart';
 
 import 'dart:io';
 import 'dart:async';
@@ -619,6 +620,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(searchUyapFolder(_library).catchError((Object _) => false));
       unawaited(_countAgenda());
+      // Each UYAP channel syncs when it connects, the agenda open or not.
+      PortalSync.instance.addListener(_portalSynced);
     }
     _incoming = _intents.paths.listen(
       (paths) {
@@ -718,6 +721,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _resultsFocus.dispose();
     _libraryResultsFocus.dispose();
     _library.removeListener(_changed);
+    PortalSync.instance.removeListener(_portalSynced);
     _library.removeListener(_archiveChanged);
     UyapCaseStore.changes.removeListener(_reloadUyapCases);
     if (widget.library == null) _library.dispose();
@@ -912,6 +916,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// The hearings today, for the badge beside Ajanda in the sidebar.
   int _agendaToday = 0;
+
+  void _portalSynced() => unawaited(_countAgenda());
 
   Future<void> _countAgenda() async {
     try {

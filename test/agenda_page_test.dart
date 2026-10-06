@@ -2,6 +2,7 @@ import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_hearing.dart';
+import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/agenda/agenda_page.dart';
@@ -58,8 +59,13 @@ void main() {
         home: Scaffold(
           body: AgendaPage(
             database: db,
-            web: UyapWebService.forTesting(),
-            mobile: UyapMobileApi.forTesting(Uri.parse('http://127.0.0.1:9/')),
+            sync: PortalSync(
+              web: UyapWebService.forTesting(),
+              mobile: UyapMobileApi.forTesting(
+                Uri.parse('http://127.0.0.1:9/'),
+              ),
+              database: () async => db,
+            ),
             now: () => now,
           ),
         ),

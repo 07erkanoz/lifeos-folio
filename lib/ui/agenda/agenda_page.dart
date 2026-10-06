@@ -7,10 +7,10 @@ import '../../services/legal/deadlines/belge_turu.dart';
 import '../../services/legal/deadlines/deadline_service.dart';
 import '../../services/legal/deadlines/mahkeme_kategori.dart';
 import '../../services/legal/deadlines/sure_katalogu.dart' show SureGuveni;
-import '../../services/portal/hearing_sync.dart';
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
+import '../../services/portal/portal_sync.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
@@ -23,8 +23,7 @@ class AgendaPage extends StatefulWidget {
   const AgendaPage({
     super.key,
     this.database,
-    this.web,
-    this.mobile,
+    this.sync,
     this.now,
     this.onOpenCase,
     this.onPetition,
@@ -33,8 +32,9 @@ class AgendaPage extends StatefulWidget {
 
   /// Tests pass their own; otherwise the one in Folio's data folder.
   final PortalDatabase? database;
-  final UyapWebService? web;
-  final UyapMobileApi? mobile;
+
+  /// The channels' syncs; the app's own unless a test passes one.
+  final PortalSync? sync;
   final DateTime Function()? now;
 
   /// Opens the case with this [caseKey] in UYAP Dosyalarım; null when the
@@ -108,21 +108,17 @@ class _AgendaPageState extends State<AgendaPage> {
   List<PortalHearing> _hearings = const [];
   List<AgendaItem> _items = const [];
   Map<String, PortalCase> _cases = const {};
-  bool _syncing = false;
-  String? _syncError;
-  bool _mobileSyncing = false;
-  String? _mobileError;
   Timer? _clock;
 
   DateTime _now() => (widget.now ?? DateTime.now)();
-  UyapWebService get _web => widget.web ?? UyapWebService.instance;
-  UyapMobileApi get _mobile => widget.mobile ?? UyapMobileApi.instance;
+  PortalSync get _sync => widget.sync ?? PortalSync.instance;
+  UyapWebService get _web => _sync.web;
+  UyapMobileApi get _mobile => _sync.mobile;
 
   @override
   void initState() {
     super.initState();
-    _web.session.addListener(_sessionChanged);
-    _mobile.session.addListener(_mobileChanged);
+    _sync.addListener(_syncChanged);
     _clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -132,46 +128,15 @@ class _AgendaPageState extends State<AgendaPage> {
   @override
   void dispose() {
     _clock?.cancel();
-    _web.session.removeListener(_sessionChanged);
-    _mobile.session.removeListener(_mobileChanged);
+    _sync.removeListener(_syncChanged);
     super.dispose();
   }
 
-  void _sessionChanged() {
-    if (mounted) setState(() {});
-    if (_web.connected) unawaited(_syncWeb());
-  }
-
-  void _mobileChanged() {
-    if (mounted) setState(() {});
-    if (_mobile.connected) unawaited(_syncMobile());
-  }
-
-  /// The mobile API's hearings, merged with the web's: its shorter answer
-  /// never replaces the web's and never removes anything (§9.7).
-  Future<void> _syncMobile() async {
-    final db = _db;
-    if (db == null || _mobileSyncing || !_mobile.connected) return;
-    setState(() {
-      _mobileSyncing = true;
-      _mobileError = null;
-    });
-    try {
-      final result = await syncHearings(
-        PortalChannel.uyapMobile,
-        db,
-        _mobile.hearingRows,
-      );
-      _mobileError = result.complete ? null : 'Bazı tarihler alınamadı';
-    } catch (e) {
-      _mobileError = '$e';
-    } finally {
-      if (mounted) {
-        setState(() => _mobileSyncing = false);
-        _reload();
-        widget.onChanged?.call();
-      }
-    }
+  /// A channel connected, finished or failed: what is kept may have changed.
+  void _syncChanged() {
+    if (!mounted) return;
+    _reload();
+    widget.onChanged?.call();
   }
 
   Future<void> _open() async {
@@ -180,8 +145,8 @@ class _AgendaPageState extends State<AgendaPage> {
     _db = db;
     _reload();
     await Future.wait([
-      if (_web.connected) _syncWeb(),
-      if (_mobile.connected) _syncMobile(),
+      if (_web.connected) _sync.syncWeb(),
+      if (_mobile.connected) _sync.syncMobile(),
     ]);
   }
 
@@ -222,31 +187,6 @@ class _AgendaPageState extends State<AgendaPage> {
             ?.key;
       }
     });
-  }
-
-  Future<void> _syncWeb() async {
-    final db = _db;
-    if (db == null || _syncing || !_web.connected) return;
-    setState(() {
-      _syncing = true;
-      _syncError = null;
-    });
-    try {
-      final result = await syncHearings(
-        PortalChannel.uyapWeb,
-        db,
-        _web.hearingRows,
-      );
-      _syncError = result.complete ? null : 'Bazı tarihler alınamadı';
-    } catch (e) {
-      _syncError = '$e';
-    } finally {
-      if (mounted) {
-        setState(() => _syncing = false);
-        _reload();
-        widget.onChanged?.call();
-      }
-    }
   }
 
   void _move(int step) {
@@ -530,18 +470,24 @@ class _AgendaPageState extends State<AgendaPage> {
       ),
     );
     final session = _web.session.value;
+    final webSync = _sync.state(PortalChannel.uyapWeb);
+    final mobileSync = _sync.state(PortalChannel.uyapMobile);
     final web = !_web.connected
         ? chip(AgendaColors.task, 'UYAP Web · bağlı değil')
-        : _syncing
+        : webSync.running
         ? chip(AgendaColors.ok, 'UYAP Web · duruşmalar güncelleniyor…')
-        : _syncError != null
-        ? chip(AgendaColors.task, 'UYAP Web · $_syncError', onTap: _syncWeb)
+        : webSync.problem != null
+        ? chip(
+            AgendaColors.task,
+            'UYAP Web · ${webSync.problem}',
+            onTap: _sync.syncWeb,
+          )
         : chip(
             AgendaColors.ok,
             session == null
                 ? 'UYAP Web · bağlı'
                 : 'UYAP Web · bağlı, ${_left(session.expires)}',
-            onTap: _syncWeb,
+            onTap: _sync.syncWeb,
           );
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
@@ -555,19 +501,19 @@ class _AgendaPageState extends State<AgendaPage> {
               'UYAP Mobil · bağlan',
               onTap: () => connectUyapMobile(context, api: _mobile),
             )
-          else if (_mobileSyncing)
-            chip(AgendaColors.ok, 'UYAP Mobil · duruşmalar güncelleniyor…')
-          else if (_mobileError != null)
+          else if (mobileSync.running)
+            chip(AgendaColors.ok, 'UYAP Mobil · güncelleniyor…')
+          else if (mobileSync.problem != null)
             chip(
               AgendaColors.task,
-              'UYAP Mobil · $_mobileError',
-              onTap: _syncMobile,
+              'UYAP Mobil · ${mobileSync.problem}',
+              onTap: _sync.syncMobile,
             )
           else
             chip(
               AgendaColors.ok,
               'UYAP Mobil · ${_mobile.session.value?.user ?? 'bağlı'}',
-              onTap: _syncMobile,
+              onTap: _sync.syncMobile,
             ),
           web,
           chip(scheme.outline, 'UETS · bağlı değil'),

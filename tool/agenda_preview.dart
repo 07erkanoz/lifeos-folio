@@ -4,7 +4,6 @@ import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_hearing.dart';
-import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/agenda/agenda_page.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -138,7 +137,6 @@ Future<void> main() async {
       home: Scaffold(
         body: AgendaPage(
           database: db,
-          web: UyapWebService.instance,
           now: () => now,
           onOpenCase: (_) => true,
           onPetition: (_) => true,
