@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Editör Şerit Taslağı</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet">
+<style>
+  :root { --page:#F7F8FA; --line:#E5E7EB; --muted:#71717A; --ink:#18181B; --primary:#2B5EA8; --pfill:rgba(43,94,168,.12);
+          --teal:#139C8B; --amber:#E08A00; --red:#D93B3B; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:18px; line-height:1; font-weight:400; font-style:normal;
+        display:inline-block; -webkit-font-feature-settings:"liga"; font-feature-settings:"liga"; color:#52525B; }
+  h2 { width:1440px; margin:0 auto 10px; font-size:15px; color:#2A3040; }
+  h2 small { font-weight:400; color:#4B5465; margin-left:8px; }
+  .win { width:1440px; margin:0 auto 34px; background:var(--page); border-radius:12px; overflow:hidden;
+         box-shadow:0 20px 60px rgba(20,30,50,.28); }
+  .win.narrow { width:1040px; }
+  /* top bar */
+  .top { height:48px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; padding:0 8px 0 6px; gap:4px; }
+  .ib { width:32px; height:32px; border-radius:6px; display:grid; place-items:center; }
+  .ib.on { background:var(--pfill); } .ib.on .ms { color:var(--primary); }
+  .title { font-size:14px; font-weight:600; margin:0 14px 0 4px; white-space:nowrap; }
+  .title small { font-weight:400; color:var(--muted); margin-left:6px; }
+  .tab { height:48px; display:flex; align-items:center; padding:0 12px; font-size:13px; color:var(--muted); font-weight:500; border-bottom:2px solid transparent; }
+  .tab.on { color:var(--primary); font-weight:700; border-bottom-color:var(--primary); }
+  .tab .dot { width:6px; height:6px; border-radius:50%; background:var(--teal); margin-left:6px; }
+  .top .right { margin-left:auto; display:flex; align-items:center; gap:4px; }
+  .chip { font-size:12px; padding:5px 10px; border-radius:999px; border:1px solid var(--line); display:flex; align-items:center; gap:6px; color:#3F3F46; }
+  .chip .ms { font-size:16px; }
+  .save { background:var(--pfill); color:var(--primary); font-weight:700; font-size:12.5px; border-radius:6px; padding:7px 12px; display:flex; gap:6px; align-items:center; }
+  .save .ms { color:var(--primary); font-size:17px; }
+  .winbtn { letter-spacing:14px; color:#71717A; font-size:13px; padding-left:14px; }
+  /* ribbon */
+  .ribbon { height:88px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:stretch; padding:0 4px; position:relative; }
+  .file { width:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; border-right:1px solid rgba(229,231,235,.7); margin-right:2px; }
+  .file .ms { font-size:24px; color:var(--primary); }
+  .file b { font-size:11px; color:var(--primary); }
+  .grp { display:flex; flex-direction:column; padding:6px 8px 0; border-right:1px solid rgba(229,231,235,.7); }
+  .rows { display:flex; flex-direction:column; gap:2px; flex:1; }
+  .row { display:flex; align-items:center; gap:2px; height:32px; }
+  .glabel { font-size:10px; line-height:15px; color:var(--muted); text-align:center; padding-bottom:3px; }
+  .lb { height:30px; display:flex; align-items:center; gap:6px; padding:0 8px; border-radius:5px; font-size:12px; white-space:nowrap; }
+  .lb .ms { font-size:16px; }
+  .lb.on { background:var(--pfill); color:var(--primary); font-weight:600; } .lb.on .ms { color:var(--primary); }
+  .lb .car { font-size:15px; margin-left:-2px; color:#A1A1AA; }
+  .big { width:64px; height:66px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; border-radius:6px; font-size:11.5px; text-align:center; line-height:1.15; }
+  .big .ms { font-size:24px; }
+  .big.prim { background:var(--primary); color:#fff; } .big.prim .ms { color:#fff; }
+  .badge { font-size:10px; font-weight:800; color:#fff; background:var(--red); border-radius:8px; padding:0 5px; margin-left:2px; }
+  .field { height:30px; border:1px solid var(--line); border-radius:5px; display:flex; align-items:center; padding:0 6px 0 8px; font-size:12px; gap:4px; }
+  .field .ms { font-size:16px; color:#A1A1AA; margin-left:auto; }
+  .more { margin-left:auto; display:flex; align-items:center; padding:0 6px; }
+  .tie { position:absolute; right:10px; top:10px; width:300px; border:1px solid #CFDDF1; background:#F3F7FC; border-radius:10px; padding:9px 12px; font-size:12px; }
+  .tie b { display:block; font-size:12.5px; color:#1F467F; margin-bottom:2px; }
+  .tie span { color:#4B5465; }
+  .tie .row2 { display:flex; gap:10px; margin-top:6px; font-size:11.5px; }
+  .tie .row2 i { font-style:normal; color:var(--primary); font-weight:700; }
+  /* page */
+  .canvas { height:300px; display:flex; justify-content:center; padding-top:22px; position:relative; }
+  .paper { width:640px; background:#fff; border:1px solid var(--line); box-shadow:0 2px 10px rgba(0,0,0,.05); padding:44px 64px; font-family:"Times New Roman",serif; font-size:14px; line-height:1.55; }
+  .paper .c { text-align:center; font-weight:700; }
+  .paper .h { font-weight:700; margin-top:10px; }
+  .paper .muted { color:#9AA3B2; }
+  /* menus */
+  .menu { position:absolute; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 12px 32px rgba(15,21,32,.16); padding:6px 0; font-size:13px; z-index:3; }
+  .mi { height:36px; display:flex; align-items:center; gap:10px; padding:0 14px; white-space:nowrap; }
+  .mi .ms { font-size:18px; }
+  .mi.on { background:rgba(43,94,168,.07); color:var(--primary); font-weight:600; } .mi.on .ms { color:var(--primary); }
+  .mi small { margin-left:auto; color:#A1A1AA; font-size:11.5px; padding-left:22px; }
+  .sep { height:1px; background:var(--line); margin:5px 0; }
+  .mh { font-size:10.5px; font-weight:800; letter-spacing:.8px; color:var(--muted); padding:8px 14px 4px; }
+  .note { width:1440px; margin:-18px auto 30px; font-size:12.5px; color:#3A4252; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .note div { background:#fff; border-radius:10px; padding:10px 12px; border:1px solid #DADFE7; line-height:1.5; }
+  .note b { color:var(--primary); }
+  /* compact */
+  .ribbon.c { height:44px; align-items:center; gap:2px; }
+  .vsep { width:1px; height:24px; background:var(--line); margin:0 4px; }
+</style>
+</head>
+<body>
+
+<h2>1 · Geniş pencere (≥ 1380 px) — <span style="color:var(--primary)">Hukuk</span> sekmesi, iki sıralı gruplar <small>Şerit 88 px · grup adı altta · Şablon menüsü açık</small></h2>
+<div class="win">
+  <div class="top">
+    <div class="ib"><span class="ms">arrow_back</span></div>
+    <div class="title">Cevap dilekçesi <small>2024/318 Esas · kaydedildi 08:47</small></div>
+    <div class="tab">Giriş</div>
+    <div class="tab on">Hukuk</div>
+    <div class="tab">Ekle</div>
+    <div class="tab">Görünüm</div>
+    <div class="right">
+      <div class="chip"><span class="ms" style="color:var(--teal)">gavel</span>Antalya 3. Asliye Hukuk · 2024/318</div>
+      <div class="ib"><span class="ms">folder_open</span></div>
+      <div class="ib"><span class="ms">tune</span></div>
+      <div class="save"><span class="ms">save</span>Kaydet</div>
+      <div class="winbtn">— ▢ ✕</div>
+    </div>
+  </div>
+  <div class="ribbon">
+    <div class="file"><span class="ms">folder</span><b>Dosya</b></div>
+
+    <div class="grp">
+      <div class="rows">
+        <div class="row">
+          <div class="lb on"><span class="ms">auto_stories</span>Şablon<span class="ms car">expand_more</span></div>
+          <div class="lb"><span class="ms">people</span>Taraf satırı<span class="ms car">expand_more</span></div>
+          <div class="lb"><span class="ms">event</span>Tarih</div>
+        </div>
+        <div class="row">
+          <div class="lb"><span class="ms">format_paint</span>Dilekçe stili<span class="ms car">expand_more</span></div>
+          <div class="lb"><span class="ms">segment</span>Bölüm başlığı<span class="ms car">expand_more</span></div>
+          <div class="lb"><span class="ms">edit_note</span>İmza bloğu</div>
+        </div>
+      </div>
+      <div class="glabel">Dilekçe</div>
+    </div>
+
+    <div class="grp">
+      <div class="rows">
+        <div class="row">
+          <div class="lb on"><span class="ms">gavel</span>UYAP dosyası</div>
+          <div class="lb"><span class="ms">description</span>Evraklar</div>
+        </div>
+        <div class="row">
+          <div class="lb"><span class="ms">checklist</span>İşlemlerim<span class="badge">2</span></div>
+          <div class="lb"><span class="ms">sync</span>Güncelle</div>
+        </div>
+      </div>
+      <div class="glabel">Dosya</div>
+    </div>
+
+    <div class="grp" style="flex-direction:row; gap:4px; align-items:flex-start; padding-top:6px;">
+      <div style="display:flex; flex-direction:column; align-items:center;">
+        <div style="display:flex; gap:4px;">
+          <div class="big"><span class="ms">usb</span>E-imza<br>kartı</div>
+          <div class="big"><span class="ms">phone_android</span>Mobil<br>imza</div>
+          <div class="big prim"><span class="ms">send</span>UYAP’a<br>gönder</div>
+        </div>
+        <div class="glabel" style="margin-top:2px">İmzala ve gönder</div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="rows">
+        <div class="row">
+          <div class="lb"><span class="ms">event_upcoming</span>Süre ekle</div>
+          <div class="lb"><span class="ms">calendar_month</span>Duruşmaya bağla</div>
+        </div>
+        <div class="row">
+          <div class="lb"><span class="ms">mark_email_unread</span>Tebligattan süre</div>
+        </div>
+      </div>
+      <div class="glabel">Ajanda</div>
+    </div>
+
+    <div class="grp" style="border-right:0">
+      <div class="rows">
+        <div class="row">
+          <div class="lb"><span class="ms">balance</span>İçtihat ara</div>
+          <div class="lb"><span class="ms">bolt</span>Kalıp metin</div>
+        </div>
+        <div class="row">
+          <div class="lb"><span class="ms">history</span>Belge geçmişi</div>
+          <div class="lb"><span class="ms">compare</span>Karşılaştır</div>
+        </div>
+      </div>
+      <div class="glabel">Araştırma</div>
+    </div>
+
+
+  </div>
+  <div class="canvas">
+    <div class="menu" style="left:58px; top:-2px; width:300px;">
+      <div class="mh">DİLEKÇE ŞABLONLARI</div>
+      <div class="mi"><span class="ms">description</span>Dava dilekçesi</div>
+      <div class="mi on"><span class="ms">description</span>Cevap dilekçesi<small>dosyadan doldurulur</small></div>
+      <div class="mi"><span class="ms">description</span>İstinaf dilekçesi</div>
+      <div class="mi"><span class="ms">description</span>İcra (ödeme emrine) itiraz</div>
+      <div class="mi"><span class="ms">description</span>Bilirkişi raporuna itiraz</div>
+      <div class="sep"></div>
+      <div class="mi"><span class="ms">bookmark_add</span>Bu belgeyi şablon olarak kaydet</div>
+      <div class="mi"><span class="ms">folder_special</span>Şablonlarım…</div>
+    </div>
+    <div class="paper">
+      <div class="c">ANTALYA 3. ASLİYE HUKUK MAHKEMESİ’NE</div>
+      <div style="margin-top:12px"><b>DOSYA NO</b> &nbsp;: 2024/318 Esas</div>
+      <div><b>DAVALI</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span class="muted">— taraf bilgisi UYAP dosyasından —</span></div>
+      <div><b>VEKİLİ</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: Av. …</div>
+      <div><b>KONU</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: Dava dilekçesine karşı cevaplarımızın sunulmasıdır.</div>
+      <div class="h">AÇIKLAMALAR</div>
+      <div class="muted">1. …</div>
+    </div>
+  </div>
+</div>
+<div class="note">
+  <div><b>Banaozel’den alınan:</b> iki sıralı gruplar, grup adı altta, 32 px düğmeler, 12 px yazı; seçili/açık araç mavi zeminle. Son seçilen sekme hatırlanır.</div>
+  <div><b>Folio’ya özgü:</b> “Dosya” grubu UYAP Web + Mobil’den gelen dosyayı, “Ajanda” grubu süre/duruşma bağlamayı, “İmzala ve gönder” tek akışı öne çıkarır.</div>
+  <div><b>Üst çubukta dosya çipi:</b> belge hangi dosyaya bağlıysa her sekmede görünür; tıklayınca sağda UYAP dosya paneli açılır.</div>
+</div>
+
+<h2>2 · Orta pencere (1000–1380 px) — Giriş sekmesi <small>Ses grubu Düzenleme’ye katlanır, etiketler yalnız ikona iner, “…” menüsü sağda</small></h2>
+<div class="win" style="width:1240px">
+  <div class="top">
+    <div class="ib"><span class="ms">arrow_back</span></div>
+    <div class="title">Cevap dilekçesi</div>
+    <div class="tab on">Giriş</div>
+    <div class="tab">Hukuk<span class="dot"></span></div>
+    <div class="tab">Ekle</div>
+    <div class="tab">Görünüm</div>
+    <div class="right">
+      <div class="chip"><span class="ms" style="color:var(--teal)">gavel</span>2024/318 Esas</div>
+      <div class="save"><span class="ms">save</span>Kaydet</div>
+      <div class="winbtn">— ▢ ✕</div>
+    </div>
+  </div>
+  <div class="ribbon">
+    <div class="file"><span class="ms">folder</span><b>Dosya</b></div>
+    <div class="grp"><div class="rows">
+      <div class="row"><div class="ib"><span class="ms">undo</span></div></div>
+      <div class="row"><div class="ib"><span class="ms">redo</span></div></div>
+    </div><div class="glabel">Geçmiş</div></div>
+    <div class="grp"><div class="rows">
+      <div class="row"><div class="field" style="width:120px">Normal metin<span class="ms">expand_more</span></div></div>
+      <div class="row"></div>
+    </div><div class="glabel">Stil</div></div>
+    <div class="grp"><div class="rows">
+      <div class="row"><div class="field" style="width:160px">Times New Roman<span class="ms">expand_more</span></div><div class="field" style="width:58px">12<span class="ms">expand_more</span></div><div class="ib"><span class="ms">text_increase</span></div><div class="ib"><span class="ms">text_decrease</span></div></div>
+      <div class="row"><div class="ib on"><span class="ms">format_bold</span></div><div class="ib"><span class="ms">format_italic</span></div><div class="ib"><span class="ms">format_underlined</span></div><div class="ib"><span class="ms">strikethrough_s</span></div><div class="ib"><span class="ms">subscript</span></div><div class="ib"><span class="ms">superscript</span></div><div class="ib"><span class="ms">format_color_text</span></div><div class="ib"><span class="ms">ink_highlighter</span></div><div class="ib"><span class="ms">format_clear</span></div></div>
+    </div><div class="glabel">Yazı tipi</div></div>
+    <div class="grp"><div class="rows">
+      <div class="row"><div class="ib"><span class="ms">format_align_left</span></div><div class="ib"><span class="ms">format_align_center</span></div><div class="ib"><span class="ms">format_align_right</span></div><div class="ib on"><span class="ms">format_align_justify</span></div></div>
+      <div class="row"><div class="ib"><span class="ms">format_list_bulleted</span></div><div class="ib"><span class="ms">format_list_numbered</span></div><div class="ib"><span class="ms">format_indent_decrease</span></div><div class="ib"><span class="ms">format_indent_increase</span></div><div class="ib"><span class="ms">format_line_spacing</span></div></div>
+    </div><div class="glabel">Paragraf</div></div>
+    <div class="grp"><div class="rows">
+      <div class="row"><div class="lb"><span class="ms">search</span>Bul</div><div class="lb"><span class="ms">find_replace</span>Değiştir</div></div>
+      <div class="row"><div class="ib"><span class="ms">print</span></div><div class="ib"><span class="ms">bolt</span></div><div class="ib"><span class="ms">record_voice_over</span></div><div class="ib"><span class="ms">mic</span></div></div>
+    </div><div class="glabel">Düzenleme</div></div>
+    <div class="grp" style="border-right:0"><div class="rows">
+      <div class="row"><div class="ib"><span class="ms">table</span></div><div class="ib"><span class="ms">image</span></div></div>
+      <div class="row"><div class="ib"><span class="ms">vertical_split</span></div></div>
+    </div><div class="glabel">Ekle</div></div>
+    <div class="more"><div class="ib"><span class="ms">more_horiz</span></div></div>
+  </div>
+  <div class="canvas" style="height:120px"><div class="paper" style="height:100px"></div></div>
+</div>
+
+<h2>3 · Dar / alçak pencere (&lt; 1000 px ya da &lt; 550 px yükseklik) — Hukuk tek sıra <small>Şerit 44 px · kalanlar “Diğer hukuk araçları” menüsünde</small></h2>
+<div class="win narrow">
+  <div class="top">
+    <div class="ib"><span class="ms">arrow_back</span></div>
+    <div class="title">Cevap dilekçesi</div>
+    <div class="tab">Giriş</div>
+    <div class="tab on">Hukuk</div>
+    <div class="right">
+      <div class="chip"><span class="ms" style="color:var(--teal)">gavel</span>2024/318</div>
+      <div class="save"><span class="ms">save</span>Kaydet</div>
+      <div class="winbtn">— ▢ ✕</div>
+    </div>
+  </div>
+  <div class="ribbon c">
+    <div class="ib"><span class="ms" style="color:var(--primary)">folder</span></div>
+    <div class="vsep"></div>
+    <div class="lb"><span class="ms">auto_stories</span>Şablon<span class="ms car">expand_more</span></div>
+    <div class="lb"><span class="ms">people</span>Taraf<span class="ms car">expand_more</span></div>
+    <div class="vsep"></div>
+    <div class="lb on"><span class="ms">gavel</span>UYAP<span class="ms car">expand_more</span></div>
+    <div class="lb"><span class="ms">draw</span>İmzala<span class="ms car">expand_more</span></div>
+    <div class="lb"><span class="ms">event_upcoming</span>Süre</div>
+    <div class="vsep"></div>
+    <div class="lb"><span class="ms">balance</span>İçtihat</div>
+    <div class="more"><div class="ib on"><span class="ms">more_horiz</span></div></div>
+  </div>
+  <div class="canvas" style="height:330px">
+    <div class="menu" style="right:8px; top:-2px; width:270px;">
+      <div class="mh">DİĞER HUKUK ARAÇLARI</div>
+      <div class="mi"><span class="ms">format_paint</span>Dilekçe stili<small>▸</small></div>
+      <div class="mi"><span class="ms">segment</span>Bölüm başlığı<small>▸</small></div>
+      <div class="mi"><span class="ms">event</span>Bugünün tarihi</div>
+      <div class="mi"><span class="ms">edit_note</span>İmza bloğu</div>
+      <div class="sep"></div>
+      <div class="mi"><span class="ms">calendar_month</span>Duruşmaya bağla</div>
+      <div class="mi"><span class="ms">bolt</span>Kalıp metin</div>
+      <div class="mi"><span class="ms">history</span>Belge geçmişi</div>
+    </div>
+    <div class="paper" style="width:560px; height:300px"></div>
+  </div>
+</div>
+
+</body>
+</html>
