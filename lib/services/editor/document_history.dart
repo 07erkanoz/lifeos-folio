@@ -119,9 +119,8 @@ class DocumentHistory {
 
   static void holdDraft(String key) {
     _live.add(key);
-    _liveLocks[key] = DocumentLock.acquire(
-      'taslak-$key',
-    ).catchError((Object _) => null);
+    _liveLocks[key] = DocumentLock.acquire('taslak-$key')
+        .catchError((Object _) => null);
   }
 
   static void releaseDraft(String key) {
@@ -192,6 +191,7 @@ class DocumentHistory {
 
   Future<List<DocumentRevision>> versions(String document) =>
       _serial(() => _list(document: document));
+
   /// Drafts waiting to be recovered, newest first. [includeOpen] lists the
   /// ones open editors are still writing as well.
   Future<List<DocumentRevision>> recoveries({bool includeOpen = false}) =>
@@ -219,6 +219,7 @@ class DocumentHistory {
           entry,
     ];
   }
+
   Future<void> _remove(DocumentRevision entry) async {
     final root = await _root();
     final folder = entry.recovery
@@ -314,6 +315,7 @@ class DocumentHistory {
       }
     }
   });
+
   /// Puts a stored version back in place of the file at [path].
   ///
   /// What the file held until now is stored first, so going back is itself
@@ -330,7 +332,8 @@ class DocumentHistory {
       bytes: content,
       kind: kind,
     );
-    if (await file.exists()) await keep(await file.readAsBytes(), 'before-restore');
+    if (await file.exists())
+      await keep(await file.readAsBytes(), 'before-restore');
     await file.writeAsBytes(bytes, flush: true);
     await keep(bytes, 'restored');
   }
@@ -348,9 +351,12 @@ class DocumentHistory {
     var signed = false;
     if (input.udf) {
       try {
-        signed = ZipDecoder().decodeBytes(input.bytes).files.any(
-          (file) => file.isFile && file.name.toLowerCase() == 'sign.sgn',
-        );
+        signed = ZipDecoder()
+            .decodeBytes(input.bytes)
+            .files
+            .any(
+              (file) => file.isFile && file.name.toLowerCase() == 'sign.sgn',
+            );
       } catch (_) {
         // Not a readable archive: nothing to say about a signature.
       }

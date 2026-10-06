@@ -7,6 +7,7 @@ import 'package:evrak_convert/services/signing/pkcs11/pkcs11_session.dart';
 import 'package:evrak_convert/services/signing/udf_signing_service.dart';
 import 'package:evrak_convert/services/signing/x509_parser.dart';
 import 'package:evrak_convert/ui/widgets/signing_dialog.dart';
+import 'package:evrak_convert/ui/widgets/folio_select.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -180,7 +181,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(service.signatures, 0);
       expect(tester.widget<FilledButton>(signButton).onPressed, isNull);
-      final choices = find.byType(DropdownButton<SigningCertificate>);
+      final choices = find.byType(FolioSelect<SigningCertificate>);
       await tester.ensureVisible(choices);
       await tester.tap(choices);
       await tester.pumpAndSettle();
@@ -224,8 +225,8 @@ void main() {
       expect(find.text('Sürücü seç'), findsNothing);
       expect(find.text('Kartları bul'), findsNothing);
       expect(find.text('1 kart bulundu.'), findsOneWidget);
-      final dropdown = tester.widget<DropdownButton<SigningCard>>(
-        find.byType(DropdownButton<SigningCard>),
+      final dropdown = tester.widget<FolioSelect<SigningCard>>(
+        find.byType(FolioSelect<SigningCard>),
       );
       expect(dropdown.value, card);
       expect(find.widgetWithText(TextField, 'Kart PIN’i'), findsOneWidget);
@@ -258,7 +259,7 @@ void main() {
           throw StateError('Test kart bağlantı hatası');
       await tester.tap(find.byTooltip('Kartları yenile'));
       await tester.pumpAndSettle();
-      expect(find.byType(DropdownButton<SigningCard>), findsNothing);
+      expect(find.byType(FolioSelect<SigningCard>), findsNothing);
       expect(find.widgetWithText(TextField, 'Kart PIN’i'), findsNothing);
       expect(find.textContaining('Test kart bağlantı hatası'), findsOneWidget);
       final sign = tester.widget<FilledButton>(

@@ -777,7 +777,9 @@ class UdfReader {
     // The run that holds the closing line break: its size counts in the
     // paragraph's last row, as UYAP lays the break out with the row.
     final closing = value.endsWith('\n')
-        ? spans.where((s) => s.startOffset + s.length >= value.length).lastOrNull
+        ? spans
+              .where((s) => s.startOffset + s.length >= value.length)
+              .lastOrNull
         : null;
     // Only the paragraph terminator is structural; internal line breaks count
     // towards UTF-16 offsets and must remain in place.

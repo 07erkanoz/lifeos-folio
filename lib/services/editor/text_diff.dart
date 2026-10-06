@@ -78,9 +78,10 @@ class TextDiff {
   static List<String> _lines(String text) {
     if (text.isEmpty) return const [];
     final normalized = text.endsWith('\n') ? text : '$text\n';
-    return RegExp(
-      r'[^\n]*\n',
-    ).allMatches(normalized).map((m) => m.group(0)!).toList();
+    return RegExp(r'[^\n]*\n')
+        .allMatches(normalized)
+        .map((m) => m.group(0)!)
+        .toList();
   }
 
   static void _words(List<DiffPiece> out, String before, String after) {
@@ -129,10 +130,7 @@ class TextDiff {
       endA--;
       endB--;
     }
-    final middle = _myers(
-      a.sublist(start, endA),
-      b.sublist(start, endB),
-    );
+    final middle = _myers(a.sublist(start, endA), b.sublist(start, endB));
     if (middle == null) return null;
     return [
       for (var i = 0; i < start; i++) _keep,

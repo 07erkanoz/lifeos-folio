@@ -14,6 +14,7 @@ import 'pdf_viewer_widget.dart';
 import 'uyap_connect_view.dart';
 import 'uyap_operations_dialog.dart';
 import 'uyap_session_chip.dart';
+import 'folio_select.dart';
 
 /// User-driven UYAP submission. Only a verified web session can reach send().
 class UyapSendDialog extends StatefulWidget {
@@ -771,7 +772,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
               // Room for the first box's floating label.
               const SizedBox(height: 10),
               if (_case == null) ...[
-                DropdownButtonFormField<String>(
+                FolioSelect<String>(
                   initialValue: _jurisdiction,
                   decoration: _field('Yargı türü'),
                   style: TextStyle(
@@ -837,7 +838,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                     child: const Text('Yargı birimlerini yükle'),
                   ),
                 if (_types.isNotEmpty)
-                  DropdownButtonFormField<UyapOption>(
+                  FolioSelect<UyapOption>(
                     key: ValueKey('uyap-types-$_jurisdiction'),
                     initialValue: _type,
                     decoration: _field('Mahkeme türü'),
@@ -868,7 +869,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                   ),
                 if (_courts.isNotEmpty) const SizedBox(height: 12),
                 if (_courts.isNotEmpty)
-                  DropdownButtonFormField<UyapOption>(
+                  FolioSelect<UyapOption>(
                     key: ValueKey('uyap-courts-${_type?.id}-$_closed'),
                     initialValue: _court,
                     decoration: _field('Mahkeme'),
@@ -1129,7 +1130,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                 const SizedBox(height: 16),
               ],
               if (_documentTypes.isNotEmpty)
-                DropdownButtonFormField<UyapDocumentType>(
+                FolioSelect<UyapDocumentType>(
                   key: ValueKey('uyap-doc-types-${_case?.id}'),
                   initialValue: _documentType,
                   decoration: _field('Evrak türü'),
@@ -1188,7 +1189,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                                     ),
                             ),
                           ),
-                          DropdownButtonFormField<UyapDocumentType>(
+                          FolioSelect<UyapDocumentType>(
                             initialValue: _attachments[i].documentType,
                             decoration: _field('Ek evrak türü'),
                             style: const TextStyle(fontSize: 13),

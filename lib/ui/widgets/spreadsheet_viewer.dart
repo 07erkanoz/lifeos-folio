@@ -46,6 +46,7 @@ class _SpreadsheetViewerState extends State<SpreadsheetViewer>
   final _value = TextEditingController(), _search = TextEditingController();
   final _valueFocus = FocusNode(), _searchFocus = FocusNode();
   final _horizontal = ScrollController(), _vertical = ScrollController();
+
   /// This sheet's own recovery slot; see [DocumentHistory.draftKey].
   final String _draftKey = DocumentHistory.draftKey();
   late final DraftRecovery _recovery;
@@ -375,7 +376,9 @@ class _SpreadsheetViewerState extends State<SpreadsheetViewer>
   Future<void> _history() async {
     final path = _savedPath ?? widget.path;
     if (path == null) {
-      _notice('Bu tablo henüz kaydedilmedi; geçmiş ilk kayıttan itibaren tutulur.');
+      _notice(
+        'Bu tablo henüz kaydedilmedi; geçmiş ilk kayıttan itibaren tutulur.',
+      );
       return;
     }
     final entry = await showDocumentVersions(

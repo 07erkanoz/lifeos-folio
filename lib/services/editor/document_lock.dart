@@ -64,9 +64,8 @@ class DocumentLock {
     await dir.create(recursive: true);
     RandomAccessFile? handle;
     try {
-      handle = await File(
-        p.join(dir.path, '$name.lock'),
-      ).open(mode: FileMode.append);
+      handle = await File(p.join(dir.path, '$name.lock'))
+          .open(mode: FileMode.append);
       await handle.lock(FileLock.exclusive);
       return handle;
     } on FileSystemException {

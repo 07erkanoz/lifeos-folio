@@ -11,6 +11,7 @@ import '../../services/platform/platform_capabilities.dart';
 
 import '../../services/signing/mobile_signature.dart';
 import '../../services/signing/udf_signing_service.dart';
+import 'folio_select.dart';
 
 enum _Method { card, mobile }
 
@@ -505,7 +506,7 @@ class _SigningDialogState extends State<SigningDialog> {
                   const SizedBox(height: 12),
                   Text(_status, style: const TextStyle(fontSize: 12)),
                   if (_cards.isNotEmpty)
-                    DropdownButton<SigningCard>(
+                    FolioSelect<SigningCard>(
                       isExpanded: true,
                       value: _card,
                       items: [
@@ -544,7 +545,7 @@ class _SigningDialogState extends State<SigningDialog> {
                       ),
                     ),
                     if (_certificates.isNotEmpty)
-                      DropdownButton<SigningCertificate>(
+                      FolioSelect<SigningCertificate>(
                         isExpanded: true,
                         value: _certificate,
                         hint: const Text('İmzacı sertifikasını seçin'),

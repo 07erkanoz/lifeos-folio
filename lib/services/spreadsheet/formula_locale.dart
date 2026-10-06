@@ -62,7 +62,9 @@ const _functions = {
   'KÖPRÜ': 'HYPERLINK',
 };
 
-final _name = RegExp(r'[A-Za-zÇĞİÖŞÜçğıöşü_][A-Za-zÇĞİÖŞÜçğıöşü0-9_.]*(?=\s*\()');
+final _name = RegExp(
+  r'[A-Za-zÇĞİÖŞÜçğıöşü_][A-Za-zÇĞİÖŞÜçğıöşü0-9_.]*(?=\s*\()',
+);
 
 /// [formula] (with its leading `=`) with Turkish function names replaced by
 /// Excel's own, and `;` between arguments turned into `,`. Text in quotes and

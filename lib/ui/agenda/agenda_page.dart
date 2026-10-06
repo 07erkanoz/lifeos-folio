@@ -20,6 +20,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../mobile/scroll_chrome.dart';
 import 'channel_bar.dart';
+import '../widgets/folio_select.dart';
 
 /// The agenda: the hearings both UYAP portals report, merged, and the
 /// lawyer's own notes, tasks and deadlines, laid out as the approved design
@@ -1828,7 +1829,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
           Row(
             children: [
               Expanded(
-                child: DropdownButtonFormField<BelgeTuru>(
+                child: FolioSelect<BelgeTuru>(
                   initialValue: _document,
                   isExpanded: true,
                   iconSize: 20,
@@ -1847,7 +1848,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
               const SizedBox(width: 8),
               SizedBox(
                 width: 110,
-                child: DropdownButtonFormField<MahkemeKategorisi>(
+                child: FolioSelect<MahkemeKategorisi>(
                   initialValue: _court,
                   isExpanded: true,
                   iconSize: 20,

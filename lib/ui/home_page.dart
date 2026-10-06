@@ -90,6 +90,7 @@ import 'widgets/image_viewer_widget.dart';
 import 'widgets/optimize_dialog.dart';
 import 'widgets/pdf_viewer_widget.dart';
 import 'widgets/tiff_viewer_widget.dart';
+import 'widgets/folio_select.dart';
 
 class HomePage extends StatefulWidget {
   final List<String> initialPaths;
@@ -2512,7 +2513,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
           if (!compact)
             DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
+              child: FolioSelect<String>(
                 value: _library.sort,
                 isDense: true,
                 style: TextStyle(

@@ -11,6 +11,7 @@ import 'notice.dart';
 import 'pdf_viewer_widget.dart';
 import 'uyap_connect_view.dart';
 import 'uyap_session_chip.dart';
+import 'folio_select.dart';
 
 /// UYAP "İşlemlerim" view. Opens straight onto live records while the shared
 /// web session is up, asks for the PIN otherwise. Documents sent from this app
@@ -464,7 +465,7 @@ class _UyapOperationsDialogState extends State<UyapOperationsDialog> {
                           onSelectionChanged: (value) =>
                               setState(() => _pendingOnly = value.first),
                         ),
-                        DropdownButton<int>(
+                        FolioSelect<int>(
                           value: _days,
                           items: const [
                             DropdownMenuItem(

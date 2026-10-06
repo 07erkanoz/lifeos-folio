@@ -146,7 +146,9 @@ class EditorTabSpans {
     );
     final marks = _marksFor(context, spelling, citations);
     final line = node.parent;
-    if (pageWidth != null && line is Line && rowStarts(line, pageWidth) != null) {
+    if (pageWidth != null &&
+        line is Line &&
+        rowStarts(line, pageWidth) != null) {
       final holds = _LineTabs._of(line, _body, pageWidth).holds;
       if (holds.isNotEmpty) {
         final units = text.codeUnits.toList();

@@ -88,7 +88,10 @@ void main() {
     });
     await tester.pump();
     const older = 'Üzerine yazılmadan önceki hali';
-    await _ready(tester, () => find.textContaining(older).evaluate().isNotEmpty);
+    await _ready(
+      tester,
+      () => find.textContaining(older).evaluate().isNotEmpty,
+    );
     expect(find.text('E-imzalı'), findsOneWidget);
     expect(find.textContaining('Folio’da kaydedildi'), findsWidgets);
 

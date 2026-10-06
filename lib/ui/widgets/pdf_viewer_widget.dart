@@ -28,6 +28,7 @@ import 'article_panel.dart';
 import 'citation_list_panel.dart';
 import 'editor_citations.dart';
 import 'notice.dart';
+import 'folio_select.dart';
 
 enum _PageFit { reading, page, width, manual }
 
@@ -720,7 +721,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                   ),
                   const SizedBox(width: 8),
                   DropdownButtonHideUnderline(
-                    child: DropdownButton<_PageFit>(
+                    child: FolioSelect<_PageFit>(
                       value: _fit,
                       isDense: true,
                       style: TextStyle(

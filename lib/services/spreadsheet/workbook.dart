@@ -53,7 +53,9 @@ class Workbook {
     book._changed.value = changed;
     // Formulas a tool saved without results are worked out once; the others
     // keep what Excel computed.
-    final unresolved = [for (final sheet in book.sheets) ...sheet._unresolved()];
+    final unresolved = [
+      for (final sheet in book.sheets) ...sheet._unresolved(),
+    ];
     if (unresolved.isNotEmpty) {
       book._recalculate(unresolved);
     }
@@ -145,9 +147,10 @@ class Workbook {
 
   static bool _isSigned(List<int> bytes) {
     try {
-      return ZipDecoder().decodeBytes(bytes).files.any(
-        (file) => file.name.toLowerCase().startsWith('_xmlsignatures/'),
-      );
+      return ZipDecoder()
+          .decodeBytes(bytes)
+          .files
+          .any((file) => file.name.toLowerCase().startsWith('_xmlsignatures/'));
     } catch (_) {
       return false;
     }
@@ -468,8 +471,10 @@ class FormulaResults extends DelegatingWorksheetData {
   }
 }
 
-xl.CellIndex _index(CellCoordinate coord) =>
-    xl.CellIndex.indexByColumnRow(columnIndex: coord.column, rowIndex: coord.row);
+xl.CellIndex _index(CellCoordinate coord) => xl.CellIndex.indexByColumnRow(
+  columnIndex: coord.column,
+  rowIndex: coord.row,
+);
 
 CellRange? _range(String span) {
   final parts = span.split(':');
@@ -483,8 +488,11 @@ CellRange? _range(String span) {
   }
 }
 
-DateTime _fromSerial(double days) =>
-    DateTime(1899, 12, 30).add(Duration(milliseconds: (days * 86400000).round()));
+DateTime _fromSerial(double days) => DateTime(
+  1899,
+  12,
+  30,
+).add(Duration(milliseconds: (days * 86400000).round()));
 
 CellValue? _fromExcel(xl.CellValue? value) => switch (value) {
   null => null,
@@ -674,7 +682,8 @@ CellBorders? _borders(xl.CellStyle style) {
   BorderStyle side(xl.Border border) {
     final (width, line) = switch (border.borderStyle) {
       null || xl.BorderStyle.None => (0.0, BorderLineStyle.none),
-      xl.BorderStyle.Dotted || xl.BorderStyle.Hair => (1.0, BorderLineStyle.dotted),
+      xl.BorderStyle.Dotted ||
+      xl.BorderStyle.Hair => (1.0, BorderLineStyle.dotted),
       xl.BorderStyle.Dashed ||
       xl.BorderStyle.DashDot ||
       xl.BorderStyle.DashDotDot ||

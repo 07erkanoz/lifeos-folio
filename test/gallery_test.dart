@@ -20,7 +20,6 @@ import 'package:evrak_convert/ui/widgets/image_viewer_widget.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
 import 'package:evrak_convert/ui/library/library_sidebar.dart';
 
-
 Future<Directory> pictures(WidgetTester tester, int count) async {
   final dir = (await tester.runAsync(
     () => Directory.systemTemp.createTemp('gallery-'),

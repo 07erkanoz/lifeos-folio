@@ -100,77 +100,83 @@ void main() {
     expect(await history.recoveries(), isEmpty);
     recovery.dispose();
   });
-  test('each editor session keeps its own draft; open ones are not offered', () async {
-    Future<void> draft(String slot, String text) => history.capture(
-      document: slot,
-      name: 'example.udf',
-      sourcePath: '/documents/example.udf',
-      format: 'rich-draft',
-      bytes: utf8.encode(text),
-      kind: 'recovery',
-    );
-    final crashed = DocumentHistory.draftKey();
-    final reopened = DocumentHistory.draftKey();
-    expect(crashed, isNot(reopened));
-    await draft(crashed, 'before the crash');
-    DocumentHistory.holdDraft(reopened);
-    addTearDown(() => DocumentHistory.releaseDraft(reopened));
-    // The second session writing, and clearing, its own slot leaves the
-    // first session's draft where it was.
-    await draft(reopened, 'after reopening');
-    await history.clearRecovery(reopened);
-    await draft(reopened, 'still typing');
-    final offered = await history.recoveries();
-    expect(offered.map((e) => e.document), [crashed]);
-    expect(
-      (await history.recoveriesFor('/documents/example.udf')).single.document,
-      crashed,
-    );
-    expect(await history.recoveriesFor('/documents/other.udf'), isEmpty);
-    expect(
-      (await history.recoveries(includeOpen: true)).map((e) => e.document),
-      unorderedEquals([crashed, reopened]),
-    );
-    DocumentHistory.releaseDraft(reopened);
-    expect((await history.recoveries()).length, 2);
-  });
-  test('a signed UDF is marked as such, and restoring keeps what it replaces', () async {
-    final big = DocumentHistory(directory: root);
-    final path = '${root.path}/belge.udf';
-    List<int> udf({required bool signed}) {
-      final archive = Archive()
-        ..addFile(ArchiveFile('content.xml', 3, utf8.encode('<a>')));
-      if (signed) archive.addFile(ArchiveFile('sign.sgn', 2, [1, 2]));
-      return ZipEncoder().encode(archive);
-    }
+  test(
+    'each editor session keeps its own draft; open ones are not offered',
+    () async {
+      Future<void> draft(String slot, String text) => history.capture(
+        document: slot,
+        name: 'example.udf',
+        sourcePath: '/documents/example.udf',
+        format: 'rich-draft',
+        bytes: utf8.encode(text),
+        kind: 'recovery',
+      );
+      final crashed = DocumentHistory.draftKey();
+      final reopened = DocumentHistory.draftKey();
+      expect(crashed, isNot(reopened));
+      await draft(crashed, 'before the crash');
+      DocumentHistory.holdDraft(reopened);
+      addTearDown(() => DocumentHistory.releaseDraft(reopened));
+      // The second session writing, and clearing, its own slot leaves the
+      // first session's draft where it was.
+      await draft(reopened, 'after reopening');
+      await history.clearRecovery(reopened);
+      await draft(reopened, 'still typing');
+      final offered = await history.recoveries();
+      expect(offered.map((e) => e.document), [crashed]);
+      expect(
+        (await history.recoveriesFor('/documents/example.udf')).single.document,
+        crashed,
+      );
+      expect(await history.recoveriesFor('/documents/other.udf'), isEmpty);
+      expect(
+        (await history.recoveries(includeOpen: true)).map((e) => e.document),
+        unorderedEquals([crashed, reopened]),
+      );
+      DocumentHistory.releaseDraft(reopened);
+      expect((await history.recoveries()).length, 2);
+    },
+  );
+  test(
+    'a signed UDF is marked as such, and restoring keeps what it replaces',
+    () async {
+      final big = DocumentHistory(directory: root);
+      final path = '${root.path}/belge.udf';
+      List<int> udf({required bool signed}) {
+        final archive = Archive()
+          ..addFile(ArchiveFile('content.xml', 3, utf8.encode('<a>')));
+        if (signed) archive.addFile(ArchiveFile('sign.sgn', 2, [1, 2]));
+        return ZipEncoder().encode(archive);
+      }
 
-    final signed = udf(signed: true), plain = udf(signed: false);
-    Future<void> keep(List<int> bytes, String kind) => big.capture(
-      document: DocumentHistory.documentKey(path),
-      name: 'belge.udf',
-      sourcePath: path,
-      format: 'udf',
-      bytes: bytes,
-      kind: kind,
-    );
-    await keep(signed, 'signed');
-    await keep(plain, 'saved');
-    await File(path).writeAsBytes(plain);
-    var versions = await big.versions(DocumentHistory.documentKey(path));
-    expect(versions.map((v) => v.signed), [false, true]);
-    expect(versions.last.kindLabel, 'E-imzalandı');
+      final signed = udf(signed: true), plain = udf(signed: false);
+      Future<void> keep(List<int> bytes, String kind) => big.capture(
+        document: DocumentHistory.documentKey(path),
+        name: 'belge.udf',
+        sourcePath: path,
+        format: 'udf',
+        bytes: bytes,
+        kind: kind,
+      );
+      await keep(signed, 'signed');
+      await keep(plain, 'saved');
+      await File(path).writeAsBytes(plain);
+      var versions = await big.versions(DocumentHistory.documentKey(path));
+      expect(versions.map((v) => v.signed), [false, true]);
+      expect(versions.last.kindLabel, 'E-imzalandı');
 
-    await big.restoreToFile(versions.last, path);
-    expect(await File(path).readAsBytes(), signed);
-    versions = await big.versions(DocumentHistory.documentKey(path));
-    expect(versions.first.kind, 'restored');
-    expect(versions.first.signed, isTrue);
-    // What the file held until then is right under it — already kept as the
-    // last save, so not kept twice — and can be gone back to in turn.
-    expect(versions[1].kind, 'saved');
-    expect(versions[1].signed, isFalse);
-    expect(versions, hasLength(3));
-  });
+      await big.restoreToFile(versions.last, path);
+      expect(await File(path).readAsBytes(), signed);
+      versions = await big.versions(DocumentHistory.documentKey(path));
+      expect(versions.first.kind, 'restored');
+      expect(versions.first.signed, isTrue);
+      // What the file held until then is right under it — already kept as the
+      // last save, so not kept twice — and can be gone back to in turn.
+      expect(versions[1].kind, 'saved');
+      expect(versions[1].signed, isFalse);
+      expect(versions, hasLength(3));
+    },
+  );
   test('continuous changes use a bounded interval, not an endlessly delayed debounce', () async {
     var writes = 0;
     final recovery = DraftRecovery(

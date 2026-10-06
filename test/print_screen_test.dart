@@ -38,10 +38,13 @@ void main() {
     });
 
     test('all, the current page, or a range, then odd or even ones', () {
-      expect(
-        PrintSelection.pages(pageCount: 5, which: PrintPages.all),
-        [1, 2, 3, 4, 5],
-      );
+      expect(PrintSelection.pages(pageCount: 5, which: PrintPages.all), [
+        1,
+        2,
+        3,
+        4,
+        5,
+      ]);
       expect(
         PrintSelection.pages(
           pageCount: 5,
@@ -71,10 +74,12 @@ void main() {
 
     test('copies come collated, or each page together', () {
       expect(PrintSelection.sheets([1, 2], copies: 2), [1, 2, 1, 2]);
-      expect(
-        PrintSelection.sheets([1, 2], copies: 2, collate: false),
-        [1, 1, 2, 2],
-      );
+      expect(PrintSelection.sheets([1, 2], copies: 2, collate: false), [
+        1,
+        1,
+        2,
+        2,
+      ]);
     });
   });
 
@@ -98,9 +103,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.runAsync(pdfrxInitialize);
     final pdf = (await tester.runAsync(() => pages(5)))!;
-    final document = (await tester.runAsync(
-      () => PdfDocument.openData(pdf),
-    ))!;
+    final document = (await tester.runAsync(() => PdfDocument.openData(pdf)))!;
     addTearDown(document.dispose);
     await tester.pumpWidget(
       MaterialApp(

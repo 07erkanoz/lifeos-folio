@@ -96,8 +96,7 @@ class _VersionsWindow extends StatefulWidget {
 }
 
 class _VersionsWindowState extends State<_VersionsWindow> {
-  late final Future<List<DocumentRevision>> _entries = DocumentHistory
-      .instance
+  late final Future<List<DocumentRevision>> _entries = DocumentHistory.instance
       .versions(widget.document)
       .then((entries) {
         if (mounted && entries.isNotEmpty && !_phone) {
@@ -231,11 +230,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
       );
     } catch (e) {
       show(
-        noticeBar(
-          'Kopya kaydedilemedi',
-          detail: '$e',
-          kind: NoticeKind.error,
-        ),
+        noticeBar('Kopya kaydedilemedi', detail: '$e', kind: NoticeKind.error),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -358,7 +353,11 @@ class _VersionsWindowState extends State<_VersionsWindow> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.history_toggle_off_rounded, size: 40, color: colors.outline),
+          Icon(
+            Icons.history_toggle_off_rounded,
+            size: 40,
+            color: colors.outline,
+          ),
           const SizedBox(height: 12),
           const Text(
             'Bu belgenin henüz saklanmış bir sürümü yok.',
@@ -423,10 +422,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
         ),
       );
     }
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 12),
-      children: rows,
-    );
+    return ListView(padding: const EdgeInsets.only(bottom: 12), children: rows);
   }
 
   Widget _chip(String text, ColorScheme colors) => Container(
@@ -435,10 +431,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
       color: colors.primary.withValues(alpha: .10),
       borderRadius: BorderRadius.circular(6),
     ),
-    child: Text(
-      text,
-      style: TextStyle(fontSize: 10.5, color: colors.primary),
-    ),
+    child: Text(text, style: TextStyle(fontSize: 10.5, color: colors.primary)),
   );
 
   Widget _detail(DocumentRevision entry, ColorScheme colors) {
@@ -557,9 +550,8 @@ class _VersionsWindowState extends State<_VersionsWindow> {
           final pdf = snapshot.data;
           if (pdf != null) return PdfViewerWidget(bytes: pdf);
           return FutureBuilder<String?>(
-            future: _read(
-              entry,
-            ).then((bytes) => documentText(bytes, entry.format)),
+            future: _read(entry)
+                .then((bytes) => documentText(bytes, entry.format)),
             builder: (context, text) {
               if (text.connectionState != ConnectionState.done) {
                 return const Center(child: CircularProgressIndicator());

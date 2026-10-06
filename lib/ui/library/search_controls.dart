@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/search/library_controller.dart';
 import '../../services/search/search_models.dart';
+import '../widgets/folio_select.dart';
 
 /// Both the library and the desktop palette expose this exact set of filters.
 class SearchControls extends StatelessWidget {
@@ -151,7 +152,7 @@ class SearchOptionsButton extends StatelessWidget {
                     style: TextStyle(fontSize: 12, height: 1.5),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<bool>(
+                  FolioSelect<bool>(
                     isExpanded: true,
                     initialValue: library.namesOnly,
                     decoration: const InputDecoration(labelText: 'Arama alanı'),
@@ -168,7 +169,7 @@ class SearchOptionsButton extends StatelessWidget {
                     onChanged: (value) => library.filter(byName: value),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
+                  FolioSelect<int>(
                     initialValue: library.sourceId ?? -1,
                     isExpanded: true,
                     decoration: const InputDecoration(
@@ -194,7 +195,7 @@ class SearchOptionsButton extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
+                  FolioSelect<String>(
                     isExpanded: true,
                     initialValue: library.sort,
                     decoration: const InputDecoration(labelText: 'Sıralama'),

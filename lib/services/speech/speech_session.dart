@@ -378,7 +378,8 @@ class SoLoudPlayer implements SpeechPlayer {
       // it. Time spent paused does not count.
       final length = Duration(
         microseconds:
-            audio.samples.length * Duration.microsecondsPerSecond ~/
+            audio.samples.length *
+            Duration.microsecondsPerSecond ~/
             audio.sampleRate,
       );
       var heard = Duration.zero;

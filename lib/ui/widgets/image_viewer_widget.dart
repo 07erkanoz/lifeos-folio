@@ -275,11 +275,7 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
       messenger
         ?..clearSnackBars()
         ..showSnackBar(
-          noticeBar(
-            'Kırpılamadı',
-            detail: '$trouble',
-            kind: NoticeKind.error,
-          ),
+          noticeBar('Kırpılamadı', detail: '$trouble', kind: NoticeKind.error),
         );
     }
   }

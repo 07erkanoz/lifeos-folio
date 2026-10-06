@@ -428,7 +428,9 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
   Future<void> _history() async {
     final path = _savedPath ?? widget.path;
     if (path == null) {
-      _notice('Bu tablo henüz kaydedilmedi; geçmiş ilk kayıttan itibaren tutulur.');
+      _notice(
+        'Bu tablo henüz kaydedilmedi; geçmiş ilk kayıttan itibaren tutulur.',
+      );
       return;
     }
     final entry = await showDocumentVersions(
@@ -505,7 +507,10 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
     }
     return [
       for (final span in spans)
-        TextSpan(text: span.text, style: change(span.style ?? const TextStyle())),
+        TextSpan(
+          text: span.text,
+          style: change(span.style ?? const TextStyle()),
+        ),
     ];
   }
 
@@ -523,9 +528,10 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
     }
     final sheet = _current, range = grid.grid.selectedRange;
     if (sheet == null || range == null) return;
-    final all = _cells(sheet, range).every(
-      (coord) => has(_cellText(sheet.raw.getRichText(coord))),
-    );
+    final all = _cells(
+      sheet,
+      range,
+    ).every((coord) => has(_cellText(sheet.raw.getRichText(coord))));
     _record(
       label,
       (sheet, coord) => sheet.raw.setRichText(
@@ -600,8 +606,10 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
 
   void _align(CellTextAlignment align) => _record(
     'Hizalama',
-    (sheet, coord) =>
-        sheet.raw.setStyle(coord, _style(sheet.raw.getStyle(coord), align: align)),
+    (sheet, coord) => sheet.raw.setStyle(
+      coord,
+      _style(sheet.raw.getStyle(coord), align: align),
+    ),
   );
 
   void _wrap() {
@@ -613,8 +621,10 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
     ).every((coord) => sheet.raw.getStyle(coord)?.wrapText == true);
     _record(
       'Metni kaydır',
-      (sheet, coord) =>
-          sheet.raw.setStyle(coord, _style(sheet.raw.getStyle(coord), wrap: !all)),
+      (sheet, coord) => sheet.raw.setStyle(
+        coord,
+        _style(sheet.raw.getStyle(coord), wrap: !all),
+      ),
     );
   }
 
@@ -664,7 +674,8 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
   static CellValue? _parse(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
-    if (trimmed.startsWith('=')) return CellValue.formula(excelFormula(trimmed));
+    if (trimmed.startsWith('='))
+      return CellValue.formula(excelFormula(trimmed));
     if (RegExp(r'^-?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?$').hasMatch(trimmed)) {
       return CellValue.number(
         double.parse(trimmed.replaceAll('.', '').replaceAll(',', '.')),
@@ -813,7 +824,9 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
     final book = _book!;
     final sheet = _current;
     if (sheet == null) {
-      return const Center(child: Text('Bu çalışma kitabında görünen sayfa yok.'));
+      return const Center(
+        child: Text('Bu çalışma kitabında görünen sayfa yok.'),
+      );
     }
     final grid = _grid;
     if (!identical(_listened, grid)) {
@@ -961,7 +974,11 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
                 listenable: grid.undo,
                 builder: (context, _) => Row(
                   children: [
-                    Icon(Icons.table_chart_outlined, color: colors.primary, size: 20),
+                    Icon(
+                      Icons.table_chart_outlined,
+                      color: colors.primary,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     button(
                       Icons.undo,
@@ -980,7 +997,11 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
                       editable ? _bold : null,
                       key: const ValueKey('sheet-bold'),
                     ),
-                    button(Icons.format_italic, 'İtalik · Ctrl+I', editable ? _italic : null),
+                    button(
+                      Icons.format_italic,
+                      'İtalik · Ctrl+I',
+                      editable ? _italic : null,
+                    ),
                     button(
                       Icons.format_underline,
                       'Altı çizili · Ctrl+U',
@@ -1014,20 +1035,27 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
                       'Sağa hizala',
                       editable ? () => _align(CellTextAlignment.right) : null,
                     ),
-                    button(Icons.wrap_text_rounded, 'Metni kaydır', editable ? _wrap : null),
+                    button(
+                      Icons.wrap_text_rounded,
+                      'Metni kaydır',
+                      editable ? _wrap : null,
+                    ),
                     gap(),
                     button(
                       Icons.call_merge_rounded,
                       'Hücreleri birleştir',
                       editable
-                          ? () => grid.grid.invokeAction(const MergeCellsIntent())
+                          ? () =>
+                                grid.grid.invokeAction(const MergeCellsIntent())
                           : null,
                     ),
                     button(
                       Icons.call_split_rounded,
                       'Birleştirmeyi kaldır',
                       editable
-                          ? () => grid.grid.invokeAction(const UnmergeCellsIntent())
+                          ? () => grid.grid.invokeAction(
+                              const UnmergeCellsIntent(),
+                            )
                           : null,
                     ),
                     PopupMenuButton<String?>(
@@ -1065,7 +1093,11 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
                       ),
                     ),
                     gap(),
-                    button(Icons.zoom_out_rounded, 'Uzaklaştır', grid.grid.zoomOut),
+                    button(
+                      Icons.zoom_out_rounded,
+                      'Uzaklaştır',
+                      grid.grid.zoomOut,
+                    ),
                     ListenableBuilder(
                       listenable: grid.grid,
                       builder: (context, _) => TextButton(
@@ -1073,7 +1105,11 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
                         child: Text('%${(grid.grid.zoom * 100).round()}'),
                       ),
                     ),
-                    button(Icons.zoom_in_rounded, 'Yakınlaştır', grid.grid.zoomIn),
+                    button(
+                      Icons.zoom_in_rounded,
+                      'Yakınlaştır',
+                      grid.grid.zoomIn,
+                    ),
                   ],
                 ),
               ),

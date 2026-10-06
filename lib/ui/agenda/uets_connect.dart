@@ -10,6 +10,7 @@ import '../../services/uets/uets_card_login.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import 'agenda_page.dart' show AgendaColors;
+import '../widgets/folio_select.dart';
 
 /// Opens a UETS session (UYGULAMAPLANI P05): with the mobile signature or
 /// with the card in the reader. The TC number, the phone and the operator
@@ -351,7 +352,7 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
-                    child: DropdownButtonFormField<MobileOperator>(
+                    child: FolioSelect<MobileOperator>(
                       initialValue: _operator,
                       isDense: true,
                       isExpanded: true,
@@ -371,7 +372,7 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
               Row(
                 children: [
                   Expanded(
-                    child: DropdownButtonFormField<SigningCard>(
+                    child: FolioSelect<SigningCard>(
                       initialValue: _card,
                       isDense: true,
                       isExpanded: true,

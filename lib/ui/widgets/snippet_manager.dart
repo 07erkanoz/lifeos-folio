@@ -6,6 +6,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/editor/snippets.dart';
 import 'notice.dart';
+import 'folio_select.dart';
 
 /// The kept passages, to tidy: the name, the keyword Tab expands, the Alt+F
 /// key, the passage itself, and whether to keep it at all.
@@ -415,7 +416,7 @@ class _SnippetEditorState extends State<SnippetEditor> {
                   const SizedBox(width: 10),
                   SizedBox(
                     width: 170,
-                    child: DropdownButtonFormField<int?>(
+                    child: FolioSelect<int?>(
                       key: const ValueKey('snippet-edit-hotkey'),
                       initialValue: _hotkey,
                       isDense: true,

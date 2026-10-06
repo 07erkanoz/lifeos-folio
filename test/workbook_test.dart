@@ -102,9 +102,7 @@ void main() {
     expect((cell('A4').value as xl.FormulaCellValue).formula, 'SUM(A1,A2)');
     expect(sheet.spannedItems, contains('B1:C1'));
     expect(
-      (saved['Özet Tablo']
-                  .cell(xl.CellIndex.indexByString('A1'))
-                  .value
+      (saved['Özet Tablo'].cell(xl.CellIndex.indexByString('A1')).value
               as xl.FormulaCellValue)
           .cachedValue,
       '20',

@@ -57,12 +57,7 @@ void main() {
     DocBlock item() =>
         DocBlock(plainText: '', listType: DocListType.ordered, listLevel: 1);
     expect(
-      ListMarkers.numbers([
-        item(),
-        item(),
-        DocBlock(plainText: 'ara'),
-        item(),
-      ]),
+      ListMarkers.numbers([item(), item(), DocBlock(plainText: 'ara'), item()]),
       {0: 1, 1: 2, 3: 1},
     );
   });

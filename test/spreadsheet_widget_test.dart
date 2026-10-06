@@ -21,7 +21,9 @@ import 'support/temp_directory.dart';
 /// size: 46 pixels of row numbers, 72 per column, 22 per row.
 Future<void> _tapCell(WidgetTester tester, int row, int column) async {
   final grid = tester.getTopLeft(find.byType(Worksheet));
-  await tester.tapAt(grid + Offset(46 + 72.0 * column + 30, 22 + 22.0 * row + 11));
+  await tester.tapAt(
+    grid + Offset(46 + 72.0 * column + 30, 22 + 22.0 * row + 11),
+  );
   await tester.pump();
 }
 
@@ -163,7 +165,10 @@ void main() {
         ),
       ),
     );
-    await helpers.ready(tester, () => find.byType(Worksheet).evaluate().isNotEmpty);
+    await helpers.ready(
+      tester,
+      () => find.byType(Worksheet).evaluate().isNotEmpty,
+    );
     expect(draft.hasChanges, isFalse);
 
     await _tapCell(tester, 1, 1);

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter_quill/quill_delta.dart';
 
 import '../../models/document_model.dart';

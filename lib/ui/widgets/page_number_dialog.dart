@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/layout/page_numbers.dart';
+import 'folio_select.dart';
 
 /// Where the page numbers go, and how they read: what UYAP's own page
 /// number dialog offers, so a number set here is one UYAP draws the same
@@ -181,7 +182,7 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                     ),
                     const SizedBox(width: 12),
                     if (_total)
-                      DropdownButton<String>(
+                      FolioSelect<String>(
                         value: _separator,
                         items: [
                           for (final s in _separators)
@@ -213,7 +214,7 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                   runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    DropdownButton<String>(
+                    FolioSelect<String>(
                       value: _face,
                       items: const [
                         DropdownMenuItem(value: 'Arial', child: Text('Arial')),
@@ -225,7 +226,7 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                       onChanged: (v) => setState(() => _face = v ?? 'Arial'),
                     ),
                     const SizedBox(width: 12),
-                    DropdownButton<double>(
+                    FolioSelect<double>(
                       value: _sizes.contains(_size) ? _size : 11,
                       items: [
                         for (final s in _sizes)

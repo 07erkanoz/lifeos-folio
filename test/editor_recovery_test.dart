@@ -415,9 +415,10 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(
-        (await io(tester, DocumentHistory.instance.recoveries)).map(
-          (e) => e.id,
-        ),
+        (await io(
+          tester,
+          DocumentHistory.instance.recoveries,
+        )).map((e) => e.id),
         [crashed.id],
       );
 

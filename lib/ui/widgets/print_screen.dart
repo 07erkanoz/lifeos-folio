@@ -11,6 +11,7 @@ import '../../services/platform/android_document_save.dart';
 import '../../services/print/print_job.dart';
 import '../../services/print/print_selection.dart';
 import 'notice.dart';
+import 'folio_select.dart';
 
 /// The print screen, as Word lays one out: what to print and where on the
 /// left, the pages as they will come out on the right.
@@ -327,7 +328,7 @@ class _PrintScreenState extends State<PrintScreen> {
               style: theme.textTheme.bodySmall,
             )
           else
-            DropdownButtonFormField<Printer?>(
+            FolioSelect<Printer?>(
               key: const ValueKey('print-printer'),
               initialValue: _printer,
               isExpanded: true,
@@ -399,7 +400,7 @@ class _PrintScreenState extends State<PrintScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<PrintParity>(
+          FolioSelect<PrintParity>(
             initialValue: _parity,
             isExpanded: true,
             decoration: const InputDecoration(

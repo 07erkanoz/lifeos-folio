@@ -31,7 +31,9 @@ void main() {
     expect(await PdfiumSetup.ensure(), isTrue);
 
     final model = DocModel(
-      blocks: [for (var n = 1; n <= 40; n++) DocBlock(plainText: _paragraph(n))],
+      blocks: [
+        for (var n = 1; n <= 40; n++) DocBlock(plainText: _paragraph(n)),
+      ],
     );
     // What the editor holds: a line per paragraph.
     final plain = model.blocks.map((b) => b.plainText).join('\n');

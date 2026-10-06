@@ -76,8 +76,7 @@ class _NoticeBody extends StatelessWidget {
       NoticeKind.info => (Icons.info_rounded, const Color(0xFF93C5E8)),
     };
     final text =
-        Theme.of(context).snackBarTheme.contentTextStyle?.color ??
-        Colors.white;
+        Theme.of(context).snackBarTheme.contentTextStyle?.color ?? Colors.white;
     return Row(
       children: [
         Container(

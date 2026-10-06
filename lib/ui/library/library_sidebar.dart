@@ -60,14 +60,7 @@ class LibrarySidebar extends StatelessWidget {
   bool _isUyapFolder(String path) =>
       uyapFolder != null && p.equals(path, uyapFolder!);
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final content = _content(context);
-      return constraints.maxHeight < 700
-          ? SingleChildScrollView(child: SizedBox(height: 700, child: content))
-          : content;
-    },
-  );
+  Widget build(BuildContext context) => _content(context);
 
   Widget _content(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -78,317 +71,331 @@ class LibrarySidebar extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(right: BorderSide(color: scheme.outlineVariant)),
         ),
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (compact) ...[
-                    IconButton.filled(
-                      tooltip: 'Dosya Aç',
-                      onPressed: pickFiles,
-                      icon: const Icon(Icons.add_rounded),
-                    ),
-                    const SizedBox(height: 8),
-                    IconButton.outlined(
-                      tooltip: 'Klasör Ekle',
-                      onPressed: pickFolder,
-                      icon: const Icon(Icons.create_new_folder_outlined),
-                    ),
-                  ] else ...[
-                    FilledButton.icon(
-                      onPressed: pickFiles,
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Dosya Aç'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: pickFolder,
-                      icon: const Icon(
-                        Icons.create_new_folder_outlined,
-                        size: 18,
-                      ),
-                      label: const Text('Klasör Ekle'),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            if (showHome)
-              _nav(
-                context,
-                Icons.home_outlined,
-                'Anasayfa',
-                'home',
-                null,
-                key: const ValueKey('nav-home'),
-              ),
-            _nav(
-              context,
-              Icons.grid_view_rounded,
-              'Tüm Evraklar',
-              'all',
-              library.total,
-            ),
-            _nav(
-              context,
-              Icons.description_outlined,
-              'Belgeler',
-              'documents',
-              null,
-            ),
-            _nav(
-              context,
-              Icons.photo_library_outlined,
-              'Galeri',
-              'images',
-              null,
-            ),
-            // İçtihat araması buradan kaldırıldı: bu liste arşivin
-            // görünümlerini sayar, o ise dışarıdaki bir bankaya sorulan
-            // ayrı bir soru. Yazarken sorulur, editörün araç çubuğundan.
-            // The office: the cases, the agenda and the notifications, one
-            // under another (UYGULAMAPLANI §10).
-            if (!compact) _heading(context, 'BÜRO'),
-            if (_showUyap)
-              _nav(
-                context,
-                Icons.gavel_rounded,
-                'UYAP Dosyalarım',
-                'uyap',
-                uyapCases.length,
-                key: const ValueKey('uyap-folder'),
-                selected: group == 'uyap' || group.startsWith('uyap:'),
-              ),
-            _nav(
-              context,
-              Icons.event_note_rounded,
-              'Ajanda',
-              'agenda',
-              null,
-              key: const ValueKey('agenda'),
-              badge: agendaToday > 0
-                  ? _badge(context, 'Bugün $agendaToday', danger: false)
-                  : null,
-            ),
-            _nav(
-              context,
-              Icons.mark_email_unread_outlined,
-              'UETS Tebligatlarım',
-              'uets',
-              null,
-              key: const ValueKey('uets'),
-              badge: uetsUnread > 0
-                  ? _badge(context, '$uetsUnread', danger: true)
-                  : null,
-            ),
-            const SizedBox(height: 14),
-            if (!compact)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: Row(
-                  children: [
-                    Text(
-                      'KLASÖRLER',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: 'Klasör Ekle',
-                      onPressed: pickFolder,
-                      icon: const Icon(Icons.add, size: 16),
-                      constraints: const BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
-                      ),
-                    ),
-                  ],
+        // The whole list scrolls in a low window; in a tall one the index
+        // and Ayarlar stay at the bottom.
+        child: CustomScrollView(
+          slivers: [
+            SliverList.list(
+              children: [
+                const SizedBox(height: 16),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (compact) ...[
+                        IconButton.filled(
+                          tooltip: 'Dosya Aç',
+                          onPressed: pickFiles,
+                          icon: const Icon(Icons.add_rounded),
+                        ),
+                        const SizedBox(height: 8),
+                        IconButton.outlined(
+                          tooltip: 'Klasör Ekle',
+                          onPressed: pickFolder,
+                          icon: const Icon(Icons.create_new_folder_outlined),
+                        ),
+                      ] else ...[
+                        FilledButton.icon(
+                          onPressed: pickFiles,
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('Dosya Aç'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: pickFolder,
+                          icon: const Icon(
+                            Icons.create_new_folder_outlined,
+                            size: 18,
+                          ),
+                          label: const Text('Klasör Ekle'),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-            Expanded(
-              child: compact
-                  ? const SizedBox.shrink()
-                  : ListView(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                const SizedBox(height: 28),
+                if (showHome)
+                  _nav(
+                    context,
+                    Icons.home_outlined,
+                    'Anasayfa',
+                    'home',
+                    null,
+                    key: const ValueKey('nav-home'),
+                  ),
+                _nav(
+                  context,
+                  Icons.grid_view_rounded,
+                  'Tüm Evraklar',
+                  'all',
+                  library.total,
+                ),
+                _nav(
+                  context,
+                  Icons.description_outlined,
+                  'Belgeler',
+                  'documents',
+                  null,
+                ),
+                _nav(
+                  context,
+                  Icons.photo_library_outlined,
+                  'Galeri',
+                  'images',
+                  null,
+                ),
+                // İçtihat araması buradan kaldırıldı: bu liste arşivin
+                // görünümlerini sayar, o ise dışarıdaki bir bankaya sorulan
+                // ayrı bir soru. Yazarken sorulur, editörün araç çubuğundan.
+                // The office: the cases, the agenda and the notifications, one
+                // under another (UYGULAMAPLANI §10).
+                if (!compact) _heading(context, 'BÜRO'),
+                if (_showUyap)
+                  _nav(
+                    context,
+                    Icons.gavel_rounded,
+                    'UYAP Dosyalarım',
+                    'uyap',
+                    uyapCases.length,
+                    key: const ValueKey('uyap-folder'),
+                    selected: group == 'uyap' || group.startsWith('uyap:'),
+                  ),
+                _nav(
+                  context,
+                  Icons.event_note_rounded,
+                  'Ajanda',
+                  'agenda',
+                  null,
+                  key: const ValueKey('agenda'),
+                  badge: agendaToday > 0
+                      ? _badge(context, 'Bugün $agendaToday', danger: false)
+                      : null,
+                ),
+                _nav(
+                  context,
+                  Icons.mark_email_unread_outlined,
+                  'UETS Tebligatlarım',
+                  'uets',
+                  null,
+                  key: const ValueKey('uets'),
+                  badge: uetsUnread > 0
+                      ? _badge(context, '$uetsUnread', danger: true)
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                if (!compact)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Row(
                       children: [
-                        for (final source in library.sources.where(
-                          (s) => s.folder && !_isUyapFolder(s.path),
-                        ))
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 3),
-                            child: Tooltip(
-                              message: source.path,
-                              child: ListTile(
-                                dense: true,
-                                minTileHeight: 42,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                selected: library.sourceId == source.id,
-                                selectedTileColor: scheme.primary.withValues(
-                                  alpha: .08,
-                                ),
-                                leading: Icon(
-                                  source.error == null
-                                      ? Icons.folder_outlined
-                                      : Icons.folder_off_outlined,
-                                  size: 18,
-                                  color: source.error == null
-                                      ? scheme.onSurfaceVariant
-                                      : scheme.error,
-                                ),
-                                minLeadingWidth: 18,
-                                title: Text(
-                                  source.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                trailing: Text(
-                                  '${source.count}',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                onTap: () => selectFolder(source.id),
-                              ),
-                            ),
+                        Text(
+                          'KLASÖRLER',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1,
+                            color: scheme.onSurfaceVariant,
                           ),
-                        if (library.sources.where((s) => s.folder).isEmpty &&
-                            !_showUyap)
-                          Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Text(
-                              'Klasörleriniz tek yerde.\nEkleyin, içeriklerinde arayın.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                height: 1.6,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: 'Klasör Ekle',
+                          onPressed: pickFolder,
+                          icon: const Icon(Icons.add, size: 16),
+                          constraints: const BoxConstraints(
+                            minWidth: 24,
+                            minHeight: 24,
                           ),
+                        ),
                       ],
                     ),
+                  ),
+                if (!compact)
+                  ListView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    children: [
+                      for (final source in library.sources.where(
+                        (s) => s.folder && !_isUyapFolder(s.path),
+                      ))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 3),
+                          child: Tooltip(
+                            message: source.path,
+                            child: ListTile(
+                              dense: true,
+                              minTileHeight: 42,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              selected: library.sourceId == source.id,
+                              selectedTileColor: scheme.primary.withValues(
+                                alpha: .08,
+                              ),
+                              leading: Icon(
+                                source.error == null
+                                    ? Icons.folder_outlined
+                                    : Icons.folder_off_outlined,
+                                size: 18,
+                                color: source.error == null
+                                    ? scheme.onSurfaceVariant
+                                    : scheme.error,
+                              ),
+                              minLeadingWidth: 18,
+                              title: Text(
+                                source.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              trailing: Text(
+                                '${source.count}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                              onTap: () => selectFolder(source.id),
+                            ),
+                          ),
+                        ),
+                      if (library.sources.where((s) => s.folder).isEmpty &&
+                          !_showUyap)
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Text(
+                            'Klasörleriniz tek yerde.\nEkleyin, içeriklerinde arayın.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.6,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
             ),
-            Padding(
-              padding: EdgeInsets.all(compact ? 12 : 16),
-              child: Column(
-                children: [
-                  if (!compact)
-                    InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: showStatus,
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: EdgeInsets.all(compact ? 12 : 16),
+                  child: Column(
+                    children: [
+                      if (!compact)
+                        InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: showStatus,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: scheme.outlineVariant),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  library.active
+                                      ? Icons.sync
+                                      : Icons.offline_bolt_outlined,
+                                  color: scheme.primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 9),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        library.active
+                                            ? 'İndeksleniyor'
+                                            : 'Yerel arşiv',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      ListenableBuilder(
+                                        listenable: library.progress,
+                                        builder: (context, _) => Text(
+                                          library.active
+                                              ? '${library.processed} / ${library.toProcess}'
+                                              : '${library.searchable} içerik aranabilir',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 16,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (compact)
+                        IconButton(
+                          tooltip: 'İndeks durumu',
+                          onPressed: showStatus,
+                          icon: const Icon(Icons.storage_outlined),
+                        ),
+                      if (!compact)
+                        TextButton.icon(
+                          onPressed: pickFolder,
+                          icon: const Icon(Icons.settings_outlined, size: 18),
+                          label: const Text('Ayarlar'),
+                        )
+                      else
+                        IconButton(
+                          tooltip: 'Ayarlar',
+                          onPressed: pickFolder,
+                          icon: const Icon(Icons.settings_outlined, size: 18),
+                        ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
                           color: scheme.surfaceContainerLow,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: scheme.outlineVariant),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              library.active
-                                  ? Icons.sync
-                                  : Icons.offline_bolt_outlined,
-                              color: scheme.primary,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 9),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        child: compact
+                            ? _themeButton(
+                                context,
+                                appearance.mode == ThemeMode.dark
+                                    ? ThemeMode.light
+                                    : ThemeMode.dark,
+                              )
+                            : Row(
                                 children: [
-                                  Text(
-                                    library.active
-                                        ? 'İndeksleniyor'
-                                        : 'Yerel arşiv',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                  for (final mode in ThemeMode.values)
+                                    Expanded(
+                                      child: _themeButton(context, mode),
                                     ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  ListenableBuilder(
-                                    listenable: library.progress,
-                                    builder: (context, _) => Text(
-                                      library.active
-                                          ? '${library.processed} / ${library.toProcess}'
-                                          : '${library.searchable} içerik aranabilir',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
                                 ],
                               ),
-                            ),
-                            Icon(
-                              Icons.chevron_right,
-                              size: 16,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ],
-                        ),
                       ),
-                    ),
-                  if (compact)
-                    IconButton(
-                      tooltip: 'İndeks durumu',
-                      onPressed: showStatus,
-                      icon: const Icon(Icons.storage_outlined),
-                    ),
-                  if (!compact)
-                    TextButton.icon(
-                      onPressed: pickFolder,
-                      icon: const Icon(Icons.settings_outlined, size: 18),
-                      label: const Text('Ayarlar'),
-                    )
-                  else
-                    IconButton(
-                      tooltip: 'Ayarlar',
-                      onPressed: pickFolder,
-                      icon: const Icon(Icons.settings_outlined, size: 18),
-                    ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: compact
-                        ? _themeButton(
-                            context,
-                            appearance.mode == ThemeMode.dark
-                                ? ThemeMode.light
-                                : ThemeMode.dark,
-                          )
-                        : Row(
-                            children: [
-                              for (final mode in ThemeMode.values)
-                                Expanded(child: _themeButton(context, mode)),
-                            ],
-                          ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ],

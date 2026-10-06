@@ -35,57 +35,53 @@ void main() {
   String squash(String s) => s.replaceAll(RegExp(r'\s+'), ' ').trim();
 
   for (final MapEntry(key: name, value: starts) in expected.entries) {
-    testWidgets(
-      'pages start where UYAP starts them: $name',
-      (tester) async {
-        final model = UdfReader.readBytes(
-          File('test/fixtures/pages/udf/$name').readAsBytesSync(),
-        )!;
-        final bytes = await tester.runAsync(
-          () => PdfService.modelToPdfBytes(model),
-        );
-        final pdf = (await tester.runAsync(() => PdfReadback.of(bytes!)))!;
-        expect(pdf.pageCount, starts.length, reason: 'sayfa sayısı');
-        // The header and footer are on every page; the body is what says
-        // where a page starts.
-        final regions = [
-          for (final blocks in model.pageRegions.values)
-            for (final b in blocks)
-              if (b.plainText.trim().isNotEmpty) squash(b.plainText),
-        ];
-        // So are the page numbers, as UYAP draws them.
-        final numberings = [
-          for (final attrs
-              in ((model.metadata['pageRegionAttrs'] as Map?) ?? const {})
-                  .values)
-            ?PageNumbering.parse(attrs as Map),
-        ];
-        String body(int page) {
-          var text = squash(pdf.pageText(page));
-          for (final region in regions) {
-            text = squash(text.replaceFirst(region, ''));
-          }
-          for (final numbering in numberings) {
-            final label = squash(numbering.label(page + 1, pdf.pageCount));
-            if (label.isNotEmpty) text = squash(text.replaceFirst(label, ''));
-          }
-          return text;
+    testWidgets('pages start where UYAP starts them: $name', (tester) async {
+      final model = UdfReader.readBytes(
+        File('test/fixtures/pages/udf/$name').readAsBytesSync(),
+      )!;
+      final bytes = await tester.runAsync(
+        () => PdfService.modelToPdfBytes(model),
+      );
+      final pdf = (await tester.runAsync(() => PdfReadback.of(bytes!)))!;
+      expect(pdf.pageCount, starts.length, reason: 'sayfa sayısı');
+      // The header and footer are on every page; the body is what says
+      // where a page starts.
+      final regions = [
+        for (final blocks in model.pageRegions.values)
+          for (final b in blocks)
+            if (b.plainText.trim().isNotEmpty) squash(b.plainText),
+      ];
+      // So are the page numbers, as UYAP draws them.
+      final numberings = [
+        for (final attrs
+            in ((model.metadata['pageRegionAttrs'] as Map?) ?? const {}).values)
+          ?PageNumbering.parse(attrs as Map),
+      ];
+      String body(int page) {
+        var text = squash(pdf.pageText(page));
+        for (final region in regions) {
+          text = squash(text.replaceFirst(region, ''));
         }
+        for (final numbering in numberings) {
+          final label = squash(numbering.label(page + 1, pdf.pageCount));
+          if (label.isNotEmpty) text = squash(text.replaceFirst(label, ''));
+        }
+        return text;
+      }
 
-        for (var i = 0; i < starts.length; i++) {
-          final want = squash(starts[i]);
-          // An empty paragraph starting a page draws no text to read back.
-          if (want.isEmpty) continue;
-          final got = body(i);
-          expect(
-            got.startsWith(want),
-            isTrue,
-            reason:
-                'sayfa ${i + 1} "$want" ile başlamalı, '
-                '"${got.substring(0, 40)}" ile başlıyor',
-          );
-        }
-      },
-    );
+      for (var i = 0; i < starts.length; i++) {
+        final want = squash(starts[i]);
+        // An empty paragraph starting a page draws no text to read back.
+        if (want.isEmpty) continue;
+        final got = body(i);
+        expect(
+          got.startsWith(want),
+          isTrue,
+          reason:
+              'sayfa ${i + 1} "$want" ile başlamalı, '
+              '"${got.substring(0, 40)}" ile başlıyor',
+        );
+      }
+    });
   }
 }

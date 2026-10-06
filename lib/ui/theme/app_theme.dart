@@ -93,11 +93,25 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surface,
+        // A field the height of a button beside it, its label the size of
+        // the text it names.
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 18,
+          horizontal: 14,
+          vertical: 15,
         ),
         hintStyle: TextStyle(color: muted, fontSize: 14),
+        labelStyle: TextStyle(color: muted, fontSize: 13.5),
+        floatingLabelStyle: WidgetStateTextStyle.resolveWith(
+          (states) => TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: states.contains(WidgetState.error)
+                ? AppColors.error
+                : states.contains(WidgetState.focused)
+                ? scheme.primary
+                : muted,
+          ),
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: border),
@@ -147,20 +161,80 @@ class AppTheme {
           color: text,
         ),
       ),
+      // A dialog is a card over a dimmed page: a heading, its text at the
+      // size of the page's text, its buttons at the bottom right with room
+      // around them.
       dialogTheme: DialogThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
+        elevation: 18,
+        shadowColor: const Color(0x55000000),
+        barrierColor: dark ? const Color(0x99000000) : const Color(0x5C0F1520),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: border),
         ),
+        titleTextStyle: TextStyle(
+          fontFamily: 'LiberationSans',
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -.2,
+          color: text,
+        ),
+        contentTextStyle: TextStyle(
+          fontFamily: 'LiberationSans',
+          fontSize: 14,
+          height: 1.45,
+          color: text,
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 4, 20, 18),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: surface,
         surfaceTintColor: Colors.transparent,
+        elevation: 10,
+        shadowColor: const Color(0x40000000),
+        menuPadding: const EdgeInsets.symmetric(vertical: 6),
+        textStyle: TextStyle(
+          fontFamily: 'LiberationSans',
+          fontSize: 13.5,
+          color: text,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: border),
+        ),
+      ),
+      // The lists that open from a field or a button (FolioSelect, the
+      // menus): a card under it, not a slab over it.
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(surface),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          elevation: const WidgetStatePropertyAll(10),
+          shadowColor: const WidgetStatePropertyAll(Color(0x40000000)),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(vertical: 6),
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: border),
+            ),
+          ),
+        ),
+      ),
+      menuButtonTheme: MenuButtonThemeData(
+        style: MenuItemButton.styleFrom(
+          minimumSize: const Size(0, 38),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          textStyle: const TextStyle(
+            fontFamily: 'LiberationSans',
+            fontSize: 13.5,
+          ),
+          foregroundColor: text,
+          shape: const RoundedRectangleBorder(),
         ),
       ),
       tooltipTheme: TooltipThemeData(

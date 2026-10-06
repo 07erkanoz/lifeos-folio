@@ -301,10 +301,10 @@ void main() {
     // Its own character, U+00B8, then the paragraph's own line break.
     expect(text.substring(at, at + 2), '\u00b8\n');
     final paragraph = image.parentElement!;
-    expect(
-      paragraph.childElements.map((e) => e.name.local).toList(),
-      ['image', 'content'],
-    );
+    expect(paragraph.childElements.map((e) => e.name.local).toList(), [
+      'image',
+      'content',
+    ]);
     expect(image.getAttribute('width'), '200.0');
     expect(image.getAttribute('height'), '50.0');
     // Read back: the picture once, no empty paragraph beside it.

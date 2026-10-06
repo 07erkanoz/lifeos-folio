@@ -8,7 +8,8 @@ String _side(TextDiff diff, DiffKind drop) => diff.pieces
 
 void main() {
   test('both texts can be read back out of the pieces', () {
-    const before = 'Davacı vekili dilekçesinde,\nalacağın tahsilini istemiştir.\n';
+    const before =
+        'Davacı vekili dilekçesinde,\nalacağın tahsilini istemiştir.\n';
     const after =
         'Davacı vekili dava dilekçesinde,\nalacağın faiziyle tahsilini '
         'istemiştir.\nEk: vekaletname\n';
@@ -26,7 +27,10 @@ void main() {
   });
 
   test('a replaced word is one removal and one addition', () {
-    final diff = TextDiff.between('Ankara 3. İş Mahkemesi\n', 'Ankara 5. İş Mahkemesi\n');
+    final diff = TextDiff.between(
+      'Ankara 3. İş Mahkemesi\n',
+      'Ankara 5. İş Mahkemesi\n',
+    );
     expect(diff.removedWords, 1);
     expect(diff.addedWords, 1);
     expect(

@@ -13,6 +13,7 @@ import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/mobile_connect.dart';
 import 'uyap_connect_view.dart';
 import 'uyap_session_chip.dart';
+import 'folio_select.dart';
 
 /// Finds the UYAP case a document is written for: the kind of court, the
 /// court, then the number. Asks for a session first when there is none.
@@ -372,7 +373,7 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
+                          child: FolioSelect<String>(
                             initialValue: _jurisdiction,
                             decoration: _field('Yargı türü'),
                             items: const [
@@ -426,7 +427,7 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<UyapOption>(
+                    FolioSelect<UyapOption>(
                       key: ValueKey('tur-${_types.length}-$_jurisdiction'),
                       initialValue: _type,
                       isExpanded: true,
@@ -454,7 +455,7 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                     ],
                     if (!_high) ...[
                       const SizedBox(height: 10),
-                      DropdownButtonFormField<UyapOption>(
+                      FolioSelect<UyapOption>(
                         key: ValueKey('mahkeme-${_courts.length}-${_type?.id}'),
                         initialValue: _court,
                         isExpanded: true,
