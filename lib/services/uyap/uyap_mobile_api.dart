@@ -127,11 +127,23 @@ class UyapMobileApi {
       field('adi'),
       field('soyadi'),
     ].where((s) => s.isNotEmpty).join(' ');
+    final phones = map['telefonList'];
     final s = MobileSession(
       user: name.isEmpty ? 'UYAP Mobil' : name,
       since: DateTime.now(),
       expires: _tokens!.refreshExpires,
       bar: field('baroAdi'),
+      tckn: RegExp(r'^\d{11}$').hasMatch(field('tcKimlikNo'))
+          ? field('tcKimlikNo')
+          : '',
+      phones: [
+        for (final p in phones is List ? phones : const [])
+          if ('${p is Map ? p['telefonNo'] ?? p['numara'] ?? p['tel'] ?? '' : p}'
+              .trim()
+              .isNotEmpty)
+            '${p is Map ? p['telefonNo'] ?? p['numara'] ?? p['tel'] : p}'
+                .trim(),
+      ],
     );
     session.value = s;
     return s;
@@ -520,11 +532,18 @@ class MobileSession {
   final DateTime since;
   final DateTime expires;
   final String bar;
+
+  /// The lawyer's TC number and phones, as UYAP knows them: UETS's login
+  /// asks for neither again (Banaozel: "TC varsayılanı oturum sahibi").
+  final String tckn;
+  final List<String> phones;
   const MobileSession({
     required this.user,
     required this.since,
     required this.expires,
     this.bar = '',
+    this.tckn = '',
+    this.phones = const [],
   });
 }
 

@@ -63,6 +63,10 @@ class UyapWebService {
   final _cookies = <String, String>{};
   final _sent = <UyapSendReceipt>[];
   String _tckn = '';
+
+  /// The TC number of the card the web portal was entered with; empty
+  /// when it was not read.
+  String get tckn => _tckn;
   HttpClient? _client;
   Future<void> _queue = Future.value();
   Completer<void>? _loginCancel;

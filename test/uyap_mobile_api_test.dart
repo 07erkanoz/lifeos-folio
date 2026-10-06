@@ -44,7 +44,15 @@ class _Fake {
         access = 'stale';
         answer = {'status': 403, 'message': 'yetkisiz'};
       } else if (path == 'mobile/avukat/user') {
-        answer = {'adi': 'Deniz', 'soyadi': 'Y.', 'baroAdi': 'Antalya'};
+        answer = {
+          'adi': 'Deniz',
+          'soyadi': 'Y.',
+          'baroAdi': 'Antalya',
+          'tcKimlikNo': '10000000146',
+          'telefonList': [
+            {'telefonNo': '0532 000 00 00'},
+          ],
+        };
       } else if (path.startsWith('mobile/avukat/durusmalarim/')) {
         answer = {
           'listDurusmalar': [
@@ -125,6 +133,9 @@ void main() {
     expect(s.user, 'Deniz Y.');
     expect(api.connected, isTrue);
     expect(api.session.value?.bar, 'Antalya');
+    // UETS's login asks for neither again.
+    expect(api.session.value?.tckn, '10000000146');
+    expect(api.session.value?.phones, ['0532 000 00 00']);
   });
 
   test('a refused token is renewed once, for every request waiting', () async {

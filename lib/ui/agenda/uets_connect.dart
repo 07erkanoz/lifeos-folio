@@ -7,6 +7,8 @@ import '../../services/security/secret_store.dart';
 import '../../services/signing/udf_signing_service.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uets/uets_card_login.dart';
+import '../../services/uyap/uyap_mobile_api.dart';
+import '../../services/uyap/uyap_web_service.dart';
 import 'agenda_page.dart' show AgendaColors;
 
 /// Opens a UETS session (UYGULAMAPLANI P05): with the mobile signature or
@@ -64,14 +66,42 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
     unawaited(_recall());
   }
 
+  /// The lawyer's own TC number, from a UYAP session: the account UETS
+  /// opens is the lawyer's, and a number typed again could be mistyped.
+  String get _knownTc {
+    final mobile = UyapMobileApi.instance.session.value?.tckn ?? '';
+    if (mobile.isNotEmpty) return mobile;
+    return UyapWebService.instance.tckn;
+  }
+
+  /// Whether the TC field is shown: when no session knows the number, or
+  /// the lawyer asks to log into another account.
+  bool _askTc = true;
+
   Future<void> _recall() async {
+    final known = _knownTc;
+    if (known.isNotEmpty) {
+      _tckn.text = known;
+      _askTc = false;
+    }
+    final phones = UyapMobileApi.instance.session.value?.phones ?? const [];
+    final mobilePhone = phones
+        .map(UetsApi.gsm)
+        .where((p) => p.length == 10 && p.startsWith('5'))
+        .firstOrNull;
+    if (mobilePhone != null) _phone.text = mobilePhone;
     if (!SecretStore.available) return;
     try {
       final kept = await widget.secrets.read(_remembered);
       if (kept == null || !mounted) return;
       setState(() {
-        _tckn.text = '${kept['tckn'] ?? ''}';
-        _phone.text = '${kept['phone'] ?? ''}';
+        final tc = '${kept['tckn'] ?? ''}';
+        if (_askTc && tc.isNotEmpty) {
+          _tckn.text = tc;
+          _askTc = false;
+        }
+        final phone = '${kept['phone'] ?? ''}';
+        if (phone.isNotEmpty) _phone.text = phone;
         _operator =
             MobileOperator.values.asNameMap()['${kept['operator']}'] ??
             _operator;
@@ -206,6 +236,10 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
   static String? _tcOf(SigningCertificate c) =>
       RegExp(r'\d{11}').firstMatch(c.info.subjectSerialNumber ?? '')?.group(0);
 
+  /// "123******01": enough to recognise one's own number.
+  static String _masked(String tc) =>
+      tc.length == 11 ? '${tc.substring(0, 3)}******${tc.substring(9)}' : tc;
+
   InputDecoration _field(String label) => InputDecoration(
     labelText: label,
     isDense: true,
@@ -268,14 +302,41 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
               ),
             const SizedBox(height: 16),
             if (mobile) ...[
-              TextField(
-                key: const ValueKey('uets-tckn'),
-                controller: _tckn,
-                enabled: !_busy,
-                keyboardType: TextInputType.number,
-                decoration: _field('TC kimlik no'),
-              ),
-              const SizedBox(height: 12),
+              if (_askTc) ...[
+                TextField(
+                  key: const ValueKey('uets-tckn'),
+                  controller: _tckn,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.number,
+                  decoration: _field('TC kimlik no'),
+                ),
+                const SizedBox(height: 12),
+              ] else
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.badge_outlined,
+                        size: 16,
+                        color: AgendaColors.muted,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Hesap: ${_masked(_tckn.text)}',
+                          style: const TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => setState(() => _askTc = true),
+                        child: const Text('Başka hesap'),
+                      ),
+                    ],
+                  ),
+                ),
               Row(
                 children: [
                   Expanded(
