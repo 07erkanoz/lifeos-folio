@@ -13,6 +13,7 @@ import '../../services/uets/notice_matcher.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import 'agenda_page.dart' show AgendaColors;
+import 'channel_bar.dart';
 import 'uets_connect.dart';
 
 enum _Filter { all, unread, untied }
@@ -317,88 +318,10 @@ class _UetsPageState extends State<UetsPage> {
     );
   }
 
-  Widget _channel(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final state = _sync.state(PortalChannel.uets);
-    final session = _api.session.value;
-    final (Color dot, String text) = !_api.connected
-        ? (
-            scheme.outline,
-            _notices.isEmpty
-                ? 'UETS · bağlı değil'
-                : 'UETS · bağlı değil — kayıtlı tebligatlar gösteriliyor',
-          )
-        : state.running
-        ? (AgendaColors.ok, 'UETS · tebligatlar alınıyor…')
-        : state.problem != null
-        ? (
-            AgendaColors.task,
-            'UETS · ${state.problem!.replaceFirst('Bad state: ', '')}',
-          )
-        : (
-            AgendaColors.ok,
-            'UETS · bağlı${session == null ? '' : ', ${_left(session.expires)}'}'
-                '${state.finished == null ? '' : ' · son alım ${_date(state.finished, time: true)}'}',
-          );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            border: Border.all(color: scheme.outlineVariant),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  text,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              if (_api.connected) ...[
-                const SizedBox(width: 8),
-                InkWell(
-                  onTap: () {
-                    _api.logout();
-                    setState(() {});
-                  },
-                  child: const Text(
-                    'Çıkış',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: AgendaColors.hearing,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _left(DateTime until) {
-    final left = until.difference(DateTime.now());
-    if (left.isNegative) return 'süresi doldu';
-    return '${left.inMinutes} dk';
-  }
+  Widget _channel(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+    child: PortalChannelBar(sync: _sync, showSyncAll: false),
+  );
 
   Widget _stats(BuildContext context) {
     final today = _day(_now());

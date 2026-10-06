@@ -97,7 +97,7 @@ void main() {
     expect(find.text('BUGÜN 09:20 · DURUŞMA · 2 SA SONRA'), findsOneWidget);
     // The deadline in the card of what is coming.
     expect(find.text('İstinaf süresi son gün'), findsOneWidget);
-    expect(find.text('UYAP Web · bağlı değil'), findsOneWidget);
+    expect(find.text('UYAP Web · bağlan'), findsOneWidget);
     expect(find.text('UYAP Mobil · bağlan'), findsOneWidget);
   });
 

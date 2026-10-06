@@ -18,8 +18,7 @@ import '../../services/portal/portal_sync.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
-import 'mobile_connect.dart';
-import 'uets_connect.dart';
+import 'channel_bar.dart';
 
 /// The agenda: the hearings both UYAP portals report, merged, and the
 /// lawyer's own notes, tasks and deadlines, laid out as the approved design
@@ -487,143 +486,10 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
-  Widget _channels(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    Widget chip(Color dot, String text, {VoidCallback? onTap}) => InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          border: Border.all(color: scheme.outlineVariant),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              text,
-              style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
-    );
-    final session = _web.session.value;
-    final webSync = _sync.state(PortalChannel.uyapWeb);
-    final mobileSync = _sync.state(PortalChannel.uyapMobile);
-    final web = !_web.connected
-        ? chip(AgendaColors.task, 'UYAP Web · bağlı değil')
-        : webSync.running
-        ? chip(AgendaColors.ok, 'UYAP Web · duruşmalar güncelleniyor…')
-        : webSync.problem != null
-        ? chip(
-            AgendaColors.task,
-            'UYAP Web · ${webSync.problem}',
-            onTap: _sync.syncWeb,
-          )
-        : chip(
-            AgendaColors.ok,
-            session == null
-                ? 'UYAP Web · bağlı'
-                : 'UYAP Web · bağlı, ${_left(session.expires)}',
-            onTap: _sync.syncWeb,
-          );
-    final uetsSync = _sync.state(PortalChannel.uets);
-    final uets = !_sync.uets.connected
-        ? chip(
-            scheme.outline,
-            'UETS · bağlan',
-            onTap: () =>
-                connectUets(context, api: _sync.uets, secrets: _sync.secrets),
-          )
-        : uetsSync.running
-        ? chip(AgendaColors.ok, 'UETS · tebligatlar alınıyor…')
-        : uetsSync.problem != null
-        ? chip(
-            AgendaColors.task,
-            'UETS · ${uetsSync.problem!.replaceFirst('Bad state: ', '')}',
-            onTap: _sync.syncUets,
-          )
-        : chip(
-            AgendaColors.ok,
-            'UETS · bağlı, ${_left(_sync.uets.session.value?.expires)}',
-            onTap: _sync.syncUets,
-          );
-    final any = _web.connected || _mobile.connected || _sync.uets.connected;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                if (!_mobile.connected)
-                  chip(
-                    scheme.outline,
-                    'UYAP Mobil · bağlan',
-                    onTap: () => connectUyapMobile(context, api: _mobile),
-                  )
-                else if (mobileSync.running)
-                  chip(AgendaColors.ok, 'UYAP Mobil · güncelleniyor…')
-                else if (mobileSync.problem != null)
-                  chip(
-                    AgendaColors.task,
-                    'UYAP Mobil · ${mobileSync.problem}',
-                    onTap: _sync.syncMobile,
-                  )
-                else
-                  chip(
-                    AgendaColors.ok,
-                    'UYAP Mobil · ${_mobile.session.value?.user ?? 'bağlı'}',
-                    onTap: _sync.syncMobile,
-                  ),
-                web,
-                uets,
-              ],
-            ),
-          ),
-          // Every connected channel's sync, now: each asks its own share.
-          TextButton.icon(
-            key: const ValueKey('agenda-sync'),
-            onPressed: any
-                ? () {
-                    if (_web.connected) unawaited(_sync.syncWeb());
-                    if (_mobile.connected) unawaited(_sync.syncMobile());
-                    if (_sync.uets.connected) unawaited(_sync.syncUets());
-                  }
-                : null,
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            icon: const Icon(Icons.sync_rounded, size: 16),
-            label: const Text('Senkronize et'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _left(DateTime? until) {
-    if (until == null) return 'oturum açık';
-    final left = until.difference(DateTime.now());
-    if (left.isNegative) return 'süresi doldu';
-    return '${left.inHours} sa ${left.inMinutes % 60} dk';
-  }
+  Widget _channels(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+    child: PortalChannelBar(sync: _sync),
+  );
 
   Widget _stats(BuildContext context) {
     final today = _day(_now());

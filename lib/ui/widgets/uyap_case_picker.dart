@@ -2,9 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../services/portal/case_import.dart';
+import '../../services/portal/observed.dart' show caseKey;
+import '../../services/portal/portal_case.dart';
+import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_case_store.dart';
+import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
+import '../agenda/mobile_connect.dart';
 import 'uyap_connect_view.dart';
 import 'uyap_session_chip.dart';
 
@@ -53,19 +59,57 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
   String? _error;
   List<UyapCaseRecord> _kept = const [];
 
+  /// The portfolio's cases not kept yet (UYAP Mobil's and the web's).
+  List<PortalCase> _portfolio = const [];
+  final _filter = TextEditingController();
+  PortalSync get _sync => PortalSync.instance;
+  UyapMobileApi get _mobile => UyapMobileApi.instance;
+
   @override
   void initState() {
     super.initState();
     _web.session.addListener(_sessionChanged);
+    _mobile.session.addListener(_sessionChanged);
     if (_web.connected) unawaited(_loadTypes());
-    if (widget.offerKept) {
-      unawaited(
-        UyapCaseStore.instance.cases().then((all) {
-          if (mounted) setState(() => _kept = [for (final (r, _) in all) r]);
-        }, onError: (Object _) {}),
-      );
-    }
+    if (widget.offerKept) unawaited(_loadKept());
   }
+
+  Future<void> _loadKept() async {
+    List<UyapCaseRecord> all;
+    try {
+      all = [for (final (r, _) in await UyapCaseStore.instance.cases()) r];
+    } catch (_) {
+      return;
+    }
+    if (mounted) setState(() => _kept = all);
+    final sync = PortalSync.started;
+    if (sync == null) return;
+    try {
+      final have = {for (final r in all) caseKey(r.number, r.court)};
+      final portfolio = [
+        for (final c in await sync.portfolio())
+          if (!have.contains(c.key)) c,
+      ]..sort((a, b) => b.number.compareTo(a.number));
+      if (mounted) setState(() => _portfolio = portfolio);
+    } catch (_) {}
+  }
+
+  bool _shows(String number, String court) {
+    final words = UyapWebService.fold(_filter.text)
+        .split(' ')
+        .where((w) => w.isNotEmpty);
+    final text = UyapWebService.fold('$number $court');
+    return words.every(text.contains);
+  }
+
+  /// A case of the portfolio: fetched through whichever portal is connected,
+  /// kept, and taken.
+  Future<void> _import(PortalCase kase) => _run(() async {
+    final import = PortalCaseImport();
+    final record = await import.add(kase);
+    final link = record.link ?? await import.linkFor(kase);
+    if (mounted) Navigator.pop(context, (link, null));
+  });
 
   /// A kept case, taken as it is: where it is in UYAP comes with it, or for
   /// one an earlier Folio kept, from a document tied to it.
@@ -87,29 +131,66 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Text(
-        'Bu bilgisayardaki dosyalar',
-        style: Theme.of(context).textTheme.labelLarge
-            ?.copyWith(fontWeight: FontWeight.w700),
+      TextField(
+        key: const ValueKey('uyap-kept-filter'),
+        controller: _filter,
+        onChanged: (_) => setState(() {}),
+        decoration: const InputDecoration(
+          isDense: true,
+          prefixIcon: Icon(Icons.search, size: 18),
+          hintText: 'Dosyalarımda ve portföyde ara: esas no, birim',
+          border: OutlineInputBorder(),
+        ),
       ),
-      const SizedBox(height: 4),
+      const SizedBox(height: 6),
       ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 200),
+        constraints: const BoxConstraints(maxHeight: 240),
         child: ListView(
           shrinkWrap: true,
           children: [
             for (final record in _kept)
-              ListTile(
-                key: ValueKey('uyap-kept-${record.key}'),
-                dense: true,
-                leading: const Icon(Icons.gavel_rounded, size: 18),
-                title: Text(record.number),
-                subtitle: Text(record.court),
-                onTap: () => unawaited(_take(record)),
-              ),
+              if (_shows(record.number, record.court))
+                ListTile(
+                  key: ValueKey('uyap-kept-${record.key}'),
+                  dense: true,
+                  leading: const Icon(Icons.gavel_rounded, size: 18),
+                  title: Text(record.number),
+                  subtitle: Text(record.court),
+                  trailing: const Text(
+                    'UYAP Dosyalarım',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  onTap: () => unawaited(_take(record)),
+                ),
+            for (final kase in _portfolio)
+              if (_shows(kase.number, kase.court))
+                ListTile(
+                  key: ValueKey('uyap-portfolio-${kase.key}'),
+                  dense: true,
+                  enabled: !_busy && (_web.connected || _mobile.connected),
+                  leading: const Icon(Icons.cloud_download_outlined, size: 18),
+                  title: Text(kase.number),
+                  subtitle: Text(kase.court),
+                  trailing: const Text(
+                    'Portföy · çekilir',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  onTap: () => unawaited(_import(kase)),
+                ),
           ],
         ),
       ),
+      if (_busy) ...[
+        const SizedBox(height: 6),
+        const LinearProgressIndicator(),
+      ],
+      if (_error != null && !_web.connected) ...[
+        const SizedBox(height: 6),
+        Text(
+          _error!,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ],
       const Divider(height: 20),
       Text(
         'UYAP’ta ara',
@@ -123,6 +204,8 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
   @override
   void dispose() {
     _web.session.removeListener(_sessionChanged);
+    _mobile.session.removeListener(_sessionChanged);
+    _filter.dispose();
     _year.dispose();
     _number.dispose();
     super.dispose();
@@ -246,7 +329,27 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_kept.isNotEmpty) _keptList(context),
+                    if (_kept.isNotEmpty || _portfolio.isNotEmpty)
+                      _keptList(context),
+                    if (!_mobile.connected && PortalSync.started != null) ...[
+                      OutlinedButton.icon(
+                        key: const ValueKey('uyap-picker-mobile'),
+                        onPressed: () async {
+                          if (await connectUyapMobile(
+                            context,
+                            api: _sync.mobile,
+                          )) {
+                            await _sync.syncMobile();
+                            await _loadKept();
+                          }
+                        },
+                        icon: const Icon(Icons.phone_iphone, size: 18),
+                        label: const Text(
+                          'UYAP Mobil ile bağlan (portföyü getirir)',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     UyapConnectView(
                       note: _kept.isEmpty
                           ? 'Dosyayı bulmak için bağlanın.'
@@ -259,7 +362,8 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_kept.isNotEmpty) _keptList(context),
+                    if (_kept.isNotEmpty || _portfolio.isNotEmpty)
+                      _keptList(context),
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: UyapSessionChip(),

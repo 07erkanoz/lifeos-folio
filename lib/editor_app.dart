@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
 
 import 'models/evrak_file.dart';
+import 'services/portal/portal_sync.dart';
 import 'services/desktop/native_window.dart';
 import 'services/editor/document_history.dart';
 import 'services/editor/editor_drafts.dart';
@@ -62,6 +63,9 @@ Future<void> runEditorApp(List<String> arguments) async {
       options = null;
     }
   }
+  // The portals' sessions kept from before: UYAP Mobil ties a petition to
+  // its case here too.
+  PortalSync.begin();
   runApp(EditorApp(path: path, desktopChrome: chrome));
   if (options != null) {
     await windowManager.waitUntilReadyToShow(options, () async {

@@ -539,7 +539,6 @@ void main() {
     );
     await tester.pumpWidget(page(null));
     await settle();
-    expect(find.byKey(const ValueKey('uyap-cases-connect')), findsOneWidget);
     expect(find.byKey(const ValueKey('uyap-cases-add')), findsOneWidget);
     expect(find.text('2026/1204'), findsOneWidget);
     expect(find.text('1 / 2 evrak'), findsOneWidget);
@@ -654,7 +653,12 @@ void main() {
       );
       await tester.pump();
     }
-    expect(find.text('Bu bilgisayardaki dosyalar'), findsOneWidget);
+    expect(find.byKey(const ValueKey('uyap-kept-filter')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('uyap-picker-mobile')),
+      findsNothing,
+      reason: 'the portals are not started in a test',
+    );
     await tester.tap(find.byKey(ValueKey('uyap-kept-${c.record!.key}')));
     for (var i = 0; i < 10; i++) {
       await tester.runAsync(

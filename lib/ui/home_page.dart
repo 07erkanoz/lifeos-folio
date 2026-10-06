@@ -1,5 +1,6 @@
 import 'agenda/agenda_page.dart';
 import 'agenda/uets_page.dart';
+import '../services/portal/case_import.dart';
 import '../services/portal/observed.dart' show caseKey;
 import '../services/portal/portal_case.dart';
 import '../services/portal/portal_database.dart';
@@ -980,23 +981,64 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     unawaited(_newDocument(forCase: link));
   }
 
+  /// The case of the agenda or of UETS, by [key], on its UYAP Dosyalarım
+  /// page: added there first, through whichever portal is connected, when
+  /// it is not there yet.
+  bool _openPortalCase(String key) {
+    final found = _uyapKeyFor(key);
+    if (found != null) {
+      setState(() => _group = 'uyap:$found');
+    } else {
+      unawaited(_importPortalCase(key));
+    }
+    return true;
+  }
+
+  Future<void> _importPortalCase(String key) async {
+    final sync = PortalSync.instance;
+    final kase = await sync.portalCase(key);
+    if (!mounted) return;
+    if (kase == null) {
+      showNotice(context, 'Dosya portföyde bulunamadı');
+      return;
+    }
+    if (!sync.web.connected && !sync.mobile.connected) {
+      showNotice(
+        context,
+        'Dosya henüz UYAP Dosyalarım’da yok',
+        detail: 'Eklemek için UYAP Web’e ya da UYAP Mobil’e bağlanın.',
+      );
+      return;
+    }
+    showNotice(
+      context,
+      'Dosya UYAP Dosyalarım’a ekleniyor',
+      detail: '${kase.court} ${kase.number}',
+    );
+    try {
+      final record = await PortalCaseImport().add(kase);
+      if (mounted) setState(() => _group = 'uyap:${record.key}');
+    } catch (e) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Dosya eklenemedi',
+          detail: '$e'.replaceFirst('Bad state: ', ''),
+          kind: NoticeKind.error,
+        );
+      }
+    }
+  }
+
   Widget _agendaPage() => AgendaPage(
     onChanged: () => unawaited(_countAgenda()),
     onPetition: _agendaPetition,
-    onOpenCase: (key) {
-      final found = _uyapKeyFor(key);
-      if (found != null) setState(() => _group = 'uyap:$found');
-      return found != null;
-    },
+    onOpenCase: _openPortalCase,
   );
 
   Widget _uetsPage() => UetsPage(
     onChanged: () => unawaited(_countAgenda()),
-    onOpenCase: (key) {
-      final found = _uyapKeyFor(key);
-      if (found != null) setState(() => _group = 'uyap:$found');
-      return found != null;
-    },
+    onOpenCase: _openPortalCase,
     onOpenFile: (path) =>
         unawaited(_addFiles([path], index: false, external: true)),
   );

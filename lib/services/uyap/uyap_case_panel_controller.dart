@@ -3,26 +3,48 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../portal/observed.dart' show caseKey;
+import '../portal/portal_sync.dart';
 import 'uyap_case_links.dart';
 import 'uyap_case_store.dart';
+import 'uyap_mobile_api.dart';
 import 'uyap_web_service.dart';
 
 /// What the UYAP panel beside a document works with: the case the document
 /// is written for, as it was last fetched and kept, and what can be done
 /// with it now. Everything that needs UYAP asks for a session first; what
-/// was kept works without one.
+/// was kept works without one. The web portal gives everything and is
+/// asked first; without it the UYAP mobile API gives the parties, the
+/// documents and the documents' files (UYGULAMAPLANI §9.2).
 class UyapCasePanelController extends ChangeNotifier {
   UyapCasePanelController({
     this._web,
+    this._mobile,
+    this._sync,
     this._store,
     this._links,
     this.pause = const Duration(milliseconds: 300),
   });
 
   final UyapWebService? _web;
+  final UyapMobileApi? _mobile;
+  final PortalSync? _sync;
   final UyapCaseStore? _store;
   final UyapCaseLinks? _links;
   UyapWebService get web => _web ?? UyapWebService.instance;
+  UyapMobileApi get mobile => _mobile ?? UyapMobileApi.instance;
+  PortalSync get sync => _sync ?? PortalSync.instance;
+
+  /// Whether either portal can be asked now.
+  bool get connected => web.connected || mobile.connected;
+
+  /// Whether the web portal is the one asked: connected, and the case's
+  /// place on it known. Otherwise the mobile API, when connected.
+  bool get _useWeb => web.connected && (findable || !mobile.connected);
+
+  /// The mobile session [_liveDocuments] came from, when they did.
+  MobileSession? _liveMobile;
+  String? _mobileCaseId;
   UyapCaseStore get store => _store ?? UyapCaseStore.instance;
   UyapCaseLinks get links => _links ?? UyapCaseLinks.instance;
 
@@ -201,9 +223,11 @@ class UyapCasePanelController extends ChangeNotifier {
 
   /// Fetches the case's particulars, parties, documents and money, and
   /// keeps them. UYAP is asked first what it shows of a case of this kind,
-  /// and only that is asked for.
+  /// and only that is asked for. Without the web portal the mobile API is
+  /// asked for the parties and the documents.
   Future<void> refresh() async {
-    if (_link == null || !web.connected) return;
+    if (_link == null || !connected) return;
+    if (!_useWeb) return _refreshMobile();
     await _doing('Dosya UYAP’ta aranıyor', () async {
       final live = await _liveCase();
       busy = 'Dosya bilgileri çekiliyor';
@@ -270,6 +294,84 @@ class UyapCasePanelController extends ChangeNotifier {
     });
   }
 
+  /// The case's id in this mobile session, the portfolio read for it first
+  /// when need be.
+  Future<String> _mobileId() async {
+    final session = mobile.session.value;
+    if (_mobileCaseId != null && identical(session, _liveMobile)) {
+      return _mobileCaseId!;
+    }
+    busy = 'UYAP Mobil’de dosya aranıyor';
+    _changed();
+    final id = await sync.mobileCaseId(caseKey(_link!.number, _link!.court));
+    if (id == null || id.isEmpty) {
+      throw StateError(
+        '${_link!.title} UYAP Mobil’de bulunamadı. Yargıtay ve Cumhuriyet '
+        'Başsavcılığı dosyaları yalnız UYAP Web’den alınır.',
+      );
+    }
+    _liveMobile = session;
+    _liveDocuments = const {};
+    return _mobileCaseId = id;
+  }
+
+  Future<void> _refreshMobile() => _doing(
+    'Dosya UYAP Mobil’den çekiliyor',
+    () async {
+      final id = await _mobileId();
+      final kept = await sync.portalCase(caseKey(_link!.number, _link!.court));
+      final details = kept?.details?.value ?? const <String, Object?>{};
+      busy = 'Taraflar çekiliyor';
+      _changed();
+      List<UyapParty> parties;
+      try {
+        parties = [
+          for (final p in await mobile.parties(
+            id,
+            caseType: '${details['dosyaTurKod'] ?? ''}',
+          ))
+            UyapParty.fromMap(p),
+        ];
+      } catch (_) {
+        parties = const [];
+      }
+      busy = 'Evrak listesi çekiliyor';
+      _changed();
+      final raw = Map<String, Object?>.from(await mobile.caseDocuments(id));
+      // The mobile API may give the full list as a list rather than grouped.
+      if (raw['tumEvraklar'] is List) {
+        raw['tumEvraklar'] = {'': raw['tumEvraklar']};
+      }
+      final documents = keyDocuments([UyapDocumentPage.fromJson(raw)]);
+      _liveDocuments = {
+        for (final d in documents) ...{
+          d.key: d,
+          for (final a in d.attachments) a.key: a,
+        },
+      };
+      final before = _record;
+      String text(String key) => '${details[key] ?? ''}'.trim();
+      // What the web gave before stays: the mobile API knows less of a case.
+      final hasWeb = before != null && before.details.kind.isNotEmpty;
+      _record = await store.keep(
+        target: UyapCase(id, _link!.number, _link!.courtId, _link!.court),
+        details: hasWeb
+            ? before.details
+            : UyapCaseDetails(
+                kind: text('davaTuru'),
+                fileType: text('tur'),
+                state: kept?.status?.value ?? '',
+                hearing: before?.details.hearing,
+              ),
+        parties: parties.isEmpty ? before?.parties ?? const [] : parties,
+        documents: UyapCaseDocuments(documents),
+        link: _link,
+        money: before?.money,
+        hidden: before?.hidden ?? const {},
+      );
+    },
+  );
+
   /// The documents the list shows, as the search narrows them.
   List<UyapCaseDocument> get documents {
     final all = _record?.documents ?? const <UyapCaseDocument>[];
@@ -312,9 +414,12 @@ class UyapCasePanelController extends ChangeNotifier {
   }
 
   Future<File> _fetch(UyapCaseDocument document) async {
-    if (!web.connected) {
-      throw StateError('Evrakı indirmek için UYAP’a bağlanın.');
+    if (!connected) {
+      throw StateError(
+        'Evrakı indirmek için UYAP Web’e ya da UYAP Mobil’e bağlanın.',
+      );
     }
+    if (!_useWeb) return _fetchMobile(document);
     await _liveCase();
     var live = _liveDocuments[document.key];
     if (live == null) {
@@ -329,6 +434,26 @@ class UyapCasePanelController extends ChangeNotifier {
     final bytes = await web.caseDocumentBytes(
       live,
       caseId: (await _liveCase()).id,
+    );
+    final (record, file) = await store.save(_record!, document, bytes);
+    _record = await store.seen(record, document.key);
+    onSaved?.call(file);
+    return file;
+  }
+
+  Future<File> _fetchMobile(UyapCaseDocument document) async {
+    final id = await _mobileId();
+    var live = _liveDocuments[document.key];
+    if (live == null) {
+      await _refreshMobile();
+      live = _liveDocuments[document.key];
+      if (live == null) {
+        throw StateError('${document.title} UYAP Mobil’deki listede yok.');
+      }
+    }
+    final bytes = await mobile.documentBytes(
+      live.documentId,
+      live.caseId.isNotEmpty ? live.caseId : id,
     );
     final (record, file) = await store.save(_record!, document, bytes);
     _record = await store.seen(record, document.key);

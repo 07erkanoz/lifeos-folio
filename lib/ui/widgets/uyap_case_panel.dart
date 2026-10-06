@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import '../../services/platform/file_actions.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
 import '../../services/uyap/uyap_case_store.dart';
+import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
+import '../agenda/mobile_connect.dart';
 import 'uyap_case_picker.dart';
 import 'uyap_connect_view.dart';
 import 'uyap_session_chip.dart';
@@ -64,12 +66,16 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
   void initState() {
     super.initState();
     _web.session.addListener(_changed);
+    // The mobile session kept from before comes back with the sync; an
+    // editor window of its own has it this way too.
+    UyapMobileApi.instance.session.addListener(_changed);
     unawaited(UyapSettings.instance.load());
   }
 
   @override
   void dispose() {
     _web.session.removeListener(_changed);
+    UyapMobileApi.instance.session.removeListener(_changed);
     _search.dispose();
     super.dispose();
   }
@@ -80,7 +86,7 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
 
   /// Runs [work] with a session, asking for one first if there is none.
   Future<void> _withSession(Future<void> Function() work) async {
-    if (_web.connected) return work();
+    if (_c.connected) return work();
     setState(() => _afterConnect = work);
   }
 
@@ -317,16 +323,35 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
                 ),
-              if (_afterConnect != null && !_web.connected)
+              if (_afterConnect != null && !_c.connected)
                 Padding(
                   padding: const EdgeInsets.all(14),
-                  child: UyapConnectView(
-                    note: 'Bu iş için UYAP oturumu gerekiyor.',
-                    onConnected: (_) async {
-                      final then = _afterConnect;
-                      setState(() => _afterConnect = null);
-                      await then?.call();
-                    },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          if (await connectUyapMobile(context)) {
+                            final then = _afterConnect;
+                            setState(() => _afterConnect = null);
+                            await then?.call();
+                          }
+                        },
+                        icon: const Icon(Icons.phone_iphone, size: 18),
+                        label: const Text('UYAP Mobil ile bağlan'),
+                      ),
+                      const SizedBox(height: 12),
+                      UyapConnectView(
+                        note:
+                            'Bu iş için UYAP Web ya da UYAP Mobil oturumu '
+                            'gerekiyor.',
+                        onConnected: (_) async {
+                          final then = _afterConnect;
+                          setState(() => _afterConnect = null);
+                          await then?.call();
+                        },
+                      ),
+                    ],
                   ),
                 )
               else if (link == null)
@@ -374,7 +399,9 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
               onPressed: _c.busy != null
                   ? null
                   : () => unawaited(
-                      _c.findable ? _withSession(_c.refresh) : _locate(),
+                      _c.findable || _c.mobile.connected
+                          ? _withSession(_c.refresh)
+                          : _locate(),
                     ),
               icon: const Icon(Icons.refresh_rounded, size: 20),
             ),

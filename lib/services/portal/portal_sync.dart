@@ -43,6 +43,14 @@ class PortalSync extends ChangeNotifier {
   static PortalSync? _instance;
   static PortalSync get instance => _instance ??= PortalSync()..start();
 
+  /// The one started, if Folio started it: what only looks (a list, a
+  /// listener) uses this, so that a test never wakes the lawyer's sessions.
+  static PortalSync? get started => _instance;
+
+  /// Starts the one instance: the kept mobile session comes back with it.
+  /// Folio's window and an editor window of its own call this at start.
+  static void begin() => _instance ??= PortalSync()..start();
+
   final UyapWebService _web;
   final UyapMobileApi _mobile;
   final UetsApi _uets;
@@ -245,19 +253,48 @@ class PortalSync extends ChangeNotifier {
     return result.complete ? null : 'Bazı tarihler alınamadı';
   });
 
-  /// The mobile API's hearings, then its cases.
-  Future<void> syncMobile() => _run(PortalChannel.uyapMobile, (db) async {
+  /// The mobile API's hearings, then its cases. A second call while one
+  /// runs waits for that one.
+  Future<void> syncMobile() =>
+      _mobileSync ??= _run(PortalChannel.uyapMobile, (db) async {
+        if (!_mobile.connected) return null;
+        final session = _mobile.session.value;
+        final hearings = await syncHearings(
+          PortalChannel.uyapMobile,
+          db,
+          _mobile.hearingRows,
+        );
+        final cases = await syncMobilePortfolio(_mobile, db);
+        _mobileIdsOf = session;
+        return hearings.complete && cases.complete
+            ? null
+            : 'Bazı kayıtlar alınamadı';
+      }).whenComplete(() => _mobileSync = null);
+  Future<void>? _mobileSync;
+
+  /// The mobile session the kept mobile ids were read in: they are that
+  /// session's only (§9).
+  MobileSession? _mobileIdsOf;
+
+  /// The mobile API's id of [key]'s case in this session: the portfolio is
+  /// read first when it was not read in this session. Null when the mobile
+  /// API is not connected or does not list the case.
+  Future<String?> mobileCaseId(String key) async {
     if (!_mobile.connected) return null;
-    final hearings = await syncHearings(
-      PortalChannel.uyapMobile,
-      db,
-      _mobile.hearingRows,
-    );
-    final cases = await syncMobilePortfolio(_mobile, db);
-    return hearings.complete && cases.complete
-        ? null
-        : 'Bazı kayıtlar alınamadı';
-  });
+    final session = _mobile.session.value;
+    if (session == null || !identical(session, _mobileIdsOf)) {
+      await syncMobile();
+    }
+    return (await _database()).cases()[key]?.ids[PortalChannel.uyapMobile];
+  }
+
+  /// The case kept as [key], if any.
+  Future<PortalCase?> portalCase(String key) async =>
+      (await _database()).cases()[key];
+
+  /// Every case kept, from both portals.
+  Future<List<PortalCase>> portfolio() async =>
+      (await _database()).cases().values.toList();
 }
 
 /// The mobile API's documents of a case, from `tumEvraklar` (grouped by
@@ -332,7 +369,12 @@ Future<PortfolioResult> syncMobilePortfolio(
   var complete = true;
   final found = <String, PortalCase>{};
 
-  void add(Map<String, Object?> row, CaseFamily family) {
+  void add(
+    Map<String, Object?> row,
+    CaseFamily family, {
+    int? jurisdiction,
+    String? unit,
+  }) {
     final number = '${row['dosyaNo'] ?? ''}'.trim();
     final court = '${row['birimAdi'] ?? ''}'.trim();
     if (number.isEmpty || court.isEmpty) return;
@@ -345,6 +387,10 @@ Future<PortfolioResult> syncMobilePortfolio(
         'acilis': row['dosyaAcilisTarihi'],
       if ('${row['dosyaKapanisTarihi'] ?? ''}'.isNotEmpty)
         'kapanis': row['dosyaKapanisTarihi'],
+      // The web portal's yargı türü and yargı birimi are the same codes:
+      // with them the case is found on the web too.
+      if (jurisdiction != null) 'yargiTuru': '$jurisdiction',
+      'yargiBirimi': ?unit,
     };
     final one = PortalCase(
       key: caseKey(number, court),
@@ -389,7 +435,7 @@ Future<PortfolioResult> syncMobilePortfolio(
                 id,
                 closed: closed,
               )) {
-                add(row, CaseFamily.court);
+                add(row, CaseFamily.court, jurisdiction: type, unit: kind);
               }
             } catch (_) {
               complete = false;

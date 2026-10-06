@@ -3,20 +3,25 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../services/portal/case_import.dart';
+import '../../services/portal/observed.dart' show caseKey;
+import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
 import '../../services/uyap/uyap_case_store.dart';
+import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
+import '../agenda/channel_bar.dart';
+import 'portfolio_picker.dart';
 import 'uyap_case_panel.dart';
 import 'uyap_case_picker.dart';
-import 'uyap_connect_view.dart';
-import 'uyap_session_chip.dart';
 
 /// The UYAP cases kept on this computer, where they are looked after on
 /// their own rather than beside a petition: each with its particulars,
 /// parties and documents, refreshed from UYAP on request, and what was
-/// downloaded of it. Cases are added here one by one, never the whole
-/// portfolio at once: UYAP answers one request at a time.
+/// downloaded of it. Cases are added from the portfolio the portals gave,
+/// a whole unit or one by one, or found on the web portal; each is fetched
+/// in turn, as UYAP answers one request at a time.
 class UyapCasesPage extends StatefulWidget {
   const UyapCasesPage({
     super.key,
@@ -54,11 +59,16 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
   List<(UyapCaseRecord, int)>? _cases;
   bool _adding = false;
 
+  /// "3/12 · Antalya 3. Asliye Hukuk 2025/412" while cases are added.
+  String? _progress;
+  PortalSync get _sync => PortalSync.instance;
+
   @override
   void initState() {
     super.initState();
     UyapCaseStore.changes.addListener(_reload);
     _web.session.addListener(_changed);
+    UyapMobileApi.instance.session.addListener(_changed);
     unawaited(_reload());
   }
 
@@ -72,6 +82,7 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
   void dispose() {
     UyapCaseStore.changes.removeListener(_reload);
     _web.session.removeListener(_changed);
+    UyapMobileApi.instance.session.removeListener(_changed);
     _controller.dispose();
     _search.dispose();
     super.dispose();
@@ -84,9 +95,10 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
   Future<void> _reload() async {
     final cases = await UyapCaseStore.instance.cases();
     if (!mounted) return;
-    final first = _cases == null;
     setState(() => _cases = cases);
-    if (first) await _showCase();
+    // A case just added elsewhere (from the agenda) is shown once it is
+    // listed.
+    await _showCase();
   }
 
   /// The case of [UyapCasesPage.caseKey], into the panel.
@@ -97,33 +109,97 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
     if (record != null) await _controller.show(record);
   }
 
-  Future<void> _connect() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('UYAP’a bağlan'),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          child: UyapConnectView(
-            note:
-                'Bağlandıktan sonra dosya ekleyebilir, dosyaları yenileyebilir '
-                've evrak indirebilirsiniz.',
-            onConnected: (_) async {
-              if (context.mounted) Navigator.pop(context);
-            },
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Kapat'),
-        ),
-      ],
-    ),
-  );
+  void _say(String text) =>
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(text)));
 
-  /// Finds a case in UYAP, fetches it and opens its page.
+  /// Cases of the portfolio, a unit whole or one by one, fetched in turn
+  /// through whichever portal is connected and kept.
+  Future<void> _addFromPortfolio() async {
+    if (!_web.connected && !_sync.mobile.connected) {
+      _say('Dosya eklemek için UYAP Web’e ya da UYAP Mobil’e bağlanın.');
+      return;
+    }
+    var all = await _sync.portfolio();
+    if (all.isEmpty && _sync.mobile.connected) {
+      setState(() => _progress = 'UYAP Mobil’den portföy okunuyor…');
+      await _sync.syncMobile();
+      all = await _sync.portfolio();
+      if (mounted) setState(() => _progress = null);
+    }
+    if (!mounted) return;
+    if (all.isEmpty) {
+      _say(
+        'Portföy henüz boş. UYAP Mobil’e bağlanın: tüm dosyalarınız birim '
+        'birim gelir.',
+      );
+      return;
+    }
+    final kept = {
+      for (final (r, _) in _cases ?? const <(UyapCaseRecord, int)>[])
+        caseKey(r.number, r.court),
+    };
+    final chosen = await PortfolioPicker.show(context, [
+      for (final c in all)
+        if (!kept.contains(c.key)) c,
+    ]);
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+    setState(() => _adding = true);
+    final failed = <String>[];
+    UyapCaseRecord? last;
+    final import = PortalCaseImport();
+    try {
+      for (var i = 0; i < chosen.length; i++) {
+        final c = chosen[i];
+        if (mounted) {
+          setState(
+            () => _progress =
+                '${i + 1}/${chosen.length} · ${c.court} ${c.number}',
+          );
+        }
+        try {
+          last = await import.add(c);
+        } catch (e) {
+          failed.add('${c.number}: ${'$e'.replaceFirst('Bad state: ', '')}');
+        }
+        if (i < chosen.length - 1) {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _adding = false;
+          _progress = null;
+        });
+      }
+    }
+    if (!mounted) return;
+    final added = chosen.length - failed.length;
+    if (failed.isEmpty) {
+      _say('$added dosya UYAP Dosyalarım’a eklendi.');
+      if (chosen.length == 1 && last != null) widget.onShowCase(last.key);
+    } else {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('$added dosya eklendi, ${failed.length} eklenemedi'),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(child: Text(failed.join('\n'))),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tamam'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  /// Finds a case on the web portal, fetches it and opens its page.
   Future<void> _add() async {
     final chosen = await UyapCasePicker.show(context);
     final live = chosen?.$2;
@@ -190,18 +266,6 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
                 ),
               ),
             ),
-          // UYAP is reached from a computer; a phone shows what was kept.
-          if (!_desktop)
-            const SizedBox.shrink()
-          else if (_web.connected)
-            const UyapSessionChip()
-          else
-            OutlinedButton.icon(
-              key: const ValueKey('uyap-cases-connect'),
-              onPressed: () => unawaited(_connect()),
-              icon: const Icon(Icons.login_rounded, size: 18),
-              label: const Text('UYAP’a bağlan'),
-            ),
           if (inCase && widget.onNewPetition != null)
             ListenableBuilder(
               listenable: _controller,
@@ -218,17 +282,50 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
               },
             ),
           if (!inCase && _desktop)
-            FilledButton.icon(
-              key: const ValueKey('uyap-cases-add'),
-              onPressed: _adding ? null : () => unawaited(_add()),
-              icon: _adding
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_rounded, size: 18),
-              label: const Text('UYAP’tan dosya ekle'),
+            MenuAnchor(
+              menuChildren: [
+                MenuItemButton(
+                  key: const ValueKey('uyap-cases-add-portfolio'),
+                  leadingIcon: const Icon(Icons.account_tree_outlined),
+                  onPressed: () => unawaited(_addFromPortfolio()),
+                  child: const Text('Portföyden seç (birim ya da tek tek)'),
+                ),
+                MenuItemButton(
+                  key: const ValueKey('uyap-cases-add-search'),
+                  leadingIcon: const Icon(Icons.search),
+                  onPressed: _web.connected ? () => unawaited(_add()) : null,
+                  child: Text(
+                    _web.connected
+                        ? 'Mahkeme ve esas no ile ara (UYAP Web)'
+                        : 'Mahkeme ve esas no ile ara (UYAP Web bağlı değil)',
+                  ),
+                ),
+              ],
+              builder: (context, menu, _) => FilledButton.icon(
+                key: const ValueKey('uyap-cases-add'),
+                onPressed: _adding
+                    ? null
+                    : () => menu.isOpen ? menu.close() : menu.open(),
+                icon: _adding
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_rounded, size: 18),
+                label: const Text('UYAP’tan dosya ekle'),
+              ),
+            ),
+          if (_progress != null)
+            Text(
+              _progress!,
+              style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
+            ),
+          // UYAP is reached from a computer; a phone shows what was kept.
+          if (_desktop && PortalSync.started != null)
+            const SizedBox(
+              width: double.infinity,
+              child: PortalChannelBar(showSyncAll: false),
             ),
         ],
       ),
@@ -314,8 +411,9 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
             constraints: const BoxConstraints(maxWidth: 460),
             child: Text(
               'Henüz bir UYAP dosyası yok. “UYAP’tan dosya ekle” ile '
-              'mahkemeyi ve esas numarasını seçerek dosyayı ekleyin. Folio '
-              'dosyanın bilgilerini, taraflarını ve evrak listesini bu '
+              'portföyünüzden bir birimin tüm dosyalarını ya da dosyaları '
+              'tek tek seçin; UYAP Mobil’e bağlıysanız portföy oradan gelir. '
+              'Folio dosyanın bilgilerini, taraflarını ve evrak listesini bu '
               'bilgisayara kaydeder; bağlantı olmadan da açarsınız.',
               textAlign: TextAlign.center,
               style: muted,
