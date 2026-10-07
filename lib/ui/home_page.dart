@@ -5,7 +5,7 @@ import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import 'agenda/uyap_notices_page.dart';
 import '../services/platform/system_notices.dart';
-import '../services/portal/uyap_notice.dart';
+import '../services/portal/background_notices.dart';
 import '../services/portal/uyap_notice_alerts.dart';
 import '../services/portal/observed.dart' show caseKey;
 import '../services/portal/portal_case.dart';
@@ -699,12 +699,19 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       PortalSync.instance.addListener(_portalSynced);
       PortalSync.instance.noticesVersion.addListener(_portalSynced);
       // New UYAP notifications, told on the computer's or phone's own.
-      PortalSync.instance.onNewNotices = (n) => unawaited(_tellNotices(n));
+      PortalSync.instance.onNewNotices = (n) => unawaited(
+        PortalDatabase.shared().then((db) => tellUyapNotices(db, n)),
+      );
       SystemNotices.instance.onOpen = (p) => unawaited(_openToldNotice(p));
-      // A phone asks leave for them when the first one comes, not at start.
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        unawaited(SystemNotices.instance.prepare());
-      }
+      // Leave for them is asked when the first one comes, not at start;
+      // a word clicked while Folio was closed opens what it told of.
+      unawaited(SystemNotices.instance.prepare());
+      unawaited(
+        PortalDatabase.shared().then((db) {
+          BackgroundNotices.seen(db);
+          return BackgroundNotices.schedule(UyapNoticeAlerts.of(db));
+        }),
+      );
     }
     _incoming = _intents.paths.listen(
       (paths) {
@@ -772,6 +779,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (Platform.isAndroid || Platform.isIOS) {
+      final away = state != AppLifecycleState.resumed;
+      PortalSync.started?.paused = away;
+      if (!away) {
+        unawaited(PortalDatabase.shared().then(BackgroundNotices.seen));
+        // Back in sight: what the background check brought is shown, and
+        // it is looked again.
+        unawaited(_countAgenda());
+        unawaited(PortalSync.started?.syncNotices());
+      }
+    }
     if (!Platform.isAndroid) return;
     if (state == AppLifecycleState.resumed) {
       _library.refresh();
@@ -1292,40 +1310,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onOpenFile: (path) =>
         unawaited(_addFiles([path], index: false, external: true)),
   );
-
-  /// [notices] told as the lawyer chose (UyapNoticeAlerts): each with its
-  /// case, or one word for many at once.
-  Future<void> _tellNotices(List<UyapNotice> notices) async {
-    final db = await PortalDatabase.shared();
-    final alerts = UyapNoticeAlerts.of(db);
-    final told = [
-      for (final n in notices)
-        if (alerts.tells(n)) n,
-    ];
-    if (told.isEmpty) return;
-    final cases = db.cases();
-    String line(UyapNotice n) => switch (cases[n.caseKey]) {
-      null => n.body.length > 140 ? '${n.body.substring(0, 140)}…' : n.body,
-      final c => '${c.number} · ${c.court}',
-    };
-    if (told.length > 3) {
-      await SystemNotices.instance.show(
-        id: 1,
-        title: '${told.length} yeni UYAP bildirimi',
-        body: told.take(4).map((n) => n.title).join(', '),
-        payload: 'notices:',
-      );
-      return;
-    }
-    for (final n in told) {
-      await SystemNotices.instance.show(
-        id: n.signature.hashCode & 0x7fffffff,
-        title: n.title.isEmpty ? 'UYAP bildirimi' : n.title,
-        body: line(n),
-        payload: 'notice:${n.signature}',
-      );
-    }
-  }
 
   /// A word clicked: its case's page, or the notifications', and read.
   Future<void> _openToldNotice(String payload) async {

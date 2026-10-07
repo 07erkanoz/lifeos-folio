@@ -105,7 +105,9 @@ class QuickSearchSettings extends StatelessWidget {
               onPressed: companion.busy
                   ? null
                   : () {
-                      Navigator.pop(context);
+                      // Shut the dialog it may sit in; never the page.
+                      final route = ModalRoute.of(context);
+                      if (route is PopupRoute) Navigator.pop(context);
                       companion.toggleQuick();
                     },
               icon: const Icon(Icons.search_rounded, size: 18),

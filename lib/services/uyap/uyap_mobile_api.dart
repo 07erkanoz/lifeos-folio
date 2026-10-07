@@ -81,6 +81,12 @@ class UyapMobileApi {
   /// they are kept between runs (`SecretStore`).
   void Function(MobileTokens? tokens)? onTokens;
 
+  /// The tokens as kept outside this run, read before renewing: another
+  /// run of Folio (the phone's check in the background) may have renewed
+  /// them meanwhile, and renewing again with the old refresh token could
+  /// end the session.
+  Future<MobileTokens?> Function()? keptTokens;
+
   void _setTokens(MobileTokens? tokens) {
     _tokens = tokens;
     onTokens?.call(tokens);
@@ -199,10 +205,26 @@ class UyapMobileApi {
   /// Renews the access token once, however many requests wait for it; a
   /// login that happened meanwhile wins over the renewal's answer.
   Future<void> _refresh() => _refreshing ??= () async {
-    final had = _tokens;
+    var had = _tokens;
     final generation = _generation;
     try {
       if (had == null) throw StateError('UYAP Mobil oturumu açık değil.');
+      MobileTokens? kept;
+      try {
+        kept = await keptTokens?.call();
+      } catch (_) {}
+      final now = DateTime.now();
+      if (kept != null &&
+          kept.refresh != had.refresh &&
+          kept.refreshExpires.isAfter(now)) {
+        if (generation != _generation || !identical(_tokens, had)) return;
+        // Renewed elsewhere: those are taken up, already kept.
+        _tokens = kept;
+        if (kept.accessExpires.isAfter(now.add(const Duration(seconds: 30)))) {
+          return;
+        }
+        had = kept;
+      }
       final data = await _send('POST', 'auth/refresh', {
         'refreshToken': had.refresh,
       }, authorized: false);
@@ -431,13 +453,12 @@ class UyapMobileApi {
   /// One page of the lawyer's UYAP notifications (`bildirimlerim`), the
   /// page after the row whose message id is [after]; the first with none.
   /// Its rows have no body: [noticeBody] gives one's.
-  Future<List<Map<String, Object?>>> noticeRows({String? after}) async =>
-      _list(
-        await _get(
-          'mobile/bildirim/bildirimlerim/${after == null ? 'null' : _pathPart(after)}',
-        ),
-        'bildirimler',
-      );
+  Future<List<Map<String, Object?>>> noticeRows({String? after}) async => _list(
+    await _get(
+      'mobile/bildirim/bildirimlerim/${after == null ? 'null' : _pathPart(after)}',
+    ),
+    'bildirimler',
+  );
 
   /// The body of the notification whose message id is [messageId].
   Future<String> noticeBody(String messageId) async {

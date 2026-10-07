@@ -339,8 +339,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                       'Folio açıkken, işletim sisteminin bildirimi olarak.',
                     ),
                     value: alerts.on,
-                    onChanged: (v) =>
-                        set(UyapNoticeAlerts(on: v, quiet: alerts.quiet)),
+                    onChanged: (v) => set(alerts.copyWith(on: v)),
                   ),
                   const Divider(),
                   const Padding(
@@ -364,8 +363,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                       value: !alerts.quiet.contains(kind),
                       onChanged: alerts.on
                           ? (v) => set(
-                              UyapNoticeAlerts(
-                                on: alerts.on,
+                              alerts.copyWith(
                                 quiet: v == true
                                     ? ({...alerts.quiet}..remove(kind))
                                     : {...alerts.quiet, kind},

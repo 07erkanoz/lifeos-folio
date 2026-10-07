@@ -27,8 +27,17 @@ class SystemNotices {
       final ok = await _plugin.initialize(
         settings: const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-          iOS: DarwinInitializationSettings(),
-          macOS: DarwinInitializationSettings(),
+          // Leave is asked for when the first word comes, not at start.
+          iOS: DarwinInitializationSettings(
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
+          ),
+          macOS: DarwinInitializationSettings(
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
+          ),
           linux: LinuxInitializationSettings(defaultActionName: 'Aç'),
           windows: WindowsInitializationSettings(
             appName: 'LifeOS Folio',
@@ -42,18 +51,13 @@ class SystemNotices {
           if (payload != null && payload.isNotEmpty) onOpen?.call(payload);
         },
       );
-      if (Platform.isAndroid) {
-        await _plugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >()
-            ?.requestNotificationsPermission();
-      } else if (Platform.isMacOS) {
-        await _plugin
-            .resolvePlatformSpecificImplementation<
-              MacOSFlutterLocalNotificationsPlugin
-            >()
-            ?.requestPermissions(alert: true, sound: true);
+      // Folio opened by a word clicked while it was closed.
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      final payload = launch?.notificationResponse?.payload;
+      if (launch?.didNotificationLaunchApp == true &&
+          payload != null &&
+          payload.isNotEmpty) {
+        _launched = payload;
       }
       return ok ?? false;
     } catch (_) {
@@ -63,17 +67,54 @@ class SystemNotices {
     }
   }();
 
-  /// Readies them early, so that the first word is not the one lost to
-  /// asking for leave.
-  Future<void> prepare() async => _start();
+  String? _launched;
+  bool _asked = false;
+
+  /// Readies them at start, and tells [onOpen] of the word Folio was
+  /// opened by, if it was.
+  Future<void> prepare() async {
+    await _start();
+    final launched = _launched;
+    _launched = null;
+    if (launched != null) onOpen?.call(launched);
+  }
+
+  /// Leave to show them, asked once a run, where the system asks for it.
+  Future<void> _askLeave() async {
+    if (_asked) return;
+    _asked = true;
+    try {
+      if (Platform.isAndroid) {
+        await _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.requestNotificationsPermission();
+      } else if (Platform.isIOS) {
+        await _plugin
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >()
+            ?.requestPermissions(alert: true, sound: true);
+      } else if (Platform.isMacOS) {
+        await _plugin
+            .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin
+            >()
+            ?.requestPermissions(alert: true, sound: true);
+      }
+    } catch (_) {}
+  }
 
   Future<void> show({
     required int id,
     required String title,
     required String body,
     String? payload,
+    bool ask = true,
   }) async {
     if (!await _start()) return;
+    if (ask) await _askLeave();
     try {
       await _plugin.show(
         id: id,

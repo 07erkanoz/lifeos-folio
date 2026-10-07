@@ -13,6 +13,8 @@ import '../../services/editor/suggestions/phrases.dart';
 import '../../services/legal/legal_settings.dart';
 import '../../services/platform/context_menu_registration.dart';
 import '../../services/platform/platform_capabilities.dart';
+import '../../services/desktop/desktop_companion.dart';
+import '../../services/portal/background_notices.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/portal/uyap_notice.dart';
@@ -516,8 +518,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onSelected: !_alerts.on
                 ? null
                 : (v) => _setAlerts(
-                    UyapNoticeAlerts(
-                      on: true,
+                    _alerts.copyWith(
                       quiet: v
                           ? ({..._alerts.quiet}..remove(kind))
                           : {..._alerts.quiet, kind},
@@ -696,16 +697,61 @@ class _SettingsPageState extends State<SettingsPage> {
               icon: Icons.notifications_active_outlined,
               title: 'Yeni bildirim gelince uyar',
               subtitle: _alerts.on
-                  ? 'Folio açıkken; ${UyapNoticeKind.values.length} türden '
-                        '$told tanesi · tıklayınca dosya açılır'
+                  ? '${UyapNoticeKind.values.length} türden $told tanesi · '
+                        'tıklayınca dosya açılır'
                   : 'Kapalı',
               trailing: settingsSwitch(
                 _alerts.on,
-                (v) =>
-                    _setAlerts(UyapNoticeAlerts(on: v, quiet: _alerts.quiet)),
+                (v) => _setAlerts(_alerts.copyWith(on: v)),
               ),
             ),
           ),
+          if (_phone)
+            _Entry(
+              'arka plan kapalıyken denetle pil',
+              SettingsRow(
+                key: const ValueKey('settings-background'),
+                icon: Icons.schedule_rounded,
+                title: 'Folio kapalıyken de denetle',
+                subtitle: Platform.isIOS
+                    ? 'iOS’un izin verdiği aralıklarla, günde birkaç kez'
+                    : 'En sık 15 dakikada bir. Bazı telefonlarda Folio’yu pil '
+                          'kısıtlamasından çıkarmak gerekir.',
+                trailing: settingsSwitch(
+                  _alerts.on && _alerts.background,
+                  _alerts.on
+                      ? (v) {
+                          final next = _alerts.copyWith(background: v);
+                          _setAlerts(next);
+                          unawaited(BackgroundNotices.schedule(next));
+                        }
+                      : null,
+                ),
+              ),
+            ),
+          if (_desktop && CompanionScope.maybeOf(context) != null)
+            _Entry(
+              'tepsi arka plan pencere kapanınca çalış',
+              Builder(
+                builder: (context) {
+                  final companion = CompanionScope.maybeOf(context)!;
+                  return SettingsRow(
+                    key: const ValueKey('settings-tray'),
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Pencere kapanınca tepside çalış',
+                    subtitle:
+                        'Bildirimler ve eşitleme sürer; hızlı arama da açık '
+                        'kalır. Tepsideki “Tamamen çık” kapatır.',
+                    trailing: settingsSwitch(
+                      companion.enabled,
+                      companion.busy
+                          ? null
+                          : (v) => unawaited(companion.configure(v)),
+                    ),
+                  );
+                },
+              ),
+            ),
           _Entry(
             'bildirim tür karar tahsilat reddiyat bilirkişi rapor kanun yolu '
             'kesinleşme müzekkere tebligat duruşma taraf vekil',

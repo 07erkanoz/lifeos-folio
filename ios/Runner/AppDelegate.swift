@@ -3,6 +3,7 @@ import PDFKit
 import UIKit
 import UserNotifications
 import VisionKit
+import workmanager_apple
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -13,6 +14,14 @@ import VisionKit
     // UYAP's notifications shown while Folio is open, too
     // (flutter_local_notifications).
     UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
+    // The background check for new UYAP notifications (BackgroundNotices):
+    // its plugins, and its task, as Info.plist names it.
+    WorkmanagerPlugin.setPluginRegistrantCallback { registry in
+      GeneratedPluginRegistrant.register(with: registry)
+    }
+    WorkmanagerPlugin.registerPeriodicTask(
+      withIdentifier: "com.erkanoz.evrak_convert.uyapNotices",
+      earliestBeginInSeconds: NSNumber(value: 15 * 60))
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

@@ -29,6 +29,7 @@ import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_database.dart';
 import 'portal_hearing.dart';
+import 'background_notices.dart';
 import 'uyap_notice.dart';
 
 /// One channel's sync, as the screens show it.
@@ -125,6 +126,8 @@ class PortalSync extends ChangeNotifier {
     // The mobile session lasts a week: kept sealed between runs, and taken
     // up again here; the web portal's and UETS's sessions likewise, until
     // they end (see _restoreKept).
+    _mobile.keptTokens = () async =>
+        MobileTokens.fromJson(await _secrets.read(_mobileSecret));
     _mobile.onTokens = (tokens) => unawaited(
       tokens == null
           ? _secrets.remove(_mobileSecret)
@@ -135,10 +138,11 @@ class PortalSync extends ChangeNotifier {
     // UYAP's notifications are asked for now and then while a portal is
     // there to ask; not in tests, where nothing is.
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _noticeTimer = Timer.periodic(
-        noticeEvery,
-        (_) => unawaited(syncNotices()),
-      );
+      _noticeTimer = Timer.periodic(noticeEvery, (_) {
+        // In sight: the phone's background check leaves it to this run.
+        if (!paused) unawaited(_database().then(BackgroundNotices.seen));
+        unawaited(syncNotices());
+      });
     }
   }
 
@@ -538,6 +542,9 @@ class PortalSync extends ChangeNotifier {
   DateTime? noticesCheckedAt;
 
   Timer? _noticeTimer;
+
+  /// Whether Folio is out of sight on a phone, set by the window.
+  bool paused = false;
   Future<void>? _noticeSync;
   DateTime _noticesAt = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -547,6 +554,8 @@ class PortalSync extends ChangeNotifier {
   /// for it.
   Future<void> syncNotices({bool force = false}) {
     if (_noticeSync != null) return _noticeSync!;
+    // A phone with Folio out of sight leaves it to the background check.
+    if (paused && !force) return Future.value();
     if (!_mobile.connected && !_web.connected) return Future.value();
     if (!force &&
         DateTime.now().difference(_noticesAt) < const Duration(minutes: 1)) {
