@@ -176,6 +176,22 @@ Dart tarafında mDNS için `bonsoir` ya da `nsd` gibi bir paket, şifreli bağla
   - Karşı cihaz kapalıysa kayıt sıraya alınır, cihaz görünce gider.
 - **Dosya görevlendirme:** "Bu dosyayı Av. Mert Yıldız'a görevlendir" dendiğinde dosyanın paketi gider. Dosya karşı tarafta "görevlendirilen" olarak işaretlenir.
 
+## Büro yönetimi ve görev (onaylandı 8 Ekim 2026)
+
+Taslak: [docs/design/buro-yonetim-taslak.html](design/buro-yonetim-taslak.html). Bu bölüm 2. erişim kararının yerini alır: büroya üyeyi yönetici kabul eder.
+
+- **Büro ve roller:** Büroyu kuran yöneticidir. Yönetici üye kabul eder, çıkarır, rol verir, başka yönetici atar. Roller: Yönetici, Avukat, Stajyer, Sekreter.
+  - Yönetici herkese görev verir ve bütün görevleri görür.
+  - Avukat kendine, stajyere ve sekretere görev verir; kendi verdiği ve aldığı görevleri görür.
+  - Stajyer ve sekreter kendilerine verilen görevleri yürütür ve teslim eder.
+- **Kayıt defteri (sunucusuz):** Büro, imzalı kayıtlardan oluşan bir defterdir. İlk kayıt kurucunun cihaz anahtarıyla imzalanır; büronun kimliği bu kaydın özetidir. Üye ekleme, rol ve çıkarma kayıtlarını o an yönetici olan bir cihaz imzalar. Defter üyeler arasında şifreli kanalla dolaşır; geçerli imzası olmayan kayıt hiçbir cihazda kabul edilmez.
+- **Katılma:** Yeni cihaz bir yöneticiyle kodla tanışır, yönetici "Kabul et" der, üyelik kaydı deftere girer. Defterdeki üyeler birbirini ayrıca tanımadan şifreli konuşur.
+- **Görev:** Bir ya da birkaç kişiye, bir ya da birkaç UYAP dosyası. Her dosyanın kendi yapılacak işleri vardır (her biri bir kişiye); işi veren her dosya için seçili evrak, bütün evrak ya da yalnız künye ve taraflar gönderir.
+  - Alan kişi o dosyada UYAP yetkisi olmasa da dosyayı UYAP Dosyalarım'da "görevle gelen" olarak görür ve gelen evrakı inceler; o dosyada UYAP'tan tazeleme kapalıdır.
+  - Akış: Verildi → Sürüyor → Teslim edildi → Tamamlandı (veren onaylar) ya da geri gönderilir. İşi alan not, ilerleme ve evrak ekler; teslimde yapılan işi yazar ve evrakı ekler. Evrak verenin cihazında dosyanın klasörüne düşer.
+  - Görev kayıtları imzalı olaylardır; ilgili kişilerin cihazlarına gider, kapalı cihaz için sıraya alınır. Son gün ajandaya düşer; dosya sayfasında "Görevler" sekmesi olur.
+- **Yapım sırası:** (1) büro, üyelik ve roller; (2) görev verme ve pano; (3) gidişat, teslim ve onay; (4) görevle gelen dosya, ajanda ve dosya sayfası bağlantıları.
+
 ## Kararlar (8 Ekim 2026)
 
 1. **Kişi kavramı:** Bir cihaz, oradaki Folio'nun avukat profilindeki adla görünür. Ayrı bir kullanıcı hesabı ya da şifre kurulmaz.
