@@ -538,6 +538,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       }
     } else if (!_showLibrary) {
       await _goLibrary();
+    } else if (_group.startsWith('uyap:')) {
+      // A case's page: its preview first, then back to the portfolio, not
+      // out of UYAP Dosyalarım.
+      if (!CaseDetailPage.closePreview()) setState(() => _group = 'uyap');
     } else if (_library.query.isNotEmpty) {
       _searchController.clear();
       _library.setQuery('');

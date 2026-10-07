@@ -299,9 +299,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('case-doc-a')));
     await tester.pump();
     expect(tester.widget<Text>(title).data, 'Tensip Zaptı');
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    // Esc (and the back button) close it first; with it closed they leave
+    // the page.
+    expect(CaseDetailPage.closePreview(), isTrue);
     await tester.pump();
     expect(title, findsNothing);
+    expect(CaseDetailPage.closePreview(), isFalse);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

@@ -56,6 +56,12 @@ class CaseDetailPage extends StatefulWidget {
   final UyapCasePanelController? controller;
   final UyapCaseLinks? links;
 
+  /// Closes the preview of the case page open, for Esc and the back
+  /// button, which then leave the page only when it is closed; false when
+  /// none is showing.
+  static bool closePreview() =>
+      _CaseDetailPageState._active?._closePreview() ?? false;
+
   @override
   State<CaseDetailPage> createState() => _CaseDetailPageState();
 }
@@ -97,9 +103,22 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   final _listFocus = FocusNode(debugLabel: 'case-documents');
   final _shownRow = GlobalKey();
 
+  static _CaseDetailPageState? _active;
+
+  /// Whether the last build put the preview beside the list.
+  bool _previewShowing = false;
+
+  bool _closePreview() {
+    if (!mounted || !_previewShowing) return false;
+    setState(() => _previewOpen = false);
+    _listFocus.requestFocus();
+    return true;
+  }
+
   @override
   void initState() {
     super.initState();
+    _active = this;
     _c.onSaved = widget.onSaved;
     _c.addListener(_changed);
     unawaited(_load());
@@ -107,6 +126,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   @override
   void dispose() {
+    if (identical(_active, this)) _active = null;
     _c.removeListener(_changed);
     if (widget.controller == null) _c.dispose();
     _search.dispose();
@@ -266,9 +286,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           final wide = box.maxWidth >= 900;
           // Room for the list and a document beside it: the page fills the
           // window and only the list scrolls.
-          if (box.maxWidth >= 1100 && box.maxHeight >= 520) {
-            return _splitPage(context, kase);
-          }
+          final split = box.maxWidth >= 1100 && box.maxHeight >= 520;
+          _previewShowing =
+              split &&
+              _previewOpen &&
+              _tab == _Tab.documents &&
+              _c.record != null;
+          if (split) return _splitPage(context, kase);
           final pad = wide ? 28.0 : 12.0;
           return CustomScrollView(
             slivers: [
@@ -478,27 +502,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       ],
     );
     if (!_previewOpen) return list;
-    // Esc closes the preview, wherever in the list or the document the
-    // keys are.
-    return Focus(
-      canRequestFocus: false,
-      skipTraversal: true,
-      onKeyEvent: (_, e) {
-        if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.escape) {
-          return KeyEventResult.ignored;
-        }
-        setState(() => _previewOpen = false);
-        _listFocus.requestFocus();
-        return KeyEventResult.handled;
-      },
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(width: 440, child: list),
-          VerticalDivider(width: 1, color: scheme.outlineVariant),
-          Expanded(child: _previewPane(context, entries)),
-        ],
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: 440, child: list),
+        VerticalDivider(width: 1, color: scheme.outlineVariant),
+        Expanded(child: _previewPane(context, entries)),
+      ],
     );
   }
 
