@@ -453,7 +453,7 @@ class _UetsPageState extends State<UetsPage> {
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(fontFamily: 'LiberationSans', fontSize: 12.5, fontWeight: FontWeight.w700),
       ),
       icon: Icon(connected ? Icons.sync_rounded : Icons.link, size: 16),
       label: Text(connected ? 'Senkronize et' : 'UETS’ye bağlan'),
@@ -1550,7 +1550,7 @@ class _UetsPageState extends State<UetsPage> {
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                textStyle: const TextStyle(
+                textStyle: const TextStyle(fontFamily: 'LiberationSans', 
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),

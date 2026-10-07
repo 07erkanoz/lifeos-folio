@@ -3249,7 +3249,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
-                            textStyle: const TextStyle(
+                            textStyle: const TextStyle(fontFamily: 'LiberationSans', 
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),

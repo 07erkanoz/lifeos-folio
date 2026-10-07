@@ -548,7 +548,7 @@ class _AgendaPageState extends State<AgendaPage> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
-              textStyle: const TextStyle(
+              textStyle: const TextStyle(fontFamily: 'LiberationSans', 
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -1418,6 +1418,8 @@ class _AgendaPageState extends State<AgendaPage> {
     final until = h.at.difference(now);
     final relative = until.isNegative
         ? 'GEÇTİ'
+        : until.inMinutes < 60
+        ? '${until.inMinutes} DK SONRA'
         : until.inHours < 24
         ? '${until.inHours} SA SONRA'
         : '${until.inDays} GÜN SONRA';
@@ -1584,7 +1586,7 @@ class _AgendaPageState extends State<AgendaPage> {
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(fontSize: 12),
+              textStyle: const TextStyle(fontFamily: 'LiberationSans', fontSize: 12),
             ),
             icon: const Icon(Icons.add, size: 15),
             label: const Text('İş ekle'),

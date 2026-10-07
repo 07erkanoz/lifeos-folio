@@ -685,7 +685,7 @@ class _DesktopHomeState extends State<DesktopHome> {
               style: OutlinedButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 foregroundColor: scheme.primary,
-                textStyle: const TextStyle(
+                textStyle: const TextStyle(fontFamily: 'LiberationSans', 
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -708,7 +708,7 @@ class _DesktopHomeState extends State<DesktopHome> {
               onPressed: onAction,
               style: FilledButton.styleFrom(
                 visualDensity: VisualDensity.compact,
-                textStyle: const TextStyle(
+                textStyle: const TextStyle(fontFamily: 'LiberationSans', 
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),

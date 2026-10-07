@@ -384,7 +384,7 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
             onPressed: any ? syncAll : null,
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(
+              textStyle: const TextStyle(fontFamily: 'LiberationSans', 
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),

@@ -244,7 +244,7 @@ class UyapFillCard extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
-            textStyle: const TextStyle(
+            textStyle: const TextStyle(fontFamily: 'LiberationSans', 
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
