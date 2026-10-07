@@ -416,7 +416,13 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   Future<void> _shareTask(OfficeTask task) async {
-    for (final id in task.people) {
+    // Those in it, and the office's managers, who see all of its work.
+    final to = {
+      ...task.people,
+      for (final m in ledger.members)
+        if (m.role == OfficeRole.manager) m.deviceId,
+    };
+    for (final id in to) {
       final peer = _peers[id];
       if (id != _self?.deviceId && peer != null && peer.online) {
         await _syncTask(peer, task);
@@ -448,8 +454,11 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// Every task shared with [peer], when it comes on the network.
   Future<void> _syncTasks(OfficePeer peer) async {
+    final manager = ledger.isManager(peer.deviceId);
     for (final t in tasks.all) {
-      if (t.people.contains(peer.deviceId)) await _syncTask(peer, t);
+      if (manager || t.people.contains(peer.deviceId)) {
+        await _syncTask(peer, t);
+      }
     }
   }
 

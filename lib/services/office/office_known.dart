@@ -119,7 +119,13 @@ class KnownDevices {
     await _save(devices);
   }
 
-  Future<void> _save(Map<String, KnownDevice> devices) async {
+  // One write at a time: two at once raced for the same part file.
+  Future<void> _saving = Future.value();
+
+  Future<void> _save(Map<String, KnownDevice> devices) =>
+      _saving = _saving.then((_) => _write(devices)).catchError((Object _) {});
+
+  Future<void> _write(Map<String, KnownDevice> devices) async {
     final file = await _file();
     await file.parent.create(recursive: true);
     final part = File('${file.path}.part');

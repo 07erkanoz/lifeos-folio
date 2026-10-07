@@ -58,6 +58,7 @@ import '../services/platform/file_actions.dart';
 import 'office/office_network_page.dart';
 import 'office/office_offer_dialog.dart';
 import 'office/office_pairing_dialog.dart';
+import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
 import 'widgets/share_document_dialog.dart';
 import 'widgets/shortcuts_dialog.dart';
@@ -1080,6 +1081,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'uets' ||
         value == 'bildirim' ||
         value == 'buro' ||
+        value == 'gorevler' ||
         value == 'ayarlar' ||
         _isUyapGroup(value)) {
       return;
@@ -1103,6 +1105,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'uets' ||
       group == 'bildirim' ||
       group == 'buro' ||
+      group == 'gorevler' ||
       group == 'ayarlar';
 
   /// The office's pages a phone opens from its first page.
@@ -1112,6 +1115,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'uets' ||
       group == 'bildirim' ||
       group == 'buro' ||
+      group == 'gorevler' ||
       group == 'ayarlar';
 
   /// Laid out as a phone, as the window's build decides.
@@ -1700,6 +1704,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   (mobile
                                       ? _group != 'images' &&
                                             _group != 'buro' &&
+                                            _group != 'gorevler' &&
                                             !_isUyapGroup(_group)
                                       : !_isFullPage(_group)))
                                 FoldingChrome(
@@ -1916,6 +1921,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? _noticesPage()
                                               : _group == 'buro'
                                               ? const OfficeNetworkPage()
+                                              : _group == 'gorevler'
+                                              ? const TasksPage()
                                               : _group == 'ayarlar'
                                               ? _settingsPage()
                                               : _overview(),

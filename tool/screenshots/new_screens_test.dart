@@ -9,6 +9,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:evrak_convert/services/office/office_task.dart';
+import 'package:evrak_convert/ui/office/tasks_page.dart';
 import 'package:evrak_convert/services/security/app_lock.dart';
 import 'package:evrak_convert/ui/security/app_lock_gate.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
@@ -394,6 +396,9 @@ void main() {
           ledger: OfficeLedger(
             file: () async => File('${dir.path}/$device/d.json'),
           ),
+          tasks: OfficeTasks(
+            file: () async => File('${dir.path}/$device/g.json'),
+          ),
         );
         Directory('${dir.path}/$device/gelen').createSync(recursive: true);
         net.inbox = () async => Directory('${dir.path}/$device/gelen');
@@ -467,6 +472,83 @@ void main() {
     );
     await tester.pump();
     await _shot(tester, 'buro-uyeler');
+    late OfficeTask shown;
+    await tester.runAsync(() async {
+      b.seenForTesting(a.self!);
+      for (var i = 0; i < 100 && b.ledger.members.length < 2; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      final item = TaskItem.create(
+        'İtiraz dilekçesini hazırla',
+        assignee: b.self!.deviceId,
+      );
+      await a.giveTask(
+        title: 'Bilirkişi raporuna itiraz',
+        to: [b.self!.deviceId],
+        note: 'Faiz başlangıcı hatalı; 20.05 tarihli beyanımıza dayanarak itiraz edelim.',
+        due: DateTime.now().add(const Duration(days: 2)),
+        priority: TaskPriority.high,
+        cases: [
+          TaskCase(
+            caseKey: 'k1',
+            number: '2024/318',
+            court: 'Antalya 3. Asliye Hukuk Mahkemesi',
+            items: [item, TaskItem.create('Tanık listesini güncelle')],
+          ),
+        ],
+      );
+      await a.giveTask(
+        title: 'Haciz ihbarnamesine itiraz',
+        to: [b.self!.deviceId],
+        due: DateTime.now().subtract(const Duration(days: 1)),
+        cases: const [
+          TaskCase(
+            caseKey: 'k2',
+            number: '2025/4410',
+            court: 'Antalya 6. İcra Dairesi',
+          ),
+        ],
+      );
+      for (var i = 0; i < 200 && b.tasks.all.length < 2; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      final t = b.tasks.all.firstWhere((t) => t.title.startsWith('Bilirkişi'));
+      await b.act(t, TaskEventKind.accepted);
+      await b.act(t, TaskEventKind.itemDone, itemId: item.id);
+      await b.act(
+        t,
+        TaskEventKind.message,
+        text: 'Taslak hazır, kaynakları kontrol ediyorum.',
+      );
+      await b.act(
+        b.tasks.all.firstWhere((t) => t.title.startsWith('Haciz')),
+        TaskEventKind.accepted,
+      );
+      for (var i = 0; i < 100; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      shown = a.tasks.all.firstWhere((t) => t.title.startsWith('Bilirkişi'));
+    });
+    await tester.pumpWidget(_app(Scaffold(body: TasksPage(network: a))));
+    await tester.pump();
+    await _shot(tester, 'gorevler');
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 820,
+              height: 760,
+              child: Card(
+                child: TaskDetail(network: b, task: b.tasks.of(shown.id)!),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await _shot(tester, 'gorev-sayfasi');
     tester.view.reset();
   });
 

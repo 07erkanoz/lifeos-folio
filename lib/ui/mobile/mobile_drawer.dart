@@ -220,6 +220,14 @@ class MobileDrawer extends StatelessWidget {
                         ),
                         _item(
                           context,
+                          key: const ValueKey('drawer-tasks'),
+                          icon: const Icon(Icons.task_alt_rounded),
+                          label: 'Görevler',
+                          selected: !home && group == 'gorevler',
+                          onTap: () => onGroup('gorevler'),
+                        ),
+                        _item(
+                          context,
                           key: const ValueKey('drawer-uyap'),
                           icon: const Icon(Icons.gavel_rounded),
                           label: 'UYAP Dosyalarım',

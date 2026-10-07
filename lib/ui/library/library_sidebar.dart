@@ -225,6 +225,14 @@ class LibrarySidebar extends StatelessWidget {
                   null,
                   key: const ValueKey('office-network-nav'),
                 ),
+                _nav(
+                  context,
+                  Icons.task_alt_rounded,
+                  'Görevler',
+                  'gorevler',
+                  null,
+                  key: const ValueKey('tasks-nav'),
+                ),
                 const SizedBox(height: 14),
                 if (!compact)
                   Padding(

@@ -8,6 +8,7 @@ import 'package:evrak_convert/services/office/office_ledger.dart';
 import 'package:evrak_convert/services/office/office_link.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
+import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,6 +37,7 @@ void main() {
       ledger: OfficeLedger(
         file: () async => File('${dir.path}/$device/d.json'),
       ),
+      tasks: OfficeTasks(file: () async => File('${dir.path}/$device/g.json')),
     );
     Directory('${dir.path}/$device/gelen').createSync(recursive: true);
     net.inbox = () async => Directory('${dir.path}/$device/gelen');
@@ -182,4 +184,72 @@ void main() {
     await c.acceptOffer(c.incomingOffer.value!);
     await until(() => t.state == TransferState.done);
   });
+
+  test(
+    'a task goes from the giver to the trainee and back, stage by stage',
+    () async {
+      b.seenForTesting(a.self!);
+      await a.foundOffice('Kaya Hukuk Bürosu');
+      await a.admit(b.self!.deviceId, OfficeRole.trainee);
+      await until(() => b.ledger.members.length == 2);
+      // A trainee gives no task.
+      expect(b.mayGive(a.self!.deviceId), isFalse);
+      final item = TaskItem.create(
+        'İtiraz dilekçesini hazırla',
+        assignee: b.self!.deviceId,
+      );
+      final given = await a.giveTask(
+        title: 'Bilirkişi raporuna itiraz',
+        to: [b.self!.deviceId],
+        due: DateTime.now().add(const Duration(days: 2)),
+        cases: [
+          TaskCase(
+            caseKey: 'k1',
+            number: '2024/318',
+            court: 'Antalya 3. Asliye Hukuk',
+            items: [item],
+          ),
+        ],
+      );
+      expect(given, isNull);
+      await until(() => b.tasks.all.isNotEmpty);
+      final mine = b.tasks.all.single;
+      expect(mine.supervisor, 'Av. Deniz Kaya');
+      expect(mine.daysLeft(DateTime.now()), 2);
+      OfficeTask theirs() => a.tasks.all.single;
+      await b.act(mine, TaskEventKind.accepted);
+      await b.act(mine, TaskEventKind.itemDone, itemId: item.id);
+      await until(
+        () => theirs().percent == 100 && theirs().stage == TaskStage.running,
+      );
+      await b.act(mine, TaskEventKind.message, text: 'Taslak hazır.');
+      await b.act(mine, TaskEventKind.delivered, text: 'Dilekçe imzaya hazır.');
+      await until(() => theirs().stage == TaskStage.review);
+      // Sent back needs a reason; then it is running again.
+      expect(await a.act(theirs(), TaskEventKind.returned), isNotNull);
+      await a.act(
+        theirs(),
+        TaskEventKind.returned,
+        text: 'Faiz başlangıcını düzelt.',
+      );
+      await until(() => b.tasks.all.single.stage == TaskStage.running);
+      await b.act(
+        b.tasks.all.single,
+        TaskEventKind.delivered,
+        text: 'Düzelttim.',
+      );
+      await until(() => theirs().stage == TaskStage.review);
+      // Only the giver approves.
+      expect(
+        await b.act(b.tasks.all.single, TaskEventKind.approved),
+        isNotNull,
+      );
+      await a.act(theirs(), TaskEventKind.approved);
+      await until(() => b.tasks.all.single.stage == TaskStage.done);
+      expect(
+        b.tasks.all.single.timeline.where((e) => e.isTalk).single.text,
+        'Taslak hazır.',
+      );
+    },
+  );
 }

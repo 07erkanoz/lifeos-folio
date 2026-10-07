@@ -407,7 +407,13 @@ class OfficeTasks {
     } catch (_) {}
   }
 
-  Future<void> _save() async {
+  // One write at a time: two at once raced for the same part file.
+  Future<void> _saving = Future.value();
+
+  Future<void> _save() =>
+      _saving = _saving.then((_) => _write()).catchError((Object _) {});
+
+  Future<void> _write() async {
     final file = await _file();
     await file.parent.create(recursive: true);
     final part = File('${file.path}.part');

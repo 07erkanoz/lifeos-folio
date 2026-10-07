@@ -71,7 +71,28 @@ void main() {
       tester.state<ScaffoldState>(find.byType(Scaffold)).openDrawer();
       await tester.pumpAndSettle();
       expect(find.text('Bugün 2'), findsOne);
+      // Further down the menu, past the office's pages.
+      await tester.scrollUntilVisible(
+        find.text('Bilgisayarla senkronla'),
+        120,
+        scrollable: find
+            .descendant(
+              of: find.byType(Drawer),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       expect(find.text('Bilgisayarla senkronla'), findsOne);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('drawer-uets')),
+        -120,
+        scrollable: find
+            .descendant(
+              of: find.byType(Drawer),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.tap(find.byKey(const ValueKey('drawer-uets')));
       expect(opened.last, 'uets');
     });
