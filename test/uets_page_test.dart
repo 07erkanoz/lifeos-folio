@@ -1,6 +1,7 @@
 import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
+import 'package:evrak_convert/services/portal/portal_deadline.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/uets/notice_matcher.dart';
 import 'package:evrak_convert/services/uets/uets_api.dart';
@@ -16,6 +17,7 @@ void main() {
   Future<PortalDatabase> pump(
     WidgetTester tester, {
     Size size = const Size(1440, 900),
+    void Function(PortalDatabase db)? before,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -43,6 +45,7 @@ void main() {
         read: DateTime(2026, 9, 21),
       ),
     ]);
+    before?.call(db);
     matchNotices(db, now: now);
     await tester.pumpWidget(
       MaterialApp(
@@ -109,5 +112,60 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
     }
+  });
+
+  testWidgets('a notice whose package came shows its envelope’s time, its '
+      'documents and its waiting deadline', (tester) async {
+    await pump(
+      tester,
+      before: (db) {
+        db.saveManifest('m1', [
+          (id: 'p1', name: '(1)BilirkisiRaporu.pdf', mime: ''),
+        ]);
+        db.saveEnvelope(
+          NoticeEnvelope(
+            noticeId: 'm1',
+            state: 'indirildi',
+            folder: '/tmp/UETS/Antalya',
+            envelopePath: '/tmp/UETS/Antalya/Tebligat zarfı.pdf',
+            envelopeText:
+                'Rapora karşı itirazlarınızı tebliğden itibaren iki hafta '
+                'içinde bildirmeniz ihtar olunur.',
+            attachments: const [
+              (name: 'BilirkisiRaporu.pdf', path: '/tmp/UETS/Antalya/r.pdf'),
+            ],
+            fetchedAt: DateTime(2026, 10, 2),
+          ),
+        );
+      },
+    );
+    expect(find.byKey(const ValueKey('uets-envelope')), findsOne);
+    expect(find.textContaining('iki hafta', findRichText: true), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('uets-file-BilirkisiRaporu.pdf')),
+      findsOne,
+    );
+    expect(find.byKey(const ValueKey('uets-timeline')), findsOne);
+    expect(find.textContaining('onay bekliyor'), findsWidgets);
+    // The report's own deadline, joined by the envelope.
+    expect(find.textContaining('Bilirkişi raporuna itiraz'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('uets-filter-pending')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('uets-row-m1')), findsOne);
+    expect(find.byKey(const ValueKey('uets-row-m2')), findsNothing);
+  });
+
+  testWidgets('a deadline reckoned by hand on the notice goes on the agenda '
+      'as the lawyer’s own', (tester) async {
+    final db = await pump(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('uets-manual')));
+    await tester.tap(find.byKey(const ValueKey('uets-manual')));
+    await tester.pumpAndSettle();
+    expect(find.text('Elle süre hesapla'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('manual-save')));
+    await tester.pumpAndSettle();
+    final own = db.agenda().where((i) => i.id.startsWith('own:uets:m1:'));
+    expect(own, isNotEmpty);
+    expect(own.first.kind, 'deadline');
   });
 }

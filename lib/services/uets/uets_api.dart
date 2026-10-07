@@ -452,13 +452,31 @@ class UetsApi {
 
   // Transport.
 
+  /// What one download may bring: a package past it is refused while it
+  /// comes, before it fills the memory.
+  static const maxDownloadBytes = 200 * 1024 * 1024;
+
   Future<Uint8List> _bytes(String path) async {
     final request = await _request('GET', path, null, authorized: true);
     final response = await request.close().timeout(const Duration(seconds: 90));
-    final bytes = await response.fold<BytesBuilder>(
-      BytesBuilder(copy: false),
-      (b, chunk) => b..add(chunk),
-    );
+    final bytes = BytesBuilder(copy: false);
+    // A pause between chunks, and the whole, each have their limit: a
+    // slow trickle does not hold the sync for hours.
+    await response
+        .timeout(const Duration(seconds: 60))
+        .forEach((chunk) {
+          bytes.add(chunk);
+          if (bytes.length > maxDownloadBytes) {
+            throw StateError('UETS: dosya çok büyük.');
+          }
+        })
+        .timeout(const Duration(minutes: 10));
+    if (response.statusCode == 429) {
+      final after = int.tryParse(
+        response.headers.value(HttpHeaders.retryAfterHeader) ?? '',
+      );
+      throw UetsBusy(Duration(seconds: after ?? 30));
+    }
     if (response.statusCode != 200) {
       _refuse(
         response.statusCode,
@@ -711,4 +729,14 @@ const uetsBinFolder = 5;
 /// folder this box has not).
 class UetsAccessDenied extends StateError {
   UetsAccessDenied(super.message);
+}
+
+/// UETS asked to be asked less often (429): wait [retryAfter] and ask
+/// again.
+class UetsBusy implements Exception {
+  final Duration retryAfter;
+  const UetsBusy(this.retryAfter);
+  @override
+  String toString() =>
+      'UETS yoğun; ${retryAfter.inSeconds} sn sonra yeniden denenecek.';
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../services/portal/portal_case.dart';
+import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/portal/portal_sync.dart';
@@ -145,8 +146,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     await _seen();
     // Fetched again when it has not been for a while and a portal is
     // there to ask; the list shows what was kept meanwhile.
+    // Not while UYAP Mobil's portfolio is being read: the two would ask
+    // UYAP and write this case's record at once.
     final record = _c.record;
+    final reading =
+        PortalSync.started?.state(PortalChannel.uyapMobile).running ?? false;
     if (_c.connected &&
+        !reading &&
         (record == null ||
             DateTime.now().difference(record.fetchedAt) >
                 const Duration(minutes: 30))) {

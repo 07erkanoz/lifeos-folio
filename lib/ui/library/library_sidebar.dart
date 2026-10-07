@@ -20,6 +20,10 @@ class LibrarySidebar extends StatelessWidget {
   /// at its last fetch.
   final List<(String, String, String, int)> uyapCases;
 
+  /// The portfolio's open cases, as UYAP Dosyalarım counts them; null
+  /// until it is read, and then [uyapCases], the cases kept in detail.
+  final int? uyapCount;
+
   /// Where UYAP's documents are saved: the archive folder that stands as
   /// UYAP in the list of folders, not as one more folder.
   final String? uyapFolder;
@@ -52,6 +56,7 @@ class LibrarySidebar extends StatelessWidget {
     required this.selectGroup,
     required this.selectFolder,
     this.uyapCases = const [],
+    this.uyapCount,
     this.uyapFolder,
     this.uyapAvailable = false,
     this.showHome = false,
@@ -162,7 +167,7 @@ class LibrarySidebar extends StatelessWidget {
                     Icons.gavel_rounded,
                     'UYAP Dosyalarım',
                     'uyap',
-                    uyapCases.length,
+                    uyapCount ?? uyapCases.length,
                     key: const ValueKey('uyap-folder'),
                     selected: group == 'uyap' || group.startsWith('uyap:'),
                     badge: uyapFresh > 0

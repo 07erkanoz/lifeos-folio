@@ -194,3 +194,31 @@ class KeptDeadline {
   bool get toReview =>
       !onAgenda && !(user?.dismissed ?? false) && !(user?.done ?? false);
 }
+
+/// A notice's package as kept on this computer (see
+/// `PortalDatabase.saveEnvelope`).
+class NoticeEnvelope {
+  final String noticeId;
+  final String state;
+  final String? folder;
+  final String? packagePath;
+  final String? envelopePath;
+
+  /// The envelope's text layer; the lawyer's matter, kept only here.
+  final String? envelopeText;
+  final List<({String name, String path})> attachments;
+  final DateTime? fetchedAt;
+  final String? error;
+
+  const NoticeEnvelope({
+    required this.noticeId,
+    required this.state,
+    this.folder,
+    this.packagePath,
+    this.envelopePath,
+    this.envelopeText,
+    this.attachments = const [],
+    this.fetchedAt,
+    this.error,
+  });
+}

@@ -63,6 +63,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
   void initState() {
     super.initState();
     _sync?.addListener(_synced);
+    _sync?.portfolioVersion.addListener(_grew);
     UyapCaseStore.changes.addListener(_reload);
     _reload();
   }
@@ -70,6 +71,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
   @override
   void dispose() {
     _sync?.removeListener(_synced);
+    _sync?.portfolioVersion.removeListener(_grew);
+    _grewSoon?.cancel();
     UyapCaseStore.changes.removeListener(_reload);
     _search.dispose();
     super.dispose();
@@ -84,6 +87,17 @@ class _PortfolioPageState extends State<PortfolioPage> {
     _wasRunning = running;
     if (mounted) setState(() {});
   }
+
+  /// A case came or changed while a sync runs: shown within a few seconds,
+  /// a burst of them read once.
+  void _grew() {
+    _grewSoon ??= Timer(const Duration(seconds: 4), () {
+      _grewSoon = null;
+      if (mounted) unawaited(_reload());
+    });
+  }
+
+  Timer? _grewSoon;
 
   Future<void> _reload() async {
     try {

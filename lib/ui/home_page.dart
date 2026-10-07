@@ -5,6 +5,7 @@ import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import '../services/portal/observed.dart' show caseKey;
 import '../services/portal/portal_case.dart';
+import '../services/portal/portal_channel.dart';
 import '../services/portal/portal_database.dart';
 import '../services/portal/portal_sync.dart';
 
@@ -253,7 +254,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     deadlinesToday: _deadlinesToday,
     next: _nextHearing,
     uetsUnread: _uetsUnread,
-    uyapCases: _uyapCases.length,
+    uyapCases: _portfolioOpen ?? _uyapCases.length,
     uyapFresh: _uyapCases.fold(0, (sum, c) => sum + c.$1.fresh.length),
     name: _lawyerName,
     channels: PortalSync.started == null
@@ -615,6 +616,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<(UyapCaseRecord, int)> _uyapCases = const [];
   int _uyapTotal = -1;
 
+  /// The portfolio's open cases (UYAP Dosyalarım's own count); null until
+  /// it is read. The cases above are only those kept in detail.
+  int? _portfolioOpen;
+
   /// Looks again when a case changed in this window, or the archive grew:
   /// documents saved from an editor window of its own come in that way.
   void _reloadUyapCases() {
@@ -769,6 +774,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _libraryResultsFocus.dispose();
     _library.removeListener(_changed);
     PortalSync.instance.removeListener(_portalSynced);
+    _countSoon?.cancel();
     _library.removeListener(_archiveChanged);
     UyapCaseStore.changes.removeListener(_reloadUyapCases);
     if (widget.library == null) _library.dispose();
@@ -1006,10 +1012,19 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// "Av. Erkan Öz": the profile's lawyer, else the UYAP Mobil user.
   String _lawyerName = '';
 
+  /// Told by the portals' syncs, often while one runs: counted again once
+  /// they have been quiet a moment, not each time, which froze the window.
   void _portalSynced() {
-    unawaited(_countAgenda());
-    if (_lawyerName.isEmpty) unawaited(_loadLawyerName());
+    _countSoon?.cancel();
+    _countSoon = Timer(const Duration(milliseconds: 800), () {
+      _countSoon = null;
+      if (!mounted) return;
+      unawaited(_countAgenda());
+      if (_lawyerName.isEmpty) unawaited(_loadLawyerName());
+    });
   }
+
+  Timer? _countSoon;
 
   Future<void> _loadLawyerName() async {
     var name = '';
@@ -1038,6 +1053,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final tomorrow = today.add(const Duration(days: 1));
       final count = db.hearings(from: today, to: tomorrow).length;
       final unread = db.notices().where((n) => n.message.read == null).length;
+      final open = db.cases().values
+          .where(
+            (c) =>
+                c.family == CaseFamily.court && !isClosedStatus(c.status?.value),
+          )
+          .length;
       final deadlines = db
           .agenda(from: today, to: tomorrow)
           .where((i) => i.kind == 'deadline' && !i.done)
@@ -1100,6 +1121,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _deadlinesToday = deadlines;
           _nextHearing = line;
           _office = office;
+          _portfolioOpen = open == 0 ? null : open;
           _uyapFresh = db
               .caseStates()
               .values
@@ -1902,6 +1924,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       for (final (record, _) in _uyapCases)
         (record.key, record.number, record.court, record.fresh.length),
     ],
+    uyapCount: _portfolioOpen,
     uyapFolder: UyapSettings.instance.folder,
     agendaToday: _agendaToday,
     uetsUnread: _uetsUnread,
@@ -1925,7 +1948,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     home: home,
     agendaToday: _agendaToday,
     uetsUnread: _uetsUnread,
-    uyapCases: _uyapCases.length,
+    uyapCases: _portfolioOpen ?? _uyapCases.length,
     onHome: () {
       _closeDrawer();
       setState(() {

@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart' as kdf;
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../editor/lawyer_profile.dart';
+import '../platform/app_directories.dart';
 import '../legal/deadlines/aidiyet.dart';
 import '../security/secret_store.dart';
 import '../uets/notice_deadlines.dart';
+import '../uets/notice_packages.dart';
 import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
 import '../uyap/mobile_case_finder.dart';
@@ -54,7 +58,10 @@ class PortalSync extends ChangeNotifier {
     UetsApi? uets,
     Future<PortalDatabase> Function()? database,
     SecretStore? secrets,
-  }) : _secrets = secrets ?? SecretStore(),
+    Future<String?> Function()? packageRoot,
+    this._packageGap = const Duration(seconds: 3),
+  }) : _packageRoot = packageRoot ?? _defaultPackageRoot,
+       _secrets = secrets ?? SecretStore(),
        _web = web ?? UyapWebService.instance,
        _mobile = mobile ?? UyapMobileApi.instance,
        _uets = uets ?? UetsApi.instance,
@@ -76,6 +83,24 @@ class PortalSync extends ChangeNotifier {
   final UetsApi _uets;
   final Future<PortalDatabase> Function() _database;
   final SecretStore _secrets;
+
+  /// Where the notices' packages are written: the UYAP folder's `UETS`,
+  /// which the archive searches. Null writes none, as under the tests,
+  /// which must not write into the lawyer's folder.
+  final Future<String?> Function() _packageRoot;
+  final Duration _packageGap;
+
+  /// The UYAP folder's `UETS` when the lawyer keeps UYAP's documents
+  /// there (the archive searches it); else Folio's own data folder, which
+  /// nothing syncs or shares.
+  static Future<String?> _defaultPackageRoot() async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return null;
+    await UyapSettings.instance.load();
+    if (!UyapSettings.instance.saveDocuments) {
+      return p.join((await folioSupportDirectory()).path, 'uets');
+    }
+    return p.join(UyapSettings.instance.folder, 'UETS');
+  }
 
   static const _mobileSecret = 'uyap-mobile';
   final _state = <PortalChannel, ChannelSync>{};
@@ -183,6 +208,7 @@ class PortalSync extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _restoreRetry?.cancel();
+    _progressTimer?.cancel();
     _web.session.removeListener(_webChanged);
     _mobile.session.removeListener(_mobileChanged);
     _uets.session.removeListener(_uetsChanged);
@@ -244,8 +270,30 @@ class PortalSync extends ChangeNotifier {
     }
     if (full && whole) db.setMeta('uets_full_listing', '1');
     await _fetchManifests(db);
+    // The deadlines from the documents' names at once; each package then
+    // makes its own notice's again as it comes, not after the whole box.
     await _loadDeadlineContext();
     matchNotices(db);
+    notifyListeners();
+    final root = await _packageRoot();
+    if (root != null) {
+      await fetchNoticePackages(
+        _uets,
+        db,
+        root: root,
+        gap: _packageGap,
+        progress: (done, total) => _progress(
+          PortalChannel.uets,
+          'Tebligat paketleri ${done + (done < total ? 1 : 0)}/$total',
+        ),
+        onKept: (id) => refreshNoticeDeadlines(
+          db,
+          parties: NoticeDeadlineContext.parties,
+          lawyer: NoticeDeadlineContext.lawyer,
+          only: {id},
+        ),
+      );
+    }
     return whole
         ? null
         : 'UETS listesinin tamamı alınamadı; eşitlemeyi yeniden deneyin.';
@@ -398,6 +446,10 @@ class PortalSync extends ChangeNotifier {
   }
 
   /// Says how far [channel]'s running sync has come.
+  ///
+  /// Told at most twice a second: a sync of five hundred cases says how far
+  /// it has come five hundred times, and every page listening reads its
+  /// data again each time it is told; told each time, the window froze.
   void _progress(PortalChannel channel, String text) {
     final now = state(channel);
     if (!now.running) return;
@@ -406,8 +458,22 @@ class PortalSync extends ChangeNotifier {
       finished: now.finished,
       progress: text,
     );
-    notifyListeners();
+    final since = DateTime.now().difference(_lastProgress);
+    if (since >= _progressEvery) {
+      _lastProgress = DateTime.now();
+      notifyListeners();
+    } else {
+      _progressTimer ??= Timer(_progressEvery - since, () {
+        _progressTimer = null;
+        _lastProgress = DateTime.now();
+        notifyListeners();
+      });
+    }
   }
+
+  static const _progressEvery = Duration(milliseconds: 500);
+  DateTime _lastProgress = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _progressTimer;
 
   Future<void> _run(
     PortalChannel channel,
@@ -641,16 +707,21 @@ class PortalSync extends ChangeNotifier {
           _mobile.hearingRows,
         );
         final read = DateTime.tryParse(db.meta(_portfolioKey) ?? '');
+        final tried = DateTime.tryParse(db.meta('portfolio_try_at') ?? '');
         var cases = const PortfolioResult(0, true);
         if (full ||
-            read == null ||
-            DateTime.now().difference(read) > portfolioInterval) {
+            ((read == null ||
+                    DateTime.now().difference(read) > portfolioInterval) &&
+                (tried == null ||
+                    DateTime.now().difference(tried) >
+                        const Duration(hours: 2)))) {
           final session = _mobile.session.value;
           final ids = <String, String>{};
           cases = await syncMobilePortfolio(
             _mobile,
             db,
             includeClosed: db.meta(_closedKey) == '1',
+            onChanged: () => portfolioVersion.value++,
             onCaseId: (key, id) => ids[key] = id,
             onProgress: (done, total) => _progress(
               PortalChannel.uyapMobile,
@@ -659,14 +730,23 @@ class PortalSync extends ChangeNotifier {
           );
           _sessionIds = ids;
           _idsSession = session;
-          db.setMeta(_portfolioKey, DateTime.now().toIso8601String());
-          await refreshCases(db);
+          // Read whole, it is not read again for a day; read in part, it
+          // is tried again in two hours, the courts that failed with it.
+          db.setMeta(
+            cases.complete ? _portfolioKey : 'portfolio_try_at',
+            DateTime.now().toIso8601String(),
+          );
+          await refreshCases(db, changed: cases.changed);
         }
         return hearings.complete && cases.complete
             ? null
             : 'Bazı kayıtlar alınamadı';
       }).whenComplete(() => _mobileSync = null);
   Future<void>? _mobileSync;
+
+  /// Counted up whenever a sync writes a case anew or changes one, as it
+  /// runs: what lists the portfolio shows it then, and only then.
+  final portfolioVersion = ValueNotifier<int>(0);
 
   /// How often the whole portfolio is read on its own.
   static const portfolioInterval = Duration(hours: 20);
@@ -693,15 +773,66 @@ class PortalSync extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Each open case asked once what is new in it: documents, parties,
-  /// its state, its money. Kept only where something changed, and the
-  /// change remembered for the portfolio's list. One case at a time, as
-  /// UYAP answers a burst with errors.
-  Future<void> refreshCases(PortalDatabase db) async {
-    final open = [
+  /// The open cases asked what is new in them: documents, parties, state,
+  /// money. Not all of them each time, which wrote over hundreds of cases
+  /// to change a few: the ones the portfolio's reading brought anew or
+  /// changed ([changed]), those with a hearing within a month, and of the
+  /// rest the [stale] longest unasked (a seventh of them, so that each is
+  /// asked within a week of daily syncs). Kept only where something changed, and the change remembered
+  /// for the portfolio's list. One case at a time, as UYAP answers a
+  /// burst with errors. With [changed] null, every open case is asked.
+  Future<void> refreshCases(
+    PortalDatabase db, {
+    Set<String>? changed,
+    int? stale,
+  }) async {
+    final all = [
       for (final c in db.cases().values)
         if (c.family == CaseFamily.court && !isClosedStatus(c.status?.value)) c,
     ];
+    final now = DateTime.now();
+    DateTime? checked(PortalCase c) =>
+        DateTime.tryParse(db.meta('case_checked:${c.key}') ?? '');
+    final List<PortalCase> open;
+    if (changed == null) {
+      open = all;
+    } else {
+      final soon = {
+        for (final h in db.hearings(
+          from: now,
+          to: now.add(const Duration(days: 31)),
+        ))
+          h.caseKey,
+      };
+      final chosen = {
+        for (final c in all)
+          if (changed.contains(c.key) || soon.contains(c.key)) c.key,
+      };
+      final rest =
+          [
+            for (final c in all)
+              if (!chosen.contains(c.key) &&
+                  (checked(c) == null ||
+                      now.difference(checked(c)!) > const Duration(days: 7)))
+                c,
+          ]..sort((a, b) {
+            final x = checked(a), y = checked(b);
+            if (x == null || y == null) {
+              return x == null ? (y == null ? 0 : -1) : 1;
+            }
+            return x.compareTo(y);
+          });
+      // A seventh of the open cases a day: each asked within the week.
+      chosen.addAll(
+        rest
+            .take(stale ?? max(30, (all.length / 7).ceil()))
+            .map((c) => c.key),
+      );
+      open = [
+        for (final c in all)
+          if (chosen.contains(c.key)) c,
+      ];
+    }
     for (final (i, kase) in open.indexed) {
       if (!_mobile.connected && !_web.connected) break;
       _progress(PortalChannel.uyapMobile, 'Evraklar ${i + 1}/${open.length}');
@@ -710,6 +841,11 @@ class PortalSync extends ChangeNotifier {
         await panel.attach(linkOf(kase));
         final before = panel.record;
         await panel.refresh();
+        // Asked, changed or not: it waits its turn again.
+        db.setMeta(
+          'case_checked:${kase.key}',
+          DateTime.now().toIso8601String(),
+        );
         final after = panel.record;
         if (after == null || identical(after, before)) continue;
         db.noteChange(
@@ -717,6 +853,7 @@ class PortalSync extends ChangeNotifier {
           fresh: after.fresh.length,
           change: before == null ? null : describeChange(before, after),
         );
+        portfolioVersion.value++;
       } catch (_) {
         // One case that does not answer does not stop the others.
       } finally {
@@ -816,7 +953,11 @@ List<Map<String, Object?>> _newestFirst(List<Map<String, Object?>> docs) {
 class PortfolioResult {
   final int cases;
   final bool complete;
-  const PortfolioResult(this.cases, this.complete);
+
+  /// The cases the reading brought anew or changed; the others it left as
+  /// they were.
+  final Set<String> changed;
+  const PortfolioResult(this.cases, this.complete, [this.changed = const {}]);
 }
 
 /// The kinds of jurisdiction the mobile API lists cases for: ceza, hukuk,
@@ -832,6 +973,7 @@ const mobileJurisdictions = [1, 0, 2, 6];
 Future<PortfolioResult> syncMobilePortfolio(
   UyapMobileApi api,
   PortalDatabase db, {
+  void Function()? onChanged,
   void Function(int done, int total)? onProgress,
   bool includeClosed = false,
   void Function(String key, String mobileId)? onCaseId,
@@ -842,6 +984,7 @@ Future<PortfolioResult> syncMobilePortfolio(
   const mobile = PortalChannel.uyapMobile;
   var complete = true;
   final found = <String, PortalCase>{};
+  final changed = <String>{};
 
   void add(
     Map<String, Object?> row,
@@ -923,7 +1066,14 @@ Future<PortfolioResult> syncMobilePortfolio(
         add(row, CaseFamily.court, jurisdiction: type, unit: kind);
       }
       if (found.isNotEmpty) {
-        db.mergeCases(found.values, portfolio: true, baseline: baseline);
+        final before = changed.length;
+        db.mergeCases(
+          found.values,
+          portfolio: true,
+          baseline: baseline,
+          changed: changed,
+        );
+        if (changed.length != before) onChanged?.call();
         found.clear();
       }
     } catch (_) {
@@ -942,8 +1092,13 @@ Future<PortfolioResult> syncMobilePortfolio(
   } catch (_) {
     complete = false;
   }
-  db.mergeCases(found.values, portfolio: true, baseline: baseline);
-  return PortfolioResult(courts.length, complete);
+  db.mergeCases(
+    found.values,
+    portfolio: true,
+    baseline: baseline,
+    changed: changed,
+  );
+  return PortfolioResult(courts.length, complete, changed);
 }
 
 /// "Kapalı", "Kapalı (12.03.2025)", "Arşiv": a case closed for good.

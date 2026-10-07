@@ -12,6 +12,7 @@ import '../legal/deadlines/turkish_legal_calendar.dart';
 import '../legal/deadlines/yasal_sure.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_deadline.dart';
+import 'envelope_directives.dart';
 import 'notice_matcher.dart';
 
 /// What the notices' deadlines are made with beyond the database: each
@@ -31,31 +32,57 @@ abstract final class NoticeDeadlineContext {
 ///
 /// [parties] gives a case's parties by its key, for the sign of whose
 /// deadline it is; [lawyer] is the lawyer's own name.
+///
+/// [only], when given, makes those notices' alone again (one whose package
+/// just came).
 void refreshNoticeDeadlines(
   PortalDatabase db, {
   Map<String, List<TarafKaydi>> parties = const {},
   String? lawyer,
   DateTime? now,
+  Set<String>? only,
 }) {
   final at = now ?? DateTime.now();
   final legacy = <String, List<AgendaItem>>{};
-  for (final old in db.legacyNoticeDeadlines()) {
+  for (final old
+      in only == null
+          ? db.legacyNoticeDeadlines()
+          : [
+              for (final id in only) ...db.legacyNoticeDeadlines(noticeId: id),
+            ]) {
     final notice = old.id.split(':').elementAtOrNull(1) ?? '';
     (legacy[notice] ??= []).add(old);
   }
   final seen = <String>{};
-  final manifests = db.manifests();
+  // One notice whose package came reads that notice alone, not the box.
+  final notices = only == null
+      ? db.notices()
+      : [for (final id in only) ?db.notice(id)];
+  final manifests = only == null
+      ? db.manifests()
+      : {for (final id in only) id: db.manifest(id)};
+  final envelopes = only == null
+      ? db.envelopes()
+      : {for (final id in only) id: ?db.envelope(id)};
   final users = {
-    for (final d in db.deadlines())
+    for (final d
+        in only == null
+            ? db.deadlines()
+            : [for (final id in only) ...db.deadlines(noticeId: id)])
       if (d.user != null) d.record.id: d.user!,
   };
-  for (final n in db.notices()) {
+  for (final n in notices) {
     seen.add(n.message.id);
     final fresh = noticeDeadlines(
       n,
       manifest:
           manifests[n.message.id] ??
           (state: 'alinmadi', fetchedAt: null, parts: const []),
+      envelope: envelopes[n.message.id],
+      takipTuru: switch (db.meta('takip:${n.message.id}')) {
+        final v? when v.isNotEmpty => v,
+        _ => null,
+      },
       parties: n.caseKey == null ? const [] : parties[n.caseKey] ?? const [],
       lawyer: lawyer,
       now: at,
@@ -76,6 +103,7 @@ void refreshNoticeDeadlines(
     }
   }
   // Rows of notices no longer kept: carried over on their own, as they are.
+  if (only != null) return;
   for (final e in legacy.entries) {
     if (seen.contains(e.key)) continue;
     for (final old in e.value) {
@@ -102,9 +130,14 @@ List<DeadlineRecord> noticeDeadlines(
     List<({String id, String name})> parts,
   })
   manifest,
+  NoticeEnvelope? envelope,
   List<TarafKaydi> parties = const [],
   String? lawyer,
   DateTime? now,
+
+  /// The lawyer's word on a payment order that does not say its kind of
+  /// proceedings: 'genel' or 'kambiyo'; null while not said.
+  String? takipTuru,
 }) {
   final m = n.message;
   final sent = m.sent;
@@ -133,6 +166,15 @@ List<DeadlineRecord> noticeDeadlines(
       },
     ));
   }
+  if (kinds.isEmpty && (envelope?.envelopeText ?? '').isNotEmpty) {
+    final t = BelgeTuruTespit.tebligatTuru(
+      const [],
+      metin: envelope!.envelopeText,
+    );
+    if (!BelgeTuruTespit.belirsiz(t)) {
+      kinds.add((tur: t, evidence: {'kaynak': 'zarf', 'ad': 'Tebligat zarfı'}));
+    }
+  }
   if (kinds.isEmpty) {
     final t = BelgeTuruTespit.tebligatTuru(const [], metin: m.subject);
     if (!BelgeTuruTespit.belirsiz(t)) {
@@ -141,10 +183,21 @@ List<DeadlineRecord> noticeDeadlines(
   }
   // A payment order that does not say its kind of proceedings: both the
   // general and the bills' deadlines, the lawyer to tell.
+  // Once the lawyer said which, only that one.
   for (final k in [...kinds]) {
-    if (k.tur == BelgeTuru.odemeEmri &&
-        BelgeTuruTespit.odemeEmriTakipTuru('${k.evidence['ad']}') == null &&
-        seenKinds.add(BelgeTuru.odemeEmriKambiyo)) {
+    if (k.tur != BelgeTuru.odemeEmri ||
+        BelgeTuruTespit.odemeEmriTakipTuru('${k.evidence['ad']}') != null) {
+      continue;
+    }
+    final said = {...k.evidence, 'avukat': takipTuru};
+    if (takipTuru == 'kambiyo') {
+      kinds.remove(k);
+      if (seenKinds.add(BelgeTuru.odemeEmriKambiyo)) {
+        kinds.add((tur: BelgeTuru.odemeEmriKambiyo, evidence: said));
+      }
+    } else if (takipTuru == 'genel') {
+      kinds[kinds.indexOf(k)] = (tur: k.tur, evidence: said);
+    } else if (seenKinds.add(BelgeTuru.odemeEmriKambiyo)) {
       kinds.add((tur: BelgeTuru.odemeEmriKambiyo, evidence: k.evidence));
     }
   }
@@ -152,190 +205,364 @@ List<DeadlineRecord> noticeDeadlines(
   final inserted = turkeyDay(sent);
   final served = inserted.addDays(5);
   final read = m.read == null ? null : turkeyDay(m.read!);
+  final kategori = category ?? MahkemeKategorisi.bilinmeyen;
+  final envelopeText = envelope?.envelopeText ?? '';
+  final envelopeDigest = envelopeText.isEmpty
+      ? null
+      : sha256.convert(utf8.encode(envelopeText)).toString();
+
+  /// One rule's record: its start, its day, why it is as it is.
+  DeadlineRecord record(
+    YasalSure rule, {
+    required String ruleId,
+    required BelgeTuru tur,
+    required Map<String, Object?> evidence,
+    required ({AidiyetSinyali sinyal, String neden}) sign,
+    List<DeadlineReason> lead = const [],
+  }) {
+    final reasons = <DeadlineReason>[
+      ...lead,
+      const DeadlineReason(
+        'ulasmaDogrulanmadi',
+        'Tebliğ günü, UETS’in tebligatı kutuya koyduğu andan beş gün '
+            'sonra sayıldı; ulaşma deliliyle doğrulanmadı.',
+      ),
+      if (!turkeyOffsetKnown(sent))
+        const DeadlineReason(
+          'eskiSaat',
+          '2016 öncesi bir tebligat: o yılların yaz saati uygulaması '
+              'hesaba katılmadı.',
+        ),
+      if (evidence['kaynak'] == 'konu')
+        const DeadlineReason(
+          'turKonudan',
+          'Belge türü yalnız tebligatın konusundan anlaşıldı; ekleri '
+              'görülmedi.',
+        ),
+      if (category == null)
+        const DeadlineReason(
+          'kategoriBelirsiz',
+          'Mahkemenin yargı kolu adından anlaşılamadı; süre ve tatil '
+              'kuralları buna göre değişir.',
+        ),
+      if (takipTuru == null &&
+          tur == BelgeTuru.odemeEmriKambiyo &&
+          fromParts.every((f) => f.tur != BelgeTuru.odemeEmriKambiyo))
+        const DeadlineReason(
+          'takipTuruBelirsiz',
+          'Ödeme emrinin genel haciz mi kambiyo mu olduğu belgeden '
+              'anlaşılamadı; ikisinin süreleri birlikte gösterildi.',
+        ),
+      if (takipTuru == null &&
+          tur == BelgeTuru.odemeEmri &&
+          BelgeTuruTespit.odemeEmriTakipTuru('${evidence['ad']}') == null)
+        const DeadlineReason(
+          'takipTuruBelirsiz',
+          'Ödeme emrinin genel haciz mi kambiyo mu olduğu belgeden '
+              'anlaşılamadı; ikisinin süreleri birlikte gösterildi.',
+        ),
+      if (rule.tariheBagli)
+        DeadlineReason(
+          'kararTarihiBilinmiyor',
+          rule.gecerliBitisIso != null || rule.gecerliBaslangicIso == k7499
+              ? 'Kararın tarihi bilinmiyor: 1 Haziran 2024’ten önceki ve '
+                    'sonraki kararlarda kural farklı (7499 s.K.).'
+              : 'Kararın tarihi bilinmiyor; kural karar tarihine bağlı.',
+        ),
+      DeadlineReason('aidiyet', sign.neden),
+    ];
+
+    // The event the rule starts from, never stood in for by another.
+    final LegalDay? start = switch (rule.baslangic) {
+      SureBaslangici.teblig => served,
+      SureBaslangici.ogrenme => read,
+      _ => null,
+    };
+    String? raw, due;
+    var state = 'aday';
+    if (start == null) {
+      state = 'olayBekleniyor';
+      reasons.add(
+        DeadlineReason('olayBekleniyor', switch (rule.baslangic) {
+          SureBaslangici.ogrenme =>
+            'Süre öğrenmeden başlar; tebligatın açıldığı gün UETS’ten '
+                'henüz gelmedi.',
+          SureBaslangici.tefhim =>
+            'Süre tefhimden başlar; tefhim günü bilinmiyor.',
+          SureBaslangici.ilan => 'Süre ilandan başlar; ilan günü bilinmiyor.',
+          _ => 'Süre karar tarihinden başlar; karar tarihi bilinmiyor.',
+        }),
+      );
+    } else {
+      final c = DeadlineService.computeFromUsuliTebligTarihi(
+        usuliTebligTarihi: start.toLocal(),
+        okunmaTarihi: read?.toLocal(),
+        kategori: kategori,
+        belgeTuru: tur,
+        now: at,
+        kurallar: [rule],
+      );
+      final item = c.items.single;
+      raw = LegalDay.of(item.hamSonGun).key;
+      due = LegalDay.of(item.etkiliSonGun).key;
+      for (final note in item.dayanakNotlari) {
+        reasons.add(DeadlineReason('dayanak', note));
+      }
+      final last = LegalDay.of(item.etkiliSonGun);
+      if (TurkishLegalCalendar.isYarimGun(item.etkiliSonGun)) {
+        reasons.add(
+          const DeadlineReason(
+            'yarimGun',
+            'Son gün yarım gün; işlemi öğleden önce yapın ya da UYAP '
+                'işlem saatini kontrol edin.',
+          ),
+        );
+      }
+      if (last.year < TurkishLegalCalendar.kDiniBayramTabloIlkYil ||
+          last.year > TurkishLegalCalendar.kDiniBayramTabloSonYil) {
+        reasons.add(
+          DeadlineReason(
+            'takvimDisi',
+            '${last.year} yılının bayramları takvimde yok; son gün '
+                'doğrulanamadı.',
+          ),
+        );
+      }
+      if (rule.maliTatildeDurur &&
+          TurkishLegalCalendar.maliTatilBaslangiciKaydi(start.year)) {
+        reasons.add(
+          DeadlineReason(
+            'maliTatilKaydi',
+            '${start.year} yılında mali tatil 1 Temmuz’dan sonra başladı '
+                '(5604 m.1/1); bitişi 20 Temmuz sayıldı.',
+          ),
+        );
+      }
+    }
+
+    final inputs = _digest({
+      'tebligat': m.id,
+      'kutuyaGiris': sent.toUtc().toIso8601String(),
+      'okunma': m.read?.toUtc().toIso8601String(),
+      'manifest': manifest.state,
+      'manifestZamani': manifest.fetchedAt,
+      'zarf': envelope?.state,
+      'zarfMetni': envelopeDigest,
+      'kanit': evidence,
+      'dosya': n.caseKey,
+      'bag': n.link,
+      'aidiyet': sign.sinyal.name,
+      'aidiyetNedeni': sign.neden,
+      'kategori': category?.name,
+      'kural': ruleId,
+      'kuralOlgu': [
+        rule.miktar,
+        rule.birim.name,
+        rule.baslangic.name,
+        rule.kanunMaddesi,
+        rule.gecerliBaslangicIso,
+        rule.gecerliBitisIso,
+      ],
+      'motor': sureHesapSurumu,
+      'takvim': TurkishLegalCalendar.takvimSurumu,
+    });
+    return DeadlineRecord(
+      id: 'uets:${m.id}:r:$ruleId',
+      noticeId: m.id,
+      caseKey: n.caseKey,
+      ruleId: ruleId,
+      title: rule.ad,
+      law: rule.kanunMaddesi,
+      startEvent: switch (rule.baslangic) {
+        SureBaslangici.teblig => 'teblig',
+        SureBaslangici.ogrenme => 'ogrenme',
+        SureBaslangici.tefhim => 'tefhim',
+        SureBaslangici.ilan => 'ilan',
+        SureBaslangici.kararTarihi => 'karar',
+      },
+      startDay: start?.key,
+      rawDay: raw,
+      dueDay: due,
+      state: state,
+      ownership: sign.sinyal.name,
+      reasons: reasons,
+      evidence: evidence,
+      engine: sureHesapSurumu,
+      calendar: TurkishLegalCalendar.takvimSurumu,
+      inputs: inputs,
+      updated: at,
+    );
+  }
+
   final out = <DeadlineRecord>[];
+  final catalogued = <(DeadlineRecord, YasalSure)>[];
   for (final k in kinds) {
-    final kategori = category ?? MahkemeKategorisi.bilinmeyen;
     for (final rule in surelerForBelgeTuru(k.tur, kategori)) {
       final info = kuralBilgisi(rule);
-      final ruleId = info?.id ?? _slug(rule.ad);
-      final reasons = <DeadlineReason>[
-        const DeadlineReason(
-          'ulasmaDogrulanmadi',
-          'Tebliğ günü, UETS’in tebligatı kutuya koyduğu andan beş gün '
-              'sonra sayıldı; ulaşma deliliyle doğrulanmadı.',
-        ),
-        if (!turkeyOffsetKnown(sent))
-          const DeadlineReason(
-            'eskiSaat',
-            '2016 öncesi bir tebligat: o yılların yaz saati uygulaması '
-                'hesaba katılmadı.',
-          ),
-        if (k.evidence['kaynak'] == 'konu')
-          const DeadlineReason(
-            'turKonudan',
-            'Belge türü yalnız tebligatın konusundan anlaşıldı; ekleri '
-                'görülmedi.',
-          ),
-        if (category == null)
-          const DeadlineReason(
-            'kategoriBelirsiz',
-            'Mahkemenin yargı kolu adından anlaşılamadı; süre ve tatil '
-                'kuralları buna göre değişir.',
-          ),
-        if (k.tur == BelgeTuru.odemeEmriKambiyo &&
-            fromParts.every((f) => f.tur != BelgeTuru.odemeEmriKambiyo))
-          const DeadlineReason(
-            'takipTuruBelirsiz',
-            'Ödeme emrinin genel haciz mi kambiyo mu olduğu belgeden '
-                'anlaşılamadı; ikisinin süreleri birlikte gösterildi.',
-          ),
-        if (k.tur == BelgeTuru.odemeEmri &&
-            BelgeTuruTespit.odemeEmriTakipTuru('${k.evidence['ad']}') == null)
-          const DeadlineReason(
-            'takipTuruBelirsiz',
-            'Ödeme emrinin genel haciz mi kambiyo mu olduğu belgeden '
-                'anlaşılamadı; ikisinin süreleri birlikte gösterildi.',
-          ),
-        if (rule.tariheBagli)
-          DeadlineReason(
-            'kararTarihiBilinmiyor',
-            rule.gecerliBitisIso != null || rule.gecerliBaslangicIso == k7499
-                ? 'Kararın tarihi bilinmiyor: 1 Haziran 2024’ten önceki ve '
-                      'sonraki kararlarda kural farklı (7499 s.K.).'
-                : 'Kararın tarihi bilinmiyor; kural karar tarihine bağlı.',
-          ),
-      ];
-      final sign = aidiyetSinyali(
-        yukumlu: info?.yukumlu ?? Yukumlu.taraflar,
-        taraflar: parties,
-        avukat: lawyer,
-      );
-      reasons.add(DeadlineReason('aidiyet', sign.neden));
-
-      // The event the rule starts from, never stood in for by another.
-      final LegalDay? start = switch (rule.baslangic) {
-        SureBaslangici.teblig => served,
-        SureBaslangici.ogrenme => read,
-        _ => null,
-      };
-      String? raw, due;
-      var state = 'aday';
-      if (start == null) {
-        state = 'olayBekleniyor';
-        reasons.add(
-          DeadlineReason('olayBekleniyor', switch (rule.baslangic) {
-            SureBaslangici.ogrenme =>
-              'Süre öğrenmeden başlar; tebligatın açıldığı gün UETS’ten '
-                  'henüz gelmedi.',
-            SureBaslangici.tefhim =>
-              'Süre tefhimden başlar; tefhim günü bilinmiyor.',
-            SureBaslangici.ilan => 'Süre ilandan başlar; ilan günü bilinmiyor.',
-            _ => 'Süre karar tarihinden başlar; karar tarihi bilinmiyor.',
-          }),
-        );
-      } else {
-        final c = DeadlineService.computeFromUsuliTebligTarihi(
-          usuliTebligTarihi: start.toLocal(),
-          okunmaTarihi: read?.toLocal(),
-          kategori: kategori,
-          belgeTuru: k.tur,
-          now: at,
-          kurallar: [rule],
-        );
-        final item = c.items.single;
-        raw = LegalDay.of(item.hamSonGun).key;
-        due = LegalDay.of(item.etkiliSonGun).key;
-        for (final note in item.dayanakNotlari) {
-          reasons.add(DeadlineReason('dayanak', note));
-        }
-        final last = LegalDay.of(item.etkiliSonGun);
-        if (TurkishLegalCalendar.isYarimGun(item.etkiliSonGun)) {
-          reasons.add(
-            const DeadlineReason(
-              'yarimGun',
-              'Son gün yarım gün; işlemi öğleden önce yapın ya da UYAP '
-                  'işlem saatini kontrol edin.',
-            ),
-          );
-        }
-        if (last.year < TurkishLegalCalendar.kDiniBayramTabloIlkYil ||
-            last.year > TurkishLegalCalendar.kDiniBayramTabloSonYil) {
-          reasons.add(
-            DeadlineReason(
-              'takvimDisi',
-              '${last.year} yılının bayramları takvimde yok; son gün '
-                  'doğrulanamadı.',
-            ),
-          );
-        }
-        if (rule.maliTatildeDurur &&
-            TurkishLegalCalendar.maliTatilBaslangiciKaydi(start.year)) {
-          reasons.add(
-            DeadlineReason(
-              'maliTatilKaydi',
-              '${start.year} yılında mali tatil 1 Temmuz’dan sonra başladı '
-                  '(5604 m.1/1); bitişi 20 Temmuz sayıldı.',
-            ),
-          );
-        }
-      }
-
-      final inputs = _digest({
-        'tebligat': m.id,
-        'kutuyaGiris': sent.toUtc().toIso8601String(),
-        'okunma': m.read?.toUtc().toIso8601String(),
-        'manifest': manifest.state,
-        'manifestZamani': manifest.fetchedAt,
-        'kanit': k.evidence,
-        'dosya': n.caseKey,
-        'bag': n.link,
-        'aidiyet': sign.sinyal.name,
-        'aidiyetNedeni': sign.neden,
-        'kategori': category?.name,
-        'kural': ruleId,
-        'kuralOlgu': [
-          rule.miktar,
-          rule.birim.name,
-          rule.baslangic.name,
-          rule.kanunMaddesi,
-          rule.gecerliBaslangicIso,
-          rule.gecerliBitisIso,
-        ],
-        'motor': sureHesapSurumu,
-        'takvim': TurkishLegalCalendar.takvimSurumu,
-      });
-      out.add(
-        DeadlineRecord(
-          id: 'uets:${m.id}:r:$ruleId',
-          noticeId: m.id,
-          caseKey: n.caseKey,
-          ruleId: ruleId,
-          title: rule.ad,
-          law: rule.kanunMaddesi,
-          startEvent: switch (rule.baslangic) {
-            SureBaslangici.teblig => 'teblig',
-            SureBaslangici.ogrenme => 'ogrenme',
-            SureBaslangici.tefhim => 'tefhim',
-            SureBaslangici.ilan => 'ilan',
-            SureBaslangici.kararTarihi => 'karar',
-          },
-          startDay: start?.key,
-          rawDay: raw,
-          dueDay: due,
-          state: state,
-          ownership: sign.sinyal.name,
-          reasons: reasons,
+      catalogued.add((
+        record(
+          rule,
+          ruleId: info?.id ?? _slug(rule.ad),
+          tur: k.tur,
           evidence: k.evidence,
-          engine: sureHesapSurumu,
-          calendar: TurkishLegalCalendar.takvimSurumu,
-          inputs: inputs,
-          updated: at,
+          sign: aidiyetSinyali(
+            yukumlu: info?.yukumlu ?? Yukumlu.taraflar,
+            taraflar: parties,
+            avukat: lawyer,
+          ),
+          lead: [
+            if (envelope == null)
+              const DeadlineReason(
+                'zarfBekleniyor',
+                'Tebligat paketi henüz indirilmedi; zarftaki süre sonra '
+                    'karşılaştırılacak.',
+              )
+            else if (envelopeText.isEmpty)
+              const DeadlineReason(
+                'zarfOkunamadi',
+                'Tebligat zarfının metni okunamadı; zarfta başka bir süre '
+                    'olup olmadığını kendiniz kontrol edin.',
+              ),
+          ],
         ),
-      );
+        rule,
+      ));
     }
+  }
+
+  // The envelope's directives: one that gives a catalogued rule's own time
+  // joins it, as its second source; one that gives another time is a
+  // deadline of its own, both told of the other.
+  final directives = envelopeText.isEmpty
+      ? const <EnvelopeDirective>[]
+      : envelopeDirectives(envelopeText);
+  final joined = <int, List<EnvelopeDirective>>{};
+  final apart = <EnvelopeDirective>[];
+  for (final d in directives) {
+    // The same time is not enough: the same act too, else the two stay
+    // apart and each says so.
+    final fitting = [
+      for (var j = 0; j < catalogued.length; j++)
+        if (catalogued[j].$2.baslangic == SureBaslangici.teblig &&
+            _spanOf(catalogued[j].$2) == d.span &&
+            _fits(d.act, catalogued[j].$1.ruleId))
+          j,
+    ];
+    // Two rules it could be: joined to neither, shown apart.
+    final i = fitting.length == 1 ? fitting.single : -1;
+    if (i < 0) {
+      apart.add(d);
+    } else {
+      (joined[i] ??= []).add(d);
+    }
+  }
+  for (var i = 0; i < catalogued.length; i++) {
+    final (r, rule) = catalogued[i];
+    final with_ = joined[i] ?? const [];
+    final others = apart;
+    out.add(
+      with_.isEmpty && others.isEmpty
+          ? r
+          : r.withState(
+              r.state,
+              reasons: [
+                for (final d in with_)
+                  DeadlineReason(
+                    'zarfIleUyumlu',
+                    'Zarf da aynı süreyi veriyor (${d.text}): “${d.quote}”',
+                  ),
+                for (final d in others)
+                  DeadlineReason(
+                    'zarfFarkli',
+                    'Zarf başka bir süre veriyor (${d.text}); o da ayrıca '
+                        'gösterildi.',
+                  ),
+                ...r.reasons,
+              ],
+            ),
+    );
+  }
+  for (final d in apart) {
+    final rule = YasalSure(
+      ad: 'Zarftaki süre · ${_actTitle(d.act)}',
+      miktar: d.amount,
+      birim: d.unit,
+      kanunMaddesi: 'Zarftaki ihtar',
+    );
+    out.add(
+      record(
+        rule,
+        ruleId: 'zarf-${d.act}-${d.amount}${d.unit.name}',
+        tur: kinds.isEmpty ? BelgeTuru.diger : kinds.first.tur,
+        evidence: {'kaynak': 'zarf', 'ad': 'Tebligat zarfı'},
+        sign: (
+          sinyal: AidiyetSinyali.olasiBizim,
+          neden:
+              'Zarftaki talimat tebligatın muhatabına, yani size '
+              'yöneltilmiş.',
+        ),
+        lead: [
+          DeadlineReason('zarfAlinti', '“${d.quote}”'),
+          if (!d.fromService)
+            const DeadlineReason(
+              'baslangicVarsayildi',
+              'Zarf sürenin neyden başladığını söylemiyor; tebliğden '
+                  'başladığı kabul edildi.',
+            ),
+          if (catalogued.isNotEmpty)
+            DeadlineReason(
+              'zarfFarkli',
+              'Kanunun süresi (${catalogued.map((c) => c.$2.sureMetni).toSet().join(', ')}) '
+                  'zarftakinden farklı; ikisi de gösterildi.',
+            ),
+        ],
+      ),
+    );
   }
   return out;
 }
+
+({int n, String unit}) _spanOf(YasalSure r) => switch (r.birim) {
+  SureBirimi.hafta => (n: r.miktar * 7, unit: 'gun'),
+  SureBirimi.gun => (n: r.miktar, unit: 'gun'),
+  SureBirimi.isGunu => (n: r.miktar, unit: 'isGunu'),
+  SureBirimi.ay => (n: r.miktar, unit: 'ay'),
+  SureBirimi.yil => (n: r.miktar, unit: 'yil'),
+};
+
+/// Whether an envelope's [act] is the act of the catalogued rule [ruleId].
+bool _fits(String act, String ruleId) {
+  bool any(List<String> prefixes) => prefixes.any(ruleId.startsWith);
+  return switch (act) {
+    'itiraz' =>
+      ruleId == 'iik89' ||
+          any([
+            'hmk281',
+            'iik62',
+            'iik168-5',
+            'iik168-4',
+            'iik168-3',
+            'iik89-1',
+            'iik89-2',
+            'iik16',
+          ]),
+    'beyan' => any(['hmk281']),
+    'cevap' => any(['hmk127', 'iyuk16']),
+    'odeme' => any(['iik168-2', 'iik32']),
+    'kanunYolu' => any(['hmk345', 'hmk361', 'cmk', 'iyuk45', 'iik363']),
+    _ => false,
+  };
+}
+
+String _actTitle(String act) => switch (act) {
+  'kanunYolu' => 'kanun yolu',
+  'itiraz' => 'itiraz',
+  'cevap' => 'cevap ve savunma',
+  'odeme' => 'ödeme',
+  'delil' => 'delil ve tanık',
+  'beyan' => 'beyan',
+  _ => 'talimat',
+};
 
 /// SHA-256 of [inputs] as JSON, its keys in a fixed order.
 String _digest(Map<String, Object?> inputs) {

@@ -150,6 +150,10 @@ class PortalDatabase {
       CREATE TABLE IF NOT EXISTS uets_manifest (
         notice_id TEXT PRIMARY KEY, state TEXT NOT NULL, fetched_at TEXT,
         error TEXT);
+      CREATE TABLE IF NOT EXISTS uets_envelope (
+        notice_id TEXT PRIMARY KEY, state TEXT NOT NULL, folder TEXT,
+        package_path TEXT, envelope_path TEXT, envelope_text TEXT,
+        attachments TEXT NOT NULL DEFAULT '[]', fetched_at TEXT, error TEXT);
       CREATE TABLE IF NOT EXISTS deadline (
         id TEXT PRIMARY KEY, notice_id TEXT NOT NULL, case_key TEXT,
         rule_id TEXT NOT NULL, title TEXT NOT NULL, law TEXT NOT NULL,
@@ -228,10 +232,14 @@ class PortalDatabase {
   /// answer again writes nothing. Answers the keys of cases not kept
   /// before; those the portfolio brings are marked new unless [baseline]
   /// (the first reading of the portfolio, where nothing is news).
+  ///
+  /// [changed], when given, is told the key of every case written: new or
+  /// changed, so that only those are asked about afterwards.
   Set<String> mergeCases(
     Iterable<PortalCase> incoming, {
     bool portfolio = false,
     bool baseline = false,
+    Set<String>? changed,
   }) {
     final added = <String>{};
     _transaction(() {
@@ -251,6 +259,7 @@ class PortalDatabase {
           final json = jsonEncode(merged.toJson());
           if (json == before) continue;
           write.execute([merged.key, json]);
+          changed?.add(merged.key);
           if (before == null) {
             added.add(merged.key);
             state.execute([merged.key, portfolio && !baseline ? now : '']);
@@ -415,6 +424,23 @@ class PortalDatabase {
         link: r['link'] as String?,
       ),
   ];
+
+  /// One notification as kept; null when it is not.
+  KeptNotice? notice(String id) {
+    final rows = _db.select(
+      'SELECT json, case_key, link FROM uets WHERE id=?',
+      [id],
+    );
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    return KeptNotice(
+      UetsMessage.fromJson(
+        Map<String, Object?>.from(jsonDecode(r['json'] as String) as Map),
+      ),
+      caseKey: r['case_key'] as String?,
+      link: r['link'] as String?,
+    );
+  }
 
   /// Keeps [messages] as UETS gave them; the tie to a case stays.
   void mergeNotices(Iterable<UetsMessage> messages) => _transaction(() {
@@ -733,6 +759,59 @@ class PortalDatabase {
     );
   }
 
+  // Notices' packages
+
+  /// What a notice's package gave, as kept: 'indirildi' (the envelope read),
+  /// 'zarfYok' (a package without an envelope), 'metinYok' (an envelope
+  /// with no text layer) or 'hata'; and where its files are.
+  void saveEnvelope(NoticeEnvelope e) => _db.execute(
+    '''INSERT OR REPLACE INTO uets_envelope(notice_id, state, folder,
+       package_path, envelope_path, envelope_text, attachments, fetched_at,
+       error) VALUES(?,?,?,?,?,?,?,?,?)''',
+    [
+      e.noticeId,
+      e.state,
+      e.folder,
+      e.packagePath,
+      e.envelopePath,
+      e.envelopeText,
+      jsonEncode([
+        for (final a in e.attachments) {'ad': a.name, 'yol': a.path},
+      ]),
+      e.fetchedAt?.toIso8601String(),
+      e.error,
+    ],
+  );
+
+  NoticeEnvelope? envelope(String noticeId) {
+    final rows = _db.select('SELECT * FROM uets_envelope WHERE notice_id=?', [
+      noticeId,
+    ]);
+    return rows.isEmpty ? null : _envelope(rows.first);
+  }
+
+  Map<String, NoticeEnvelope> envelopes() => {
+    for (final r in _db.select('SELECT * FROM uets_envelope'))
+      r['notice_id'] as String: _envelope(r),
+  };
+
+  NoticeEnvelope _envelope(Row r) => NoticeEnvelope(
+    noticeId: r['notice_id'] as String,
+    state: r['state'] as String,
+    folder: r['folder'] as String?,
+    packagePath: r['package_path'] as String?,
+    envelopePath: r['envelope_path'] as String?,
+    envelopeText: r['envelope_text'] as String?,
+    attachments: [
+      for (final a in jsonDecode(r['attachments'] as String) as List)
+        if (a is Map) (name: '${a['ad']}', path: '${a['yol']}'),
+    ],
+    fetchedAt: r['fetched_at'] == null
+        ? null
+        : DateTime.parse(r['fetched_at'] as String),
+    error: r['error'] as String?,
+  );
+
   // Notices' deadlines
 
   List<KeptDeadline> deadlines({String? noticeId}) => [
@@ -939,11 +1018,13 @@ class PortalDatabase {
 
   // The agenda rows the notices' deadlines were kept in before
 
-  /// The notices' deadline rows of the agenda not yet carried over.
-  List<AgendaItem> legacyNoticeDeadlines() => _agendaRows(
+  /// The notices' deadline rows of the agenda not yet carried over; of
+  /// [noticeId] alone when given.
+  List<AgendaItem> legacyNoticeDeadlines({String? noticeId}) => _agendaRows(
     _db.select(
-      "SELECT * FROM agenda WHERE kind='deadline' AND id LIKE 'uets:%' "
+      "SELECT * FROM agenda WHERE kind='deadline' AND id LIKE ? "
       'AND id NOT IN (SELECT legacy_id FROM deadline_legacy)',
+      [noticeId == null ? 'uets:%' : 'uets:$noticeId:%'],
     ),
   );
 

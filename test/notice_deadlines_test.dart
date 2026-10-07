@@ -285,6 +285,29 @@ void main() {
       );
     });
 
+    test('once the lawyer tells the proceedings, only theirs remain', () {
+      parts([('p1', 'Ödeme Emri.pdf')]);
+      db.setMeta('takip:m1', 'kambiyo');
+      refreshNoticeDeadlines(db, now: now);
+      final live = {
+        for (final d in db.deadlines())
+          if (d.record.state != 'eski') d.record.ruleId,
+      };
+      expect(live, contains('iik168-5-borca'));
+      expect(live, isNot(contains('iik62')));
+      expect(
+        db.deadlines().expand((d) => d.record.reasons).map((r) => r.code),
+        isNot(contains('takipTuruBelirsiz')),
+      );
+      db.setMeta('takip:m1', 'genel');
+      refreshNoticeDeadlines(db, now: now);
+      final general = {
+        for (final d in db.deadlines())
+          if (d.record.state != 'eski') d.record.ruleId,
+      };
+      expect(general, {'iik62'});
+    });
+
     test('a confirmation holds while the inputs do, and falls when a '
         'document changes, even under the same name (T60, T67)', () {
       parts([('p1', '(1)GerekceliKarar.pdf')]);
