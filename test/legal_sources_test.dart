@@ -616,6 +616,39 @@ void main() {
       });
     });
 
+    test('a kept copy older than a week still answers offline', () async {
+      await withTempDirectory((dir) async {
+        // Fetched once, and kept.
+        final first = legislation(dir);
+        expect(
+          (await first.lookup(_article("TBK'nın 97. maddesi"))).article,
+          isNotNull,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        final kept = File('${dir.path}/bedesten/6098.json');
+        expect(kept.existsSync(), isTrue);
+        // Ten days later, with no network.
+        final json =
+            jsonDecode(kept.readAsStringSync()) as Map<String, Object?>;
+        json['alindi'] = DateTime.now()
+            .subtract(const Duration(days: 10))
+            .toUtc()
+            .toIso8601String();
+        kept.writeAsStringSync(jsonEncode(json));
+        final offline = Legislation(
+          cache: dir,
+          download: (law) async => throw const SocketException('ağ yok'),
+          bedesten: BedestenLegislation(
+            send: (path, body) async => throw const SocketException('ağ yok'),
+            between: _quick,
+          ),
+        );
+        final got = await offline.lookup(_article("TBK'nın 97. maddesi"));
+        expect(got.article?.source, ArticleSource.bedesten);
+        expect(got.article?.number, 97);
+      });
+    });
+
     test('a lettered article is cut out of the article it follows', () async {
       await withTempDirectory((dir) async {
         final laws = legislation(dir);

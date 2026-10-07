@@ -883,11 +883,11 @@ void main() {
       );
       await _settle(
         tester,
-        () => find.text('Adalet E-İmza PIN').evaluate().isNotEmpty,
+        () => find.text('E-imza PIN').evaluate().isNotEmpty,
         rounds: 20,
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Adalet E-İmza PIN'),
+        find.widgetWithText(TextField, 'E-imza PIN'),
         '123456',
       );
       await _shot(tester, 'uyap-baglan');

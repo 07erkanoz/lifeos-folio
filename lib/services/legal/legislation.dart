@@ -337,15 +337,24 @@ class Legislation {
     if (kept != null && DateTime.now().difference(kept.at) < bankKeepFor) {
       return _banks[law.number] = kept;
     }
-    final found = await bank.law(law.number);
-    if (found == null) return null;
-    final tree = await bank.tree(found.id);
-    return _banks[law.number] = _BankCopy(
-      law: found,
-      tree: tree,
-      pages: {},
-      at: DateTime.now(),
-    );
+    // Older than a week: asked for anew, but the copy kept still answers
+    // when the bank cannot be reached, offline above all. An article on
+    // disk is not "unreachable".
+    final stale = held ?? kept;
+    try {
+      final found = await bank.law(law.number);
+      if (found == null) return stale;
+      final tree = await bank.tree(found.id);
+      return _banks[law.number] = _BankCopy(
+        law: found,
+        tree: tree,
+        pages: {},
+        at: DateTime.now(),
+      );
+    } catch (_) {
+      if (stale == null) rethrow;
+      return _banks[law.number] = stale;
+    }
   }
 
   Future<File> _bankFile(Law law) async {
