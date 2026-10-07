@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Evrak Önizleme Taslağı</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet">
+<style>
+  :root { --page:#F4F6F9; --line:#E3E7EE; --muted:#6B7383; --ink:#1B2130; --primary:#2B5EA8; --pfill:#EAF0F9;
+          --ok:#157A52; --okF:#EAF7F1; --amber:#97600D; --amberF:#FDF4E6; --red:#C0322B; --redF:#FDECEC; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:18px; line-height:1; font-style:normal; display:inline-block; font-feature-settings:"liga"; vertical-align:-3px; }
+  h2.cap { width:1440px; margin:0 auto 10px; font-size:15px; color:#2A3040; }
+  h2.cap small { font-weight:400; color:#4B5465; margin-left:8px; }
+  .win { width:1440px; height:900px; margin:0 auto 34px; background:var(--page); border-radius:12px; overflow:hidden; box-shadow:0 20px 60px rgba(20,30,50,.28); display:flex; flex-direction:column; }
+  .tb { height:34px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; padding:0 14px; font-size:12px; color:var(--muted); }
+  .tb .r { margin-left:auto; letter-spacing:12px; }
+  .body { flex:1; display:flex; min-height:0; }
+  /* The library's panel folded to a rail on UYAP pages. */
+  .rail { width:58px; background:#fff; border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:6px; }
+  .rail .i { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#6B7383; position:relative; }
+  .rail .i.on { background:var(--pfill); color:var(--primary); }
+  .rail .i.new { background:var(--primary); color:#fff; margin-bottom:8px; }
+  .rail .dot { position:absolute; top:4px; right:3px; font-size:9px; font-weight:800; background:var(--red); color:#fff; border-radius:8px; padding:0 4px; }
+  .rail .open { margin-top:auto; border:1px solid var(--line); }
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; padding:14px 18px; gap:10px; }
+  /* The case's heading, thin. */
+  .head { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 16px; display:flex; align-items:center; gap:12px; }
+  .head .crumb { font-size:11.5px; color:var(--primary); font-weight:600; }
+  .head .no { font-family:"Consolas",monospace; font-size:19px; font-weight:700; }
+  .chip { font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:6px; letter-spacing:.3px; }
+  .chip.b { background:var(--pfill); color:var(--primary); } .chip.a { background:var(--amberF); color:var(--amber); }
+  .head .court { font-size:13px; color:#3B4252; }
+  .head .facts { margin-left:18px; display:flex; gap:16px; font-size:12px; color:var(--muted); }
+  .head .facts b { color:var(--ink); font-weight:600; }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:9px; padding:7px 12px; font-size:12.5px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .btn.p { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .grow { flex:1; }
+  /* The documents' area: the window's remaining height. */
+  .area { flex:1; min-height:0; background:#fff; border:1px solid var(--line); border-radius:12px; display:flex; flex-direction:column; overflow:hidden; }
+  .tabs { display:flex; gap:22px; padding:0 18px; border-bottom:1px solid var(--line); font-size:13px; color:var(--muted); }
+  .tabs span { padding:11px 0 9px; }
+  .tabs .on { color:var(--ink); font-weight:700; border-bottom:2.5px solid var(--primary); }
+  .tabs small { color:var(--muted); font-weight:400; margin-left:3px; }
+  .split { flex:1; display:flex; min-height:0; }
+  .list { width:450px; border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+  .tools { padding:10px 12px 8px; display:flex; flex-direction:column; gap:8px; border-bottom:1px solid var(--line); }
+  .search { border:1px solid var(--line); border-radius:9px; padding:7px 10px; font-size:12.5px; color:#8A92A3; display:flex; gap:8px; align-items:center; }
+  .filters { display:flex; gap:6px; }
+  .f { font-size:11.5px; border:1px solid var(--line); border-radius:7px; padding:4px 9px; }
+  .f.on { background:var(--pfill); border-color:#C9D7EE; color:var(--primary); font-weight:700; }
+  .rows { flex:1; overflow:hidden; }
+  .bucket { font-size:10px; font-weight:800; letter-spacing:.9px; color:var(--muted); padding:10px 14px 4px; }
+  .row { display:flex; align-items:center; gap:10px; padding:7px 12px 7px 14px; border-left:3px solid transparent; }
+  .row .ic { width:28px; height:28px; border-radius:7px; background:#F1F3F7; display:flex; align-items:center; justify-content:center; color:#5E6677; flex:none; }
+  .row .t { font-size:12.8px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .s { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .tx { flex:1; min-width:0; }
+  .row .st { font-size:16px; color:var(--ok); } .row .st.dl { color:var(--primary); }
+  .row.sel { background:var(--pfill); border-left-color:var(--primary); }
+  .row.att { padding-left:40px; } .row.att .ic { width:22px; height:22px; } .row.att .t { font-weight:500; font-size:12.2px; }
+  .new { font-size:9.5px; font-weight:800; color:#fff; background:var(--primary); border-radius:5px; padding:1px 5px; margin-left:6px; vertical-align:1px; }
+  .keys { border-top:1px solid var(--line); padding:7px 14px; font-size:11px; color:var(--muted); display:flex; gap:14px; }
+  kbd { font-family:inherit; font-size:10.5px; border:1px solid #D3D8E1; border-bottom-width:2px; border-radius:4px; padding:0 5px; background:#fff; color:#3B4252; }
+  /* The preview. */
+  .pv { flex:1; min-width:0; display:flex; flex-direction:column; background:#E9ECF1; }
+  .pvh { background:#fff; border-bottom:1px solid var(--line); padding:9px 14px; display:flex; align-items:center; gap:10px; }
+  .pvh .t { font-size:13.5px; font-weight:700; }
+  .pvh .s { font-size:11.5px; color:var(--muted); }
+  .ibtn { width:32px; height:32px; border-radius:8px; border:1px solid var(--line); display:inline-flex; align-items:center; justify-content:center; background:#fff; color:#4B5465; }
+  .pages { flex:1; overflow:hidden; display:flex; flex-direction:column; align-items:center; padding:18px 0; gap:14px; position:relative; }
+  .sheet { width:540px; height:700px; background:#fff; box-shadow:0 2px 10px rgba(20,30,50,.15); padding:46px 54px; font-family:"Times New Roman",serif; font-size:11.5px; color:#222; flex:none; }
+  .sheet .c { text-align:center; font-weight:700; line-height:1.5; }
+  .sheet .kv { display:grid; grid-template-columns:120px 1fr; gap:3px 8px; margin:18px 0; font-size:11px; }
+  .sheet .kv b { font-weight:700; }
+  .ln { height:7px; background:#E3E5E9; border-radius:2px; margin:7px 0; }
+  .pgnum { position:absolute; bottom:14px; right:18px; background:rgba(27,33,48,.75); color:#fff; font-size:11px; border-radius:7px; padding:3px 9px; }
+  .zoom { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); background:#fff; border:1px solid var(--line); border-radius:9px; display:flex; align-items:center; gap:2px; padding:3px; font-size:12px; box-shadow:0 2px 8px rgba(20,30,50,.12); }
+  .zoom span { padding:3px 8px; }
+  .note { position:absolute; top:18px; right:18px; width:270px; background:#FFFBEA; border:1px solid #EAD89A; border-radius:10px; padding:10px 12px; font-size:11.5px; color:#5C4A12; line-height:1.45; }
+  .note b { display:block; margin-bottom:3px; }
+  /* Small frames: the not-downloaded state and the phone. */
+  .pair { width:1440px; margin:0 auto 34px; display:flex; gap:26px; align-items:flex-start; }
+  .card { background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(20,30,50,.22); overflow:hidden; }
+  .empty { width:560px; height:430px; display:flex; flex-direction:column; }
+  .empty .mid { flex:1; background:#E9ECF1; display:flex; align-items:center; justify-content:center; }
+  .box { background:#fff; border:1px solid var(--line); border-radius:12px; padding:22px 26px; width:360px; text-align:center; }
+  .box .big { font-size:34px; color:var(--primary); }
+  .box h4 { margin:8px 0 4px; font-size:14px; } .box p { margin:0 0 14px; font-size:12px; color:var(--muted); line-height:1.5; }
+  .bar { height:5px; border-radius:3px; background:#E3E7EE; overflow:hidden; margin:12px 0 4px; } .bar i { display:block; height:100%; width:62%; background:var(--primary); }
+  .phone { width:300px; height:620px; border-radius:30px; border:9px solid #1E2330; background:var(--page); overflow:hidden; display:flex; flex-direction:column; flex:none; }
+  .phone .top { background:#fff; padding:12px 12px 8px; border-bottom:1px solid var(--line); }
+  .phone .top .no { font-family:"Consolas",monospace; font-weight:700; font-size:15px; }
+  .phone .top .s { font-size:10.5px; color:var(--muted); }
+  .phone .row { padding:8px 10px; } .phone .row .t { font-size:12px; } .phone .row .s { font-size:10.5px; }
+  .phone .dark { flex:1; background:#2A2F3A; display:flex; flex-direction:column; }
+  .phone .dark .h { color:#fff; padding:12px; display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; }
+  .phone .dark .h small { display:block; font-weight:400; color:#AEB5C2; font-size:10.5px; }
+  .phone .dark .pg { margin:6px 14px; background:#fff; flex:1; padding:20px 18px; font-family:"Times New Roman",serif; font-size:9px; }
+  .phone .dark .nav2 { color:#D7DCE5; display:flex; justify-content:space-between; padding:10px 16px 14px; font-size:11px; }
+  .lbl { font-size:12px; color:#2A3040; margin:0 0 8px; font-weight:700; }
+  .lbl small { font-weight:400; color:#4B5465; }
+  .arrow { align-self:center; font-size:30px; color:#4B5465; }
+</style>
+</head>
+<body>
+
+<h2 class="cap">1 · Geniş ekran: liste solda yerinde kalır, seçilen evrak sağda açılır <small>Sol panel simge şeridine küçülmüş; taraflar ve özetler başlıkta tek satır</small></h2>
+<div class="win">
+  <div class="tb">Folio <span class="r">— ▢ ✕</span></div>
+  <div class="body">
+    <div class="rail">
+      <div class="i new"><span class="ms">add</span></div>
+      <div class="i"><span class="ms">home</span></div>
+      <div class="i"><span class="ms">folder</span></div>
+      <div class="i on"><span class="ms">gavel</span></div>
+      <div class="i"><span class="ms">event</span><span class="dot">3</span></div>
+      <div class="i"><span class="ms">mail</span><span class="dot">12</span></div>
+      <div class="i"><span class="ms">menu_book</span></div>
+      <div class="i open" title="Paneli aç"><span class="ms">left_panel_open</span></div>
+    </div>
+    <div class="main">
+      <div class="head">
+        <span class="ms" style="color:#4B5465">arrow_back</span>
+        <div>
+          <div class="crumb">UYAP Dosyalarım › Hukuk</div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="no">2024/318</span><span class="chip b">HUKUK · İLK DERECE</span><span class="chip a">Karara Çıkmış</span></div>
+          <div class="court">Antalya 3. Asliye Hukuk Mahkemesi</div>
+        </div>
+        <div class="facts">
+          <span>Bizim taraf <b>2</b></span><span>Karşı taraf <b>3</b></span><span>Duruşma <b>yok</b></span><span>Açık süre <b>yok</b></span><span>Son gelişme <b>05.10.2026</b></span>
+        </div>
+        <div class="grow"></div>
+        <span class="btn p"><span class="ms">edit_note</span>Dilekçe yaz</span>
+        <span class="btn"><span class="ms">sync</span>UYAP’tan tazele</span>
+      </div>
+      <div class="area">
+        <div class="tabs"><span class="on">Evraklar<small>412</small></span><span>Duruşmalar</span><span>Süreler &amp; Tebligat<small>2</small></span><span>Taraflar<small>5</small></span><span>Künye</span><span>Dilekçelerim</span></div>
+        <div class="split">
+          <div class="list">
+            <div class="tools">
+              <div class="search"><span class="ms">search</span>Evrak ara: bilirkişi, gerekçeli karar, 2025</div>
+              <div class="filters"><span class="f on">Tümü</span><span class="f">Kararlar</span><span class="f">Dilekçeler</span><span class="f">İndirilmemiş</span></div>
+            </div>
+            <div class="rows">
+              <div class="bucket">BU HAFTA</div>
+              <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Reddiyat Banka Ödeme Dekontu</div><div class="s">05.10.2026 · Antalya Adliyesi Veznesi</div></div><span class="ms st">check_circle</span></div>
+              <div class="row sel"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Gerekçeli Karar<span class="new">YENİ</span></div><div class="s">05.10.2026 · Antalya 3. Asliye Hukuk Mahkemesi</div></div><span class="ms st">check_circle</span></div>
+              <div class="row att"><span class="ic"><span class="ms" style="font-size:15px">attach_file</span></span><div class="tx"><div class="t">Ek 1 · Hesap tablosu</div></div><span class="ms st">check_circle</span></div>
+              <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Reddiyat Makbuzu</div><div class="s">05.10.2026 · Antalya Adliyesi Veznesi</div></div><span class="ms st dl">download</span></div>
+              <div class="bucket">EYLÜL 2026</div>
+              <div class="row"><span class="ic"><span class="ms">mail</span></span><div class="tx"><div class="t">Kapalı E-Tebliğ Mazbatası</div><div class="s">23.09.2026 · Davalı vekili Av. ****</div></div><span class="ms st dl">download</span></div>
+              <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Bilirkişi Raporu</div><div class="s">12.09.2026 · Bilirkişi ****</div></div><span class="ms st">check_circle</span></div>
+              <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Beyan Dilekçesi</div><div class="s">04.09.2026 · Davacı vekili</div></div><span class="ms st">check_circle</span></div>
+              <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Duruşma Zaptı</div><div class="s">02.09.2026 · Antalya 3. Asliye Hukuk Mahkemesi</div></div><span class="ms st">check_circle</span></div>
+              <div class="bucket">AĞUSTOS 2026</div>
+              <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Ara Karar</div><div class="s">21.08.2026 · Antalya 3. Asliye Hukuk Mahkemesi</div></div><span class="ms st dl">download</span></div>
+              <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Cevaba Cevap Dilekçesi</div><div class="s">14.08.2026 · Davacı vekili</div></div><span class="ms st">check_circle</span></div>
+            </div>
+            <div class="keys"><span><kbd>↑</kbd> <kbd>↓</kbd> evrak değiştir</span><span><kbd>Enter</kbd> editörde aç</span><span>çift tık: editörde aç</span></div>
+          </div>
+          <div class="pv">
+            <div class="pvh">
+              <div><div class="t">Gerekçeli Karar</div><div class="s">05.10.2026 · Antalya 3. Asliye Hukuk Mahkemesi · 6 sayfa</div></div>
+              <div class="grow"></div>
+              <span class="ibtn" title="Önceki evrak"><span class="ms">keyboard_arrow_up</span></span>
+              <span class="ibtn" title="Sonraki evrak"><span class="ms">keyboard_arrow_down</span></span>
+              <span class="ibtn" title="Klasörde göster"><span class="ms">folder_open</span></span>
+              <span class="ibtn" title="Ayrı pencerede aç"><span class="ms">open_in_new</span></span>
+              <span class="btn p"><span class="ms">edit_document</span>Editörde aç</span>
+            </div>
+            <div class="pages">
+              <div class="sheet">
+                <div class="c">T.C.<br>ANTALYA 3. ASLİYE HUKUK MAHKEMESİ<br>GEREKÇELİ KARAR</div>
+                <div class="kv"><b>ESAS NO</b><span>2024/318 Esas</span><b>KARAR NO</b><span>2026/402</span><b>HAKİM</b><span>****</span><b>DAVACI</b><span>A. Y****</span><b>VEKİLİ</b><span>Av. ****</span><b>DAVALI</b><span>M. K****</span><b>DAVA</b><span>Ortaklığın Giderilmesi</span></div>
+                <div class="ln" style="width:96%"></div><div class="ln" style="width:100%"></div><div class="ln" style="width:92%"></div><div class="ln" style="width:98%"></div><div class="ln" style="width:60%"></div>
+                <div style="height:10px"></div>
+                <div class="ln" style="width:100%"></div><div class="ln" style="width:94%"></div><div class="ln" style="width:97%"></div><div class="ln" style="width:89%"></div><div class="ln" style="width:99%"></div><div class="ln" style="width:72%"></div>
+                <div style="height:10px"></div>
+                <div class="ln" style="width:98%"></div><div class="ln" style="width:100%"></div><div class="ln" style="width:90%"></div><div class="ln" style="width:95%"></div><div class="ln" style="width:55%"></div>
+              </div>
+              <div class="zoom"><span class="ms">remove</span><span>%100</span><span class="ms">add</span><span style="border-left:1px solid var(--line)">Sayfaya sığdır</span></div>
+              <div class="pgnum">1 / 6</div>
+              <div class="note"><b>Tek tık önizler</b>Liste kaybolmaz; kaydırma yeri ve süzgeç korunur. Önizleme alanı sabit durur, yalnız liste kayar. Son seçilen evrak bir dahaki açılışta yine seçili gelir.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pair">
+  <div>
+    <p class="lbl">2 · İndirilmemiş evrak seçildiğinde <small>okla üzerinden geçerken kendiliğinden inmez</small></p>
+    <div style="display:flex;gap:18px">
+      <div class="card empty">
+        <div class="pvh"><div><div class="t">Reddiyat Makbuzu</div><div class="s">05.10.2026 · Antalya Adliyesi Veznesi</div></div></div>
+        <div class="mid"><div class="box"><span class="ms big">cloud_download</span><h4>Bu evrak henüz indirilmedi</h4><p>Göstermek için UYAP’tan indirilir ve dosyanın klasörüne kaydedilir.</p><span class="btn p"><span class="ms">download</span>Göster (indir) · Enter</span></div></div>
+      </div>
+      <div class="card empty">
+        <div class="pvh"><div><div class="t">Reddiyat Makbuzu</div><div class="s">05.10.2026 · Antalya Adliyesi Veznesi</div></div></div>
+        <div class="mid"><div class="box"><span class="ms big">hourglass_top</span><h4>UYAP’tan indiriliyor</h4><div class="bar"><i></i></div><p>Bu sırada listede gezmeye devam edebilirsiniz; inince burada açılır.</p></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pair">
+  <div>
+    <p class="lbl">3 · Telefon ve dar ekran <small>dokununca tam ekran önizleme; sağa/sola kaydırınca önceki/sonraki evrak; geri dönünce liste aynı yerde</small></p>
+    <div style="display:flex;gap:22px;align-items:center">
+      <div class="phone">
+        <div class="top"><div class="no">2024/318</div><div class="s">Antalya 3. Asliye Hukuk Mahkemesi</div></div>
+        <div class="bucket">BU HAFTA</div>
+        <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Reddiyat Banka Ödeme Dekontu</div><div class="s">05.10.2026</div></div><span class="ms st">check_circle</span></div>
+        <div class="row sel"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Gerekçeli Karar</div><div class="s">05.10.2026</div></div><span class="ms st">check_circle</span></div>
+        <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Reddiyat Makbuzu</div><div class="s">05.10.2026</div></div><span class="ms st dl">download</span></div>
+        <div class="bucket">EYLÜL 2026</div>
+        <div class="row"><span class="ic"><span class="ms">mail</span></span><div class="tx"><div class="t">Kapalı E-Tebliğ Mazbatası</div><div class="s">23.09.2026</div></div><span class="ms st dl">download</span></div>
+        <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Bilirkişi Raporu</div><div class="s">12.09.2026</div></div><span class="ms st">check_circle</span></div>
+        <div class="row"><span class="ic"><span class="ms">description</span></span><div class="tx"><div class="t">Beyan Dilekçesi</div><div class="s">04.09.2026</div></div><span class="ms st">check_circle</span></div>
+      </div>
+      <span class="ms arrow">arrow_forward</span>
+      <div class="phone">
+        <div class="dark">
+          <div class="h"><span class="ms">arrow_back</span><div>Gerekçeli Karar<small>2 / 412 · 05.10.2026</small></div><span class="grow"></span><span class="ms">edit_document</span><span class="ms">ios_share</span></div>
+          <div class="pg">
+            <div style="text-align:center;font-weight:700;line-height:1.5">T.C.<br>ANTALYA 3. ASLİYE HUKUK MAHKEMESİ<br>GEREKÇELİ KARAR</div>
+            <div class="ln" style="width:90%;height:5px;margin-top:16px"></div><div class="ln" style="width:100%;height:5px"></div><div class="ln" style="width:94%;height:5px"></div><div class="ln" style="width:70%;height:5px"></div>
+            <div class="ln" style="width:100%;height:5px;margin-top:12px"></div><div class="ln" style="width:96%;height:5px"></div><div class="ln" style="width:88%;height:5px"></div><div class="ln" style="width:99%;height:5px"></div><div class="ln" style="width:60%;height:5px"></div>
+          </div>
+          <div class="nav2"><span>‹ Reddiyat Banka Dekontu</span><span>Reddiyat Makbuzu ›</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

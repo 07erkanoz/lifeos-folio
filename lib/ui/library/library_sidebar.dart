@@ -44,6 +44,10 @@ class LibrarySidebar extends StatelessWidget {
 
   /// UETS notifications not yet opened, for the badge beside UETS.
   final int uetsUnread;
+
+  /// Widens the panel folded on the UYAP pages, or folds it again; null
+  /// where the window's width decides alone.
+  final VoidCallback? onTogglePanel;
   const LibrarySidebar({
     super.key,
     required this.library,
@@ -63,6 +67,7 @@ class LibrarySidebar extends StatelessWidget {
     this.uyapFresh = 0,
     this.agendaToday = 0,
     this.uetsUnread = 0,
+    this.onTogglePanel,
   });
 
   bool get _showUyap => uyapAvailable || uyapCases.isNotEmpty;
@@ -363,6 +368,18 @@ class LibrarySidebar extends StatelessWidget {
                                 ),
                               ],
                             ),
+                          ),
+                        ),
+                      if (onTogglePanel != null)
+                        IconButton(
+                          key: const ValueKey('sidebar-toggle'),
+                          tooltip: compact ? 'Paneli aç' : 'Paneli daralt',
+                          onPressed: onTogglePanel,
+                          icon: Icon(
+                            compact
+                                ? Icons.keyboard_double_arrow_right_rounded
+                                : Icons.keyboard_double_arrow_left_rounded,
+                            size: 18,
                           ),
                         ),
                       if (compact)

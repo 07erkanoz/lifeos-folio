@@ -12,6 +12,7 @@ import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/portfolio/case_detail_page.dart';
 import 'package:evrak_convert/ui/portfolio/portfolio_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -216,8 +217,11 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('case-number')), findsOneWidget);
     expect(find.text('YENİ'), findsOneWidget);
-    expect(find.text('BİZİM TARAF · 1'), findsOneWidget);
-    expect(find.text('KARŞI TARAF · 1'), findsOneWidget);
+    // The window has room: the parties in the heading's line, the cards'
+    // room given to the documents.
+    expect(find.text('Bizim taraf 1', findRichText: true), findsOneWidget);
+    expect(find.text('Karşı taraf 1', findRichText: true), findsOneWidget);
+    expect(find.text('BİZİM TARAF · 1'), findsNothing);
     // Seen: the list no longer counts it new.
     for (var i = 0; i < 60; i++) {
       await tester.runAsync(
@@ -231,6 +235,91 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('case-tab-facts')));
     await tester.pump();
     expect(find.text('Mahkeme'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  Future<void> pumpCase(WidgetTester tester, Size size) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final controller = UyapCasePanelController(
+      web: UyapWebService.forTesting(),
+      mobile: UyapMobileApi.forTesting(Uri.parse('http://127.0.0.1:9/')),
+      store: store,
+      links: links,
+      pause: Duration.zero,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CaseDetailPage(
+            caseKey: caseKey('2024/318', civil),
+            database: db,
+            controller: controller,
+            links: links,
+            lawyer: 'Av. Deniz Kaya',
+            onBack: () {},
+            onOpen: (_) {},
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+  }
+
+  testWidgets('a document is shown beside the list, which keeps its place; '
+      'the arrows go through it and the preview folds away', (tester) async {
+    await pumpCase(tester, const Size(1440, 900));
+    expect(tester.takeException(), isNull);
+    expect(find.text('Önizlemek için soldan bir evrak seçin.'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('case-doc-b')));
+    await tester.pump();
+    final title = find.byKey(const ValueKey('case-preview-title'));
+    expect(tester.widget<Text>(title).data, 'Bilirkişi Raporu');
+    // Not on this computer: fetched when asked, not when chosen.
+    expect(find.text('Bu evrak henüz indirilmedi'), findsOneWidget);
+    expect(find.byKey(const ValueKey('case-preview-fetch')), findsOneWidget);
+    expect(find.byKey(const ValueKey('case-doc-list')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(tester.widget<Text>(title).data, 'Tensip Zaptı');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(tester.widget<Text>(title).data, 'Bilirkişi Raporu');
+    await tester.tap(find.byKey(const ValueKey('case-preview-close')));
+    await tester.pump();
+    expect(title, findsNothing);
+    expect(find.byKey(const ValueKey('case-preview-show')), findsOneWidget);
+    // Choosing a document opens it again.
+    await tester.tap(find.byKey(const ValueKey('case-doc-a')));
+    await tester.pump();
+    expect(tester.widget<Text>(title).data, 'Tensip Zaptı');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('on a phone a document opens on a page of its own, the next '
+      'one beside it', (tester) async {
+    await pumpCase(tester, const Size(390, 844));
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('case-doc-b')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const ValueKey('case-doc-b')));
+    await tester.pumpAndSettle();
+    expect(find.text('Bu evrak henüz indirilmedi'), findsOneWidget);
+    expect(find.textContaining('1 / 2'), findsOneWidget);
+    expect(find.text('Tensip Zaptı'), findsOneWidget);
+    await tester.tap(find.text('Tensip Zaptı'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2 / 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    // The list where it was left.
+    expect(find.byKey(const ValueKey('case-doc-b')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

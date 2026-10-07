@@ -564,6 +564,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _isEditorMode = false;
   bool _editorPanelsVisible = false;
   bool _showLibrary = true;
+
+  /// Whether the panel is wide on the UYAP pages, where it is folded first.
+  bool _uyapPanelOpen = false;
   bool _previewExpanded = false;
 
   /// Text providers owned by the open PDFium viewers. This is the same text
@@ -1439,7 +1442,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ? !_editorPanelsVisible
                                 : (_fullScreen ||
                                       (!_showLibrary && _previewExpanded)),
-                            child: _sidebar(compact || !_showLibrary),
+                            child: _sidebar(
+                              compact ||
+                                  !_showLibrary ||
+                                  (_isUyapGroup(_group) && !_uyapPanelOpen),
+                              toggle:
+                                  !compact &&
+                                  _showLibrary &&
+                                  _isUyapGroup(_group),
+                            ),
                           ),
                         Expanded(
                           child: Column(
@@ -1923,7 +1934,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         setState(() => _editorPanelsVisible = !_editorPanelsVisible),
   );
 
-  Widget _sidebar(bool compact) => LibrarySidebar(
+  /// The panel folded to its icons on the UYAP pages, for the documents'
+  /// room; [toggle] gives the button that widens it there.
+  Widget _sidebar(bool compact, {bool toggle = false}) => LibrarySidebar(
+    onTogglePanel: toggle
+        ? () => setState(() => _uyapPanelOpen = !_uyapPanelOpen)
+        : null,
     library: _library,
     appearance: widget.appearance,
     compact: compact,

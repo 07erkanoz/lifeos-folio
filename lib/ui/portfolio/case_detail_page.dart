@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../../preview_app.dart' show openPreviewWindow;
+import '../../services/platform/editor_window.dart';
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
@@ -16,6 +19,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
+import '../widgets/file_preview.dart';
 import 'portfolio_rows.dart';
 
 /// A case's own page (docs/design/uyap-portfoy-taslak.png, the second
@@ -79,6 +83,20 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   _DocFilter _filter = _DocFilter.all;
   final _search = TextEditingController();
 
+  /// The document shown beside the list; each case's last one is shown
+  /// again when it is opened again, while Folio runs.
+  static final _lastShown = <String, String>{};
+  String? _shownKey;
+
+  /// Whether the preview is beside the list; closed, the list takes the
+  /// width, and choosing a document opens it again. Kept while Folio runs.
+  static bool _previewOpen = true;
+
+  /// The document being fetched from UYAP to be shown.
+  String? _fetchingKey;
+  final _listFocus = FocusNode(debugLabel: 'case-documents');
+  final _shownRow = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +110,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     _c.removeListener(_changed);
     if (widget.controller == null) _c.dispose();
     _search.dispose();
+    _listFocus.dispose();
     super.dispose();
   }
 
@@ -138,6 +157,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _items = db.agenda(caseKey: kase.key);
       _notices = db.notices(caseKey: kase.key);
       _petitions = petitions;
+      _shownKey = _lastShown[kase.key];
       _loaded = true;
     });
     await _seen();
@@ -244,6 +264,11 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       child: LayoutBuilder(
         builder: (context, box) {
           final wide = box.maxWidth >= 900;
+          // Room for the list and a document beside it: the page fills the
+          // window and only the list scrolls.
+          if (box.maxWidth >= 1100 && box.maxHeight >= 520) {
+            return _splitPage(context, kase);
+          }
           final pad = wide ? 28.0 : 12.0;
           return CustomScrollView(
             slivers: [
@@ -301,6 +326,474 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     );
   }
 
+  /// The page when the window has room: the case's heading with its facts
+  /// in a line, and the tabs filling the rest; in Evraklar the list on the
+  /// left, the document shown on the right (docs/design/
+  /// evrak-onizleme-taslak.png).
+  Widget _splitPage(BuildContext context, PortalCase kase) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _header(context, kase, true, facts: true),
+        if (_c.busy != null || _c.error != null) ...[
+          const SizedBox(height: 8),
+          _status(context),
+        ],
+        const SizedBox(height: 10),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _tabBar(context),
+                  Expanded(
+                    child: _tab == _Tab.documents && _c.record != null
+                        ? _documentsSplit(context)
+                        : SingleChildScrollView(child: _tabBody(context, true)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  /// The parties, the next hearing and deadline, the last news.
+  Widget _factsLine(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final lawyer = widget.lawyer.isNotEmpty
+        ? widget.lawyer
+        : UyapMobileApi.instance.session.value?.user ?? '';
+    final (ours, others) = splitParties(
+      _c.record?.parties ?? const <UyapParty>[],
+      lawyer,
+    );
+    final hearing = ([
+      for (final h in _hearings)
+        if (!h.at.isBefore(today)) h,
+    ]..sort((a, b) => a.at.compareTo(b.at))).firstOrNull;
+    final deadline = ([
+      for (final i in _items)
+        if (i.kind == 'deadline' && !i.done && i.at != null) i,
+    ]..sort((a, b) => a.at!.compareTo(b.at!))).firstOrNull;
+    final change = _state.changeAt ?? _documents.firstOrNull?.date;
+    bool soon(DateTime at, int days) =>
+        DateTime(at.year, at.month, at.day).difference(today).inDays <= days;
+    Widget fact(String label, String value, {bool warn = false}) => Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: '$label '),
+          TextSpan(
+            text: value,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: warn
+                  ? AgendaColors.deadline
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+      style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        key: const ValueKey('case-facts'),
+        spacing: 18,
+        runSpacing: 4,
+        children: [
+          fact('Bizim taraf', '${ours.length}'),
+          fact('Karşı taraf', '${others.length}'),
+          fact(
+            'Duruşma',
+            hearing == null
+                ? 'yok'
+                : '${dayText(hearing.at)} ${clockText(hearing.at)}',
+            warn: hearing != null && soon(hearing.at, 7),
+          ),
+          fact(
+            'Açık süre',
+            deadline == null
+                ? 'yok'
+                : '${deadline.title} · ${dayText(deadline.at!)}',
+            warn: deadline != null && soon(deadline.at!, 3),
+          ),
+          fact('Son gelişme', change == null ? '—' : dayText(change)),
+        ],
+      ),
+    );
+  }
+
+  /// The list, which keeps its place, and the document chosen in it.
+  Widget _documentsSplit(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final entries = _documentEntries();
+    final list = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _documentsTab(context, !_previewOpen, entries: entries),
+        Divider(height: 1, color: scheme.outlineVariant),
+        Expanded(
+          child: Focus(
+            focusNode: _listFocus,
+            onKeyEvent: (_, e) => _listKey(e, entries),
+            child: ListView.builder(
+              key: const ValueKey('case-doc-list'),
+              itemCount: entries.length,
+              itemBuilder: (context, i) =>
+                  _entryRow(context, entries[i], split: true),
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 7, 14, 8),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: scheme.outlineVariant)),
+          ),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  '↑ ↓ evrak değiştirir · Enter ya da çift tık açar',
+                  style: TextStyle(fontSize: 11, color: AgendaColors.muted),
+                ),
+              ),
+              if (!_previewOpen)
+                TextButton.icon(
+                  key: const ValueKey('case-preview-show'),
+                  onPressed: () => setState(() => _previewOpen = true),
+                  icon: const Icon(Icons.vertical_split_outlined, size: 16),
+                  label: const Text('Önizlemeyi göster'),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (!_previewOpen) return list;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: 440, child: list),
+        VerticalDivider(width: 1, color: scheme.outlineVariant),
+        Expanded(child: _previewPane(context, entries)),
+      ],
+    );
+  }
+
+  List<UyapCaseDocument> _shownDocuments(
+    List<({String? bucket, UyapCaseDocument? doc, int? attachment})> entries,
+  ) => [
+    for (final e in entries)
+      if (e.doc != null) e.doc!,
+  ];
+
+  /// ↑ and ↓ move through the list, the document shown with them; Enter
+  /// opens it, or fetches it when it is not on this computer yet.
+  KeyEventResult _listKey(
+    KeyEvent e,
+    List<({String? bucket, UyapCaseDocument? doc, int? attachment})> entries,
+  ) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final docs = _shownDocuments(entries);
+    final at = docs.indexWhere((d) => d.key == _shownKey);
+    final down = e.logicalKey == LogicalKeyboardKey.arrowDown;
+    if (down || e.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (docs.isEmpty) return KeyEventResult.handled;
+      final next = (at < 0 ? 0 : at + (down ? 1 : -1)).clamp(
+        0,
+        docs.length - 1,
+      );
+      _show(docs[next]);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final row = _shownRow.currentContext;
+        if (row != null && row.mounted) {
+          Scrollable.ensureVisible(
+            row,
+            alignmentPolicy: down
+                ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd
+                : ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+          );
+        }
+      });
+      return KeyEventResult.handled;
+    }
+    if (e.logicalKey == LogicalKeyboardKey.enter && at >= 0) {
+      final d = docs[at];
+      unawaited(_downloaded(d) ? _open(d) : _fetchShown(d));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// A click shows [d] at once; a second on it soon after opens it. Not
+  /// a double tap's recogniser, which holds every click back to wait for
+  /// a second.
+  void _tapped(UyapCaseDocument d) {
+    final now = DateTime.now();
+    final again =
+        _lastTap?.key == d.key &&
+        now.difference(_lastTap!.at) < const Duration(milliseconds: 400);
+    _lastTap = again ? null : (key: d.key, at: now);
+    if (again) {
+      unawaited(_open(d));
+    } else {
+      _show(d);
+    }
+  }
+
+  ({String key, DateTime at})? _lastTap;
+
+  void _show(UyapCaseDocument d) {
+    setState(() {
+      _shownKey = d.key;
+      _previewOpen = true;
+    });
+    final kase = _kase;
+    if (kase != null) _lastShown[kase.key] = d.key;
+    _listFocus.requestFocus();
+  }
+
+  /// [d] fetched from UYAP to be shown; the list can be gone through
+  /// meanwhile.
+  Future<void> _fetchShown(UyapCaseDocument d) async {
+    if (_fetchingKey != null) return;
+    if (!_c.connected) {
+      PortalSync.begin();
+      if (!await connectUyapMobile(context, api: UyapMobileApi.instance)) {
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _fetchingKey = d.key);
+    try {
+      await _c.open(d);
+    } finally {
+      if (mounted) setState(() => _fetchingKey = null);
+    }
+  }
+
+  /// The document of [key], among the documents or their attachments.
+  UyapCaseDocument? _documentOf(String? key) {
+    if (key == null) return null;
+    for (final d in _c.record?.documents ?? const <UyapCaseDocument>[]) {
+      if (d.key == key) return d;
+      for (final a in d.attachments) {
+        if (a.key == key) return a;
+      }
+    }
+    return null;
+  }
+
+  Widget _previewPane(
+    BuildContext context,
+    List<({String? bucket, UyapCaseDocument? doc, int? attachment})> entries,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final back = dark ? scheme.surfaceContainerLowest : const Color(0xFFE9ECF1);
+    final docs = _shownDocuments(entries);
+    final at = docs.indexWhere((d) => d.key == _shownKey);
+    final d = at >= 0 ? docs[at] : _documentOf(_shownKey);
+    if (d == null) {
+      return ColoredBox(
+        color: back,
+        child: const Center(
+          child: Text(
+            'Önizlemek için soldan bir evrak seçin.',
+            style: TextStyle(color: AgendaColors.muted),
+          ),
+        ),
+      );
+    }
+    final record = _c.record;
+    final file = record == null ? null : _c.store.fileOf(record, d.key);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      d.type.isNotEmpty ? d.type : d.title,
+                      key: const ValueKey('case-preview-title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      [
+                        if (d.date != null) dayText(d.date!),
+                        if (d.sender.trim().isNotEmpty)
+                          titleName(d.sender.trim()),
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Önceki evrak',
+                onPressed: at > 0 ? () => _show(docs[at - 1]) : null,
+                icon: const Icon(Icons.keyboard_arrow_up_rounded),
+              ),
+              IconButton(
+                tooltip: 'Sonraki evrak',
+                onPressed: at >= 0 && at < docs.length - 1
+                    ? () => _show(docs[at + 1])
+                    : null,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              ),
+              if (file != null && EditorWindow.available)
+                IconButton(
+                  tooltip: 'Ayrı pencerede aç',
+                  onPressed: () => unawaited(openPreviewWindow(file.path)),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 19),
+                ),
+              const SizedBox(width: 4),
+              FilledButton.icon(
+                key: const ValueKey('case-preview-open'),
+                onPressed: () => unawaited(_open(d)),
+                icon: Icon(
+                  file != null ? Icons.open_in_full_rounded : Icons.download,
+                  size: 17,
+                ),
+                label: Text(file != null ? 'Aç' : 'İndir ve aç'),
+              ),
+              IconButton(
+                key: const ValueKey('case-preview-close'),
+                tooltip: 'Önizlemeyi kapat',
+                onPressed: () => setState(() => _previewOpen = false),
+                icon: const Icon(Icons.close_rounded, size: 19),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ColoredBox(
+            color: back,
+            child: file != null
+                ? FilePreview(key: ValueKey(file.path), path: file.path)
+                : _notHere(
+                    context,
+                    fetching: _fetchingKey == d.key,
+                    onFetch: () => unawaited(_fetchShown(d)),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// A document not on this computer yet: fetched when asked, not when
+  /// the arrows pass over it, which would ask UYAP for every one.
+  static Widget _notHere(
+    BuildContext context, {
+    required bool fetching,
+    required VoidCallback onFetch,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Container(
+        width: 360,
+        padding: const EdgeInsets.fromLTRB(26, 22, 26, 22),
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              fetching
+                  ? Icons.hourglass_top_rounded
+                  : Icons.cloud_download_outlined,
+              size: 34,
+              color: scheme.primary,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              fetching ? 'UYAP’tan indiriliyor' : 'Bu evrak henüz indirilmedi',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            if (fetching) ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 8),
+              const Text(
+                'Bu sırada listede gezmeye devam edebilirsiniz; inince burada '
+                'açılır.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+            ] else ...[
+              const Text(
+                'Göstermek için UYAP’tan indirilir ve dosyanın klasörüne '
+                'kaydedilir.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                key: const ValueKey('case-preview-fetch'),
+                onPressed: onFetch,
+                icon: const Icon(Icons.download_rounded, size: 17),
+                label: const Text('Göster (indir)'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// On a phone or a narrow window: the document on a page of its own,
+  /// the next and the one before a swipe away; back finds the list where
+  /// it was.
+  Future<void> _openPreviewPage(UyapCaseDocument d) async {
+    final docs = _shownDocuments(_documentEntries());
+    final at = docs.indexWhere((x) => x.key == d.key);
+    if (at < 0) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _CasePreviewPage(
+          controller: _c,
+          documents: docs,
+          initial: at,
+          fetch: _fetchShown,
+          open: _open,
+        ),
+      ),
+    );
+  }
+
   Widget _card({required Widget child, EdgeInsets? padding, Border? border}) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
@@ -326,7 +819,14 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     ),
   );
 
-  Widget _header(BuildContext context, PortalCase kase, bool wide) {
+  /// [facts]: the parties, hearing, deadline and last news in a line, in
+  /// place of their cards, when the documents take the window.
+  Widget _header(
+    BuildContext context,
+    PortalCase kase,
+    bool wide, {
+    bool facts = false,
+  }) {
     final kind = CaseKind.of(kase);
     final record = _c.record;
     final status = shortStatus(
@@ -413,7 +913,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               style: TextStyle(
                 fontFamily: 'Consolas',
                 fontFamilyFallback: const ['Cascadia Mono', 'monospace'],
-                fontSize: wide ? 26 : 21,
+                fontSize: facts ? 21 : (wide ? 26 : 21),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -480,7 +980,14 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 const SizedBox(width: 6),
-                Expanded(child: info),
+                Expanded(
+                  child: facts
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [info, _factsLine(context)],
+                        )
+                      : info,
+                ),
                 const SizedBox(width: 12),
                 Wrap(spacing: 8, runSpacing: 8, children: actions),
               ],
@@ -862,7 +1369,30 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     bool wide, {
     List<({String? bucket, UyapCaseDocument? doc, int? attachment})>? entries,
   }) {
-    final bare = entries != null;
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _tabBar(context),
+        _tabBody(context, wide, entries: entries),
+      ],
+    );
+    return entries != null ? content : _card(child: content);
+  }
+
+  Widget _tabBody(
+    BuildContext context,
+    bool wide, {
+    List<({String? bucket, UyapCaseDocument? doc, int? attachment})>? entries,
+  }) => switch (_tab) {
+    _Tab.documents => _documentsTab(context, wide, entries: entries),
+    _Tab.hearings => _hearingsTab(context),
+    _Tab.deadlines => _deadlinesTab(context),
+    _Tab.parties => _partiesTab(context),
+    _Tab.facts => _factsTab(context),
+    _Tab.petitions => _petitionsTab(context),
+  };
+
+  Widget _tabBar(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final docs = _c.record?.documents ?? const <UyapCaseDocument>[];
     final docCount = docs.fold<int>(0, (s, d) => s + 1 + d.attachments.length);
@@ -925,39 +1455,25 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ),
       ),
     );
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                tab(_Tab.documents, 'Evraklar', docCount, fresh: _fresh.length),
-                tab(_Tab.hearings, 'Duruşmalar', _hearings.length),
-                tab(_Tab.deadlines, 'Süreler & Tebligat', deadlines),
-                tab(_Tab.parties, 'Taraflar', parties),
-                tab(_Tab.facts, 'Künye', null),
-                tab(_Tab.petitions, 'Dilekçelerim', _petitions.length),
-              ],
-            ),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            tab(_Tab.documents, 'Evraklar', docCount, fresh: _fresh.length),
+            tab(_Tab.hearings, 'Duruşmalar', _hearings.length),
+            tab(_Tab.deadlines, 'Süreler & Tebligat', deadlines),
+            tab(_Tab.parties, 'Taraflar', parties),
+            tab(_Tab.facts, 'Künye', null),
+            tab(_Tab.petitions, 'Dilekçelerim', _petitions.length),
+          ],
         ),
-        switch (_tab) {
-          _Tab.documents => _documentsTab(context, wide, entries: entries),
-          _Tab.hearings => _hearingsTab(context),
-          _Tab.deadlines => _deadlinesTab(context),
-          _Tab.parties => _partiesTab(context),
-          _Tab.facts => _factsTab(context),
-          _Tab.petitions => _petitionsTab(context),
-        },
-      ],
+      ),
     );
-    return bare ? content : _card(child: content);
   }
 
   // Documents.
@@ -1168,8 +1684,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   Widget _entryRow(
     BuildContext context,
-    ({String? bucket, UyapCaseDocument? doc, int? attachment}) e,
-  ) => e.doc == null
+    ({String? bucket, UyapCaseDocument? doc, int? attachment}) e, {
+    bool split = false,
+  }) => e.doc == null
       ? Padding(
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
           child: Text(
@@ -1182,13 +1699,21 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             ),
           ),
         )
-      : _docRow(context, e.doc!, attachment: e.attachment);
+      : _docRow(context, e.doc!, attachment: e.attachment, split: split);
 
-  Widget _docRow(BuildContext context, UyapCaseDocument d, {int? attachment}) {
+  /// [split]: beside the preview, where a click shows the document and a
+  /// double click opens it; elsewhere a tap shows it on a page of its own.
+  Widget _docRow(
+    BuildContext context,
+    UyapCaseDocument d, {
+    int? attachment,
+    bool split = false,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     final fresh = _fresh.contains(d.key);
     final downloaded = _downloaded(d);
-    final folded = UyapWebService.fold('${d.type} ${d.description}');
+    final shown = split && d.key == _shownKey;
+    final folded = _folded(d).kind;
     final (icon, ink) = _isDecision(d)
         ? (Icons.gavel_rounded, AgendaColors.deadline)
         : _isPetition(d)
@@ -1207,13 +1732,31 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       if (d.sender.trim().isNotEmpty) titleName(d.sender.trim()),
       if (d.description.isNotEmpty && d.description != d.type) d.description,
     ].join(' · ');
-    return InkWell(
+    final row = InkWell(
       key: ValueKey('case-doc-${d.key}'),
-      onTap: () => unawaited(_open(d)),
+      onTap: split ? () => _tapped(d) : () => unawaited(_openPreviewPage(d)),
       child: Container(
-        color: fresh ? const Color(0xFFF6F9FE) : null,
-        padding: EdgeInsets.fromLTRB(attachment == null ? 18 : 58, 8, 18, 8),
-        decoration: null,
+        padding: EdgeInsets.fromLTRB(
+          attachment == null ? (split ? 15 : 18) : (split ? 44 : 58),
+          8,
+          split ? 12 : 18,
+          8,
+        ),
+        decoration: BoxDecoration(
+          color: shown
+              ? scheme.primaryContainer.withValues(alpha: .45)
+              : fresh
+              ? const Color(0xFFF6F9FE)
+              : null,
+          border: split
+              ? Border(
+                  left: BorderSide(
+                    color: shown ? scheme.primary : Colors.transparent,
+                    width: 3,
+                  ),
+                )
+              : null,
+        ),
         child: Row(
           children: [
             Container(
@@ -1280,30 +1823,51 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              downloaded ? 'indirildi' : (fresh ? 'okunmadı' : ''),
-              style: TextStyle(
-                fontSize: 11.5,
-                color: downloaded
-                    ? const Color(0xFF157A52)
-                    : AgendaColors.taskText,
+            if (split)
+              _fetchingKey == d.key
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Tooltip(
+                      message: downloaded ? 'İndirildi' : 'İndirilmedi',
+                      child: Icon(
+                        downloaded
+                            ? Icons.check_circle_outline_rounded
+                            : Icons.download_rounded,
+                        size: 17,
+                        color: downloaded
+                            ? const Color(0xFF157A52)
+                            : scheme.primary,
+                      ),
+                    )
+            else ...[
+              Text(
+                downloaded ? 'indirildi' : (fresh ? 'okunmadı' : ''),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: downloaded
+                      ? const Color(0xFF157A52)
+                      : AgendaColors.taskText,
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: downloaded ? 'Aç' : 'İndir ve aç',
-              onPressed: () => unawaited(_open(d)),
-              icon: Icon(
-                downloaded
-                    ? Icons.folder_open_outlined
-                    : Icons.download_rounded,
-                size: 18,
-                color: downloaded ? const Color(0xFF9AA2B1) : scheme.primary,
+              IconButton(
+                tooltip: downloaded ? 'Aç' : 'İndir ve aç',
+                onPressed: () => unawaited(_open(d)),
+                icon: Icon(
+                  downloaded
+                      ? Icons.folder_open_outlined
+                      : Icons.download_rounded,
+                  size: 18,
+                  color: downloaded ? const Color(0xFF9AA2B1) : scheme.primary,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
     );
+    return shown ? KeyedSubtree(key: _shownRow, child: row) : row;
   }
 
   // The other tabs.
@@ -1601,4 +2165,160 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       ],
     );
   }
+}
+
+/// A case's documents one to a page, on a phone or a narrow window.
+class _CasePreviewPage extends StatefulWidget {
+  const _CasePreviewPage({
+    required this.controller,
+    required this.documents,
+    required this.initial,
+    required this.fetch,
+    required this.open,
+  });
+
+  final UyapCasePanelController controller;
+  final List<UyapCaseDocument> documents;
+  final int initial;
+  final Future<void> Function(UyapCaseDocument d) fetch;
+  final Future<void> Function(UyapCaseDocument d) open;
+
+  @override
+  State<_CasePreviewPage> createState() => _CasePreviewPageState();
+}
+
+class _CasePreviewPageState extends State<_CasePreviewPage> {
+  late final _pages = PageController(initialPage: widget.initial);
+  late int _at = widget.initial;
+  String? _fetching;
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  String _name(UyapCaseDocument d) => d.type.isNotEmpty ? d.type : d.title;
+
+  File? _file(UyapCaseDocument d) {
+    final record = widget.controller.record;
+    return record == null
+        ? null
+        : widget.controller.store.fileOf(record, d.key);
+  }
+
+  Future<void> _fetch(UyapCaseDocument d) async {
+    setState(() => _fetching = d.key);
+    try {
+      await widget.fetch(d);
+    } finally {
+      if (mounted) setState(() => _fetching = null);
+    }
+  }
+
+  void _go(int i) => unawaited(
+    _pages.animateToPage(
+      i,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (context, _) {
+      final docs = widget.documents;
+      final d = docs[_at];
+      final file = _file(d);
+      return Scaffold(
+        appBar: AppBar(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _name(d),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 15),
+              ),
+              Text(
+                [
+                  '${_at + 1} / ${docs.length}',
+                  if (d.date != null) dayText(d.date!),
+                ].join(' · '),
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: AgendaColors.muted,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              tooltip: file != null ? 'Aç' : 'İndir ve aç',
+              onPressed: () => unawaited(widget.open(d)),
+              icon: Icon(
+                file != null ? Icons.open_in_full_rounded : Icons.download,
+              ),
+            ),
+          ],
+        ),
+        body: PageView.builder(
+          controller: _pages,
+          itemCount: docs.length,
+          onPageChanged: (i) => setState(() => _at = i),
+          itemBuilder: (context, i) {
+            final doc = docs[i];
+            final kept = _file(doc);
+            return kept != null
+                ? FilePreview(key: ValueKey(kept.path), path: kept.path)
+                : _CaseDetailPageState._notHere(
+                    context,
+                    fetching: _fetching == doc.key,
+                    onFetch: () => unawaited(_fetch(doc)),
+                  );
+          },
+        ),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _at > 0
+                      ? TextButton.icon(
+                          onPressed: () => _go(_at - 1),
+                          icon: const Icon(Icons.chevron_left_rounded),
+                          label: Text(
+                            _name(docs[_at - 1]),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                Expanded(
+                  child: _at < docs.length - 1
+                      ? Directionality(
+                          textDirection: TextDirection.rtl,
+                          child: TextButton.icon(
+                            onPressed: () => _go(_at + 1),
+                            icon: const Icon(Icons.chevron_left_rounded),
+                            label: Text(
+                              _name(docs[_at + 1]),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
