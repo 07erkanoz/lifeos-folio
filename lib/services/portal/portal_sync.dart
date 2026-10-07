@@ -273,7 +273,7 @@ class PortalSync extends ChangeNotifier {
     // The deadlines from the documents' names at once; each package then
     // makes its own notice's again as it comes, not after the whole box.
     await _loadDeadlineContext();
-    matchNotices(db);
+    await matchNoticesGently(db);
     notifyListeners();
     final root = await _packageRoot();
     if (root != null) {
@@ -298,6 +298,34 @@ class PortalSync extends ChangeNotifier {
         ? null
         : 'UETS listesinin tamamı alınamadı; eşitlemeyi yeniden deneyin.';
   });
+
+  /// The package of notice [id], asked for by the lawyer (one older than
+  /// the forty days whose packages come by themselves); its deadlines made
+  /// again. Null when it came, else what went wrong.
+  Future<String?> fetchPackageOf(String id) async {
+    if (!_uets.connected) return 'UETS’ye bağlı değil.';
+    final root = await _packageRoot();
+    if (root == null) return null;
+    final db = await _database();
+    await _loadDeadlineContext();
+    await fetchNoticePackages(
+      _uets,
+      db,
+      root: root,
+      gap: Duration.zero,
+      only: {id},
+      recent: null,
+    );
+    refreshNoticeDeadlines(
+      db,
+      parties: NoticeDeadlineContext.parties,
+      lawyer: NoticeDeadlineContext.lawyer,
+      only: {id},
+    );
+    notifyListeners();
+    final e = db.envelope(id);
+    return e?.state == 'hata' ? e?.error ?? 'Paket alınamadı.' : null;
+  }
 
   /// The lists of documents of the notices that have none yet, newest
   /// first, all of them, the progress saying how far. What UETS would not
@@ -492,7 +520,7 @@ class PortalSync extends ChangeNotifier {
       // The portfolio may have grown: untied notices are tried again (§9.8).
       if (channel != PortalChannel.uets) {
         await _loadDeadlineContext();
-        matchNotices(db);
+        await matchNoticesGently(db);
       }
     } catch (e) {
       problem = '$e';
@@ -598,7 +626,7 @@ class PortalSync extends ChangeNotifier {
 
   Future<String?> syncCase(String key) async {
     final db = await _database();
-    final kase = db.cases()[key];
+    final kase = db.caseOf(key);
     if (kase == null) return 'Dosya henüz kayıtlı değil.';
     final connected = {
       if (_web.connected) PortalChannel.uyapWeb,
@@ -824,9 +852,7 @@ class PortalSync extends ChangeNotifier {
           });
       // A seventh of the open cases a day: each asked within the week.
       chosen.addAll(
-        rest
-            .take(stale ?? max(30, (all.length / 7).ceil()))
-            .map((c) => c.key),
+        rest.take(stale ?? max(30, (all.length / 7).ceil())).map((c) => c.key),
       );
       open = [
         for (final c in all)
@@ -882,7 +908,7 @@ class PortalSync extends ChangeNotifier {
       final known = _sessionIds[key];
       if (known != null && known.isNotEmpty) return known;
     }
-    final kept = (await _database()).cases()[key];
+    final kept = (await _database()).caseOf(key);
     final details = kept?.details?.value ?? const <String, Object?>{};
     String? code(Object? v) => '${v ?? ''}'.trim().isEmpty ? null : '$v';
     return _finder.find(
@@ -896,7 +922,7 @@ class PortalSync extends ChangeNotifier {
 
   /// The case kept as [key], if any.
   Future<PortalCase?> portalCase(String key) async =>
-      (await _database()).cases()[key];
+      (await _database()).caseOf(key);
 
   /// Every case kept, from both portals.
   Future<List<PortalCase>> portfolio() async =>

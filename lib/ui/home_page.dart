@@ -622,6 +622,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// Looks again when a case changed in this window, or the archive grew:
   /// documents saved from an editor window of its own come in that way.
+  /// A refresh writes a case's record several times; the records, all
+  /// read from disk, are read once it is quiet, not each time, which held
+  /// the window while a case's page refreshed.
   void _reloadUyapCases() {
     // Tests do not list the lawyer's real cases; one with a store of its
     // own does.
@@ -629,6 +632,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         UyapCaseStore.isReal) {
       return;
     }
+    _uyapReloadSoon?.cancel();
+    _uyapReloadSoon = Timer(const Duration(seconds: 2), () {
+      _uyapReloadSoon = null;
+      if (mounted) _readUyapCases();
+    });
+  }
+
+  Timer? _uyapReloadSoon;
+
+  void _readUyapCases() {
     unawaited(
       UyapCaseStore.instance.cases().then((cases) {
         if (mounted) setState(() => _uyapCases = cases);
@@ -777,6 +790,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _countSoon?.cancel();
     _library.removeListener(_archiveChanged);
     UyapCaseStore.changes.removeListener(_reloadUyapCases);
+    _uyapReloadSoon?.cancel();
     if (widget.library == null) _library.dispose();
     super.dispose();
   }

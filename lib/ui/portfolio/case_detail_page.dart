@@ -109,7 +109,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   Future<void> _load() async {
     final db = await _db;
-    final kase = db.cases()[widget.caseKey];
+    // This case alone: the whole portfolio and every notice are not read
+    // to open one case's page.
+    final kase = db.caseOf(widget.caseKey);
     if (!mounted) return;
     if (kase == null) {
       setState(() => _loaded = true);
@@ -132,14 +134,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _state = state;
       _hearings = db.hearings(caseKey: kase.key)
         ..sort((a, b) => b.at.compareTo(a.at));
-      _items = [
-        for (final i in db.agenda())
-          if (i.caseKey == kase.key) i,
-      ];
-      _notices = [
-        for (final n in db.notices())
-          if (n.caseKey == kase.key) n,
-      ];
+      _items = db.agenda(caseKey: kase.key);
+      _notices = db.notices(caseKey: kase.key);
       _petitions = petitions;
       _loaded = true;
     });

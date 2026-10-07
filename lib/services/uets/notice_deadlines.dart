@@ -67,7 +67,7 @@ void refreshNoticeDeadlines(
   final users = {
     for (final d
         in only == null
-            ? db.deadlines()
+            ? db.deadlines(decidedOnly: true)
             : [for (final id in only) ...db.deadlines(noticeId: id)])
       if (d.user != null) d.record.id: d.user!,
   };
@@ -104,6 +104,47 @@ void refreshNoticeDeadlines(
   }
   // Rows of notices no longer kept: carried over on their own, as they are.
   if (only != null) return;
+  _carryOrphans(db, legacy, seen, at);
+}
+
+/// The same as [refreshNoticeDeadlines] for the whole box, a few notices
+/// at a time with the window let breathe between them: a box of a
+/// thousand notices reckoned at one go held it for seconds.
+Future<void> refreshNoticeDeadlinesGently(
+  PortalDatabase db, {
+  Map<String, List<TarafKaydi>> parties = const {},
+  String? lawyer,
+  DateTime? now,
+  int chunk = 25,
+}) async {
+  final at = now ?? DateTime.now();
+  final ids = db.noticeIds();
+  for (var i = 0; i < ids.length; i += chunk) {
+    refreshNoticeDeadlines(
+      db,
+      parties: parties,
+      lawyer: lawyer,
+      now: at,
+      only: ids.skip(i).take(chunk).toSet(),
+    );
+    await Future<void>.delayed(Duration.zero);
+  }
+  final legacy = <String, List<AgendaItem>>{};
+  for (final old in db.legacyNoticeDeadlines()) {
+    final notice = old.id.split(':').elementAtOrNull(1) ?? '';
+    (legacy[notice] ??= []).add(old);
+  }
+  _carryOrphans(db, legacy, ids.toSet(), at);
+}
+
+/// The old agenda rows of notices no longer kept, carried over on their
+/// own, as they are.
+void _carryOrphans(
+  PortalDatabase db,
+  Map<String, List<AgendaItem>> legacy,
+  Set<String> seen,
+  DateTime at,
+) {
   for (final e in legacy.entries) {
     if (seen.contains(e.key)) continue;
     for (final old in e.value) {

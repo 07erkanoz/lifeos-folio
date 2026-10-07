@@ -17,6 +17,7 @@ import '../../services/portal/portal_sync.dart';
 import '../../services/uets/envelope_directives.dart';
 import '../../services/uets/notice_deadlines.dart';
 import '../../services/uets/notice_matcher.dart';
+import '../../services/uets/notice_packages.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import 'agenda_page.dart' show AgendaColors;
@@ -1312,7 +1313,40 @@ class _UetsPageState extends State<UetsPage> {
         : envelopeDirectives(text);
     final path = envelope?.envelopePath;
     final Widget body;
-    if (envelope == null) {
+    final sent = n.message.sent;
+    final old =
+        sent != null && sent.isBefore(_now().subtract(autoPackageWindow));
+    if (envelope == null && old) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Bu tebligat 40 günden eski; paketi kendiliğinden inmedi. '
+            'İndirirseniz UETS’te okundu olarak görünür; tebliğ günü '
+            'değişmez.',
+            style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+          ),
+          const SizedBox(height: 6),
+          OutlinedButton.icon(
+            key: const ValueKey('uets-fetch-package'),
+            style: _buttonStyle(),
+            onPressed: !_api.connected || _fetching == n.message.id
+                ? null
+                : () => unawaited(_fetchPackage(n.message.id)),
+            icon: _fetching == n.message.id
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download_outlined, size: 16),
+            label: Text(
+              _api.connected ? 'Paketi indir' : 'Paket için UETS’ye bağlanın',
+            ),
+          ),
+        ],
+      );
+    } else if (envelope == null) {
       body = Text(
         _api.connected
             ? 'Tebligat paketi indiriliyor; zarf ve ekler birazdan burada.'
@@ -1394,6 +1428,22 @@ class _UetsPageState extends State<UetsPage> {
         ],
       ),
     );
+  }
+
+  /// The notice whose package is being fetched at the lawyer's word.
+  String? _fetching;
+
+  Future<void> _fetchPackage(String id) async {
+    setState(() => _fetching = id);
+    final problem = await _sync.fetchPackageOf(id);
+    if (!mounted) return;
+    setState(() => _fetching = null);
+    _reload();
+    widget.onChanged?.call();
+    if (problem != null) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(problem)));
+    }
   }
 
   /// [quote] with the time it gives ("iki hafta içinde") marked.

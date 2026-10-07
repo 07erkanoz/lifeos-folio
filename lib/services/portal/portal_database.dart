@@ -223,6 +223,12 @@ class PortalDatabase {
       row['key'] as String: _case(row['json'] as String),
   };
 
+  /// One case as kept; null when it is not. Not all of them read for one.
+  PortalCase? caseOf(String key) {
+    final rows = _db.select('SELECT json FROM cases WHERE key=?', [key]);
+    return rows.isEmpty ? null : _case(rows.first['json'] as String);
+  }
+
   PortalCase _case(String json) => PortalCaseJson.fromJson(
     Map<String, Object?>.from(jsonDecode(json) as Map),
   );
@@ -413,10 +419,17 @@ class PortalDatabase {
 
   /// The notifications kept, newest first, each with the case it was tied
   /// to (UYGULAMAPLANI §9.8) and how.
-  List<KeptNotice> notices() => [
-    for (final r in _db.select(
-      'SELECT json, case_key, link FROM uets ORDER BY sent DESC',
-    ))
+  List<KeptNotice> notices({String? caseKey}) => [
+    for (final r
+        in caseKey == null
+            ? _db.select(
+                'SELECT json, case_key, link FROM uets ORDER BY sent DESC',
+              )
+            : _db.select(
+                'SELECT json, case_key, link FROM uets WHERE case_key=? '
+                'ORDER BY sent DESC',
+                [caseKey],
+              ))
       KeptNotice(
         UetsMessage.fromJson(
           Map<String, Object?>.from(jsonDecode(r['json'] as String) as Map),
@@ -424,6 +437,12 @@ class PortalDatabase {
         caseKey: r['case_key'] as String?,
         link: r['link'] as String?,
       ),
+  ];
+
+  /// The notifications' ids, newest first; nothing else read.
+  List<String> noticeIds() => [
+    for (final r in _db.select('SELECT id FROM uets ORDER BY sent DESC'))
+      r['id'] as String,
   ];
 
   /// The subjects of the notifications [ids], by id.
@@ -494,14 +513,26 @@ class PortalDatabase {
   /// notices' deadlines the lawyer confirmed or gave a day (see
   /// [KeptDeadline.onAgenda]). The old rows the notices' deadlines were
   /// kept in before are not shown: they live on as [deadlines] records.
-  List<AgendaItem> agenda({DateTime? from, DateTime? to}) {
-    final rows = from == null || to == null
-        ? _db.select('SELECT * FROM agenda ORDER BY at')
-        : _db.select(
-            'SELECT * FROM agenda WHERE at >= ? AND at < ? ORDER BY at',
-            [from.toIso8601String(), to.toIso8601String()],
-          );
-    final all = deadlines();
+  List<AgendaItem> agenda({DateTime? from, DateTime? to, String? caseKey}) {
+    final where = <String>[
+      if (from != null && to != null) 'at >= ? AND at < ?',
+      if (caseKey != null) 'case_key = ?',
+    ];
+    final rows = _db.select(
+      'SELECT * FROM agenda'
+      '${where.isEmpty ? '' : ' WHERE ${where.join(' AND ')}'} ORDER BY at',
+      [
+        if (from != null && to != null) ...[
+          from.toIso8601String(),
+          to.toIso8601String(),
+        ],
+        ?caseKey,
+      ],
+    );
+    final all = [
+      for (final d in deadlines(decidedOnly: true))
+        if (caseKey == null || d.record.caseKey == caseKey) d,
+    ];
     final byId = {for (final d in all) d.record.id: d};
     // An old row stays until the lawyer has decided on every deadline it
     // was carried over to, or had marked it done; marked as the old
@@ -523,8 +554,9 @@ class PortalDatabase {
         if (!legacy.contains(i.id))
           i
         else if (!i.done &&
+            // One never touched by the lawyer is not among those read.
             (carried[i.id] ?? const []).any(
-              (id) => !(byId[id]?.decided ?? true),
+              (id) => !(byId[id]?.decided ?? false),
             ))
           i.copyWith(
             body: [
@@ -845,13 +877,21 @@ class PortalDatabase {
 
   // Notices' deadlines
 
-  List<KeptDeadline> deadlines({String? noticeId}) => [
+  /// The notices' deadlines; of [noticeId] alone when given; with
+  /// [decidedOnly], only those the lawyer did something with (confirmed,
+  /// gave a day, marked, set aside), the only ones the agenda can show:
+  /// the rest are not read at all.
+  List<KeptDeadline> deadlines({
+    String? noticeId,
+    bool decidedOnly = false,
+  }) => [
     for (final r
         in noticeId == null
             ? _db.select(
                 'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
                 'u.title_override, u.body_override, u.confirmed_inputs, '
-                'u.confirmed_at, u.dismissed FROM deadline d LEFT JOIN '
+                'u.confirmed_at, u.dismissed FROM deadline d '
+                '${decidedOnly ? 'JOIN' : 'LEFT JOIN'} '
                 'deadline_user u ON u.deadline_id = d.id ORDER BY d.due_day',
               )
             : _db.select(

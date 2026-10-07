@@ -63,13 +63,7 @@ String? matchSubject(String subject, Iterable<PortalCase> cases) {
 /// notices' deadlines are made again (see [refreshNoticeDeadlines]), with
 /// the parties and the lawyer's name [NoticeDeadlineContext] holds.
 void matchNotices(PortalDatabase db, {DateTime? now}) {
-  final cases = db.cases().values.toList();
-  final kept = db.notices();
-  for (final n in kept) {
-    if (n.link != null) continue;
-    final key = matchSubject(n.message.subject, cases);
-    if (key != null) db.linkNotice(n.message.id, key, 'auto');
-  }
+  _tie(db);
   refreshNoticeDeadlines(
     db,
     parties: NoticeDeadlineContext.parties,
@@ -84,3 +78,31 @@ String noticeKind(UetsMessage m) => [
   for (final b in RegExp(r'\[([^\]]*)\]').allMatches(m.subject).skip(1))
     b.group(1)!.trim(),
 ].where((s) => s.isNotEmpty).join(' · ');
+
+/// [matchNotices] for the syncs: the deadlines made a few notices at a
+/// time, the window let breathe between them.
+Future<void> matchNoticesGently(PortalDatabase db, {DateTime? now}) async {
+  _tie(db);
+  await Future<void>.delayed(Duration.zero);
+  await refreshNoticeDeadlinesGently(
+    db,
+    parties: NoticeDeadlineContext.parties,
+    lawyer: NoticeDeadlineContext.lawyer,
+    now: now,
+  );
+}
+
+/// Ties every untied notification to its case where its subject leaves
+/// one; the untied ones alone are read.
+void _tie(PortalDatabase db) {
+  final untied = [
+    for (final n in db.notices())
+      if (n.link == null) n,
+  ];
+  if (untied.isEmpty) return;
+  final cases = db.cases().values.toList();
+  for (final n in untied) {
+    final key = matchSubject(n.message.subject, cases);
+    if (key != null) db.linkNotice(n.message.id, key, 'auto');
+  }
+}

@@ -105,13 +105,17 @@ void main() {
     root.deleteSync(recursive: true);
   });
 
-  Future<void> fetch(String envelopeText) => fetchNoticePackages(
-    api,
-    db,
-    root: root.path,
-    gap: Duration.zero,
-    readText: (_) async => envelopeText,
-  );
+  Future<void> fetch(String envelopeText, {Set<String>? only}) =>
+      fetchNoticePackages(
+        api,
+        db,
+        root: root.path,
+        gap: Duration.zero,
+        readText: (_) async => envelopeText,
+        now: DateTime(2026, 10, 6),
+        only: only,
+        recent: only == null ? autoPackageWindow : null,
+      );
 
   test('the package is kept: the envelope, the documents under their own '
       'names, its text', () async {
@@ -191,5 +195,21 @@ void main() {
       ),
       throwsFormatException,
     );
+  });
+
+  test('a notice older than forty days waits until it is asked for', () async {
+    db.mergeNotices([
+      UetsMessage(
+        id: 'old',
+        subject: 'Antalya 4. Asliye Hukuk Mahkemesi [2025/1] [x]',
+        sent: DateTime.utc(2026, 7, 1, 9),
+      ),
+    ]);
+    await fetch('x');
+    expect(db.envelope('m1'), isNotNull);
+    expect(db.envelope('old'), isNull);
+    expect(asked, isNot(contains('messages/old/_download')));
+    await fetch('x', only: {'old'});
+    expect(asked, contains('messages/old/_download'));
   });
 }

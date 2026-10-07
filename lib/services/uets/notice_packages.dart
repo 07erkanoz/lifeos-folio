@@ -13,6 +13,11 @@ import 'eyp_package.dart';
 import 'notice_matcher.dart';
 import 'uets_api.dart';
 
+/// The notices whose packages come down by themselves: those of the last
+/// forty days, as Banaozel's server does; an older one's when the lawyer
+/// asks for it ([only]), not to load the computer with years of a box.
+const autoPackageWindow = Duration(days: 40);
+
 /// Fetches the package of every notice that has none yet, newest first
 /// (the lawyer chose every notice, read or not: UETS then shows it read;
 /// its service day does not move): the envelope and the documents are
@@ -30,18 +35,25 @@ Future<void> fetchNoticePackages(
   void Function(String noticeId)? onKept,
   Duration gap = const Duration(seconds: 3),
   DateTime? now,
+  Duration? recent = autoPackageWindow,
+  Set<String>? only,
 }) async {
   final at = now ?? DateTime.now();
   final kept = db.envelopes();
+  final since = recent == null ? null : at.subtract(recent);
   final due = [
     for (final n in db.notices())
-      if (switch (kept[n.message.id]) {
-        null => true,
-        final e when e.state == 'hata' =>
-          e.fetchedAt == null ||
-              at.difference(e.fetchedAt!) > const Duration(days: 1),
-        _ => false,
-      })
+      if ((only == null || only.contains(n.message.id)) &&
+          (only != null ||
+              since == null ||
+              (n.message.sent != null && !n.message.sent!.isBefore(since))) &&
+          switch (kept[n.message.id]) {
+            null => true,
+            final e when e.state == 'hata' =>
+              e.fetchedAt == null ||
+                  at.difference(e.fetchedAt!) > const Duration(days: 1),
+            _ => false,
+          })
         n,
   ];
   final read = readText ?? _pdfText;
