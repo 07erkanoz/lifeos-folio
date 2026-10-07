@@ -10,6 +10,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
+import '../widgets/uyap_connect_view.dart';
 import 'portfolio_rows.dart';
 
 /// UYAP Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
@@ -117,6 +118,31 @@ class _PortfolioPageState extends State<PortfolioPage> {
     }
     await sync.syncMobile(full: true);
     await _reload();
+  }
+
+  /// UYAP Mobil: connected, its portfolio read again whole; else its
+  /// e-Devlet login first.
+  Future<void> _connectMobile() async {
+    PortalSync.begin();
+    final sync = PortalSync.instance;
+    if (sync.mobile.connected ||
+        await connectUyapMobile(context, api: sync.mobile)) {
+      unawaited(sync.syncMobile(full: true));
+    }
+  }
+
+  /// The web portal: connected, its documents checked again; else its
+  /// login window.
+  void _connectWeb() {
+    PortalSync.begin();
+    final sync = PortalSync.instance;
+    if (sync.web.connected) {
+      unawaited(sync.syncWeb());
+    } else {
+      unawaited(
+        connectUyapWeb(context, onConnected: () => unawaited(sync.syncWeb())),
+      );
+    }
   }
 
   Future<void> _setIncludeClosed(bool value) async {
@@ -283,53 +309,79 @@ class _PortfolioPageState extends State<PortfolioPage> {
     final mobile = UyapMobileApi.instance.connected;
     final web = UyapWebService.instance.connected;
     final running = sync?.state(PortalChannel.uyapMobile).running ?? false;
-    Widget source(String name, bool on, String detail) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-      decoration: BoxDecoration(
+    // A channel's chip is its button: not connected, it connects; connected,
+    // it syncs that channel again.
+    Widget source(
+      String name,
+      bool on,
+      String detail, {
+      required Key key,
+      required VoidCallback onTap,
+    }) => Tooltip(
+      message: on ? '$name’i yeniden eşitle' : '$name’e bağlan',
+      child: Material(
         color: scheme.surface,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: on ? AgendaColors.ok : const Color(0xFF9AA2B1),
-              shape: BoxShape.circle,
+        shape: StadiumBorder(side: BorderSide(color: scheme.outlineVariant)),
+        child: InkWell(
+          key: key,
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: on ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  '$name · $detail',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF3F4656),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 7),
-          Text(
-            '$name · $detail',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF3F4656)),
-          ),
-        ],
+        ),
       ),
     );
+    final chips = [
+      source(
+        'UYAP Mobil',
+        mobile,
+        !mobile
+            ? 'bağlı değil'
+            : _portfolioAt == null
+            ? 'henüz taranmadı'
+            : 'tam tarama ${whenText(_portfolioAt!, now)}',
+        key: const ValueKey('portfolio-connect-mobile'),
+        onTap: () => unawaited(_connectMobile()),
+      ),
+      source(
+        'UYAP Web',
+        web,
+        !web
+            ? 'bağlı değil'
+            : _checkedAt == null
+            ? 'bağlı'
+            : 'evraklar ${whenText(_checkedAt!, now)}',
+        key: const ValueKey('portfolio-connect-web'),
+        onTap: _connectWeb,
+      ),
+    ];
     final actions = [
       if (wide) ...[
-        source(
-          'UYAP Mobil',
-          mobile,
-          !mobile
-              ? 'bağlı değil'
-              : _portfolioAt == null
-              ? 'henüz taranmadı'
-              : 'tam tarama ${whenText(_portfolioAt!, now)}',
-        ),
+        chips[0],
         const SizedBox(width: 8),
-        source(
-          'UYAP Web',
-          web,
-          !web
-              ? 'bağlı değil'
-              : _checkedAt == null
-              ? 'bağlı'
-              : 'evraklar ${whenText(_checkedAt!, now)}',
-        ),
+        chips[1],
         const SizedBox(width: 12),
       ],
       Row(
@@ -409,6 +461,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
               children: [
                 title,
                 const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 6, children: chips),
+                const SizedBox(height: 6),
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   runSpacing: 6,

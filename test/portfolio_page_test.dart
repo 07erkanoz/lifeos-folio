@@ -163,6 +163,22 @@ void main() {
     expect(shown, [caseKey('2024/318', civil)]);
   });
 
+  testWidgets('the channels’ chips are buttons, on a desktop and a phone', (
+    tester,
+  ) async {
+    for (final size in const [Size(1440, 900), Size(390, 844)]) {
+      await pumpList(tester, size);
+      for (final key in const [
+        'portfolio-connect-mobile',
+        'portfolio-connect-web',
+      ]) {
+        final chip = find.byKey(ValueKey(key));
+        expect(chip, findsOneWidget, reason: '$key at $size');
+        expect(tester.widget<InkWell>(chip).onTap, isNotNull);
+      }
+    }
+  });
+
   testWidgets('the portfolio fits a phone', (tester) async {
     await pumpList(tester, const Size(390, 844));
     expect(tester.takeException(), isNull);
