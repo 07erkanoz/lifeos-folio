@@ -1361,6 +1361,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               onFilesDropped: _addFiles,
               child: Scaffold(
                 drawer: mobile ? _mobileDrawer(mobileHome) : null,
+                // A document's own edge strip goes back; the menu's drag
+                // from the same edge took the swipe and opened the menu.
+                drawerEnableOpenDragGesture: _showLibrary,
                 body: Actions(
                   actions: {
                     DismissIntent: CallbackAction<DismissIntent>(

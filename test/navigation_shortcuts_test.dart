@@ -82,11 +82,10 @@ void main() {
     // Just that the document is what is on screen: how many places its name
     // is written differs with the layout.
     expect(find.text('tek.udf'), findsWidgets);
-    expect(
-      find.text('Klasör Ekle'),
-      findsNothing,
-      reason: 'the archive is not what is on screen yet',
-    );
+    // The phone's first page, which going back comes out to, has the menu
+    // button in its heading.
+    final home = find.byKey(const ValueKey('mobile-menu'));
+    expect(home, findsNothing, reason: 'the first page is not on screen yet');
 
     // From the very edge, so that a drag across the page still turns it.
     final edge = find.byKey(const ValueKey('edge-back'));
@@ -94,15 +93,19 @@ void main() {
     await tester.flingFrom(tester.getCenter(edge), const Offset(220, 0), 900);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    await helpers.ready(
-      tester,
-      () => find.text('Klasör Ekle').evaluate().isNotEmpty,
-    );
+    await helpers.ready(tester, () => home.evaluate().isNotEmpty);
     expect(
-      find.text('Klasör Ekle'),
-      findsWidgets,
-      reason: 'an edge swipe should come back out to the archive',
+      home,
+      findsOneWidget,
+      reason: 'an edge swipe should come back out to the first page',
     );
+    // Not the menu opened over the document by the same swipe, which is
+    // what this used to pass on while the menu held the archive's folders.
+    expect(
+      tester.state<ScaffoldState>(find.byType(Scaffold).first).isDrawerOpen,
+      isFalse,
+    );
+    expect(find.byKey(const ValueKey('workspace-title')), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
