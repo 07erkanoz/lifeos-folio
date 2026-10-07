@@ -848,62 +848,6 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                     color: AgendaColors.muted,
                   ),
                 ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEA),
-                  border: Border.all(color: const Color(0xFFEAD89A)),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: 'Bildirim tebligat değildir. ',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      TextSpan(
-                        text:
-                            'UYAP bildirimi bir süre başlatmaz. Tebliğ '
-                            'UETS’ten gelince süre orada hesaplanır.',
-                      ),
-                    ],
-                  ),
-                  style: TextStyle(fontSize: 12, color: Color(0xFF5C4A12)),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                key: const ValueKey('notice-toggle-read'),
-                onPressed: () =>
-                    unawaited(_sync.markNotices([n], read: !n.read)),
-                icon: Icon(
-                  n.read
-                      ? Icons.mark_email_unread_outlined
-                      : Icons.mark_email_read_outlined,
-                  size: 17,
-                ),
-                label: Text(n.read ? 'Okunmadı yap' : 'Okundu say'),
-              ),
-              Text(
-                n.sources.contains(UyapNoticeSource.mobile)
-                    ? 'Okundu bilgisi UYAP Mobil’e de gider.'
-                    : 'Web portalı okundu bilgisini almıyor; Folio’da tutulur.',
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AgendaColors.muted,
-                ),
-              ),
             ],
           ),
         ),

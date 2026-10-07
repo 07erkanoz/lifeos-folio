@@ -468,13 +468,6 @@ class UyapMobileApi {
     return data is Map ? _plain('${data['mesaj'] ?? ''}') : '';
   }
 
-  /// Tells UYAP the notification [id] is read, or unread again.
-  Future<void> markNotice(String id, {required bool read}) => _authorized(
-    read ? 'PUT' : 'DELETE',
-    '${read ? 'mobile/bildirim/okundu' : 'mobile/bildirim/okunmadi'}/${_pathPart(id)}',
-    null,
-  );
-
   /// UYAP Mobil's ids as they are in a path ("…+xBHg==", "…@OVM…"), only
   /// what would end or break the path escaped.
   static String _pathPart(String id) => id

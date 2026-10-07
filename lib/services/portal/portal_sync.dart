@@ -672,8 +672,8 @@ class PortalSync extends ChangeNotifier {
     if (out.isNotEmpty) onNewNotices?.call(out);
   }
 
-  /// [notices] read, or unread again, in Folio and, for UYAP Mobil's,
-  /// on UYAP too; the portal has no way to be told.
+  /// [notices] read, or unread again, in Folio. Only Folio's count: UYAP
+  /// is not told, a notification being no more than news of the case.
   Future<void> markNotices(
     List<UyapNotice> notices, {
     required bool read,
@@ -682,19 +682,6 @@ class PortalSync extends ChangeNotifier {
     final db = await _database();
     db.setUyapNoticeRead([for (final n in notices) ...n.rows], read);
     noticesVersion.value++;
-    for (final n in notices) {
-      for (final r in n.rows) {
-        if (r.source != UyapNoticeSource.mobile || !_mobile.connected) {
-          continue;
-        }
-        try {
-          await _mobile.markNotice(r.id, read: read);
-        } catch (_) {
-          // Folio keeps the lawyer's word; UYAP is told next time it is
-          // marked.
-        }
-      }
-    }
   }
 
   /// Says how far [channel]'s running sync has come.

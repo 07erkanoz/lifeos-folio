@@ -103,16 +103,13 @@ void main() {
     expect(asked, isEmpty);
   });
 
-  test('read and unread go back to UYAP Mobil', () async {
+  test('read is Folio’s own: UYAP is not told', () async {
     rows = [row('0Npv+xBHg==', 'Gerekçeli Karar', now(5))];
     await sync.syncNotices(force: true);
     final notice = db.uyapNotices().single;
     expect(notice.read, isFalse);
     await sync.markNotices([notice], read: true);
     expect(db.uyapNotices().single.read, isTrue);
-    expect(asked, contains('PUT mobile/bildirim/okundu/0Npv+xBHg=='));
-    await sync.markNotices([db.uyapNotices().single], read: false);
-    expect(db.uyapNotices().single.read, isFalse);
-    expect(asked, contains('DELETE mobile/bildirim/okunmadi/0Npv+xBHg=='));
+    expect(asked.where((a) => a.contains('okundu')), isEmpty);
   });
 }
