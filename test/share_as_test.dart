@@ -4,8 +4,8 @@ import 'package:evrak_convert/ui/widgets/share_as.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-// A document that is not a PDF asks how it goes: as it is, or as a PDF;
-// a PDF goes as it is, without asking.
+// A UDF asks how it goes: as it is, or as a PDF; a PDF goes as it is and
+// a TIFF as a PDF, neither asking.
 void main() {
   late Directory dir;
   setUp(() => dir = Directory.systemTemp.createTempSync('folio_share_'));

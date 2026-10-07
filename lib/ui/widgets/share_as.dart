@@ -11,13 +11,13 @@ import '../../services/tiff/tiff_service.dart';
 import 'share_document_dialog.dart';
 
 /// Shares the document at [path]: as it is when it is a PDF or a picture;
-/// otherwise as it is ("UDF olarak") or made a PDF first ("PDF olarak"),
-/// the reader choosing. On a phone the system's share screen opens, on a
+/// a TIFF always as a PDF, which every phone opens; a UDF or a Word file
+/// as it is ("UDF olarak") or made a PDF first ("PDF olarak"), the reader
+/// choosing. On a phone the system's share screen opens, on a
 /// computer Folio's own dialog.
 Future<void> shareAs(BuildContext context, String path, {String? name}) async {
   final file = EvrakFile.fromPath(path);
   final asPdf = switch (file.format) {
-    EvrakFormat.tif ||
     EvrakFormat.udf ||
     EvrakFormat.docx ||
     EvrakFormat.odt ||
@@ -29,7 +29,17 @@ Future<void> shareAs(BuildContext context, String path, {String? name}) async {
     _ => false,
   };
   var chosen = path;
-  if (asPdf) {
+  if (file.format == EvrakFormat.tif) {
+    try {
+      chosen = await _pdfOf(file, name: name);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text('PDF hazırlanamadı: $e')));
+      }
+      return;
+    }
+  } else if (asPdf) {
     final kind = p.extension(path).replaceFirst('.', '').toUpperCase();
     final pick = await showModalBottomSheet<bool>(
       context: context,
