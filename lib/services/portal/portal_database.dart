@@ -12,6 +12,7 @@ import 'portal_deadline.dart';
 import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
 import 'portal_hearing.dart';
+import 'uyap_notice.dart';
 
 /// A UETS notification as kept, with the case it is tied to.
 class KeptNotice {
@@ -182,6 +183,13 @@ class PortalDatabase {
       CREATE TABLE IF NOT EXISTS deadline_map (
         legacy_id TEXT NOT NULL, deadline_id TEXT NOT NULL,
         PRIMARY KEY(legacy_id, deadline_id));
+      CREATE TABLE IF NOT EXISTS uyap_notice (
+        source TEXT NOT NULL, id TEXT NOT NULL,
+        message_id TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
+        body TEXT NOT NULL DEFAULT '', sent TEXT, remote_read INTEGER,
+        local_read INTEGER, first_seen TEXT NOT NULL, updated TEXT NOT NULL,
+        PRIMARY KEY(source, id));
+      CREATE INDEX IF NOT EXISTS uyap_notice_sent ON uyap_notice(sent);
     ''');
   }
 
@@ -333,6 +341,144 @@ class PortalDatabase {
       DateTime.now().toUtc().toIso8601String(),
       key,
     ]);
+  }
+
+  // UYAP's notifications
+
+  /// [rows] of one channel kept, in one transaction: each channel writes
+  /// only its own rows, so UYAP Mobil's reading and the portal's never
+  /// write over each other. What a row had is not lost to an answer
+  /// without it (UYAP Mobil's list has no body); the lawyer's own read or
+  /// unread is never touched. The rows new to Folio, for the desktop's
+  /// word of them.
+  List<UyapNoticeRow> saveUyapNotices(
+    Iterable<UyapNoticeRow> rows, {
+    DateTime? now,
+  }) {
+    final at = (now ?? DateTime.now()).toIso8601String();
+    final added = <UyapNoticeRow>[];
+    _transaction(() {
+      for (final r in rows) {
+        final kept = _db.select(
+          'SELECT 1 FROM uyap_notice WHERE source=? AND id=?',
+          [r.source.name, r.id],
+        );
+        if (kept.isEmpty) {
+          _db.execute(
+            'INSERT INTO uyap_notice(source, id, message_id, title, body, '
+            'sent, remote_read, first_seen, updated) '
+            'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+              r.source.name,
+              r.id,
+              r.messageId,
+              r.title,
+              r.body,
+              r.sentAt?.toIso8601String(),
+              r.remoteRead == null ? null : (r.remoteRead! ? 1 : 0),
+              at,
+              at,
+            ],
+          );
+          added.add(r);
+          continue;
+        }
+        _db.execute(
+          'UPDATE uyap_notice SET '
+          "message_id=CASE WHEN ?1<>'' THEN ?1 ELSE message_id END, "
+          "title=CASE WHEN ?2<>'' THEN ?2 ELSE title END, "
+          "body=CASE WHEN ?3<>'' THEN ?3 ELSE body END, "
+          'sent=COALESCE(?4, sent), '
+          'remote_read=COALESCE(?5, remote_read), updated=?6 '
+          'WHERE source=?7 AND id=?8',
+          [
+            r.messageId,
+            r.title,
+            r.body,
+            r.sentAt?.toIso8601String(),
+            r.remoteRead == null ? null : (r.remoteRead! ? 1 : 0),
+            at,
+            r.source.name,
+            r.id,
+          ],
+        );
+      }
+    });
+    return added;
+  }
+
+  /// The body UYAP Mobil gave for one of its notifications.
+  void setUyapNoticeBody(String id, String body) => _db.execute(
+    "UPDATE uyap_notice SET body=? WHERE source='mobile' AND id=? "
+    "AND body=''",
+    [body, id],
+  );
+
+  /// UYAP Mobil's notifications with no body yet, newest first.
+  List<UyapNoticeRow> uyapNoticesWithoutBody({int limit = 25}) => [
+    for (final row in _db.select(
+      "SELECT * FROM uyap_notice WHERE source='mobile' AND body='' "
+      "AND message_id<>'' ORDER BY sent DESC LIMIT ?",
+      [limit],
+    ))
+      _noticeRow(row),
+  ];
+
+  /// Every channel's rows since [since] (all when null), newest first.
+  List<UyapNoticeRow> uyapNoticeRows({DateTime? since}) => [
+    for (final row
+        in since == null
+            ? _db.select('SELECT * FROM uyap_notice ORDER BY sent DESC')
+            : _db.select(
+                'SELECT * FROM uyap_notice WHERE sent IS NULL OR sent>=? '
+                'ORDER BY sent DESC',
+                [since.toIso8601String()],
+              ))
+      _noticeRow(row),
+  ];
+
+  /// The lawyer's read or unread, on every row of a notification: both
+  /// channels' rows of one say the same.
+  void setUyapNoticeRead(Iterable<UyapNoticeRow> rows, bool read) =>
+      _transaction(() {
+        for (final r in rows) {
+          _db.execute(
+            'UPDATE uyap_notice SET local_read=? WHERE source=? AND id=?',
+            [read ? 1 : 0, r.source.name, r.id],
+          );
+        }
+      });
+
+  UyapNoticeRow _noticeRow(Row row) {
+    bool? flag(Object? v) => v == null ? null : v == 1;
+    return UyapNoticeRow(
+      source: UyapNoticeSource.values.byName(row['source'] as String),
+      id: row['id'] as String,
+      messageId: row['message_id'] as String,
+      title: row['title'] as String,
+      body: row['body'] as String,
+      sentAt: row['sent'] == null
+          ? null
+          : DateTime.tryParse(row['sent'] as String),
+      remoteRead: flag(row['remote_read']),
+      localRead: flag(row['local_read']),
+    );
+  }
+
+  /// The notifications as the lawyer sees them, both channels' as one,
+  /// each tied to its case in the portfolio where its body names it.
+  List<UyapNotice> uyapNotices({DateTime? since, String? caseKey}) {
+    final keys = {
+      for (final row in _db.select('SELECT key FROM cases'))
+        row['key'] as String,
+    };
+    final all = mergeUyapNotices(uyapNoticeRows(since: since), caseKeys: keys);
+    return caseKey == null
+        ? all
+        : [
+            for (final n in all)
+              if (n.caseKey == caseKey) n,
+          ];
   }
 
   // Hearings

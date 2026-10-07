@@ -21,6 +21,7 @@ class MobileDrawer extends StatelessWidget {
     required this.onSyncComputer,
     this.agendaToday = 0,
     this.uetsUnread = 0,
+    this.uyapNotices = 0,
     this.uyapCases = 0,
     this.sync,
   });
@@ -32,7 +33,7 @@ class MobileDrawer extends StatelessWidget {
   final ValueChanged<String> onGroup;
   final VoidCallback onConnectMobile, onConnectWeb, onConnectUets;
   final VoidCallback onSyncComputer;
-  final int agendaToday, uetsUnread, uyapCases;
+  final int agendaToday, uetsUnread, uyapCases, uyapNotices;
   final PortalSync? sync;
 
   Widget _section(String text) => Padding(
@@ -178,6 +179,21 @@ class MobileDrawer extends StatelessWidget {
                                 )
                               : null,
                           onTap: () => onGroup('agenda'),
+                        ),
+                        _item(
+                          context,
+                          key: const ValueKey('drawer-notices'),
+                          icon: const Icon(Icons.notifications_outlined),
+                          label: 'UYAP Bildirimleri',
+                          selected: !home && group == 'bildirim',
+                          trailing: uyapNotices > 0
+                              ? _pill(
+                                  '$uyapNotices',
+                                  AgendaColors.hearing,
+                                  Colors.white,
+                                )
+                              : null,
+                          onTap: () => onGroup('bildirim'),
                         ),
                         _item(
                           context,

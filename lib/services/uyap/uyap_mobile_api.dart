@@ -428,6 +428,40 @@ class UyapMobileApi {
     );
   }
 
+  /// One page of the lawyer's UYAP notifications (`bildirimlerim`), the
+  /// page after the row whose message id is [after]; the first with none.
+  /// Its rows have no body: [noticeBody] gives one's.
+  Future<List<Map<String, Object?>>> noticeRows({String? after}) async =>
+      _list(
+        await _get(
+          'mobile/bildirim/bildirimlerim/${after == null ? 'null' : _pathPart(after)}',
+        ),
+        'bildirimler',
+      );
+
+  /// The body of the notification whose message id is [messageId].
+  Future<String> noticeBody(String messageId) async {
+    final data = await _get(
+      'mobile/bildirim/bildirimmesaj/${_pathPart(messageId)}',
+    );
+    return data is Map ? _plain('${data['mesaj'] ?? ''}') : '';
+  }
+
+  /// Tells UYAP the notification [id] is read, or unread again.
+  Future<void> markNotice(String id, {required bool read}) => _authorized(
+    read ? 'PUT' : 'DELETE',
+    '${read ? 'mobile/bildirim/okundu' : 'mobile/bildirim/okunmadi'}/${_pathPart(id)}',
+    null,
+  );
+
+  /// UYAP Mobil's ids as they are in a path ("…+xBHg==", "…@OVM…"), only
+  /// what would end or break the path escaped.
+  static String _pathPart(String id) => id
+      .replaceAll('%', '%25')
+      .replaceAll('?', '%3F')
+      .replaceAll('#', '%23')
+      .replaceAll(' ', '%20');
+
   /// UYAP's own app caps an excuse's reason here; longer is refused here
   /// rather than cut, so that half a reason is never sent as the whole.
   static const excuseLimit = 500;

@@ -45,6 +45,9 @@ class LibrarySidebar extends StatelessWidget {
   /// UETS notifications not yet opened, for the badge beside UETS.
   final int uetsUnread;
 
+  /// UYAP's notifications not yet read, for the badge beside them.
+  final int uyapNotices;
+
   /// Widens the panel folded on the UYAP pages, or folds it again; null
   /// where the window's width decides alone.
   final VoidCallback? onTogglePanel;
@@ -67,6 +70,7 @@ class LibrarySidebar extends StatelessWidget {
     this.uyapFresh = 0,
     this.agendaToday = 0,
     this.uetsUnread = 0,
+    this.uyapNotices = 0,
     this.onTogglePanel,
   });
 
@@ -177,6 +181,18 @@ class LibrarySidebar extends StatelessWidget {
                     selected: group == 'uyap' || group.startsWith('uyap:'),
                     badge: uyapFresh > 0
                         ? _badge(context, '$uyapFresh yeni', danger: false)
+                        : null,
+                  ),
+                if (_showUyap)
+                  _nav(
+                    context,
+                    Icons.notifications_outlined,
+                    'UYAP Bildirimleri',
+                    'bildirim',
+                    null,
+                    key: const ValueKey('uyap-notices'),
+                    badge: uyapNotices > 0
+                        ? _badge(context, '$uyapNotices', danger: false)
                         : null,
                   ),
                 _nav(

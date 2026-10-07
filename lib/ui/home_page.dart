@@ -3,6 +3,10 @@ import 'agenda/channel_bar.dart';
 import 'agenda/mobile_connect.dart';
 import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
+import 'agenda/uyap_notices_page.dart';
+import '../services/platform/system_notices.dart';
+import '../services/portal/uyap_notice.dart';
+import '../services/portal/uyap_notice_alerts.dart';
 import '../services/portal/observed.dart' show caseKey;
 import '../services/portal/portal_case.dart';
 import '../services/portal/portal_channel.dart';
@@ -45,6 +49,7 @@ import 'library/collapsing_overview.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -692,6 +697,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_loadLawyerName());
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
+      PortalSync.instance.noticesVersion.addListener(_portalSynced);
+      // New UYAP notifications, told on the computer's or phone's own.
+      PortalSync.instance.onNewNotices = (n) => unawaited(_tellNotices(n));
+      SystemNotices.instance.onOpen = (p) => unawaited(_openToldNotice(p));
+      unawaited(SystemNotices.instance.prepare());
     }
     _incoming = _intents.paths.listen(
       (paths) {
@@ -794,6 +804,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _libraryResultsFocus.dispose();
     _library.removeListener(_changed);
     PortalSync.instance.removeListener(_portalSynced);
+    PortalSync.started?.noticesVersion.removeListener(_portalSynced);
     _countSoon?.cancel();
     _library.removeListener(_archiveChanged);
     UyapCaseStore.changes.removeListener(_reloadUyapCases);
@@ -988,6 +999,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'home' ||
         value == 'agenda' ||
         value == 'uets' ||
+        value == 'bildirim' ||
         _isUyapGroup(value)) {
       return;
     }
@@ -1005,7 +1017,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// The office's own pages, which bring their headings and fill the page.
   static bool _isFullPage(String group) =>
-      group == 'home' || group == 'agenda' || group == 'uets';
+      group == 'home' ||
+      group == 'agenda' ||
+      group == 'uets' ||
+      group == 'bildirim';
 
   static bool _isUyapGroup(String group) =>
       group == 'uyap' || group.startsWith('uyap:');
@@ -1018,6 +1033,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// The UETS notices not yet read, for the badge beside UETS Tebligatlarım.
   int _uetsUnread = 0;
+
+  /// UYAP's notifications not yet read, for the badge beside them.
+  int _uyapNoticesUnread = 0;
 
   /// The deadlines that end today, and the next hearing, for the phone's
   /// first page.
@@ -1096,7 +1114,23 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             a.message.sent ?? DateTime(0),
           ),
         );
+      final unreadNotices = [
+        for (final n in db.uyapNotices())
+          if (!n.read) n,
+      ];
+      final cases = db.cases();
       final office = DesktopHomeOffice(
+        noticesUnread: unreadNotices.length,
+        notices: [
+          for (final n in unreadNotices.take(3))
+            (
+              notice: n,
+              caseLine: switch (cases[n.caseKey]) {
+                null => null,
+                final c => '${c.number} · ${c.court}',
+              },
+            ),
+        ],
         today: db.hearings(from: today, to: tomorrow),
         next: db
             .hearings(from: tomorrow, to: today.add(const Duration(days: 90)))
@@ -1142,6 +1176,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         setState(() {
           _agendaToday = count;
           _uetsUnread = unread;
+          _uyapNoticesUnread = unreadNotices.length;
           _deadlinesToday = deadlines;
           _nextHearing = line;
           _office = office;
@@ -1221,6 +1256,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onDrafts: () => unawaited(_openRecovery()),
     onAgenda: () => unawaited(_selectGroup('agenda')),
     onUets: () => unawaited(_selectGroup('uets')),
+    onNotices: () => unawaited(_selectGroup('bildirim')),
   );
 
   Widget _agendaPage() => AgendaPage(
@@ -1243,6 +1279,78 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onOpenCase: _openPortalCase,
     onOpenFile: (path) =>
         unawaited(_addFiles([path], index: false, external: true)),
+  );
+
+  /// [notices] told as the lawyer chose (UyapNoticeAlerts): each with its
+  /// case, or one word for many at once.
+  Future<void> _tellNotices(List<UyapNotice> notices) async {
+    final db = await PortalDatabase.shared();
+    final alerts = UyapNoticeAlerts.of(db);
+    final told = [
+      for (final n in notices)
+        if (alerts.tells(n)) n,
+    ];
+    if (told.isEmpty) return;
+    final cases = db.cases();
+    String line(UyapNotice n) => switch (cases[n.caseKey]) {
+      null => n.body.length > 140 ? '${n.body.substring(0, 140)}…' : n.body,
+      final c => '${c.number} · ${c.court}',
+    };
+    if (told.length > 3) {
+      await SystemNotices.instance.show(
+        id: 1,
+        title: '${told.length} yeni UYAP bildirimi',
+        body: told.take(4).map((n) => n.title).join(', '),
+        payload: 'notices:',
+      );
+      return;
+    }
+    for (final n in told) {
+      await SystemNotices.instance.show(
+        id: n.signature.hashCode & 0x7fffffff,
+        title: n.title.isEmpty ? 'UYAP bildirimi' : n.title,
+        body: line(n),
+        payload: 'notice:${n.signature}',
+      );
+    }
+  }
+
+  /// A word clicked: its case's page, or the notifications', and read.
+  Future<void> _openToldNotice(String payload) async {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      try {
+        await windowManager.show();
+        await windowManager.focus();
+      } catch (_) {}
+    }
+    final signature = payload.startsWith('notice:')
+        ? payload.substring(7)
+        : null;
+    final db = await PortalDatabase.shared();
+    final notice = signature == null
+        ? null
+        : db.uyapNotices().where((n) => n.signature == signature).firstOrNull;
+    if (notice != null && !notice.read) {
+      unawaited(PortalSync.instance.markNotices([notice], read: true));
+    }
+    if (!mounted) return;
+    if (notice?.caseKey != null) {
+      _openPortalCase(notice!.caseKey!);
+      return;
+    }
+    _noticeFocus = signature;
+    await _selectGroup('bildirim');
+  }
+
+  /// The notification the notifications' page opens on, when the
+  /// desktop's word of it was clicked.
+  String? _noticeFocus;
+
+  Widget _noticesPage() => UyapNoticesPage(
+    key: ValueKey('notices-${_noticeFocus ?? ''}'),
+    initialNotice: _noticeFocus,
+    onChanged: () => unawaited(_countAgenda()),
+    onOpenCase: _openPortalCase,
   );
 
   /// UYAP Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
@@ -1732,6 +1840,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? _agendaPage()
                                               : _group == 'uets'
                                               ? _uetsPage()
+                                              : _group == 'bildirim'
+                                              ? _noticesPage()
                                               : _overview(),
                                         ),
                                         TransitionPane(
@@ -1972,6 +2082,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uyapFolder: UyapSettings.instance.folder,
     agendaToday: _agendaToday,
     uetsUnread: _uetsUnread,
+    uyapNotices: _uyapNoticesUnread,
     uyapAvailable: true,
     showHome: !(Platform.isAndroid || Platform.isIOS),
     uyapFresh: _uyapFresh,
@@ -1992,6 +2103,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     home: home,
     agendaToday: _agendaToday,
     uetsUnread: _uetsUnread,
+    uyapNotices: _uyapNoticesUnread,
     uyapCases: _portfolioOpen ?? _uyapCases.length,
     onHome: () {
       _closeDrawer();

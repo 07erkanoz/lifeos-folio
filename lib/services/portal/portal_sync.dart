@@ -28,6 +28,7 @@ import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_database.dart';
 import 'portal_hearing.dart';
+import 'uyap_notice.dart';
 
 /// One channel's sync, as the screens show it.
 class ChannelSync {
@@ -130,6 +131,14 @@ class PortalSync extends ChangeNotifier {
     );
     unawaited(_restoreMobile());
     unawaited(_restoreKept());
+    // UYAP's notifications are asked for now and then while a portal is
+    // there to ask; not in tests, where nothing is.
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _noticeTimer = Timer.periodic(
+        noticeEvery,
+        (_) => unawaited(syncNotices()),
+      );
+    }
   }
 
   static const _webSecret = 'uyap-web';
@@ -209,6 +218,8 @@ class PortalSync extends ChangeNotifier {
     _disposed = true;
     _restoreRetry?.cancel();
     _progressTimer?.cancel();
+    _noticeTimer?.cancel();
+    noticesVersion.dispose();
     _web.session.removeListener(_webChanged);
     _mobile.session.removeListener(_mobileChanged);
     _uets.session.removeListener(_uetsChanged);
@@ -218,7 +229,10 @@ class PortalSync extends ChangeNotifier {
   void _webChanged() {
     _keepWeb();
     notifyListeners();
-    if (_web.connected) unawaited(syncWeb());
+    if (_web.connected) {
+      unawaited(syncWeb());
+      unawaited(syncNotices(force: true));
+    }
   }
 
   void _uetsChanged() {
@@ -470,7 +484,177 @@ class PortalSync extends ChangeNotifier {
 
   void _mobileChanged() {
     notifyListeners();
-    if (_mobile.connected) unawaited(syncMobile());
+    if (_mobile.connected) {
+      unawaited(syncMobile());
+      unawaited(syncNotices(force: true));
+    }
+  }
+
+  // UYAP's notifications.
+
+  /// How often they are asked for while a portal is connected.
+  static const noticeEvery = Duration(minutes: 5);
+
+  /// Told each time the notifications kept change.
+  final noticesVersion = ValueNotifier<int>(0);
+
+  /// Told the notifications that came new and unread, each once, for the
+  /// desktop's word of them; set by the window.
+  void Function(List<UyapNotice> notices)? onNewNotices;
+
+  /// What went wrong in the last reading; null when it worked.
+  String? noticeProblem;
+  DateTime? noticesCheckedAt;
+
+  Timer? _noticeTimer;
+  Future<void>? _noticeSync;
+  DateTime _noticesAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// UYAP Mobil's and the portal's notifications kept, each channel in
+  /// its own rows. Not again within a minute unless [force]d (a page
+  /// opened asks; so does the timer); a second call while one runs waits
+  /// for it.
+  Future<void> syncNotices({bool force = false}) {
+    if (_noticeSync != null) return _noticeSync!;
+    if (!_mobile.connected && !_web.connected) return Future.value();
+    if (!force &&
+        DateTime.now().difference(_noticesAt) < const Duration(minutes: 1)) {
+      return Future.value();
+    }
+    return _noticeSync = _syncNotices().whenComplete(() => _noticeSync = null);
+  }
+
+  static const _mobileNoticesKey = 'uyap_notice_mobile';
+  static const _webNoticesKey = 'uyap_notice_web';
+  static const _toldNoticesKey = 'uyap_notice_told';
+
+  /// Whether a reading of them runs now.
+  bool get noticesRunning => _noticeSync != null;
+
+  Future<void> _syncNotices() async {
+    _noticesAt = DateTime.now();
+    await Future<void>.delayed(Duration.zero);
+    noticesVersion.value++;
+    final db = await _database();
+    final added = <UyapNoticeRow>[];
+    final problems = <String>[];
+    if (_mobile.connected) {
+      // The first reading goes back further; it tells of nothing: what was
+      // there before Folio looked is not news.
+      final first = db.meta(_mobileNoticesKey) == null;
+      try {
+        final rows = <UyapNoticeRow>[];
+        String? after;
+        for (var page = 0; page < (first ? 10 : 2); page++) {
+          final got = await _mobile.noticeRows(after: after);
+          if (got.isEmpty) break;
+          rows.addAll(got.map(UyapNoticeRow.fromMobile).nonNulls);
+          final last = '${got.last['mesajId'] ?? ''}'.trim();
+          if (last.isEmpty || last == after) break;
+          after = last;
+        }
+        final fresh = db.saveUyapNotices(rows);
+        if (!first) added.addAll(fresh);
+        db.setMeta(_mobileNoticesKey, DateTime.now().toIso8601String());
+        noticesVersion.value++;
+        // Their bodies, which name the case: a few at a time, not to ask
+        // UYAP for hundreds at once.
+        for (final r in db.uyapNoticesWithoutBody()) {
+          if (!_mobile.connected || _disposed) break;
+          try {
+            final body = await _mobile.noticeBody(r.messageId);
+            if (body.isNotEmpty) db.setUyapNoticeBody(r.id, body);
+          } catch (_) {
+            // Asked again next time.
+          }
+        }
+      } catch (e) {
+        problems.add('UYAP Mobil: ${_said(e)}');
+      }
+    }
+    if (_web.connected) {
+      final first = db.meta(_webNoticesKey) == null;
+      try {
+        final now = DateTime.now();
+        final got = await _web.noticeRows(
+          now.subtract(const Duration(days: 30)),
+          now,
+        );
+        final fresh = db.saveUyapNotices(
+          got.map(UyapNoticeRow.fromWeb).nonNulls,
+        );
+        if (!first) added.addAll(fresh);
+        db.setMeta(_webNoticesKey, now.toIso8601String());
+      } catch (e) {
+        problems.add('UYAP Web: ${_said(e)}');
+      }
+    }
+    if (_disposed) return;
+    noticeProblem = problems.isEmpty ? null : problems.join(' · ');
+    noticesCheckedAt = DateTime.now();
+    noticesVersion.value++;
+    if (added.isNotEmpty) _tellNew(db, added);
+  }
+
+  static String _said(Object e) =>
+      '$e'.replaceFirst('Bad state: ', '').replaceFirst('Exception: ', '');
+
+  /// The notifications of the last day among [added], unread, each told
+  /// once though both channels bring it.
+  void _tellNew(PortalDatabase db, List<UyapNoticeRow> added) {
+    final now = DateTime.now();
+    final ids = {for (final r in added) '${r.source.name}:${r.id}'};
+    final told = <String, String>{};
+    try {
+      final kept = jsonDecode(db.meta(_toldNoticesKey) ?? '{}');
+      if (kept is Map) {
+        for (final MapEntry(:key, :value) in kept.entries) {
+          final at = DateTime.tryParse('$value');
+          if (at != null && now.difference(at) < const Duration(days: 3)) {
+            told['$key'] = '$value';
+          }
+        }
+      }
+    } catch (_) {}
+    final out = <UyapNotice>[];
+    for (final n in db.uyapNotices(
+      since: now.subtract(const Duration(days: 1)),
+    )) {
+      if (n.read) continue;
+      if (!n.rows.any((r) => ids.contains('${r.source.name}:${r.id}'))) {
+        continue;
+      }
+      if (told.containsKey(n.signature)) continue;
+      told[n.signature] = now.toIso8601String();
+      out.add(n);
+    }
+    db.setMeta(_toldNoticesKey, jsonEncode(told));
+    if (out.isNotEmpty) onNewNotices?.call(out);
+  }
+
+  /// [notices] read, or unread again, in Folio and, for UYAP Mobil's,
+  /// on UYAP too; the portal has no way to be told.
+  Future<void> markNotices(
+    List<UyapNotice> notices, {
+    required bool read,
+  }) async {
+    if (notices.isEmpty) return;
+    final db = await _database();
+    db.setUyapNoticeRead([for (final n in notices) ...n.rows], read);
+    noticesVersion.value++;
+    for (final n in notices) {
+      for (final r in n.rows) {
+        if (r.source != UyapNoticeSource.mobile || !_mobile.connected) {
+          continue;
+        }
+        try {
+          await _mobile.markNotice(r.id, read: read);
+        } catch (_) {
+          // Folio keeps the lawyer's word; UYAP is told next time it is
+          // marked.
+        }
+      }
+    }
   }
 
   /// Says how far [channel]'s running sync has come.

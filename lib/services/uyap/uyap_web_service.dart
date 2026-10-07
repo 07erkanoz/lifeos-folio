@@ -921,6 +921,23 @@ class UyapWebService {
         ];
       });
 
+  /// The lawyer's UYAP notifications sent from [from] to [to], with their
+  /// bodies. Unlike the hearings', its dates are padded ("01.10.2026").
+  Future<List<Map<String, Object?>>> noticeRows(DateTime from, DateTime to) =>
+      _serial(() async {
+        String two(int n) => n.toString().padLeft(2, '0');
+        String day(DateTime d) => '${two(d.day)}.${two(d.month)}.${d.year}';
+        final data = await _post('/get_kullanici_tum_bildirimleri.ajx', {
+          'baslangicTarihi': day(from),
+          'bitisTarihi': day(to),
+        });
+        return [
+          if (data is List)
+            for (final row in data)
+              if (row is Map) Map<String, Object?>.from(row),
+        ];
+      });
+
   Future<UyapCaseDetails> caseDetails(UyapCase target) => _serial(() async {
     final data = await _post('/dosyaAyrintiBilgileri_brd.ajx', {
       'dosyaId': target.id,

@@ -11,6 +11,7 @@ import '../../services/portal/portal_database.dart';
 import '../../services/portal/observed.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/portal/portal_sync.dart';
+import '../../services/portal/uyap_notice.dart';
 import '../../services/uets/notice_matcher.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_case_links.dart';
@@ -30,6 +31,8 @@ class DesktopHomeOffice {
     this.deadlines = const [],
     this.unread = 0,
     this.newest,
+    this.notices = const [],
+    this.noticesUnread = 0,
   });
 
   /// Today's hearings, and the next when there are none.
@@ -42,6 +45,11 @@ class DesktopHomeOffice {
   /// The UETS notices unread, and the newest of them.
   final int unread;
   final UetsMessage? newest;
+
+  /// UYAP's notifications not yet read: how many, and the newest few with
+  /// the case each is tied to (its number and court, when it has one).
+  final List<({UyapNotice notice, String? caseLine})> notices;
+  final int noticesUnread;
 }
 
 /// The desktop's first page (docs/design/masaustu-anasayfa-taslak.png): the
@@ -63,6 +71,7 @@ class DesktopHome extends StatefulWidget {
     required this.onDrafts,
     required this.onAgenda,
     required this.onUets,
+    this.onNotices,
     this.uyapFolder,
     this.links,
     this.now,
@@ -75,6 +84,9 @@ class DesktopHome extends StatefulWidget {
   final ValueChanged<String> onSearch;
   final ValueChanged<EvrakFile> onOpen, onEdit, onSendUyap;
   final VoidCallback onArchive, onDrafts, onAgenda, onUets;
+
+  /// UYAP Bildirimleri; null where it is not shown.
+  final VoidCallback? onNotices;
 
   /// Where UYAP's documents are saved: "UYAP'tan inen".
   final String? uyapFolder;
@@ -307,6 +319,10 @@ class _DesktopHomeState extends State<DesktopHome> {
                 const SizedBox(height: 16),
                 _deadlinesCard(context),
                 const SizedBox(height: 16),
+                if (widget.onNotices != null) ...[
+                  _noticesCard(context),
+                  const SizedBox(height: 16),
+                ],
                 _uetsCard(context),
               ],
             );
@@ -1335,6 +1351,88 @@ class _DesktopHomeState extends State<DesktopHome> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// UYAP's notifications not yet read, the newest three with their case.
+  Widget _noticesCard(BuildContext context) {
+    final o = widget.office;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _kicker(
+            o.noticesUnread > 0
+                ? 'UYAP BİLDİRİMLERİ · ${o.noticesUnread} OKUNMAMIŞ'
+                : 'UYAP BİLDİRİMLERİ',
+            link: 'Tümü',
+            onLink: widget.onNotices,
+            key: const ValueKey('home-notices'),
+          ),
+          const SizedBox(height: 6),
+          if (o.notices.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                'Okunmamış bildirim yok',
+                style: TextStyle(fontSize: 13),
+              ),
+            ),
+          for (final (i, (:notice, :caseLine)) in o.notices.indexed)
+            InkWell(
+              onTap: widget.onNotices,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  border: i == o.notices.length - 1
+                      ? null
+                      : const Border(
+                          bottom: BorderSide(color: Color(0xFFF0F2F6)),
+                        ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.notifications_active_outlined,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            notice.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            [
+                              caseLine ?? 'Dosyası bulunamadı',
+                              if (notice.sentAt != null) _ago(notice.sentAt!),
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AgendaColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

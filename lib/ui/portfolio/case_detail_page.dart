@@ -12,6 +12,7 @@ import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/portal/portal_sync.dart';
+import '../../services/portal/uyap_notice.dart';
 import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
 import '../../services/uyap/uyap_case_store.dart';
@@ -66,7 +67,7 @@ class CaseDetailPage extends StatefulWidget {
   State<CaseDetailPage> createState() => _CaseDetailPageState();
 }
 
-enum _Tab { documents, hearings, deadlines, parties, facts, petitions }
+enum _Tab { documents, notices, hearings, deadlines, parties, facts, petitions }
 
 enum _DocFilter { all, fresh, decisions, petitions, notDownloaded }
 
@@ -78,6 +79,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   List<PortalHearing> _hearings = const [];
   List<AgendaItem> _items = const [];
   List<KeptNotice> _notices = const [];
+
+  /// UYAP's notifications whose body names this case.
+  List<UyapNotice> _uyapNotices = const [];
   List<String> _petitions = const [];
   bool _loaded = false;
 
@@ -176,6 +180,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ..sort((a, b) => b.at.compareTo(a.at));
       _items = db.agenda(caseKey: kase.key);
       _notices = db.notices(caseKey: kase.key);
+      _uyapNotices = db.uyapNotices(caseKey: kase.key);
       _petitions = petitions;
       _shownKey = _lastShown[kase.key];
       _loaded = true;
@@ -1429,6 +1434,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     _Tab.hearings => _hearingsTab(context),
     _Tab.deadlines => _deadlinesTab(context),
     _Tab.parties => _partiesTab(context),
+    _Tab.notices => _noticesTab(context),
     _Tab.facts => _factsTab(context),
     _Tab.petitions => _petitionsTab(context),
   };
@@ -1506,6 +1512,12 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         child: Row(
           children: [
             tab(_Tab.documents, 'Evraklar', docCount, fresh: _fresh.length),
+            tab(
+              _Tab.notices,
+              'Bildirimler',
+              _uyapNotices.length,
+              fresh: _uyapNotices.where((n) => !n.read).length,
+            ),
             tab(_Tab.hearings, 'Duruşmalar', _hearings.length),
             tab(_Tab.deadlines, 'Süreler & Tebligat', deadlines),
             tab(_Tab.parties, 'Taraflar', parties),
@@ -2170,6 +2182,57 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ],
       ),
     );
+  }
+
+  /// The case's UYAP notifications; opened is read, here and on UYAP.
+  Widget _noticesTab(BuildContext context) {
+    if (_uyapNotices.isEmpty) {
+      return _empty(
+        'Bu dosya için UYAP bildirimi yok. UYAP Mobil ya da UYAP Web '
+        'bağlıyken gelen bildirimler, dosyayı andıkları için buraya bağlanır.',
+      );
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    return Column(
+      children: [
+        for (final n in _uyapNotices)
+          InkWell(
+            key: ValueKey('case-notice-${n.key}'),
+            onTap: n.read ? null : () => unawaited(_readNotice(n)),
+            child: _line(
+              n.title,
+              [
+                if (n.body.isNotEmpty) n.body,
+                [
+                  for (final s in n.sources)
+                    s == UyapNoticeSource.mobile ? 'Mobil' : 'Web',
+                ].join(' + '),
+                if (n.sentAt != null) whenText(n.sentAt!, now),
+              ].join(' · '),
+              leading: Icon(
+                n.read
+                    ? Icons.notifications_none_rounded
+                    : Icons.notifications_active_rounded,
+                size: 18,
+                color: n.read ? AgendaColors.muted : scheme.primary,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _readNotice(UyapNotice n) async {
+    final db = await _db;
+    final sync = PortalSync.started;
+    if (sync != null) {
+      await sync.markNotices([n], read: true);
+    } else {
+      db.setUyapNoticeRead(n.rows, true);
+    }
+    if (!mounted || _kase == null) return;
+    setState(() => _uyapNotices = db.uyapNotices(caseKey: _kase!.key));
   }
 
   Widget _petitionsTab(BuildContext context) {

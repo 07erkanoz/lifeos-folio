@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UYAP Bildirimleri Taslağı</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet">
+<style>
+  :root { --page:#F4F6F9; --line:#E3E7EE; --muted:#6B7383; --ink:#1B2130; --primary:#2B5EA8; --pfill:#EAF0F9;
+          --ok:#157A52; --okF:#EAF7F1; --amber:#97600D; --amberF:#FDF4E6; --red:#C0322B; --redF:#FDECEC;
+          --hukuk:#2B5EA8; --icra:#97600D; --ceza:#B2453E; --idari:#5B4BB7; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:18px; line-height:1; font-style:normal; display:inline-block; font-feature-settings:"liga"; vertical-align:-3px; }
+  h2.cap { width:1440px; margin:0 auto 10px; font-size:15px; color:#2A3040; }
+  h2.cap small { font-weight:400; color:#4B5465; margin-left:8px; }
+  .win { width:1440px; height:880px; margin:0 auto 34px; background:var(--page); border-radius:12px; overflow:hidden; box-shadow:0 20px 60px rgba(20,30,50,.28); display:flex; flex-direction:column; }
+  .tb { height:34px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; padding:0 14px; font-size:12px; color:var(--muted); }
+  .tb .r { margin-left:auto; letter-spacing:12px; }
+  .body { flex:1; display:flex; min-height:0; }
+  .side { width:236px; background:#fff; border-right:1px solid var(--line); padding:16px 12px; display:flex; flex-direction:column; gap:3px; }
+  .btn1 { background:var(--primary); color:#fff; border-radius:10px; padding:10px; text-align:center; font-weight:700; font-size:13px; margin-bottom:14px; }
+  .head { font-size:10.5px; font-weight:800; letter-spacing:.9px; color:var(--muted); padding:10px 10px 4px; }
+  .nav { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; font-size:13.5px; }
+  .nav .ms { color:#6B7383; }
+  .nav.on { background:var(--pfill); color:var(--primary); font-weight:700; } .nav.on .ms { color:var(--primary); }
+  .pill { margin-left:auto; font-size:11px; font-weight:800; padding:1px 7px; border-radius:9px; background:var(--redF); color:var(--red); }
+  .pill.b { background:var(--primary); color:#fff; }
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .ph { background:#fff; border-bottom:1px solid var(--line); padding:14px 24px; display:flex; align-items:center; gap:14px; }
+  .ph h1 { margin:0; font-size:18px; }
+  .ph .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .chan { display:inline-flex; align-items:center; gap:6px; font-size:12px; border:1px solid var(--line); border-radius:20px; padding:4px 10px; background:#fff; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--ok); display:inline-block; }
+  .dot.off { background:#B8BFCC; }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:9px; padding:7px 12px; font-size:12.5px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .btn.p { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .grow { flex:1; }
+  .content { flex:1; min-height:0; display:flex; gap:14px; padding:14px 24px 18px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; }
+  .list { width:560px; display:flex; flex-direction:column; min-height:0; }
+  .tools { padding:12px 14px 10px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:9px; }
+  .search { border:1px solid var(--line); border-radius:9px; padding:7px 10px; font-size:12.5px; color:#8A92A3; display:flex; gap:8px; align-items:center; }
+  .filters { display:flex; gap:6px; align-items:center; }
+  .f { font-size:11.5px; border:1px solid var(--line); border-radius:7px; padding:4px 9px; }
+  .f.on { background:var(--pfill); border-color:#C9D7EE; color:var(--primary); font-weight:700; }
+  .bucket { font-size:10px; font-weight:800; letter-spacing:.9px; color:var(--muted); padding:10px 16px 4px; }
+  .row { display:flex; gap:11px; padding:10px 14px 10px 13px; border-left:3px solid transparent; border-bottom:1px solid #F0F2F6; }
+  .row .un { width:8px; flex:none; padding-top:6px; } .row .un i { display:block; width:8px; height:8px; border-radius:50%; background:var(--primary); }
+  .row .tx { flex:1; min-width:0; }
+  .row .t { font-size:13px; font-weight:700; }
+  .row.read .t { font-weight:500; color:#3B4252; }
+  .row .m { font-size:11.8px; color:#4B5465; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .meta { display:flex; gap:6px; align-items:center; margin-top:5px; font-size:11px; color:var(--muted); }
+  .row.sel { background:var(--pfill); border-left-color:var(--primary); }
+  .case { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; border-radius:6px; padding:1px 7px; }
+  .case.h { background:#EAF0F9; color:var(--hukuk); } .case.i { background:var(--amberF); color:var(--icra); } .case.c { background:#FBEDEC; color:var(--ceza); }
+  .case.none { background:#F1F3F7; color:var(--muted); font-weight:600; }
+  .src { font-size:10px; font-weight:700; color:#5E6677; border:1px solid var(--line); border-radius:5px; padding:0 5px; }
+  .time { margin-left:auto; font-size:11px; color:var(--muted); white-space:nowrap; }
+  .detail { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .dh { padding:18px 22px 14px; border-bottom:1px solid var(--line); }
+  .dh .k { font-size:10.5px; font-weight:800; letter-spacing:.9px; color:var(--muted); }
+  .dh h3 { margin:6px 0 8px; font-size:19px; }
+  .dh .line { display:flex; gap:10px; align-items:center; font-size:12px; color:var(--muted); flex-wrap:wrap; }
+  .db { padding:18px 22px; font-size:13.5px; line-height:1.65; color:#2A3040; }
+  .quote { background:#F7F8FA; border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .linked { margin-top:16px; border:1px solid #C9D7EE; background:#F6F9FE; border-radius:10px; padding:12px 14px; display:flex; align-items:center; gap:12px; }
+  .linked .no { font-family:Consolas,monospace; font-weight:700; font-size:15px; }
+  .linked .s { font-size:12px; color:var(--muted); }
+  .acts { margin-top:auto; padding:12px 22px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; }
+  .note { margin-left:auto; font-size:11.5px; color:var(--muted); }
+  .hint { background:#FFFBEA; border:1px solid #EAD89A; border-radius:10px; padding:10px 12px; font-size:11.5px; color:#5C4A12; line-height:1.45; margin-top:14px; }
+  .hint b { display:block; margin-bottom:2px; }
+  .pair { width:1440px; margin:0 auto 34px; display:flex; gap:26px; align-items:flex-start; }
+  .lbl { font-size:12px; color:#2A3040; margin:0 0 8px; font-weight:700; } .lbl small { font-weight:400; color:#4B5465; }
+  .shadow { box-shadow:0 20px 60px rgba(20,30,50,.22); }
+  .casep { width:690px; overflow:hidden; }
+  .tabs { display:flex; gap:22px; padding:0 18px; border-bottom:1px solid var(--line); font-size:13px; color:var(--muted); }
+  .tabs span { padding:11px 0 9px; } .tabs .on { color:var(--ink); font-weight:700; border-bottom:2.5px solid var(--primary); }
+  .tabs small { color:var(--muted); font-weight:400; margin-left:3px; }
+  .newb { font-size:9.5px; font-weight:800; color:#fff; background:var(--primary); border-radius:8px; padding:1px 6px; margin-left:5px; }
+  .home { width:380px; padding:14px 16px; }
+  .home .k { font-size:10.5px; font-weight:800; letter-spacing:.9px; color:var(--muted); display:flex; } .home .k a { margin-left:auto; color:var(--primary); font-weight:700; letter-spacing:0; }
+  .home .r { display:flex; gap:10px; padding:9px 0; border-bottom:1px solid #F0F2F6; font-size:12.5px; }
+  .home .r:last-child { border-bottom:0; }
+  .phone { width:300px; height:620px; border-radius:30px; border:9px solid #1E2330; background:var(--page); overflow:hidden; display:flex; flex-direction:column; flex:none; }
+  .phone .top { background:#fff; padding:12px 14px 10px; border-bottom:1px solid var(--line); }
+  .phone .top b { font-size:15px; } .phone .top .s { font-size:10.5px; color:var(--muted); }
+  .phone .row { padding:9px 10px 9px 9px; background:#fff; } .phone .row .t { font-size:12px; } .phone .row .m { font-size:10.8px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+</style>
+</head>
+<body>
+
+<h2 class="cap">1 · UYAP Bildirimleri sayfası <small>UYAP Mobil ve web portalından gelenler tek listede; her bildirim dosyasına bağlı, okundu işareti UYAP ile eşit</small></h2>
+<div class="win">
+  <div class="tb">Folio <span class="r">— ▢ ✕</span></div>
+  <div class="body">
+    <div class="side">
+      <div class="btn1">+ Yeni belge</div>
+      <div class="nav"><span class="ms">home</span>Ana sayfa</div>
+      <div class="nav"><span class="ms">folder</span>Tüm belgeler</div>
+      <div class="head">BÜRO</div>
+      <div class="nav"><span class="ms">gavel</span>UYAP Dosyalarım<span class="pill b" style="background:var(--pfill);color:var(--primary)">3 yeni</span></div>
+      <div class="nav on"><span class="ms">notifications</span>UYAP Bildirimleri<span class="pill b">6</span></div>
+      <div class="nav"><span class="ms">event</span>Ajanda<span class="pill" style="background:var(--amberF);color:var(--amber)">Bugün 2</span></div>
+      <div class="nav"><span class="ms">mail</span>UETS Tebligatlarım<span class="pill">4</span></div>
+      <div class="nav"><span class="ms">menu_book</span>İçtihat</div>
+    </div>
+    <div class="main">
+      <div class="ph">
+        <div><h1>UYAP Bildirimleri</h1><div class="sub">Son 30 gün · 6 okunmamış · son kontrol 14:32</div></div>
+        <div class="grow"></div>
+        <span class="chan"><i class="dot"></i>UYAP Mobil</span>
+        <span class="chan"><i class="dot"></i>UYAP Web</span>
+        <span class="btn"><span class="ms">done_all</span>Tümünü okundu say</span>
+        <span class="btn p"><span class="ms">sync</span>Yenile</span>
+      </div>
+      <div class="content">
+        <div class="card list">
+          <div class="tools">
+            <div class="search"><span class="ms">search</span>Bildirimlerde ara: dosya no, mahkeme, karar, reddiyat</div>
+            <div class="filters"><span class="f on">Tümü · 42</span><span class="f">Okunmamış · 6</span><span class="f">Dosyası bulunamayan · 2</span><span class="grow"></span><span style="font-size:11px;color:var(--muted)">Türe göre ▾</span></div>
+          </div>
+          <div style="flex:1;overflow:hidden">
+            <div class="bucket">BUGÜN</div>
+            <div class="row sel"><div class="un"><i></i></div><div class="tx">
+              <div class="t">Gerekçeli Karar</div>
+              <div class="m">Antalya 3. Asliye Hukuk Mahkemesi biriminde bulunan 2024/318 sayılı dosyaya gerekçeli karar eklendi.</div>
+              <div class="meta"><span class="case h">⚖ 2024/318 · Antalya 3. Asliye Hukuk</span><span class="src">Mobil</span><span class="src">Web</span><span class="time">14:05</span></div></div></div>
+            <div class="row"><div class="un"><i></i></div><div class="tx">
+              <div class="t">İcra Dosyası Borç Tahsilatı</div>
+              <div class="m">Antalya 6. İcra Dairesi'nin 2025/4410 Esas sayılı dosyasında 18.450,00 TL tahsilat yapıldı.</div>
+              <div class="meta"><span class="case i">⚖ 2025/4410 · Antalya 6. İcra</span><span class="src">Mobil</span><span class="time">11:42</span></div></div></div>
+            <div class="row"><div class="un"><i></i></div><div class="tx">
+              <div class="t">Bilirkişi Raporu Kaydedilmesi</div>
+              <div class="m">Manavgat 2. Asliye Hukuk Mahkemesi birimi, 2025/201 dosyasında bilirkişi raporu kaydedildi.</div>
+              <div class="meta"><span class="case h">⚖ 2025/201 · Manavgat 2. Asliye Hukuk</span><span class="src">Web</span><span class="time">09:18</span></div></div></div>
+            <div class="bucket">DÜN</div>
+            <div class="row read"><div class="un"></div><div class="tx">
+              <div class="t">İstinaf Başvurusu Kaydedilmesi</div>
+              <div class="m">Alanya 1. Asliye Ticaret Mahkemesi biriminde bulunan 2023/77 sayılı dosyada istinaf başvurusu kaydedildi.</div>
+              <div class="meta"><span class="case h">⚖ 2023/77 · Alanya 1. Asliye Ticaret</span><span class="src">Mobil</span><span class="src">Web</span><span class="time">16:30</span></div></div></div>
+            <div class="row read"><div class="un"></div><div class="tx">
+              <div class="t">Vekil Kaydı</div>
+              <div class="m">Kurum adına vekil kaydı yapıldı.</div>
+              <div class="meta"><span class="case none">Dosyası bulunamadı</span><span class="src">Mobil</span><span class="time">10:02</span></div></div></div>
+            <div class="row read"><div class="un"></div><div class="tx">
+              <div class="t">Harç Tahsil Müzekkere Kaydı</div>
+              <div class="m">Antalya 3. Asliye Hukuk Mahkemesi biriminde bulunan 2024/318 sayılı dosyada harç tahsil müzekkeresi kaydedildi.</div>
+              <div class="meta"><span class="case h">⚖ 2024/318 · Antalya 3. Asliye Hukuk</span><span class="src">Web</span><span class="time">09:47</span></div></div></div>
+          </div>
+        </div>
+        <div class="card detail">
+          <div class="dh">
+            <div class="k">BİLDİRİM · 07.10.2026 14:05</div>
+            <h3>Gerekçeli Karar</h3>
+            <div class="line"><span class="src">UYAP Mobil</span><span class="src">UYAP Web</span><span>İki kanaldan da geldi, bir kez gösteriliyor</span></div>
+          </div>
+          <div class="db">
+            <div class="quote">Antalya 3. Asliye Hukuk Mahkemesi biriminde bulunan 2024/318 sayılı dosyaya gerekçeli karar eklenmiştir. Ayrıntılar için dosyayı inceleyiniz.</div>
+            <div class="linked"><span class="ms" style="color:var(--primary);font-size:22px">folder_open</span><div><div class="no">2024/318</div><div class="s">Antalya 3. Asliye Hukuk Mahkemesi · Ortaklığın Giderilmesi · Davacı A. Y****</div></div><span class="grow"></span><span class="btn p"><span class="ms">arrow_forward</span>Dosyaya git</span></div>
+            <div class="hint"><b>Bildirim tebligat değildir</b>UYAP bildirimi bir süre başlatmaz. Kararın tebliği UETS'ten gelince süre orada hesaplanır.</div>
+          </div>
+          <div class="acts">
+            <span class="btn"><span class="ms">mark_email_unread</span>Okunmadı yap</span>
+            <span class="btn"><span class="ms">description</span>Dosyanın evraklarını aç</span>
+            <span class="note">Açınca okundu sayıldı; UYAP Mobil'e de bildirildi.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pair">
+  <div>
+    <p class="lbl">2 · Dosya sayfasında "Bildirimler" sekmesi <small>o dosyanın bildirimleri; yeni gelen sekmede sayılır</small></p>
+    <div class="card casep shadow">
+      <div class="tabs"><span>Evraklar<small>412</small></span><span class="on">Bildirimler<small>9</small><span class="newb">1 yeni</span></span><span>Duruşmalar</span><span>Süreler &amp; Tebligat<small>2</small></span><span>Taraflar<small>5</small></span><span>Künye</span></div>
+      <div class="row"><div class="un"><i></i></div><div class="tx"><div class="t">Gerekçeli Karar</div><div class="m">… 2024/318 sayılı dosyaya gerekçeli karar eklendi.</div><div class="meta"><span class="src">Mobil</span><span class="src">Web</span><span class="time">Bugün 14:05</span></div></div></div>
+      <div class="row read"><div class="un"></div><div class="tx"><div class="t">Harç Tahsil Müzekkere Kaydı</div><div class="m">… 2024/318 sayılı dosyada harç tahsil müzekkeresi kaydedildi.</div><div class="meta"><span class="src">Web</span><span class="time">Dün 09:47</span></div></div></div>
+      <div class="row read"><div class="un"></div><div class="tx"><div class="t">Bilirkişi Raporu Kaydedilmesi</div><div class="m">… 2024/318 sayılı dosyada bilirkişi raporu kaydedildi.</div><div class="meta"><span class="src">Mobil</span><span class="time">12.09.2026</span></div></div></div>
+    </div>
+  </div>
+  <div>
+    <p class="lbl">3 · Ana sayfa kartı</p>
+    <div class="card home shadow">
+      <div class="k">UYAP BİLDİRİMLERİ · 6 OKUNMAMIŞ <a>Tümü</a></div>
+      <div class="r"><span class="ms" style="color:var(--primary)">notifications_active</span><div><b>Gerekçeli Karar</b><div style="color:var(--muted);font-size:11.5px">2024/318 · Antalya 3. Asliye Hukuk · 14:05</div></div></div>
+      <div class="r"><span class="ms" style="color:var(--primary)">notifications_active</span><div><b>İcra Dosyası Borç Tahsilatı</b><div style="color:var(--muted);font-size:11.5px">2025/4410 · Antalya 6. İcra · 11:42</div></div></div>
+      <div class="r"><span class="ms" style="color:var(--primary)">notifications_active</span><div><b>Bilirkişi Raporu Kaydedilmesi</b><div style="color:var(--muted);font-size:11.5px">2025/201 · Manavgat 2. Asliye Hukuk · 09:18</div></div></div>
+    </div>
+  </div>
+  <div>
+    <p class="lbl">4 · Telefon</p>
+    <div class="phone">
+      <div class="top"><b>UYAP Bildirimleri</b><div class="s">6 okunmamış · son kontrol 14:32</div></div>
+      <div class="bucket">BUGÜN</div>
+      <div class="row"><div class="un"><i></i></div><div class="tx"><div class="t">Gerekçeli Karar</div><div class="m">Antalya 3. Asliye Hukuk Mahkemesi biriminde bulunan 2024/318 sayılı dosyaya gerekçeli karar eklendi.</div><div class="meta"><span class="case h">2024/318</span><span class="time">14:05</span></div></div></div>
+      <div class="row"><div class="un"><i></i></div><div class="tx"><div class="t">İcra Dosyası Borç Tahsilatı</div><div class="m">Antalya 6. İcra Dairesi'nin 2025/4410 Esas sayılı dosyasında tahsilat yapıldı.</div><div class="meta"><span class="case i">2025/4410</span><span class="time">11:42</span></div></div></div>
+      <div class="bucket">DÜN</div>
+      <div class="row read"><div class="un"></div><div class="tx"><div class="t">İstinaf Başvurusu Kaydedilmesi</div><div class="m">Alanya 1. Asliye Ticaret Mahkemesi 2023/77 dosyasında istinaf başvurusu kaydedildi.</div><div class="meta"><span class="case h">2023/77</span><span class="time">16:30</span></div></div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
