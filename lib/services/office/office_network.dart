@@ -16,6 +16,7 @@ import 'office_ledger.dart';
 import 'office_link.dart';
 import 'office_pairing.dart';
 import 'office_peer.dart';
+import 'office_task.dart';
 import 'office_transfer.dart';
 
 /// The office's network (docs/buro.md): this Folio announced on the local
@@ -29,10 +30,15 @@ class OfficeNetwork extends ChangeNotifier {
     Future<File> Function()? settings,
     KnownDevices? known,
     OfficeLedger? ledger,
+    OfficeTasks? tasks,
     this.platformName,
   }) : _settingsFile = settings ?? _defaultSettings,
        _known = known ?? KnownDevices(),
-       ledger = ledger ?? OfficeLedger();
+       ledger = ledger ?? OfficeLedger(),
+       tasks = tasks ?? OfficeTasks();
+
+  /// The tasks this device gives or was given.
+  final OfficeTasks tasks;
 
   /// The office this device belongs to, if it does (docs/buro.md, Büro
   /// yönetimi).
@@ -223,6 +229,18 @@ class OfficeNetwork extends ChangeNotifier {
     late final StreamSubscription<Map<String, Object?>> first;
     first = ch.messages.listen((m) async {
       await first.cancel();
+      if (m['t'] == 'gorev') {
+        final theirs = OfficeTask.fromJson(m['gorev']);
+        if (theirs != null &&
+            await tasks.merge(theirs, from: ch.peer.deviceId)) {
+          notifyListeners();
+        }
+        final mine = theirs == null ? null : tasks.of(theirs.id);
+        await ch.send({'t': 'gorev', 'gorev': mine?.toJson()});
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await ch.close();
+        return;
+      }
       if (m['t'] == 'defter') {
         await _ledgerCame(m['kayit']);
         await ch.send({'t': 'defter', 'kayit': ledger.records});
@@ -302,6 +320,138 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   final _ledgerSynced = <String>{};
+
+  /// Whether this device may give a task to [to]: a manager to anyone, a
+  /// lawyer to themself, a trainee or a secretary; no one else.
+  bool mayGive(String to) {
+    final me = ledger.member(_self?.deviceId ?? '');
+    final them = ledger.member(to);
+    if (me == null || them == null) return false;
+    return switch (me.role) {
+      OfficeRole.manager => true,
+      OfficeRole.lawyer =>
+        them.deviceId == me.deviceId ||
+            them.role == OfficeRole.trainee ||
+            them.role == OfficeRole.secretary,
+      _ => false,
+    };
+  }
+
+  /// Gives a task; why not, in the user's words, when it cannot be.
+  Future<String?> giveTask({
+    required String title,
+    required List<String> to,
+    String note = '',
+    DateTime? due,
+    TaskPriority priority = TaskPriority.normal,
+    List<TaskCase> cases = const [],
+  }) async {
+    final self = _self;
+    if (self == null) return 'Önce büro ağına katılın.';
+    if (title.trim().isEmpty) return 'Görevin ne olduğunu yazın.';
+    if (to.isEmpty) return 'Görevin kime verileceğini seçin.';
+    for (final id in to) {
+      if (!mayGive(id)) {
+        final who = ledger.member(id)?.name ?? 'bu kişi';
+        return '$who için görev verme yetkiniz yok.';
+      }
+    }
+    // A trainee's work is under a lawyer: the giver, unless a trainee.
+    final trainee = to.any(
+      (id) => ledger.member(id)?.role == OfficeRole.trainee,
+    );
+    final task = OfficeTask(
+      id: OfficeTask.newId(),
+      title: title.trim(),
+      by: self.deviceId,
+      byName: self.name,
+      assignees: {for (final id in to) id: ledger.member(id)?.name ?? ''},
+      createdAt: DateTime.now(),
+      note: note.trim(),
+      due: due,
+      priority: priority,
+      cases: cases,
+      supervisor: trainee ? self.name : '',
+    );
+    task.events.add(
+      TaskEvent.create(TaskEventKind.given, self.deviceId, self.name),
+    );
+    await tasks.put(task);
+    notifyListeners();
+    unawaited(_shareTask(task));
+    return null;
+  }
+
+  /// Something done in a task by this device: said to the others in it.
+  Future<String?> act(
+    OfficeTask task,
+    TaskEventKind kind, {
+    String text = '',
+    int? percent,
+    String? itemId,
+    List<String> files = const [],
+  }) async {
+    final self = _self;
+    if (self == null) return 'Önce büro ağına katılın.';
+    if ((kind == TaskEventKind.returned || kind == TaskEventKind.cancelled) &&
+        text.trim().isEmpty) {
+      return 'Nedenini yazın.';
+    }
+    final ok = await tasks.add(
+      task,
+      TaskEvent.create(
+        kind,
+        self.deviceId,
+        self.name,
+        text: text.trim(),
+        percent: percent,
+        itemId: itemId,
+        files: files,
+      ),
+    );
+    if (!ok) return 'Bunu bu görevde yapamazsınız.';
+    notifyListeners();
+    unawaited(_shareTask(task));
+    return null;
+  }
+
+  Future<void> _shareTask(OfficeTask task) async {
+    for (final id in task.people) {
+      final peer = _peers[id];
+      if (id != _self?.deviceId && peer != null && peer.online) {
+        await _syncTask(peer, task);
+      }
+    }
+  }
+
+  Future<void> _syncTask(OfficePeer peer, OfficeTask task) async {
+    final identity = _identity, host = peer.host;
+    final trusted = await _trusted(peer.deviceId);
+    if (identity == null || host == null || trusted == null) return;
+    try {
+      final ch = await OfficeChannel.open(
+        identity: identity,
+        peer: trusted,
+        host: host,
+        port: peer.port,
+      );
+      final reply = ch.messages.first.timeout(const Duration(seconds: 10));
+      await ch.send({'t': 'gorev', 'gorev': task.toJson()});
+      final m = await reply;
+      await ch.close();
+      final theirs = OfficeTask.fromJson(m['gorev']);
+      if (theirs != null && await tasks.merge(theirs, from: peer.deviceId)) {
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  /// Every task shared with [peer], when it comes on the network.
+  Future<void> _syncTasks(OfficePeer peer) async {
+    for (final t in tasks.all) {
+      if (t.people.contains(peer.deviceId)) await _syncTask(peer, t);
+    }
+  }
 
   Future<String?> foundOffice(String name) async {
     final identity = _identity, self = _self;
@@ -423,6 +573,7 @@ class OfficeNetwork extends ChangeNotifier {
       _identity ??= await OfficeIdentity.load();
       await _loadKnown();
       await ledger.load();
+      await tasks.load();
       // Where the others will reach this Folio; what is said there comes in
       // the next step (docs/buro.md, Aktarım), till then it hangs up.
       // Both families: the others may find this one by either address.
@@ -550,7 +701,7 @@ class OfficeNetwork extends ChangeNotifier {
         if (peer.host != null &&
             isTrusted(peer.deviceId) &&
             _ledgerSynced.add(peer.deviceId)) {
-          unawaited(_syncLedger(peer));
+          unawaited(_syncLedger(peer).then((_) => _syncTasks(peer)));
         }
       case BonsoirDiscoveryServiceLostEvent(:final service):
         final id =
@@ -587,6 +738,7 @@ class OfficeNetwork extends ChangeNotifier {
     _identity = identity;
     await _loadKnown();
     await ledger.load();
+    await tasks.load();
     _server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     _server!.listen(_opened);
     _self = OfficePeer(
