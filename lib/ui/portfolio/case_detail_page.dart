@@ -88,9 +88,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   static final _lastShown = <String, String>{};
   String? _shownKey;
 
-  /// Whether the preview is beside the list; closed, the list takes the
-  /// width, and choosing a document opens it again. Kept while Folio runs.
-  static bool _previewOpen = true;
+  /// Whether the preview is beside the list: closed when the page opens,
+  /// the list taking the width, and opened by choosing a document.
+  bool _previewOpen = false;
 
   /// The document being fetched from UYAP to be shown.
   String? _fetchingKey;
@@ -546,9 +546,12 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     _lastTap = again ? null : (key: d.key, at: now);
     if (again) {
       unawaited(_open(d));
-    } else {
-      _show(d);
+      return;
     }
+    _show(d);
+    // A click is asking to see it: fetched at once when it is not here.
+    // The arrows only show what is here, not to ask UYAP for every one.
+    if (!_downloaded(d)) unawaited(_fetchShown(d));
   }
 
   ({String key, DateTime at})? _lastTap;
@@ -566,7 +569,11 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   /// [d] fetched from UYAP to be shown; the list can be gone through
   /// meanwhile.
   Future<void> _fetchShown(UyapCaseDocument d) async {
-    if (_fetchingKey != null) return;
+    // One at a time; the last one asked for meanwhile comes after.
+    if (_fetchingKey != null) {
+      _fetchNext = d;
+      return;
+    }
     if (!_c.connected) {
       PortalSync.begin();
       if (!await connectUyapMobile(context, api: UyapMobileApi.instance)) {
@@ -580,7 +587,17 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     } finally {
       if (mounted) setState(() => _fetchingKey = null);
     }
+    final next = _fetchNext;
+    _fetchNext = null;
+    if (mounted &&
+        next != null &&
+        next.key == _shownKey &&
+        !_downloaded(next)) {
+      await _fetchShown(next);
+    }
   }
+
+  UyapCaseDocument? _fetchNext;
 
   /// The document of [key], among the documents or their attachments.
   UyapCaseDocument? _documentOf(String? key) {
@@ -1744,7 +1761,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ),
         decoration: BoxDecoration(
           color: shown
-              ? scheme.primaryContainer.withValues(alpha: .45)
+              ? scheme.primary.withValues(alpha: .1)
               : fresh
               ? const Color(0xFFF6F9FE)
               : null,

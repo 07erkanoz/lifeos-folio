@@ -271,12 +271,17 @@ void main() {
       'the arrows go through it and the preview folds away', (tester) async {
     await pumpCase(tester, const Size(1440, 900));
     expect(tester.takeException(), isNull);
-    expect(find.text('Önizlemek için soldan bir evrak seçin.'), findsOneWidget);
+    // Closed until a document is chosen: the list has the width.
+    expect(find.byKey(const ValueKey('case-preview-show')), findsOneWidget);
+    expect(find.byKey(const ValueKey('case-preview-title')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('case-doc-b')));
     await tester.pump();
     final title = find.byKey(const ValueKey('case-preview-title'));
     expect(tester.widget<Text>(title).data, 'Bilirkişi Raporu');
-    // Not on this computer: fetched when asked, not when chosen.
+    // Not on this computer: a click asks UYAP for it; with no UYAP here it
+    // stays to be fetched, and the arrows do not ask for the others.
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.textContaining('UYAP Mobil girişi'), findsOneWidget);
     expect(find.text('Bu evrak henüz indirilmedi'), findsOneWidget);
     expect(find.byKey(const ValueKey('case-preview-fetch')), findsOneWidget);
     expect(find.byKey(const ValueKey('case-doc-list')), findsOneWidget);
