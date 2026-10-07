@@ -149,7 +149,7 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   void _show(Chat chat) {
-    unawaited(_net.chats.markRead(chat));
+    unawaited(_net.markRead(chat));
     if (MediaQuery.sizeOf(context).width < 900) {
       unawaited(
         Navigator.of(context).push(

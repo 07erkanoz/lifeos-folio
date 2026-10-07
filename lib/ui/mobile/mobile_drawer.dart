@@ -22,6 +22,8 @@ class MobileDrawer extends StatelessWidget {
     this.agendaToday = 0,
     this.uetsUnread = 0,
     this.uyapNotices = 0,
+    this.messagesUnread = 0,
+    this.tasksOpen = 0,
     this.uyapCases = 0,
     this.sync,
   });
@@ -34,6 +36,7 @@ class MobileDrawer extends StatelessWidget {
   final VoidCallback onConnectMobile, onConnectWeb, onConnectUets;
   final VoidCallback onSyncComputer;
   final int agendaToday, uetsUnread, uyapCases, uyapNotices;
+  final int messagesUnread, tasksOpen;
   final PortalSync? sync;
 
   Widget _section(String text) => Padding(
@@ -224,6 +227,13 @@ class MobileDrawer extends StatelessWidget {
                           icon: const Icon(Icons.task_alt_rounded),
                           label: 'Görevler',
                           selected: !home && group == 'gorevler',
+                          trailing: tasksOpen > 0
+                              ? _pill(
+                                  '$tasksOpen',
+                                  AgendaColors.hearing,
+                                  Colors.white,
+                                )
+                              : null,
                           onTap: () => onGroup('gorevler'),
                         ),
                         _item(
@@ -232,6 +242,13 @@ class MobileDrawer extends StatelessWidget {
                           icon: const Icon(Icons.forum_outlined),
                           label: 'Mesajlar',
                           selected: !home && group == 'mesajlar',
+                          trailing: messagesUnread > 0
+                              ? _pill(
+                                  '$messagesUnread',
+                                  AgendaColors.deadline,
+                                  Colors.white,
+                                )
+                              : null,
                           onTap: () => onGroup('mesajlar'),
                         ),
                         _item(

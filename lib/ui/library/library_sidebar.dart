@@ -48,6 +48,9 @@ class LibrarySidebar extends StatelessWidget {
   /// UYAP's notifications not yet read, for the badge beside them.
   final int uyapNotices;
 
+  /// The office's unread messages and the open tasks given to this user.
+  final int messagesUnread, tasksOpen;
+
   /// Widens the panel folded on the UYAP pages, or folds it again; null
   /// where the window's width decides alone.
   final VoidCallback? onTogglePanel;
@@ -71,6 +74,8 @@ class LibrarySidebar extends StatelessWidget {
     this.agendaToday = 0,
     this.uetsUnread = 0,
     this.uyapNotices = 0,
+    this.messagesUnread = 0,
+    this.tasksOpen = 0,
     this.onTogglePanel,
   });
 
@@ -232,6 +237,9 @@ class LibrarySidebar extends StatelessWidget {
                   'gorevler',
                   null,
                   key: const ValueKey('tasks-nav'),
+                  badge: tasksOpen > 0
+                      ? _badge(context, '$tasksOpen', danger: false)
+                      : null,
                 ),
                 _nav(
                   context,
@@ -240,6 +248,9 @@ class LibrarySidebar extends StatelessWidget {
                   'mesajlar',
                   null,
                   key: const ValueKey('messages-nav'),
+                  badge: messagesUnread > 0
+                      ? _badge(context, '$messagesUnread', danger: true)
+                      : null,
                 ),
                 const SizedBox(height: 14),
                 if (!compact)

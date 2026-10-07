@@ -598,6 +598,12 @@ class OfficeNetwork extends ChangeNotifier {
     });
   }
 
+  /// A talk was opened and read: its count in the menus goes.
+  Future<void> markRead(Chat chat) async {
+    await chats.markRead(chat);
+    notifyListeners();
+  }
+
   OfficeMember? get _me => ledger.member(_self?.deviceId ?? '');
 
   /// The private talk with [deviceId], made if there is none yet.

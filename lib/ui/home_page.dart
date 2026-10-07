@@ -716,6 +716,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       OfficeNetwork.instance.incoming.addListener(_pairingAsked);
       OfficeNetwork.instance.incomingOffer.addListener(_offerCame);
       tellOffice(OfficeNetwork.instance);
+      OfficeNetwork.instance.addListener(_officeCounted);
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
       PortalSync.instance.noticesVersion.addListener(_portalSynced);
@@ -838,6 +839,25 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
+  int _officeUnread = 0, _officeTasks = 0;
+
+  /// The office's counts for the menus, redrawn only when they change: the
+  /// network speaks often, a transfer's progress at every piece.
+  void _officeCounted() {
+    final net = OfficeNetwork.instance;
+    final me = net.self?.deviceId ?? '';
+    final unread = net.chats.unreadAll(me);
+    final open = net.tasks.all
+        .where((t) => t.open && t.assignees.containsKey(me))
+        .length;
+    if (mounted && (unread != _officeUnread || open != _officeTasks)) {
+      setState(() {
+        _officeUnread = unread;
+        _officeTasks = open;
+      });
+    }
+  }
+
   /// A known device offers files: asked wherever the user is.
   void _offerCame() {
     final net = OfficeNetwork.instance;
@@ -862,6 +882,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
+    OfficeNetwork.instance.removeListener(_officeCounted);
     OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
     _stopPreviewSpeech();
     UpdateCheck.instance.available.removeListener(_updateAvailable);
@@ -2191,6 +2212,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     agendaToday: _agendaToday,
     uetsUnread: _uetsUnread,
     uyapNotices: _uyapNoticesUnread,
+    messagesUnread: _officeUnread,
+    tasksOpen: _officeTasks,
     uyapAvailable: true,
     showHome: !(Platform.isAndroid || Platform.isIOS),
     uyapFresh: _uyapFresh,
@@ -2212,6 +2235,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     agendaToday: _agendaToday,
     uetsUnread: _uetsUnread,
     uyapNotices: _uyapNoticesUnread,
+    messagesUnread: _officeUnread,
+    tasksOpen: _officeTasks,
     uyapCases: _portfolioOpen ?? _uyapCases.length,
     onHome: () {
       _closeDrawer();
