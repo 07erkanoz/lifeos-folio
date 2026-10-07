@@ -8,13 +8,16 @@ import 'package:path/path.dart' as p;
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
+import '../../services/portal/portal_deadline.dart';
 import '../../services/portal/portal_sync.dart';
+import '../../services/uets/notice_deadlines.dart';
 import '../../services/uets/notice_matcher.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import 'agenda_page.dart' show AgendaColors;
 import '../mobile/scroll_chrome.dart';
 import 'channel_bar.dart';
+import 'deadline_review.dart';
 import 'uets_connect.dart';
 
 enum _Filter { all, unread, untied }
@@ -55,7 +58,7 @@ class _UetsPageState extends State<UetsPage> {
   PortalDatabase? _db;
   List<KeptNotice> _notices = const [];
   Map<String, PortalCase> _cases = const {};
-  List<AgendaItem> _deadlines = const [];
+  List<KeptDeadline> _deadlines = const [];
   _Filter _filter = _Filter.all;
   String? _selected;
   final Map<String, List<UetsPart>> _parts = {};
@@ -119,10 +122,7 @@ class _UetsPageState extends State<UetsPage> {
     setState(() {
       _notices = db.notices();
       _cases = db.cases();
-      _deadlines = [
-        for (final i in db.agenda())
-          if (i.id.startsWith('uets:')) i,
-      ];
+      _deadlines = db.deadlines();
       if (_selected == null ||
           !_notices.any((n) => n.message.id == _selected)) {
         _selected = _notices.firstOrNull?.message.id;
@@ -388,11 +388,11 @@ class _UetsPageState extends State<UetsPage> {
       return s != null && !s.isBefore(today.subtract(const Duration(days: 6)));
     }).length;
     final untied = _notices.where((n) => n.caseKey == null).length;
+    // Only what the lawyer confirmed or gave a day counts, as on the agenda.
     final soon = _deadlines.where((d) {
-      final at = d.at;
-      return !d.done &&
-          at != null &&
-          !at.isBefore(today) &&
+      if (!d.onAgenda || (d.user?.done ?? false)) return false;
+      final at = DateTime.parse(d.day!);
+      return !at.isBefore(today) &&
           at.isBefore(today.add(const Duration(days: 8)));
     }).length;
     Widget stat(IconData icon, Color fill, Color tint, int value, String l) =>
@@ -721,8 +721,9 @@ class _UetsPageState extends State<UetsPage> {
     final kase = n.caseKey == null ? null : _cases[n.caseKey];
     final deadlines = [
       for (final d in _deadlines)
-        if (d.id.startsWith('uets:${m.id}:')) d,
-    ]..sort((a, b) => a.at!.compareTo(b.at!));
+        if (d.record.noticeId == m.id) d,
+    ];
+    final manifest = _db?.manifest(m.id);
     Widget row(String label, String value) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -881,51 +882,63 @@ class _UetsPageState extends State<UetsPage> {
               _kicker('SÜRELER'),
               const SizedBox(height: 8),
               if (deadlines.isEmpty)
-                const Text(
-                  'Belge türü konudan kesin anlaşılmadı; süreyi ajandada '
-                  '“Not / iş ekle → Süre” ile hesaplayabilirsiniz.',
-                  style: TextStyle(fontSize: 12, color: AgendaColors.muted),
-                )
-              else
-                for (final d in deadlines)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 3,
-                          height: 30,
-                          color: AgendaColors.deadline,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                d.title,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                  decoration: d.done
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                ),
-                              ),
-                              Text(
-                                'Son gün ${_date(d.at)}',
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  color: AgendaColors.deadlineText,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                Text(
+                  switch (manifest?.state) {
+                    'alinmadi' || null =>
+                      'Ekler henüz alınmadı; bir sonraki eşitlemede alınır ve '
+                          'süreler hesaplanır.',
+                    'hata' => 'Ekler UETS’ten alınamadı; yeniden denenecek.',
+                    'bos' => 'Tebligatta ek yok; süre hesaplanamadı.',
+                    _ =>
+                      'Eklerin adından süre doğuran bir belge türü '
+                          'anlaşılmadı; süreyi ajandada “Not / iş ekle → '
+                          'Süre” ile hesaplayabilirsiniz.',
+                  },
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AgendaColors.muted,
                   ),
+                )
+              else ...[
+                const Text(
+                  'Süreler siz onaylayana kadar ajandaya ve sayaçlara girmez.',
+                  style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+                ),
+                for (final d in deadlines)
+                  DeadlineReviewTile(
+                    deadline: d,
+                    onConfirm:
+                        d.confirmed ||
+                            d.record.state != 'aday' ||
+                            d.record.dueDay == null
+                        ? null
+                        : () {
+                            _db?.confirmDeadline(d.record.id);
+                            _reload();
+                            widget.onChanged?.call();
+                          },
+                    onSetDay: () async {
+                      final day = await askDeadlineDay(context, d);
+                      final db = _db;
+                      if (day == null || db == null) return;
+                      db.saveDeadlineUser(
+                        (d.user ?? DeadlineUser(deadlineId: d.record.id))
+                            .copyWith(manualDay: day),
+                      );
+                      _reload();
+                      widget.onChanged?.call();
+                    },
+                    onDismiss: () {
+                      _db?.removeAgenda(d.record.id);
+                      _reload();
+                      widget.onChanged?.call();
+                    },
+                    onDetails: () {
+                      final db = _db;
+                      if (db != null) showDeadlineDetails(context, db, d);
+                    },
+                  ),
+              ],
             ],
           ),
         ),
@@ -1169,7 +1182,11 @@ class _UetsPageState extends State<UetsPage> {
     );
     if (chosen == null) return;
     db.linkNotice(n.message.id, chosen.isEmpty ? null : chosen, 'manual');
-    addNoticeDeadlines(db);
+    refreshNoticeDeadlines(
+      db,
+      parties: NoticeDeadlineContext.parties,
+      lawyer: NoticeDeadlineContext.lawyer,
+    );
     _reload();
     widget.onChanged?.call();
   }

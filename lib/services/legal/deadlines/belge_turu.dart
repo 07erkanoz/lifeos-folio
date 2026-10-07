@@ -15,7 +15,11 @@ enum BelgeTuru {
   // itiraz 7 değil BEŞ gün ve tek değil dört ayrı süre var.
   odemeEmriKambiyo,
   icraEmri,
+  // Its stage unknown: the first, second or third (İİK m.89).
   hacizIhbarnamesi,
+  hacizIhbarnamesiBirinci,
+  hacizIhbarnamesiIkinci,
+  hacizIhbarnamesiUcuncu,
   davaDilekcesi,
   cevapDilekcesi,
   tensipZapti,
@@ -40,6 +44,9 @@ const belgeTuruEtiket = <BelgeTuru, String>{
   BelgeTuru.odemeEmriKambiyo: 'Ödeme Emri (kambiyo)',
   BelgeTuru.icraEmri: 'İcra Emri',
   BelgeTuru.hacizIhbarnamesi: 'Haciz İhbarnamesi',
+  BelgeTuru.hacizIhbarnamesiBirinci: 'Birinci Haciz İhbarnamesi (89/1)',
+  BelgeTuru.hacizIhbarnamesiIkinci: 'İkinci Haciz İhbarnamesi (89/2)',
+  BelgeTuru.hacizIhbarnamesiUcuncu: 'Üçüncü Haciz İhbarnamesi (89/3)',
   BelgeTuru.davaDilekcesi: 'Dava Dilekçesi',
   BelgeTuru.cevapDilekcesi: 'Cevap Dilekçesi',
   BelgeTuru.tensipZapti: 'Tensip Zaptı',
@@ -159,6 +166,9 @@ List<BelgeEylem> belgeTuruEylemleri(BelgeTuru t) {
         ),
       ];
     case BelgeTuru.hacizIhbarnamesi:
+    case BelgeTuru.hacizIhbarnamesiBirinci:
+    case BelgeTuru.hacizIhbarnamesiIkinci:
+    case BelgeTuru.hacizIhbarnamesiUcuncu:
       return const [
         _analizEylem,
         BelgeEylem(
@@ -238,13 +248,13 @@ class BelgeTuruTespit {
     final n = _norm(metin);
     final bas = n.length > 600 ? n.substring(0, 600) : n;
     bool h(String k) => bas.contains(k);
-    if (h('adli tip') || h('bilirkisi rapor') || h('saglik kurulu rapor')) {
+    if (h('adli tip') || h('bilirkisi rapor')) {
       return BelgeTuru.bilirkisiRaporu;
     }
     if (h('gerekceli karar')) return BelgeTuru.gerekceliKarar;
-    if (h('odeme emri')) return BelgeTuru.odemeEmri;
+    if (h('odeme emri')) return _odemeEmri(bas);
     if (h('icra emri')) return BelgeTuru.icraEmri;
-    if (h('haciz ihbarname')) return BelgeTuru.hacizIhbarnamesi;
+    if (h('haciz ihbarname')) return _hacizAsamasi(bas);
     if (h('tensip zapti') || h('tensip tutanag')) return BelgeTuru.tensipZapti;
     if (h('durusma davetiye')) return BelgeTuru.durusmaDavetiyesi;
     if (h('ihtarname')) return BelgeTuru.ihtarname;
@@ -255,26 +265,33 @@ class BelgeTuruTespit {
   static BelgeTuru _tekil(String ad, String? metin) {
     final adL = ad.toLowerCase();
     if (adL.endsWith('.xml')) return BelgeTuru.tebligatZarfi;
-    final s = _norm('$ad ${metin ?? ''}');
+    // UETS writes its documents' names run together ("CevapDilekcesi"):
+    // apart, "cevap dilekce" is found, and the name does not fall through
+    // to the bare "dilekce" of a statement of claim.
+    final words = ad.replaceAllMapped(
+      RegExp(r'([a-zçğıöşü])([A-ZÇĞİÖŞÜ])'),
+      (m) => '${m[1]} ${m[2]}',
+    );
+    final s = _norm('$words ${metin ?? ''}');
     bool h(String k) => s.contains(k);
 
     if (h('dosyabilgileri') || h('ustveri') || h('ust yazi')) {
       return BelgeTuru.tebligatZarfi;
     }
     if (h('tensip')) return BelgeTuru.tensipZapti;
-    if (h('odeme emri')) return BelgeTuru.odemeEmri;
+    if (h('odeme emri') || h('odemeemri')) return _odemeEmri(s);
     if (h('icra emri')) return BelgeTuru.icraEmri;
-    if (h('haciz ihbar')) return BelgeTuru.hacizIhbarnamesi;
+    if (h('haciz ihbar')) return _hacizAsamasi(s);
     // RAPOR AILESI (HMK m.281 -> 2 hafta itiraz). 'adli tip raporu' kurali YOKTU:
     // gelen Adli Tip Raporu tanınmayip metne dusuyor, metinde gecen 'gerekceli'
     // kelimesi yuzunden GEREKCELI KARAR sayilip istinaf/temyiz suresi
     // uretiliyordu. Yanlis kanun yolu = hak kaybi.
-    if (h('bilirkisi') ||
-        h('adli tip') ||
-        h('adlitip') ||
-        h('saglik kurulu rapor') ||
-        h('hesap rapor') ||
-        h('uzman gorus')) {
+    //
+    // A party's expert opinion and a health board's report are not the
+    // court's expert report: HMK m.281's two weeks is not theirs, and they
+    // are left to the lawyer (Folio).
+    if (h('uzman gorus') || h('saglik kurulu rapor')) return BelgeTuru.diger;
+    if (h('bilirkisi') || h('adli tip') || h('adlitip') || h('hesap rapor')) {
       return BelgeTuru.bilirkisiRaporu;
     }
     if (h('istinaf') && (h('karar') || h('ilam'))) {
@@ -299,6 +316,53 @@ class BelgeTuruTespit {
     if (h('dilekce')) return BelgeTuru.davaDilekcesi;
     return BelgeTuru.diger;
   }
+
+  /// A payment order's kind of proceedings from its own words (folded):
+  /// the bills' form (Örnek 10, "kambiyo") or the general one (Örnek 7,
+  /// "genel haciz"); null when it says neither, and then the lawyer is to
+  /// tell, since the deadlines differ (İİK m.62: 7 days; m.168: 5).
+  static BelgeTuru? odemeEmriTakipTuru(String text) {
+    final s = _norm(text);
+    if (s.contains('kambiyo') || _ornek(s, 10)) {
+      return BelgeTuru.odemeEmriKambiyo;
+    }
+    if (s.contains('genel haciz') || _ornek(s, 7)) return BelgeTuru.odemeEmri;
+    return null;
+  }
+
+  static bool _ornek(String folded, int n) => RegExp(
+    r'ornek\s*(no\s*)?[:.]?\s*'
+    '$n'
+    r'(?!\d)',
+  ).hasMatch(folded);
+
+  static BelgeTuru _odemeEmri(String folded) =>
+      odemeEmriTakipTuru(folded) ?? BelgeTuru.odemeEmri;
+
+  /// A garnishment notice's stage (İİK m.89) from its words; the bare kind
+  /// when it says none.
+  static BelgeTuru _hacizAsamasi(String folded) {
+    bool any(List<String> ks) => ks.any(folded.contains);
+    if (any(['ucuncu haciz', '3 haciz', '3. haciz', '89/3', '89 3'])) {
+      return BelgeTuru.hacizIhbarnamesiUcuncu;
+    }
+    if (any(['ikinci haciz', '2 haciz', '2. haciz', '89/2', '89 2'])) {
+      return BelgeTuru.hacizIhbarnamesiIkinci;
+    }
+    if (any(['birinci haciz', '1 haciz', '1. haciz', '89/1', '89 1'])) {
+      return BelgeTuru.hacizIhbarnamesiBirinci;
+    }
+    return BelgeTuru.hacizIhbarnamesi;
+  }
+
+  /// Every document of a notice with the kind its own name gives, in its
+  /// order: a package of a report and an interim decision is two kinds,
+  /// never only the one ranked higher (Folio). The envelope and what tells
+  /// nothing are left out.
+  static List<({BelgeTuru tur, String ad})> ekTurleri(List<String> adlar) => [
+    for (final ad in adlar)
+      if (_tekil(ad, null) case final t when !belirsiz(t)) (tur: t, ad: ad),
+  ];
 
   /// Sunucudan gelen enum ADINI BelgeTuru'ne cevirir. Taninmayan ad -> null
   /// (uydurma yok; cagiran kural sonucunu korur).
@@ -337,7 +401,10 @@ class BelgeTuruTespit {
     BelgeTuru.odemeEmriKambiyo => 92,
     BelgeTuru.odemeEmri ||
     BelgeTuru.icraEmri ||
-    BelgeTuru.hacizIhbarnamesi => 90,
+    BelgeTuru.hacizIhbarnamesi ||
+    BelgeTuru.hacizIhbarnamesiBirinci ||
+    BelgeTuru.hacizIhbarnamesiIkinci ||
+    BelgeTuru.hacizIhbarnamesiUcuncu => 90,
     BelgeTuru.davaDilekcesi || BelgeTuru.cevapDilekcesi => 70,
     BelgeTuru.iddianame => 60,
     BelgeTuru.tensipZapti || BelgeTuru.araKarar => 40,

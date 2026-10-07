@@ -14,12 +14,14 @@ import '../../services/platform/app_directories.dart';
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
+import '../../services/portal/portal_deadline.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../mobile/scroll_chrome.dart';
 import 'channel_bar.dart';
+import 'deadline_review.dart';
 import '../widgets/folio_select.dart';
 
 /// The agenda: the hearings both UYAP portals report, merged, and the
@@ -115,6 +117,9 @@ class _AgendaPageState extends State<AgendaPage> {
   String? _selected;
   List<PortalHearing> _hearings = const [];
   List<AgendaItem> _items = const [];
+
+  /// The notices' deadlines the lawyer is still to look at.
+  List<KeptDeadline> _review = const [];
   Map<String, PortalCase> _cases = const {};
   Timer? _clock;
   String? _caseSyncing;
@@ -224,6 +229,17 @@ class _AgendaPageState extends State<AgendaPage> {
             : today.add(const Duration(days: 30)),
       );
       _items = db.agenda();
+      _review =
+          [
+            for (final d in db.deadlines())
+              if (d.toReview) d,
+          ]..sort((a, b) {
+            final x = a.day, y = b.day;
+            if (x == null || y == null) {
+              return x == null ? (y == null ? 0 : 1) : -1;
+            }
+            return x.compareTo(y);
+          });
       _cases = db.cases();
       final keys = {for (final h in _hearings) h.key};
       if (_selected == null || !keys.contains(_selected)) {
@@ -375,6 +391,10 @@ class _AgendaPageState extends State<AgendaPage> {
                               _prepCard(context),
                               const SizedBox(height: 12),
                               _deadlinesCard(context),
+                              if (_review.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                _reviewCard(context),
+                              ],
                             ],
                           ),
                         ),
@@ -634,6 +654,10 @@ class _AgendaPageState extends State<AgendaPage> {
             _prepCard(sheet),
             const SizedBox(height: 12),
             _deadlinesCard(sheet),
+            if (_review.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _reviewCard(sheet),
+            ],
           ],
         ),
       ),
@@ -1678,6 +1702,74 @@ class _AgendaPageState extends State<AgendaPage> {
     ),
   );
 
+  /// The notices' deadlines not yet on the agenda: each to be confirmed,
+  /// given a day, or set aside by the lawyer, with why it waits.
+  Widget _reviewCard(BuildContext context) {
+    final db = _db;
+    return _card(
+      context,
+      child: Column(
+        key: const ValueKey('agenda-review'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _heading('İNCELENECEK SÜRELER · ${_review.length}'),
+          const Text(
+            'UETS tebligatlarından hesaplanan süreler, siz onaylayana kadar '
+            'ajandaya ve sayaçlara girmez.',
+            style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+          ),
+          for (final d in _review.take(8))
+            DeadlineReviewTile(
+              deadline: d,
+              subtitle: _cases[d.record.caseKey] == null
+                  ? null
+                  : '${_cases[d.record.caseKey]!.court} · '
+                        '${_cases[d.record.caseKey]!.number}',
+              onConfirm:
+                  db == null ||
+                      d.record.state != 'aday' ||
+                      d.record.dueDay == null
+                  ? null
+                  : () {
+                      db.confirmDeadline(d.record.id);
+                      _reload();
+                    },
+              onSetDay: () async {
+                final day = await askDeadlineDay(context, d);
+                if (day == null || db == null) return;
+                db.saveDeadlineUser(
+                  (d.user ?? DeadlineUser(deadlineId: d.record.id)).copyWith(
+                    manualDay: day,
+                  ),
+                );
+                _reload();
+              },
+              onDismiss: () {
+                if (db == null) return;
+                db.removeAgenda(d.record.id);
+                _reload();
+              },
+              onDetails: () {
+                if (db != null) showDeadlineDetails(context, db, d);
+              },
+            ),
+          if (_review.length > 8)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                've ${_review.length - 8} süre daha; UETS sayfasında '
+                'tebligatlarıyla birlikte görünür.',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: AgendaColors.muted,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _deadlinesCard(BuildContext context) {
     final today = _day(_now());
     final soon = [
@@ -2271,7 +2363,9 @@ class _ExcuseDialogState extends State<_ExcuseDialog> {
         ),
         FilledButton(
           key: const ValueKey('excuse-send'),
-          onPressed: text.isEmpty ? null : () => Navigator.of(context).pop(text),
+          onPressed: text.isEmpty
+              ? null
+              : () => Navigator.of(context).pop(text),
           child: const Text('Gönder'),
         ),
       ],

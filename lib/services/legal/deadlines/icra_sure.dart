@@ -38,7 +38,7 @@ Map<String, Object?> icraSureHesapla(Map<String, Object?> g) {
   // İİK m.19: karşılık gelen gün; bulunmazsa o ayın son günü.
   final last = DateTime(d!.year + 1, d.month + 1, 0).day;
   final raw = k == 'gider_tamamlama'
-      ? d.add(const Duration(days: 15))
+      ? DateTime(d.year, d.month, d.day + 15)
       : DateTime(d.year + 1, d.month, d.day > last ? last : d.day);
   final adj = TurkishLegalCalendar.adjustDeadline(
     raw,

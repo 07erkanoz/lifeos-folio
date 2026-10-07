@@ -43,8 +43,8 @@ void main() {
     expect(matchSubject('Duyuru', [a]), isNull);
   });
 
-  test('a manual tie stays; a certain kind of document brings its deadlines '
-      'once', () {
+  test('a manual tie stays; a kind of document brings candidate deadlines '
+      'once, on the agenda only once confirmed', () {
     final db = PortalDatabase.memory();
     addTearDown(db.dispose);
     final c = kase('2025/412', 'Antalya 3. Asliye Hukuk Mahkemesi');
@@ -68,12 +68,25 @@ void main() {
     expect(kept['m1']!.caseKey, c.key);
     expect(kept['m1']!.link, 'auto');
     expect(kept['m2']!.caseKey, 'baska-dosya');
-    final deadlines = db.agenda().where((i) => i.id.startsWith('uets:m1:'));
-    expect(deadlines, isNotEmpty);
+    final made = db.deadlines(noticeId: 'm1');
+    expect(made, isNotEmpty);
     // Served 6 October (five days later); two weeks to appeal: 20 October.
-    expect(deadlines.map((d) => d.at), contains(DateTime(2026, 10, 20)));
-    final count = db.agenda().length;
+    final appeal = made.firstWhere((d) => d.record.ruleId == 'hmk345');
+    expect(appeal.record.dueDay, '2026-10-20');
+    expect(appeal.record.state, 'aday');
+    // Told by the subject alone, and said so.
+    expect(appeal.record.reasons.map((r) => r.code), contains('turKonudan'));
+    // A candidate is not on the agenda, nor counted.
+    expect(db.agenda().where((i) => i.id.startsWith('uets:m1:')), isEmpty);
+    expect(db.confirmDeadline(appeal.record.id), isTrue);
+    expect(
+      db.agenda().where((i) => i.id == appeal.record.id).map((i) => i.at),
+      [DateTime(2026, 10, 20)],
+    );
+    final history = db.deadlineHistory(appeal.record.id).length;
     matchNotices(db, now: DateTime(2026, 10, 6));
-    expect(db.agenda().length, count);
+    // Nothing changed: nothing written, the confirmation stands.
+    expect(db.deadlineHistory(appeal.record.id), hasLength(history));
+    expect(db.deadline(appeal.record.id)!.confirmed, isTrue);
   });
 }

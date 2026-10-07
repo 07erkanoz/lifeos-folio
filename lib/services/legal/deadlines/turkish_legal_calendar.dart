@@ -18,6 +18,7 @@
 // (AvukatOS Hukuk projesinden taşınmıştır.)
 
 import 'mahkeme_kategori.dart';
+import 'legal_day.dart';
 
 /// Süre düzeltme sonucu — ham tarih + nihai tarih + hukuki dayanak notları.
 class DeadlineAdjustment {
@@ -56,6 +57,15 @@ class TurkishLegalCalendar {
   /// The last year the religious holidays are written down at all; after
   /// it a holiday would silently count as a working day (Folio).
   static const int kDiniBayramTabloSonYil = 2030;
+
+  /// The calendar's version, raised whenever a holiday or a rule of it
+  /// changes: a deadline reckoned on another is reckoned again.
+  ///   1 — 2026-10-07: tax recess start (5604 m.1/1), half holidays.
+  static const int takvimSurumu = 1;
+
+  /// The first year whose holidays are written down; before it a holiday
+  /// would count as a working day.
+  static const int kDiniBayramTabloIlkYil = 2024;
 
   /// Takvim verisinin son elle doğrulanma tarihi (kullanıcıya/asistanı bilgi).
   static const String kTakvimSonGuncelleme = '2026-07';
@@ -118,7 +128,7 @@ class TurkishLegalCalendar {
   static DateTime firstBusinessDayOnOrAfter(DateTime d) {
     var x = DateTime(d.year, d.month, d.day);
     while (!isBusinessDay(x)) {
-      x = x.add(const Duration(days: 1));
+      x = DateTime(x.year, x.month, x.day + 1);
     }
     return x;
   }
@@ -130,8 +140,41 @@ class TurkishLegalCalendar {
     return false;
   }
 
-  /// Mali tatil içinde mi? (1–20 Temmuz, 5604 s.K. m.1)
-  static bool inMaliTatil(DateTime d) => d.month == 7 && d.day <= 20;
+  /// The first day of the tax recess (5604 m.1/1): 1 July; but when the
+  /// last day of June is not a working day, the day after July's first
+  /// working day (30 June 2024 a Sunday: 2 July).
+  static DateTime maliTatilBaslangici(int yil) {
+    if (isBusinessDay(DateTime(yil, 6, 30))) return DateTime(yil, 7, 1);
+    final ilk = firstBusinessDayOnOrAfter(DateTime(yil, 7, 1));
+    return DateTime(ilk.year, ilk.month, ilk.day + 1);
+  }
+
+  /// Whether [yil]'s recess starts late (see [maliTatilBaslangici]): the
+  /// law moves the start but says nothing of the end, which is kept on 20
+  /// July here, the earlier end and so the safe one, and said so.
+  static bool maliTatilBaslangiciKaydi(int yil) =>
+      maliTatilBaslangici(yil) != DateTime(yil, 7, 1);
+
+  /// Mali tatil içinde mi? (5604 s.K. m.1: [maliTatilBaslangici] – 20 Temmuz)
+  static bool inMaliTatil(DateTime d) {
+    if (d.month != 7 || d.day > 20) return false;
+    return !DateTime(
+      d.year,
+      d.month,
+      d.day,
+    ).isBefore(maliTatilBaslangici(d.year));
+  }
+
+  /// A half holiday (2429 m.2): the eve of each religious holiday and 28
+  /// October, a holiday from 13.00. A last day on one is not moved, since
+  /// the morning is a working day, but it is said, since a filing in person
+  /// and one through UYAP may not end at the same hour.
+  static bool isYarimGun(DateTime d) {
+    if (d.month == 10 && d.day == 28) return true;
+    final next = DateTime(d.year, d.month, d.day + 1);
+    return _diniBayramlar.contains(_key(next)) &&
+        !_diniBayramlar.contains(_key(d));
+  }
 
   /// Mali tatil DURMASI (5604 s.K. m.1/3): vergiyle ilgili dava açma süreleri
   /// mali tatil süresince İŞLEMEZ. [baslangic]→[ham] aralığında mali tatile
@@ -146,16 +189,16 @@ class TurkishLegalCalendar {
   ) {
     final b = DateTime(baslangic.year, baslangic.month, baslangic.day);
     final h = DateTime(ham.year, ham.month, ham.day);
-    final toplamGun = h.difference(b).inDays;
+    final toplamGun = LegalDay.of(h).daysSince(LegalDay.of(b));
     if (toplamGun <= 0) return (tarih: h, durmaGunu: 0);
     // Süreyi gün gün yürüt; mali tatile düşen gün SAYILMAZ (işlemez).
     var sayilan = 0;
     var d = b;
     while (sayilan < toplamGun) {
-      d = d.add(const Duration(days: 1));
+      d = DateTime(d.year, d.month, d.day + 1);
       if (!inMaliTatil(d)) sayilan++;
     }
-    return (tarih: d, durmaGunu: d.difference(h).inDays);
+    return (tarih: d, durmaGunu: LegalDay.of(d).daysSince(LegalDay.of(h)));
   }
 
   /// Mahkeme adından kategori türet (kategori elde yoksa).
@@ -206,12 +249,12 @@ class TurkishLegalCalendar {
   static DateTime? _tatilUzatmasi(DateTime tatilSonu, MahkemeKategorisi? k) {
     switch (k) {
       case MahkemeKategorisi.hukuk:
-        return tatilSonu.add(const Duration(days: 7));
+        return DateTime(tatilSonu.year, tatilSonu.month, tatilSonu.day + 7);
       case MahkemeKategorisi.idare:
       case MahkemeKategorisi.vergi:
-        return tatilSonu.add(const Duration(days: 7));
+        return DateTime(tatilSonu.year, tatilSonu.month, tatilSonu.day + 7);
       case MahkemeKategorisi.ceza:
-        return tatilSonu.add(const Duration(days: 3));
+        return DateTime(tatilSonu.year, tatilSonu.month, tatilSonu.day + 3);
       case MahkemeKategorisi.icra:
       case MahkemeKategorisi.bilinmeyen:
       case null:
@@ -245,7 +288,7 @@ class TurkishLegalCalendar {
       if (m.durmaGunu > 0) {
         effective = m.tarih;
         notes.add(
-          'Mali tatil (1–20 Temmuz) süresince vergiyle ilgili dava '
+          'Mali tatil (${_gun(maliTatilBaslangici(effective.year))}–20 Temmuz) süresince vergiyle ilgili dava '
           'açma süresi işlemez; süre ${m.durmaGunu} gün ileri gitti '
           '(5604 s.K. m.1/3).',
         );
@@ -343,6 +386,13 @@ class TurkishLegalCalendar {
         'bitiminde sona erer (HMK m.93 / CMK m.39 / İYUK m.8).',
       );
       effective = shifted;
+    }
+
+    if (isYarimGun(effective)) {
+      notes.add(
+        'Son gün yarım gün (saat 13.00\'te tatil başlar; 2429 s.K. m.2); '
+        'fizikî başvuru ve UYAP işlem saatini kontrol edin.',
+      );
     }
 
     return DeadlineAdjustment(

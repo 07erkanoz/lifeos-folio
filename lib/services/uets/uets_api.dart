@@ -5,6 +5,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 
+import '../legal/deadlines/legal_day.dart';
+
 /// UETS, the national electronic notification system (api.etebligat.gov.tr),
 /// Folio's third channel (UYGULAMAPLANI §3, P05/P08). Its own login, by
 /// mobile signature or by the card; its own token, which lasts about half
@@ -129,14 +131,14 @@ class UetsApi {
       }
       final data = _json(answer.body);
       if (data is Map && '${data['access_token'] ?? ''}'.isNotEmpty) {
-        return _open(data);
+        return _open(data, login.tckn);
       }
       await Future<void>.delayed(pollEvery);
     }
   }
 
   /// Takes up the session UETS gave: the token and when it ends.
-  UetsSession _open(Map data) {
+  UetsSession _open(Map data, String tckn) {
     _token = '${data['access_token']}';
     final end = data['expire_time'];
     _expires = end is num
@@ -147,6 +149,7 @@ class UetsApi {
       expires: _expires!,
       method: '${data['login_method'] ?? ''}',
       accounts: clients is List ? clients.length : 1,
+      tckn: tckn.trim(),
     );
     session.value = s;
     return s;
@@ -214,7 +217,7 @@ class UetsApi {
       }, authorized: false);
       final data = _json(answer.body);
       if (data is Map && '${data['access_token'] ?? ''}'.isNotEmpty) {
-        return _open(data);
+        return _open(data, challenge.tckn);
       }
       final state = data is Map ? '${data['status'] ?? ''}'.toLowerCase() : '';
       if (answer.code >= 400 ||
@@ -341,10 +344,13 @@ class UetsApi {
       'messages/${Uri.encodeComponent(id)}/parts',
       null,
     );
+    // Anything but a list of documents is not "no documents": it is asked
+    // again later.
+    if (data is! List || data.any((p) => p is! Map)) {
+      throw StateError('UETS ek listesi beklenmeyen biçimde geldi.');
+    }
     return [
-      if (data is List)
-        for (final p in data)
-          if (p is Map) UetsPart.fromJson(Map<String, Object?>.from(p)),
+      for (final p in data) UetsPart.fromJson(Map<String, Object?>.from(p)),
     ];
   }
 
@@ -513,10 +519,15 @@ class UetsSession {
   /// How many UETS accounts the login reaches (the lawyer's own, an
   /// office's).
   final int accounts;
+
+  /// Whose box it is: the TC number the login was made with. Kept in
+  /// memory only, for telling one box from another.
+  final String tckn;
   const UetsSession({
     required this.expires,
     this.method = '',
     this.accounts = 1,
+    this.tckn = '',
   });
 }
 
@@ -545,8 +556,10 @@ class UetsMessage {
     this.status = '',
   });
 
+  /// Five days on from the day [sent] fell on in Turkey, whatever zone
+  /// this computer is set to.
   DateTime? get served =>
-      sent == null ? null : DateTime(sent!.year, sent!.month, sent!.day + 5);
+      sent == null ? null : turkeyDay(sent!).addDays(5).toLocal();
 
   factory UetsMessage.fromJson(Map<String, Object?> json) {
     DateTime? time(Object? v) {

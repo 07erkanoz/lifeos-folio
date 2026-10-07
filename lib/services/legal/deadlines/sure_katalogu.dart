@@ -279,6 +279,61 @@ const sHacizIhbarnamesi = YasalSure(
   miktar: 7,
   birim: SureBirimi.gun,
   kanunMaddesi: 'İİK m.89',
+  guven: SureGuveni.orta,
+  guvenNotu:
+      'İhbarnamenin birinci, ikinci ya da üçüncü olduğu belgeden '
+      'anlaşılamadı. Birinci ve ikincisine itiraz 7 gündür; üçüncüsünde '
+      '15 gün içinde ödeme/teslim ya da menfi tespit davası gerekir.',
+);
+
+/// İİK m.89/1: the first garnishment notice, objected to in seven days.
+const sHaciz891 = YasalSure(
+  ad: 'Birinci haciz ihbarnamesine itiraz',
+  miktar: 7,
+  birim: SureBirimi.gun,
+  kanunMaddesi: 'İİK m.89/1',
+);
+
+/// İİK m.89/2: the second, sent when the first was not objected to.
+const sHaciz892 = YasalSure(
+  ad: 'İkinci haciz ihbarnamesine itiraz',
+  miktar: 7,
+  birim: SureBirimi.gun,
+  kanunMaddesi: 'İİK m.89/2',
+);
+
+/// İİK m.89/3: the third. Fifteen days to pay or deliver, or to bring the
+/// suit that the debt is not owed.
+const sHaciz893Dava = YasalSure(
+  ad: 'Üçüncü haciz ihbarnamesi — ödeme/teslim ya da menfi tespit davası',
+  miktar: 15,
+  birim: SureBirimi.gun,
+  kanunMaddesi: 'İİK m.89/3',
+);
+
+/// İİK m.89/3: and when the suit is brought, the paper that says so is
+/// given to the enforcement office within twenty days of the notice.
+const sHaciz893Belge = YasalSure(
+  ad: 'Üçüncü haciz ihbarnamesi — dava açıldığı belgesini icra dairesine verme',
+  miktar: 20,
+  birim: SureBirimi.gun,
+  kanunMaddesi: 'İİK m.89/3',
+  guvenNotu: 'Yalnız menfi tespit davası açtıysanız.',
+);
+
+/// İİK m.363 as 7499 wrote it: an enforcement court's decision given on
+/// or after 1 June 2024 is appealed in two weeks from its service. Not
+/// every such decision is open to appeal, and the sum matters.
+const sIcraMahkemesiIstinaf = YasalSure(
+  ad: 'İstinaf süresi (icra mahkemesi kararı)',
+  miktar: 2,
+  birim: SureBirimi.hafta,
+  kanunMaddesi: 'İİK m.363',
+  gecerliBaslangicIso: k7499,
+  guven: SureGuveni.orta,
+  guvenNotu:
+      'Kararın istinafa açık bir karar türü olup olmadığı ve parasal sınır '
+      'denetlenmedi (İİK m.363).',
 );
 
 // ── Ceza (CMK) — 7499 tarih-etkin geçişi ──
@@ -349,6 +404,20 @@ const sVergiDava = YasalSure(
 /// bağlamda yanlışlıkla 60 günlük DAVA AÇMA süresi (sIdariDava) gösteriliyordu —
 /// avukatı 30 gün GEÇ bırakırdı. Dava açma olguları (sIdariDava/sVergiDava)
 /// yalnız dava-öncesi bağlam (A1 soru-cevap, ihbarname) içindir.
+/// İYUK m.16/3: the defence to an administrative suit, thirty days from
+/// the petition's service; the court may extend it, and the special
+/// procedures (m.20/A, 20/B) are shorter.
+const sIyukSavunma = YasalSure(
+  ad: 'Savunma süresi',
+  miktar: 30,
+  birim: SureBirimi.gun,
+  kanunMaddesi: 'İYUK m.16',
+  guven: SureGuveni.orta,
+  guvenNotu:
+      'İvedi yargılama (İYUK m.20/A) ve özel usuller (m.20/B) daha kısa '
+      'süre öngörür; mahkemenin ek süre kararı da süreyi değiştirir.',
+);
+
 const sIdariKanunYolu = YasalSure(
   ad: 'İstinaf/temyiz süresi (idari yargı)',
   miktar: 30,

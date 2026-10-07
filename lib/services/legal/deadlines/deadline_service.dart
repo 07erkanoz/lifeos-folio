@@ -3,6 +3,7 @@ import 'mahkeme_kategori.dart';
 import 'tebligat_parser.dart';
 import 'turkish_legal_calendar.dart';
 import 'yasal_sure.dart';
+import 'legal_day.dart';
 
 /// Tebliğ tarihinin nasıl belirlendiği. (Geriye dönük uyum için korunur.)
 enum TebligKaynagi {
@@ -125,11 +126,16 @@ class DeadlineService {
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+  // Days are counted on the date's own fields, never as 24 hours added to
+  // a local clock, which a summer-time change would shift by a day.
+  static DateTime _plusDays(DateTime d, int n) =>
+      DateTime(d.year, d.month, d.day + n);
+
   /// Usulî tebliğ tarihi: elektronik tebligat, gönderimi izleyen 5. günün
   /// sonunda yapılmış sayılır (Tebligat Kanunu 7/a). **Erken okuma bu tarihi
   /// DEĞİŞTİRMEZ** — kanun yolu süreleri buradan başlar (LEG-01).
   static DateTime usuliTebligTarihiHesapla(DateTime gonderimTarihi) =>
-      _dateOnly(gonderimTarihi).add(const Duration(days: 5));
+      _plusDays(_dateOnly(gonderimTarihi), 5);
 
   /// Geriye dönük uyum: usulî tebliğ tarihini döndürür. (Eski "erken okunmayı
   /// tebliğ say" davranışı KALDIRILDI; okunma artık ayrı "öğrenme" tarihidir.)
@@ -181,6 +187,9 @@ class DeadlineService {
   /// Usulî tebliğ tarihi zaten kesin olarak biliniyorsa doğrudan hesaplar.
   /// Kâtip `sure_hesapla` aracı ve elle tarih girişi bu yolu kullanır; UETS'nin
   /// beş gün kuralı ikinci kez uygulanmaz.
+  ///
+  /// [kurallar] reckons only those rules instead of the catalogue's for
+  /// [belgeTuru] (a notice's deadlines are made rule by rule).
   static DeadlineComputation computeFromUsuliTebligTarihi({
     required DateTime usuliTebligTarihi,
     DateTime? okunmaTarihi,
@@ -189,6 +198,7 @@ class DeadlineService {
     DateTime? kararTarihi,
     DateTime? now,
     bool? adliTatileTabi,
+    List<YasalSure>? kurallar,
   }) => _compute(
     usuliTebligTarihi: _dateOnly(usuliTebligTarihi),
     okunmaTarihi: okunmaTarihi,
@@ -198,6 +208,7 @@ class DeadlineService {
     now: now,
     tebligKaynagi: TebligKaynagi.dogrudan,
     adliTatileTabi: adliTatileTabi,
+    ozelKurallar: kurallar,
   );
 
   /// DURUŞMADA VERİLEN SÜRE — kaynağı katalog değil, zabıt metnidir.
@@ -355,7 +366,8 @@ class DeadlineService {
           baslangicTuru: _baslangicEtiket(sure.baslangic),
           hamSonGun: ham,
           etkiliSonGun: adj.effectiveDate,
-          kalanGun: adj.effectiveDate.difference(bugun).inDays,
+          kalanGun: LegalDay.of(adj.effectiveDate)
+              .daysSince(LegalDay.of(bugun)),
           dayanakNotlari: notlar,
           uzadi: adj.extended || baslangicAdliTatilNedeniyleDegisti,
           guven: guven,

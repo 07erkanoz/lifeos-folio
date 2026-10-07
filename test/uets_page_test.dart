@@ -74,7 +74,9 @@ void main() {
     expect(find.text('Eşleşmedi'), findsOne);
     // The newest is selected: tied, with its deadline.
     expect(find.textContaining('otomatik eşleşti'), findsOne);
-    expect(find.textContaining('Son gün'), findsWidgets);
+    // Its deadline, a candidate waiting for the lawyer.
+    expect(find.textContaining('Onayınızı bekliyor'), findsWidgets);
+    expect(find.text('20.10.2026'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('uets-filter-unread')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('uets-row-m2')), findsNothing);

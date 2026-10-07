@@ -1,11 +1,7 @@
 import '../editor/suggestions/phrases.dart' show foldPhrase;
-import '../legal/deadlines/belge_turu.dart';
-import '../legal/deadlines/deadline_service.dart';
-import '../legal/deadlines/mahkeme_kategori.dart';
-import '../legal/deadlines/sure_katalogu.dart' show SureGuveni;
-import '../legal/deadlines/turkish_legal_calendar.dart';
 import '../portal/portal_case.dart';
 import '../portal/portal_database.dart';
+import 'notice_deadlines.dart';
 import 'uets_api.dart';
 
 /// A notification's subject read: "Antalya 3. Asliye Hukuk Mahkemesi
@@ -63,9 +59,9 @@ String? matchSubject(String subject, Iterable<PortalCase> cases) {
 }
 
 /// Ties every untied notification in [db] to its case where the subject
-/// leaves a single one; a tie the lawyer made is never touched. Then each
-/// notification whose kind of document is certain from its subject gets
-/// its deadlines in the agenda, once.
+/// leaves a single one; a tie the lawyer made is never touched. Then the
+/// notices' deadlines are made again (see [refreshNoticeDeadlines]), with
+/// the parties and the lawyer's name [NoticeDeadlineContext] holds.
 void matchNotices(PortalDatabase db, {DateTime? now}) {
   final cases = db.cases().values.toList();
   final kept = db.notices();
@@ -74,71 +70,12 @@ void matchNotices(PortalDatabase db, {DateTime? now}) {
     final key = matchSubject(n.message.subject, cases);
     if (key != null) db.linkNotice(n.message.id, key, 'auto');
   }
-  addNoticeDeadlines(db, now: now);
-}
-
-/// The deadlines a notification starts, as agenda deadlines whose ids name
-/// the notification, so that they are added once and never overwrite what
-/// the lawyer marked. Only where the kind of document is certain from the
-/// subject; otherwise the lawyer calculates it in the agenda.
-void addNoticeDeadlines(PortalDatabase db, {DateTime? now}) {
-  final have = {for (final i in db.agenda()) i.id: i};
-  for (final n in db.notices()) {
-    // A deadline follows its notice when the notice is tied or tied anew.
-    for (final old in have.values) {
-      if (old.caseKey != n.caseKey &&
-          old.id.startsWith('uets:${n.message.id}:')) {
-        db.saveAgenda(
-          AgendaItem(
-            id: old.id,
-            kind: old.kind,
-            title: old.title,
-            body: old.body,
-            at: old.at,
-            allDay: old.allDay,
-            done: old.done,
-            caseKey: n.caseKey,
-            updated: old.updated,
-          ),
-        );
-      }
-    }
-    final m = n.message;
-    final sent = m.sent;
-    final parsed = NoticeSubject.parse(m.subject);
-    if (sent == null || parsed == null) continue;
-    final kind = BelgeTuruTespit.tebligatTuru(const [], metin: m.subject);
-    if (BelgeTuruTespit.belirsiz(kind)) continue;
-    final category =
-        TurkishLegalCalendar.kategoriFromMahkemeAdi(parsed.unit) ??
-        MahkemeKategorisi.hukuk;
-    final items = DeadlineService.compute(
-      gonderimTarihi: sent,
-      kategori: category,
-      belgeTuru: kind,
-      now: now,
-    ).items;
-    for (final item in items) {
-      final id = 'uets:${m.id}:${item.sureAdi}';
-      if (have.containsKey(id)) continue;
-      db.saveAgenda(
-        AgendaItem(
-          id: id,
-          kind: 'deadline',
-          title: item.sureAdi,
-          body: [
-            'UETS · ${parsed.unit} · ${parsed.number}',
-            item.kanun,
-            if (item.guven != SureGuveni.yuksek) 'kontrol edin',
-          ].join(' · '),
-          at: item.etkiliSonGun,
-          allDay: true,
-          caseKey: n.caseKey,
-          updated: DateTime.now(),
-        ),
-      );
-    }
-  }
+  refreshNoticeDeadlines(
+    db,
+    parties: NoticeDeadlineContext.parties,
+    lawyer: NoticeDeadlineContext.lawyer,
+    now: now,
+  );
 }
 
 /// What the subject's later brackets say the document is: "Gerekçeli

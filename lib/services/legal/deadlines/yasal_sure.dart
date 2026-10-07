@@ -22,9 +22,9 @@ extension YasalSureTakvim on YasalSure {
     );
     switch (birim) {
       case SureBirimi.gun:
-        return d.add(Duration(days: miktar));
+        return DateTime(d.year, d.month, d.day + miktar);
       case SureBirimi.hafta:
-        return d.add(Duration(days: miktar * 7));
+        return DateTime(d.year, d.month, d.day + miktar * 7);
       // HMK m.92: the corresponding day, or the month's last when the
       // month has none. DateTime(y, m + n, d) rolled over instead: 31
       // January plus a month was 3 March, a deadline given too late.
@@ -36,7 +36,7 @@ extension YasalSureTakvim on YasalSure {
         var x = d;
         var kalan = miktar;
         while (kalan > 0) {
-          x = x.add(const Duration(days: 1));
+          x = DateTime(x.year, x.month, x.day + 1);
           if (TurkishLegalCalendar.isBusinessDay(x)) kalan--;
         }
         return x;
@@ -69,7 +69,12 @@ extension YasalSureTakvim on YasalSure {
 ///       uygulanmaz; tabi olup olmadığı bilinmiyorsa da uzatılmaz (güvenli
 ///       yön). İdari uzatmanın dayanağı m.61 yerine İYUK m.8/3 olarak
 ///       düzeltildi (tarih değişmedi: 7 Eylül).
-const sureHesapSurumu = 4;
+///   5 — 2026-10-07 (Folio): a notice's deadlines are candidates the
+///       lawyer confirms, made rule by rule from its documents; kambiyo,
+///       the garnishment notice's stages, İİK m.363 for enforcement
+///       courts, İYUK m.16, reports by jurisdiction; days counted on dates,
+///       not hours.
+const sureHesapSurumu = 5;
 
 /// Kategori bazlı yasal süreler (belge türü kanun yolu kararıysa kullanılır).
 /// Değerler kanonik olgulardan (sure_katalogu.dart) gelir — TEK kaynak.
@@ -79,7 +84,12 @@ const kategoriYasalSureleri = <MahkemeKategorisi, List<YasalSure>>{
   // tebliginden isler. Ikisini birlikte gostermek avukata var olmayan bir
   // kanun yolu suresi bildiriyordu. Temyiz zaten `istinafKarari` turunde var.
   MahkemeKategorisi.hukuk: [sIstinafHukuk],
-  MahkemeKategorisi.icra: [sIcraSikayet, sItirazinIptali],
+  // An enforcement court's decision: appeal under İİK m.363, and only the
+  // regime 7499 wrote (decisions from 1 June 2024). The complaint (m.16)
+  // and the suit against an objection (m.67) start from other events, not
+  // from a decision's service; they stay in the catalogue for the lawyer's
+  // own reckoning.
+  MahkemeKategorisi.icra: [sIcraMahkemesiIstinaf],
   MahkemeKategorisi.ceza: [sCezaIstinafEski, sCezaIstinafYeni],
   // DÜZELTME (hukuki): gerekçeli karara karşı süre İSTİNAF/TEMYİZ'dir (İYUK
   // m.45/46 → 30 gün). Önceki eşleme dava açma sürelerini (60/30 gün, İYUK m.7)
@@ -130,10 +140,31 @@ List<YasalSure> surelerForBelgeTuru(
       return const [sIcraEmriOdeme, sIcraEmriGeriBirakma];
     case BelgeTuru.hacizIhbarnamesi:
       return const [sHacizIhbarnamesi];
+    case BelgeTuru.hacizIhbarnamesiBirinci:
+      return const [sHaciz891];
+    case BelgeTuru.hacizIhbarnamesiIkinci:
+      return const [sHaciz892];
+    case BelgeTuru.hacizIhbarnamesiUcuncu:
+      return const [sHaciz893Dava, sHaciz893Belge];
+    // A statement of claim is answered by the court's own procedure: HMK
+    // m.127 in civil courts, İYUK m.16 in administrative ones; a criminal
+    // or enforcement court has no such answer.
     case BelgeTuru.davaDilekcesi:
-      return const [sCevapHmk127];
+      return switch (kategori) {
+        MahkemeKategorisi.hukuk ||
+        MahkemeKategorisi.bilinmeyen => const [sCevapHmk127],
+        MahkemeKategorisi.idare ||
+        MahkemeKategorisi.vergi => const [sIyukSavunma],
+        MahkemeKategorisi.ceza || MahkemeKategorisi.icra => const [],
+      };
+    // HMK m.281 in civil courts, through İYUK m.31 in administrative ones
+    // and İİK m.18 in enforcement courts. A criminal court gives its own
+    // time for a report (CMK m.67/5), written in its decision, not in a
+    // catalogue.
     case BelgeTuru.bilirkisiRaporu:
-      return const [sBilirkisiRaporu];
+      return kategori == MahkemeKategorisi.ceza
+          ? const []
+          : const [sBilirkisiRaporu];
     case BelgeTuru.temyizKarari:
     case BelgeTuru.cevapDilekcesi:
     case BelgeTuru.tensipZapti:

@@ -1,9 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
+import 'package:crypto/crypto.dart';
+import 'package:cryptography/cryptography.dart' as kdf;
 import 'package:flutter/foundation.dart';
 
+import '../editor/lawyer_profile.dart';
+import '../legal/deadlines/aidiyet.dart';
 import '../security/secret_store.dart';
+import '../uets/notice_deadlines.dart';
 import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
 import '../uyap/mobile_case_finder.dart';
@@ -147,6 +153,11 @@ class PortalSync extends ChangeNotifier {
   /// untied notice is matched to a case (§9.8).
   Future<void> syncUets() => _run(PortalChannel.uets, (db) async {
     if (!_uets.connected) return null;
+    final refused = await _checkUetsAccount(db);
+    if (refused != null) {
+      _uets.logout();
+      return refused;
+    }
     final kept = db.notices();
     final newest = kept.isEmpty ? null : kept.first.message.sent;
     // The first time the whole box: a notice older than ninety days may
@@ -164,17 +175,163 @@ class PortalSync extends ChangeNotifier {
     // What the lawyer moved to the archive is still a notice; a box
     // without an archive folder is no failure.
     try {
-      final archive = await _uets.listing(folder: uetsArchiveFolder, since: since);
+      final archive = await _uets.listing(
+        folder: uetsArchiveFolder,
+        since: since,
+      );
       db.mergeNotices(archive.messages);
       whole = whole && archive.complete;
     } on UetsAccessDenied {
       // No archive here.
     }
+    await _fetchManifests(db);
+    await _loadDeadlineContext();
     matchNotices(db);
     return whole
         ? null
         : 'UETS listesinin tamamı alınamadı; eşitlemeyi yeniden deneyin.';
   });
+
+  /// The lists of documents of the notices that have none yet, newest
+  /// first, all of them, the progress saying how far. What UETS would not
+  /// give is kept as such and asked again a day later.
+  Future<void> _fetchManifests(PortalDatabase db) async {
+    final now = DateTime.now();
+    final kept = db.manifests();
+    final due = [
+      for (final n in db.notices())
+        if (switch (kept[n.message.id]) {
+          null => true,
+          (state: 'hata', fetchedAt: final at?, parts: _) =>
+            now.difference(DateTime.parse(at)) > const Duration(days: 1),
+          _ => false,
+        })
+          n.message.id,
+    ];
+    for (var i = 0; i < due.length; i++) {
+      if (!_uets.connected) return;
+      _progress(PortalChannel.uets, 'Ekler ${i + 1}/${due.length}');
+      try {
+        final parts = await _uets.parts(due[i]);
+        db.saveManifest(due[i], [
+          for (final p in parts) (id: p.id, name: p.name, mime: p.mime),
+        ]);
+      } catch (e) {
+        db.saveManifest(due[i], null, error: '$e');
+      }
+    }
+  }
+
+  /// The parties of the cases Folio keeps, by case key, and the lawyer's
+  /// own name as UYAP writes it (else the profile's), for the sign of
+  /// whose a notice's deadline is.
+  Future<void> _loadDeadlineContext() async {
+    final parties = <String, List<TarafKaydi>>{};
+    try {
+      for (final (record, _) in await UyapCaseStore.instance.cases()) {
+        if (record.parties.isEmpty) continue;
+        parties[caseKey(record.number, record.court)] = [
+          for (final t in record.parties) (rol: t.role, vekil: t.lawyer),
+        ];
+      }
+    } catch (_) {
+      // No parties: every deadline's owner stays "not known".
+    }
+    var lawyer = _mobile.session.value?.user ?? '';
+    if (lawyer == 'UYAP Mobil') lawyer = '';
+    if (lawyer.isEmpty) {
+      try {
+        lawyer = (await LawyerProfile.load()).lawyer?.name ?? '';
+      } catch (_) {}
+    }
+    NoticeDeadlineContext.parties = parties;
+    NoticeDeadlineContext.lawyer = lawyer.isEmpty ? null : lawyer;
+  }
+
+  static const _uetsAccountKey = 'uets-account-key';
+
+  /// Folio keeps one UETS box. The box a login opens is told from the one
+  /// kept before by a keyed digest of its TC number (the key in this
+  /// computer's keystore; where there is none, a slow salted one), never
+  /// the number itself; a login to another box is refused, so that two
+  /// boxes' notices and deadlines are never mixed.
+  Future<String?> _checkUetsAccount(PortalDatabase db) async {
+    final tckn = _uets.session.value?.tckn ?? '';
+    if (tckn.isEmpty) return null;
+    final (:id, :keyLost) = await _uetsAccountId(db, tckn);
+    final kept = db.meta('uets_account');
+    if (kept == null || kept == id) {
+      if (kept == null) db.setMeta('uets_account', id);
+      return null;
+    }
+    // Another digest with the key still here is another TC number: refused.
+    // Only when the key was lost (a new keystore, a reinstall) is the
+    // digest no proof, and then the box is told by its own notices: all
+    // of the newest it lists that Folio kept before must be Folio's, and
+    // there must be some. An office's box two lawyers share is not enough,
+    // since then the key would not have been lost.
+    if (keyLost) {
+      final known = {for (final n in db.notices()) n.message.id};
+      final page = await _uets.messages(count: 50);
+      final shared = page.where((m) => known.contains(m.id)).length;
+      if (shared > 0 && shared == page.length) {
+        db.setMeta('uets_account', id);
+        db.setMeta('uets_account_rekey', '');
+        return null;
+      }
+    }
+    return 'Bu Folio başka bir UETS hesabının tebligatlarını tutuyor. İki '
+        'hesabın tebligatları ve süreleri karışmasın diye bu hesapla '
+        'bağlanılmadı.';
+  }
+
+  /// The box's digest, and whether the keystore's key had to be made anew
+  /// though a box was kept before with one: the old digest cannot be had.
+  Future<({String id, bool keyLost})> _uetsAccountId(
+    PortalDatabase db,
+    String tckn,
+  ) async {
+    var key = (await _secrets.read(_uetsAccountKey))?['k'] as String?;
+    var keyLost = false;
+    if (key == null && db.meta('uets_account_salt') == null) {
+      final fresh = base64Encode(
+        List<int>.generate(32, (_) => Random.secure().nextInt(256)),
+      );
+      if (await _secrets.write(_uetsAccountKey, {'k': fresh})) {
+        key = fresh;
+        // Kept until the box is told again by its notices: a first login
+        // with another box after the loss must not shut the right one out.
+        if (db.meta('uets_account')?.startsWith('h:') ?? false) {
+          db.setMeta('uets_account_rekey', '1');
+        }
+      }
+    }
+    keyLost = db.meta('uets_account_rekey') == '1';
+    if (key != null) {
+      return (
+        id: 'h:${Hmac(sha256, base64Decode(key)).convert(utf8.encode(tckn))}',
+        keyLost: keyLost,
+      );
+    }
+    // No keystore: a salt beside the database and a slow derivation, so
+    // that the eleven digits are not had back by trying them all quickly.
+    var salt = db.meta('uets_account_salt');
+    if (salt == null) {
+      salt = base64Encode(
+        List<int>.generate(16, (_) => Random.secure().nextInt(256)),
+      );
+      db.setMeta('uets_account_salt', salt);
+    }
+    final derived = await kdf.Pbkdf2(
+      macAlgorithm: kdf.Hmac.sha256(),
+      iterations: 200000,
+      bits: 256,
+    ).deriveKeyFromPassword(password: tckn, nonce: base64Decode(salt));
+    return (
+      id: 'p:${base64Encode(await derived.extractBytes())}',
+      keyLost: false,
+    );
+  }
 
   void _mobileChanged() {
     notifyListeners();
@@ -208,7 +365,10 @@ class PortalSync extends ChangeNotifier {
       final db = await _database();
       problem = await work(db);
       // The portfolio may have grown: untied notices are tried again (§9.8).
-      if (channel != PortalChannel.uets) matchNotices(db);
+      if (channel != PortalChannel.uets) {
+        await _loadDeadlineContext();
+        matchNotices(db);
+      }
     } catch (e) {
       problem = '$e';
     }

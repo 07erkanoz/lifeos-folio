@@ -3,6 +3,8 @@ import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_hearing.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
+import 'package:evrak_convert/services/uets/notice_deadlines.dart';
+import 'package:evrak_convert/services/uets/uets_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/agenda/agenda_page.dart';
@@ -18,6 +20,7 @@ void main() {
     WidgetTester tester, {
     Size size = const Size(1440, 900),
     void Function(PortalCase kase)? onPetition,
+    void Function(PortalDatabase db)? before,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -59,6 +62,7 @@ void main() {
         updated: now,
       ),
     );
+    before?.call(db);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -260,5 +264,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(begun, ['2025/412']);
     expect(find.byKey(const ValueKey('agenda-prep')), findsNothing);
+  });
+
+  testWidgets('a notice’s deadline waits in the review until confirmed, '
+      'then comes to the agenda', (tester) async {
+    final db = await pump(
+      tester,
+      before: (db) {
+        db.mergeNotices([
+          UetsMessage(
+            id: 'm1',
+            subject: '$court [2025/412] [x]',
+            sent: DateTime.utc(2026, 9, 30, 9),
+          ),
+        ]);
+        db.saveManifest('m1', [
+          (id: 'p1', name: '(1)GerekceliKarar.pdf', mime: ''),
+        ]);
+        refreshNoticeDeadlines(db, now: now);
+      },
+    );
+    expect(find.byKey(const ValueKey('agenda-review')), findsOne);
+    expect(find.textContaining('Onayınızı bekliyor'), findsOne);
+    // Not counted: the only deadline due soon is the lawyer's own.
+    expect(find.text('19.10.2026'), findsOne);
+    final id = db.deadlines().single.record.id;
+    await tester.ensureVisible(find.byKey(ValueKey('review-confirm-$id')));
+    await tester.tap(find.byKey(ValueKey('review-confirm-$id')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('agenda-review')), findsNothing);
+    expect(db.agenda().map((i) => i.id), contains(id));
+    expect(find.text('İstinaf süresi'), findsWidgets);
   });
 }
