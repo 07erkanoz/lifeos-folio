@@ -231,4 +231,7 @@ class LawyerProfile {
   /// For tests: the profile to answer with, or null to read the file again.
   @visibleForTesting
   static void use(LawyerProfile? profile) => _held = profile;
+
+  /// The profile already read or set, if it is; null before.
+  static LawyerProfile? get held => _held;
 }

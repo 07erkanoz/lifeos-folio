@@ -37,6 +37,7 @@ import 'package:evrak_convert/ui/widgets/file_preview.dart';
 import 'package:evrak_convert/ui/widgets/uyap_case_panel.dart';
 import 'package:evrak_convert/services/uyap/adalet_eimza.dart';
 import 'package:flutter/foundation.dart';
+import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -625,6 +626,12 @@ void main() {
     // The in-app PDF viewer loads PDFium on its own; the built bundle has it.
     Pdfrx.pdfiumModulePath = pdfiumLibrary();
     Pdfrx.cacheDirectoryPath = Directory.systemTemp.path;
+    // The demo cases' lawyer, so a case page knows whose side is ours.
+    LawyerProfile.use(
+      const LawyerProfile(
+        lawyers: [Lawyer(name: 'Deniz Yılmaz', bar: 'İstanbul Barosu')],
+      ),
+    );
   });
 
   testWidgets('editor: a petition with its articles and decision', (

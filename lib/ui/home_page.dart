@@ -54,6 +54,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../services/platform/file_actions.dart';
+import 'widgets/share_as.dart';
 import 'widgets/share_document_dialog.dart';
 import 'widgets/shortcuts_dialog.dart';
 
@@ -697,6 +698,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _library.initialize();
     // UYAP documents saved from an editor window of its own, which keeps no
     // archive, are searched from the next start.
+    // A profile already read names the lawyer at once.
+    _lawyerName = LawyerProfile.held?.lawyer?.titled ?? '';
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(searchUyapFolder(_library).catchError((Object _) => false));
       unawaited(_countAgenda());
@@ -3083,8 +3086,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case 'folder':
         await _fileAction('showFolder', file);
       case 'share':
-        if (Platform.isAndroid) {
-          await _fileAction('share', file);
+        if (Platform.isAndroid || Platform.isIOS) {
+          // A UDF or Word file asks whether it goes as it is or as a PDF.
+          await shareAs(context, file.path);
         } else {
           final message = await showDialog<String>(
             context: context,

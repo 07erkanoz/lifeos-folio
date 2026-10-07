@@ -281,10 +281,9 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('case-number')), findsOneWidget);
     expect(find.text('YENİ'), findsOneWidget);
-    // The window has room: the parties in the heading's line, the cards'
+    // The window has room: the parties named in the heading, the cards'
     // room given to the documents.
-    expect(find.text('Bizim taraf 1', findRichText: true), findsOneWidget);
-    expect(find.text('Karşı taraf 1', findRichText: true), findsOneWidget);
+    expect(find.byKey(const ValueKey('case-parties-strip')), findsOneWidget);
     expect(find.text('BİZİM TARAF · 1'), findsNothing);
     // Seen: the list no longer counts it new.
     for (var i = 0; i < 60; i++) {
@@ -373,6 +372,28 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('a wide case page names its sides and its kind in the heading', (
+    tester,
+  ) async {
+    await pumpCase(tester, const Size(1440, 900));
+    final strip = find.byKey(const ValueKey('case-parties-strip'));
+    expect(strip, findsOneWidget);
+    expect(
+      find.descendant(of: strip, matching: find.text('MÜVEKKİL')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: strip, matching: find.textContaining('Karaca')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: strip, matching: find.textContaining('Murat Er')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('on a phone a document opens on a page of its own, the next '
       'one beside it', (tester) async {
     await pumpCase(tester, const Size(390, 844));
@@ -386,6 +407,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Bu evrak henüz indirilmedi'), findsOneWidget);
     expect(find.textContaining('1 / 2'), findsOneWidget);
+    // The document has the screen; the bar below is its own height.
+    expect(tester.getSize(find.byType(PageView)).height, greaterThan(600));
     expect(find.text('Tensip Zaptı'), findsOneWidget);
     await tester.tap(find.text('Tensip Zaptı'));
     await tester.pumpAndSettle();

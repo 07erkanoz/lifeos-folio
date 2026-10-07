@@ -21,6 +21,7 @@ import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
 import '../widgets/file_preview.dart';
+import '../widgets/share_as.dart';
 import 'portfolio_rows.dart';
 
 /// A case's own page (docs/design/uyap-portfoy-taslak.png, the second
@@ -396,13 +397,6 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   Widget _factsLine(BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final lawyer = widget.lawyer.isNotEmpty
-        ? widget.lawyer
-        : UyapMobileApi.instance.session.value?.user ?? '';
-    final (ours, others) = splitParties(
-      _c.record?.parties ?? const <UyapParty>[],
-      lawyer,
-    );
     final hearing = ([
       for (final h in _hearings)
         if (!h.at.isBefore(today)) h,
@@ -438,8 +432,6 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         spacing: 18,
         runSpacing: 4,
         children: [
-          fact('Bizim taraf', '${ours.length}'),
-          fact('Karşı taraf', '${others.length}'),
           fact(
             'Duruşma',
             hearing == null
@@ -1002,14 +994,32 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         const SizedBox(height: 4),
         Text(kase.court, style: const TextStyle(fontSize: 15)),
         const SizedBox(height: 3),
-        Text(
-          [
-            if (type.trim().isNotEmpty) type.trim(),
-            if (opened != null) 'açılış ${dayText(opened)}',
-            record == null
-                ? 'yalnız künye — evraklar UYAP’tan ilk tazelemede gelir'
-                : 'son senkron ${whenText(record.fetchedAt, now)}',
-          ].join(' · '),
+        // The kind of case first and dark: it is what the case is about.
+        Text.rich(
+          TextSpan(
+            children: [
+              if (type.trim().isNotEmpty) ...[
+                TextSpan(
+                  text: type.trim(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const TextSpan(text: ' · '),
+              ],
+              TextSpan(
+                text: [
+                  if (opened != null) 'açılış ${dayText(opened)}',
+                  record == null
+                      ? 'yalnız künye — evraklar UYAP’tan ilk tazelemede gelir'
+                      : 'son senkron ${whenText(record.fetchedAt, now)}',
+                ].join(' · '),
+              ),
+            ],
+          ),
+          key: const ValueKey('case-type'),
           style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
       ],
@@ -1017,25 +1027,31 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     return _card(
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
       child: wide
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                IconButton(
-                  tooltip: 'UYAP Dosyalarım’a dön',
-                  onPressed: widget.onBack,
-                  icon: const Icon(Icons.arrow_back_rounded),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    IconButton(
+                      tooltip: 'UYAP Dosyalarım’a dön',
+                      onPressed: widget.onBack,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: facts
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [info, _factsLine(context)],
+                            )
+                          : info,
+                    ),
+                    const SizedBox(width: 12),
+                    Wrap(spacing: 8, runSpacing: 8, children: actions),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: facts
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [info, _factsLine(context)],
-                        )
-                      : info,
-                ),
-                const SizedBox(width: 12),
-                Wrap(spacing: 8, runSpacing: 8, children: actions),
+                if (facts) _partyStrip(context),
               ],
             )
           : Column(
@@ -1054,6 +1070,121 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 ),
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 8, children: actions),
+              ],
+            ),
+    );
+  }
+
+  /// The sides in the heading when the page has no room for their cards:
+  /// whom the lawyer stands for and against whom, with their roles and
+  /// counsel; the rest a tap away in Taraflar.
+  Widget _partyStrip(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final lawyer = widget.lawyer.isNotEmpty
+        ? widget.lawyer
+        : UyapMobileApi.instance.session.value?.user ?? '';
+    final (ours, others) = splitParties(
+      _c.record?.parties ?? const <UyapParty>[],
+      lawyer,
+    );
+    if (ours.isEmpty && others.isEmpty) return const SizedBox.shrink();
+    // Our side's counsel is the reader; the other side's is worth naming.
+    Widget side(
+      String label,
+      Color color,
+      List<UyapParty> list, {
+      bool counsel = true,
+    }) {
+      final shown = list.take(2).toList();
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 74,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: .7,
+                  color: color,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final p in shown)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: titleName(p.name),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: scheme.onSurface,
+                            ),
+                          ),
+                          if (p.role.trim().isNotEmpty)
+                            TextSpan(text: '  ${titleName(p.role)}'),
+                          if (counsel && p.lawyer.trim().isNotEmpty)
+                            TextSpan(
+                              text:
+                                  ' · Vekil: ${titleName(p.lawyer.trim().replaceAll(RegExp(r'^\[|\]$'), ''))}',
+                            ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                  ),
+                if (list.length > 2)
+                  InkWell(
+                    onTap: () => setState(() => _tab = _Tab.parties),
+                    child: Text(
+                      '+${list.length - 2} taraf daha',
+                      style: TextStyle(fontSize: 12, color: scheme.primary),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      key: const ValueKey('case-parties-strip'),
+      margin: const EdgeInsets.only(top: 12, left: 54),
+      padding: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: ours.isEmpty
+          ? side('TARAFLAR', AgendaColors.muted, others)
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: side(
+                    'MÜVEKKİL',
+                    const Color(0xFF157A52),
+                    ours,
+                    counsel: false,
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Expanded(child: side('KARŞI', const Color(0xFFB7791F), others)),
               ],
             ),
     );
@@ -2477,6 +2608,12 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
               )
             else ...[
               IconButton(
+                key: const ValueKey('case-preview-share'),
+                tooltip: 'Paylaş',
+                onPressed: () => unawaited(shareAs(context, file.path)),
+                icon: const Icon(Icons.share_outlined),
+              ),
+              IconButton(
                 key: const ValueKey('case-preview-full'),
                 tooltip: 'Tam ekran',
                 onPressed: () => _setFull(true),
@@ -2501,6 +2638,8 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
+                    // Its own height: left to fill, it took the page's.
+                    heightFactor: 1,
                     child: _at > 0
                         ? step(_at - 1, back: true)
                         : const SizedBox.shrink(),
@@ -2509,6 +2648,7 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerRight,
+                    heightFactor: 1,
                     child: _at < docs.length - 1
                         ? step(_at + 1, back: false)
                         : const SizedBox.shrink(),
