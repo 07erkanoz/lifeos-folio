@@ -57,17 +57,43 @@ abstract final class BackgroundNotices {
   static void seen(PortalDatabase db) =>
       db.setMeta(_seenKey, DateTime.now().toIso8601String());
 
+  static const _lastKey = 'background_check';
+
+  /// When the background check last ran, and what came of it; null when
+  /// it never has. Shown in the settings, so that one can see it runs.
+  static ({DateTime at, String result})? last(PortalDatabase db) {
+    final kept = db.meta(_lastKey);
+    if (kept == null) return null;
+    final at = DateTime.tryParse(kept.split('|').first);
+    if (at == null) return null;
+    return (at: at, result: kept.substring(kept.indexOf('|') + 1));
+  }
+
+  static void _note(PortalDatabase db, String result) =>
+      db.setMeta(_lastKey, '${DateTime.now().toIso8601String()}|$result');
+
   /// One check: UYAP Mobil's newest notifications kept, the new ones told.
   static Future<void> check() async {
     final db = await PortalDatabase.shared();
+    try {
+      _note(db, await _check(db));
+    } catch (e) {
+      _note(db, 'hata: $e');
+      rethrow;
+    }
+  }
+
+  static Future<String> _check(PortalDatabase db) async {
     final alerts = UyapNoticeAlerts.of(db);
-    if (!alerts.on || !alerts.background) return;
+    if (!alerts.on || !alerts.background) return 'kapalı';
     final seen = DateTime.tryParse(db.meta(_seenKey) ?? '');
-    if (seen != null && DateTime.now().difference(seen) < _quiet) return;
+    if (seen != null && DateTime.now().difference(seen) < _quiet) {
+      return 'Folio açıktı, ona bırakıldı';
+    }
     final secrets = SecretStore();
     const secret = 'uyap-mobile';
     final kept = MobileTokens.fromJson(await secrets.read(secret));
-    if (kept == null) return;
+    if (kept == null) return 'UYAP Mobil oturumu yok';
     final api = UyapMobileApi.instance;
     api.keptTokens = () async =>
         MobileTokens.fromJson(await secrets.read(secret));
@@ -78,9 +104,11 @@ abstract final class BackgroundNotices {
           : secrets.write(secret, tokens.toJson()),
     );
     try {
-      if (await api.restore(kept) == null) return;
+      if (await api.restore(kept) == null) {
+        return 'UYAP Mobil oturumu sona ermiş';
+      }
     } on UyapMobileUnreachable {
-      return;
+      return 'UYAP’a ulaşılamadı';
     }
     final sync = PortalSync(mobile: api, database: () async => db)
       ..paused = true;
@@ -89,6 +117,11 @@ abstract final class BackgroundNotices {
     try {
       await sync.syncNotices(force: true);
       if (fresh.isNotEmpty) await tellUyapNotices(db, fresh, ask: false);
+      final problem = sync.noticeProblem;
+      if (problem != null) return problem;
+      return fresh.isEmpty
+          ? 'yeni bildirim yok'
+          : '${fresh.length} yeni bildirim bildirildi';
     } finally {
       await Future.wait(writes);
       sync.dispose();

@@ -1038,6 +1038,34 @@ void main() {
       );
       await _shot(tester, 'uyap-dosyalarim');
       await tester.pumpWidget(const SizedBox());
+      _size(tester, phone);
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: PortfolioPage(
+              database: db,
+              store: store,
+              lawyer: lawyer,
+              onShowCase: (_) {},
+            ),
+          ),
+        ),
+      );
+      await _settle(
+        tester,
+        ready: () => find.text('2025/933').evaluate().isNotEmpty,
+        rounds: 150,
+      );
+      await _shot(tester, 'telefon-uyap-dosyalarim');
+      // Scrolled: the heading goes, the list has the screen.
+      await tester.drag(
+        find.byKey(const ValueKey('portfolio-scroll')),
+        const Offset(0, -420),
+      );
+      await _settle(tester, rounds: 10);
+      await _shot(tester, 'telefon-uyap-dosyalarim-kaydirilmis');
+      await tester.pumpWidget(const SizedBox());
+      _size(tester, logical);
 
       final controller = UyapCasePanelController(
         web: UyapWebService.forTesting(),

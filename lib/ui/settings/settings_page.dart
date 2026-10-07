@@ -12,6 +12,7 @@ import '../../services/editor/suggestions/phrases.dart';
 import '../../services/legal/legal_settings.dart';
 import '../../services/platform/context_menu_registration.dart';
 import '../../services/platform/platform_capabilities.dart';
+import '../../services/platform/system_notices.dart';
 import '../../services/desktop/desktop_companion.dart';
 import '../../services/portal/background_notices.dart';
 import '../../services/portal/portal_database.dart';
@@ -205,6 +206,28 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) setState(() => _update = 'Denetlenemedi: $e');
     } finally {
       if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  static String _day(DateTime t) =>
+      '${t.day.toString().padLeft(2, '0')}.${t.month.toString().padLeft(2, '0')}';
+
+  /// A word on this device's own notifications, now: leave asked first.
+  Future<void> _testNotice() async {
+    await SystemNotices.instance.askLeave();
+    await SystemNotices.instance.show(
+      id: 7,
+      title: 'Folio deneme bildirimi',
+      body: 'Bu bildirimi görüyorsanız yeni UYAP bildirimleri de gelir.',
+      payload: 'notices:',
+    );
+    if (mounted) {
+      showNotice(
+        context,
+        'Deneme bildirimi gönderildi',
+        detail:
+            'Gelmediyse Folio’nun bildirim iznini telefonun ayarlarından açın.',
+      );
     }
   }
 
@@ -729,6 +752,35 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
+          if (_phone)
+            _Entry(
+              'arka plan son denetim',
+              SettingsRow(
+                key: const ValueKey('settings-background-last'),
+                icon: Icons.history_rounded,
+                title: 'Son arka plan denetimi',
+                subtitle: switch (_db == null
+                    ? null
+                    : BackgroundNotices.last(_db!)) {
+                  null =>
+                    'Henüz çalışmadı. Android ilk denetimi Folio kapandıktan '
+                        'en erken 15 dakika sonra yapar.',
+                  final l => '${_day(l.at)} ${_clock(l.at)} · ${l.result}',
+                },
+              ),
+            ),
+          _Entry(
+            'deneme bildirimi test uyarı',
+            SettingsRow(
+              key: const ValueKey('settings-test-notice'),
+              icon: Icons.notification_add_outlined,
+              title: 'Deneme bildirimi gönder',
+              subtitle:
+                  'Bu cihazın Folio’dan gelen bildirimi gösterip göstermediğini '
+                  'denetler',
+              onTap: () => unawaited(_testNotice()),
+            ),
+          ),
           if (_desktop && CompanionScope.maybeOf(context) != null)
             _Entry(
               'tepsi arka plan pencere kapanınca çalış',

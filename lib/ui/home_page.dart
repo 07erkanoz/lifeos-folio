@@ -546,6 +546,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // A case's page: its preview first, then back to the portfolio, not
       // out of UYAP Dosyalarım.
       if (!CaseDetailPage.closePreview()) setState(() => _group = 'uyap');
+    } else if (_phone && _isOfficePage(_group)) {
+      // A phone's office pages come from its first page: back goes there,
+      // not to the archive.
+      setState(() {
+        _group = 'all';
+        _mobileArchive = false;
+      });
     } else if (_library.query.isNotEmpty) {
       _searchController.clear();
       _library.setQuery('');
@@ -704,7 +711,18 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       SystemNotices.instance.onOpen = (p) => unawaited(_openToldNotice(p));
       // Leave for them is asked when the first one comes, not at start;
       // a word clicked while Folio was closed opens what it told of.
-      unawaited(SystemNotices.instance.prepare());
+      unawaited(
+        SystemNotices.instance.prepare().then((_) async {
+          // Android 13 and later show none without leave: asked at start
+          // while the lawyer wants them, not when the first one is lost.
+          if (Platform.isAndroid || Platform.isIOS) {
+            final db = await PortalDatabase.shared();
+            if (UyapNoticeAlerts.of(db).on) {
+              await SystemNotices.instance.askLeave();
+            }
+          }
+        }),
+      );
       unawaited(
         PortalDatabase.shared().then((db) {
           BackgroundNotices.seen(db);
@@ -1050,6 +1068,20 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'uets' ||
       group == 'bildirim' ||
       group == 'ayarlar';
+
+  /// The office's pages a phone opens from its first page.
+  static bool _isOfficePage(String group) =>
+      _isUyapGroup(group) ||
+      group == 'agenda' ||
+      group == 'uets' ||
+      group == 'bildirim' ||
+      group == 'ayarlar';
+
+  /// Laid out as a phone, as the window's build decides.
+  bool get _phone {
+    final size = MediaQuery.sizeOf(context);
+    return size.width < 700 || (size.height < 500 && size.width < 1000);
+  }
 
   static bool _isUyapGroup(String group) =>
       group == 'uyap' || group.startsWith('uyap:');
@@ -3249,7 +3281,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
-                            textStyle: const TextStyle(fontFamily: 'LiberationSans', 
+                            textStyle: const TextStyle(
+                              fontFamily: 'LiberationSans',
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),

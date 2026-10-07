@@ -207,7 +207,33 @@ class _PortfolioPageState extends State<PortfolioPage> {
     return words.every(where.contains);
   }
 
+  /// The rows as the filters, the search and the order leave them; made
+  /// again only when one of these changes, not at each frame (two thousand
+  /// cases filtered and sorted at every frame of a scroll held the phone).
   List<PortfolioRow> get _visible {
+    final key = (
+      _development,
+      _kind,
+      _role,
+      _place,
+      _closed,
+      _scope,
+      _sort,
+      _search.text,
+    );
+    if (identical(_rows, _visibleFor) && key == _visibleKey) {
+      return _visibleRows;
+    }
+    _visibleFor = _rows;
+    _visibleKey = key;
+    return _visibleRows = _sorted();
+  }
+
+  List<PortfolioRow>? _visibleFor;
+  Object? _visibleKey;
+  List<PortfolioRow> _visibleRows = const [];
+
+  List<PortfolioRow> _sorted() {
     final rows = [
       for (final r in _rows ?? const <PortfolioRow>[])
         if (_matchesFilters(r) && _matchesSearch(r)) r,
@@ -271,6 +297,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
       child: LayoutBuilder(
         builder: (context, box) {
           final wide = box.maxWidth >= 860;
+          // A phone: the heading and the search scroll away with the list,
+          // which then has the screen.
+          if (!wide) return _narrow(context, rows);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -309,6 +338,63 @@ class _PortfolioPageState extends State<PortfolioPage> {
           );
         },
       ),
+    );
+  }
+
+  Widget _narrow(BuildContext context, List<PortfolioRow>? rows) {
+    final scheme = Theme.of(context).colorScheme;
+    final visible = _visible;
+    final shown = visible.take(_shown).toList();
+    return CustomScrollView(
+      key: const ValueKey('portfolio-scroll'),
+      slivers: [
+        SliverToBoxAdapter(child: _head(context, false)),
+        SliverToBoxAdapter(child: _progress(context)),
+        if (rows == null)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (rows.isEmpty)
+          SliverFillRemaining(hasScrollBody: false, child: _empty(context))
+        else ...[
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            sliver: SliverToBoxAdapter(child: _controls(context, false)),
+          ),
+          if (shown.isEmpty)
+            SliverToBoxAdapter(child: _noMatch(context))
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              sliver: DecoratedSliver(
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                sliver: SliverList.builder(
+                  key: const ValueKey('portfolio-list'),
+                  itemCount: shown.length + (visible.length > _shown ? 1 : 0),
+                  itemBuilder: (context, i) => i == shown.length
+                      ? TextButton(
+                          key: const ValueKey('portfolio-more'),
+                          onPressed: () => setState(() => _shown += 100),
+                          child: Text(
+                            'Daha fazla (${visible.length - _shown} dosya daha)',
+                          ),
+                        )
+                      : _CaseRow(
+                          row: shown[i],
+                          first: i == 0,
+                          wide: false,
+                          onTap: () => widget.onShowCase(shown[i].key),
+                        ),
+                ),
+              ),
+            ),
+        ],
+      ],
     );
   }
 
@@ -470,18 +556,43 @@ class _PortfolioPageState extends State<PortfolioPage> {
                 ...actions,
               ],
             )
+          // A phone: the title with its two actions beside it, the
+          // channels under it; the rest of the screen is the list's.
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                title,
-                const SizedBox(height: 8),
-                Wrap(spacing: 8, runSpacing: 6, children: chips),
-                const SizedBox(height: 6),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  runSpacing: 6,
-                  children: actions,
+                Row(
+                  children: [
+                    Expanded(child: title),
+                    IconButton(
+                      key: const ValueKey('portfolio-refresh'),
+                      tooltip: 'Portföyü yenile',
+                      onPressed: running ? null : () => unawaited(_refresh()),
+                      icon: running
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.sync_rounded),
+                    ),
+                    PopupMenuButton<String>(
+                      key: const ValueKey('portfolio-menu'),
+                      tooltip: 'Diğer',
+                      onSelected: (_) =>
+                          unawaited(_setIncludeClosed(!_includeClosed)),
+                      itemBuilder: (_) => [
+                        CheckedPopupMenuItem(
+                          key: const ValueKey('portfolio-closed-switch'),
+                          value: 'closed',
+                          checked: _includeClosed,
+                          child: const Text('Kapalı dosyaları da indir'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 6),
+                Wrap(spacing: 8, runSpacing: 6, children: chips),
               ],
             ),
     );
@@ -791,6 +902,54 @@ class _PortfolioPageState extends State<PortfolioPage> {
     final scheme = Theme.of(context).colorScheme;
     final visible = _visible;
     final shown = visible.take(_shown).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _controls(context, wide),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              border: Border.all(color: scheme.outlineVariant),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: shown.isEmpty
+                ? _noMatch(context)
+                : ListView.builder(
+                    key: const ValueKey('portfolio-list'),
+                    itemCount: shown.length + (visible.length > _shown ? 1 : 0),
+                    itemBuilder: (context, i) {
+                      if (i == shown.length) {
+                        return TextButton(
+                          key: const ValueKey('portfolio-more'),
+                          onPressed: () => setState(() => _shown += 100),
+                          child: Text(
+                            'Daha fazla (${visible.length - _shown} dosya daha)',
+                          ),
+                        );
+                      }
+                      return _CaseRow(
+                        row: shown[i],
+                        first: i == 0,
+                        wide: wide,
+                        onTap: () => widget.onShowCase(shown[i].key),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The search, the scopes, the filters and the order, above the rows.
+  Widget _controls(BuildContext context, bool wide) {
+    final scheme = Theme.of(context).colorScheme;
+    final visible = _visible;
     Widget scopeChip(_Scope scope, String label) => Padding(
       padding: const EdgeInsets.only(right: 6),
       child: ChoiceChip(
@@ -930,42 +1089,6 @@ class _PortfolioPageState extends State<PortfolioPage> {
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: scheme.surface,
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: shown.isEmpty
-                ? _noMatch(context)
-                : ListView.builder(
-                    key: const ValueKey('portfolio-list'),
-                    itemCount: shown.length + (visible.length > _shown ? 1 : 0),
-                    itemBuilder: (context, i) {
-                      if (i == shown.length) {
-                        return TextButton(
-                          key: const ValueKey('portfolio-more'),
-                          onPressed: () => setState(() => _shown += 100),
-                          child: Text(
-                            'Daha fazla (${visible.length - _shown} dosya daha)',
-                          ),
-                        );
-                      }
-                      return _CaseRow(
-                        row: shown[i],
-                        first: i == 0,
-                        wide: wide,
-                        onTap: () => widget.onShowCase(shown[i].key),
-                      );
-                    },
-                  ),
-          ),
         ),
       ],
     );

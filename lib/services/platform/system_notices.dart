@@ -80,7 +80,8 @@ class SystemNotices {
   }
 
   /// Leave to show them, asked once a run, where the system asks for it.
-  Future<void> _askLeave() async {
+  Future<void> askLeave() async {
+    if (!await _start()) return;
     if (_asked) return;
     _asked = true;
     try {
@@ -114,7 +115,7 @@ class SystemNotices {
     bool ask = true,
   }) async {
     if (!await _start()) return;
-    if (ask) await _askLeave();
+    if (ask) await askLeave();
     try {
       await _plugin.show(
         id: id,

@@ -453,7 +453,11 @@ class _UetsPageState extends State<UetsPage> {
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: const TextStyle(fontFamily: 'LiberationSans', fontSize: 12.5, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(
+          fontFamily: 'LiberationSans',
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       icon: Icon(connected ? Icons.sync_rounded : Icons.link, size: 16),
       label: Text(connected ? 'Senkronize et' : 'UETS’ye bağlan'),
@@ -723,11 +727,15 @@ class _UetsPageState extends State<UetsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // A phone: the court in full, on two lines if need be;
+                  // the badges under it, not beside it.
                   Text(
                     parsed == null
                         ? m.subject
+                        : _narrow
+                        ? parsed.unit
                         : '${parsed.unit} · ${parsed.number}',
-                    maxLines: 1,
+                    maxLines: _narrow ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
@@ -739,22 +747,36 @@ class _UetsPageState extends State<UetsPage> {
                     [
                       if (kind.isNotEmpty) kind,
                       if (m.sender.isNotEmpty && parsed == null) m.sender,
-                      'kutuya giriş ${_date(m.sent)}',
+                      if (!_narrow) 'kutuya giriş ${_date(m.sent)}',
                       'tebliğ ${_date(m.served)}',
                     ].join(' · '),
-                    maxLines: 1,
+                    maxLines: _narrow ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11.5,
                       color: AgendaColors.muted,
                     ),
                   ),
-                  if (_narrow) ...[const SizedBox(height: 4), tag],
+                  if (_narrow) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        tag,
+                        if (badge != null)
+                          KeyedSubtree(
+                            key: ValueKey('uets-badge-${m.id}'),
+                            child: _tag(badge),
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
             if (!_narrow) ...[const SizedBox(width: 10), tag],
-            if (badge != null) ...[
+            if (badge != null && !_narrow) ...[
               const SizedBox(width: 8),
               KeyedSubtree(
                 key: ValueKey('uets-badge-${m.id}'),
@@ -1550,7 +1572,8 @@ class _UetsPageState extends State<UetsPage> {
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                textStyle: const TextStyle(fontFamily: 'LiberationSans', 
+                textStyle: const TextStyle(
+                  fontFamily: 'LiberationSans',
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),

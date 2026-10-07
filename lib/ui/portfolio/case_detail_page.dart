@@ -2297,6 +2297,22 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
   String? _fetching;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _auto(_at));
+  }
+
+  /// The document come to: fetched at once when it is not here and UYAP is
+  /// there to ask, as one opened to be read.
+  void _auto(int i) {
+    if (!mounted || i < 0 || i >= widget.documents.length) return;
+    final d = widget.documents[i];
+    if (_file(d) != null || _fetching != null) return;
+    if (!widget.controller.connected) return;
+    unawaited(_fetch(d));
+  }
+
+  @override
   void dispose() {
     _pages.dispose();
     super.dispose();
@@ -2371,7 +2387,10 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
         body: PageView.builder(
           controller: _pages,
           itemCount: docs.length,
-          onPageChanged: (i) => setState(() => _at = i),
+          onPageChanged: (i) {
+            setState(() => _at = i);
+            _auto(i);
+          },
           itemBuilder: (context, i) {
             final doc = docs[i];
             final kept = _file(doc);
