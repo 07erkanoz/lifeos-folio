@@ -11,6 +11,7 @@ import '../../services/portal/portal_hearing.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
+import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
@@ -265,11 +266,37 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(pad, 0, pad, 16),
-                sliver: SliverToBoxAdapter(child: _tabsCard(context, wide)),
+                sliver: _tab == _Tab.documents && _c.record != null
+                    ? _documentsSliver(context, wide)
+                    : SliverToBoxAdapter(child: _tabsCard(context, wide)),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// The tabs' card with the documents in it, its rows built as they come
+  /// on the screen.
+  Widget _documentsSliver(BuildContext context, bool wide) {
+    final scheme = Theme.of(context).colorScheme;
+    final entries = _documentEntries();
+    return DecoratedSliver(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      sliver: SliverMainAxisGroup(
+        slivers: [
+          SliverToBoxAdapter(child: _tabsCard(context, wide, entries: entries)),
+          SliverList.builder(
+            itemCount: entries.length,
+            itemBuilder: (context, i) => _entryRow(context, entries[i]),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+        ],
       ),
     );
   }
@@ -667,16 +694,20 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     ],
   );
 
+  /// The documents newest first, sorted once a record, not at each frame.
   List<UyapCaseDocument> get _documents {
-    final out = <UyapCaseDocument>[];
-    for (final d in _c.record?.documents ?? const <UyapCaseDocument>[]) {
-      out.add(d);
+    final record = _c.record;
+    if (!identical(record, _sortedFor)) {
+      _sortedFor = record;
+      final none = DateTime(1900);
+      _sorted = [...?record?.documents]
+        ..sort((a, b) => (b.date ?? none).compareTo(a.date ?? none));
     }
-    out.sort(
-      (a, b) => (b.date ?? DateTime(1900)).compareTo(a.date ?? DateTime(1900)),
-    );
-    return out;
+    return _sorted;
   }
+
+  UyapCaseRecord? _sortedFor;
+  List<UyapCaseDocument> _sorted = const [];
 
   Widget _summaries(BuildContext context, bool wide) {
     final now = DateTime.now();
@@ -824,7 +855,14 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           );
   }
 
-  Widget _tabsCard(BuildContext context, bool wide) {
+  /// [entries]: the documents' rows, without the card: they follow it
+  /// row by row in the page's own scroll (see [_documentEntries]).
+  Widget _tabsCard(
+    BuildContext context,
+    bool wide, {
+    List<({String? bucket, UyapCaseDocument? doc, int? attachment})>? entries,
+  }) {
+    final bare = entries != null;
     final scheme = Theme.of(context).colorScheme;
     final docs = _c.record?.documents ?? const <UyapCaseDocument>[];
     final docCount = docs.fold<int>(0, (s, d) => s + 1 + d.attachments.length);
@@ -887,66 +925,84 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ),
       ),
     );
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  tab(
-                    _Tab.documents,
-                    'Evraklar',
-                    docCount,
-                    fresh: _fresh.length,
-                  ),
-                  tab(_Tab.hearings, 'Duruşmalar', _hearings.length),
-                  tab(_Tab.deadlines, 'Süreler & Tebligat', deadlines),
-                  tab(_Tab.parties, 'Taraflar', parties),
-                  tab(_Tab.facts, 'Künye', null),
-                  tab(_Tab.petitions, 'Dilekçelerim', _petitions.length),
-                ],
-              ),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                tab(_Tab.documents, 'Evraklar', docCount, fresh: _fresh.length),
+                tab(_Tab.hearings, 'Duruşmalar', _hearings.length),
+                tab(_Tab.deadlines, 'Süreler & Tebligat', deadlines),
+                tab(_Tab.parties, 'Taraflar', parties),
+                tab(_Tab.facts, 'Künye', null),
+                tab(_Tab.petitions, 'Dilekçelerim', _petitions.length),
+              ],
             ),
           ),
-          switch (_tab) {
-            _Tab.documents => _documentsTab(context, wide),
-            _Tab.hearings => _hearingsTab(context),
-            _Tab.deadlines => _deadlinesTab(context),
-            _Tab.parties => _partiesTab(context),
-            _Tab.facts => _factsTab(context),
-            _Tab.petitions => _petitionsTab(context),
-          },
-        ],
-      ),
+        ),
+        switch (_tab) {
+          _Tab.documents => _documentsTab(context, wide, entries: entries),
+          _Tab.hearings => _hearingsTab(context),
+          _Tab.deadlines => _deadlinesTab(context),
+          _Tab.parties => _partiesTab(context),
+          _Tab.facts => _factsTab(context),
+          _Tab.petitions => _petitionsTab(context),
+        },
+      ],
     );
+    return bare ? content : _card(child: content);
   }
 
   // Documents.
 
-  bool _isDecision(UyapCaseDocument d) =>
-      UyapWebService.fold('${d.type} ${d.description}').contains('karar');
-  bool _isPetition(UyapCaseDocument d) =>
-      UyapWebService.fold('${d.type} ${d.description}').contains('dilekce');
+  bool _isDecision(UyapCaseDocument d) => _folded(d).kind.contains('karar');
+  bool _isPetition(UyapCaseDocument d) => _folded(d).kind.contains('dilekce');
 
+  /// Which documents are on disk, looked at once a record, not at every
+  /// row of every frame: a list of hundreds stuttered as it scrolled.
   bool _downloaded(UyapCaseDocument d) {
     final record = _c.record;
-    return record != null && _c.store.fileOf(record, d.key) != null;
+    if (record == null) return false;
+    if (!identical(record, _onDiskFor)) {
+      _onDiskFor = record;
+      _onDisk = {
+        for (final key in record.files.keys)
+          if (_c.store.fileOf(record, key) != null) key,
+      };
+    }
+    return _onDisk.contains(d.key);
   }
 
-  bool _shows(UyapCaseDocument d) {
-    final q = UyapWebService.fold(_search.text.trim());
-    if (q.isNotEmpty &&
-        !UyapWebService.fold('${d.title} ${d.sender} ${d.approved}')
-            .contains(q)) {
-      return false;
+  UyapCaseRecord? _onDiskFor;
+  Set<String> _onDisk = const {};
+
+  /// A document's words folded, once a record: what the search looks in,
+  /// and its kind.
+  ({String search, String kind}) _folded(UyapCaseDocument d) {
+    final record = _c.record;
+    if (!identical(record, _foldedFor)) {
+      _foldedFor = record;
+      _foldedText.clear();
     }
+    return _foldedText[d.key] ??= (
+      search: UyapWebService.fold('${d.title} ${d.sender} ${d.approved}'),
+      kind: UyapWebService.fold('${d.type} ${d.description}'),
+    );
+  }
+
+  UyapCaseRecord? _foldedFor;
+  final _foldedText = <String, ({String search, String kind})>{};
+
+  /// [q]: the search, folded once for the whole list.
+  bool _shows(UyapCaseDocument d, String q) {
+    if (q.isNotEmpty && !_folded(d).search.contains(q)) return false;
     return switch (_filter) {
       _DocFilter.all => true,
       _DocFilter.fresh => _fresh.contains(d.key),
@@ -968,7 +1024,14 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     return '${_months[d.month - 1]} ${d.year}';
   }
 
-  Widget _documentsTab(BuildContext context, bool wide) {
+  /// [entries]: the rows, made already, which then follow the tab in the
+  /// page's own scroll rather than in it.
+  Widget _documentsTab(
+    BuildContext context,
+    bool wide, {
+    List<({String? bucket, UyapCaseDocument? doc, int? attachment})>? entries,
+  }) {
+    final head = entries != null;
     final scheme = Theme.of(context).colorScheme;
     final record = _c.record;
     if (record == null) {
@@ -1002,37 +1065,10 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         onSelected: (_) => setState(() => _filter = f),
       ),
     );
-    final rows = <Widget>[];
-    String? bucket;
-    for (final d in docs) {
-      final children = [
-        for (final a in d.attachments)
-          if (_shows(a)) a,
-      ];
-      if (!_shows(d) && children.isEmpty) continue;
-      final b = _bucket(d.date);
-      if (b != bucket) {
-        bucket = b;
-        rows.add(
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
-            child: Text(
-              b,
-              style: const TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: .9,
-                color: AgendaColors.muted,
-              ),
-            ),
-          ),
-        );
-      }
-      rows.add(_docRow(context, d));
-      for (final (i, a) in children.indexed) {
-        rows.add(_docRow(context, a, attachment: i + 1));
-      }
-    }
+    final shown = entries ?? _documentEntries();
+    final rows = head
+        ? const <Widget>[]
+        : [for (final e in shown) _entryRow(context, e)];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1072,7 +1108,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             ],
           ),
         ),
-        if (rows.isEmpty)
+        if (shown.isEmpty)
           Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
@@ -1089,6 +1125,64 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       ],
     );
   }
+
+  /// The documents' list as it shows: a month's heading, a document, an
+  /// attachment, in order. Light to make; each row is built only when it
+  /// is on the screen (a case of seven hundred documents built them all at
+  /// every change, and stuttered as it scrolled).
+  /// Made again only when the record, the search, the filter or the new
+  /// ones change: a sync's progress, told often, leaves it as it was.
+  List<({String? bucket, UyapCaseDocument? doc, int? attachment})>
+  _documentEntries() {
+    final q = UyapWebService.fold(_search.text.trim());
+    final record = _c.record;
+    final key = (_filter, q, _fresh.length);
+    if (identical(record, _entriesFor) && key == _entriesKey) return _entries;
+    final out = <({String? bucket, UyapCaseDocument? doc, int? attachment})>[];
+    String? bucket;
+    for (final d in _documents) {
+      final children = [
+        for (final a in d.attachments)
+          if (_shows(a, q)) a,
+      ];
+      if (!_shows(d, q) && children.isEmpty) continue;
+      final b = _bucket(d.date);
+      if (b != bucket) {
+        bucket = b;
+        out.add((bucket: b, doc: null, attachment: null));
+      }
+      out.add((bucket: null, doc: d, attachment: null));
+      for (final (i, a) in children.indexed) {
+        out.add((bucket: null, doc: a, attachment: i + 1));
+      }
+    }
+    _entriesFor = record;
+    _entriesKey = key;
+    return _entries = out;
+  }
+
+  UyapCaseRecord? _entriesFor;
+  (_DocFilter, String, int)? _entriesKey;
+  List<({String? bucket, UyapCaseDocument? doc, int? attachment})> _entries =
+      const [];
+
+  Widget _entryRow(
+    BuildContext context,
+    ({String? bucket, UyapCaseDocument? doc, int? attachment}) e,
+  ) => e.doc == null
+      ? Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+          child: Text(
+            e.bucket!,
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .9,
+              color: AgendaColors.muted,
+            ),
+          ),
+        )
+      : _docRow(context, e.doc!, attachment: e.attachment);
 
   Widget _docRow(BuildContext context, UyapCaseDocument d, {int? attachment}) {
     final scheme = Theme.of(context).colorScheme;

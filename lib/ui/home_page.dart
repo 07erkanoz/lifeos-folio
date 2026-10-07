@@ -1179,12 +1179,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// The case of the agenda or of UETS, by the portal's [key], on its own
   /// page in UYAP Dosyalarım: the portfolio has every case, nothing is
   /// added first.
+  /// Straight to the case's page: the whole portfolio is not built first
+  /// on the way to it.
   bool _openPortalCase(String key) {
-    unawaited(
-      _selectGroup('uyap').then((_) {
-        if (mounted) setState(() => _group = 'uyap:$key');
-      }),
-    );
+    unawaited(_selectGroup('uyap:$key'));
     return true;
   }
 

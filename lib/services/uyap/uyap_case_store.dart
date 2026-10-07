@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
@@ -424,23 +425,41 @@ class UyapCaseStore {
   /// earlier Folio's mobile download could save one document's content for
   /// several. Those files Folio put in the case's folders are deleted, the
   /// documents are no longer marked downloaded, and are fetched again.
+  ///
+  /// Every file of the case is read and hashed, off the window's isolate,
+  /// and only when the case's files changed since they were last looked
+  /// at: done at each opening, it held the window for seconds.
   Future<UyapCaseRecord> dropSameContent(UyapCaseRecord record) async {
     if (record.files.length < 2) return record;
+    final files = Map<String, String>.from(record.files);
+    final signature =
+        (files.entries.toList()..sort((a, b) => a.key.compareTo(b.key)))
+            .map((e) => '${e.key}=${e.value}')
+            .join('|');
+    if (_checkedFiles[record.key] == signature) return record;
+    final digests = await Isolate.run(() {
+      final out = <String, String>{};
+      for (final MapEntry(key: key, value: path) in files.entries) {
+        try {
+          out[key] = sha256.convert(File(path).readAsBytesSync()).toString();
+        } catch (_) {}
+      }
+      return out;
+    });
     final byDigest = <String, List<String>>{};
-    for (final MapEntry(key: key, value: path) in record.files.entries) {
-      try {
-        final digest = sha256.convert(await File(path).readAsBytes());
-        (byDigest['$digest'] ??= []).add(key);
-      } catch (_) {}
+    for (final MapEntry(key: key, value: digest) in digests.entries) {
+      (byDigest[digest] ??= []).add(key);
     }
     final shared = {
       for (final keys in byDigest.values)
         if (keys.length > 1) ...keys,
     };
-    if (shared.isEmpty) return record;
+    if (shared.isEmpty) {
+      _checkedFiles[record.key] = signature;
+      return record;
+    }
     await settings.load();
     final ours = [settings.folder, p.join((await _root()).path, 'belgeler')];
-    final files = {...record.files};
     for (final key in shared) {
       final path = files.remove(key)!;
       if (ours.any((root) => p.isWithin(root, path))) {
@@ -454,6 +473,10 @@ class UyapCaseStore {
     await _write(next);
     return next;
   }
+
+  /// Each case's files as they were when last found to hold no copies,
+  /// in this run: looked at again only when they change.
+  final _checkedFiles = <String, String>{};
 
   /// The document of [key] on disk, if it is there still.
   File? fileOf(UyapCaseRecord record, String key) {
