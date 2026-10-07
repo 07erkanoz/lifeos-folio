@@ -26,7 +26,7 @@ const _order = [
 
 List<DeadlineReason> leadingReasons(KeptDeadline d, {int count = 2}) {
   final rs = [...d.record.reasons]
-    ..removeWhere((r) => r.code == 'ulasmaDogrulanmadi' || r.code == 'dayanak');
+    ..removeWhere((r) => r.code == 'besGunKurali' || r.code == 'dayanak');
   rs.sort((a, b) {
     int at(DeadlineReason r) {
       final i = _order.indexOf(r.code);

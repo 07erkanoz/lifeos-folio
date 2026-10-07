@@ -223,9 +223,10 @@ List<DeadlineRecord> noticeDeadlines(
     final reasons = <DeadlineReason>[
       ...lead,
       const DeadlineReason(
-        'ulasmaDogrulanmadi',
-        'Tebliğ günü, UETS’in tebligatı kutuya koyduğu andan beş gün '
-            'sonra sayıldı; ulaşma deliliyle doğrulanmadı.',
+        'besGunKurali',
+        'Tebliğ, tebligatın elektronik adresinize ulaştığı (UETS kutusuna '
+            'girdiği) günü izleyen 5. günün sonunda yapılmış sayıldı (Tebligat '
+            'K. m.7/a). Okuma tarihi bunu değiştirmez.',
       ),
       if (!turkeyOffsetKnown(sent))
         const DeadlineReason(

@@ -266,7 +266,7 @@ void main() {
         expect(d.record.dueDay, '2026-10-19');
         expect(
           d.record.reasons.map((r) => r.code),
-          containsAll(['ulasmaDogrulanmadi', 'aidiyet']),
+          containsAll(['besGunKurali', 'aidiyet']),
         );
         expect(d.record.evidence['kaynak'], 'ek');
       }
