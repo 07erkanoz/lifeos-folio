@@ -254,9 +254,9 @@ class OfficeNetwork extends ChangeNotifier {
               theirs,
               from: ch.peer.deviceId,
               mayBroadcast: ledger.isManager,
+              added: (msg) => _messageCame(theirs.id, msg),
             )) {
           notifyListeners();
-          _heard(theirs.id);
         }
         final mine = theirs == null ? null : chats.of(theirs.id);
         await ch.send({'t': 'sohbet', 'sohbet': mine?.toJson()});
@@ -267,7 +267,11 @@ class OfficeNetwork extends ChangeNotifier {
       if (m['t'] == 'gorev') {
         final theirs = OfficeTask.fromJson(m['gorev']);
         if (theirs != null &&
-            await tasks.merge(theirs, from: ch.peer.deviceId)) {
+            await tasks.merge(
+              theirs,
+              from: ch.peer.deviceId,
+              added: (e) => _taskMoved(theirs.id, e),
+            )) {
           notifyListeners();
         }
         final mine = theirs == null ? null : tasks.of(theirs.id);
@@ -496,17 +500,34 @@ class OfficeNetwork extends ChangeNotifier {
       final m = await reply;
       await ch.close();
       final theirs = OfficeTask.fromJson(m['gorev']);
-      if (theirs != null && await tasks.merge(theirs, from: peer.deviceId)) {
+      if (theirs != null &&
+          await tasks.merge(
+            theirs,
+            from: peer.deviceId,
+            added: (e) => _taskMoved(theirs.id, e),
+          )) {
         notifyListeners();
       }
     } catch (_) {}
   }
 
-  /// Something new came in a talk: for the notifications to tell.
-  void Function(Chat chat)? onChat;
-  void _heard(String chatId) {
+  /// Something another member wrote, for the notifications to tell.
+  void Function(Chat chat, ChatMessage message)? onMessage;
+
+  /// Something another member did in a task.
+  void Function(OfficeTask task, TaskEvent event)? onTaskEvent;
+
+  void _messageCame(String chatId, ChatMessage m) {
     final c = chats.of(chatId);
-    if (c != null) onChat?.call(c);
+    if (c != null && m.by != _self?.deviceId) onMessage?.call(c, m);
+  }
+
+  void _taskMoved(String taskId, TaskEvent e) {
+    // Read after it is kept: the callback comes while it is being added.
+    scheduleMicrotask(() {
+      final t = tasks.of(taskId);
+      if (t != null && e.by != _self?.deviceId) onTaskEvent?.call(t, e);
+    });
   }
 
   OfficeMember? get _me => ledger.member(_self?.deviceId ?? '');
@@ -650,9 +671,9 @@ class OfficeNetwork extends ChangeNotifier {
             theirs,
             from: peer.deviceId,
             mayBroadcast: ledger.isManager,
+            added: (msg) => _messageCame(theirs.id, msg),
           )) {
         notifyListeners();
-        _heard(theirs.id);
       }
     } catch (_) {}
     // This device's files that have not yet reached it.

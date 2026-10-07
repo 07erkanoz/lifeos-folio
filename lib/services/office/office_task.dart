@@ -440,7 +440,11 @@ class OfficeTasks {
   /// Takes a task as another device has it: what is new in it is added,
   /// what one may not have done is left out; true when anything changed.
   /// The giver's words of what the task is are kept as the giver sent them.
-  Future<bool> merge(OfficeTask theirs, {required String from}) async {
+  Future<bool> merge(
+    OfficeTask theirs, {
+    required String from,
+    void Function(TaskEvent event)? added,
+  }) async {
     if (!theirs.people.contains(from)) return false;
     final mine = _tasks[theirs.id];
     if (mine == null) {
@@ -451,6 +455,7 @@ class OfficeTasks {
         if (mayDo(kept, e.kind, e.by)) kept.events.add(e);
       }
       await put(kept);
+      kept.events.forEach(added ?? (_) {});
       return true;
     }
     final seen = {for (final e in mine.events) e.id};
@@ -458,6 +463,7 @@ class OfficeTasks {
     for (final e in theirs.events) {
       if (seen.contains(e.id) || !mayDo(mine, e.kind, e.by)) continue;
       mine.events.add(e);
+      added?.call(e);
       changed = true;
     }
     if (changed) await put(mine);

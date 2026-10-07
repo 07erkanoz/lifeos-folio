@@ -5,6 +5,7 @@ import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import 'agenda/uyap_notices_page.dart';
 import '../services/office/office_network.dart';
+import '../services/office/office_notices.dart';
 import '../services/platform/system_notices.dart';
 import '../services/portal/background_notices.dart';
 import '../services/portal/uyap_notice_alerts.dart';
@@ -714,6 +715,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(OfficeNetwork.instance.resume());
       OfficeNetwork.instance.incoming.addListener(_pairingAsked);
       OfficeNetwork.instance.incomingOffer.addListener(_offerCame);
+      tellOffice(OfficeNetwork.instance);
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
       PortalSync.instance.noticesVersion.addListener(_portalSynced);
@@ -1394,6 +1396,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await windowManager.show();
         await windowManager.focus();
       } catch (_) {}
+    }
+    // The office's words: their pages.
+    for (final (prefix, group) in const [
+      ('mesaj:', 'mesajlar'),
+      ('gorev:', 'gorevler'),
+      ('buro:', 'buro'),
+    ]) {
+      if (payload.startsWith(prefix)) {
+        if (mounted) await _selectGroup(group);
+        return;
+      }
     }
     final signature = payload.startsWith('notice:')
         ? payload.substring(7)

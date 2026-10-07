@@ -311,6 +311,7 @@ class OfficeChats {
     Chat theirs, {
     required String from,
     required bool Function(String deviceId) mayBroadcast,
+    void Function(ChatMessage message)? added,
   }) async {
     final mine = _chats[theirs.id];
     final members = mine?.members ?? theirs.members;
@@ -327,6 +328,7 @@ class OfficeChats {
       final kept = Chat.fromJson(theirs.toJson())!..messages.clear();
       kept.messages.addAll(theirs.messages.where(allowed));
       await put(kept);
+      kept.messages.forEach(added ?? (_) {});
       return true;
     }
     final seen = {for (final m in mine.messages) m.id};
@@ -334,6 +336,7 @@ class OfficeChats {
     for (final m in theirs.messages) {
       if (seen.contains(m.id) || !allowed(m)) continue;
       mine.messages.add(m);
+      added?.call(m);
       changed = true;
     }
     if (changed) await put(mine);
