@@ -387,6 +387,14 @@ class UyapCaseStore {
     for (final d in documents) ...[d.key, for (final a in d.attachments) a.key],
   };
 
+  /// Takes every document off the new ones: the case has been opened.
+  Future<UyapCaseRecord> seenAll(UyapCaseRecord record) async {
+    if (record.fresh.isEmpty) return record;
+    final next = record.copyWith(fresh: const {});
+    await _write(next);
+    return next;
+  }
+
   /// Takes [key] off the new ones: it has been looked at.
   Future<UyapCaseRecord> seen(UyapCaseRecord record, String key) async {
     if (!record.fresh.contains(key)) return record;

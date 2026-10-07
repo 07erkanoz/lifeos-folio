@@ -31,6 +31,10 @@ class LibrarySidebar extends StatelessWidget {
   /// The desktop's first page, at the top of the list.
   final bool showHome;
 
+  /// The cases with something new in them: new to the portfolio, or with
+  /// documents not yet looked at.
+  final int uyapFresh;
+
   /// The agenda's hearings today, for the badge beside Ajanda.
   final int agendaToday;
 
@@ -51,6 +55,7 @@ class LibrarySidebar extends StatelessWidget {
     this.uyapFolder,
     this.uyapAvailable = false,
     this.showHome = false,
+    this.uyapFresh = 0,
     this.agendaToday = 0,
     this.uetsUnread = 0,
   });
@@ -160,6 +165,9 @@ class LibrarySidebar extends StatelessWidget {
                     uyapCases.length,
                     key: const ValueKey('uyap-folder'),
                     selected: group == 'uyap' || group.startsWith('uyap:'),
+                    badge: uyapFresh > 0
+                        ? _badge(context, '$uyapFresh yeni', danger: false)
+                        : null,
                   ),
                 _nav(
                   context,

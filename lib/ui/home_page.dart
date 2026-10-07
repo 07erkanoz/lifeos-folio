@@ -3,7 +3,6 @@ import 'agenda/channel_bar.dart';
 import 'agenda/mobile_connect.dart';
 import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
-import '../services/portal/case_import.dart';
 import '../services/portal/observed.dart' show caseKey;
 import '../services/portal/portal_case.dart';
 import '../services/portal/portal_database.dart';
@@ -35,6 +34,8 @@ import 'widgets/document_actions_dialog.dart';
 import 'widgets/spreadsheet_editor.dart';
 import 'widgets/spreadsheet_viewer.dart';
 import 'widgets/hover_document_preview.dart';
+import 'portfolio/case_detail_page.dart';
+import 'portfolio/portfolio_page.dart';
 import 'desktop/desktop_home.dart';
 import 'widgets/editor_ribbon.dart';
 import 'widgets/desktop_frame.dart' show windowFullScreen;
@@ -86,7 +87,6 @@ import 'widgets/document_preview_widget.dart';
 import 'widgets/drop_zone.dart';
 import 'widgets/editor_file_menu.dart';
 import 'widgets/editor_widget.dart';
-import 'widgets/uyap_cases_page.dart';
 import 'widgets/uyap_operations_dialog.dart';
 import 'widgets/image_viewer_widget.dart';
 import 'widgets/optimize_dialog.dart';
@@ -997,6 +997,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _deadlinesToday = 0;
   NextHearingLine? _nextHearing;
 
+  /// The cases with news in them, for the badge beside UYAP Dosyalarım.
+  int _uyapFresh = 0;
+
   /// The office as the desktop's first page shows it.
   DesktopHomeOffice _office = const DesktopHomeOffice();
 
@@ -1097,20 +1100,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _deadlinesToday = deadlines;
           _nextHearing = line;
           _office = office;
+          _uyapFresh = db
+              .caseStates()
+              .values
+              .where((s) => s.fresh > 0 || s.isNew)
+              .length;
         });
       }
     } catch (_) {
       // The badge is a convenience; the agenda shows the same when opened.
     }
-  }
-
-  /// The UYAP Dosyalarım key of the case the agenda names by [caseKey], if
-  /// the case is kept there.
-  String? _uyapKeyFor(String key) {
-    for (final (record, _) in _uyapCases) {
-      if (caseKey(record.number, record.court) == key) return record.key;
-    }
-    return null;
   }
 
   /// A petition for the agenda's [kase]: UYAP Dosyalarım's own link when
@@ -1138,60 +1137,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     unawaited(_newDocument(forCase: link));
   }
 
-  /// The case of the agenda or of UETS, by [key], on its UYAP Dosyalarım
-  /// page: added there first, through whichever portal is connected, when
-  /// it is not there yet.
+  /// The case of the agenda or of UETS, by the portal's [key], on its own
+  /// page in UYAP Dosyalarım: the portfolio has every case, nothing is
+  /// added first.
   bool _openPortalCase(String key) {
-    final found = _uyapKeyFor(key);
-    if (found != null) {
-      setState(() => _group = 'uyap:$found');
-    } else {
-      unawaited(_importPortalCase(key));
-    }
-    return true;
-  }
-
-  Future<void> _importPortalCase(String key) async {
-    final sync = PortalSync.instance;
-    final kase = await sync.portalCase(key);
-    if (!mounted) return;
-    if (kase == null) {
-      showNotice(context, 'Dosya portföyde bulunamadı');
-      return;
-    }
-    if (!sync.web.connected && !sync.mobile.connected) {
-      showNotice(
-        context,
-        'Dosya henüz UYAP Dosyalarım’da yok',
-        detail: 'Eklemek için UYAP Web’e ya da UYAP Mobil’e bağlanın.',
-      );
-      return;
-    }
-    showNotice(
-      context,
-      'Dosya UYAP Dosyalarım’a ekleniyor',
-      detail: '${kase.court} ${kase.number}',
+    unawaited(
+      _selectGroup('uyap').then((_) {
+        if (mounted) setState(() => _group = 'uyap:$key');
+      }),
     );
-    try {
-      final record = await PortalCaseImport().add(kase);
-      if (!mounted) return;
-      setState(() => _group = 'uyap:${record.key}');
-      showNotice(
-        context,
-        'Dosya UYAP Dosyalarım’a eklendi',
-        detail:
-            '${record.court} ${record.number} · ${record.documents.length} evrak',
-      );
-    } catch (e) {
-      if (mounted) {
-        showNotice(
-          context,
-          'Dosya eklenemedi',
-          detail: '$e'.replaceFirst('Bad state: ', ''),
-          kind: NoticeKind.error,
-        );
-      }
-    }
+    return true;
   }
 
   /// The desktop's first page (docs/design/masaustu-anasayfa-taslak.png).
@@ -1237,16 +1192,34 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         unawaited(_addFiles([path], index: false, external: true)),
   );
 
-  Widget _uyapPage() => UyapCasesPage(
-    caseKey: _group.startsWith('uyap:') ? _group.substring(5) : null,
-    onShowCase: (key) =>
-        setState(() => _group = key == null ? 'uyap' : 'uyap:$key'),
-    onOpen: (file) =>
-        unawaited(_addFiles([file.path], index: false, external: true)),
-    onSaved: (_) =>
-        unawaited(searchUyapFolder(_library).catchError((Object _) => false)),
-    onNewPetition: (link) => unawaited(_newDocument(forCase: link)),
-  );
+  /// UYAP Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
+  /// portfolio, and a case's own page as `uyap:<the portal's key>`.
+  Widget _uyapPage() {
+    final key = _group.startsWith('uyap:') ? _group.substring(5) : null;
+    if (key == null) {
+      return PortfolioPage(
+        key: const ValueKey('portfolio'),
+        lawyer: _lawyerName,
+        onShowCase: (key) => setState(() => _group = 'uyap:$key'),
+      );
+    }
+    return CaseDetailPage(
+      key: ValueKey('case-$key'),
+      caseKey: key,
+      lawyer: _lawyerName,
+      onBack: () {
+        setState(() => _group = 'uyap');
+        unawaited(_countAgenda());
+      },
+      onOpen: (file) =>
+          unawaited(_addFiles([file.path], index: false, external: true)),
+      onOpenPath: (path) =>
+          unawaited(_openRecent(EvrakFile.fromPath(path), edit: true)),
+      onSaved: (_) =>
+          unawaited(searchUyapFolder(_library).catchError((Object _) => false)),
+      onNewPetition: (link) => unawaited(_newDocument(forCase: link)),
+    );
+  }
 
   void _openConvertDialog({List<EvrakFile>? specificFiles}) {
     final files =
@@ -1931,6 +1904,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uetsUnread: _uetsUnread,
     uyapAvailable: true,
     showHome: !(Platform.isAndroid || Platform.isIOS),
+    uyapFresh: _uyapFresh,
     selectFolder: (id) async {
       _closeDrawer();
       if (!await _leaveEditor()) return;
