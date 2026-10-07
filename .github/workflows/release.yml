@@ -237,9 +237,11 @@ jobs:
       - name: Ses kitaplığı
         # dart run builds every package's native code first, the recorder's
         # included, and that links against ALSA.
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+          sudo apt-get $apt_opts update
+          sudo apt-get $apt_opts install -y libasound2-dev
       - name: Sürüm bilgilerini imzala
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}

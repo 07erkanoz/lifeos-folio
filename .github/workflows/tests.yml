@@ -51,7 +51,9 @@ jobs:
           exit 1
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The suite takes about a quarter of an hour; a slow package mirror on
+    # top of it ran past thirty minutes twice on the day of a release.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: subosito/flutter-action@v2.23.0
@@ -72,24 +74,23 @@ jobs:
         # Skipping is the failure mode this job exists to prevent, and a skipped
         # test still reports success. Fail here instead, where it is legible.
         run: tesseract --list-langs
-      - name: Ses kitaplığı
+      - name: Ses kitaplığı ve Linux derleme araçları
         # The recorder's native code links against ALSA when the tests build
-        # it, before the Linux build tools below are installed.
+        # it; the Linux build below needs the rest. One update and one
+        # install, retried, instead of two that each waited on the mirror.
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+          sudo apt-get $apt_opts update
+          sudo apt-get $apt_opts install -y libasound2-dev ninja-build \
+            libgtk-3-dev libayatana-appindicator3-dev libwebkit2gtk-4.1-dev \
+            libsecret-1-dev
       - name: Testler
         run: flutter test
-      - name: Linux derleme araçları
-        # The Linux runner carries C++ of its own — the spelling bridge, the
-        # file actions, the quick search — and nothing compiled any of it:
-        # the tests never build a runner, and the only packaging job builds
-        # Windows. So it was written and shipped unbuilt.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libgtk-3-dev \
-            libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libasound2-dev \
-            libsecret-1-dev
+      # The Linux runner carries C++ of its own — the spelling bridge, the
+      # file actions, the quick search — and nothing compiled any of it: the
+      # tests never build a runner, and the only packaging job builds Windows.
+      # So it was written and shipped unbuilt.
       - name: Linux uygulamasını derle
         run: flutter build linux --release
       - name: LifeOS Editör pakette
