@@ -7,6 +7,7 @@ import 'dart:async';
 import 'services/desktop/desktop_instance.dart';
 import 'services/platform/document_launch.dart';
 import 'services/platform/onboarding_store.dart';
+import 'services/security/app_lock.dart';
 import 'services/desktop/desktop_companion.dart';
 import 'services/desktop/native_window.dart';
 import 'ui/desktop/quick_search_palette.dart';
@@ -23,6 +24,7 @@ import 'preview_app.dart';
 import 'services/platform/editor_window.dart' show previewFlag;
 import 'ui/home_page.dart';
 import 'ui/widgets/desktop_frame.dart';
+import 'ui/security/app_lock_gate.dart';
 import 'ui/widgets/onboarding_gate.dart';
 import 'ui/widgets/folio_about_dialog.dart';
 import 'services/editor/editor_settings.dart';
@@ -106,6 +108,8 @@ void main(List<String> arguments) async {
     }
   }
 
+  // Read before the first frame, so that nothing shows before the lock.
+  await AppLock.instance.load();
   runApp(
     EvrakConvertApp(
       windowSession: windowSession,
@@ -362,9 +366,9 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                   final context = _navigator.currentState?.overlay?.context;
                   if (context != null) showFolioAbout(context);
                 },
-                child: child ?? const SizedBox.shrink(),
+                child: AppLockGate(child: child ?? const SizedBox.shrink()),
               )
-            : child ?? const SizedBox.shrink();
+            : AppLockGate(child: child ?? const SizedBox.shrink());
         // On a phone a dialog opens from below, the screen's width, its top
         // corners rounded, as a phone's own sheets do.
         final phone = constraints.maxWidth < 700;

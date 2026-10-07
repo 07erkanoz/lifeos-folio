@@ -9,6 +9,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:evrak_convert/services/security/app_lock.dart';
+import 'package:evrak_convert/ui/security/app_lock_gate.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
 import 'package:evrak_convert/ui/office/office_offer_dialog.dart';
 import 'package:evrak_convert/services/office/office_identity.dart';
@@ -465,6 +467,39 @@ void main() {
     );
     await tester.pump();
     await _shot(tester, 'buro-uyeler');
+    tester.view.reset();
+  });
+
+  testWidgets('app lock', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('folio_lock_shot_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final lock = AppLock(
+      file: () async => File('${dir.path}/kilit.json'),
+      iterations: 1000,
+    );
+    await tester.runAsync(() async {
+      await lock.setPassword('büro-şifresi-1');
+    });
+    lock.lockNow();
+    for (final (size, name) in [
+      (logical, 'kilit'),
+      (const Size(390, 844), 'kilit-telefon'),
+    ]) {
+      tester.view.physicalSize = size * pixelRatio;
+      tester.view.devicePixelRatio = pixelRatio;
+      await tester.pumpWidget(
+        _app(
+          AppLockGate(
+            lock: lock,
+            office: 'Kaya Hukuk Bürosu',
+            child: const Scaffold(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await _shot(tester, name);
+    }
+    lock.dispose();
     tester.view.reset();
   });
 }

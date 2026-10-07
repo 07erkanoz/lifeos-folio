@@ -66,6 +66,7 @@ class LawyerProfile {
     this.phone = '',
     this.email = '',
     this.kep = '',
+    this.officeName = '',
   });
 
   /// The lawyers of the office; [main] is the one a filing is signed by.
@@ -74,6 +75,10 @@ class LawyerProfile {
 
   /// The office's own details.
   final String address, phone, email, kep;
+
+  /// "Kaya Hukuk Bürosu": shown on the lock screen when no office of the
+  /// network names it.
+  final String officeName;
 
   Lawyer? get lawyer {
     final named = lawyers.where((one) => !one.isEmpty).toList();
@@ -87,7 +92,8 @@ class LawyerProfile {
       address.trim().isEmpty &&
       phone.trim().isEmpty &&
       email.trim().isEmpty &&
-      kep.trim().isEmpty;
+      kep.trim().isEmpty &&
+      officeName.trim().isEmpty;
 
   /// The snippet blanks this profile can answer, by name. Only those it has
   /// a value for: a blank the profile cannot fill is asked, not emptied.
@@ -167,6 +173,7 @@ class LawyerProfile {
     'telefon': phone,
     'eposta': email,
     'kep': kep,
+    'buro': officeName,
   };
 
   static LawyerProfile fromJson(Map<String, Object?> json) {
@@ -183,6 +190,7 @@ class LawyerProfile {
       phone: text('telefon'),
       email: text('eposta'),
       kep: text('kep'),
+      officeName: text('buro'),
     );
   }
 

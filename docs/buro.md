@@ -199,6 +199,9 @@ Taslak: [docs/design/buro-yonetim-taslak.html](design/buro-yonetim-taslak.html).
   - KVKK: asgari paylaşım; varsayılan seçili evraktır, bütün evrak bilerek seçilir.
   - **Yazışma:** Her görevin kendi yazışma alanı vardır; mesajlar ve ekleri, durum değişiklikleriyle aynı akışta ama ayrı görünür.
   - Defter: kurucu kalıcı üst yetkilidir, onu yalnız kendisi değiştirir; kayıtların sırası cihaz saatinden değil, her kaydın bağlandığı önceki kayıttan gelir (Matrix'in saat sorunu). Silinen üye kayıtla silinir, başka bir cihaz onu geri getiremez (Syncthing'in sorunu). Sonra: üye çıkınca büro anahtarının yenilenmesi, kurucu için çevrimdışı kurtarma kodu.
+- **Mesajlaşma (görevden bağımsız):** Özel mesaj (iki üye), grup mesajı (seçilen üyeler) ve toplu duyuru (yalnız yöneticiler, bütün büroya). Hepsi üyelerin şifreli kanalından gider; ek evrak gönderilebilir. Görevden bağımsız evrak gönderme Büro ağı sayfasındaki "Gönder" ile sürer.
+- **Bildirimler:** Gelen mesaj, görev, teslim, onay, geri gönderme ve dosya teklifi sistem bildirimi olarak (masaüstünde tepsiden de) çıkar. Folio kilitliyken bildirimde içerik yazmaz, yalnız "Yeni mesaj" gibi genel bir söz çıkar.
+- **Giriş şifresi (Ayarlar › Güvenlik, yapıldı 8 Ekim 2026):** Açılışta ve seçilen süre kullanılmayınca ekran koruyucu gibi bir kilit; büro varsa adı yazar. Şifre ve kurtarma kodu yalnız PBKDF2 özetiyle saklanır; yanlış denemeler bekletilir; kurtarma koduyla yeni şifre konur ve kod yenilenir. Şifre dosyaları şifrelemez (disk şifrelemesi önerilir). Sonra: UYAP/UETS oturumlarını şifreye bağlamak, LifeOS Editör penceresini de kilitlemek, telefonda parmak izi.
 - **Yapım sırası:** (1) büro, üyelik ve roller; (2) görev verme ve pano; (3) gidişat, teslim ve onay; (4) görevle gelen dosya, ajanda ve dosya sayfası bağlantıları.
 
 ## Kararlar (8 Ekim 2026)

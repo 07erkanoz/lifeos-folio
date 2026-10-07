@@ -33,6 +33,7 @@ import '../mobile/lawyer_profile_page.dart';
 import '../mobile/mobile_settings_page.dart'
     show ArchiveFoldersPage, LearningPage;
 import '../mobile/settings_parts.dart';
+import '../security/security_settings.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/default_viewer_dialog.dart';
 import '../widgets/folio_about_dialog.dart';
@@ -589,6 +590,18 @@ class _SettingsPageState extends State<SettingsPage> {
       _Section('profile', 'Profil', Icons.person_outline_rounded, [
         _Entry('profil avukat ad baro sicil tc kimlik', _profileCard(context)),
       ], lead: 'Dilekçelerin ve imzanın kullandığı bilgiler.'),
+      _Section(
+        'security',
+        'Güvenlik',
+        Icons.lock_outline_rounded,
+        lead: 'Folio’yu açmak için şifre ve kurtarma kodu.',
+        [
+          const _Entry(
+            'güvenlik giriş şifre parola kilit kurtarma kodu ekran koruyucu',
+            SecuritySettings(),
+          ),
+        ],
+      ),
       _Section(
         'connections',
         'Bağlantılar',

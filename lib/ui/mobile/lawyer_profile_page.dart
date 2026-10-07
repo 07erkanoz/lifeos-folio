@@ -50,6 +50,7 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
   final _address = TextEditingController();
   final _phone = TextEditingController();
   final _kep = TextEditingController();
+  final _office = TextEditingController();
   final _email = TextEditingController();
   bool _loaded = false;
   bool _filling = false;
@@ -76,6 +77,7 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
     _address.text = p.address;
     _phone.text = p.phone;
     _kep.text = p.kep;
+    _office.text = p.officeName;
     _email.text = p.email;
     _loaded = true;
   }
@@ -87,6 +89,7 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
     phone: _phone.text.trim(),
     email: _email.text.trim(),
     kep: _kep.text.trim(),
+    officeName: _office.text.trim(),
   );
 
   @override
@@ -94,7 +97,7 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
     for (final l in _lawyers) {
       l.dispose();
     }
-    for (final c in [_address, _phone, _kep, _email]) {
+    for (final c in [_address, _phone, _kep, _email, _office]) {
       c.dispose();
     }
     super.dispose();
@@ -282,6 +285,7 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
                 SettingsGroup(
                   padding: const EdgeInsets.fromLTRB(12, 14, 12, 2),
                   children: [
+                    ProfileField(_office, 'Büro adı'),
                     ProfileField(_address, 'Büro adresi'),
                     fieldPair(
                       ProfileField(

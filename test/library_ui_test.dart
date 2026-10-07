@@ -59,6 +59,8 @@ void main() {
       await tester.pumpAndSettle();
       // The settings are a page in the window now, the folders a page of
       // their own under them.
+      await tester.ensureVisible(find.text('Arşiv klasörleri'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Arşiv klasörleri'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('folders-add')));
