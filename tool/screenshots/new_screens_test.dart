@@ -239,6 +239,20 @@ void main() {
     await tester.tap(find.text('Gerekçeli Karar').first);
     await _shot(tester, 'bildirimler');
     await tester.pumpWidget(const SizedBox());
+    tester.view.physicalSize = const Size(390, 844) * pixelRatio;
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: UyapNoticesPage(
+            database: db,
+            sync: sync,
+            onOpenCase: (_) => true,
+          ),
+        ),
+      ),
+    );
+    await _shot(tester, 'telefon-bildirimler');
+    await tester.pumpWidget(const SizedBox());
     sync.dispose();
     db.dispose();
   });

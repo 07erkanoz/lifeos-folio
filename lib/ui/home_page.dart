@@ -1655,10 +1655,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ),
                               // The agenda and UETS fill the page with their
                               // own heading; on a phone the menu button stays.
+                              // UYAP Dosyalarım and a case's page bring
+                              // their own bar on a phone.
                               if (_showLibrary &&
                                   !mobileHome &&
                                   (mobile
-                                      ? _group != 'images'
+                                      ? _group != 'images' &&
+                                            !_isUyapGroup(_group)
                                       : !_isFullPage(_group)))
                                 FoldingChrome(
                                   // On a phone the heading folds away while
@@ -2052,7 +2055,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                              if (_showLibrary && !mobileHome) _statusBar(),
+                              // The archive's line is the archive's; on a
+                              // phone the office's pages have the screen.
+                              if (_showLibrary &&
+                                  !mobileHome &&
+                                  !(mobile && _isOfficePage(_group)))
+                                _statusBar(),
                             ],
                           ),
                         ),

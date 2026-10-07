@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:evrak_convert/services/portal/observed.dart';
@@ -167,17 +168,80 @@ void main() {
   testWidgets('the channels’ chips are buttons, on a desktop and a phone', (
     tester,
   ) async {
-    for (final size in const [Size(1440, 900), Size(390, 844)]) {
-      await pumpList(tester, size);
-      for (final key in const [
-        'portfolio-connect-mobile',
-        'portfolio-connect-web',
-      ]) {
-        final chip = find.byKey(ValueKey(key));
-        expect(chip, findsOneWidget, reason: '$key at $size');
-        expect(tester.widget<InkWell>(chip).onTap, isNotNull);
-      }
+    await pumpList(tester, const Size(1440, 900));
+    for (final key in const [
+      'portfolio-connect-mobile',
+      'portfolio-connect-web',
+    ]) {
+      final chip = find.byKey(ValueKey(key));
+      expect(chip, findsOneWidget, reason: key);
+      expect(tester.widget<InkWell>(chip).onTap, isNotNull);
     }
+    // On a phone they are under the bar's one dot.
+    await pumpList(tester, const Size(390, 844));
+    await tester.tap(find.byKey(const ValueKey('portfolio-live')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('portfolio-connect-mobile')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('portfolio-connect-web')), findsOneWidget);
+  });
+
+  testWidgets('on a phone a filter is a list from below, several at once, '
+      'and a search says where it found what', (tester) async {
+    await pumpList(tester, const Size(390, 844));
+    expect(find.text('2024/318'), findsOneWidget);
+    expect(find.text('2026/295'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('portfolio-kind')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('portfolio-kind')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('portfolio-pick-Ceza')));
+    await tester.pump();
+    expect(find.text('1 dosyayı göster'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('portfolio-pick-Hukuk')));
+    await tester.pump();
+    expect(find.text('2 dosyayı göster'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('portfolio-pick-Hukuk')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('portfolio-pick-apply')));
+    await tester.pumpAndSettle();
+    expect(find.text('2026/295'), findsOneWidget);
+    expect(find.text('2024/318'), findsNothing);
+    // The chip says what was chosen; Temizle takes it off.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('portfolio-kind')),
+        matching: find.text('Ceza'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('portfolio-clear')));
+    await tester.pump();
+    expect(find.text('2024/318'), findsOneWidget);
+    // Searched: how many in each field, and the closed ones beside.
+    await tester.enterText(
+      find.byKey(const ValueKey('portfolio-search')),
+      'karaca',
+    );
+    await tester.pump();
+    expect(find.text('2024/318'), findsOneWidget);
+    expect(find.text('2026/295'), findsNothing);
+    final party = find.byKey(const ValueKey('portfolio-scope-party'));
+    expect(
+      find.descendant(of: party, matching: find.text('1')),
+      findsOneWidget,
+    );
+    final number = find.byKey(const ValueKey('portfolio-scope-number'));
+    expect(
+      find.descendant(of: number, matching: find.text('0')),
+      findsOneWidget,
+    );
+    await tester.tap(number);
+    await tester.pump();
+    expect(find.text('2024/318'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the portfolio fits a phone', (tester) async {
@@ -331,6 +395,47 @@ void main() {
     await tester.pumpAndSettle();
     // The list where it was left.
     expect(find.byKey(const ValueKey('case-doc-b')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('on a phone a kept document goes full screen, and back out', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final record = await store.keep(
+        target: const UyapCase('1', '2024/318', '', civil),
+        details: const UyapCaseDetails(),
+        parties: const [],
+        documents: UyapCaseDocuments([
+          doc('a', 'Tensip Zaptı', '01.09.2026'),
+          doc('b', 'Bilirkişi Raporu', '06.10.2026'),
+        ]),
+      );
+      await store.save(
+        record,
+        doc('b', 'Bilirkişi Raporu', '06.10.2026'),
+        Uint8List.fromList(utf8.encode('rapor')),
+      );
+    });
+    await pumpCase(tester, const Size(390, 844));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('case-doc-b')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const ValueKey('case-doc-b')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('case-preview-full')));
+    await tester.pumpAndSettle();
+    // The document alone: no bar above it, none below.
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.text('Tensip Zaptı'), findsNothing);
+    // Back leaves full screen, not the document.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.textContaining('1 / 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 }

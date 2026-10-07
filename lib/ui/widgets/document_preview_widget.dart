@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import '../../models/evrak_file.dart';
 import '../../services/editor/text_anchor.dart';
@@ -37,6 +38,22 @@ class _DocumentPreviewWidgetState extends State<DocumentPreviewWidget> {
   /// The reader's choice of view; null for the width's: on a phone the
   /// text flows at its width (UYGULAMAPLANI §13), on a computer the pages.
   bool? _flowChoice;
+
+  /// The view's switch, out of the text's way while it is read downwards
+  /// and back as soon as it is scrolled up.
+  bool _switchShown = true;
+
+  bool _scrolled(UserScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    final shown = switch (n.direction) {
+      ScrollDirection.reverse => false,
+      ScrollDirection.forward => true,
+      ScrollDirection.idle => _switchShown,
+    };
+    if (shown != _switchShown) setState(() => _switchShown = shown);
+    return false;
+  }
+
   Future<DocumentPreview> _load() => PreviewCache.load(widget.file);
   @override
   void initState() {
@@ -73,32 +90,48 @@ class _DocumentPreviewWidgetState extends State<DocumentPreviewWidget> {
               padding: const EdgeInsets.all(8),
               child: Text(note, style: const TextStyle(fontSize: 12)),
             ),
-          SignatureBanner(model: model),
+          if (widget.chrome) SignatureBanner(model: model),
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (flows)
-                  FlowingDocumentView(model: model)
-                else
-                  PdfViewerWidget(
-                    bytes: bytes,
-                    onPastEnd: widget.onPastEnd,
-                    chrome: widget.chrome,
-                    onEditAt: widget.onEditAt,
-                  ),
-                // A phone's view and the page's, one tap apart.
-                if (width < 900)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: ViewSwitchChip(
-                      key: const ValueKey('preview-view-switch'),
-                      flowing: flows,
-                      onTap: () => setState(() => _flowChoice = !flows),
+            child: NotificationListener<UserScrollNotification>(
+              onNotification: _scrolled,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (flows)
+                    FlowingDocumentView(model: model)
+                  else
+                    PdfViewerWidget(
+                      bytes: bytes,
+                      onPastEnd: widget.onPastEnd,
+                      chrome: widget.chrome,
+                      onEditAt: widget.onEditAt,
                     ),
-                  ),
-              ],
+                  // A phone's view and the page's, one tap apart.
+                  if (width < 900)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: IgnorePointer(
+                        ignoring: !_switchShown,
+                        child: AnimatedSlide(
+                          offset: _switchShown
+                              ? Offset.zero
+                              : const Offset(0, -1.6),
+                          duration: const Duration(milliseconds: 180),
+                          child: AnimatedOpacity(
+                            opacity: _switchShown ? 1 : 0,
+                            duration: const Duration(milliseconds: 180),
+                            child: ViewSwitchChip(
+                              key: const ValueKey('preview-view-switch'),
+                              flowing: flows,
+                              onTap: () => setState(() => _flowChoice = !flows),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ],

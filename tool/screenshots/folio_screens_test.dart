@@ -21,11 +21,16 @@ import 'package:archive/archive.dart';
 import 'package:evrak_convert/main.dart';
 import 'package:evrak_convert/services/legal/case_law.dart';
 import 'package:evrak_convert/services/pdf/pdf_service.dart';
+import 'package:evrak_convert/services/portal/observed.dart';
+import 'package:evrak_convert/services/portal/portal_case.dart';
+import 'package:evrak_convert/services/portal/portal_channel.dart';
+import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/services/udf/udf_writer.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:evrak_convert/ui/legal/case_law_search_screen.dart';
+import 'package:evrak_convert/ui/widgets/editor_ribbon.dart';
 import 'package:evrak_convert/ui/widgets/editor_toolbar.dart';
 import 'package:evrak_convert/ui/widgets/editor_widget.dart';
 import 'package:evrak_convert/ui/widgets/file_preview.dart';
@@ -69,6 +74,11 @@ const pixelRatio = 2.0;
 
 final _frame = GlobalKey();
 
+const _fallbacks = [
+  ('FallbackSymbols', '/usr/share/fonts/TTF/DejaVuSans.ttf'),
+  ('FallbackEmoji', '/usr/share/fonts/noto/NotoColorEmoji.ttf'),
+];
+
 Future<void> _loadFonts() async {
   Future<void> family(String name, List<String> files) async {
     final loader = FontLoader(name);
@@ -94,6 +104,16 @@ Future<void> _loadFonts() async {
         'fonts/pdf/Liberation$name-$style.ttf',
     ]);
   }
+  // What the system supplies for a symbol the text font lacks (▾, ↻):
+  // flutter_tester falls back on nothing, so these are named instead.
+  for (final (name, file) in _fallbacks) {
+    if (File(file).existsSync()) await family(name, [file]);
+  }
+  // The case numbers' font, which Windows has.
+  await family('Consolas', [
+    for (final style in ['Regular', 'Bold'])
+      'fonts/pdf/LiberationMono-$style.ttf',
+  ]);
   final flutter = File(Platform.resolvedExecutable).parent.parent.parent.parent;
   final material = '${flutter.path}/artifacts/material_fonts';
   await family('MaterialIcons', ['$material/MaterialIcons-Regular.otf']);
@@ -117,10 +137,34 @@ Future<void> _settle(
   }
 }
 
+/// The symbols' fonts behind text that names none, as a computer's
+/// system would put them.
+void _fixFonts(WidgetTester tester) {
+  for (final p in tester.allRenderObjects.whereType<RenderParagraph>()) {
+    final span = p.text;
+    final style = span.style;
+    if (span is! TextSpan || style == null) continue;
+    if (style.fontFamilyFallback?.isNotEmpty ?? false) continue;
+    p.text = TextSpan(
+      text: span.text,
+      children: span.children,
+      style: style.copyWith(
+        fontFamilyFallback: [for (final (name, _) in _fallbacks) name],
+      ),
+      recognizer: span.recognizer,
+      semanticsLabel: span.semanticsLabel,
+      locale: span.locale,
+      spellOut: span.spellOut,
+    );
+  }
+}
+
 Future<void> _shot(WidgetTester tester, String name) async {
   for (var i = 0; i < 10; i++) {
     await tester.pump(const Duration(milliseconds: 100));
   }
+  _fixFonts(tester);
+  await tester.pump();
   final boundary =
       _frame.currentContext!.findRenderObject()! as RenderRepaintBoundary;
   final bytes = await tester.runAsync(() async {
@@ -236,9 +280,12 @@ Future<File> _openPetition(
       ),
     ),
   );
+  // A phone shows the page flowing, without the bar at its foot.
   await _settle(
     tester,
-    () => find.byKey(const ValueKey('citation-status')).evaluate().isNotEmpty,
+    () =>
+        find.byKey(const ValueKey('citation-status')).evaluate().isNotEmpty ||
+        find.byKey(const ValueKey('editor-flowing')).evaluate().isNotEmpty,
   );
   return file;
 }
@@ -373,6 +420,75 @@ Future<UyapCaseStore> _demoCase(
     );
   }
   return store;
+}
+
+/// The demo cases of [_demoCase] in the portfolio, as UYAP Mobil's reading
+/// of it would leave them: UYAP Dosyalarım lists what the portfolio holds,
+/// with what Folio kept of each beside it.
+Future<void> _demoPortfolio() async {
+  final db = await PortalDatabase.shared();
+  final asked = DateTime.now().toUtc();
+  PortalCase one(
+    String number,
+    String court,
+    String code,
+    String type,
+    String opened, {
+    String courtType = '',
+    String courtId = '',
+    CaseFamily family = CaseFamily.court,
+  }) => PortalCase(
+    key: caseKey(number, court),
+    number: number,
+    court: court,
+    family: family,
+    status: Observed('Açık', PortalChannel.uyapMobile, asked),
+    details: Observed(
+      {
+        'yargiTuru': code,
+        'yargiBirimi': courtType,
+        'birimId': courtId,
+        'tur': code == '2' ? 'İcra Dosyası' : 'Dava Dosyası',
+        'davaTuru': type,
+        'acilis': opened,
+      },
+      PortalChannel.uyapMobile,
+      asked,
+      complete: false,
+    ),
+  );
+  db.mergeCases(
+    [
+      one(
+        DemoUyap.target.number,
+        DemoUyap.target.courtName,
+        '1',
+        'Boşanma (TMK 166/1)',
+        '02.03.2026',
+        courtType: 'AILE',
+        courtId: DemoUyap.court.id,
+      ),
+      one(
+        '2026/3318',
+        'İstanbul 12. İcra Dairesi',
+        '2',
+        'İlamsız Takip',
+        '14.01.2026',
+        courtId: 'c9',
+      ),
+      one(
+        '2026/9001',
+        'Yargıtay 2. Hukuk Dairesi',
+        'yargitay',
+        'Boşanma',
+        '14.09.2026',
+        courtId: 'y2',
+        family: CaseFamily.yargitay,
+      ),
+    ],
+    portfolio: true,
+    baseline: true,
+  );
 }
 
 /// An e-signature card as a reader's machine would show one; invented.
@@ -683,6 +799,7 @@ void main() {
         '${archive.path}/Boşanma Dava Dilekçesi.udf',
         home: archive.parent.path,
       );
+      await _demoPortfolio();
     });
     final library = LibraryController(
       databasePath: ':memory:',
@@ -711,31 +828,30 @@ void main() {
       final uyap = find.byKey(const ValueKey('uyap-folder'));
       await _settle(tester, () => uyap.evaluate().isNotEmpty, rounds: 60);
       await tester.tap(uyap);
-      final tile = find.byWidgetPredicate(
-        (w) => '${w.key}'.contains('uyap-case-'),
+      final row = find.byKey(
+        ValueKey(
+          'portfolio-row-${caseKey(DemoUyap.target.number, DemoUyap.target.courtName)}',
+        ),
       );
-      await _settle(tester, () => tile.evaluate().isNotEmpty, rounds: 60);
       await _settle(
         tester,
-        () => find.textContaining('evrak').evaluate().length > 1,
-        rounds: 40,
+        () =>
+            row.evaluate().isNotEmpty &&
+            find.textContaining('2026/9001').evaluate().isNotEmpty,
+        rounds: 60,
       );
+      await _settle(tester, () => false, rounds: 10);
       await _shot(tester, 'uyap-dosyalarim');
-      await tester.tap(
-        find.byWidgetPredicate(
-          (w) =>
-              '${w.key}'.contains('uyap-case-') &&
-              '${w.key}'.contains(
-                UyapCaseStore.keyOf(
-                  DemoUyap.target.courtName,
-                  DemoUyap.target.number,
-                ),
-              ),
-        ),
+      await tester.tap(row);
+      await _settle(
+        tester,
+        () => find.byKey(const ValueKey('case-doc-107')).evaluate().isNotEmpty,
+        rounds: 40,
       );
       await _settle(tester, () => false, rounds: 20);
       await _shot(tester, 'uyap-kategori');
-      await tester.tap(find.text('Harç ve tahsilat'));
+      // The fees and collections are told in the case's particulars.
+      await tester.tap(find.byKey(const ValueKey('case-tab-facts')));
       await _settle(tester, () => false, rounds: 20);
       await _shot(tester, 'uyap-harc');
     } finally {
@@ -1085,7 +1201,14 @@ void main() {
     debugDisableShadows = false;
     try {
       await _openPetition(tester, base);
-      await tester.tap(find.byTooltip('UYAP dosyası'));
+      // The case is opened from the ribbon's Hukuk tab; the picture shows
+      // the Giriş tab, as the editor opens.
+      addTearDown(() => editorRibbonTab.value = RibbonTab.home);
+      editorRibbonTab.value = RibbonTab.legal;
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('legal-uyap-case')));
+      await tester.pump();
+      editorRibbonTab.value = RibbonTab.home;
       await _settle(
         tester,
         () => find.textContaining('Evraklar · 9').evaluate().isNotEmpty,
@@ -1187,6 +1310,8 @@ void main() {
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
+      _fixFonts(tester);
+      await tester.pump();
       final boundary =
           _frame.currentContext!.findRenderObject()! as RenderRepaintBoundary;
       final bytes = await tester.runAsync(() async {
@@ -1218,7 +1343,11 @@ void main() {
       // The page whole, as a phone opens it: A4 fits the width at 50%.
       await shot('phone-editor');
 
-      await tester.tap(find.byKey(const ValueKey('citation-status')));
+      // What the filing rests on is listed at the foot of the page view.
+      await tester.tap(find.byKey(const ValueKey('editor-view-switch')));
+      final status = find.byKey(const ValueKey('citation-status'));
+      await _settle(tester, () => status.evaluate().isNotEmpty, rounds: 40);
+      await tester.tap(status);
       await _settle(
         tester,
         () => find.byKey(const ValueKey('citation-list')).evaluate().isNotEmpty,
@@ -1267,7 +1396,13 @@ void main() {
     debugDisableShadows = false;
     try {
       await _openPetition(tester, base, caseLaw: bank);
-      await tester.tap(find.byTooltip('İçtihat ara').first);
+      // Opened from the ribbon's Hukuk tab; the picture shows the Giriş tab.
+      addTearDown(() => editorRibbonTab.value = RibbonTab.home);
+      editorRibbonTab.value = RibbonTab.legal;
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('legal-case-law')));
+      await tester.pump();
+      editorRibbonTab.value = RibbonTab.home;
       await _settle(
         tester,
         () => find.text('Ara').evaluate().isNotEmpty,

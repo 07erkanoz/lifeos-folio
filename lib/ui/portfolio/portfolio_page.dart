@@ -50,8 +50,10 @@ class _PortfolioPageState extends State<PortfolioPage> {
   _Sort _sort = _Sort.change;
   bool _closed = false;
   _Development? _development;
-  CaseKind? _kind;
-  String? _role, _place;
+  // Each list's choices, any of which a case may match; none chosen, the
+  // list does not narrow.
+  Set<CaseKind> _kinds = const {};
+  Set<String> _roles = const {}, _places = const {};
   int _shown = 100;
   bool _includeClosed = false;
   DateTime? _portfolioAt, _checkedAt;
@@ -168,11 +170,23 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
   // Filtering.
 
-  bool _matchesFilters(PortfolioRow r, {bool status = true}) {
-    if (status && _development != _Development.hearing && r.closed != _closed) {
+  /// Whether [r] passes the filters; any of them may be put otherwise,
+  /// for the count a choice not yet made would give.
+  bool _matchesFilters(
+    PortfolioRow r, {
+    bool? closed,
+    Object? development = _keep,
+    Set<CaseKind>? kinds,
+    Set<String>? roles,
+    Set<String>? places,
+  }) {
+    final dev = identical(development, _keep)
+        ? _development
+        : development as _Development?;
+    if (dev != _Development.hearing && r.closed != (closed ?? _closed)) {
       return false;
     }
-    switch (_development) {
+    switch (dev) {
       case _Development.fresh:
         if (r.freshCount == 0 && !r.state.isNew) return false;
       case _Development.hearing:
@@ -184,25 +198,29 @@ class _PortfolioPageState extends State<PortfolioPage> {
         }
       case null:
     }
-    if (_kind != null && r.kind != _kind) return false;
-    if (_role != null && r.ourRole != _role) return false;
-    if (_place != null && r.place != _place) return false;
+    final k = kinds ?? _kinds, ro = roles ?? _roles, pl = places ?? _places;
+    if (k.isNotEmpty && !k.contains(r.kind)) return false;
+    if (ro.isNotEmpty && !ro.contains(r.ourRole)) return false;
+    if (pl.isNotEmpty && !pl.contains(r.place)) return false;
     return true;
   }
 
-  bool _matchesSearch(PortfolioRow r) {
+  static const _keep = Object();
+
+  /// The search's words, folded; none when it is shorter than two letters.
+  List<String> get _words {
     final q = UyapWebService.fold(_search.text.trim());
-    if (q.length < 2) return true;
-    final words = q.split(RegExp(r'\s+'));
-    final where = switch (_scope) {
+    return q.length < 2 ? const [] : q.split(' ');
+  }
+
+  bool _matchesSearch(PortfolioRow r, [_Scope? scope]) {
+    final words = _words;
+    if (words.isEmpty) return true;
+    final where = switch (scope ?? _scope) {
       _Scope.all => r.haystack,
-      _Scope.party => UyapWebService.fold(
-        [
-          for (final p in [...r.ours, ...r.others]) p.name,
-        ].join(' '),
-      ),
-      _Scope.number => UyapWebService.fold(r.kase.number),
-      _Scope.court => UyapWebService.fold(r.kase.court),
+      _Scope.party => r.partyHaystack,
+      _Scope.number => r.numberHaystack,
+      _Scope.court => r.courtHaystack,
     };
     return words.every(where.contains);
   }
@@ -213,9 +231,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
   List<PortfolioRow> get _visible {
     final key = (
       _development,
-      _kind,
-      _role,
-      _place,
+      _kinds.map((k) => k.name).join(','),
+      _roles.join('\u0001'),
+      _places.join('\u0001'),
       _closed,
       _scope,
       _sort,
@@ -274,16 +292,19 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
   bool get _filtered =>
       _development != null ||
-      _kind != null ||
-      _role != null ||
-      _place != null ||
+      _kinds.isNotEmpty ||
+      _roles.isNotEmpty ||
+      _places.isNotEmpty ||
       _closed;
+
+  static Set<T> _toggled<T>(Set<T> set, T value) =>
+      set.contains(value) ? ({...set}..remove(value)) : {...set, value};
 
   void _clearFilters() => setState(() {
     _development = null;
-    _kind = null;
-    _role = null;
-    _place = null;
+    _kinds = const {};
+    _roles = const {};
+    _places = const {};
     _closed = false;
     _shown = 100;
   });
@@ -341,60 +362,829 @@ class _PortfolioPageState extends State<PortfolioPage> {
     );
   }
 
+  /// A phone (docs/design/telefon-portfoy-suzgec-taslak.png): one bar
+  /// with the page's name, and under it the search, open or closed, the
+  /// filters as chips each with its own list, and the cases; all but the
+  /// bar scroll away with the list.
   Widget _narrow(BuildContext context, List<PortfolioRow>? rows) {
     final scheme = Theme.of(context).colorScheme;
     final visible = _visible;
     final shown = visible.take(_shown).toList();
-    return CustomScrollView(
-      key: const ValueKey('portfolio-scroll'),
-      slivers: [
-        SliverToBoxAdapter(child: _head(context, false)),
-        SliverToBoxAdapter(child: _progress(context)),
-        if (rows == null)
-          const SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (rows.isEmpty)
-          SliverFillRemaining(hasScrollBody: false, child: _empty(context))
-        else ...[
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-            sliver: SliverToBoxAdapter(child: _controls(context, false)),
+    final words = _scope == _Scope.number ? const <String>[] : _words;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _phoneBar(context),
+        _progress(context),
+        Expanded(
+          child: CustomScrollView(
+            key: const ValueKey('portfolio-scroll'),
+            slivers: [
+              if (rows == null)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (rows.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _empty(context),
+                )
+              else ...[
+                SliverToBoxAdapter(child: _phoneControls(context)),
+                SliverToBoxAdapter(child: _phoneResult(context)),
+                if (shown.isEmpty)
+                  SliverToBoxAdapter(child: _noMatch(context))
+                else
+                  DecoratedSliver(
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      border: Border(
+                        top: BorderSide(color: scheme.outlineVariant),
+                      ),
+                    ),
+                    sliver: SliverList.builder(
+                      key: const ValueKey('portfolio-list'),
+                      itemCount:
+                          shown.length + (visible.length > _shown ? 1 : 0),
+                      itemBuilder: (context, i) => i == shown.length
+                          ? TextButton(
+                              key: const ValueKey('portfolio-more'),
+                              onPressed: () => setState(() => _shown += 100),
+                              child: Text(
+                                'Daha fazla (${visible.length - _shown} dosya daha)',
+                              ),
+                            )
+                          : _CaseRow(
+                              row: shown[i],
+                              first: i == 0,
+                              wide: false,
+                              words: words,
+                              onTap: () => widget.onShowCase(shown[i].key),
+                            ),
+                    ),
+                  ),
+              ],
+            ],
           ),
-          if (shown.isEmpty)
-            SliverToBoxAdapter(child: _noMatch(context))
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              sliver: DecoratedSliver(
+        ),
+      ],
+    );
+  }
+
+  /// The phone's one bar: the menu, the page's name, one dot for the two
+  /// channels (its menu connects them or reads them again), the refresh
+  /// and what else there is.
+  Widget _phoneBar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final drawer = Scaffold.maybeOf(context)?.hasDrawer ?? false;
+    final now = DateTime.now();
+    final mobile = UyapMobileApi.instance.connected;
+    final web = UyapWebService.instance.connected;
+    final running = _sync?.state(PortalChannel.uyapMobile).running ?? false;
+    final dot = mobile && web
+        ? AgendaColors.ok
+        : mobile || web
+        ? const Color(0xFFE0A100)
+        : const Color(0xFF9AA2B1);
+    PopupMenuItem<String> channel(String value, String text, bool on) =>
+        PopupMenuItem(
+          key: ValueKey('portfolio-connect-$value'),
+          value: value,
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(
-                  color: scheme.surface,
-                  border: Border.all(color: scheme.outlineVariant),
-                  borderRadius: BorderRadius.circular(12),
+                  color: on ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                  shape: BoxShape.circle,
                 ),
-                sliver: SliverList.builder(
-                  key: const ValueKey('portfolio-list'),
-                  itemCount: shown.length + (visible.length > _shown ? 1 : 0),
-                  itemBuilder: (context, i) => i == shown.length
-                      ? TextButton(
-                          key: const ValueKey('portfolio-more'),
-                          onPressed: () => setState(() => _shown += 100),
-                          child: Text(
-                            'Daha fazla (${visible.length - _shown} dosya daha)',
-                          ),
-                        )
-                      : _CaseRow(
-                          row: shown[i],
-                          first: i == 0,
-                          wide: false,
-                          onTap: () => widget.onShowCase(shown[i].key),
-                        ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(text, style: const TextStyle(fontSize: 13.5)),
+              ),
+            ],
+          ),
+        );
+    return Container(
+      height: 54,
+      padding: EdgeInsets.only(left: drawer ? 4 : 16, right: 2),
+      color: scheme.surface,
+      child: Row(
+        children: [
+          if (drawer)
+            IconButton(
+              tooltip: 'Menü',
+              onPressed: () => Scaffold.of(context).openDrawer(),
+              icon: const Icon(Icons.menu_rounded),
+            ),
+          const Expanded(
+            child: Text(
+              'UYAP Dosyalarım',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 17.5, fontWeight: FontWeight.w700),
+            ),
+          ),
+          PopupMenuButton<String>(
+            key: const ValueKey('portfolio-live'),
+            tooltip: 'Bağlantılar',
+            onSelected: (v) =>
+                v == 'mobile' ? unawaited(_connectMobile()) : _connectWeb(),
+            itemBuilder: (_) => [
+              channel(
+                'mobile',
+                !mobile
+                    ? 'UYAP Mobil · bağlan'
+                    : _portfolioAt == null
+                    ? 'UYAP Mobil · henüz taranmadı'
+                    : 'UYAP Mobil · ${whenText(_portfolioAt!, now)}',
+                mobile,
+              ),
+              channel(
+                'web',
+                !web
+                    ? 'UYAP Web · bağlan'
+                    : _checkedAt == null
+                    ? 'UYAP Web · bağlı'
+                    : 'UYAP Web · ${whenText(_checkedAt!, now)}',
+                web,
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: dot,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: dot.withValues(alpha: .22),
+                      spreadRadius: 3,
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
+          IconButton(
+            key: const ValueKey('portfolio-refresh'),
+            tooltip: 'Portföyü yenile',
+            onPressed: running ? null : () => unawaited(_refresh()),
+            icon: running
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync_rounded),
+          ),
+          PopupMenuButton<String>(
+            key: const ValueKey('portfolio-menu'),
+            tooltip: 'Diğer',
+            onSelected: (_) => unawaited(_setIncludeClosed(!_includeClosed)),
+            itemBuilder: (_) => [
+              CheckedPopupMenuItem(
+                key: const ValueKey('portfolio-closed-switch'),
+                value: 'closed',
+                checked: _includeClosed,
+                child: const Text('Kapalı dosyaları da indir'),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  /// What the phone's chips and switches say, counted once for the
+  /// filters and the search they are counted under.
+  _PhoneCounts get _counts {
+    _visible;
+    final key = (_visibleKey, _words.join(' '));
+    if (identical(_rows, _countsFor) && key == _countsKey) return _countsMemo;
+    final rows = _rows ?? const <PortfolioRow>[];
+    var open = 0, closed = 0, fresh = 0, week = 0, other = 0;
+    final scopes = {for (final s in _Scope.values) s: 0};
+    final searching = _words.isNotEmpty;
+    for (final r in rows) {
+      final found = _matchesSearch(r);
+      if (found && _matchesFilters(r, closed: false)) open++;
+      if (found && _matchesFilters(r, closed: true)) closed++;
+      if (found && _matchesFilters(r, development: _Development.fresh)) {
+        fresh++;
+      }
+      if (found && _matchesFilters(r, development: _Development.thisWeek)) {
+        week++;
+      }
+      if (!searching) continue;
+      if (found && _matchesFilters(r, closed: !_closed)) other++;
+      if (!_matchesFilters(r)) continue;
+      for (final s in _Scope.values) {
+        if (_matchesSearch(r, s)) scopes[s] = scopes[s]! + 1;
+      }
+    }
+    _countsFor = _rows;
+    _countsKey = key;
+    return _countsMemo = (
+      open: open,
+      closed: closed,
+      fresh: fresh,
+      week: week,
+      otherSide: other,
+      scopes: scopes,
+    );
+  }
+
+  List<PortfolioRow>? _countsFor;
+  Object? _countsKey;
+  late _PhoneCounts _countsMemo;
+
+  Widget _phoneControls(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final counts = _counts;
+    final searching = _words.isNotEmpty;
+    final well = dark
+        ? scheme.surfaceContainerHighest
+        : const Color(0xFFF1F3F7);
+    void pick(void Function() change) => setState(() {
+      change();
+      _shown = 100;
+    });
+
+    Widget side(String label, int n, bool on, VoidCallback onTap, Key key) =>
+        Expanded(
+          child: Material(
+            color: on ? scheme.surface : Colors.transparent,
+            elevation: on ? 1 : 0,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              key: key,
+              borderRadius: BorderRadius.circular(8),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: label),
+                      TextSpan(
+                        text: '  $n',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          color: AgendaColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: on ? FontWeight.w800 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    Widget scope(_Scope s, String label) {
+      final n = counts.scopes[s] ?? 0;
+      final on = _scope == s;
+      final ink = on
+          ? scheme.primary
+          : n == 0
+          ? const Color(0xFFA9B0BD)
+          : null;
+      return Expanded(
+        child: Padding(
+          padding: EdgeInsets.only(right: s == _Scope.court ? 0 : 6),
+          child: Material(
+            color: on
+                ? dark
+                      ? scheme.primary.withValues(alpha: .16)
+                      : const Color(0xFFEAF0F9)
+                : null,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(9),
+              side: BorderSide(
+                color: on ? scheme.primary : scheme.outlineVariant,
+              ),
+            ),
+            child: InkWell(
+              key: ValueKey('portfolio-scope-${s.name}'),
+              borderRadius: BorderRadius.circular(9),
+              onTap: () => pick(() => _scope = s),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Column(
+                  children: [
+                    Text(
+                      '$n',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: ink,
+                      ),
+                    ),
+                    Text(label, style: TextStyle(fontSize: 11, color: ink)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final kindsText = [
+      for (final k in CaseKind.values)
+        if (_kinds.contains(k)) k.label,
+    ].join(', ');
+    String several(Set<String> set) =>
+        set.length == 1 ? set.first : '${set.first} +${set.length - 1}';
+    final lists = <(bool, Widget)>[
+      (
+        _kinds.isNotEmpty,
+        _FilterChip(
+          key: const ValueKey('portfolio-kind'),
+          label: _kinds.isEmpty ? 'Tür' : kindsText,
+          on: _kinds.isNotEmpty,
+          list: true,
+          onTap: _pickKinds,
+          onClear: () => pick(() => _kinds = const {}),
+        ),
+      ),
+      (
+        _roles.isNotEmpty,
+        _FilterChip(
+          key: const ValueKey('portfolio-role'),
+          label: _roles.isEmpty ? 'Tarafımız' : several(_roles),
+          on: _roles.isNotEmpty,
+          list: true,
+          onTap: _pickRoles,
+          onClear: () => pick(() => _roles = const {}),
+        ),
+      ),
+      (
+        _places.isNotEmpty,
+        _FilterChip(
+          key: const ValueKey('portfolio-place'),
+          label: _places.isEmpty
+              ? 'Birim'
+              : several({
+                  for (final p in _places) p.replaceFirst(' Adliyesi', ''),
+                }),
+          on: _places.isNotEmpty,
+          list: true,
+          onTap: _pickPlaces,
+          onClear: () => pick(() => _places = const {}),
+        ),
+      ),
+    ];
+    final toggles = [
+      _FilterChip(
+        key: const ValueKey('portfolio-fresh'),
+        label: 'Yeni evrak',
+        count: counts.fresh,
+        on: _development == _Development.fresh,
+        onTap: () => pick(
+          () => _development = _development == _Development.fresh
+              ? null
+              : _Development.fresh,
+        ),
+      ),
+      _FilterChip(
+        key: const ValueKey('portfolio-week'),
+        label: 'Bu hafta duruşma',
+        count: counts.week,
+        on: _development == _Development.thisWeek,
+        onTap: () => pick(
+          () => _development = _development == _Development.thisWeek
+              ? null
+              : _Development.thisWeek,
+        ),
+      ),
+    ];
+    // What is chosen comes first, where it is seen.
+    final chips = [
+      for (final (on, chip) in lists)
+        if (on) chip,
+      ...toggles,
+      for (final (on, chip) in lists)
+        if (!on) chip,
+    ];
+    return Container(
+      color: scheme.surface,
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('portfolio-search'),
+            controller: _search,
+            onChanged: (_) => setState(() => _shown = 100),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              isDense: true,
+              filled: true,
+              fillColor: well,
+              hintText: 'Dosya no, taraf, mahkeme',
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: scheme.primary, width: 2),
+              ),
+              suffixIcon: _search.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Temizle',
+                      icon: const Icon(Icons.close_rounded, size: 19),
+                      onPressed: () => pick(() {
+                        _search.clear();
+                        _scope = _Scope.all;
+                      }),
+                    ),
+            ),
+          ),
+          if (searching) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                scope(_Scope.all, 'her yerde'),
+                scope(_Scope.party, 'tarafta'),
+                scope(_Scope.number, 'dosya no'),
+                scope(_Scope.court, 'mahkemede'),
+              ],
+            ),
+          ],
+          const SizedBox(height: 9),
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: well,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                side(
+                  'Açık',
+                  counts.open,
+                  !_closed,
+                  () => pick(() => _closed = false),
+                  const ValueKey('portfolio-side-open'),
+                ),
+                side(
+                  'Kapalı',
+                  counts.closed,
+                  _closed,
+                  () => pick(() => _closed = true),
+                  const ValueKey('portfolio-side-closed'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 9),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final c in chips)
+                  Padding(padding: const EdgeInsets.only(right: 6), child: c),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// How many are listed, the way back from the filters, and the order.
+  Widget _phoneResult(BuildContext context) {
+    final n = _visible.length;
+    final other = _counts.otherSide;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 2, 2),
+      child: Row(
+        children: [
+          Text(
+            '$n dosya',
+            style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+          ),
+          if (_words.isNotEmpty && other > 0)
+            TextButton(
+              key: const ValueKey('portfolio-other-side'),
+              onPressed: () => setState(() {
+                _closed = !_closed;
+                _shown = 100;
+              }),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+              ),
+              child: Text(
+                _closed ? 'açıklarda $other daha' : 'kapalılarda $other daha',
+                style: const TextStyle(fontSize: 12),
+              ),
+            )
+          else if (_filtered)
+            TextButton(
+              key: const ValueKey('portfolio-clear'),
+              onPressed: _clearFilters,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+              ),
+              child: const Text('Temizle', style: TextStyle(fontSize: 12)),
+            ),
+          const Spacer(),
+          PopupMenuButton<_Sort>(
+            key: const ValueKey('portfolio-sort'),
+            tooltip: 'Sırala',
+            initialValue: _sort,
+            onSelected: (v) => setState(() => _sort = v),
+            itemBuilder: (_) => [
+              for (final s in _Sort.values)
+                PopupMenuItem(value: s, child: Text(_sortName(s))),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.swap_vert_rounded, size: 17),
+                  const SizedBox(width: 3),
+                  Text(
+                    _sortName(_sort, short: true),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _sortName(_Sort s, {bool short = false}) => switch (s) {
+    _Sort.change => short ? 'Son gelişme' : 'Son gelişme önce',
+    _Sort.newest => short ? 'Yeni açılan' : 'Yeni açılan önce',
+    _Sort.oldest => short ? 'Eski açılan' : 'Eski açılan önce',
+    _Sort.hearing => short ? 'Yaklaşan duruşma' : 'Yaklaşan duruşma önce',
+    _Sort.number => 'Esas numarası',
+  };
+
+  // A filter's own list, from below: each choice with how many it holds,
+  // several at once, the button saying how many will be listed.
+
+  Future<void> _pickKinds() async {
+    final picked = await _pickFrom<CaseKind>(
+      title: 'Tür',
+      chosen: _kinds,
+      options: [for (final k in CaseKind.values) (k, k.label, k.ink)],
+      matches: (r, set) => _matchesFilters(r, kinds: set),
+    );
+    if (picked != null) {
+      setState(() {
+        _kinds = picked;
+        _shown = 100;
+      });
+    }
+  }
+
+  Future<void> _pickRoles() async {
+    final roles = _topOf(
+      (r) => r.ourRole,
+      (r, set) => _matchesFilters(r, roles: const {}),
+      8,
+    );
+    final picked = await _pickFrom<String>(
+      title: 'Tarafımız',
+      chosen: _roles,
+      options: [
+        for (final v in {...roles, ..._roles}) (v, v, null),
       ],
+      matches: (r, set) => _matchesFilters(r, roles: set),
+    );
+    if (picked != null) {
+      setState(() {
+        _roles = picked;
+        _shown = 100;
+      });
+    }
+  }
+
+  Future<void> _pickPlaces() async {
+    final places = _topOf(
+      (r) => r.place,
+      (r, set) => _matchesFilters(r, places: const {}),
+      20,
+    );
+    final picked = await _pickFrom<String>(
+      title: 'Birim',
+      chosen: _places,
+      options: [
+        for (final v in {...places, ..._places})
+          (v, v.replaceFirst(' Adliyesi', ''), null),
+      ],
+      matches: (r, set) => _matchesFilters(r, places: set),
+    );
+    if (picked != null) {
+      setState(() {
+        _places = picked;
+        _shown = 100;
+      });
+    }
+  }
+
+  /// The [n] values most cases have, among those the other filters and
+  /// the search leave.
+  List<String> _topOf(
+    String? Function(PortfolioRow r) value,
+    bool Function(PortfolioRow r, Set<String> none) others,
+    int n,
+  ) {
+    final counts = <String, int>{};
+    for (final r in _rows ?? const <PortfolioRow>[]) {
+      final v = value(r);
+      if (v == null || v.isEmpty) continue;
+      if (!others(r, const {}) || !_matchesSearch(r)) continue;
+      counts[v] = (counts[v] ?? 0) + 1;
+    }
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return [for (final e in sorted.take(n)) e.key];
+  }
+
+  Future<Set<T>?> _pickFrom<T>({
+    required String title,
+    required Set<T> chosen,
+    required List<(T, String, Color?)> options,
+    required bool Function(PortfolioRow r, Set<T> set) matches,
+  }) {
+    final rows = [
+      for (final r in _rows ?? const <PortfolioRow>[])
+        if (_matchesSearch(r)) r,
+    ];
+    int count(Set<T> set) => rows.where((r) => matches(r, set)).length;
+    final each = {
+      for (final o in options) o.$1: count({o.$1}),
+    };
+    final shown = [
+      for (final o in options)
+        if (each[o.$1]! > 0 || chosen.contains(o.$1)) o,
+    ];
+    return showModalBottomSheet<Set<T>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) {
+        var local = {...chosen};
+        return StatefulBuilder(
+          builder: (context, setSheet) {
+            final scheme = Theme.of(context).colorScheme;
+            final total = count(local);
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 8, 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (local.isNotEmpty)
+                        TextButton(
+                          onPressed: () => setSheet(() => local = {}),
+                          child: const Text('Temizle'),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final (value, label, swatch) in shown)
+                        InkWell(
+                          key: ValueKey('portfolio-pick-$label'),
+                          onTap: () =>
+                              setSheet(() => local = _toggled(local, value)),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 2,
+                            ),
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  value: local.contains(value),
+                                  onChanged: (_) => setSheet(
+                                    () => local = _toggled(local, value),
+                                  ),
+                                ),
+                                if (swatch != null) ...[
+                                  Container(
+                                    width: 4,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: swatch,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: local.contains(value)
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: Text(
+                                    '${each[value]}',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AgendaColors.muted,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: scheme.outlineVariant),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(46),
+                          ),
+                          child: const Text('Vazgeç'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 3,
+                        child: FilledButton(
+                          key: const ValueKey('portfolio-pick-apply'),
+                          onPressed: () => Navigator.pop(context, local),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(46),
+                          ),
+                          child: Text('$total dosyayı göster'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -856,8 +1646,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
             item(
               kind.label,
               count((r) => r.kind == kind && r.closed == _closed),
-              _kind == kind,
-              () => pick(() => _kind = _kind == kind ? null : kind),
+              _kinds.contains(kind),
+              () => pick(() => _kinds = _toggled(_kinds, kind)),
               swatch: kind.ink,
             ),
         if (roles.isNotEmpty) ...[
@@ -866,8 +1656,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
             item(
               e.key,
               e.value,
-              _role == e.key,
-              () => pick(() => _role = _role == e.key ? null : e.key),
+              _roles.contains(e.key),
+              () => pick(() => _roles = _toggled(_roles, e.key)),
             ),
         ],
         if (places.length > 1) ...[
@@ -876,8 +1666,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
             item(
               e.key,
               e.value,
-              _place == e.key,
-              () => pick(() => _place = _place == e.key ? null : e.key),
+              _places.contains(e.key),
+              () => pick(() => _places = _toggled(_places, e.key)),
             ),
         ],
         if (_filtered)
@@ -1118,6 +1908,99 @@ class _PortfolioPageState extends State<PortfolioPage> {
   );
 }
 
+typedef _PhoneCounts = ({
+  int open,
+  int closed,
+  int fresh,
+  int week,
+  int otherSide,
+  Map<_Scope, int> scopes,
+});
+
+/// A filter on a phone: a switch with its count, or a list's chip that
+/// opens the list and, once something in it is chosen, says what and
+/// takes it off with its ✕.
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    super.key,
+    required this.label,
+    required this.on,
+    required this.onTap,
+    this.count,
+    this.list = false,
+    this.onClear,
+  });
+
+  final String label;
+  final bool on, list;
+  final int? count;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final ink = on ? scheme.onPrimary : scheme.onSurface;
+    return Material(
+      color: on ? scheme.primary : scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: on ? scheme.primary : const Color(0xFFD5DBE5)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(11, 7, list ? 5 : 11, 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: ink,
+                  fontWeight: on ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+              if (count != null) ...[
+                const SizedBox(width: 5),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+              if (list)
+                on && onClear != null
+                    ? InkResponse(
+                        onTap: onClear,
+                        radius: 16,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 3),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 17,
+                            color: ink,
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        Icons.expand_more_rounded,
+                        size: 19,
+                        color: scheme.onSurfaceVariant,
+                      ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// One case in the list: its kind's stripe, its number, kind and court,
 /// its chips, its parties and what is new in it.
 class _CaseRow extends StatefulWidget {
@@ -1126,10 +2009,14 @@ class _CaseRow extends StatefulWidget {
     required this.first,
     required this.wide,
     required this.onTap,
+    this.words = const [],
   });
   final PortfolioRow row;
   final bool first, wide;
   final VoidCallback onTap;
+
+  /// The search's folded words, marked where they are found.
+  final List<String> words;
 
   @override
   State<_CaseRow> createState() => _CaseRowState();
@@ -1208,6 +2095,13 @@ class _CaseRowState extends State<_CaseRow> {
           ),
         },
     ];
+    final words = widget.words;
+    final court = Text.rich(
+      TextSpan(children: _marked(r.kase.court, words)),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: widget.wide ? 13 : 12.5),
+    );
     final line1 = Row(
       children: [
         Text(
@@ -1236,15 +2130,11 @@ class _CaseRowState extends State<_CaseRow> {
             ),
           ),
         ),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(
-            r.kase.court,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13),
-          ),
-        ),
+        if (widget.wide) ...[
+          const SizedBox(width: 9),
+          Expanded(child: court),
+        ] else
+          const Spacer(),
         if (widget.wide)
           for (final c in chips)
             Padding(padding: const EdgeInsets.only(left: 6), child: c),
@@ -1257,7 +2147,7 @@ class _CaseRowState extends State<_CaseRow> {
           for (final (i, p) in shown.indexed) ...[
             if (i > 0) const TextSpan(text: ', '),
             TextSpan(
-              text: titleName(p.name as String),
+              children: _marked(titleName(p.name as String), words),
               style: TextStyle(
                 fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
               ),
@@ -1306,6 +2196,26 @@ class _CaseRowState extends State<_CaseRow> {
         ),
       ],
     );
+    // A party the search found but the two names shown leave out.
+    (String, UyapParty)? why;
+    if (words.isNotEmpty) {
+      bool found(UyapParty p) {
+        final name = UyapWebService.fold(p.name);
+        return words.any(name.contains);
+      }
+
+      for (final (label, list) in [
+        ('Müvekkil', r.ours),
+        (r.ours.isEmpty ? 'Taraf' : 'Karşı taraf', r.others),
+      ]) {
+        final at = list.indexWhere(found);
+        if (at >= 2) {
+          why = (label, list[at]);
+          break;
+        }
+        if (at >= 0) break;
+      }
+    }
     final record = r.record;
     final opened = r.opened;
     final footer = [
@@ -1336,6 +2246,32 @@ class _CaseRowState extends State<_CaseRow> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               line1,
+              if (!widget.wide) ...[const SizedBox(height: 2), court],
+              if (why != null) ...[
+                const SizedBox(height: 4),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '${why.$1}: '),
+                      TextSpan(
+                        children: _marked(titleName(why.$2.name), words),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1B2130),
+                        ),
+                      ),
+                      if (why.$2.role.isNotEmpty)
+                        TextSpan(text: ' · ${titleName(why.$2.role)}'),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AgendaColors.muted,
+                  ),
+                ),
+              ],
               if (!widget.wide && chips.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Wrap(spacing: 6, runSpacing: 4, children: chips),
@@ -1386,4 +2322,46 @@ class _CaseRowState extends State<_CaseRow> {
       ),
     );
   }
+}
+
+/// [text] in spans, the places where one of the folded [words] is found
+/// in it marked.
+List<TextSpan> _marked(String text, List<String> words) {
+  if (words.isEmpty || text.isEmpty) return [TextSpan(text: text)];
+  final folded = StringBuffer();
+  final at = <int>[];
+  for (var i = 0; i < text.length; i++) {
+    final c = text[i];
+    final f = c.trim().isEmpty ? ' ' : UyapWebService.fold(c);
+    for (var k = 0; k < f.length; k++) {
+      folded.write(f[k]);
+      at.add(i);
+    }
+  }
+  final hay = folded.toString();
+  final mark = List<bool>.filled(text.length, false);
+  for (final w in words) {
+    if (w.isEmpty) continue;
+    for (var j = hay.indexOf(w); j >= 0; j = hay.indexOf(w, j + w.length)) {
+      for (var k = j; k < j + w.length; k++) {
+        mark[at[k]] = true;
+      }
+    }
+  }
+  if (!mark.contains(true)) return [TextSpan(text: text)];
+  const style = TextStyle(backgroundColor: Color(0xFFFFE8A3));
+  final spans = <TextSpan>[];
+  var from = 0;
+  for (var i = 1; i <= text.length; i++) {
+    if (i == text.length || mark[i] != mark[from]) {
+      spans.add(
+        TextSpan(
+          text: text.substring(from, i),
+          style: mark[from] ? style : null,
+        ),
+      );
+      from = i;
+    }
+  }
+  return spans;
 }

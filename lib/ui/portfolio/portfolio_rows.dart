@@ -209,6 +209,15 @@ class PortfolioRow {
       for (final p in [...ours, ...others]) p.name,
     ].join(' '),
   );
+
+  /// The same, a field at a time, for a search kept to one of them.
+  late final String partyHaystack = UyapWebService.fold(
+    [
+      for (final p in [...ours, ...others]) p.name,
+    ].join(' '),
+  );
+  late final String numberHaystack = UyapWebService.fold(kase.number);
+  late final String courtHaystack = UyapWebService.fold(kase.court);
 }
 
 /// The lawyer's own side of a case: the parties whose lawyer is [lawyer],

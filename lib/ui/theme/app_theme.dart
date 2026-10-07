@@ -63,6 +63,39 @@ class AppTheme {
           outlineVariant: border,
           onSurfaceVariant: muted,
           error: AppColors.error,
+          // What a chosen segment, a selected tab or toggle, a tonal button
+          // and a raised sheet are painted with: left to the defaults they
+          // were Material's lilac, beside the cobalt of everything else.
+          primaryContainer: dark
+              ? const Color(0xFF1C3354)
+              : const Color(0xFFEAF0F9),
+          onPrimaryContainer: dark
+              ? const Color(0xFFD6E4F7)
+              : const Color(0xFF173B6E),
+          secondaryContainer: dark
+              ? const Color(0xFF1C3354)
+              : const Color(0xFFEAF0F9),
+          onSecondaryContainer: dark
+              ? const Color(0xFFD6E4F7)
+              : const Color(0xFF173B6E),
+          tertiary: AppColors.accent,
+          tertiaryContainer: dark
+              ? const Color(0xFF123B31)
+              : const Color(0xFFE3F5EF),
+          onTertiaryContainer: dark
+              ? const Color(0xFFBFEBDD)
+              : const Color(0xFF0F5240),
+          inversePrimary: dark ? AppColors.primary : AppColors.primaryDark,
+          surfaceTint: Colors.transparent,
+          surfaceContainerLowest: dark ? AppColors.darkBg : Colors.white,
+          surfaceContainer: dark
+              ? const Color(0xFF141414)
+              : const Color(0xFFF3F4F6),
+          surfaceContainerHigh: dark
+              ? const Color(0xFF171717)
+              : const Color(0xFFEDEFF2),
+          surfaceDim: dark ? AppColors.darkBg : const Color(0xFFE4E6EA),
+          surfaceBright: dark ? AppColors.darkPanel : Colors.white,
         );
     final base = ThemeData(
       useMaterial3: true,

@@ -2314,8 +2314,27 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
 
   @override
   void dispose() {
+    if (_full) SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _pages.dispose();
     super.dispose();
+  }
+
+  /// The document and nothing else: no bars of this page, none of the
+  /// phone's, no signature strip; back or the corner's button comes out.
+  bool _full = false;
+
+  void _setFull(bool value) {
+    setState(() => _full = value);
+    SystemChrome.setEnabledSystemUIMode(
+      value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    );
+  }
+
+  /// Opened in Folio's own viewer, this page out of its way first: left
+  /// on top, it hid the document it had opened.
+  void _openInFolio(UyapCaseDocument d) {
+    Navigator.of(context).pop();
+    unawaited(widget.open(d));
   }
 
   String _name(UyapCaseDocument d) => d.type.isNotEmpty ? d.type : d.title;
@@ -2351,6 +2370,79 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
       final docs = widget.documents;
       final d = docs[_at];
       final file = _file(d);
+      final pages = PageView.builder(
+        controller: _pages,
+        itemCount: docs.length,
+        onPageChanged: (i) {
+          setState(() => _at = i);
+          _auto(i);
+        },
+        itemBuilder: (context, i) {
+          final doc = docs[i];
+          final kept = _file(doc);
+          return kept != null
+              ? FilePreview(
+                  key: ValueKey('${kept.path}_$_full'),
+                  path: kept.path,
+                  chrome: !_full,
+                )
+              : _CaseDetailPageState._notHere(
+                  context,
+                  fetching: _fetching == doc.key,
+                  onFetch: () => unawaited(_fetch(doc)),
+                );
+        },
+      );
+      if (_full) {
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (popped, _) {
+            if (!popped) _setFull(false);
+          },
+          child: Scaffold(
+            body: Stack(
+              children: [
+                Positioned.fill(child: pages),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: SafeArea(
+                    child: IconButton.filledTonal(
+                      key: const ValueKey('case-preview-unfull'),
+                      tooltip: 'Tam ekrandan çık',
+                      onPressed: () => _setFull(false),
+                      icon: const Icon(Icons.fullscreen_exit_rounded),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      Widget step(int to, {required bool back}) {
+        final name = Text(
+          _name(docs[to]),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+        return TextButton(
+          onPressed: () => _go(to),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: back
+                ? [
+                    const Icon(Icons.chevron_left_rounded),
+                    Flexible(child: name),
+                  ]
+                : [
+                    Flexible(child: name),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+          ),
+        );
+      }
+
       return Scaffold(
         appBar: AppBar(
           title: Column(
@@ -2375,67 +2467,52 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
             ],
           ),
           actions: [
-            IconButton(
-              tooltip: file != null ? 'Aç' : 'İndir ve aç',
-              onPressed: () => unawaited(widget.open(d)),
-              icon: Icon(
-                file != null ? Icons.open_in_full_rounded : Icons.download,
+            if (file == null)
+              IconButton(
+                tooltip: 'İndir',
+                onPressed: _fetching != null
+                    ? null
+                    : () => unawaited(_fetch(d)),
+                icon: const Icon(Icons.download_rounded),
+              )
+            else ...[
+              IconButton(
+                key: const ValueKey('case-preview-full'),
+                tooltip: 'Tam ekran',
+                onPressed: () => _setFull(true),
+                icon: const Icon(Icons.fullscreen_rounded),
               ),
-            ),
+              PopupMenuButton<String>(
+                tooltip: 'Diğer',
+                onSelected: (_) => _openInFolio(d),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'folio', child: Text('Folio’da aç')),
+                ],
+              ),
+            ],
           ],
         ),
-        body: PageView.builder(
-          controller: _pages,
-          itemCount: docs.length,
-          onPageChanged: (i) {
-            setState(() => _at = i);
-            _auto(i);
-          },
-          itemBuilder: (context, i) {
-            final doc = docs[i];
-            final kept = _file(doc);
-            return kept != null
-                ? FilePreview(key: ValueKey(kept.path), path: kept.path)
-                : _CaseDetailPageState._notHere(
-                    context,
-                    fetching: _fetching == doc.key,
-                    onFetch: () => unawaited(_fetch(doc)),
-                  );
-          },
-        ),
+        body: pages,
         bottomNavigationBar: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               children: [
                 Expanded(
-                  child: _at > 0
-                      ? TextButton.icon(
-                          onPressed: () => _go(_at - 1),
-                          icon: const Icon(Icons.chevron_left_rounded),
-                          label: Text(
-                            _name(docs[_at - 1]),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        )
-                      : const SizedBox.shrink(),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _at > 0
+                        ? step(_at - 1, back: true)
+                        : const SizedBox.shrink(),
+                  ),
                 ),
                 Expanded(
-                  child: _at < docs.length - 1
-                      ? Directionality(
-                          textDirection: TextDirection.rtl,
-                          child: TextButton.icon(
-                            onPressed: () => _go(_at + 1),
-                            icon: const Icon(Icons.chevron_left_rounded),
-                            label: Text(
-                              _name(docs[_at + 1]),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _at < docs.length - 1
+                        ? step(_at + 1, back: false)
+                        : const SizedBox.shrink(),
+                  ),
                 ),
               ],
             ),

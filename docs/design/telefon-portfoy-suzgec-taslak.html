@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Telefon Portföy Süzgeci</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet">
+<style>
+  :root { --page:#F4F6F9; --line:#E3E7EE; --muted:#6B7383; --ink:#1B2130; --primary:#2B5EA8; --pfill:#EAF0F9;
+          --ok:#157A52; --okF:#EAF7F1; --amber:#97600D; --amberF:#FDF4E6; --red:#C0322B; --redF:#FDECEC; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:20px; line-height:1; font-style:normal; display:inline-block; font-feature-settings:"liga"; vertical-align:-4px; }
+  h2.cap { width:1340px; margin:0 auto 6px; font-size:15px; color:#2A3040; }
+  p.sub { width:1340px; margin:0 auto 14px; font-size:12px; color:#3F4656; line-height:1.5; }
+  .row { width:1340px; margin:0 auto; display:flex; gap:22px; }
+  .col { display:flex; flex-direction:column; gap:8px; } .lbl { font-size:12.5px; font-weight:700; color:#2A3040; width:310px; } .lbl small { font-weight:400; color:#4B5465; display:block; margin-top:2px; line-height:1.4; }
+  .phone { width:310px; height:660px; border-radius:30px; border:9px solid #1E2330; background:var(--page); overflow:hidden; display:flex; flex-direction:column; flex:none; position:relative; }
+  .sb { height:22px; background:#fff; font-size:10px; color:#555; display:flex; align-items:center; padding:0 14px; } .sb span:last-child { margin-left:auto; }
+  .ab { background:#fff; height:50px; display:flex; align-items:center; gap:12px; padding:0 8px 0 12px; }
+  .ab b { font-size:16.5px; flex:1; white-space:nowrap; }
+  .ab .ms { color:#3F4656; }
+  .live { width:9px; height:9px; border-radius:50%; background:var(--ok); display:inline-block; box-shadow:0 0 0 3px #EAF7F1; }
+  .top { background:#fff; border-bottom:1px solid var(--line); padding:0 10px 9px; }
+  .search { background:#F1F3F7; border-radius:12px; height:42px; padding:0 6px 0 11px; font-size:13px; color:#8A92A3; display:flex; gap:8px; align-items:center; }
+  .search.on { background:#fff; border:2px solid var(--primary); color:var(--ink); }
+  .search .scope { margin-left:auto; font-size:11.5px; color:var(--primary); font-weight:700; background:var(--pfill); border-radius:8px; padding:4px 8px; white-space:nowrap; }
+  .seg { display:flex; margin-top:9px; background:#F1F3F7; border-radius:10px; padding:3px; }
+  .seg span { flex:1; text-align:center; font-size:12.5px; padding:6px 0; border-radius:8px; color:#4B5465; }
+  .seg .on { background:#fff; color:var(--ink); font-weight:800; box-shadow:0 1px 3px rgba(20,30,50,.15); }
+  .seg small { font-weight:500; color:var(--muted); margin-left:3px; }
+  .chips { display:flex; gap:6px; margin-top:9px; overflow:hidden; white-space:nowrap; }
+  .c { font-size:11.8px; border:1px solid #D5DBE5; background:#fff; border-radius:9px; padding:5px 9px; display:flex; align-items:center; gap:3px; }
+  .c .ms { font-size:16px; vertical-align:0; color:#5E6677; }
+  .c.on { background:var(--primary); border-color:var(--primary); color:#fff; font-weight:700; } .c.on .ms { color:#fff; }
+  .c b { font-weight:800; }
+  .res { display:flex; align-items:center; font-size:11.5px; color:var(--muted); padding:8px 12px 6px; }
+  .res .sort { margin-left:auto; color:var(--ink); font-weight:600; display:flex; align-items:center; gap:2px; } .res .sort .ms { font-size:17px; }
+  .res a { color:var(--primary); font-weight:700; margin-left:8px; text-decoration:none; }
+  .list { background:#fff; border-top:1px solid var(--line); flex:1; overflow:hidden; }
+  .it { padding:9px 12px; border-bottom:1px solid #EEF1F5; font-size:12px; border-left:3px solid transparent; }
+  .it .s { color:var(--muted); font-size:11px; margin-top:2px; }
+  .tags { display:flex; gap:5px; margin-top:5px; flex-wrap:wrap; }
+  .tg { font-size:10px; font-weight:800; border-radius:6px; padding:1px 6px; } .tg.b { background:var(--pfill); color:var(--primary); } .tg.r { background:var(--redF); color:var(--red); } .tg.a { background:var(--amberF); color:var(--amber); } .tg.p { background:#F1EEFB; color:#5B4BB7; } .tg.g { background:#F1F3F7; color:#5E6677; }
+  .no { font-family:Consolas,monospace; font-weight:800; font-size:13px; }
+  mark { background:#FFE8A3; color:inherit; border-radius:3px; padding:0 1px; }
+  .why { font-size:10.5px; color:#5E6677; margin-top:4px; } .why b { color:var(--ink); }
+  .k-h { border-left-color:#2B5EA8; } .k-i { border-left-color:#97600D; } .k-c { border-left-color:#B2453E; } .k-d { border-left-color:#5B4BB7; }
+  .dim { position:absolute; inset:0; background:rgba(15,20,30,.45); }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:18px 18px 0 0; padding:8px 0 0; }
+  .grab { width:38px; height:4px; border-radius:2px; background:#CBD1DB; margin:0 auto 10px; }
+  .sh { display:flex; align-items:center; padding:0 16px 8px; } .sh b { font-size:15.5px; flex:1; } .sh span { font-size:12px; color:var(--primary); font-weight:700; }
+  .opt { display:flex; align-items:center; gap:11px; padding:11px 16px; font-size:13.5px; border-top:1px solid #F0F2F6; }
+  .opt .bx { width:20px; height:20px; border-radius:5px; border:2px solid #AEB6C4; display:flex; align-items:center; justify-content:center; }
+  .opt .bx.on { background:var(--primary); border-color:var(--primary); color:#fff; } .opt .bx .ms { font-size:16px; }
+  .opt .sw { width:4px; height:16px; border-radius:2px; }
+  .opt .n { margin-left:auto; color:var(--muted); font-size:12.5px; }
+  .opt.sel { font-weight:700; }
+  .shfoot { display:flex; gap:10px; padding:12px 16px 16px; border-top:1px solid var(--line); margin-top:4px; }
+  .btn { flex:1; text-align:center; border-radius:12px; padding:12px 0; font-size:13.5px; font-weight:700; }
+  .btn.o { border:1px solid #CBD1DB; color:var(--ink); flex:.6; } .btn.f { background:var(--primary); color:#fff; }
+  .shgrp { font-size:10px; font-weight:800; letter-spacing:.8px; color:var(--muted); padding:10px 16px 4px; }
+  .pills { display:flex; flex-wrap:wrap; gap:7px; padding:2px 16px 6px; }
+  .pill { font-size:12.5px; border:1px solid #D5DBE5; border-radius:10px; padding:7px 11px; } .pill.on { background:var(--pfill); border-color:#B9CCEA; color:var(--primary); font-weight:700; } .pill small { color:var(--muted); font-weight:400; margin-left:3px; }
+  .scopes { display:flex; gap:6px; margin-top:9px; }
+  .sc { flex:1; text-align:center; font-size:11px; border:1px solid #D5DBE5; border-radius:9px; padding:5px 0; line-height:1.25; } .sc b { display:block; font-size:13px; }
+  .sc.on { border-color:var(--primary); background:var(--pfill); color:var(--primary); }
+  .sc.zero { color:#A9B0BD; }
+</style>
+</head>
+<body>
+<h2 class="cap">UYAP Dosyalarım · telefonda arama ve süzgeçler</h2>
+<p class="sub">Bugün süzgeçler listenin üstünde açılan dar bir kutuda; arama kapsamı (Hepsi / Taraf / Dosya no / Mahkeme) süzgeç gibi duruyor; sıralama ayrı satırda. Taslakta: <b>Açık / Kapalı</b> her zaman görünen bir anahtar; her süzgeç kendi çipi ve dokununca alttan kendi listesini açıyor (sayılarıyla, birden çok seçimle); seçilen değer çipin üstüne yazılıyor; arama yazarken hangi alanda kaç dosya bulduğunu söylüyor ve neden eşleştiğini satırda gösteriyor.</p>
+<div class="row">
+  <div class="col"><div class="lbl">1 · Açılış<small>Açık/Kapalı anahtarı; iki hızlı çip; Tür, Tarafımız, Birim birer liste; sonuç sayısı ve sıralama tek satırda</small></div>
+    <div class="phone"><div class="sb"><span>08:43</span><span>%64</span></div>
+      <div class="ab"><span class="ms">menu</span><b>UYAP Dosyalarım</b><span class="live"></span><span class="ms">sync</span><span class="ms">more_vert</span></div>
+      <div class="top">
+        <div class="search"><span class="ms" style="font-size:19px">search</span>Dosya no, taraf, mahkeme</div>
+        <div class="seg"><span class="on">Açık<small>542</small></span><span>Kapalı<small>1588</small></span></div>
+        <div class="chips"><span class="c">Yeni evrak <b>12</b></span><span class="c">Bu hafta duruşma <b>9</b></span><span class="c">Tür<span class="ms">expand_more</span></span><span class="c">Tarafımız<span class="ms">expand_more</span></span></div>
+      </div>
+      <div class="res">542 dosya<span class="sort"><span class="ms">swap_vert</span>Son gelişme</span></div>
+      <div class="list">
+        <div class="it k-h"><div><span class="no">2024/318</span> <span class="tg b">HUKUK</span></div><div class="s">Antalya 3. Asliye Hukuk Mahkemesi</div><div class="tags"><span class="tg b">2 yeni evrak</span><span class="tg r">duruşma bugün 09:35</span></div><div class="s" style="margin-top:5px"><b style="color:var(--ok)">MÜVEKKİL</b> Ayşe Karaca · <b>KARŞI</b> Berk İnşaat</div></div>
+        <div class="it k-h"><div><span class="no">2025/201</span> <span class="tg b">HUKUK</span></div><div class="s">Manavgat 2. Asliye Hukuk Mahkemesi</div><div class="tags"><span class="tg b">1 yeni evrak</span><span class="tg a">duruşma 08.10 · 1 gün</span></div><div class="s" style="margin-top:5px"><b style="color:var(--ok)">MÜVEKKİL</b> Hakan Öztürk · <b>KARŞI</b> Karayel Sigorta</div></div>
+        <div class="it k-i"><div><span class="no">2025/4410</span> <span class="tg a">İCRA</span></div><div class="s">Antalya 6. İcra Dairesi</div><div class="s" style="margin-top:5px"><b style="color:var(--ok)">MÜVEKKİL</b> Mert Yıldız · <b>KARŞI</b> Selin Aksoy</div></div>
+        <div class="it k-c"><div><span class="no">2026/112</span> <span class="tg r">CEZA</span></div><div class="s">Antalya 2. Ağır Ceza Mahkemesi</div><div class="tags"><span class="tg a">duruşma 08.10 · 1 gün</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="col"><div class="lbl">2 · Tür çipine dokunuldu<small>alttan liste: sayılarıyla, birden çok seçilebilir; düğme kaç dosya kalacağını önceden söyler</small></div>
+    <div class="phone"><div class="sb"><span>08:43</span><span>%64</span></div>
+      <div class="ab"><span class="ms">menu</span><b>UYAP Dosyalarım</b><span class="live"></span><span class="ms">sync</span><span class="ms">more_vert</span></div>
+      <div class="top">
+        <div class="search"><span class="ms" style="font-size:19px">search</span>Dosya no, taraf, mahkeme</div>
+        <div class="seg"><span class="on">Açık<small>542</small></span><span>Kapalı<small>1588</small></span></div>
+        <div class="chips"><span class="c">Yeni evrak <b>12</b></span><span class="c">Bu hafta duruşma <b>9</b></span><span class="c">Tür<span class="ms">expand_more</span></span></div>
+      </div>
+      <div class="dim"></div>
+      <div class="sheet"><div class="grab"></div>
+        <div class="sh"><b>Tür</b><span>Temizle</span></div>
+        <div class="opt sel"><span class="bx on"><span class="ms">check</span></span><span class="sw" style="background:#2B5EA8"></span>Hukuk<span class="n">312</span></div>
+        <div class="opt"><span class="bx"></span><span class="sw" style="background:#B2453E"></span>Ceza<span class="n">58</span></div>
+        <div class="opt sel"><span class="bx on"><span class="ms">check</span></span><span class="sw" style="background:#97600D"></span>İcra<span class="n">140</span></div>
+        <div class="opt"><span class="bx"></span><span class="sw" style="background:#5B4BB7"></span>İdari<span class="n">22</span></div>
+        <div class="opt"><span class="bx"></span><span class="sw" style="background:#6B7383"></span>Diğer<span class="n">10</span></div>
+        <div class="shfoot"><span class="btn o">Vazgeç</span><span class="btn f">452 dosyayı göster</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col"><div class="lbl">3 · Süzgeçler seçili<small>seçilen değer çipin üstünde, renkli; ✕ ile tek tek kalkar; “Temizle” hepsini kaldırır</small></div>
+    <div class="phone"><div class="sb"><span>08:44</span><span>%64</span></div>
+      <div class="ab"><span class="ms">menu</span><b>UYAP Dosyalarım</b><span class="live"></span><span class="ms">sync</span><span class="ms">more_vert</span></div>
+      <div class="top">
+        <div class="search"><span class="ms" style="font-size:19px">search</span>Dosya no, taraf, mahkeme</div>
+        <div class="seg"><span class="on">Açık<small>542</small></span><span>Kapalı<small>1588</small></span></div>
+        <div class="chips"><span class="c on">Hukuk, İcra<span class="ms">close</span></span><span class="c on">Manavgat<span class="ms">close</span></span><span class="c">Yeni evrak <b>3</b></span><span class="c">Tarafımız<span class="ms">expand_more</span></span></div>
+      </div>
+      <div class="res">38 dosya<a>Temizle</a><span class="sort"><span class="ms">swap_vert</span>Son gelişme</span></div>
+      <div class="list">
+        <div class="it k-h"><div><span class="no">2025/201</span> <span class="tg b">HUKUK</span></div><div class="s">Manavgat 2. Asliye Hukuk Mahkemesi</div><div class="tags"><span class="tg b">1 yeni evrak</span><span class="tg a">duruşma 08.10 · 1 gün</span></div><div class="s" style="margin-top:5px"><b style="color:var(--ok)">MÜVEKKİL</b> Hakan Öztürk · <b>KARŞI</b> Karayel Sigorta</div></div>
+        <div class="it k-i"><div><span class="no">2025/1290</span> <span class="tg a">İCRA</span></div><div class="s">Manavgat İcra Dairesi</div><div class="s" style="margin-top:5px"><b style="color:var(--ok)">MÜVEKKİL</b> Derya Kılıç · <b>KARŞI</b> Okan Tekin</div></div>
+        <div class="it k-h"><div><span class="no">2024/877</span> <span class="tg b">HUKUK</span></div><div class="s">Manavgat 1. Asliye Hukuk Mahkemesi</div><div class="tags"><span class="tg a">duruşma 21.10 · 14 gün</span></div><div class="s" style="margin-top:5px"><b style="color:var(--ok)">MÜVEKKİL</b> Seda Aydın · <b>KARŞI</b> Manavgat Belediyesi</div></div>
+        <div class="it k-i"><div><span class="no">2023/5521</span> <span class="tg a">İCRA</span></div><div class="s">Manavgat İcra Dairesi</div><div class="s" style="margin-top:5px"><b style="color:var(--ok)">MÜVEKKİL</b> Ali Er · <b>KARŞI</b> Bora Gıda</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="col"><div class="lbl">4 · Arama yazılırken<small>hangi alanda kaç dosya bulduğunu söyler, dokununca o alana daralır; satırda neden eşleştiği işaretli</small></div>
+    <div class="phone"><div class="sb"><span>08:45</span><span>%64</span></div>
+      <div class="ab"><span class="ms">menu</span><b>UYAP Dosyalarım</b><span class="live"></span><span class="ms">sync</span><span class="ms">more_vert</span></div>
+      <div class="top">
+        <div class="search on"><span class="ms" style="font-size:19px;color:var(--primary)">search</span>öztürk<span class="ms" style="margin-left:auto;color:#6B7383;font-size:19px">close</span></div>
+        <div class="scopes"><span class="sc on"><b>7</b>her yerde</span><span class="sc"><b>6</b>tarafta</span><span class="sc zero"><b>0</b>dosya no</span><span class="sc"><b>1</b>mahkemede</span></div>
+      </div>
+      <div class="res">7 açık dosya · kapalılarda 4 daha<span class="sort"><span class="ms">swap_vert</span>Son gelişme</span></div>
+      <div class="list">
+        <div class="it k-h"><div><span class="no">2025/201</span> <span class="tg b">HUKUK</span></div><div class="s">Manavgat 2. Asliye Hukuk Mahkemesi</div><div class="why">Müvekkil: <b>Hakan <mark>Öztürk</mark></b></div></div>
+        <div class="it k-i"><div><span class="no">2025/3307</span> <span class="tg a">İCRA</span></div><div class="s">Antalya 9. İcra Dairesi</div><div class="why">Karşı taraf: <b>Elif <mark>Öztürk</mark></b> · borçlu</div></div>
+        <div class="it k-h"><div><span class="no">2024/1544</span> <span class="tg b">HUKUK</span></div><div class="s">Antalya 2. Sulh Hukuk Mahkemesi</div><div class="why">Karşı taraf: <b><mark>Öztürk</mark> Yapı Ltd. Şti.</b></div></div>
+        <div class="it k-d"><div><span class="no">2025/1876</span> <span class="tg p">İDARİ</span></div><div class="s">Antalya 1. İdare Mahkemesi</div><div class="why">Müvekkil: <b>Kemal <mark>Öztürk</mark></b></div></div>
+        <div class="it k-c"><div><span class="no">2026/41</span> <span class="tg r">CEZA</span></div><div class="s">Antalya 4. Asliye Ceza Mahkemesi</div><div class="why">Katılan: <b>Nuri <mark>Öztürk</mark></b></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

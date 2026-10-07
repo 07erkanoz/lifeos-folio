@@ -1042,6 +1042,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           Scaffold(
+            drawer: const Drawer(),
             body: PortfolioPage(
               database: db,
               store: store,
@@ -1064,6 +1065,27 @@ void main() {
       );
       await _settle(tester, rounds: 10);
       await _shot(tester, 'telefon-uyap-dosyalarim-kaydirilmis');
+      await tester.drag(
+        find.byKey(const ValueKey('portfolio-scroll')),
+        const Offset(0, 600),
+      );
+      await _settle(tester, rounds: 10);
+      // A filter's list from below, the list it leaves, a search's counts.
+      await tester.tap(find.byKey(const ValueKey('portfolio-kind')));
+      await _settle(tester, rounds: 20);
+      await _shot(tester, 'telefon-portfoy-tur');
+      await tester.tap(find.byKey(const ValueKey('portfolio-pick-Hukuk')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('portfolio-pick-apply')));
+      await _settle(tester, rounds: 20);
+      await _shot(tester, 'telefon-portfoy-suzgecli');
+      await tester.tap(find.byKey(const ValueKey('portfolio-clear')));
+      await tester.enterText(
+        find.byKey(const ValueKey('portfolio-search')),
+        'öztürk',
+      );
+      await _settle(tester, rounds: 20);
+      await _shot(tester, 'telefon-portfoy-arama');
       await tester.pumpWidget(const SizedBox());
       _size(tester, logical);
 
@@ -1095,6 +1117,35 @@ void main() {
       await _settle(tester, rounds: 60);
       await _shot(tester, 'dosya-onizleme');
       await tester.pumpWidget(const SizedBox());
+      // The same case on a phone: its page, then a document on its own.
+      _size(tester, phone);
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: CaseDetailPage(
+              caseKey: _of('2024/318').key,
+              database: db,
+              controller: controller,
+              links: links,
+              lawyer: lawyer,
+              onBack: () {},
+              onOpen: (_) {},
+            ),
+          ),
+        ),
+      );
+      await _settle(tester, rounds: 40);
+      await _shot(tester, 'telefon-dosya');
+      await tester.scrollUntilVisible(
+        row,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(row);
+      await _settle(tester, rounds: 60);
+      await _shot(tester, 'telefon-evrak');
+      await tester.pumpWidget(const SizedBox());
+      _size(tester, logical);
     } finally {
       debugDisableShadows = true;
     }
