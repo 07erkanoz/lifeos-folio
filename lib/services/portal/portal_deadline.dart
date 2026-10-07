@@ -193,6 +193,24 @@ class KeptDeadline {
   /// including what is no longer made, until the lawyer decides.
   bool get toReview =>
       !onAgenda && !(user?.dismissed ?? false) && !(user?.done ?? false);
+
+  /// Not put before the lawyer at [now]: its notice served more than forty
+  /// days ago (a box read whole brings years of notices; Banaozel keeps to
+  /// forty days too), or its last day more than a week gone. It stays on
+  /// its notice's page; one the lawyer confirmed stays on the agenda.
+  bool expired(DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+    final start = record.startDay;
+    if (start != null &&
+        DateTime.parse(start)
+            .isBefore(DateTime(today.year, today.month, today.day - 40))) {
+      return true;
+    }
+    final d = day;
+    return d != null &&
+        DateTime.parse(d)
+            .isBefore(DateTime(today.year, today.month, today.day - 7));
+  }
 }
 
 /// A notice's package as kept on this computer (see

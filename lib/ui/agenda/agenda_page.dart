@@ -17,6 +17,7 @@ import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_deadline.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/portal/portal_hearing.dart';
+import '../../services/uets/notice_matcher.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../mobile/scroll_chrome.dart';
@@ -36,6 +37,7 @@ class AgendaPage extends StatefulWidget {
     this.onOpenCase,
     this.onPetition,
     this.onChanged,
+    this.onOpenNotice,
   });
 
   /// Tests pass their own; otherwise the one in Folio's data folder.
@@ -54,6 +56,9 @@ class AgendaPage extends StatefulWidget {
 
   /// Something the sidebar counts changed.
   final VoidCallback? onChanged;
+
+  /// Opens the UETS page on the notice with this id.
+  final void Function(String noticeId)? onOpenNotice;
 
   @override
   State<AgendaPage> createState() => _AgendaPageState();
@@ -120,6 +125,9 @@ class _AgendaPageState extends State<AgendaPage> {
 
   /// The notices' deadlines the lawyer is still to look at.
   List<KeptDeadline> _review = const [];
+
+  /// Their notices' subjects, for the court and number each belongs to.
+  Map<String, String> _subjects = const {};
   Map<String, PortalCase> _cases = const {};
   Timer? _clock;
   String? _caseSyncing;
@@ -232,7 +240,7 @@ class _AgendaPageState extends State<AgendaPage> {
       _review =
           [
             for (final d in db.deadlines())
-              if (d.toReview) d,
+              if (d.toReview && !d.expired(_now())) d,
           ]..sort((a, b) {
             final x = a.day, y = b.day;
             if (x == null || y == null) {
@@ -240,6 +248,11 @@ class _AgendaPageState extends State<AgendaPage> {
             }
             return x.compareTo(y);
           });
+      _subjects = db.noticeSubjects({
+        for (final d in _review) d.record.noticeId,
+        for (final i in _items)
+          if (i.id.startsWith('uets:')) i.id.split(':')[1],
+      });
       _cases = db.cases();
       final keys = {for (final h in _hearings) h.key};
       if (_selected == null || !keys.contains(_selected)) {
@@ -1721,10 +1734,13 @@ class _AgendaPageState extends State<AgendaPage> {
           for (final d in _review.take(8))
             DeadlineReviewTile(
               deadline: d,
-              subtitle: _cases[d.record.caseKey] == null
+              subtitle: _whose(d.record.noticeId, d.record.caseKey),
+              onOpenCase: d.record.caseKey == null || widget.onOpenCase == null
                   ? null
-                  : '${_cases[d.record.caseKey]!.court} · '
-                        '${_cases[d.record.caseKey]!.number}',
+                  : () => _goToCase(d.record.caseKey!),
+              onOpenNotice: widget.onOpenNotice == null
+                  ? null
+                  : () => widget.onOpenNotice!(d.record.noticeId),
               onConfirm:
                   db == null ||
                       d.record.state != 'aday' ||
@@ -1768,6 +1784,25 @@ class _AgendaPageState extends State<AgendaPage> {
         ],
       ),
     );
+  }
+
+  /// The court and number a notice's deadline belongs to: its case's,
+  /// else its notice's subject's.
+  String? _whose(String noticeId, String? caseKey) {
+    final kase = caseKey == null ? null : _cases[caseKey];
+    if (kase != null) return '${kase.court} · ${kase.number}';
+    final parsed = NoticeSubject.parse(_subjects[noticeId] ?? '');
+    return parsed == null ? null : '${parsed.unit} · ${parsed.number}';
+  }
+
+  void _goToCase(String caseKey) {
+    if (!(widget.onOpenCase?.call(caseKey) ?? false)) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Bu dosya UYAP Dosyalarım’da kayıtlı değil.'),
+        ),
+      );
+    }
   }
 
   Widget _deadlinesCard(BuildContext context) {
@@ -1834,6 +1869,35 @@ class _AgendaPageState extends State<AgendaPage> {
                               fontSize: 11.5,
                               color: AgendaColors.muted,
                             ),
+                          ),
+                        if (i.caseKey != null || i.id.startsWith('uets:'))
+                          Wrap(
+                            spacing: 4,
+                            children: [
+                              if (i.caseKey != null &&
+                                  widget.onOpenCase != null)
+                                TextButton(
+                                  key: ValueKey('deadline-case-${i.id}'),
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () => _goToCase(i.caseKey!),
+                                  child: const Text('Dosyaya git'),
+                                ),
+                              if (i.id.startsWith('uets:') &&
+                                  widget.onOpenNotice != null)
+                                TextButton(
+                                  key: ValueKey('deadline-notice-${i.id}'),
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () =>
+                                      widget.onOpenNotice!(i.id.split(':')[1]),
+                                  child: const Text('Tebligatı aç'),
+                                ),
+                            ],
                           ),
                       ],
                     ),

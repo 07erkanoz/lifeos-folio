@@ -21,6 +21,7 @@ void main() {
     Size size = const Size(1440, 900),
     void Function(PortalCase kase)? onPetition,
     void Function(PortalDatabase db)? before,
+    void Function(String noticeId)? onOpenNotice,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -77,6 +78,7 @@ void main() {
             ),
             now: () => now,
             onPetition: onPetition,
+            onOpenNotice: onOpenNotice,
           ),
         ),
       ),
@@ -268,8 +270,10 @@ void main() {
 
   testWidgets('a notice’s deadline waits in the review until confirmed, '
       'then comes to the agenda', (tester) async {
+    final opened = <String>[];
     final db = await pump(
       tester,
+      onOpenNotice: opened.add,
       before: (db) {
         db.mergeNotices([
           UetsMessage(
@@ -277,6 +281,15 @@ void main() {
             subject: '$court [2025/412] [x]',
             sent: DateTime.utc(2026, 9, 30, 9),
           ),
+          // A notice of 2023: its time ran out long ago.
+          UetsMessage(
+            id: 'old',
+            subject: 'Manavgat 1. Aile Mahkemesi [2022/332] [x]',
+            sent: DateTime.utc(2023, 11, 1, 9),
+          ),
+        ]);
+        db.saveManifest('old', [
+          (id: 'q1', name: '(1)GerekceliKarar.pdf', mime: ''),
         ]);
         db.saveManifest('m1', [
           (id: 'p1', name: '(1)GerekceliKarar.pdf', mime: ''),
@@ -288,12 +301,27 @@ void main() {
     expect(find.textContaining('Onayınızı bekliyor'), findsOne);
     // Not counted: the only deadline due soon is the lawyer's own.
     expect(find.text('19.10.2026'), findsOne);
-    final id = db.deadlines().single.record.id;
+    // Which case it is, and the way to its notice.
+    expect(find.textContaining('$court · 2025/412'), findsWidgets);
+    expect(find.textContaining('2022/332'), findsNothing);
+    final id = db.deadlines(noticeId: 'm1').single.record.id;
+    await tester.ensureVisible(find.byKey(ValueKey('review-notice-$id')));
+    await tester.tap(find.byKey(ValueKey('review-notice-$id')));
+    expect(opened, ['m1']);
     await tester.ensureVisible(find.byKey(ValueKey('review-confirm-$id')));
     await tester.tap(find.byKey(ValueKey('review-confirm-$id')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('agenda-review')), findsNothing);
     expect(db.agenda().map((i) => i.id), contains(id));
+    // A notice served more than forty days ago brings none, even with a
+    // year's time still to run.
+    final old = db.deadlines(noticeId: 'old');
+    expect(old, isNotEmpty);
+    expect(old.every((d) => d.expired(now)), isTrue);
+    expect(
+      db.agenda().firstWhere((i) => i.id == id).body,
+      contains('$court · 2025/412'),
+    );
     expect(find.text('İstinaf süresi'), findsWidgets);
   });
 }

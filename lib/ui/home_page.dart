@@ -1053,10 +1053,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final tomorrow = today.add(const Duration(days: 1));
       final count = db.hearings(from: today, to: tomorrow).length;
       final unread = db.notices().where((n) => n.message.read == null).length;
-      final open = db.cases().values
+      final open = db
+          .cases()
+          .values
           .where(
             (c) =>
-                c.family == CaseFamily.court && !isClosedStatus(c.status?.value),
+                c.family == CaseFamily.court &&
+                !isClosedStatus(c.status?.value),
           )
           .length;
       final deadlines = db
@@ -1205,9 +1208,18 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onChanged: () => unawaited(_countAgenda()),
     onPetition: _agendaPetition,
     onOpenCase: _openPortalCase,
+    onOpenNotice: (id) {
+      _uetsFocus = id;
+      unawaited(_selectGroup('uets'));
+    },
   );
 
+  /// The notice the UETS page opens on, when a deadline led there.
+  String? _uetsFocus;
+
   Widget _uetsPage() => UetsPage(
+    key: ValueKey('uets-${_uetsFocus ?? ''}'),
+    initialNotice: _uetsFocus,
     onChanged: () => unawaited(_countAgenda()),
     onOpenCase: _openPortalCase,
     onOpenFile: (path) =>

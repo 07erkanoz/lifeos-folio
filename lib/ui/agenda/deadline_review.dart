@@ -65,6 +65,8 @@ class DeadlineReviewTile extends StatelessWidget {
     required this.onDismiss,
     required this.onDetails,
     this.subtitle,
+    this.onOpenCase,
+    this.onOpenNotice,
   });
 
   final KeptDeadline deadline;
@@ -75,6 +77,12 @@ class DeadlineReviewTile extends StatelessWidget {
 
   /// The notice it came from ("Konya 14. Asliye Hukuk · 2026/441").
   final String? subtitle;
+
+  /// Goes to its case in UYAP Dosyalarım; null when it is not kept there.
+  final VoidCallback? onOpenCase;
+
+  /// Goes to its notice on the UETS page.
+  final VoidCallback? onOpenNotice;
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +187,18 @@ class DeadlineReviewTile extends StatelessWidget {
                   child: const Text('Tarih gir'),
                 ),
                 TextButton(onPressed: onDetails, child: const Text('Ayrıntı')),
+                if (onOpenCase != null)
+                  TextButton(
+                    key: ValueKey('review-case-${r.id}'),
+                    onPressed: onOpenCase,
+                    child: const Text('Dosyaya git'),
+                  ),
+                if (onOpenNotice != null)
+                  TextButton(
+                    key: ValueKey('review-notice-${r.id}'),
+                    onPressed: onOpenNotice,
+                    child: const Text('Tebligatı aç'),
+                  ),
                 TextButton(
                   key: ValueKey('review-dismiss-${r.id}'),
                   onPressed: onDismiss,

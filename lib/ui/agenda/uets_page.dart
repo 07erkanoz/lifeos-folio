@@ -42,6 +42,9 @@ class UetsPage extends StatefulWidget {
   /// Opens a downloaded attachment in Folio.
   final void Function(String path)? onOpenFile;
 
+  /// The notice to show selected, coming from its deadline elsewhere.
+  final String? initialNotice;
+
   /// Something kept changed: the sidebar's count may need refreshing.
   final VoidCallback? onChanged;
 
@@ -53,6 +56,7 @@ class UetsPage extends StatefulWidget {
     this.onOpenCase,
     this.onOpenFile,
     this.onChanged,
+    this.initialNotice,
   });
 
   @override
@@ -169,7 +173,13 @@ class _UetsPageState extends State<UetsPage> {
       _manifests = db.manifests();
       if (_selected == null ||
           !_notices.any((n) => n.message.id == _selected)) {
-        _selected = _notices.firstOrNull?.message.id;
+        _selected =
+            _notices
+                .where((n) => n.message.id == widget.initialNotice)
+                .firstOrNull
+                ?.message
+                .id ??
+            _notices.firstOrNull?.message.id;
       }
     });
   }
@@ -258,9 +268,9 @@ class _UetsPageState extends State<UetsPage> {
     for (final n in _notices)
       if (switch (_filter) {
         _Filter.all => true,
-        _Filter.pending => _of(
-          n,
-        ).any((d) => d.toReview && d.record.state == 'aday'),
+        _Filter.pending => _of(n).any(
+          (d) => d.toReview && !d.expired(_now()) && d.record.state == 'aday',
+        ),
         _Filter.unread => n.message.read == null,
         _Filter.withDeadline => _of(n).any((d) => d.record.state != 'eski'),
         _Filter.untied => n.caseKey == null,
@@ -393,7 +403,7 @@ class _UetsPageState extends State<UetsPage> {
             (_Filter.all, 'Tümü · ${_notices.length}'),
             (
               _Filter.pending,
-              'Onay bekleyen · ${_notices.where((n) => _of(n).any((d) => d.toReview && d.record.state == 'aday')).length}',
+              'Onay bekleyen · ${_notices.where((n) => _of(n).any((d) => d.toReview && !d.expired(_now()) && d.record.state == 'aday')).length}',
             ),
             (_Filter.unread, 'Okunmamış'),
             (_Filter.withDeadline, 'Süresi olan'),
@@ -517,7 +527,9 @@ class _UetsPageState extends State<UetsPage> {
     final today = _day(_now());
     final unread = _notices.where((n) => n.message.read == null).length;
     final pending = _deadlines
-        .where((d) => d.toReview && d.record.state == 'aday')
+        .where(
+          (d) => d.toReview && !d.expired(_now()) && d.record.state == 'aday',
+        )
         .length;
     final untied = _notices.where((n) => n.caseKey == null).length;
     // Only what the lawyer confirmed or gave a day counts, as on the agenda.

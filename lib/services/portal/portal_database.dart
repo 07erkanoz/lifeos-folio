@@ -9,6 +9,7 @@ import '../platform/app_directories.dart';
 import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_deadline.dart';
+import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
 import 'portal_hearing.dart';
 
@@ -425,6 +426,24 @@ class PortalDatabase {
       ),
   ];
 
+  /// The subjects of the notifications [ids], by id.
+  Map<String, String> noticeSubjects(Set<String> ids) {
+    if (ids.isEmpty) return const {};
+    final out = <String, String>{};
+    final read = _db.prepare('SELECT json FROM uets WHERE id=?');
+    try {
+      for (final id in ids) {
+        final rows = read.select([id]);
+        if (rows.isEmpty) continue;
+        final json = jsonDecode(rows.first['json'] as String);
+        if (json is Map) out[id] = '${json['subject'] ?? ''}';
+      }
+    } finally {
+      read.dispose();
+    }
+    return out;
+  }
+
   /// One notification as kept; null when it is not.
   KeptNotice? notice(String id) {
     final rows = _db.select(
@@ -515,10 +534,14 @@ class PortalDatabase {
             updated: i.updated,
           ),
     ];
+    final subjects = noticeSubjects({
+      for (final d in all)
+        if (d.onAgenda) d.record.noticeId,
+    });
     final kept =
         [
           for (final d in all)
-            if (d.onAgenda) _agendaOf(d),
+            if (d.onAgenda) _agendaOf(d, subjects[d.record.noticeId]),
         ].where(
           (i) =>
               from == null ||
@@ -562,14 +585,22 @@ class PortalDatabase {
     };
   }
 
-  AgendaItem _agendaOf(KeptDeadline d) {
+  /// [subject] is its notice's subject, for the court and number the
+  /// deadline belongs to.
+  AgendaItem _agendaOf(KeptDeadline d, [String? subject]) {
     final day = DateTime.parse(d.day!);
     final r = d.record;
+    final parsed = subject == null ? null : NoticeSubject.parse(subject);
     return AgendaItem(
       id: r.id,
       kind: 'deadline',
       title: d.user?.titleOverride ?? r.title,
-      body: d.user?.bodyOverride ?? [r.law, 'UETS'].join(' · '),
+      body:
+          d.user?.bodyOverride ??
+          [
+            if (r.law.isNotEmpty) r.law,
+            parsed == null ? 'UETS' : '${parsed.unit} · ${parsed.number}',
+          ].join(' · '),
       at: DateTime(day.year, day.month, day.day),
       allDay: true,
       done: d.user?.done ?? false,
