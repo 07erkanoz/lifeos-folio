@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Büro Paylaşımı Taslağı</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet">
+<style>
+  :root { --page:#F4F6F9; --line:#E3E7EE; --muted:#6B7383; --ink:#1B2130; --primary:#2B5EA8; --pfill:#EAF0F9;
+          --ok:#157A52; --okF:#EAF7F1; --amber:#97600D; --amberF:#FDF4E6; --red:#C0322B; --redF:#FDECEC; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:19px; line-height:1; font-style:normal; display:inline-block; font-feature-settings:"liga"; vertical-align:-4px; }
+  h2.cap { width:1440px; margin:0 auto 10px; font-size:15px; color:#2A3040; } h2.cap small { font-weight:400; color:#4B5465; margin-left:8px; }
+  .win { width:1440px; height:900px; margin:0 auto 34px; background:var(--page); border-radius:12px; overflow:hidden; box-shadow:0 20px 60px rgba(20,30,50,.28); display:flex; flex-direction:column; }
+  .tb { height:34px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; padding:0 14px; font-size:12px; color:var(--muted); } .tb .r { margin-left:auto; letter-spacing:12px; }
+  .body { flex:1; display:flex; min-height:0; }
+  .side { width:236px; background:#fff; border-right:1px solid var(--line); padding:16px 12px; display:flex; flex-direction:column; gap:3px; }
+  .btn1 { background:var(--primary); color:#fff; border-radius:10px; padding:10px; text-align:center; font-weight:700; font-size:13px; margin-bottom:14px; }
+  .head { font-size:10.5px; font-weight:800; letter-spacing:.9px; color:var(--muted); padding:10px 10px 4px; }
+  .nav { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; font-size:13.5px; } .nav .ms { color:#6B7383; }
+  .nav.on { background:var(--pfill); color:var(--primary); font-weight:700; } .nav.on .ms { color:var(--primary); }
+  .pill { margin-left:auto; font-size:11px; font-weight:800; padding:1px 7px; border-radius:9px; background:var(--primary); color:#fff; }
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .ph { background:#fff; border-bottom:1px solid var(--line); padding:14px 24px; display:flex; align-items:center; gap:14px; }
+  .ph h1 { margin:0; font-size:18px; } .ph .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .tabs { display:flex; gap:4px; margin-left:24px; } .tabs span { font-size:13px; padding:7px 12px; border-radius:8px; } .tabs .on { background:var(--pfill); color:var(--primary); font-weight:700; }
+  .grow { flex:1; }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:9px; padding:7px 12px; font-size:12.5px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .btn.p { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .content { flex:1; min-height:0; display:flex; gap:14px; padding:14px 24px 18px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; }
+  .people { width:380px; display:flex; flex-direction:column; overflow:hidden; }
+  .ch { padding:12px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+  .ch b { color:var(--ink); font-size:13px; }
+  .person { padding:12px 14px 6px; border-bottom:1px solid #F0F2F6; }
+  .pn { display:flex; align-items:center; gap:10px; }
+  .av { width:34px; height:34px; border-radius:50%; background:var(--primary); color:#fff; font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center; flex:none; }
+  .av.g { background:#5E6677; } .av.t { background:#139C8B; }
+  .pn .t { font-size:13.5px; font-weight:700; } .pn .s { font-size:11.5px; color:var(--muted); }
+  .dev { display:flex; align-items:center; gap:9px; padding:6px 4px 6px 44px; font-size:12.5px; }
+  .dev .ms { color:#5E6677; font-size:18px; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--ok); display:inline-block; } .dot.off { background:#B8BFCC; }
+  .star { color:#E0A100; font-size:16px; } .muted { color:var(--muted); font-size:11.5px; }
+  .chk { width:16px; height:16px; border-radius:4px; border:1.5px solid #9AA2B1; display:inline-block; margin-left:auto; } .chk.on { background:var(--primary); border-color:var(--primary); position:relative; } .chk.on::after { content:"✓"; color:#fff; font-size:12px; position:absolute; left:2px; top:-2px; }
+  .send { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .sec { padding:16px 18px; border-bottom:1px solid var(--line); }
+  .sec h3 { margin:0 0 10px; font-size:14px; }
+  .drop { border:2px dashed #C9D3E3; border-radius:12px; padding:18px; text-align:center; color:var(--muted); font-size:13px; background:#FAFBFD; }
+  .picks { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .item { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:9px; font-size:12.5px; margin-top:8px; }
+  .item .ic { width:28px; height:28px; border-radius:7px; background:#F1F3F7; display:flex; align-items:center; justify-content:center; color:#4B5465; }
+  .to { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:12px; border:1px solid #C9D7EE; background:var(--pfill); color:var(--primary); border-radius:16px; padding:4px 10px; font-weight:700; }
+  .note { width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:12.5px; color:#8A92A3; margin-top:10px; }
+  .tr { width:360px; display:flex; flex-direction:column; }
+  .x { padding:11px 14px; border-bottom:1px solid #F0F2F6; font-size:12.5px; }
+  .x .t { font-weight:700; } .x .s { font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .bar { height:5px; border-radius:3px; background:#E3E7EE; overflow:hidden; margin-top:6px; } .bar i { display:block; height:100%; background:var(--primary); }
+  .tag { font-size:10.5px; font-weight:800; border-radius:6px; padding:1px 7px; } .tag.ok { background:var(--okF); color:var(--ok); } .tag.in { background:var(--pfill); color:var(--primary); } .tag.wait { background:var(--amberF); color:var(--amber); }
+  .pair { width:1440px; margin:0 auto 34px; display:flex; gap:26px; align-items:flex-start; }
+  .lbl { font-size:12px; color:#2A3040; margin:0 0 8px; font-weight:700; } .lbl small { font-weight:400; color:#4B5465; }
+  .dlg { width:520px; background:#fff; border-radius:14px; box-shadow:0 20px 60px rgba(20,30,50,.22); overflow:hidden; }
+  .dlg .h { padding:16px 18px; border-bottom:1px solid var(--line); font-weight:700; font-size:15px; }
+  .dlg .b { padding:14px 18px; font-size:12.5px; } .dlg .f { padding:12px 18px; border-top:1px solid var(--line); display:flex; gap:8px; justify-content:flex-end; }
+  .code { font-family:Consolas,monospace; font-size:30px; font-weight:800; letter-spacing:8px; text-align:center; padding:14px; background:#F5F7FA; border-radius:10px; margin:10px 0; }
+  .phone { width:300px; height:620px; border-radius:30px; border:9px solid #1E2330; background:var(--page); overflow:hidden; display:flex; flex-direction:column; flex:none; }
+  .phone .top { background:#fff; padding:12px 14px; border-bottom:1px solid var(--line); font-weight:700; display:flex; gap:8px; align-items:center; }
+  .phone .person { background:#fff; } .phone .dev { padding-left:40px; }
+  .own { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:16px 18px; }
+  .own .card { padding:14px; font-size:12.5px; }
+  .warn { background:#FFFBEA; border:1px solid #EAD89A; border-radius:10px; padding:10px 12px; font-size:12px; color:#5C4A12; margin-top:10px; line-height:1.45; }
+</style>
+</head>
+<body>
+
+<h2 class="cap">1 · Büro ağı: kişiler ve cihazları, gönderme, aktarımlar <small>aynı ağdaki Folio’lar kendiliğinden görünür; cihaz ilk kez bir kodla tanınır, sonra her aktarım şifreli gider</small></h2>
+<div class="win">
+  <div class="tb">Folio <span class="r">— ▢ ✕</span></div>
+  <div class="body">
+    <div class="side">
+      <div class="btn1">+ Yeni belge</div>
+      <div class="nav"><span class="ms">home</span>Ana sayfa</div>
+      <div class="nav"><span class="ms">folder</span>Tüm belgeler</div>
+      <div class="head">BÜRO</div>
+      <div class="nav"><span class="ms">gavel</span>UYAP Dosyalarım</div>
+      <div class="nav"><span class="ms">notifications</span>UYAP Bildirimleri</div>
+      <div class="nav"><span class="ms">event</span>Ajanda</div>
+      <div class="nav"><span class="ms">mail</span>UETS Tebligatlarım</div>
+      <div class="nav on"><span class="ms">lan</span>Büro ağı<span class="pill">2</span></div>
+    </div>
+    <div class="main">
+      <div class="ph">
+        <div><h1>Büro ağı</h1><div class="sub">Aynı ağda 4 kişi, 7 cihaz · bu cihaz: Erkan’ın masaüstü (Linux)</div></div>
+        <div class="tabs"><span class="on">Gönder</span><span>Kendi cihazlarım</span><span>Görevler · 2. aşama</span></div>
+        <div class="grow"></div>
+        <span class="btn"><span class="ms">qr_code_2</span>Cihaz ekle</span>
+      </div>
+      <div class="content">
+        <div class="card people">
+          <div class="ch"><b>Kişiler ve cihazlar</b><span class="grow"></span>alıcıyı seçin</div>
+          <div class="person">
+            <div class="pn"><div class="av">EÖ</div><div><div class="t">Av. Erkan Öz <span class="muted">(siz)</span></div><div class="s">3 cihaz · 2 çevrimiçi</div></div></div>
+            <div class="dev"><span class="ms">desktop_windows</span>Masaüstü · Linux<span class="muted">bu cihaz</span></div>
+            <div class="dev"><span class="ms">smartphone</span><span class="dot"></span>Telefon · Android<span class="star ms">star</span><span class="chk"></span></div>
+            <div class="dev"><span class="ms">laptop</span><span class="dot off"></span>Dizüstü · Windows <span class="muted">dün 18:40</span></div>
+          </div>
+          <div class="person">
+            <div class="pn"><div class="av t">DK</div><div><div class="t">Av. Deniz Kaya</div><div class="s">2 cihaz · varsayılanı masaüstü</div></div><span class="chk on"></span></div>
+            <div class="dev"><span class="ms">desktop_windows</span><span class="dot"></span>Masaüstü · Windows<span class="star ms">star</span></div>
+            <div class="dev"><span class="ms">phone_iphone</span><span class="dot"></span>Telefon · iOS</div>
+          </div>
+          <div class="person">
+            <div class="pn"><div class="av g">MY</div><div><div class="t">Stj. Av. Mert Yıldız</div><div class="s">1 cihaz</div></div><span class="chk"></span></div>
+            <div class="dev"><span class="ms">laptop_mac</span><span class="dot"></span>Dizüstü · macOS<span class="star ms">star</span></div>
+          </div>
+          <div class="person">
+            <div class="pn"><div class="av g">SA</div><div><div class="t">Selin Aksoy · büro</div><div class="s">1 cihaz</div></div><span class="chk"></span></div>
+            <div class="dev"><span class="ms">desktop_windows</span><span class="dot off"></span>Ön büro · Windows<span class="star ms">star</span></div>
+          </div>
+          <div class="ch" style="border-top:1px solid var(--line);border-bottom:0"><span class="chk"></span>Herkesin varsayılan cihazına gönder</div>
+        </div>
+        <div class="card send">
+          <div class="sec">
+            <h3>Ne gönderilecek</h3>
+            <div class="drop"><span class="ms" style="font-size:28px;color:#9AA2B1">upload_file</span><br>Dosya ya da klasörü buraya bırakın</div>
+            <div class="picks"><span class="btn"><span class="ms">gavel</span>UYAP dosyasından evrak</span><span class="btn"><span class="ms">mail</span>UETS evrakı</span><span class="btn"><span class="ms">edit_note</span>Dilekçe</span><span class="btn"><span class="ms">folder</span>Klasör</span></div>
+            <div class="item"><span class="ic"><span class="ms">gavel</span></span><div style="flex:1"><b>2024/318 · Antalya 3. Asliye Hukuk</b><div class="muted">Seçili 3 evrak: Ara Karar, Bilirkişi Raporu, Duruşma Zaptı · dosyanın künyesi ve tarafları da gider</div></div><span class="ms" style="color:#9AA2B1">close</span></div>
+            <div class="item"><span class="ic"><span class="ms">description</span></span><div style="flex:1"><b>Bilirkişi raporuna itiraz dilekçesi.udf</b><div class="muted">48 KB · dosyaya bağlı</div></div><span class="ms" style="color:#9AA2B1">close</span></div>
+          </div>
+          <div class="sec">
+            <h3>Kime</h3>
+            <div class="to"><span class="chip"><span class="ms" style="font-size:16px">person</span>Av. Deniz Kaya · varsayılan cihazı</span><span class="btn" style="padding:4px 10px">+ kişi ya da cihaz</span></div>
+            <div class="note">Not: Rapora itirazı yarın öğlene kadar gözden geçirebilir misin?</div>
+          </div>
+          <div class="sec" style="border-bottom:0;display:flex;align-items:center;gap:10px">
+            <span class="muted">Alan cihaz kabul edince evrak oranın UYAP klasörüne, dosyasına bağlı olarak düşer.</span><span class="grow"></span><span class="btn p"><span class="ms">send</span>Gönder</span>
+          </div>
+        </div>
+        <div class="card tr">
+          <div class="ch"><b>Aktarımlar</b><span class="grow"></span>bugün</div>
+          <div class="x"><div style="display:flex;gap:6px;align-items:center"><span class="tag in">GELEN</span><span class="t">Av. Deniz Kaya’dan</span><span class="grow"></span><span class="muted">14:20</span></div><div class="s">2025/201 · Cevaba cevap dilekçesi.udf · “son hâli bu”</div><div style="margin-top:6px;display:flex;gap:6px"><span class="btn" style="padding:4px 10px">Aç</span><span class="btn" style="padding:4px 10px">Klasörde göster</span></div></div>
+          <div class="x"><div style="display:flex;gap:6px;align-items:center"><span class="tag in">GELEN</span><span class="t">Telefonumdan</span><span class="grow"></span><span class="muted">13:05</span></div><div class="s">Tarama 07.10.2026.pdf · 4 sayfa</div></div>
+          <div class="x"><div style="display:flex;gap:6px;align-items:center"><span class="tag wait">GİDİYOR</span><span class="t">Stj. Av. Mert Yıldız’a</span></div><div class="s">2025/4410 · bütün evrak (38) · 61 MB</div><div class="bar"><i style="width:64%"></i></div></div>
+          <div class="x"><div style="display:flex;gap:6px;align-items:center"><span class="tag ok">ALINDI</span><span class="t">Selin Aksoy’a</span><span class="grow"></span><span class="muted">10:12</span></div><div class="s">UETS · Antalya 6. İcra · Haciz İhbarnamesi</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pair">
+  <div>
+    <p class="lbl">2 · Kendi cihazlarım <small>yalnız aynı kullanıcının cihazları arasında</small></p>
+    <div class="dlg" style="width:700px">
+      <div class="own">
+        <div class="card"><b>Klasör eşitleme</b><div class="muted" style="margin:4px 0 10px">Bir klasör cihazlarınızda aynı kalır; silinen dosya silinmez, çöp klasörüne alınır.</div>
+          <div class="item"><span class="ic"><span class="ms">folder</span></span><div style="flex:1"><b>Folio/UYAP</b><div class="muted">Masaüstü ↔ Dizüstü · son eşitleme 14:31</div></div></div>
+          <div class="item"><span class="ic"><span class="ms">folder</span></span><div style="flex:1"><b>Belgeler/Dilekçeler</b><div class="muted">Masaüstü ↔ Telefon · yalnız UDF ve PDF</div></div></div>
+          <div style="margin-top:10px"><span class="btn">+ Klasör eşitle</span></div></div>
+        <div class="card"><b>Oturum aktarımı</b><div class="muted" style="margin:4px 0 10px">Bir cihazda açtığınız oturumu kendi başka cihazınıza geçirin; yeniden e-imzayla girmezsiniz.</div>
+          <div class="item"><span class="ic"><span class="ms">smartphone</span></span><div style="flex:1"><b>UYAP Mobil</b><div class="muted">bu cihazda açık · 6 gün</div></div><span class="btn" style="padding:4px 10px">Telefona</span></div>
+          <div class="item"><span class="ic"><span class="ms">mail</span></span><div style="flex:1"><b>UETS</b><div class="muted">telefonda açık · 23 dk</div></div><span class="btn" style="padding:4px 10px">Buraya al</span></div>
+          <div class="item"><span class="ic"><span class="ms">account_balance</span></span><div style="flex:1"><b>UYAP Web</b><div class="muted">bu cihazda açık · 2 sa</div></div><span class="btn" style="padding:4px 10px">Dizüstüne</span></div>
+          <div class="warn">Oturum başka bir kullanıcıya gönderilemez: e-imzanızla açılmış giriş yalnız sizin cihazlarınızda kullanılır.</div></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <p class="lbl">3 · Yeni cihaz tanıma</p>
+    <div class="dlg" style="width:360px">
+      <div class="h">Yeni cihaz: Dizüstü · macOS</div>
+      <div class="b">Ağda “Stj. Av. Mert Yıldız” adıyla bir Folio göründü. Karşı ekranda da aynı kod görünüyorsa onaylayın.<div class="code">482 917</div><span class="muted">Onaydan sonra bu cihazla her aktarım şifreli olur; kod bir daha sorulmaz.</span></div>
+      <div class="f"><span class="btn">Reddet</span><span class="btn p">Kodlar aynı, tanı</span></div>
+    </div>
+  </div>
+  <div>
+    <p class="lbl">4 · Telefon <small>paylaşma ekranından “Folio ile gönder”</small></p>
+    <div class="phone">
+      <div class="top"><span class="ms">arrow_back</span>Gönder</div>
+      <div class="item" style="margin:10px 10px 0;background:#fff"><span class="ic"><span class="ms">picture_as_pdf</span></span><div style="flex:1"><b>Tarama 07.10.2026.pdf</b><div class="muted">4 sayfa · 1,2 MB</div></div></div>
+      <div class="head" style="padding:12px 14px 4px">KİME</div>
+      <div class="person"><div class="pn"><div class="av">EÖ</div><div><div class="t">Kendi cihazlarım</div><div class="s">Masaüstü · Linux</div></div><span class="chk on"></span></div></div>
+      <div class="person"><div class="pn"><div class="av t">DK</div><div><div class="t">Av. Deniz Kaya</div><div class="s">Masaüstü · Windows</div></div><span class="chk"></span></div></div>
+      <div class="person"><div class="pn"><div class="av g">MY</div><div><div class="t">Stj. Av. Mert Yıldız</div><div class="s">Dizüstü · macOS</div></div><span class="chk"></span></div></div>
+      <div style="margin-top:auto;padding:12px"><div class="btn p" style="justify-content:center;width:100%;padding:12px"><span class="ms">send</span>Gönder</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="pair">
+  <div>
+    <p class="lbl">5 · Dosya sayfasından paylaşma <small>evrak listesinde seçip “Paylaş”</small></p>
+    <div class="dlg" style="width:640px">
+      <div class="h">2024/318 · evrak paylaş</div>
+      <div class="b">
+        <div style="display:flex;gap:8px;margin-bottom:8px"><span class="chip">Seçili 3 evrak</span><span class="btn" style="padding:4px 10px">Bütün evrak (15)</span><span class="btn" style="padding:4px 10px">Yalnız künye ve taraflar</span></div>
+        <div class="muted">Alan kişi dosyayı kendi Folio’sunda “UYAP Dosyalarım” altında, gönderilen evrakla birlikte görür; UYAP’a bağlı olmasa da.</div>
+        <div class="to" style="margin-top:12px"><span class="chip"><span class="ms" style="font-size:16px">person</span>Stj. Av. Mert Yıldız</span><span class="btn" style="padding:4px 10px">+ kişi</span></div>
+        <div class="note">Not: duruşma hazırlığı için.</div>
+      </div>
+      <div class="f"><span class="btn">Vazgeç</span><span class="btn p"><span class="ms">send</span>Gönder</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
