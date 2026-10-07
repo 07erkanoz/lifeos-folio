@@ -4,6 +4,7 @@ import 'agenda/mobile_connect.dart';
 import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import 'agenda/uyap_notices_page.dart';
+import '../services/office/office_network.dart';
 import '../services/platform/system_notices.dart';
 import '../services/portal/background_notices.dart';
 import '../services/portal/uyap_notice_alerts.dart';
@@ -54,6 +55,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../services/platform/file_actions.dart';
+import 'office/office_network_page.dart';
 import 'widgets/share_as.dart';
 import 'widgets/share_document_dialog.dart';
 import 'widgets/shortcuts_dialog.dart';
@@ -704,6 +706,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(searchUyapFolder(_library).catchError((Object _) => false));
       unawaited(_countAgenda());
       unawaited(_loadLawyerName());
+      // The office's network, if this Folio had joined it.
+      unawaited(OfficeNetwork.instance.resume());
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
       PortalSync.instance.noticesVersion.addListener(_portalSynced);
@@ -1048,6 +1052,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'agenda' ||
         value == 'uets' ||
         value == 'bildirim' ||
+        value == 'buro' ||
         value == 'ayarlar' ||
         _isUyapGroup(value)) {
       return;
@@ -1070,6 +1075,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'agenda' ||
       group == 'uets' ||
       group == 'bildirim' ||
+      group == 'buro' ||
       group == 'ayarlar';
 
   /// The office's pages a phone opens from its first page.
@@ -1078,6 +1084,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'agenda' ||
       group == 'uets' ||
       group == 'bildirim' ||
+      group == 'buro' ||
       group == 'ayarlar';
 
   /// Laid out as a phone, as the window's build decides.
@@ -1658,12 +1665,14 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ),
                               // The agenda and UETS fill the page with their
                               // own heading; on a phone the menu button stays.
-                              // UYAP Dosyalarım and a case's page bring
-                              // their own bar on a phone.
+                              // UYAP Dosyalarım, a case's page and the
+                              // office's network bring their own bar on a
+                              // phone.
                               if (_showLibrary &&
                                   !mobileHome &&
                                   (mobile
                                       ? _group != 'images' &&
+                                            _group != 'buro' &&
                                             !_isUyapGroup(_group)
                                       : !_isFullPage(_group)))
                                 FoldingChrome(
@@ -1878,6 +1887,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? _uetsPage()
                                               : _group == 'bildirim'
                                               ? _noticesPage()
+                                              : _group == 'buro'
+                                              ? const OfficeNetworkPage()
                                               : _group == 'ayarlar'
                                               ? _settingsPage()
                                               : _overview(),

@@ -217,6 +217,14 @@ class LibrarySidebar extends StatelessWidget {
                       ? _badge(context, '$uetsUnread', danger: true)
                       : null,
                 ),
+                _nav(
+                  context,
+                  Icons.lan_outlined,
+                  'Büro ağı',
+                  'buro',
+                  null,
+                  key: const ValueKey('office-network-nav'),
+                ),
                 const SizedBox(height: 14),
                 if (!compact)
                   Padding(

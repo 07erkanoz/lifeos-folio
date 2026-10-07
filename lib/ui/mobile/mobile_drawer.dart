@@ -212,6 +212,14 @@ class MobileDrawer extends StatelessWidget {
                         ),
                         _item(
                           context,
+                          key: const ValueKey('drawer-office'),
+                          icon: const Icon(Icons.lan_outlined),
+                          label: 'Büro ağı',
+                          selected: !home && group == 'buro',
+                          onTap: () => onGroup('buro'),
+                        ),
+                        _item(
+                          context,
                           key: const ValueKey('drawer-uyap'),
                           icon: const Icon(Icons.gavel_rounded),
                           label: 'UYAP Dosyalarım',

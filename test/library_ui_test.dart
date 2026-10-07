@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
+import 'package:evrak_convert/ui/library/library_sidebar.dart';
 import 'package:flutter/material.dart';
 import 'package:evrak_convert/ui/settings/settings_page.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -161,12 +162,21 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const EvrakConvertApp());
     await tester.pump();
-    expect(find.byTooltip('Ayarlar'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(tester.takeException(), isNull);
-    // The sidebar scrolls in a low window.
-    await tester.ensureVisible(find.byTooltip('Ayarlar'));
+    // The sidebar scrolls in a low window: Ayarlar is at its foot.
+    await tester.scrollUntilVisible(
+      find.byTooltip('Ayarlar'),
+      120,
+      scrollable: find
+          .descendant(
+            of: find.byType(LibrarySidebar),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.pump();
+    expect(find.byTooltip('Ayarlar'), findsOneWidget);
     await tester.tap(find.byTooltip('Ayarlar'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);

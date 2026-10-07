@@ -176,12 +176,21 @@ Dart tarafında mDNS için `bonsoir` ya da `nsd` gibi bir paket, şifreli bağla
   - Karşı cihaz kapalıysa kayıt sıraya alınır, cihaz görünce gider.
 - **Dosya görevlendirme:** "Bu dosyayı Av. Mert Yıldız'a görevlendir" dendiğinde dosyanın paketi gider. Dosya karşı tarafta "görevlendirilen" olarak işaretlenir.
 
-## Açık kararlar
+## Kararlar (8 Ekim 2026)
 
-1. **Kişi kavramı:** Bir cihaz, oradaki Folio'nun avukat profilindeki adla görünür. Ayrı bir kullanıcı hesabı ya da şifre kurulmaz. Uygun mu?
-2. **Erişim:** Büro ağına yeni bir cihazı ağdaki herhangi biri mi tanıyabilsin, yoksa yalnız büronun yöneticisi (örneğin siz) mi? Yönetici seçilirse yöneticinin tanıdığı cihazlar birbirini de tanır.
+1. **Kişi kavramı:** Bir cihaz, oradaki Folio'nun avukat profilindeki adla görünür. Ayrı bir kullanıcı hesabı ya da şifre kurulmaz.
+2. **Erişim:** Ağdaki her iki Folio, iki ekranda aynı altı haneli kodu görüp ikisi de onaylayınca birbirini tanır. Ayrı bir büro yöneticisi yoktur.
+3. **Katılma:** Folio, kullanıcı Büro ağı sayfasında "Bu ağa katıl" demedikçe ağda duyurulmaz; duyuruda avukatın adı bulunduğu için ortak ağlarda (kafe, otel) kendiliğinden görünmesi istenmez. Katıldıktan sonra her açılışta yeniden katılır, "Ağdan ayrıl" diyene kadar.
 
 ## Yapım sırası (1. aşama)
+
+Durum:
+
+- **1. adım yapıldı** (8 Ekim 2026): `lib/services/office/` (kimlik, duyuru ve bulma `bonsoir` ile), `lib/ui/office/office_network_page.dart` (kişiler ve cihazlar).
+  - Linux'ta ölçüldü: aynı makinede iki ayrı Folio birbirini adıyla ve adresiyle buldu; kapıya IPv4 ve IPv6 ile bağlanılabildi; kapanınca duyurular kalktı.
+  - Linux eklentisi önce TXT kaydını, adresi sonra bildiriyor; adres ve kapı korunur, IPv4 adresi IPv6'ya tercih edilir.
+  - Henüz ölçülmedi: Windows (güvenlik duvarı izni), macOS ve iOS (yerel ağ izni; Info.plist girdileri eklendi), Android (NSD).
+  - Kişiler, kullanıcı anahtarları paylaşılana kadar (2. adım) profil adına göre gruplanır.
 
 1. Cihaz ve kullanıcı anahtarları; mDNS ile duyurma ve bulma; kişiler ve cihazlar listesi. Beş platformda bulmanın ölçülmesi.
 2. Tanıma (kodla eşleme), tanınan cihazlar listesi, cihaz kaldırma.

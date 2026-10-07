@@ -32,5 +32,11 @@
 	<string>LifeOS Folio</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Sesli yazma, söylediklerinizi belgeye yazmak için mikrofonu kullanır. Ses bilgisayarınızdan çıkmaz.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Folio, büro ağındaki diğer Folio’ları bulmak ve onlarla evrak alıp vermek için yerel ağı kullanır.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_folio._tcp</string>
+	</array>
 </dict>
 </plist>

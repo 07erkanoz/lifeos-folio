@@ -9,6 +9,9 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:evrak_convert/services/office/office_network.dart';
+import 'package:evrak_convert/services/office/office_peer.dart';
+import 'package:evrak_convert/ui/office/office_network_page.dart';
 import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -255,5 +258,60 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     sync.dispose();
     db.dispose();
+  });
+
+  testWidgets('office network', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('folio_office_shot_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    OfficePeer peer(
+      String id,
+      String name,
+      String device,
+      OfficePlatform platform, {
+      bool online = true,
+    }) => OfficePeer(
+      deviceId: id,
+      userId: 'u$id',
+      name: name,
+      device: device,
+      platform: platform,
+      online: online,
+      lastSeen: DateTime.now().subtract(const Duration(hours: 3)),
+    );
+    final net = OfficeNetwork(
+      settings: () async => File('${dir.path}/buro.json'),
+    );
+    net.seenForTesting(
+      peer('p1', 'Av. Deniz Kaya', 'deniz-telefon', OfficePlatform.android),
+      self: peer('s', 'Av. Deniz Kaya', 'deniz-masaustu', OfficePlatform.linux),
+    );
+    for (final p in [
+      peer(
+        'p2',
+        'Av. Deniz Kaya',
+        'deniz-dizustu',
+        OfficePlatform.windows,
+        online: false,
+      ),
+      peer('p3', 'Av. Murat Er', 'murat-pc', OfficePlatform.windows),
+      peer('p4', 'Av. Murat Er', 'Android telefon', OfficePlatform.android),
+      peer('p5', 'Stj. Av. Mert Yıldız', 'mert-macbook', OfficePlatform.macos),
+      peer('p6', 'Selin Aksoy', 'sekreterya', OfficePlatform.windows),
+    ]) {
+      net.seenForTesting(p);
+    }
+    for (final (size, name) in [
+      (logical, 'buro-agi'),
+      (const Size(390, 844), 'buro-agi-telefon'),
+    ]) {
+      tester.view.physicalSize = size * pixelRatio;
+      tester.view.devicePixelRatio = pixelRatio;
+      await tester.pumpWidget(
+        _app(Scaffold(body: OfficeNetworkPage(network: net))),
+      );
+      await tester.pump();
+      await _shot(tester, name);
+    }
+    tester.view.reset();
   });
 }
