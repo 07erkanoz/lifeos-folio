@@ -180,7 +180,12 @@ Dart tarafında mDNS için `bonsoir` ya da `nsd` gibi bir paket, şifreli bağla
 
 1. **Kişi kavramı:** Bir cihaz, oradaki Folio'nun avukat profilindeki adla görünür. Ayrı bir kullanıcı hesabı ya da şifre kurulmaz.
 2. **Erişim:** Ağdaki her iki Folio, iki ekranda aynı altı haneli kodu görüp ikisi de onaylayınca birbirini tanır. Ayrı bir büro yöneticisi yoktur.
-3. **Katılma:** Folio, kullanıcı Büro ağı sayfasında "Bu ağa katıl" demedikçe ağda duyurulmaz; duyuruda avukatın adı bulunduğu için ortak ağlarda (kafe, otel) kendiliğinden görünmesi istenmez. Katıldıktan sonra her açılışta yeniden katılır, "Ağdan ayrıl" diyene kadar.
+3. **Kendi cihazlar:** TC numarasıyla onaysız eşleşme yapılmaz; TC gizli değildir (dilekçede, vekâletnamede, UYAP evrakında yazar) ve onu bilen biri kendini kişinin cihazı gibi tanıtıp oturumlarını alabilirdi. Bunun yerine:
+   - Her yeni cihaz hayatında bir kez onaylanır. İkinci cihaz tanınınca kişi anahtarı ona geçer; üçüncü cihaz kişinin herhangi bir cihazına tanıtılınca öbürleri onu kendiliğinden tanır.
+   - Telefonu tanıtırken bilgisayarda QR kodu çıkar, telefonla okutulur; kod karşılaştırmak gerekmez. Bilgisayarlar arasında altı haneli kod bir kez karşılaştırılır.
+   - TC yalnız ipucudur: bağlantı kurulduktan sonra ağa açılmadan karşılaştırılır; aynıysa pencere "Bu sizin cihazınız" diye açılır.
+4. **Senkron sayfası:** Büro ağından ayrı bir sayfa; yalnız kişinin kendi cihazları arasında klasör ve dosya, ajandadaki işler ve notlar, UYAP Mobil, UETS ve UYAP Web oturumları eşitlenir.
+5. **Katılma:** Folio, kullanıcı Büro ağı sayfasında "Bu ağa katıl" demedikçe ağda duyurulmaz; duyuruda avukatın adı bulunduğu için ortak ağlarda (kafe, otel) kendiliğinden görünmesi istenmez. Katıldıktan sonra her açılışta yeniden katılır, "Ağdan ayrıl" diyene kadar.
 
 ## Yapım sırası (1. aşama)
 
@@ -191,6 +196,10 @@ Durum:
   - Linux eklentisi önce TXT kaydını, adresi sonra bildiriyor; adres ve kapı korunur, IPv4 adresi IPv6'ya tercih edilir.
   - Henüz ölçülmedi: Windows (güvenlik duvarı izni), macOS ve iOS (yerel ağ izni; Info.plist girdileri eklendi), Android (NSD).
   - Kişiler, kullanıcı anahtarları paylaşılana kadar (2. adım) profil adına göre gruplanır.
+- **2. adım yapıldı** (8 Ekim 2026): `office_pairing.dart` (kodla tanıma), `office_known.dart` (tanınan cihazlar, `buro_cihazlar.json`'da yalnız açık anahtarlar ve adlar), `office_link.dart` (satır başına bir JSON; uzun satır bayt bayt sayılıp kesilir), `office_pairing_dialog.dart`.
+  - Tanıyan taraf önce rastgele sayısının özetine bağlanır, karşının sayısını duyduktan sonra kendininkini açıklar; altı hane iki cihazın açık anahtarlarından ve iki sayıdan üretilir. Açıklanan sayı özetle tutmazsa tanıma durur.
+  - İki taraf da onaylamadan hiçbiri tanınmaz; reddedilen ya da süresi (3 dakika) dolan tanıma kayda geçmez; bir tanıma sürerken gelen ikinci istek "meşgul" yanıtı alır.
+  - Uçtan uca testler aynı makinede iki Folio'yu gerçek soketlerle konuşturur (`test/office_pairing_test.dart`).
 
 1. Cihaz ve kullanıcı anahtarları; mDNS ile duyurma ve bulma; kişiler ve cihazlar listesi. Beş platformda bulmanın ölçülmesi.
 2. Tanıma (kodla eşleme), tanınan cihazlar listesi, cihaz kaldırma.
@@ -198,7 +207,7 @@ Durum:
 4. Büro ağı sayfası: kişiler ve cihazlar, gönderme, aktarımlar (taslaktaki 1. görünüm).
 5. UYAP dosyası paketi; dosya sayfasından "Paylaş"; alanda dosyaya bağlama (taslaktaki 5. görünüm). UETS evrakı gönderme.
 6. Telefon: Android paylaşma hedefi ve iOS paylaşma eklentisi (taslaktaki 4. görünüm).
-7. Kendi cihazlarım: klasör eşitleme ve oturum aktarımı (taslaktaki 2. görünüm).
+7. Kendi cihazlar: kişi anahtarının aktarımı ve yayılması, QR ile tanıma, TC ipucu. Ardından ayrı **Senkron sayfası**: klasör ve dosya eşitleme, ajanda işleri ve notları, oturum (jeton) aktarımı (taslaktaki 2. görünüm bu sayfaya taşınır).
 8. Her adımda testler: iki Folio'yu aynı makinede sahte ağla konuşturan uçtan uca testler; tanınmamış cihazın reddedilmesi; yarım kalan aktarımın sürmesi; özeti tutmayan dosyanın atılması; başka kullanıcıya oturum gönderilememesi.
 
 2. aşama, 1. aşama bürolarda kullanılmaya başladıktan sonra aynı belgeye ayrıntılandırılarak eklenir.

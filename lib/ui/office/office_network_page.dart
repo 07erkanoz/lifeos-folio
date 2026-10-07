@@ -6,6 +6,7 @@ import '../../services/office/office_network.dart';
 import '../../services/office/office_peer.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
+import 'office_pairing_dialog.dart';
 
 /// Büro ağı (docs/buro.md, docs/design/buro-paylasim-taslak.png): the
 /// Folios on the office's network under their people. Sending, knowing a
@@ -341,9 +342,11 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                       text: '  bu cihaz',
                       style: TextStyle(fontSize: 11, color: AgendaColors.muted),
                     )
-                  else if (!d.online && seen != null)
+                  else if (!d.online)
                     TextSpan(
-                      text: '  kapalı · ${when(seen)}',
+                      text: seen == null
+                          ? '  kapalı'
+                          : '  kapalı · ${when(seen)}',
                       style: const TextStyle(
                         fontSize: 11,
                         color: AgendaColors.muted,
@@ -356,9 +359,41 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
               style: const TextStyle(fontSize: 13),
             ),
           ),
+          if (!self && _net.isKnown(d.deviceId))
+            const Tooltip(
+              message: 'Tanınan cihaz',
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Icon(
+                  Icons.verified_rounded,
+                  size: 17,
+                  color: AgendaColors.ok,
+                ),
+              ),
+            )
+          else if (!self && d.online)
+            TextButton(
+              key: ValueKey('office-pair-${d.deviceId}'),
+              onPressed: () => _pair(d),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+              child: const Text('Tanı'),
+            ),
         ],
       ),
     );
+  }
+
+  void _pair(OfficePeer d) {
+    final pairing = _net.pair(d);
+    if (pairing == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Şu anda başka bir cihaz tanınıyor; bitince deneyin.'),
+        ),
+      );
+      return;
+    }
+    unawaited(OfficePairingDialog.show(context, pairing));
   }
 
   /// This device: how it is seen, what comes next, and leaving.
@@ -399,12 +434,51 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.taskText),
               ),
             ],
+            const SizedBox(height: 14),
+            const Text(
+              'Tanınan cihazlar',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            if (_net.known.isEmpty)
+              const Text(
+                'Henüz tanınan bir cihaz yok. Listedeki bir cihazın yanındaki '
+                '“Tanı”ya basın; iki ekranda aynı kod çıkınca onaylayın.',
+                style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              )
+            else
+              for (final k in _net.known)
+                Row(
+                  key: ValueKey('office-known-${k.deviceId}'),
+                  children: [
+                    const Icon(
+                      Icons.verified_rounded,
+                      size: 15,
+                      color: AgendaColors.ok,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        '${k.name.isEmpty ? 'Adsız' : k.name} · ${k.device}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                    IconButton(
+                      key: ValueKey('office-forget-${k.deviceId}'),
+                      tooltip: 'Tanımayı kaldır',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => unawaited(_net.forget(k.deviceId)),
+                      icon: const Icon(Icons.close_rounded, size: 17),
+                    ),
+                  ],
+                ),
             const SizedBox(height: 10),
             const Text(
-              'Sıradaki adımlarda: yeni bir cihazı iki ekranda görünen kodla '
-              'tanımak, tanınan cihazlara şifreli olarak evrak, UYAP dosyası '
-              've dilekçe göndermek, kendi cihazlarınız arasında klasör ve '
-              'oturum taşımak.',
+              'Sıradaki adımlarda: tanınan cihazlara şifreli olarak evrak, UYAP '
+              'dosyası ve dilekçe göndermek; kendi cihazlarınız arasında '
+              'Senkron sayfasından klasör, ajanda ve oturum eşitlemek.',
               style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
             const SizedBox(height: 12),

@@ -9,6 +9,11 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:evrak_convert/services/office/office_identity.dart';
+import 'package:evrak_convert/services/office/office_known.dart';
+import 'package:evrak_convert/services/office/office_pairing.dart';
+import 'package:evrak_convert/services/security/secret_store.dart';
+import 'package:evrak_convert/ui/office/office_pairing_dialog.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/ui/office/office_network_page.dart';
@@ -314,4 +319,70 @@ void main() {
     }
     tester.view.reset();
   });
+
+  testWidgets('office pairing', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('folio_pair_shot_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    late OfficeNetwork a, b;
+    late OfficePairing asking;
+    await tester.runAsync(() async {
+      Future<OfficeNetwork> folio(String name, String device) async {
+        final net = OfficeNetwork(
+          settings: () async => File('${dir.path}/$device.json'),
+          known: KnownDevices(
+            file: () async => File('${dir.path}/$device-k.json'),
+          ),
+        );
+        final identity = await OfficeIdentity.load(store: _MemoryStore());
+        await net.listenForTesting(
+          identity,
+          OfficePeer(
+            deviceId: identity.deviceId,
+            userId: identity.userId,
+            name: name,
+            device: device,
+            platform: name.startsWith('Stj')
+                ? OfficePlatform.macos
+                : OfficePlatform.linux,
+          ),
+        );
+        return net;
+      }
+
+      a = await folio('Stj. Av. Mert Yıldız', 'mert-macbook');
+      b = await folio('Av. Deniz Kaya', 'deniz-masaustu');
+      asking = a.pair(b.self!)!;
+      for (var i = 0; i < 200 && b.incoming.value?.code == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    tester.view.physicalSize = logical * pixelRatio;
+    tester.view.devicePixelRatio = pixelRatio;
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: Center(child: OfficePairingDialog(pairing: b.incoming.value!)),
+        ),
+      ),
+    );
+    await tester.pump();
+    await _shot(tester, 'buro-tanima');
+    await tester.runAsync(() async {
+      asking.reject();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    tester.view.reset();
+  });
+}
+
+class _MemoryStore extends SecretStore {
+  final _kept = <String, Map<String, Object?>>{};
+  @override
+  Future<bool> write(String name, Map<String, Object?> value) async {
+    _kept[name] = value;
+    return true;
+  }
+
+  @override
+  Future<Map<String, Object?>?> read(String name) async => _kept[name];
 }

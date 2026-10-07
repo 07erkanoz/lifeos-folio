@@ -56,6 +56,7 @@ import 'package:path/path.dart' as p;
 
 import '../services/platform/file_actions.dart';
 import 'office/office_network_page.dart';
+import 'office/office_pairing_dialog.dart';
 import 'widgets/share_as.dart';
 import 'widgets/share_document_dialog.dart';
 import 'widgets/shortcuts_dialog.dart';
@@ -708,6 +709,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_loadLawyerName());
       // The office's network, if this Folio had joined it.
       unawaited(OfficeNetwork.instance.resume());
+      OfficeNetwork.instance.incoming.addListener(_pairingAsked);
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
       PortalSync.instance.noticesVersion.addListener(_portalSynced);
@@ -830,8 +832,20 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
+  /// Another Folio asked to know this one: its code shown wherever the
+  /// user is.
+  void _pairingAsked() {
+    final incoming = OfficeNetwork.instance.incoming;
+    final pairing = incoming.value;
+    if (pairing == null || !mounted) return;
+    incoming.value = null;
+    if (pairing.finished) return;
+    unawaited(OfficePairingDialog.show(context, pairing));
+  }
+
   @override
   void dispose() {
+    OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
     _stopPreviewSpeech();
     UpdateCheck.instance.available.removeListener(_updateAvailable);
     DocumentHistory.recoveryChanges.removeListener(_checkRecovery);

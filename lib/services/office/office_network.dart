@@ -9,6 +9,9 @@ import 'package:path/path.dart' as p;
 import '../editor/lawyer_profile.dart';
 import '../platform/app_directories.dart';
 import 'office_identity.dart';
+import 'office_known.dart';
+import 'office_link.dart';
+import 'office_pairing.dart';
 import 'office_peer.dart';
 
 /// The office's network (docs/buro.md): this Folio announced on the local
@@ -18,8 +21,12 @@ import 'office_peer.dart';
 /// lawyer's name, and a café's network is not an office's. Once joined,
 /// Folio joins again at each start until the user leaves.
 class OfficeNetwork extends ChangeNotifier {
-  OfficeNetwork({Future<File> Function()? settings, this.platformName})
-    : _settingsFile = settings ?? _defaultSettings;
+  OfficeNetwork({
+    Future<File> Function()? settings,
+    KnownDevices? known,
+    this.platformName,
+  }) : _settingsFile = settings ?? _defaultSettings,
+       _known = known ?? KnownDevices();
 
   static OfficeNetwork? _instance;
   static OfficeNetwork get instance => _instance ??= OfficeNetwork();
@@ -38,6 +45,12 @@ class OfficeNetwork extends ChangeNotifier {
   BonsoirDiscovery? _discovery;
   StreamSubscription<BonsoirDiscoveryEvent>? _events;
   final _peers = <String, OfficePeer>{};
+  final KnownDevices _known;
+  Map<String, KnownDevice> _knownDevices = const {};
+
+  /// A device that asked to know this one: shown wherever the user is.
+  final incoming = ValueNotifier<OfficePairing?>(null);
+  OfficePairing? _pairing;
 
   bool _joined = false, _starting = false;
   String? _error;
@@ -55,11 +68,83 @@ class OfficeNetwork extends ChangeNotifier {
   /// Whether the keys outlive this run (see [OfficeIdentity.kept]).
   bool get kept => _identity?.kept ?? true;
 
-  /// The people on the network with their devices, this user's first.
+  /// The people on the network with their devices, this user's first; a
+  /// known device that is not on it now is there too, as closed.
   List<OfficePerson> get people {
     final self = _self;
     if (self == null) return const [];
-    return groupPeople(_peers.values, self: self);
+    return groupPeople([
+      ..._peers.values,
+      for (final d in _knownDevices.values)
+        if (!_peers.containsKey(d.deviceId)) d.asAbsent(null),
+    ], self: self);
+  }
+
+  /// The devices this one knows, the newest first.
+  List<KnownDevice> get known =>
+      _knownDevices.values.toList()
+        ..sort((a, b) => b.knownAt.compareTo(a.knownAt));
+
+  bool isKnown(String deviceId) => _knownDevices.containsKey(deviceId);
+
+  /// Starts knowing [peer] by a code; null while another is being known.
+  OfficePairing? pair(OfficePeer peer) {
+    final identity = _identity, self = _self;
+    if (identity == null || self == null) return null;
+    if (_pairing != null && !_pairing!.finished) return null;
+    return _pairing = OfficePairing.start(
+      identity: identity,
+      self: self,
+      peer: peer,
+      onKnown: _knownNow,
+    );
+  }
+
+  /// Forgets a known device: it must be known by its code again before
+  /// anything goes to it or comes from it.
+  Future<void> forget(String deviceId) async {
+    await _known.forget(deviceId);
+    await _loadKnown();
+    notifyListeners();
+  }
+
+  Future<void> _knownNow(KnownDevice device) async {
+    await _known.remember(device);
+    await _loadKnown();
+    notifyListeners();
+  }
+
+  Future<void> _loadKnown() async {
+    _knownDevices = {for (final d in await _known.all()) d.deviceId: d};
+  }
+
+  /// A talk another Folio opened: knowing by a code, for now; what is
+  /// sent to a known device comes in the next step (docs/buro.md, Aktarım).
+  void _opened(Socket socket) {
+    final link = OfficeLink(socket);
+    late final StreamSubscription<Map<String, Object?>> first;
+    first = link.messages.listen((m) {
+      unawaited(first.cancel());
+      final identity = _identity, self = _self;
+      if (m['t'] != 'pair' || identity == null || self == null) {
+        unawaited(link.close());
+        return;
+      }
+      if (_pairing != null && !_pairing!.finished) {
+        link.send({'t': 'busy'});
+        unawaited(link.close());
+        return;
+      }
+      final pairing = OfficePairing.answer(
+        link: link,
+        first: m,
+        identity: identity,
+        self: self,
+        onKnown: _knownNow,
+      );
+      _pairing = pairing;
+      if (!pairing.finished) incoming.value = pairing;
+    });
   }
 
   /// Joins again if the user had joined before; at Folio's start.
@@ -95,6 +180,7 @@ class OfficeNetwork extends ChangeNotifier {
     notifyListeners();
     try {
       _identity ??= await OfficeIdentity.load();
+      await _loadKnown();
       // Where the others will reach this Folio; what is said there comes in
       // the next step (docs/buro.md, Aktarım), till then it hangs up.
       // Both families: the others may find this one by either address.
@@ -103,7 +189,7 @@ class OfficeNetwork extends ChangeNotifier {
         0,
         v6Only: false,
       );
-      _server!.listen((socket) => socket.destroy());
+      _server!.listen(_opened);
       _self = await _describe(_identity!, _server!.port);
       await _announce(_self!);
       await _look();
@@ -241,6 +327,28 @@ class OfficeNetwork extends ChangeNotifier {
     _broadcast = null;
     await _server?.close();
     _server = null;
+  }
+
+  /// For tests: listening as [join] does, without the announcement.
+  @visibleForTesting
+  Future<void> listenForTesting(
+    OfficeIdentity identity,
+    OfficePeer self,
+  ) async {
+    _identity = identity;
+    await _loadKnown();
+    _server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    _server!.listen(_opened);
+    _self = OfficePeer(
+      deviceId: identity.deviceId,
+      userId: identity.userId,
+      name: self.name,
+      device: self.device,
+      platform: self.platform,
+      host: '127.0.0.1',
+      port: _server!.port,
+    );
+    _joined = true;
   }
 
   /// For tests: a peer as if it had been found.
