@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:evrak_convert/services/office/office_chat.dart';
 import 'package:evrak_convert/services/office/office_identity.dart';
@@ -11,7 +12,12 @@ import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
+import 'package:evrak_convert/services/office/task_package.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
+import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
+import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _Store extends SecretStore {
@@ -40,6 +46,9 @@ void main() {
       ),
       tasks: OfficeTasks(file: () async => File('${dir.path}/$device/g.json')),
       chats: OfficeChats(file: () async => File('${dir.path}/$device/m.json')),
+      packages: TaskPackages(
+        file: () async => File('${dir.path}/$device/p.json'),
+      ),
     );
     Directory('${dir.path}/$device/gelen').createSync(recursive: true);
     net.inbox = () async => Directory('${dir.path}/$device/gelen');
@@ -328,4 +337,88 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'a task’s case goes with its details and documents, for one without UYAP',
+    () async {
+      b.seenForTesting(a.self!);
+      await a.foundOffice('Kaya Hukuk Bürosu');
+      await a.admit(b.self!.deviceId, OfficeRole.lawyer);
+      await until(() => b.ledger.members.length == 2);
+      const court = 'Antalya 3. Asliye Hukuk Mahkemesi';
+      final store = UyapCaseStore(
+        directory: Directory('${dir.path}/uyap'),
+        settings: UyapSettings(
+          directory: Directory('${dir.path}/uyap'),
+          home: '${dir.path}/ev',
+        ),
+      );
+      UyapCaseDocument doc(String key, String type) => UyapCaseDocument(
+        key: key,
+        documentId: key,
+        caseId: '1',
+        type: type,
+        number: key,
+        approved: '01.10.2026 10:00',
+        sender: 'Mahkeme',
+        description: '',
+      );
+      var record = await store.keep(
+        target: const UyapCase('1', '2024/318', '', court),
+        details: const UyapCaseDetails(
+          kind: 'Alacak (İtirazın İptali)',
+          status: 'Açık',
+        ),
+        parties: const [
+          UyapParty('AYŞE KARACA', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+        ],
+        documents: UyapCaseDocuments([
+          doc('a', 'Ara Karar'),
+          doc('b', 'Bilirkişi Raporu'),
+        ]),
+      );
+      final bytes = utf8.encode('%PDF-1.4 ara karar');
+      (record, _) = await store.save(
+        record,
+        record.documents.first,
+        Uint8List.fromList(bytes),
+      );
+      const c = TaskCase(
+        caseKey: 'k1',
+        number: '2024/318',
+        court: court,
+        docKeys: ['a', 'b'],
+      );
+      final pack = await TaskPackage.pack(
+        c,
+        store: store,
+        controller: UyapCasePanelController(
+          web: UyapWebService.forTesting(),
+          mobile: UyapMobileApi.forTesting(Uri.parse('http://127.0.0.1:9/')),
+          store: store,
+        ),
+        temp: () async => Directory('${dir.path}/tmp'),
+      );
+      // UYAP not connected: the one not here is said, not sent.
+      expect(pack.missing, ['Bilirkişi Raporu']);
+      expect(pack.paths, hasLength(2));
+      await a.giveTask(
+        title: 'İncele',
+        to: [b.self!.deviceId],
+        cases: const [c],
+        packed: {'k1': pack},
+      );
+      await until(() => b.tasks.all.isNotEmpty);
+      final t = b.tasks.all.single;
+      await until(() => b.receivedCase(t, 'k1') != null);
+      final got = b.receivedCase(t, 'k1')!;
+      expect(got.number, '2024/318');
+      expect(got.particulars['kind'], 'Alacak (İtirazın İptali)');
+      expect(got.parties.single['ad'], 'AYŞE KARACA');
+      expect(File(got.documents.single).readAsBytesSync(), bytes);
+      // The giver's paths go nowhere.
+      expect(got.details['dosyalar'], isEmpty);
+      await until(() => a.packages.pending.isEmpty);
+    },
+  );
 }

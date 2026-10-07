@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/office/office_network.dart';
 import '../../services/office/office_task.dart';
+import '../../services/office/task_package.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart';
@@ -110,32 +111,81 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
     if (day != null) setState(() => _due = day);
   }
 
+  String? _packing;
+
   Future<void> _give() async {
     setState(() {
       _busy = true;
       _error = null;
     });
+    final cases = [
+      for (final c in _cases)
+        TaskCase(
+          caseKey: c.row.key,
+          number: c.row.kase.number,
+          court: c.row.kase.court,
+          items: [
+            for (final (field, who) in c.items)
+              if (field.text.trim().isNotEmpty)
+                TaskItem.create(field.text, assignee: who),
+          ],
+          docs: c.docs,
+          docKeys: c.chosen.toList(),
+        ),
+    ];
+    // The cases' details and documents, those not here fetched from UYAP:
+    // the assignee cannot open them there.
+    final packed = <String, TaskPackage>{};
+    final missing = <String>[];
+    for (final c in cases) {
+      setState(() => _packing = '${c.number} hazırlanıyor…');
+      final pack = await TaskPackage.pack(c);
+      packed[c.caseKey] = pack;
+      missing.addAll([for (final m in pack.missing) '${c.number}: $m']);
+    }
+    if (!mounted) return;
+    setState(() => _packing = null);
+    if (missing.isNotEmpty) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Bazı evrak indirilemedi'),
+          content: SizedBox(
+            width: 420,
+            child: Text(
+              'UYAP’a bağlı olmadığınız ya da UYAP vermediği için şu evrak '
+              'gönderilemeyecek:\n\n${missing.take(12).join('\n')}'
+              '${missing.length > 12 ? '\n+${missing.length - 12} evrak daha' : ''}'
+              '\n\nUYAP’a bağlanıp yeniden deneyebilir ya da görevi bunlarsız '
+              'verebilirsiniz.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('task-give-anyway'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yine de ver'),
+            ),
+          ],
+        ),
+      );
+      if (go != true || !mounted) {
+        setState(() => _busy = false);
+        return;
+      }
+    }
     final error = await _net.giveTask(
       title: _title.text,
       to: _to.toList(),
       note: _note.text,
       due: _due,
       priority: _priority,
-      cases: [
-        for (final c in _cases)
-          TaskCase(
-            caseKey: c.row.key,
-            number: c.row.kase.number,
-            court: c.row.kase.court,
-            items: [
-              for (final (field, who) in c.items)
-                if (field.text.trim().isNotEmpty)
-                  TaskItem.create(field.text, assignee: who),
-            ],
-            docs: c.docs,
-            docKeys: c.chosen.toList(),
-          ),
-      ],
+      cases: cases,
+      packed: packed,
     );
     if (!mounted) return;
     if (error != null) {
@@ -288,7 +338,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
         FilledButton(
           key: const ValueKey('task-give'),
           onPressed: _busy ? null : () => unawaited(_give()),
-          child: const Text('Görevi ver'),
+          child: Text(_packing ?? 'Görevi ver'),
         ),
       ],
     );

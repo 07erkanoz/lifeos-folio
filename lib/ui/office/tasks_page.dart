@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../services/office/office_network.dart';
 import '../../services/office/office_task.dart';
+import '../../services/platform/file_actions.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'task_give_dialog.dart';
@@ -702,6 +704,7 @@ class _TaskDetailState extends State<TaskDetail> {
                       color: AgendaColors.muted,
                     ),
                   ),
+                  _received(context, t, c, doer),
                   for (final item in c.items)
                     CheckboxListTile(
                       key: ValueKey('task-item-${item.id}'),
@@ -781,6 +784,92 @@ class _TaskDetailState extends State<TaskDetail> {
       );
     },
   );
+
+  /// The case as it came with the task: its particulars, its parties and
+  /// its documents, here to read without UYAP.
+  Widget _received(BuildContext context, OfficeTask t, TaskCase c, bool doer) {
+    if (!doer) return const SizedBox.shrink();
+    final got = _net.receivedCase(t, c.caseKey);
+    if (got == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 4),
+        child: Text(
+          'Dosya ve evrak işi verenden geliyor…',
+          style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+        ),
+      );
+    }
+    final k = got.particulars;
+    String v(String key) => '${k[key] ?? ''}'.trim();
+    final facts = [
+      if (v('kind').isNotEmpty) 'Dava türü: ${v('kind')}',
+      if (v('fileType').isNotEmpty) 'Dosya türü: ${v('fileType')}',
+      if ((v('status').isNotEmpty ? v('status') : v('state')).isNotEmpty)
+        'Durum: ${v('status').isNotEmpty ? v('status') : v('state')}',
+      if (v('openedOn').isNotEmpty) 'Açılış: ${v('openedOn')}',
+      if (v('hearing').isNotEmpty) 'Duruşma: ${v('hearing')}',
+    ];
+    return Container(
+      key: ValueKey('task-received-${c.caseKey}'),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: AgendaColors.taskFill,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'GÖREVLE GELEN DOSYA · UYAP yetkiniz olmasa da inceleyebilirsiniz',
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              color: AgendaColors.taskText,
+            ),
+          ),
+          if (facts.isNotEmpty)
+            Text(facts.join(' · '), style: const TextStyle(fontSize: 12.5)),
+          for (final party in got.parties.take(6))
+            Text(
+              '${party['rol'] ?? ''}: ${party['ad'] ?? ''}'
+              '${'${party['vekil'] ?? ''}'.isEmpty ? '' : ' · vekil ${party['vekil']}'}',
+              style: const TextStyle(fontSize: 12),
+            ),
+          const SizedBox(height: 4),
+          for (final path in got.documents)
+            Row(
+              children: [
+                const Icon(Icons.description_outlined, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    p.basename(path),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      unawaited(FileActions.invoke('openDefault', path)),
+                  child: const Text('Aç'),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      unawaited(FileActions.invoke('showFolder', path)),
+                  child: const Text('Klasörde göster'),
+                ),
+              ],
+            ),
+          if (got.documents.isEmpty)
+            const Text(
+              'Yalnız künye ve taraflar gönderildi.',
+              style: TextStyle(fontSize: 12),
+            ),
+        ],
+      ),
+    );
+  }
 
   void _send() {
     final text = _say.text.trim();

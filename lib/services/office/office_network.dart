@@ -18,6 +18,7 @@ import 'office_link.dart';
 import 'office_pairing.dart';
 import 'office_peer.dart';
 import 'office_task.dart';
+import 'task_package.dart';
 import 'office_transfer.dart';
 
 /// The office's network (docs/buro.md): this Folio announced on the local
@@ -33,12 +34,17 @@ class OfficeNetwork extends ChangeNotifier {
     OfficeLedger? ledger,
     OfficeTasks? tasks,
     OfficeChats? chats,
+    TaskPackages? packages,
     this.platformName,
   }) : _settingsFile = settings ?? _defaultSettings,
        _known = known ?? KnownDevices(),
        ledger = ledger ?? OfficeLedger(),
        tasks = tasks ?? OfficeTasks(),
-       chats = chats ?? OfficeChats();
+       chats = chats ?? OfficeChats(),
+       packages = packages ?? TaskPackages();
+
+  /// Task cases on their way, and those that came (docs/buro.md, Görev).
+  final TaskPackages packages;
 
   /// The talks this device is in (docs/buro.md, Mesajlaşma).
   final OfficeChats chats;
@@ -140,6 +146,21 @@ class OfficeNetwork extends ChangeNotifier {
 
   void _ended(OfficeTransfer t) {
     unawaited(_log(t));
+    final taskId = t.meta['gorev'], caseKey = t.meta['dosya'];
+    if (taskId is String &&
+        caseKey is String &&
+        t.state == TransferState.done) {
+      if (t.outgoing) {
+        packages.pending.remove('$taskId|$caseKey|${t.peer.deviceId}');
+        unawaited(packages.save());
+      } else {
+        unawaited(
+          packages
+              .came(taskId, caseKey, t.saved)
+              .then((_) => notifyListeners()),
+        );
+      }
+    }
     final message = t.meta['mesaj'];
     if (message is String && t.state == TransferState.done) {
       if (t.outgoing) {
@@ -287,9 +308,18 @@ class OfficeNetwork extends ChangeNotifier {
         await ch.close();
         return;
       }
-      final forChat =
-          m['meta'] is Map && (m['meta'] as Map)['sohbet'] is String;
+      final meta = m['meta'] is Map ? m['meta'] as Map : const {};
+      final forChat = meta['sohbet'] is String;
+      final forTask = meta['gorev'] is String && meta['dosya'] is String;
       final folder = await inbox();
+      final taskFolder = forTask
+          // Each case to a folder of its own.
+          ? p.join(
+              folder.path,
+              'Görevler',
+              '${meta['gorev']}-${'${meta['dosya']}'.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}',
+            )
+          : null;
       final t = m['t'] == 'offer'
           ? OfficeTransfer.receive(
               channel: ch,
@@ -297,6 +327,8 @@ class OfficeNetwork extends ChangeNotifier {
               folder: forChat
                   ? (await Directory(p.join(folder.path, 'Mesajlar'))
                         .create(recursive: true))
+                  : taskFolder != null
+                  ? await Directory(taskFolder).create(recursive: true)
                   : folder,
               onEnd: _ended,
             )
@@ -313,6 +345,12 @@ class OfficeNetwork extends ChangeNotifier {
               (chat.kind == ChatKind.broadcast &&
                   ledger.isManager(ch.peer.deviceId)))) {
         // A member's file with a message: taken unasked.
+        await t.accept();
+        return;
+      }
+      final task = tasks.of('${t.meta['gorev'] ?? ''}');
+      if (task != null && task.by == ch.peer.deviceId) {
+        // A case of a task given to this device, from its giver.
         await t.accept();
         return;
       }
@@ -399,6 +437,7 @@ class OfficeNetwork extends ChangeNotifier {
     DateTime? due,
     TaskPriority priority = TaskPriority.normal,
     List<TaskCase> cases = const [],
+    Map<String, TaskPackage> packed = const {},
   }) async {
     final self = _self;
     if (self == null) return 'Önce büro ağına katılın.';
@@ -431,10 +470,39 @@ class OfficeNetwork extends ChangeNotifier {
       TaskEvent.create(TaskEventKind.given, self.deviceId, self.name),
     );
     await tasks.put(task);
+    for (final c in cases) {
+      final pack = packed[c.caseKey];
+      if (pack == null || pack.paths.isEmpty) continue;
+      for (final id in to) {
+        if (id == self.deviceId) continue;
+        packages.pending['${task.id}|${c.caseKey}|$id'] = pack.paths;
+      }
+    }
+    await packages.save();
     notifyListeners();
-    unawaited(_shareTask(task));
+    unawaited(_shareTask(task).then((_) => _sendPackages(task)));
     return null;
   }
+
+  /// A task's cases to those it is given to who are on the network now.
+  Future<void> _sendPackages(OfficeTask task, {String? only}) async {
+    for (final key in packages.pending.keys.toList()) {
+      final parts = key.split('|');
+      if (parts.length != 3) continue;
+      if (parts[0] != task.id || (only != null && parts[2] != only)) continue;
+      final peer = _peers[parts[2]];
+      if (peer == null || !peer.online) continue;
+      await send(
+        peer,
+        packages.pending[key]!,
+        meta: {'gorev': task.id, 'dosya': parts[1]},
+      );
+    }
+  }
+
+  /// What came of a task's case here.
+  ReceivedCase? receivedCase(OfficeTask task, String caseKey) =>
+      packages.received(task.id, caseKey);
 
   /// Something done in a task by this device: said to the others in it.
   Future<String?> act(
@@ -706,6 +774,7 @@ class OfficeNetwork extends ChangeNotifier {
       if (manager || t.people.contains(peer.deviceId)) {
         await _syncTask(peer, t);
       }
+      if (t.by == _self?.deviceId) await _sendPackages(t, only: peer.deviceId);
     }
   }
 
@@ -831,6 +900,7 @@ class OfficeNetwork extends ChangeNotifier {
       await ledger.load();
       await tasks.load();
       await chats.load();
+      await packages.load();
       // Where the others will reach this Folio; what is said there comes in
       // the next step (docs/buro.md, Aktarım), till then it hangs up.
       // Both families: the others may find this one by either address.
@@ -1001,6 +1071,7 @@ class OfficeNetwork extends ChangeNotifier {
     await ledger.load();
     await tasks.load();
     await chats.load();
+    await packages.load();
     _server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     _server!.listen(_opened);
     _self = OfficePeer(
