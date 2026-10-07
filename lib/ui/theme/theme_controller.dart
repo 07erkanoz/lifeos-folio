@@ -10,6 +10,10 @@ class ThemeController extends ChangeNotifier {
   final String? settingsPath;
   ThemeMode mode;
   bool hoverPreview = true;
+
+  /// Whether the library's panel folds to its icons on the UYAP pages,
+  /// for the cases' and documents' room.
+  bool foldPanelOnUyap = true;
   bool _disposed = false;
   int _revision = 0;
   Future<void> _writing = Future.value();
@@ -28,6 +32,7 @@ class ThemeController extends ChangeNotifier {
         final value = settings['theme'];
         if (!_disposed && revision == _revision) {
           hoverPreview = settings['hoverPreview'] != false;
+          foldPanelOnUyap = settings['foldPanelOnUyap'] != false;
           mode = ThemeMode.values.firstWhere(
             (m) => m.name == value,
             orElse: () => ThemeMode.system,
@@ -56,8 +61,20 @@ class ThemeController extends ChangeNotifier {
     _persist();
   }
 
+  void setFoldPanelOnUyap(bool fold) {
+    if (_disposed) return;
+    _revision++;
+    foldPanelOnUyap = fold;
+    notifyListeners();
+    _persist();
+  }
+
   void _persist() {
-    final settings = {'theme': mode.name, 'hoverPreview': hoverPreview};
+    final settings = {
+      'theme': mode.name,
+      'hoverPreview': hoverPreview,
+      'foldPanelOnUyap': foldPanelOnUyap,
+    };
     _writing = _writing
         .then((_) async {
           _path ??=

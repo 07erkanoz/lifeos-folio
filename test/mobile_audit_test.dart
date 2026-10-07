@@ -7,7 +7,7 @@ import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:evrak_convert/services/uyap/adalet_eimza.dart';
 import 'package:evrak_convert/ui/agenda/uets_connect.dart';
 import 'package:evrak_convert/ui/mobile/lawyer_profile_page.dart';
-import 'package:evrak_convert/ui/mobile/mobile_settings_page.dart';
+import 'package:evrak_convert/ui/settings/settings_page.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
 import 'package:evrak_convert/ui/widgets/portfolio_picker.dart';
 import 'package:evrak_convert/ui/widgets/uyap_case_picker.dart';
@@ -113,11 +113,14 @@ void main() {
     addTearDown(appearance.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        home: MobileSettingsPage(library: library, appearance: appearance),
+        home: SettingsPage(library: library, appearance: appearance),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, -2000),
+    );
     await tester.pumpAndSettle();
     await tester.pumpWidget(const MaterialApp(home: LawyerProfilePage()));
     await tester.pumpAndSettle();

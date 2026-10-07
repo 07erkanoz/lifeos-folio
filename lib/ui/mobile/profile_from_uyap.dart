@@ -1,23 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../services/editor/lawyer_profile.dart';
+import '../../services/editor/profile_autofill.dart';
+
+export '../../services/editor/profile_autofill.dart' show titleCaseTr;
 import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../agenda/mobile_connect.dart';
-
-/// "ERKAN ÖZ" as "Erkan Öz", with Turkish's dotted and dotless i.
-String titleCaseTr(String text) => text
-    .split(RegExp(r'\s+'))
-    .where((w) => w.isNotEmpty)
-    .map((w) {
-      final rest = w
-          .substring(1)
-          .replaceAll('I', 'ı')
-          .replaceAll('İ', 'i')
-          .toLowerCase();
-      return '${w[0]}$rest';
-    })
-    .join(' ');
 
 /// [current] with what UYAP Mobil knows of the lawyer: the name, the bar
 /// and its register number, the TBB's, the TC number, a phone and an

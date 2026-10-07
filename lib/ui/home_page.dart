@@ -68,7 +68,7 @@ import 'mobile/mobile_drawer.dart';
 import 'mobile/mobile_gallery.dart';
 import 'mobile/photo_editor.dart';
 import 'mobile/photo_viewer.dart';
-import 'mobile/mobile_settings_page.dart';
+import 'settings/settings_page.dart';
 import 'mobile/scroll_chrome.dart';
 import 'widgets/uyap_connect_view.dart';
 import 'mobile/profile_from_uyap.dart';
@@ -80,7 +80,7 @@ import '../services/pdf/pdf_service.dart';
 import '../services/tiff/tiff_service.dart';
 import 'library/index_status_dialog.dart';
 import 'library/library_sidebar.dart';
-import 'library/library_settings_dialog.dart';
+import 'mobile/mobile_settings_page.dart' show ArchiveFoldersPage;
 import 'library/gallery_view.dart';
 import 'library/search_results.dart';
 import 'theme/theme_controller.dart';
@@ -701,7 +701,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // New UYAP notifications, told on the computer's or phone's own.
       PortalSync.instance.onNewNotices = (n) => unawaited(_tellNotices(n));
       SystemNotices.instance.onOpen = (p) => unawaited(_openToldNotice(p));
-      unawaited(SystemNotices.instance.prepare());
+      // A phone asks leave for them when the first one comes, not at start.
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        unawaited(SystemNotices.instance.prepare());
+      }
     }
     _incoming = _intents.paths.listen(
       (paths) {
@@ -824,12 +827,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  /// The settings: a page of their own on a phone (docs/design/mobil-
-  /// ayarlar-taslak.png), the dialog on a computer.
+  /// The settings (docs/design/ayarlar-taslak.png): a page of their own,
+  /// over everything on a phone, in the window's place on a computer.
   void _pickFolder() {
     if (MediaQuery.sizeOf(context).width < 700) {
       unawaited(
-        MobileSettingsPage.open(
+        SettingsPage.open(
           context,
           library: _library,
           appearance: widget.appearance,
@@ -837,14 +840,21 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       );
       return;
     }
-    showDialog<void>(
-      context: context,
-      builder: (_) => LibrarySettingsDialog(
-        library: _library,
-        appearance: widget.appearance,
-      ),
-    );
+    _settingsFrom = _group == 'ayarlar' ? _settingsFrom : _group;
+    unawaited(_selectGroup('ayarlar'));
   }
+
+  /// Where the settings were opened from, to go back to.
+  String _settingsFrom = 'all';
+
+  Widget _settingsPage() => SettingsPage(
+    library: _library,
+    appearance: widget.appearance,
+    onBack: () {
+      unawaited(_selectGroup(_settingsFrom));
+      unawaited(_loadLawyerName());
+    },
+  );
 
   Future<void> _addFiles(
     List<String> paths, {
@@ -1000,6 +1010,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'agenda' ||
         value == 'uets' ||
         value == 'bildirim' ||
+        value == 'ayarlar' ||
         _isUyapGroup(value)) {
       return;
     }
@@ -1020,7 +1031,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'home' ||
       group == 'agenda' ||
       group == 'uets' ||
-      group == 'bildirim';
+      group == 'bildirim' ||
+      group == 'ayarlar';
 
   static bool _isUyapGroup(String group) =>
       group == 'uyap' || group.startsWith('uyap:');
@@ -1557,11 +1569,14 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             child: _sidebar(
                               compact ||
                                   !_showLibrary ||
-                                  (_isUyapGroup(_group) && !_uyapPanelOpen),
+                                  (_isUyapGroup(_group) &&
+                                      widget.appearance.foldPanelOnUyap &&
+                                      !_uyapPanelOpen),
                               toggle:
                                   !compact &&
                                   _showLibrary &&
-                                  _isUyapGroup(_group),
+                                  _isUyapGroup(_group) &&
+                                  widget.appearance.foldPanelOnUyap,
                             ),
                           ),
                         Expanded(
@@ -1842,6 +1857,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? _uetsPage()
                                               : _group == 'bildirim'
                                               ? _noticesPage()
+                                              : _group == 'ayarlar'
+                                              ? _settingsPage()
                                               : _overview(),
                                         ),
                                         TransitionPane(

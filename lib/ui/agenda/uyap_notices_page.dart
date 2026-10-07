@@ -471,17 +471,29 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                         horizontal: 6,
                         vertical: 6,
                       ),
-                      child: Text(
-                        '${_kind?.label ?? 'Türe göre'} ▾',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: _kind == null
-                              ? FontWeight.w400
-                              : FontWeight.w700,
-                          color: _kind == null
-                              ? AgendaColors.muted
-                              : scheme.primary,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _kind?.label ?? 'Türe göre',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: _kind == null
+                                  ? FontWeight.w400
+                                  : FontWeight.w700,
+                              color: _kind == null
+                                  ? AgendaColors.muted
+                                  : scheme.primary,
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_drop_down_rounded,
+                            size: 18,
+                            color: _kind == null
+                                ? AgendaColors.muted
+                                : scheme.primary,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -666,10 +678,15 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                   const SizedBox(height: 5),
                   Row(
                     children: [
-                      Flexible(child: _caseChip(n, short: _narrow)),
-                      if (!_narrow)
-                        for (final s in n.sources) _source(s),
-                      const Spacer(),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(child: _caseChip(n, short: _narrow)),
+                            if (!_narrow)
+                              for (final s in n.sources) _source(s),
+                          ],
+                        ),
+                      ),
                       if (n.sentAt != null)
                         Text(
                           clockText(n.sentAt!),

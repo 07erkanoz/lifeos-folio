@@ -2,7 +2,7 @@ import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/ui/mobile/lawyer_profile_page.dart';
-import 'package:evrak_convert/ui/mobile/mobile_settings_page.dart';
+import 'package:evrak_convert/ui/settings/settings_page.dart';
 import 'package:evrak_convert/ui/mobile/profile_from_uyap.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
 import 'package:flutter/material.dart';
@@ -57,7 +57,7 @@ void main() {
       addTearDown(appearance.dispose);
       await tester.pumpWidget(
         MaterialApp(
-          home: MobileSettingsPage(library: library, appearance: appearance),
+          home: SettingsPage(library: library, appearance: appearance),
         ),
       );
       await tester.pumpAndSettle();

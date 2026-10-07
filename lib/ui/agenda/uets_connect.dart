@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../services/editor/lawyer_profile.dart';
+import '../../services/editor/profile_autofill.dart';
 import '../../services/security/secret_store.dart';
 import '../../services/signing/udf_signing_service.dart';
 import '../../services/uets/uets_api.dart';
@@ -80,17 +82,32 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
   bool _askTc = true;
 
   Future<void> _recall() async {
-    final known = _knownTc;
+    // A UYAP session's number first; else the profile's, which every
+    // portal that told it, and the lawyer, wrote there.
+    var known = _knownTc;
+    if (known.isEmpty && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      known = await profileTc();
+      if (!mounted) return;
+    }
     if (known.isNotEmpty) {
-      _tckn.text = known;
-      _askTc = false;
+      setState(() {
+        _tckn.text = known;
+        _askTc = false;
+      });
     }
     final phones = UyapMobileApi.instance.session.value?.phones ?? const [];
     final mobilePhone = phones
         .map(UetsApi.gsm)
         .where((p) => p.length == 10 && p.startsWith('5'))
         .firstOrNull;
-    if (mobilePhone != null) _phone.text = mobilePhone;
+    if (mobilePhone != null) {
+      _phone.text = mobilePhone;
+    } else if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      final phone = UetsApi.gsm((await LawyerProfile.load()).phone);
+      if (phone.length == 10 && phone.startsWith('5') && mounted) {
+        _phone.text = phone;
+      }
+    }
     if (!SecretStore.available) return;
     try {
       final kept = await widget.secrets.read(_remembered);

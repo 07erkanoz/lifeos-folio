@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../services/editor/lawyer_profile.dart';
 import '../../services/platform/app_directories.dart';
 import '../../services/platform/platform_capabilities.dart';
 
@@ -125,7 +126,16 @@ class _SigningDialogState extends State<SigningDialog> {
 
   Future<void> _load() async {
     final data = await _read();
+    // The phone the lawyer's profile gives, when none was kept here.
+    final profilePhone = Platform.environment.containsKey('FLUTTER_TEST')
+        ? ''
+        : (await LawyerProfile.load()).phone;
     if (!mounted) return;
+    if (data['phone'] is! String || (data['phone'] as String).isEmpty) {
+      if (MobileUdfSigner.phone(profilePhone) != null) {
+        data['phone'] = profilePhone;
+      }
+    }
     String text(String key) => data[key] is String ? data[key] as String : '';
     final operator = data['operator'];
     setState(() {

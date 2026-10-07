@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../editor/lawyer_profile.dart';
+import '../editor/profile_autofill.dart';
 import '../platform/app_directories.dart';
 import '../legal/deadlines/aidiyet.dart';
 import '../security/secret_store.dart';
@@ -229,6 +230,7 @@ class PortalSync extends ChangeNotifier {
   void _webChanged() {
     _keepWeb();
     notifyListeners();
+    _rememberTc(_web.tckn);
     if (_web.connected) {
       unawaited(syncWeb());
       unawaited(syncNotices(force: true));
@@ -238,6 +240,7 @@ class PortalSync extends ChangeNotifier {
   void _uetsChanged() {
     _keepUets();
     notifyListeners();
+    _rememberTc(_uets.session.value?.tckn ?? '');
     if (_uets.connected) unawaited(syncUets());
   }
 
@@ -484,9 +487,37 @@ class PortalSync extends ChangeNotifier {
 
   void _mobileChanged() {
     notifyListeners();
+    final s = _mobile.session.value;
+    if (s != null && s.user.isNotEmpty && s.user != 'UYAP Mobil') {
+      _remember(
+        () => rememberLawyer(
+          name: s.user,
+          bar: s.bar,
+          barNumber: s.barNumber,
+          tbbNumber: s.tbbNumber,
+          tckn: s.tckn,
+          phone: s.phones.firstOrNull ?? '',
+          email: s.emails.firstOrNull ?? '',
+        ),
+      );
+    }
     if (_mobile.connected) {
       unawaited(syncMobile());
       unawaited(syncNotices(force: true));
+    }
+  }
+
+  /// The lawyer's own particulars, as a portal told them, written into the
+  /// profile where it is blank: the TC number most of all, which UETS's
+  /// mobile signature asks for. Never in tests, which have no lawyer.
+  void _remember(Future<void> Function() write) {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+    unawaited(write().catchError((Object _) {}));
+  }
+
+  void _rememberTc(String tc) {
+    if (RegExp(r'^\d{11}$').hasMatch(tc.trim())) {
+      _remember(() => rememberLawyer(tckn: tc));
     }
   }
 

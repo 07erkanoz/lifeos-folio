@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:flutter/material.dart';
+import 'package:evrak_convert/ui/settings/settings_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/temp_directory.dart';
@@ -55,12 +56,11 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Ayarlar'));
       await tester.pumpAndSettle();
-      expect(find.text('Arşiv klasörleri'), findsOneWidget);
-      // Ayar listesi uzadıkça düğme katlanın altına iniyor; kullanıcı
-      // kaydırarak ulaşıyor, test de öyle yapmalı.
-      await tester.ensureVisible(find.text('Klasör seç ve ekle'));
+      // The settings are a page in the window now, the folders a page of
+      // their own under them.
+      await tester.tap(find.text('Arşiv klasörleri'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Klasör seç ve ekle'));
+      await tester.tap(find.byKey(const ValueKey('folders-add')));
       await tester.runAsync(() async {
         for (var i = 0; i < 100 && library.sources.isEmpty; i++) {
           await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -71,7 +71,11 @@ void main() {
       expect(library.searchable, 1);
       expect(library.sources.single.folder, isTrue);
       expect(library.sources.single.recursive, isTrue);
-      await tester.tap(find.text('Kapat'));
+      // Back from the folders, then from the settings (Turkish tooltips,
+      // which pageBack does not know).
+      await tester.tap(find.byTooltip('Geri').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Geri'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'ihtiyati');
       await tester.runAsync(library.searchNow);
@@ -131,7 +135,16 @@ void main() {
     await tester.pumpAndSettle();
     // A phone's settings are a page of their own, not a dialog.
     expect(find.text('BAĞLANTILAR'), findsOneWidget);
-    expect(find.text('Arşiv klasörleri'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Arşiv klasörleri'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(SettingsPage),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.tap(find.text('Arşiv klasörleri'));
     await tester.pumpAndSettle();
     expect(find.text('Klasör ekle'), findsOneWidget);
@@ -156,7 +169,11 @@ void main() {
     await tester.pump();
     await tester.tap(find.byTooltip('Ayarlar'));
     await tester.pumpAndSettle();
-    expect(find.text('Klasör seç ve ekle'), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+    // The sections listed on the left; one chosen, its settings shown.
+    await tester.tap(find.byKey(const ValueKey('settings-nav-documents')));
+    await tester.pumpAndSettle();
+    expect(find.text('Arşiv klasörleri'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

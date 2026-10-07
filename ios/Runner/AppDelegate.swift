@@ -1,6 +1,7 @@
 import Flutter
 import PDFKit
 import UIKit
+import UserNotifications
 import VisionKit
 
 @main
@@ -9,6 +10,9 @@ import VisionKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // UYAP's notifications shown while Folio is open, too
+    // (flutter_local_notifications).
+    UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

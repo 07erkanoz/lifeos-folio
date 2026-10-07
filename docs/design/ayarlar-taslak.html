@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ayarlar Taslağı</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet">
+<style>
+  :root { --page:#F4F6F9; --line:#E3E7EE; --muted:#6B7383; --ink:#1B2130; --primary:#2B5EA8; --pfill:#EAF0F9;
+          --ok:#157A52; --okF:#EAF7F1; --amber:#97600D; --amberF:#FDF4E6; --red:#C0322B; --redF:#FDECEC; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:19px; line-height:1; font-style:normal; display:inline-block; font-feature-settings:"liga"; vertical-align:-4px; }
+  h2.cap { width:1440px; margin:0 auto 10px; font-size:15px; color:#2A3040; }
+  h2.cap small { font-weight:400; color:#4B5465; margin-left:8px; }
+  .win { width:1440px; height:900px; margin:0 auto 34px; background:var(--page); border-radius:12px; overflow:hidden; box-shadow:0 20px 60px rgba(20,30,50,.28); display:flex; flex-direction:column; }
+  .tb { height:34px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; padding:0 14px; font-size:12px; color:var(--muted); }
+  .tb .r { margin-left:auto; letter-spacing:12px; }
+  .body { flex:1; display:flex; min-height:0; }
+  .rail { width:58px; background:#fff; border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:6px; }
+  .rail .i { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#6B7383; }
+  .rail .i.new { background:var(--primary); color:#fff; margin-bottom:8px; }
+  .rail .i.on { background:var(--pfill); color:var(--primary); }
+  .rail .sp { margin-top:auto; }
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .ph { background:#fff; border-bottom:1px solid var(--line); padding:16px 28px; display:flex; align-items:center; gap:12px; }
+  .ph h1 { margin:0; font-size:19px; } .ph .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .search { margin-left:auto; width:320px; border:1px solid var(--line); border-radius:9px; padding:7px 10px; font-size:12.5px; color:#8A92A3; display:flex; gap:8px; align-items:center; }
+  .cols { flex:1; display:flex; min-height:0; }
+  .nav { width:250px; padding:18px 14px; display:flex; flex-direction:column; gap:2px; border-right:1px solid var(--line); background:#FAFBFC; }
+  .nav a { display:flex; gap:10px; align-items:center; padding:9px 12px; border-radius:9px; font-size:13.5px; color:#2A3040; text-decoration:none; }
+  .nav a .ms { color:#6B7383; }
+  .nav a.on { background:var(--pfill); color:var(--primary); font-weight:700; } .nav a.on .ms { color:var(--primary); }
+  .nav a .tag { margin-left:auto; font-size:10.5px; font-weight:800; border-radius:8px; padding:1px 7px; }
+  .tag.ok { background:var(--okF); color:var(--ok); } .tag.warn { background:var(--amberF); color:var(--amber); } .tag.b { background:var(--primary); color:#fff; }
+  .content { flex:1; overflow:hidden; padding:22px 34px; display:flex; flex-direction:column; gap:18px; }
+  .sec h3 { margin:0 0 4px; font-size:16px; } .sec .lead { font-size:12.5px; color:var(--muted); margin-bottom:10px; }
+  .grp { background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .row { display:flex; align-items:center; gap:14px; padding:13px 16px; border-bottom:1px solid #EEF1F5; }
+  .row:last-child { border-bottom:0; }
+  .row .ic { width:34px; height:34px; border-radius:9px; background:#F1F3F7; display:flex; align-items:center; justify-content:center; color:#4B5465; flex:none; }
+  .row .tx { flex:1; min-width:0; } .row .t { font-size:13.5px; font-weight:600; } .row .s { font-size:12px; color:var(--muted); margin-top:1px; }
+  .sw { width:38px; height:22px; border-radius:11px; background:var(--primary); position:relative; flex:none; } .sw::after { content:""; position:absolute; right:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#fff; }
+  .sw.off { background:#C8CED8; } .sw.off::after { right:auto; left:3px; }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:9px; padding:7px 12px; font-size:12.5px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .btn.p { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); display:inline-block; margin-right:6px; } .dot.off { background:#B8BFCC; }
+  .themes { display:flex; gap:14px; padding:16px; }
+  .th { width:190px; border:2px solid var(--line); border-radius:12px; padding:10px; font-size:12.5px; text-align:center; }
+  .th.on { border-color:var(--primary); box-shadow:0 0 0 3px rgba(43,94,168,.12); font-weight:700; color:var(--primary); }
+  .pv { height:86px; border-radius:8px; margin-bottom:8px; display:flex; overflow:hidden; border:1px solid var(--line); }
+  .pv .a { width:30%; } .pv .b { flex:1; padding:8px; display:flex; flex-direction:column; gap:5px; }
+  .pv i { display:block; height:7px; border-radius:3px; }
+  .light .a { background:#fff; border-right:1px solid #E3E7EE; } .light .b { background:#F4F6F9; } .light i { background:#D8DDE5; }
+  .dark .a { background:#20242D; } .dark .b { background:#171A21; } .dark i { background:#3A404C; }
+  .sys .a { background:linear-gradient(180deg,#fff 50%,#20242D 50%); } .sys .b { background:linear-gradient(180deg,#F4F6F9 50%,#171A21 50%); } .sys i { background:#9AA2B1; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:12px; }
+  .seg span { padding:6px 12px; border-right:1px solid var(--line); } .seg span:last-child { border-right:0; } .seg .on { background:var(--pfill); color:var(--primary); font-weight:700; }
+  .kinds { display:flex; flex-wrap:wrap; gap:8px; padding:4px 16px 14px 64px; }
+  .k { font-size:12px; border:1px solid var(--line); border-radius:7px; padding:4px 9px; } .k.on { background:var(--pfill); border-color:#C9D7EE; color:var(--primary); font-weight:700; }
+  .pair { width:1440px; margin:0 auto 34px; display:flex; gap:26px; align-items:flex-start; }
+  .lbl { font-size:12px; color:#2A3040; margin:0 0 8px; font-weight:700; } .lbl small { font-weight:400; color:#4B5465; }
+  .phone { width:300px; height:640px; border-radius:30px; border:9px solid #1E2330; background:var(--page); overflow:hidden; display:flex; flex-direction:column; flex:none; }
+  .phone .top { background:#fff; padding:12px 14px 10px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; font-weight:700; }
+  .phone .in { padding:10px 12px; display:flex; flex-direction:column; gap:6px; overflow:hidden; }
+  .phone .h { font-size:10px; font-weight:800; letter-spacing:.9px; color:var(--muted); padding:8px 4px 2px; }
+  .phone .row { padding:10px 12px; gap:10px; } .phone .seg span { padding:5px 8px; } .phone .row .t { font-size:12.5px; } .phone .row .s { font-size:11px; } .phone .row .ic { width:28px; height:28px; }
+  .note { width:520px; background:#fff; border-radius:12px; padding:16px 18px; font-size:12.5px; line-height:1.55; box-shadow:0 20px 60px rgba(20,30,50,.18); }
+  .note h4 { margin:0 0 6px; font-size:13px; } .note table { width:100%; border-collapse:collapse; font-size:12px; } .note td, .note th { border-bottom:1px solid #EEF1F5; padding:5px 4px; text-align:left; vertical-align:top; } .note th { color:var(--muted); font-weight:700; font-size:11px; }
+  .y { color:var(--ok); font-weight:700; } .n { color:#9AA2B1; }
+</style>
+</head>
+<body>
+
+<h2 class="cap">1 · Masaüstü: Ayarlar bir sayfa <small>solda bölümler, sağda içerik; arama ile ayar bulunur; pencere değil, geri tuşu ve Esc ile çıkılır</small></h2>
+<div class="win">
+  <div class="tb">Folio <span class="r">— ▢ ✕</span></div>
+  <div class="body">
+    <div class="rail"><div class="i new"><span class="ms">add</span></div><div class="i"><span class="ms">home</span></div><div class="i"><span class="ms">folder</span></div><div class="i"><span class="ms">gavel</span></div><div class="i"><span class="ms">notifications</span></div><div class="i"><span class="ms">event</span></div><div class="i"><span class="ms">mail</span></div><div class="i sp on"><span class="ms">settings</span></div></div>
+    <div class="main">
+      <div class="ph"><span class="ms">arrow_back</span><div><h1>Ayarlar</h1><div class="sub">LifeOS Folio 1.4.0 · güncel</div></div><div class="search"><span class="ms" style="font-size:17px">search</span>Ayar ara: tema, OCR, e-imza, UETS</div></div>
+      <div class="cols">
+        <div class="nav">
+          <a><span class="ms">person</span>Profil</a>
+          <a><span class="ms">link</span>Bağlantılar<span class="tag ok">3/3</span></a>
+          <a><span class="ms">notifications</span>Bildirimler</a>
+          <a><span class="ms">folder_open</span>Belgeler ve arşiv</a>
+          <a><span class="ms">edit_note</span>Editör</a>
+          <a><span class="ms">menu_book</span>Atıflar</a>
+          <a><span class="ms">verified</span>E-imza</a>
+          <a class="on"><span class="ms">palette</span>Görünüm</a>
+          <a><span class="ms">system_update</span>Güncelleme<span class="tag b">yeni</span></a>
+          <a><span class="ms">info</span>Hakkında</a>
+        </div>
+        <div class="content">
+          <div class="sec">
+            <h3>Görünüm</h3><div class="lead">Folio'nun rengi ve düzeni. Değişiklik hemen uygulanır.</div>
+            <div class="grp">
+              <div class="themes">
+                <div class="th sys"><div class="pv"><div class="a"></div><div class="b"><i style="width:70%"></i><i style="width:90%"></i><i style="width:50%"></i></div></div>Sisteme uy</div>
+                <div class="th light on"><div class="pv"><div class="a"></div><div class="b"><i style="width:70%"></i><i style="width:90%"></i><i style="width:50%"></i></div></div>Açık</div>
+                <div class="th dark"><div class="pv"><div class="a"></div><div class="b"><i style="width:70%"></i><i style="width:90%"></i><i style="width:50%"></i></div></div>Koyu</div>
+              </div>
+              <div class="row"><div class="ic"><span class="ms">left_panel_close</span></div><div class="tx"><div class="t">Sol panel UYAP sayfalarında daralsın</div><div class="s">Dosya listesine ve evrak önizlemesine yer açar</div></div><div class="sw"></div></div>
+              <div class="row"><div class="ic"><span class="ms">preview</span></div><div class="tx"><div class="t">Üzerine gelince hızlı önizleme</div><div class="s">Arşivde bir belgenin üstünde durunca içinden parçalar görünür</div></div><div class="sw"></div></div>
+            </div>
+          </div>
+          <div class="sec">
+            <h3>Bildirimler</h3><div class="lead">UYAP Mobil ve UYAP Web'den gelen yeni bildirimler için masaüstü uyarısı.</div>
+            <div class="grp">
+              <div class="row"><div class="ic"><span class="ms">notifications_active</span></div><div class="tx"><div class="t">Yeni bildirim gelince uyar</div><div class="s">Folio açıkken, işletim sisteminin bildirimi olarak; tıklayınca dosya açılır</div></div><div class="sw"></div></div>
+              <div class="kinds"><span class="k on">Karar</span><span class="k on">Tahsilat ve reddiyat</span><span class="k on">Bilirkişi ve rapor</span><span class="k on">Kanun yolu</span><span class="k on">Kesinleşme</span><span class="k">Müzekkere ve tebligat</span><span class="k on">Duruşma</span><span class="k">Taraf ve vekil</span><span class="k">Diğer</span></div>
+            </div>
+          </div>
+          <div class="sec">
+            <h3>Bağlantılar</h3><div class="lead">Oturumlar süreleri bitene kadar bu bilgisayarda saklanır.</div>
+            <div class="grp">
+              <div class="row"><div class="ic"><span class="ms">smartphone</span></div><div class="tx"><div class="t"><span class="dot"></span>UYAP Mobil</div><div class="s">Bağlı · 6 gün 22 sa daha · son senkron 14:32</div></div><span class="btn">Senkronize et</span><span class="btn">Bağlantıyı kes</span></div>
+              <div class="row"><div class="ic"><span class="ms">language</span></div><div class="tx"><div class="t"><span class="dot"></span>UYAP Web</div><div class="s">Bağlı · 2 sa 10 dk daha</div></div><span class="btn">Senkronize et</span><span class="btn">Bağlantıyı kes</span></div>
+              <div class="row"><div class="ic"><span class="ms">mail</span></div><div class="tx"><div class="t"><span class="dot off"></span>UETS</div><div class="s">Bağlı değil</div></div><span class="btn p">Bağlan</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pair">
+  <div>
+    <p class="lbl">2 · Telefon <small>aynı bölümler alt alta; tema en üstte değil, Görünüm'de</small></p>
+    <div style="display:flex;gap:22px">
+      <div class="phone">
+        <div class="top"><span class="ms">arrow_back</span>Ayarlar</div>
+        <div class="in">
+          <div class="grp"><div class="row"><div class="ic" style="background:var(--primary);color:#fff;font-weight:800;font-size:12px">AD</div><div class="tx"><div class="t">Av. Deniz Kaya</div><div class="s">Antalya Barosu · profili düzenle</div></div><span class="ms" style="color:#9AA2B1">chevron_right</span></div></div>
+          <div class="h">BAĞLANTILAR</div>
+          <div class="grp">
+            <div class="row"><div class="ic"><span class="ms">smartphone</span></div><div class="tx"><div class="t"><span class="dot"></span>UYAP Mobil</div><div class="s">6 gün 22 sa daha</div></div><span class="ms" style="color:#9AA2B1">chevron_right</span></div>
+            <div class="row"><div class="ic"><span class="ms">mail</span></div><div class="tx"><div class="t"><span class="dot off"></span>UETS</div><div class="s">Bağlı değil</div></div><span class="ms" style="color:#9AA2B1">chevron_right</span></div>
+          </div>
+          <div class="h">BİLDİRİMLER</div>
+          <div class="grp"><div class="row"><div class="ic"><span class="ms">notifications_active</span></div><div class="tx"><div class="t">Yeni bildirimde uyar</div><div class="s">9 türden 6'sı açık</div></div><div class="sw"></div></div></div>
+          <div class="h">GÖRÜNÜM</div>
+          <div class="grp"><div class="row"><div class="ic"><span class="ms">palette</span></div><div class="tx" style="flex:none"><div class="t">Tema</div></div><div style="flex:1"></div><div class="seg"><span>Sistem</span><span class="on">Açık</span><span>Koyu</span></div></div></div>
+          <div class="h">GÜNCELLEME</div>
+          <div class="grp"><div class="row"><div class="ic"><span class="ms">system_update</span></div><div class="tx"><div class="t">Sürüm 1.4.0</div><div class="s">Güncel · son denetim bugün 14:00</div></div><span class="btn">Denetle</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <h4>3 · Platforma göre gösterilenler</h4>
+    <table>
+      <tr><th>Ayar</th><th>Windows</th><th>Linux</th><th>macOS</th><th>Android</th><th>iOS</th></tr>
+      <tr><td>UYAP Mobil, UYAP Web, UETS</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+      <tr><td>Masaüstü uyarıları</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">telefon bildirimi</td><td class="y">telefon bildirimi</td></tr>
+      <tr><td>Arşiv klasörleri</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">klasör izniyle</td><td class="y">Dosyalar'dan</td></tr>
+      <tr><td>OCR, OCR klasörü</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td></tr>
+      <tr><td>Hızlı önizleme (fare)</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td></tr>
+      <tr><td>Sağ tık menüsüne ekle</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+      <tr><td>Varsayılan uygulama</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td></tr>
+      <tr><td>E-imza (kart, token)</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">mobil imza</td><td class="n">mobil imza</td></tr>
+      <tr><td>Sesli okuma / yazdırma</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td></tr>
+      <tr><td>Bilgisayarla senkron (QR)</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td></tr>
+      <tr><td>Tema, güncelleme, hakkında</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+    </table>
+  </div>
+</div>
+</body>
+</html>
