@@ -5,14 +5,17 @@ import 'dart:io';
 import 'package:bonsoir/bonsoir.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../editor/lawyer_profile.dart';
 import '../platform/app_directories.dart';
+import 'office_channel.dart';
 import 'office_identity.dart';
 import 'office_known.dart';
 import 'office_link.dart';
 import 'office_pairing.dart';
 import 'office_peer.dart';
+import 'office_transfer.dart';
 
 /// The office's network (docs/buro.md): this Folio announced on the local
 /// network, and the other Folios found there, under their people.
@@ -47,6 +50,94 @@ class OfficeNetwork extends ChangeNotifier {
   final _peers = <String, OfficePeer>{};
   final KnownDevices _known;
   Map<String, KnownDevice> _knownDevices = const {};
+
+  /// Files a known device offers: the user is asked wherever they are.
+  final incomingOffer = ValueNotifier<OfficeTransfer?>(null);
+
+  /// This run's transfers, the newest first.
+  final transfers = <OfficeTransfer>[];
+
+  /// Offers taken before, going on from where they stopped when made again.
+  final _accepted = <String>{};
+
+  /// Where what comes is put; for tests, a folder of their own.
+  Future<Directory> Function() inbox = _defaultInbox;
+
+  static Future<Directory> _defaultInbox() async {
+    final base = Platform.isAndroid || Platform.isIOS
+        ? await getApplicationDocumentsDirectory()
+        : await getDownloadsDirectory() ??
+              await getApplicationDocumentsDirectory();
+    final dir = Directory(p.join(base.path, 'Folio Gelenler'));
+    await dir.create(recursive: true);
+    return dir;
+  }
+
+  /// Sends [paths] to a known device on the network; null when it is not
+  /// both known and on the network now.
+  Future<OfficeTransfer?> send(
+    OfficePeer to,
+    List<String> paths, {
+    String note = '',
+    String? id,
+  }) async {
+    final identity = _identity;
+    final known = _knownDevices[to.deviceId];
+    final seen = _peers[to.deviceId] ?? to;
+    final host = seen.host;
+    if (identity == null || known == null || host == null || seen.port == 0) {
+      return null;
+    }
+    final t = await OfficeTransfer.send(
+      identity: identity,
+      peer: known,
+      host: host,
+      port: seen.port,
+      paths: paths,
+      note: note,
+      id: id,
+      onEnd: _ended,
+    );
+    _added(t);
+    return t;
+  }
+
+  /// Sends a cut-off transfer again: what came of it is not sent twice.
+  Future<OfficeTransfer?> retry(OfficeTransfer t) async {
+    final to = _peers[t.peer.deviceId];
+    if (!t.outgoing || to == null) return null;
+    transfers.remove(t);
+    return send(to, t.paths, note: t.note, id: t.id);
+  }
+
+  void _added(OfficeTransfer t) {
+    transfers.insert(0, t);
+    t.addListener(notifyListeners);
+    notifyListeners();
+  }
+
+  void _ended(OfficeTransfer t) {
+    unawaited(_log(t));
+    notifyListeners();
+  }
+
+  Future<File> _logFile() async =>
+      File(p.join((await _settingsFile()).parent.path, 'buro_aktarimlar.json'));
+
+  /// The transfers' record: who sent what to whom, when, and how it ended.
+  Future<void> _log(OfficeTransfer t) async {
+    try {
+      final file = await _logFile();
+      var list = <Object?>[];
+      if (await file.exists()) {
+        final old = jsonDecode(await file.readAsString());
+        if (old is List) list = old;
+      }
+      list.insert(0, t.toJson());
+      if (list.length > 500) list = list.sublist(0, 500);
+      await file.writeAsString(jsonEncode(list));
+    } catch (_) {}
+  }
 
   /// A device that asked to know this one: shown wherever the user is.
   final incoming = ValueNotifier<OfficePairing?>(null);
@@ -108,6 +199,50 @@ class OfficeNetwork extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A known device's encrypted talk: an offer of files, for now.
+  Future<void> _talk(
+    OfficeLink link,
+    Map<String, Object?> hello,
+    OfficeIdentity identity,
+  ) async {
+    final ch = await OfficeChannel.accept(
+      link: link,
+      hello: hello,
+      identity: identity,
+      known: _known.of,
+    );
+    if (ch == null) return;
+    late final StreamSubscription<Map<String, Object?>> first;
+    first = ch.messages.listen((m) async {
+      await first.cancel();
+      final t = m['t'] == 'offer'
+          ? OfficeTransfer.receive(
+              channel: ch,
+              offer: m,
+              folder: await inbox(),
+              onEnd: _ended,
+            )
+          : null;
+      if (t == null) {
+        await ch.close();
+        return;
+      }
+      transfers.removeWhere((old) => old.id == t.id && old.finished);
+      _added(t);
+      if (_accepted.contains(t.id)) {
+        await t.accept();
+      } else {
+        incomingOffer.value = t;
+      }
+    });
+  }
+
+  /// The user took an offer: if it is cut off, it goes on unasked.
+  Future<void> acceptOffer(OfficeTransfer t) async {
+    _accepted.add(t.id);
+    await t.accept();
+  }
+
   Future<void> _knownNow(KnownDevice device) async {
     await _known.remember(device);
     await _loadKnown();
@@ -126,6 +261,10 @@ class OfficeNetwork extends ChangeNotifier {
     first = link.messages.listen((m) {
       unawaited(first.cancel());
       final identity = _identity, self = _self;
+      if (m['t'] == 'hello' && identity != null) {
+        unawaited(_talk(link, m, identity));
+        return;
+      }
       if (m['t'] != 'pair' || identity == null || self == null) {
         unawaited(link.close());
         return;
@@ -221,6 +360,8 @@ class OfficeNetwork extends ChangeNotifier {
   Future<void> rename() async {
     final identity = _identity, server = _server;
     if (!_joined || identity == null || server == null) return;
+    // Nothing was announced (a test's listening): nothing to say again.
+    if (_broadcast == null) return;
     final next = await _describe(identity, server.port);
     if (next.name == _self?.name) return;
     await _broadcast?.stop();

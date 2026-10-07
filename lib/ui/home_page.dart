@@ -56,6 +56,7 @@ import 'package:path/path.dart' as p;
 
 import '../services/platform/file_actions.dart';
 import 'office/office_network_page.dart';
+import 'office/office_offer_dialog.dart';
 import 'office/office_pairing_dialog.dart';
 import 'widgets/share_as.dart';
 import 'widgets/share_document_dialog.dart';
@@ -710,6 +711,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // The office's network, if this Folio had joined it.
       unawaited(OfficeNetwork.instance.resume());
       OfficeNetwork.instance.incoming.addListener(_pairingAsked);
+      OfficeNetwork.instance.incomingOffer.addListener(_offerCame);
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
       PortalSync.instance.noticesVersion.addListener(_portalSynced);
@@ -832,6 +834,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
+  /// A known device offers files: asked wherever the user is.
+  void _offerCame() {
+    final net = OfficeNetwork.instance;
+    final t = net.incomingOffer.value;
+    if (t == null || !mounted) return;
+    net.incomingOffer.value = null;
+    if (t.finished) return;
+    unawaited(OfficeOfferDialog.show(context, t, () => net.acceptOffer(t)));
+  }
+
   /// Another Folio asked to know this one: its code shown wherever the
   /// user is.
   void _pairingAsked() {
@@ -846,6 +858,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
+    OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
     _stopPreviewSpeech();
     UpdateCheck.instance.available.removeListener(_updateAvailable);
     DocumentHistory.recoveryChanges.removeListener(_checkRecovery);

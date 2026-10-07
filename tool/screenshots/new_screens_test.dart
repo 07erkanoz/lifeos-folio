@@ -9,6 +9,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:evrak_convert/services/office/office_transfer.dart';
+import 'package:evrak_convert/ui/office/office_offer_dialog.dart';
 import 'package:evrak_convert/services/office/office_identity.dart';
 import 'package:evrak_convert/services/office/office_known.dart';
 import 'package:evrak_convert/services/office/office_pairing.dart';
@@ -371,6 +373,85 @@ void main() {
       asking.reject();
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
+    tester.view.reset();
+  });
+
+  testWidgets('office transfer', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('folio_send_shot_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    late OfficeNetwork a, b;
+    late OfficeTransfer offer;
+    await tester.runAsync(() async {
+      Future<OfficeNetwork> folio(String name, String device) async {
+        final net = OfficeNetwork(
+          settings: () async => File('${dir.path}/$device/buro.json'),
+          known: KnownDevices(
+            file: () async => File('${dir.path}/$device/k.json'),
+          ),
+        );
+        Directory('${dir.path}/$device/gelen').createSync(recursive: true);
+        net.inbox = () async => Directory('${dir.path}/$device/gelen');
+        final identity = await OfficeIdentity.load(store: _MemoryStore());
+        await net.listenForTesting(
+          identity,
+          OfficePeer(
+            deviceId: identity.deviceId,
+            userId: identity.userId,
+            name: name,
+            device: device,
+            platform: OfficePlatform.linux,
+          ),
+        );
+        return net;
+      }
+
+      Future<void> until(bool Function() done) async {
+        for (var i = 0; i < 300 && !done(); i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      }
+
+      a = await folio('Av. Deniz Kaya', 'deniz-masaustu');
+      b = await folio('Av. Murat Er', 'murat-pc');
+      final asking = a.pair(b.self!)!;
+      await until(() => b.incoming.value?.code != null);
+      b.incoming.value!.confirm();
+      asking.confirm();
+      await until(() => b.isKnown(a.self!.deviceId));
+      a.seenForTesting(b.self!);
+      b.seenForTesting(a.self!);
+      final f = File('${dir.path}/Bilirkişi Raporuna İtiraz.udf')
+        ..writeAsBytesSync(List.filled(48000, 7));
+      await a.send(b.self!, [
+        f.path,
+      ], note: 'Yarın öğlene kadar bakabilir misin?');
+      await until(() => b.incomingOffer.value != null);
+      offer = b.incomingOffer.value!;
+    });
+    tester.view.physicalSize = logical * pixelRatio;
+    tester.view.devicePixelRatio = pixelRatio;
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: Center(
+            child: OfficeOfferDialog(transfer: offer, onAccept: () async {}),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await _shot(tester, 'buro-gelen-teklif');
+    await tester.runAsync(() async {
+      await b.acceptOffer(offer);
+      for (var i = 0; i < 300 && !offer.finished; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pumpWidget(
+      _app(Scaffold(body: OfficeNetworkPage(network: b))),
+    );
+    await tester.pump();
+    await _shot(tester, 'buro-aktarimlar');
     tester.view.reset();
   });
 }

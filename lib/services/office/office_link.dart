@@ -26,7 +26,7 @@ class OfficeLink {
         );
   }
 
-  static const maxLine = 64 * 1024;
+  static const maxLine = 256 * 1024;
 
   final Socket _socket;
   late final StreamSubscription<String> _lines;

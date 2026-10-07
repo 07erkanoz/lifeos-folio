@@ -1,0 +1,154 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:evrak_convert/services/office/office_identity.dart';
+import 'package:evrak_convert/services/office/office_known.dart';
+import 'package:evrak_convert/services/office/office_link.dart';
+import 'package:evrak_convert/services/office/office_network.dart';
+import 'package:evrak_convert/services/office/office_peer.dart';
+import 'package:evrak_convert/services/office/office_transfer.dart';
+import 'package:evrak_convert/services/security/secret_store.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+class _Store extends SecretStore {
+  final kept = <String, Map<String, Object?>>{};
+  @override
+  Future<bool> write(String name, Map<String, Object?> value) async {
+    kept[name] = value;
+    return true;
+  }
+
+  @override
+  Future<Map<String, Object?>?> read(String name) async => kept[name];
+}
+
+/// Two known Folios on loopback sending files to each other, encrypted.
+void main() {
+  late Directory dir;
+  late OfficeNetwork a, b;
+
+  Future<OfficeNetwork> folio(String name, String device) async {
+    final net = OfficeNetwork(
+      settings: () async => File('${dir.path}/$device/buro.json'),
+      known: KnownDevices(file: () async => File('${dir.path}/$device/k.json')),
+    );
+    Directory('${dir.path}/$device/gelen').createSync(recursive: true);
+    net.inbox = () async => Directory('${dir.path}/$device/gelen');
+    final identity = await OfficeIdentity.load(store: _Store());
+    await net.listenForTesting(
+      identity,
+      OfficePeer(
+        deviceId: identity.deviceId,
+        userId: identity.userId,
+        name: name,
+        device: device,
+        platform: OfficePlatform.linux,
+      ),
+    );
+    return net;
+  }
+
+  Future<void> until(bool Function() done) async {
+    for (var i = 0; i < 500 && !done(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(done(), isTrue);
+  }
+
+  File file(String name, int size, {int seed = 1}) {
+    final r = Random(seed);
+    return File('${dir.path}/$name')
+      ..writeAsBytesSync([for (var i = 0; i < size; i++) r.nextInt(256)]);
+  }
+
+  setUp(() async {
+    dir = Directory.systemTemp.createTempSync('folio_send_');
+    a = await folio('Av. Deniz Kaya', 'deniz-pc');
+    b = await folio('Av. Mert Yıldız', 'mert-pc');
+    final asking = a.pair(b.self!)!;
+    await until(() => b.incoming.value?.code != null);
+    b.incoming.value!.confirm();
+    asking.confirm();
+    await until(
+      () => a.isKnown(b.self!.deviceId) && b.isKnown(a.self!.deviceId),
+    );
+    a.seenForTesting(b.self!);
+  });
+  tearDown(() => dir.deleteSync(recursive: true));
+
+  test('files go in pieces, sealed, and come whole', () async {
+    // Larger than the window of pieces, and an empty one.
+    final big = file('Bilirkişi Raporu.pdf', 900 * 1024);
+    final small = file('not.txt', 0);
+    final t = (await a.send(b.self!, [
+      big.path,
+      small.path,
+    ], note: 'bakar mısın'))!;
+    await until(() => b.incomingOffer.value != null);
+    final offer = b.incomingOffer.value!;
+    expect(offer.note, 'bakar mısın');
+    expect(offer.files.map((f) => f.name), ['Bilirkişi Raporu.pdf', 'not.txt']);
+    expect(offer.peer.name, 'Av. Deniz Kaya');
+    await b.acceptOffer(offer);
+    await until(() => t.state == TransferState.done);
+    await until(() => offer.state == TransferState.done);
+    expect(offer.saved, hasLength(2));
+    expect(File(offer.saved.first).readAsBytesSync(), big.readAsBytesSync());
+    expect(t.moved, t.total);
+    // Recorded on both sides.
+    await until(
+      () => File('${dir.path}/mert-pc/buro_aktarimlar.json').existsSync(),
+    );
+    final log = jsonDecode(
+      File('${dir.path}/mert-pc/buro_aktarimlar.json').readAsStringSync(),
+    ) as List;
+    expect((log.first as Map)['durum'], 'done');
+  });
+
+  test('declined, nothing is written', () async {
+    final t = (await a.send(b.self!, [file('x.udf', 1000).path]))!;
+    await until(() => b.incomingOffer.value != null);
+    await b.incomingOffer.value!.decline();
+    await until(() => t.state == TransferState.declined);
+    expect(Directory('${dir.path}/mert-pc/gelen').listSync(), isEmpty);
+  });
+
+  test('cut off, it goes on from where it was', () async {
+    final big = file('Dosya.pdf', 300 * 1024, seed: 7);
+    final id = OfficeTransfer.newId();
+    // What came before the line was cut.
+    final parts = Directory('${dir.path}/mert-pc/gelen/.folio-parca')
+      ..createSync(recursive: true);
+    File('${parts.path}/$id-0.part')
+        .writeAsBytesSync(big.readAsBytesSync().sublist(0, 200 * 1024));
+    final t = (await a.send(b.self!, [big.path], id: id))!;
+    await until(() => b.incomingOffer.value != null);
+    final offer = b.incomingOffer.value!;
+    await b.acceptOffer(offer);
+    await until(() => offer.state == TransferState.done);
+    await until(() => t.state == TransferState.done);
+    expect(File(offer.saved.single).readAsBytesSync(), big.readAsBytesSync());
+    // Only the rest was sent.
+    expect(t.moved, t.total);
+  });
+
+  test('a device not known cannot even open a talk', () async {
+    final stranger = await OfficeIdentity.load(store: _Store());
+    final link = await OfficeLink.connect('127.0.0.1', b.self!.port);
+    link.send({
+      't': 'hello',
+      'id': stranger.deviceId,
+      'eph': base64Encode(List.filled(32, 1)),
+      'sig': base64Encode(List.filled(64, 0)),
+    });
+    await until(() => link.closed);
+    expect(b.incomingOffer.value, isNull);
+  });
+
+  test('a file whose name holds a folder is put under its name alone', () {
+    final f = TransferFile.fromJson({'n': '../../.bashrc', 's': 3, 'h': 'x'})!;
+    expect(f.name, '.bashrc');
+    expect(TransferFile.fromJson({'n': '..', 's': 3, 'h': 'x'}), isNull);
+  });
+}

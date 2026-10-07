@@ -200,6 +200,11 @@ Durum:
   - Tanıyan taraf önce rastgele sayısının özetine bağlanır, karşının sayısını duyduktan sonra kendininkini açıklar; altı hane iki cihazın açık anahtarlarından ve iki sayıdan üretilir. Açıklanan sayı özetle tutmazsa tanıma durur.
   - İki taraf da onaylamadan hiçbiri tanınmaz; reddedilen ya da süresi (3 dakika) dolan tanıma kayda geçmez; bir tanıma sürerken gelen ikinci istek "meşgul" yanıtı alır.
   - Uçtan uca testler aynı makinede iki Folio'yu gerçek soketlerle konuşturur (`test/office_pairing_test.dart`).
+  - Başka odadaki cihazda istek kullanıcı hangi sayfadaysa orada açılır; kod isteyen telefonla okuyup karşılaştırır. Kod tanınan cihazlar listesinde saklanır, sonradan da karşılaştırılabilir.
+- **3. adım yapıldı** (8 Ekim 2026): `office_channel.dart` (şifreli kanal), `office_transfer.dart` (teklif, kabul, parça, sürme, özet).
+  - El sıkışma: iki taraf bu konuşmaya özel X25519 anahtarı üretir, tanımada saklanan Ed25519 cihaz anahtarıyla imzalar; anahtarlar HKDF ile iki yöne ayrı türetilir, her mesaj ChaCha20-Poly1305 ile ve yalnız artan sayaçla mühürlenir. Tanınmayan cihaz konuşma bile açamaz.
+  - 48 KB'lık parçalar, yolda en çok 8 parça; alan her dosyanın sonunda SHA-256'yı denetler, tutmazsa siler. Kesilen aktarım "Sürdür" ile aynı kimlikle yeniden teklif edilir ve alan elindekini söyler; yalnız kalanı gider. Dosya adından klasör kısmı atılır.
+  - Gelenler "Folio Gelenler" klasörüne (masaüstünde İndirilenler altında) düşer; aktarım kaydı `buro_aktarimlar.json`.
 
 1. Cihaz ve kullanıcı anahtarları; mDNS ile duyurma ve bulma; kişiler ve cihazlar listesi. Beş platformda bulmanın ölçülmesi.
 2. Tanıma (kodla eşleme), tanınan cihazlar listesi, cihaz kaldırma.

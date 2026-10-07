@@ -1,11 +1,15 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/office/office_network.dart';
+import '../../services/office/office_transfer.dart';
+import '../../services/platform/file_actions.dart';
 import '../../services/office/office_peer.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
+import 'office_offer_dialog.dart' show sizeText;
 import 'office_pairing_dialog.dart';
 
 /// Büro ağı (docs/buro.md, docs/design/buro-paylasim-taslak.png): the
@@ -58,12 +62,18 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     children: [
                       Expanded(flex: 3, child: _people(context)),
                       const SizedBox(width: 16),
-                      Expanded(flex: 2, child: _thisDevice(context)),
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                          children: [_transfers(context), _thisDevice(context)],
+                        ),
+                      ),
                     ],
                   )
                 else ...[
                   _people(context),
                   const SizedBox(height: 12),
+                  _transfers(context),
                   _thisDevice(context),
                 ],
               ],
@@ -359,6 +369,14 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
               style: const TextStyle(fontSize: 13),
             ),
           ),
+          if (!self && _net.isKnown(d.deviceId) && d.online)
+            TextButton.icon(
+              key: ValueKey('office-send-${d.deviceId}'),
+              onPressed: () => unawaited(_send(d)),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+              icon: const Icon(Icons.send_rounded, size: 15),
+              label: const Text('Gönder'),
+            ),
           if (!self && _net.isKnown(d.deviceId))
             const Tooltip(
               message: 'Tanınan cihaz',
@@ -379,6 +397,176 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
               child: const Text('Tanı'),
             ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _send(OfficePeer d) async {
+    final picked = await FilePicker.pickFiles(allowMultiple: true);
+    final paths = [
+      for (final f in picked?.files ?? const <PlatformFile>[])
+        if (f.path != null) f.path!,
+    ];
+    if (paths.isEmpty) return;
+    final t = await _net.send(d, paths);
+    if (t == null && mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Cihaz şu anda ağda görünmüyor.')),
+      );
+    }
+  }
+
+  /// Today's transfers: what went and came, how far, and what to do next.
+  Widget _transfers(BuildContext context) {
+    final list = _net.transfers;
+    if (list.isEmpty) return const SizedBox.shrink();
+    Widget tag(String text, Color ink, Color fill) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: ink),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: _card(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 13, 16, 9),
+              child: Text(
+                'Aktarımlar',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+            for (final t in list.take(12)) ...[
+              const Divider(height: 1),
+              Padding(
+                key: ValueKey('office-transfer-${t.id}'),
+                padding: const EdgeInsets.fromLTRB(16, 9, 12, 9),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        switch (t.state) {
+                          TransferState.done =>
+                            t.outgoing
+                                ? tag(
+                                    'GÖNDERİLDİ',
+                                    AgendaColors.ok,
+                                    const Color(0xFFE3F5EF),
+                                  )
+                                : tag(
+                                    'ALINDI',
+                                    AgendaColors.ok,
+                                    const Color(0xFFE3F5EF),
+                                  ),
+                          TransferState.declined => tag(
+                            'REDDEDİLDİ',
+                            AgendaColors.muted,
+                            const Color(0xFFEEF0F3),
+                          ),
+                          TransferState.failed => tag(
+                            'KESİLDİ',
+                            AgendaColors.deadline,
+                            AgendaColors.deadlineFill,
+                          ),
+                          _ =>
+                            t.outgoing
+                                ? tag(
+                                    'GİDİYOR',
+                                    AgendaColors.taskText,
+                                    AgendaColors.taskFill,
+                                  )
+                                : tag(
+                                    'GELEN',
+                                    AgendaColors.hearing,
+                                    AgendaColors.hearingFill,
+                                  ),
+                        },
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${t.outgoing ? 'Alıcı' : 'Gönderen'}: '
+                            '${t.peer.name.isEmpty ? t.peer.device : t.peer.name}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          clockText(t.at),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AgendaColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      [
+                        t.files.length == 1
+                            ? t.files.single.name
+                            : '${t.files.length} dosya',
+                        sizeText(t.total),
+                        if (t.reason != null) t.reason!,
+                      ].join(' · '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                    if (t.state == TransferState.sending) ...[
+                      const SizedBox(height: 6),
+                      LinearProgressIndicator(
+                        value: t.total == 0 ? null : t.moved / t.total,
+                        minHeight: 4,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ],
+                    if (!t.outgoing && t.saved.isNotEmpty)
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          TextButton(
+                            onPressed: () => unawaited(
+                              FileActions.invoke('openDefault', t.saved.first),
+                            ),
+                            child: const Text('Aç'),
+                          ),
+                          TextButton(
+                            onPressed: () => unawaited(
+                              FileActions.invoke('showFolder', t.saved.first),
+                            ),
+                            child: const Text('Klasörde göster'),
+                          ),
+                        ],
+                      ),
+                    if (t.outgoing && t.state == TransferState.failed)
+                      TextButton(
+                        key: ValueKey('office-retry-${t.id}'),
+                        onPressed: () => unawaited(_net.retry(t)),
+                        child: const Text('Sürdür'),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -459,7 +647,8 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(
-                        '${k.name.isEmpty ? 'Adsız' : k.name} · ${k.device}',
+                        '${k.name.isEmpty ? 'Adsız' : k.name} · ${k.device}'
+                        '${k.code.isEmpty ? '' : ' · kod ${k.code}'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12.5),
@@ -476,9 +665,9 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                 ),
             const SizedBox(height: 10),
             const Text(
-              'Sıradaki adımlarda: tanınan cihazlara şifreli olarak evrak, UYAP '
-              'dosyası ve dilekçe göndermek; kendi cihazlarınız arasında '
-              'Senkron sayfasından klasör, ajanda ve oturum eşitlemek.',
+              'Sıradaki adımlarda: UYAP dosyasından evrak ve UETS evrakı '
+              'göndermek; kendi cihazlarınız arasında Senkron sayfasından '
+              'klasör, ajanda ve oturum eşitlemek.',
               style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
             const SizedBox(height: 12),

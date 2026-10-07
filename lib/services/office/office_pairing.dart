@@ -318,6 +318,7 @@ class OfficePairing extends ChangeNotifier {
         device: other.device,
         platform: other.platform,
         knownAt: DateTime.now(),
+        code: _code ?? '',
       ),
     );
     _end(PairingState.done, null);

@@ -18,6 +18,7 @@ class KnownDevice {
     required this.device,
     required this.platform,
     required this.knownAt,
+    this.code = '',
   });
 
   final String deviceId, userId;
@@ -28,6 +29,10 @@ class KnownDevice {
   final OfficePlatform platform;
   final DateTime knownAt;
 
+  /// The six digits both screens showed when they knew each other: to be
+  /// compared later, by telephone, by whoever wants to be sure.
+  final String code;
+
   Map<String, Object?> toJson() => {
     'id': deviceId,
     'u': userId,
@@ -36,6 +41,7 @@ class KnownDevice {
     'c': device,
     'p': platform.name,
     'at': knownAt.toUtc().toIso8601String(),
+    'kod': code,
   };
 
   static KnownDevice? fromJson(Object? json) {
@@ -51,6 +57,7 @@ class KnownDevice {
       device: text('c'),
       platform: OfficePlatform.of(text('p')),
       knownAt: DateTime.tryParse(text('at'))?.toLocal() ?? DateTime(2026),
+      code: text('kod'),
     );
   }
 

@@ -47,9 +47,9 @@ class OfficePairingDialog extends StatelessWidget {
             Text(
               other == null
                   ? 'Karşı ekranda da aynı kod görünüyorsa onaylayın.'
-                  : 'Ağda “${other.name.isEmpty ? 'adı yazılmamış bir kullanıcı' : other.name}” '
-                        'adıyla bir Folio göründü. Karşı ekranda da aynı kod '
-                        'görünüyorsa onaylayın.',
+                  : '“${other.name.isEmpty ? 'Adı yazılmamış bir kullanıcı' : other.name}” '
+                        'bu cihazla tanışmak istiyor. Karşı ekranda da aynı '
+                        'kod görünüyorsa onaylayın.',
             ),
             const SizedBox(height: 14),
             Container(
@@ -75,8 +75,10 @@ class OfficePairingDialog extends StatelessWidget {
               waiting('Karşı tarafın onayı bekleniyor…')
             else
               const Text(
-                'Onaydan sonra bu cihazla her aktarım şifreli olur; kod bir '
-                'daha sorulmaz.',
+                'Başka bir odadaysanız kodu telefonla okuyarak '
+                'karşılaştırabilirsiniz. Onaydan sonra bu cihazla her aktarım '
+                'şifreli olur; kod bir daha sorulmaz, tanınan cihazlarda '
+                'durur.',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               ),
           ],
