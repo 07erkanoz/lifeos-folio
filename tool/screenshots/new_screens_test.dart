@@ -13,6 +13,7 @@ import 'package:evrak_convert/services/office/office_transfer.dart';
 import 'package:evrak_convert/ui/office/office_offer_dialog.dart';
 import 'package:evrak_convert/services/office/office_identity.dart';
 import 'package:evrak_convert/services/office/office_known.dart';
+import 'package:evrak_convert/services/office/office_ledger.dart';
 import 'package:evrak_convert/services/office/office_pairing.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:evrak_convert/ui/office/office_pairing_dialog.dart';
@@ -388,6 +389,9 @@ void main() {
           known: KnownDevices(
             file: () async => File('${dir.path}/$device/k.json'),
           ),
+          ledger: OfficeLedger(
+            file: () async => File('${dir.path}/$device/d.json'),
+          ),
         );
         Directory('${dir.path}/$device/gelen').createSync(recursive: true);
         net.inbox = () async => Directory('${dir.path}/$device/gelen');
@@ -452,6 +456,15 @@ void main() {
     );
     await tester.pump();
     await _shot(tester, 'buro-aktarimlar');
+    await tester.runAsync(() async {
+      await a.foundOffice('Kaya Hukuk Bürosu');
+      await a.admit(b.self!.deviceId, OfficeRole.lawyer);
+    });
+    await tester.pumpWidget(
+      _app(Scaffold(body: OfficeNetworkPage(network: a))),
+    );
+    await tester.pump();
+    await _shot(tester, 'buro-uyeler');
     tester.view.reset();
   });
 }

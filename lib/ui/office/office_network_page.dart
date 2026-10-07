@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/office/office_ledger.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_transfer.dart';
 import '../../services/platform/file_actions.dart';
@@ -60,7 +61,16 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(flex: 3, child: _people(context)),
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          children: [
+                            _office(context),
+                            const SizedBox(height: 12),
+                            _people(context),
+                          ],
+                        ),
+                      ),
                       const SizedBox(width: 16),
                       Expanded(
                         flex: 2,
@@ -71,6 +81,8 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     ],
                   )
                 else ...[
+                  _office(context),
+                  const SizedBox(height: 12),
                   _people(context),
                   const SizedBox(height: 12),
                   _transfers(context),
@@ -369,7 +381,31 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
               style: const TextStyle(fontSize: 13),
             ),
           ),
-          if (!self && _net.isKnown(d.deviceId) && d.online)
+          if (!self &&
+              _net.isKnown(d.deviceId) &&
+              _net.ledger.exists &&
+              _net.ledger.member(d.deviceId) == null &&
+              _net.ledger.isManager(_net.self?.deviceId ?? ''))
+            PopupMenuButton<OfficeRole>(
+              key: ValueKey('office-admit-${d.deviceId}'),
+              tooltip: 'Büroya ekle',
+              onSelected: (r) => unawaited(_say(_net.admit(d.deviceId, r))),
+              itemBuilder: (_) => [
+                for (final r in OfficeRole.values)
+                  PopupMenuItem(
+                    value: r,
+                    child: Text('${r.label} olarak ekle'),
+                  ),
+              ],
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(
+                  'Büroya ekle ▾',
+                  style: TextStyle(fontSize: 12.5, color: AgendaColors.hearing),
+                ),
+              ),
+            ),
+          if (!self && _net.isTrusted(d.deviceId) && d.online)
             TextButton.icon(
               key: ValueKey('office-send-${d.deviceId}'),
               onPressed: () => unawaited(_send(d)),
@@ -396,6 +432,181 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
               style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
               child: const Text('Tanı'),
             ),
+        ],
+      ),
+    );
+  }
+
+  final _officeName = TextEditingController();
+
+  Future<void> _say(Future<String?> action) async {
+    final error = await action;
+    if (error != null && mounted) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  /// The office: founding it, or its members and their roles.
+  Widget _office(BuildContext context) {
+    final l = _net.ledger;
+    final me = _net.self?.deviceId;
+    final manager = me != null && l.isManager(me);
+    if (!l.exists) {
+      return _card(
+        context,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Büro',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Büro kurduğunuzda büronun ilk yöneticisi siz olursunuz; '
+                'tanıdığınız cihazları rolleriyle büroya alırsınız. Başka bir '
+                'büroya katılacaksanız o büronun yöneticisinin sizi tanıyıp '
+                'büroya eklemesi yeterlidir.',
+                style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('office-name'),
+                      controller: _officeName,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        hintText: 'Büronun adı, ör. Kaya Hukuk Bürosu',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    key: const ValueKey('office-found'),
+                    onPressed: () =>
+                        unawaited(_say(_net.foundOffice(_officeName.text))),
+                    child: const Text('Büro kur'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final members = l.members;
+    return _card(
+      context,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 13, 16, 9),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: l.officeName),
+                  TextSpan(
+                    text: '  ${members.length} üye',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      color: AgendaColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+          ),
+          for (final m in members) ...[
+            const Divider(height: 1),
+            Padding(
+              key: ValueKey('office-member-${m.deviceId}'),
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${m.name.isEmpty ? 'Adsız' : m.name}'
+                          '${m.deviceId == me ? '  (siz)' : ''}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          '${m.device} · ${m.platform.label}'
+                          '${m.founder ? ' · kurucu' : ''}',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AgendaColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: m.role == OfficeRole.manager
+                          ? AgendaColors.hearingFill
+                          : const Color(0xFFEEF0F3),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      m.role.label.replaceAll('i', 'İ').toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: m.role == OfficeRole.manager
+                            ? AgendaColors.hearing
+                            : const Color(0xFF5E6677),
+                      ),
+                    ),
+                  ),
+                  if (manager)
+                    PopupMenuButton<Object>(
+                      key: ValueKey('office-role-${m.deviceId}'),
+                      tooltip: 'Rol',
+                      onSelected: (v) => unawaited(
+                        _say(
+                          v is OfficeRole
+                              ? _net.setRole(m.deviceId, v)
+                              : _net.removeMember(m.deviceId),
+                        ),
+                      ),
+                      itemBuilder: (_) => [
+                        for (final r in OfficeRole.values)
+                          CheckedPopupMenuItem(
+                            value: r,
+                            checked: m.role == r,
+                            child: Text(r.label),
+                          ),
+                        const PopupMenuDivider(),
+                        const PopupMenuItem(
+                          value: 'cikar',
+                          child: Text('Bürodan çıkar'),
+                        ),
+                      ],
+                    )
+                  else
+                    const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

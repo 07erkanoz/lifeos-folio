@@ -188,8 +188,17 @@ Taslak: [docs/design/buro-yonetim-taslak.html](design/buro-yonetim-taslak.html).
 - **Katılma:** Yeni cihaz bir yöneticiyle kodla tanışır, yönetici "Kabul et" der, üyelik kaydı deftere girer. Defterdeki üyeler birbirini ayrıca tanımadan şifreli konuşur.
 - **Görev:** Bir ya da birkaç kişiye, bir ya da birkaç UYAP dosyası. Her dosyanın kendi yapılacak işleri vardır (her biri bir kişiye); işi veren her dosya için seçili evrak, bütün evrak ya da yalnız künye ve taraflar gönderir.
   - Alan kişi o dosyada UYAP yetkisi olmasa da dosyayı UYAP Dosyalarım'da "görevle gelen" olarak görür ve gelen evrakı inceler; o dosyada UYAP'tan tazeleme kapalıdır.
+  - Görevli o dosyayı kendi UYAP'ıyla açamadığı için her şey işi verenden gider: seçilen evrakın bilgisayarda olmayanları, görev verilmeden önce işi verenin Folio'su tarafından UYAP'tan indirilir; evrakla birlikte dosyanın detayı da gider (künye, taraflar ve vekilleri, evrak listesi, duruşmalar, süreler). İndirilemeyen evrak varsa (UYAP bağlantısı yoksa) görev verilmeden önce söylenir.
   - Akış: Verildi → Sürüyor → Teslim edildi → Tamamlandı (veren onaylar) ya da geri gönderilir. İşi alan not, ilerleme ve evrak ekler; teslimde yapılan işi yazar ve evrakı ekler. Evrak verenin cihazında dosyanın klasörüne düşer.
   - Görev kayıtları imzalı olaylardır; ilgili kişilerin cihazlarına gider, kapalı cihaz için sıraya alınır. Son gün ajandaya düşer; dosya sayfasında "Görevler" sekmesi olur.
+- **Benzer ürünlerden alınanlar** (Clio, Filevine, Smokeball, Mühlet, Dosya360, Asana, Linear, Keybase, Matrix, Syncthing; araştırma 8 Ekim 2026):
+  - Durumlar: Verildi → Sürüyor → İncelemede (teslim edildi) → Tamamlandı; ayrıca İptal. Geri gönderilen iş "Sürüyor"a döner, tamamlanmış sayılmaz (Asana'nın bilinen hatası); geri gönderme ve iptal gerekçe ister.
+  - Son gün duruşmaya ya da süreye göreli verilebilir ("duruşmadan 7 gün önce"); duruşma kayarsa görev sessizce kaymaz, sorulur. Hatırlatma kademelidir (7, 3, 1 gün) ve "Gördüm" ile durdurulur.
+  - Dava türüne göre hazır iş şablonları; iş yükü görünümü (kişi başına açık işler, durumlarına göre).
+  - Stajyere verilen işte gözetimden sorumlu avukat kayda geçer (Av. K. m. 26).
+  - KVKK: asgari paylaşım; varsayılan seçili evraktır, bütün evrak bilerek seçilir.
+  - **Yazışma:** Her görevin kendi yazışma alanı vardır; mesajlar ve ekleri, durum değişiklikleriyle aynı akışta ama ayrı görünür.
+  - Defter: kurucu kalıcı üst yetkilidir, onu yalnız kendisi değiştirir; kayıtların sırası cihaz saatinden değil, her kaydın bağlandığı önceki kayıttan gelir (Matrix'in saat sorunu). Silinen üye kayıtla silinir, başka bir cihaz onu geri getiremez (Syncthing'in sorunu). Sonra: üye çıkınca büro anahtarının yenilenmesi, kurucu için çevrimdışı kurtarma kodu.
 - **Yapım sırası:** (1) büro, üyelik ve roller; (2) görev verme ve pano; (3) gidişat, teslim ve onay; (4) görevle gelen dosya, ajanda ve dosya sayfası bağlantıları.
 
 ## Kararlar (8 Ekim 2026)

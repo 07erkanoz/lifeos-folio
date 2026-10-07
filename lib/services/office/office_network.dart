@@ -12,6 +12,7 @@ import '../platform/app_directories.dart';
 import 'office_channel.dart';
 import 'office_identity.dart';
 import 'office_known.dart';
+import 'office_ledger.dart';
 import 'office_link.dart';
 import 'office_pairing.dart';
 import 'office_peer.dart';
@@ -27,9 +28,15 @@ class OfficeNetwork extends ChangeNotifier {
   OfficeNetwork({
     Future<File> Function()? settings,
     KnownDevices? known,
+    OfficeLedger? ledger,
     this.platformName,
   }) : _settingsFile = settings ?? _defaultSettings,
-       _known = known ?? KnownDevices();
+       _known = known ?? KnownDevices(),
+       ledger = ledger ?? OfficeLedger();
+
+  /// The office this device belongs to, if it does (docs/buro.md, Büro
+  /// yönetimi).
+  final OfficeLedger ledger;
 
   static OfficeNetwork? _instance;
   static OfficeNetwork get instance => _instance ??= OfficeNetwork();
@@ -82,7 +89,8 @@ class OfficeNetwork extends ChangeNotifier {
     String? id,
   }) async {
     final identity = _identity;
-    final known = _knownDevices[to.deviceId];
+    final known =
+        _knownDevices[to.deviceId] ?? ledger.member(to.deviceId)?.asKnown;
     final seen = _peers[to.deviceId] ?? to;
     final host = seen.host;
     if (identity == null || known == null || host == null || seen.port == 0) {
@@ -209,12 +217,19 @@ class OfficeNetwork extends ChangeNotifier {
       link: link,
       hello: hello,
       identity: identity,
-      known: _known.of,
+      known: _trusted,
     );
     if (ch == null) return;
     late final StreamSubscription<Map<String, Object?>> first;
     first = ch.messages.listen((m) async {
       await first.cancel();
+      if (m['t'] == 'defter') {
+        await _ledgerCame(m['kayit']);
+        await ch.send({'t': 'defter', 'kayit': ledger.records});
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await ch.close();
+        return;
+      }
       final t = m['t'] == 'offer'
           ? OfficeTransfer.receive(
               channel: ch,
@@ -235,6 +250,93 @@ class OfficeNetwork extends ChangeNotifier {
         incomingOffer.value = t;
       }
     });
+  }
+
+  /// A device this one talks to: one it knows, or a member of its office.
+  Future<KnownDevice?> _trusted(String deviceId) async =>
+      await _known.of(deviceId) ?? ledger.member(deviceId)?.asKnown;
+
+  bool isTrusted(String deviceId) =>
+      _knownDevices.containsKey(deviceId) || ledger.member(deviceId) != null;
+
+  Future<void> _ledgerCame(Object? records) async {
+    if (records is List && await ledger.merge(records)) {
+      notifyListeners();
+      unawaited(_shareLedger());
+    }
+  }
+
+  /// The ledger said to a trusted device on the network, and theirs heard.
+  Future<void> _syncLedger(OfficePeer peer) async {
+    final identity = _identity;
+    final host = peer.host;
+    if (identity == null || host == null || peer.port == 0) return;
+    final trusted = await _trusted(peer.deviceId);
+    if (trusted == null || (!ledger.exists && !isTrusted(peer.deviceId))) {
+      return;
+    }
+    try {
+      final ch = await OfficeChannel.open(
+        identity: identity,
+        peer: trusted,
+        host: host,
+        port: peer.port,
+      );
+      final reply = ch.messages.first.timeout(const Duration(seconds: 10));
+      await ch.send({'t': 'defter', 'kayit': ledger.records});
+      final m = await reply;
+      await ch.close();
+      if (m['t'] == 'defter' && m['kayit'] is List) {
+        if (await ledger.merge(m['kayit'] as List)) notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  /// After a change: to every trusted device on the network.
+  Future<void> _shareLedger() async {
+    for (final peer in _peers.values.toList()) {
+      if (peer.online && isTrusted(peer.deviceId)) {
+        await _syncLedger(peer);
+      }
+    }
+  }
+
+  final _ledgerSynced = <String>{};
+
+  Future<String?> foundOffice(String name) async {
+    final identity = _identity, self = _self;
+    if (identity == null || self == null) return 'Önce büro ağına katılın.';
+    if (name.trim().isEmpty) return 'Büronun adını yazın.';
+    await ledger.found(identity, self, name);
+    notifyListeners();
+    return null;
+  }
+
+  Future<String?> admit(String deviceId, OfficeRole role) async {
+    final identity = _identity;
+    final known = _knownDevices[deviceId];
+    if (identity == null || known == null) {
+      return 'Önce cihazı kodla tanıyın.';
+    }
+    return _after(await ledger.admit(identity, known, role));
+  }
+
+  Future<String?> setRole(String deviceId, OfficeRole role) async {
+    final identity = _identity;
+    if (identity == null) return 'Önce büro ağına katılın.';
+    return _after(await ledger.setRole(identity, deviceId, role));
+  }
+
+  Future<String?> removeMember(String deviceId) async {
+    final identity = _identity;
+    if (identity == null) return 'Önce büro ağına katılın.';
+    return _after(await ledger.remove(identity, deviceId));
+  }
+
+  Future<String?> _after(String? error) async {
+    notifyListeners();
+    if (error == null) unawaited(_shareLedger());
+    return error;
   }
 
   /// The user took an offer: if it is cut off, it goes on unasked.
@@ -320,6 +422,7 @@ class OfficeNetwork extends ChangeNotifier {
     try {
       _identity ??= await OfficeIdentity.load();
       await _loadKnown();
+      await ledger.load();
       // Where the others will reach this Folio; what is said there comes in
       // the next step (docs/buro.md, Aktarım), till then it hangs up.
       // Both families: the others may find this one by either address.
@@ -444,6 +547,11 @@ class OfficeNetwork extends ChangeNotifier {
         }
         _peers[peer.deviceId] = peer;
         notifyListeners();
+        if (peer.host != null &&
+            isTrusted(peer.deviceId) &&
+            _ledgerSynced.add(peer.deviceId)) {
+          unawaited(_syncLedger(peer));
+        }
       case BonsoirDiscoveryServiceLostEvent(:final service):
         final id =
             service.attributes['id'] ?? service.name.replaceFirst('folio-', '');
@@ -478,6 +586,7 @@ class OfficeNetwork extends ChangeNotifier {
   ) async {
     _identity = identity;
     await _loadKnown();
+    await ledger.load();
     _server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     _server!.listen(_opened);
     _self = OfficePeer(

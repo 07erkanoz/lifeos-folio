@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:evrak_convert/services/office/office_identity.dart';
 import 'package:evrak_convert/services/office/office_known.dart';
+import 'package:evrak_convert/services/office/office_ledger.dart';
 import 'package:evrak_convert/services/office/office_link.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
@@ -32,6 +33,9 @@ void main() {
     final net = OfficeNetwork(
       settings: () async => File('${dir.path}/$device/buro.json'),
       known: KnownDevices(file: () async => File('${dir.path}/$device/k.json')),
+      ledger: OfficeLedger(
+        file: () async => File('${dir.path}/$device/d.json'),
+      ),
     );
     Directory('${dir.path}/$device/gelen').createSync(recursive: true);
     net.inbox = () async => Directory('${dir.path}/$device/gelen');
@@ -150,5 +154,32 @@ void main() {
     final f = TransferFile.fromJson({'n': '../../.bashrc', 's': 3, 'h': 'x'})!;
     expect(f.name, '.bashrc');
     expect(TransferFile.fromJson({'n': '..', 's': 3, 'h': 'x'}), isNull);
+  });
+
+  test('members an office took in talk to each other unpaired', () async {
+    final c = await folio('Av. Selin Aksoy', 'selin-pc');
+    final asking = a.pair(c.self!)!;
+    await until(() => c.incoming.value?.code != null);
+    c.incoming.value!.confirm();
+    asking.confirm();
+    await until(() => a.isKnown(c.self!.deviceId));
+    a.seenForTesting(c.self!);
+    expect(await a.foundOffice('Kaya Hukuk Bürosu'), isNull);
+    expect(await a.admit(b.self!.deviceId, OfficeRole.trainee), isNull);
+    expect(await a.admit(c.self!.deviceId, OfficeRole.lawyer), isNull);
+    // The ledger went to both.
+    await until(
+      () => b.ledger.members.length == 3 && c.ledger.members.length == 3,
+    );
+    expect(b.ledger.officeName, 'Kaya Hukuk Bürosu');
+    expect(c.ledger.member(b.self!.deviceId)!.role, OfficeRole.trainee);
+    // A trainee cannot change roles.
+    expect(await b.setRole(b.self!.deviceId, OfficeRole.manager), isNotNull);
+    // B and C never met by a code, yet a file goes between them.
+    b.seenForTesting(c.self!);
+    final t = (await b.send(c.self!, [file('Tanık listesi.udf', 5000).path]))!;
+    await until(() => c.incomingOffer.value != null);
+    await c.acceptOffer(c.incomingOffer.value!);
+    await until(() => t.state == TransferState.done);
   });
 }
