@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UETS Taslağı</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet">
+<style>
+  :root { --page:#F4F6F9; --line:#E3E7EE; --muted:#6B7383; --ink:#1B2130; --primary:#2B5EA8; --pfill:#EAF0F9;
+          --ok:#157A52; --okF:#EAF7F1; --amber:#97600D; --amberF:#FDF4E6; --red:#C0322B; --redF:#FDECEC;
+          --hukuk:#2B5EA8; --icra:#97600D; --ceza:#B2453E; --idari:#5B4BB7; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:18px; line-height:1; font-style:normal; display:inline-block; font-feature-settings:"liga"; vertical-align:-3px; }
+  h2.cap { width:1440px; margin:0 auto 10px; font-size:15px; color:#2A3040; }
+  h2.cap small { font-weight:400; color:#4B5465; margin-left:8px; }
+  .win { width:1440px; height:900px; margin:0 auto 34px; background:var(--page); border-radius:12px; overflow:hidden; box-shadow:0 20px 60px rgba(20,30,50,.28); display:flex; flex-direction:column; }
+  .tb { height:34px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; padding:0 14px; font-size:12px; color:var(--muted); }
+  .tb .r { margin-left:auto; letter-spacing:12px; }
+  .body { flex:1; display:flex; min-height:0; }
+  .side { width:236px; background:#fff; border-right:1px solid var(--line); padding:16px 12px; display:flex; flex-direction:column; gap:3px; }
+  .btn1 { background:var(--primary); color:#fff; border-radius:10px; padding:10px; text-align:center; font-weight:700; font-size:13px; margin-bottom:14px; }
+  .nav { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; font-size:13.5px; }
+  .nav .ms { color:#6B7383; }
+  .nav.on { background:var(--pfill); color:var(--primary); font-weight:700; } .nav.on .ms { color:var(--primary); }
+  .pill { margin-left:auto; font-size:11px; font-weight:800; padding:1px 7px; border-radius:9px; background:var(--redF); color:var(--red); }
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .ph { background:#fff; border-bottom:1px solid var(--line); padding:14px 24px; display:flex; align-items:center; gap:14px; }
+  .ph h1 { margin:0; font-size:18px; }
+  .ph .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .src { display:flex; align-items:center; gap:7px; font-size:12px; color:#3F4656; border:1px solid var(--line); border-radius:999px; padding:5px 11px; background:#fff; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); }
+  .fb { background:var(--primary); color:#fff; border-radius:9px; padding:8px 13px; font-size:12.5px; font-weight:700; display:flex; gap:6px; align-items:center; }
+  .fb .ms { color:#fff; font-size:17px; }
+  .ob { border:1px solid var(--line); border-radius:9px; padding:7px 12px; font-size:12.5px; font-weight:600; display:flex; gap:6px; align-items:center; background:#fff; }
+  .ob .ms { font-size:17px; color:var(--primary); }
+  .prog { background:#F3F7FC; border-bottom:1px solid #DCE6F4; padding:8px 24px; font-size:12px; color:#1F467F; display:flex; align-items:center; gap:12px; }
+  .bar { flex:0 0 260px; height:5px; border-radius:3px; background:#D5E1F2; overflow:hidden; } .bar i { display:block; height:100%; width:38%; background:var(--primary); }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; padding:14px 24px 0; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:12px; padding:11px 14px; display:flex; gap:12px; align-items:center; }
+  .stat .ic { width:36px; height:36px; border-radius:9px; display:flex; align-items:center; justify-content:center; }
+  .stat b { font-size:20px; display:block; } .stat span { font-size:11.5px; color:var(--muted); }
+  .grid { flex:1; min-height:0; display:grid; grid-template-columns:1fr 560px; gap:16px; padding:14px 24px 18px; }
+  .list { background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:0; }
+  .lh { display:flex; gap:6px; padding:10px 12px; border-bottom:1px solid var(--line); align-items:center; }
+  .chip { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:3px 10px; background:#fff; white-space:nowrap; }
+  .chip.on { background:var(--pfill); border-color:#CFDDF1; color:var(--primary); font-weight:700; }
+  .chip .n { font-weight:800; margin-left:3px; }
+  .search { margin-left:auto; border:1px solid var(--line); border-radius:8px; padding:4px 10px; font-size:12px; color:#8A92A3; width:220px; }
+  .row { display:flex; gap:12px; padding:10px 14px 10px 12px; border-top:1px solid #EEF1F5; position:relative; align-items:flex-start; }
+  .row:first-of-type { border-top:0; }
+  .row.sel { background:#F3F7FC; }
+  .row.sel::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--primary); }
+  .ud { width:8px; height:8px; border-radius:50%; margin-top:6px; flex-shrink:0; }
+  .ud.on { background:var(--red); }
+  .rc { flex:1; min-width:0; }
+  .l1 { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .l1 b { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .no { font-family:Consolas,monospace; font-weight:700; font-size:12.5px; }
+  .kind { font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:4px; background:#EEF1F5; color:#3F4656; white-space:nowrap; }
+  .l2 { font-size:11.5px; color:var(--muted); margin-top:3px; }
+  .dl { flex-shrink:0; text-align:right; font-size:11.5px; }
+  .badge { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .b-wait { background:var(--amberF); color:var(--amber); }
+  .b-ok { background:var(--redF); color:var(--red); }
+  .b-none { background:#EEF0F3; color:#5D6474; }
+  .b-other { border:1px solid #CBD2DD; color:var(--muted); }
+  .detail { display:flex; flex-direction:column; gap:12px; min-height:0; overflow:hidden; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; }
+  .k { font-size:10.5px; font-weight:800; letter-spacing:.9px; color:var(--muted); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .k .act { margin-left:auto; color:var(--primary); letter-spacing:0; font-size:12px; font-weight:700; }
+  .t1 { font-size:15px; font-weight:700; } .t2 { font-size:12.5px; color:var(--primary); font-weight:700; margin-top:2px; }
+  .tl { display:flex; align-items:flex-start; margin:12px 0 2px; }
+  .tl .st { flex:1; position:relative; text-align:center; font-size:11px; color:var(--muted); }
+  .tl .st::before { content:""; position:absolute; top:6px; left:-50%; right:50%; height:2px; background:#D5DBE5; }
+  .tl .st:first-child::before { display:none; }
+  .tl .st i { display:block; width:14px; height:14px; border-radius:50%; margin:0 auto 5px; background:#fff; border:2px solid #9AA2B1; position:relative; z-index:1; }
+  .tl .st.done i { background:var(--primary); border-color:var(--primary); }
+  .tl .st.key i { background:var(--red); border-color:var(--red); }
+  .tl .st b { display:block; color:var(--ink); font-size:12px; }
+  .note { font-size:11.5px; color:var(--muted); margin-top:6px; }
+  .zarf { border:1px solid #E7DCC4; background:#FFFCF5; border-radius:9px; padding:10px 12px; font-size:12.5px; line-height:1.45; }
+  .zarf mark { background:#FFE7A8; padding:0 2px; border-radius:3px; }
+  .zarf .src2 { font-size:11px; color:var(--muted); margin-top:6px; }
+  .ek { display:flex; align-items:center; gap:9px; padding:6px 0; border-top:1px solid #F1F3F6; font-size:12.5px; }
+  .ek:first-of-type { border-top:0; }
+  .ek .ms { color:var(--primary); font-size:18px; }
+  .ek .ty { font-size:10.5px; font-weight:700; padding:1px 6px; border-radius:4px; background:var(--pfill); color:var(--primary); }
+  .ek .ty.z { background:#FFF3D6; color:var(--amber); }
+  .ek .dn { margin-left:auto; color:var(--muted); }
+  .sure { border-top:1px solid #F1F3F6; padding:10px 0 8px; }
+  .sure:first-of-type { border-top:0; padding-top:2px; }
+  .sh { display:flex; align-items:baseline; gap:10px; }
+  .sday { font-size:15px; font-weight:800; color:var(--red); width:96px; flex-shrink:0; }
+  .sday.wait { color:var(--amber); }
+  .sday small { display:block; font-size:11px; font-weight:600; color:var(--muted); }
+  .sname { font-size:13px; font-weight:700; }
+  .slaw { font-size:11.5px; color:var(--muted); }
+  .why { margin:6px 0 0 106px; font-size:11.5px; line-height:1.4; }
+  .why li { margin-bottom:2px; }
+  .acts { margin:7px 0 0 106px; display:flex; gap:6px; }
+  .a1 { background:var(--primary); color:#fff; border-radius:7px; padding:4px 11px; font-size:12px; font-weight:700; }
+  .a2 { border:1px solid var(--line); border-radius:7px; padding:4px 10px; font-size:12px; font-weight:600; background:#fff; }
+  .own { font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:4px; margin-left:auto; white-space:nowrap; }
+  .own.us { background:var(--okF); color:var(--ok); }
+  .own.them { border:1px solid #CBD2DD; color:var(--muted); }
+  .calc { display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end; }
+  .fld { font-size:11px; color:var(--muted); }
+  .fld div { border:1px solid var(--line); border-radius:7px; padding:6px 9px; font-size:12.5px; color:var(--ink); margin-top:3px; background:#fff; }
+  .res { margin-top:10px; background:#F8FAFD; border:1px solid #E3E9F3; border-radius:9px; padding:9px 11px; font-size:12.5px; }
+  .res b { color:var(--red); }
+  .legend { width:1440px; margin:0 auto 40px; background:#fff; border-radius:12px; padding:18px 22px; font-size:13px; line-height:1.55; }
+  .legend h3 { margin:0 0 8px; font-size:14px; }
+  .legend li { margin-bottom:4px; }
+</style>
+</head>
+<body>
+
+<h2 class="cap">1 · UETS Tebligatlarım <small>Liste solda, seçilen tebligat sağda: zaman çizelgesi, zarf, ekler, süreler · bütün bilgiler uydurmadır</small></h2>
+<div class="win">
+  <div class="tb">LifeOS Folio<span class="r">— ▢ ✕</span></div>
+  <div class="body">
+    <div class="side">
+      <div class="btn1">Yeni belge oluştur</div>
+      <div class="nav"><span class="ms">home</span>Anasayfa</div>
+      <div class="nav"><span class="ms">folder_open</span>Kütüphane</div>
+      <div class="nav"><span class="ms">calendar_month</span>Ajanda</div>
+      <div class="nav on"><span class="ms">mark_email_unread</span>UETS Tebligatlarım<span class="pill">3</span></div>
+      <div class="nav"><span class="ms">gavel</span>UYAP Dosyalarım</div>
+    </div>
+    <div class="main">
+      <div class="ph">
+        <div><h1>UETS Tebligatlarım</h1><div class="sub">Elektronik tebligatlar, zarfları, ekleri ve doğurdukları süreler</div></div>
+        <div class="right">
+          <div class="src"><span class="dot"></span>UETS · bağlı · 22 dk</div>
+          <div class="src"><span class="dot"></span>UYAP Mobil · bağlı</div>
+          <div class="fb"><span class="ms">sync</span>Senkronize et</div>
+        </div>
+      </div>
+      <div class="prog"><span class="ms" style="font-size:16px">downloading</span>Tebligat paketleri indiriliyor · 46 / 120 · zarflar okunuyor<div class="bar"><i></i></div><span style="color:var(--muted)">Paket indirilen tebligat UETS’te okundu görünür; tebliğ günü değişmez.</span></div>
+      <div class="stats">
+        <div class="stat"><div class="ic" style="background:var(--amberF)"><span class="ms" style="color:var(--amber)">pending_actions</span></div><div><b>7</b><span>Onayınızı bekleyen süre</span></div></div>
+        <div class="stat"><div class="ic" style="background:var(--redF)"><span class="ms" style="color:var(--red)">timer</span></div><div><b>2</b><span>7 gün içinde son günü olan (onaylı)</span></div></div>
+        <div class="stat"><div class="ic" style="background:var(--pfill)"><span class="ms" style="color:var(--primary)">mail</span></div><div><b>3</b><span>Okunmamış</span></div></div>
+        <div class="stat"><div class="ic" style="background:#EEF0F3"><span class="ms" style="color:#5D6474">link_off</span></div><div><b>1</b><span>Dosyayla eşleşmeyen</span></div></div>
+      </div>
+      <div class="grid">
+        <div class="list">
+          <div class="lh">
+            <span class="chip on">Tümü<span class="n">120</span></span>
+            <span class="chip">Onay bekleyen<span class="n">7</span></span>
+            <span class="chip">Okunmamış<span class="n">3</span></span>
+            <span class="chip">Süresi olan<span class="n">24</span></span>
+            <span class="chip">Eşleşmeyen<span class="n">1</span></span>
+            <span class="search"><span class="ms" style="font-size:15px">search</span> Mahkeme, esas no, belge türü</span>
+          </div>
+          <div class="row sel"><span class="ud on"></span>
+            <div class="rc"><div class="l1"><b>Antalya 4. Asliye Hukuk Mahkemesi</b><span class="no">2025/118</span><span class="kind">Bilirkişi Raporu</span></div>
+              <div class="l2">Kutuya giriş 30 Eyl · tebliğ 5 Eki · zarf okundu · Ece Yılmaz (Davalı) vekili</div></div>
+            <div class="dl"><span class="badge b-wait">19 Eki · onay bekliyor</span></div></div>
+          <div class="row"><span class="ud on"></span>
+            <div class="rc"><div class="l1"><b>Alanya 2. İcra Dairesi</b><span class="no">2026/2044</span><span class="kind">Ödeme Emri</span></div>
+              <div class="l2">Kutuya giriş 2 Eki · tebliğ 7 Eki · takip türü belli değil (genel / kambiyo)</div></div>
+            <div class="dl"><span class="badge b-wait">12 Eki · onay bekliyor</span></div></div>
+          <div class="row"><span class="ud"></span>
+            <div class="rc"><div class="l1"><b>Manavgat 1. Aile Mahkemesi</b><span class="no">2025/90</span><span class="kind">Gerekçeli Karar</span></div>
+              <div class="l2">Kutuya giriş 24 Eyl · tebliğ 29 Eyl · okundu 25 Eyl</div></div>
+            <div class="dl"><span class="badge b-ok">13 Eki · onaylı</span></div></div>
+          <div class="row"><span class="ud"></span>
+            <div class="rc"><div class="l1"><b>İstanbul Anadolu 7. İş Mahkemesi</b><span class="no">2026/301</span><span class="kind">Dava Dilekçesi</span></div>
+              <div class="l2">Kutuya giriş 22 Eyl · tebliğ 27 Eyl · Deniz Kaya (Davacı) vekili</div></div>
+            <div class="dl"><span class="badge b-other">Karşı tarafın süresi</span></div></div>
+          <div class="row"><span class="ud on"></span>
+            <div class="rc"><div class="l1"><b>Antalya 3. İcra Dairesi</b><span class="no">2026/77</span><span class="kind">3. Haciz İhbarnamesi</span></div>
+              <div class="l2">Kutuya giriş 19 Eyl · tebliğ 24 Eyl · 2 süre</div></div>
+            <div class="dl"><span class="badge b-wait">9 Eki · onay bekliyor</span></div></div>
+          <div class="row"><span class="ud"></span>
+            <div class="rc"><div class="l1"><b>Konya 2. Asliye Ceza Mahkemesi</b><span class="no">2025/612</span><span class="kind">Adli Tıp Raporu</span></div>
+              <div class="l2">Kutuya giriş 15 Eyl · tebliğ 20 Eyl · süreyi mahkeme verir</div></div>
+            <div class="dl"><span class="badge b-none">Zarftaki süreye bakın</span></div></div>
+          <div class="row"><span class="ud"></span>
+            <div class="rc"><div class="l1"><b>Alanya Asliye Ticaret Mahkemesi</b><span class="no">2024/1264</span><span class="kind">Duruşma Davetiyesi</span></div>
+              <div class="l2">Kutuya giriş 1 Eyl · tebliğ 6 Eyl · süre doğurmaz</div></div>
+            <div class="dl"><span class="badge b-none">Süre yok</span></div></div>
+        </div>
+
+        <div class="detail">
+          <div class="card">
+            <div class="k">TEBLİGAT<span class="act"><span class="ms" style="font-size:16px">folder_open</span> Dosyayı aç</span></div>
+            <div class="t1">Antalya 4. Asliye Hukuk Mahkemesi</div>
+            <div class="t2">2025/118 Esas · Bilirkişi Raporu</div>
+            <div class="tl">
+              <div class="st done"><i></i><b>30 Eyl 14:12</b>Kutuya giriş</div>
+              <div class="st done"><i></i><b>7 Eki 10:03</b>Okundu (paket indi)</div>
+              <div class="st key"><i></i><b>5 Eki</b>Tebliğ sayılır</div>
+              <div class="st"><i></i><b>19 Eki</b>Son gün (aday)</div>
+            </div>
+            <div class="note">Tebliğ, kutuya girişi izleyen 5. günün sonunda sayılır (TK m.7/a). Okuma tarihi bunu öne çekmez.</div>
+          </div>
+
+          <div class="card">
+            <div class="k">ZARF · ÜST YAZI<span class="act">Zarfı aç</span></div>
+            <div class="zarf">… dosyaya sunulan bilirkişi raporu ekte gönderilmiştir. Rapora karşı itiraz ve beyanlarınızı <mark>tebliğden itibaren iki hafta içinde</mark> dosyaya sunmanız, aksi hâlde itiraz hakkınızdan vazgeçmiş sayılacağınız ihtar olunur.
+              <div class="src2">UstYazi/ustyazi.pdf · sayfa 1 · metinden okundu</div></div>
+          </div>
+
+          <div class="card">
+            <div class="k">EKLER · 3<span class="act">Paketi indir (EYP)</span></div>
+            <div class="ek"><span class="ms">description</span>(1) Bilirkişi Raporu.pdf<span class="ty">Bilirkişi raporu</span><span class="dn ms">download</span></div>
+            <div class="ek"><span class="ms">mail</span>Üst yazı (zarf)<span class="ty z">Zarf</span><span class="dn ms">download</span></div>
+            <div class="ek"><span class="ms">data_object</span>dosyaBilgileriV1.xml<span class="ty z">Dosya bilgisi</span><span class="dn ms">download</span></div>
+          </div>
+
+          <div class="card">
+            <div class="k">SÜRELER · 1</div>
+            <div class="sure">
+              <div class="sh"><div class="sday wait">19.10.2026<small>Pazartesi · 12 gün</small></div>
+                <div><div class="sname">Bilirkişi raporuna itiraz</div><div class="slaw">HMK m.281 · 2 hafta · tebliğden</div></div>
+                <span class="own us">Sizin olabilir</span></div>
+              <ul class="why">
+                <li>Kanunun süresiyle zarftaki ihtar aynı: iki hafta. İki kaynak birleşti.</li>
+                <li>Taraf listesine göre Davalı vekilisiniz.</li>
+                <li style="color:var(--muted)">Tebliğ günü kutuya giriş anından sayıldı; ulaşma deliliyle doğrulanmadı.</li>
+              </ul>
+              <div class="acts"><span class="a1">Onayla</span><span class="a2">Tarih gir</span><span class="a2">Ayrıntı</span><span class="a2">Gerekmez</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="cap">2 · Belirsiz bir tebligat ve elle hesap <small>İki aday birlikte gösterilir; tarih avukatın kararıyla kesinleşir</small></h2>
+<div class="win">
+  <div class="tb">LifeOS Folio<span class="r">— ▢ ✕</span></div>
+  <div class="body">
+    <div class="side">
+      <div class="btn1">Yeni belge oluştur</div>
+      <div class="nav"><span class="ms">home</span>Anasayfa</div>
+      <div class="nav"><span class="ms">folder_open</span>Kütüphane</div>
+      <div class="nav"><span class="ms">calendar_month</span>Ajanda</div>
+      <div class="nav on"><span class="ms">mark_email_unread</span>UETS Tebligatlarım<span class="pill">3</span></div>
+      <div class="nav"><span class="ms">gavel</span>UYAP Dosyalarım</div>
+    </div>
+    <div class="main">
+      <div class="ph">
+        <div><h1>UETS Tebligatlarım</h1><div class="sub">Alanya 2. İcra Dairesi · 2026/2044 · Ödeme Emri</div></div>
+        <div class="right"><div class="ob"><span class="ms">arrow_back</span>Listeye dön</div></div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <div class="detail">
+          <div class="card">
+            <div class="k">SÜRELER · 5 aday · takip türü belli değil</div>
+            <div class="note" style="margin:0 0 8px">Ödeme emrinin genel haciz (Örnek 7) mi kambiyo (Örnek 10) mu olduğu belgeden anlaşılamadı. İki takip türünün süreleri birlikte gösteriliyor; hangisi olduğunu seçtiğinizde ötekiler kalkar.</div>
+            <div style="display:flex;gap:6px;margin-bottom:6px"><span class="chip on">İkisi de</span><span class="chip">Genel haciz (Örnek 7)</span><span class="chip">Kambiyo (Örnek 10)</span></div>
+            <div class="sure">
+              <div class="sh"><div class="sday wait">12.10.2026<small>Pazartesi · 5 gün</small></div>
+                <div><div class="sname">Kambiyo — borca itiraz</div><div class="slaw">İİK m.168/5 · 5 gün</div></div><span class="own us">Sizin olabilir</span></div>
+              <div class="acts"><span class="a1">Onayla</span><span class="a2">Tarih gir</span><span class="a2">Ayrıntı</span></div>
+            </div>
+            <div class="sure">
+              <div class="sh"><div class="sday wait">12.10.2026<small>Pazartesi · 5 gün</small></div>
+                <div><div class="sname">Kambiyo — imzaya itiraz</div><div class="slaw">İİK m.168/4 · 5 gün</div></div></div>
+            </div>
+            <div class="sure">
+              <div class="sh"><div class="sday wait">14.10.2026<small>Çarşamba · 7 gün</small></div>
+                <div><div class="sname">Ödeme emrine itiraz (genel haciz)</div><div class="slaw">İİK m.62 · 7 gün</div></div></div>
+            </div>
+            <div class="sure">
+              <div class="sh"><div class="sday wait">17.10.2026<small>Cumartesi → 19.10 Pazartesi</small></div>
+                <div><div class="sname">Kambiyo — borcun ödenmesi</div><div class="slaw">İİK m.168/2 · 10 gün</div></div></div>
+              <ul class="why"><li>Son gün hafta sonuna rastladığından ilk iş gününe kaydı (HMK m.93).</li></ul>
+            </div>
+          </div>
+        </div>
+        <div class="detail">
+          <div class="card">
+            <div class="k">ELLE SÜRE HESAPLA</div>
+            <div class="calc">
+              <div class="fld">Belge türü<div>Kambiyo ödeme emri ▾</div></div>
+              <div class="fld">Başlangıç<div>Tebliğ · 07.10.2026 ▾</div></div>
+              <div class="fld">Yargı kolu<div>İcra ▾</div></div>
+              <span class="a1" style="padding:7px 12px">Hesapla</span>
+            </div>
+            <div class="res">Borca itiraz: son gün <b>12.10.2026 Pazartesi</b> · İİK m.168/5 · 5 gün<br>
+              <span style="color:var(--muted)">Hesap bu tebligata kaydedilir ve onayınızla ajandaya girer.</span></div>
+          </div>
+          <div class="card">
+            <div class="k">ÖNCEKİ HESAP</div>
+            <div style="font-size:12.5px">Folio’nun önceki sürümü bu tebligat için <b>“Ödeme emrine itiraz · 14.10.2026”</b> yazmıştı. Yeni hesapla karşılaştırıp karar verene kadar ajandada “önceki hesap” notuyla durur.</div>
+          </div>
+          <div class="card">
+            <div class="k">TELEFONDA</div>
+            <div style="font-size:12.5px;color:#3F4656">Liste tam ekran; bir tebligata dokununca ayrıntı aynı sırayla açılır: zaman çizelgesi, zarf, ekler, süreler. “Onayla” ve “Tarih gir” alttaki sabit çubukta durur.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <h3>Bu taslakta karar vermeniz gerekenler</h3>
+  <ol>
+    <li><b>Liste satırı:</b> Satırda mahkeme, esas, belge türü, tebliğ günü ve en yakın sürenin rozeti var: “onay bekliyor” sarı, “onaylı” kırmızı, “karşı tarafın” gri.</li>
+    <li><b>Zaman çizelgesi:</b> Kutuya giriş, okunma, tebliğ sayılma ve son gün tek satırda gösteriliyor. Okumanın tebliğ gününü değiştirmediği altta yazıyor.</li>
+    <li><b>Zarf kartı:</b> Üst yazının ilgili cümlesi işaretli olarak görünüyor. Kanunun süresi ile zarftaki ihtar aynıysa tek süre olarak birleşir; farklıysa ikisi de çatışma notuyla gösterilir.</li>
+    <li><b>Takip türü belirsizse:</b> İki takip türünün süreleri birlikte gösteriliyor. Avukat türü seçince ötekiler kalkar.</li>
+    <li><b>Elle hesap:</b> Hesap bu tebligatın kendi sayfasında yapılıyor ve sonuç o tebligata kaydediliyor.</li>
+  </ol>
+</div>
+</body>
+</html>
