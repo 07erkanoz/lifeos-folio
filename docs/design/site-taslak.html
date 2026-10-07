@@ -5,150 +5,321 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>lifeos.com.tr Taslağı</title>
 <style>
-  :root { --ink:#16202E; --muted:#5B6576; --line:#E3E7EE; --primary:#2B5EA8; --pfill:#EAF0F9; --page:#FFFFFF; --soft:#F5F7FA; }
+  :root { --ink:#16202E; --muted:#525C6D; --line:#E3E7EE; --primary:#2B5EA8; --pfill:#EAF0F9; --page:#FFFFFF; --soft:#F5F7FA; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); background:#C9CFD9; padding:24px; }
   .site { width:1280px; margin:0 auto; background:var(--page); border-radius:14px; overflow:hidden; box-shadow:0 20px 60px rgba(20,30,50,.25); }
-  nav { display:flex; align-items:center; gap:26px; padding:18px 48px; border-bottom:1px solid var(--line); font-size:14px; }
+  nav { display:flex; align-items:center; gap:24px; padding:18px 48px; border-bottom:1px solid var(--line); font-size:14px; }
   nav b { font-size:17px; margin-right:auto; } nav .dl { background:var(--primary); color:#fff; padding:8px 14px; border-radius:8px; font-weight:700; }
-  section { padding:56px 48px; border-bottom:1px solid var(--line); }
+  section { padding:52px 48px; border-bottom:1px solid var(--line); }
   section.soft { background:var(--soft); }
   .eyebrow { font-size:12px; font-weight:800; letter-spacing:1.2px; color:var(--primary); text-transform:uppercase; }
-  h1 { font-size:42px; line-height:1.15; margin:10px 0 14px; max-width:820px; }
-  h2 { font-size:30px; line-height:1.2; margin:8px 0 12px; max-width:760px; }
-  p.lead { font-size:17px; line-height:1.65; color:var(--muted); max-width:820px; margin:0; }
+  h1 { font-size:42px; line-height:1.15; margin:10px 0 14px; max-width:860px; }
+  h2 { font-size:29px; line-height:1.2; margin:8px 0 12px; max-width:820px; }
+  h3 { font-size:17px; margin:0 0 6px; }
+  p.lead { font-size:16.5px; line-height:1.65; color:var(--muted); max-width:860px; margin:0; }
   .row { display:flex; gap:40px; align-items:flex-start; margin-top:26px; }
   .row.rev { flex-direction:row-reverse; }
-  .txt { flex:0 0 400px; font-size:15px; line-height:1.65; color:var(--muted); }
-  .txt li { margin-bottom:8px; }
-  .shot { flex:1; border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(20,30,50,.12); background:#fff; min-height:200px; display:flex; align-items:center; justify-content:center; color:#9AA2B1; font-size:13px; }
+  .txt { flex:0 0 420px; font-size:15px; line-height:1.62; color:var(--muted); }
+  .txt p { margin:0 0 10px; } .txt ul { margin:0; padding-left:18px; } .txt li { margin-bottom:7px; }
+  .shot { flex:1; border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(20,30,50,.12); background:#fff; }
   .shot img { width:100%; display:block; }
+  .shot.phone { flex:0 0 280px; border-radius:26px; border:8px solid #1E2330; }
+  .shots2 { display:flex; gap:18px; flex:1; } .shots2 .shot { flex:1; }
   .btns { display:flex; gap:12px; margin-top:22px; }
   .btn { padding:12px 18px; border-radius:10px; font-weight:700; font-size:14px; border:1px solid var(--line); }
   .btn.p { background:var(--primary); color:#fff; border-color:var(--primary); }
-  .hl { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; margin-top:28px; }
+  .hl { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:28px; }
   .hl div { border:1px solid var(--line); border-radius:12px; padding:16px; font-size:13.5px; line-height:1.55; color:var(--muted); background:#fff; }
   .hl b { display:block; color:var(--ink); font-size:15px; margin-bottom:6px; }
-  .note { background:#FFFBEA; border:1px solid #EAD89A; border-radius:10px; padding:10px 14px; font-size:13px; color:#5C4A12; margin-top:14px; }
-  .tag { font-size:11px; font-weight:800; background:#FDECEC; color:#C0322B; border-radius:6px; padding:2px 7px; margin-left:8px; vertical-align:4px; }
-  .old { font-size:11px; font-weight:800; background:#EAF7F1; color:#157A52; border-radius:6px; padding:2px 7px; margin-left:8px; vertical-align:4px; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:24px; }
+  .grid.two { grid-template-columns:repeat(2,1fr); }
+  .card { border:1px solid var(--line); border-radius:12px; padding:18px; font-size:14px; line-height:1.6; color:var(--muted); background:#fff; }
+  .card b.t { display:block; color:var(--ink); font-size:15.5px; margin-bottom:6px; }
+  .card ul { margin:6px 0 0; padding-left:18px; } .card li { margin-bottom:4px; }
+  table.f { width:100%; border-collapse:collapse; margin-top:22px; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  table.f th { text-align:left; background:#F0F3F7; color:var(--ink); font-size:12px; letter-spacing:.4px; padding:10px 12px; }
+  table.f td { padding:9px 12px; border-top:1px solid var(--line); color:var(--muted); vertical-align:top; }
+  table.f td:first-child { color:var(--ink); font-weight:700; white-space:nowrap; }
+  .note { background:#FFFBEA; border:1px solid #EAD89A; border-radius:10px; padding:10px 14px; font-size:13px; color:#5C4A12; margin-top:16px; max-width:860px; }
+  .tag { font-size:10.5px; font-weight:800; background:#FDECEC; color:#C0322B; border-radius:6px; padding:2px 7px; margin-left:8px; vertical-align:3px; }
+  .old { font-size:10.5px; font-weight:800; background:#EAF7F1; color:#157A52; border-radius:6px; padding:2px 7px; margin-left:8px; vertical-align:3px; }
   .video { margin-top:24px; aspect-ratio:16/9; border-radius:14px; background:#1B2130; color:#C9CFD9; display:flex; align-items:center; justify-content:center; font-size:15px; }
-  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:24px; }
-  .grid3 > div { border:1px solid var(--line); border-radius:12px; padding:18px; font-size:14px; line-height:1.6; color:var(--muted); }
-  .grid3 b { display:block; color:var(--ink); font-size:16px; margin-bottom:6px; }
-  .cap { width:1280px; margin:0 auto 10px; font-size:14px; color:#2A3040; }
+  .cap { width:1280px; margin:0 auto 10px; font-size:14px; color:#2A3040; line-height:1.5; }
+  .steps { counter-reset:s; display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-top:22px; }
+  .steps div { border:1px solid var(--line); border-radius:12px; padding:14px; font-size:13px; line-height:1.55; color:var(--muted); background:#fff; }
+  .steps div::before { counter-increment:s; content:counter(s); display:inline-block; width:24px; height:24px; border-radius:50%; background:var(--primary); color:#fff; font-weight:800; text-align:center; line-height:24px; margin-bottom:8px; }
+  .steps b { display:block; color:var(--ink); margin-bottom:4px; }
 </style>
 </head>
 <body>
-<p class="cap"><b>lifeos.com.tr yeni sayfa taslağı.</b> Kırmızı “yeni” etiketli bölümler eklenecek, yeşil “var” etiketliler mevcut metinle kalacak (ekran görüntüleri yenilenecek). Görseller kurmaca verilerle uygulamanın kendisinden alınır.</p>
+<p class="cap"><b>lifeos.com.tr yeni sayfa taslağı, bütün özellikler.</b> Kırmızı “yeni” etiketli bölümler bu sürümle gelenler, yeşil “var” etiketliler önceden olan ve şimdi ayrıntılandırılanlar. Görseller kurmaca verilerle uygulamanın kendisinden alındı; eski görseller yeni sürümle yeniden çekilecek.</p>
 <div class="site">
-  <nav><b>LifeOS Folio</b><span>Özellikler</span><span>UYAP ve UETS</span><span>Editör</span><span>Video</span><span>İletişim</span><span class="dl">İndir</span></nav>
+  <nav><b>LifeOS Folio</b><span>Belgeler</span><span>Editör</span><span>UYAP ve UETS</span><span>Telefon</span><span>Video</span><span>İletişim</span><span class="dl">İndir</span></nav>
 
+  <!-- HERO -->
   <section>
     <div class="eyebrow">Avukatlar için</div>
     <h1>Dosyalarınız, tebligatlarınız ve dilekçeleriniz tek uygulamada.</h1>
-    <p class="lead">Folio, UYAP’taki dosyalarınızı, UETS’e gelen tebligatlarınızı ve duruşmalarınızı bilgisayarınızda bir araya getirir. Tebligattan doğan süreyi kanuna göre hesaplar, yeni evrak ve bildirim geldiğinde size haber verir. Dilekçenizi Office’e ihtiyaç duymadan yazar, e-imza ya da mobil imzayla imzalar ve yine Folio’dan UYAP’a gönderirsiniz.</p>
+    <p class="lead">Folio, UYAP’taki dosyalarınızı, UETS’e gelen tebligatlarınızı ve duruşmalarınızı bilgisayarınızda bir araya getirir. Tebligattan doğan süreyi kanuna göre hesaplar, yeni evrak ve bildirim geldiğinde size haber verir. UDF, Word ve PDF belgelerinizi Office’e ihtiyaç duymadan açıp düzenlersiniz; dilekçenizi kanun maddeleri ve emsal kararlar yanınızdayken yazar, e-imza ya da mobil imzayla imzalar ve yine Folio’dan UYAP’a gönderirsiniz.</p>
     <div class="btns"><span class="btn p">İndir</span><span class="btn">Videoyu izleyin</span></div>
-    <div class="row"><div class="shot"><img src="../../tool/screenshots/out/ofis-anasayfa.png" alt="Ana sayfa"></div></div>
+    <div class="row"><div class="shot"><img src="../../tool/screenshots/out/ofis-anasayfa.png"></div></div>
     <div class="hl">
-      <div><b>Evrakınız bilgisayarınızda kalır</b>Dosyalarınız, tebligatlarınız ve oturumlarınız hiçbir sunucuya gönderilmez.</div>
+      <div><b>Evrakınız bilgisayarınızda kalır</b>Belgeleriniz, dosyalarınız ve oturumlarınız hiçbir sunucuya gönderilmez.</div>
       <div><b>UYAP Web, UYAP Mobil ve UETS</b>Üç kanala bir kez bağlanırsınız; oturumlar süreleri bitene kadar saklanır.</div>
       <div><b>Süreleri hesaplar, siz onaylarsınız</b>Tebliğ tarihi, adli tatil ve resmî tatiller hesaba katılır; süre ajandaya sizin onayınızla girer.</div>
-      <div><b>Office gerekmez</b>UDF, Word, Excel ve PDF dosyalarını Folio’da açıp düzenlersiniz.</div>
+      <div><b>Office gerekmez</b>UDF, Word, RTF, Excel ve PDF dosyalarını Folio’da açıp düzenlersiniz.</div>
     </div>
   </section>
 
+  <!-- HOME -->
   <section class="soft">
     <div class="eyebrow">Ana sayfa <span class="tag">yeni</span></div>
     <h2>Güne neyin beklediğini görerek başlayın</h2>
-    <p class="lead">Folio’yu açtığınızda bugünkü duruşmalarınız, son günü yaklaşan süreleriniz, okunmamış tebligatlarınız ve UYAP bildirimleriniz ilk sayfada durur. Üç bağlantının durumunu ve en son çalıştığınız belgeyi de aynı yerde görürsünüz.</p>
+    <p class="lead">Folio’yu açtığınızda ilk sayfada bugünkü duruşmalarınız, son günü yaklaşan süreleriniz, okunmamış tebligatlarınız ve UYAP bildirimleriniz durur. Üç bağlantının durumunu, kaldığınız belgeyi ve son açtığınız evrakı da aynı yerde görürsünüz. “Kaldığınız yerden devam edin” kartından belgeye dönebilir, onu önizleyebilir ya da doğrudan UYAP’a gönderebilirsiniz.</p>
   </section>
 
+  <!-- DOCUMENTS -->
   <section>
+    <div class="eyebrow">Belgeler <span class="old">var</span></div>
+    <h2>Word, Excel, UDF ve PDF için ayrı bir programa gerek yok</h2>
+    <p class="lead">Bir belgeyi açtığınızda önce önizlemede, basıldığında görüneceği gibi sayfa sayfa açılır. “Düzenle” dediğinizde, ya da masaüstünde sayfaya çift tıkladığınızda, aynı yerde düzenlemeye geçersiniz. Belgeyi hangi biçimde açtıysanız o biçimde kaydedebilir ya da başka bir biçime çevirebilirsiniz.</p>
+    <table class="f">
+      <tr><th>BİÇİM</th><th>NE YAPABİLİRSİNİZ</th><th>KAYDETME VE ÇEVİRME</th></tr>
+      <tr><td>UDF</td><td>UYAP editöründeki sayfa düzeniyle açar ve düzenlersiniz; imzalı belgede imza bilgileri görünür.</td><td>UDF, Word, RTF, PDF, metin</td></tr>
+      <tr><td>Word (DOCX)</td><td>Açar, düzenler, kaydedersiniz.</td><td>DOCX, UDF, RTF, PDF, metin</td></tr>
+      <tr><td>Eski Word (DOC)</td><td>Metni, paragrafları ve tabloları açılır; biçimlendirme alınmaz.</td><td>UDF, DOCX, RTF, PDF</td></tr>
+      <tr><td>RTF ve OpenDocument</td><td>Açar ve düzenlersiniz.</td><td>UDF, DOCX, RTF, PDF</td></tr>
+      <tr><td>PDF</td><td>Okur, sayfada arar, metni seçip vurgularsınız; metnini düzenlenebilir bir belgeye alırsınız. Taranmış PDF’ler metin tanıma ile okunur.</td><td>DOCX, UDF, metin</td></tr>
+      <tr><td>Excel (XLSX)</td><td>Türkçe formüllerle hesap yapan bir tabloda açar, düzenlersiniz (deneme aşamasında).</td><td>XLSX</td></tr>
+      <tr><td>TIFF</td><td>UYAP’tan inen çok sayfalı TIFF’leri sayfa sayfa görürsünüz.</td><td>Kayıpsız PDF</td></tr>
+      <tr><td>Görseller</td><td>PNG, JPEG, BMP, GIF, WebP ve SVG açılır; döndürür, kırpar, tam ekran bakarsınız.</td><td>PDF, PNG, TIFF</td></tr>
+      <tr><td>Metin ve veri</td><td>TXT, HTML, Markdown, CSV, JSON ve XML dosyaları açılır.</td><td>PDF, metin</td></tr>
+    </table>
+    <div class="grid">
+      <div class="card"><b class="t">PDF’te vurgulama</b>Bir bölümü seçip beş renkten biriyle vurgularsınız. Vurgular dosyaya yazılmaz; bu yüzden imzalı ya da salt okunur PDF’lerde de kullanılabilir.</div>
+      <div class="card"><b class="t">Toplu dönüştürme</b>Açık belgelerin hepsini tek seferde PDF’e ya da başka bir biçime çevirirsiniz. Yeni dosya eskisinin yanına yazılır; hiçbir dosyanın üzerine yazılmaz.</div>
+      <div class="card"><b class="t">Yazdırma</b>Yazıcıyı, sayfa aralığını, tek ya da çift sayfaları ve kopya sayısını seçersiniz. Seçtiğiniz sayfaları PDF olarak da kaydedebilirsiniz.</div>
+    </div>
+  </section>
+
+  <!-- EDITOR -->
+  <section class="soft">
+    <div class="eyebrow">Editör <span class="old">var</span></div>
+    <h2>Dilekçeyi baştan sona Folio’da yazın</h2>
+    <div class="row">
+      <div class="txt"><p>Editör, UDF belgeyi UYAP’ın kendi sayfa kurallarıyla A4 sayfalar hâlinde gösterir: sekmeler, asılı girintiler ve sayfadan sayfaya geçen tablolar UYAP editöründe nasıl görünüyorsa öyle görünür. Cetvelden kenar boşluklarını santimetre olarak sürükleyerek ayarlarsınız.</p>
+      <ul><li>Başlık stilleri, yazı tipi ve punto, kalın, italik, altı çizili, renk ve vurgu.</li><li>Hizalama, madde işaretli ve numaralı listeler, girinti ve satır aralığı.</li><li>Tablo, görsel, üst ve alt bilgi, sayfa numarası ve büro antetiniz.</li><li>Bul ve değiştir; büyük-küçük harf ve tam sözcük seçenekleriyle.</li><li>Yazım denetimi; bilmediği sözcüğün altını çizer, öneri getirir.</li><li>UYAP editöründen, Word’den ya da bir web sayfasından yapıştırdığınız metin biçimini korur.</li></ul></div>
+      <div class="shot"><img src="file:///home/erkanoz/projeler/lifeosweb/public/folio/editor-dayanaklar.webp"></div>
+    </div>
+    <div class="grid">
+      <div class="card"><b class="t">Dilekçe şablonları</b>Dava, cevap, istinaf, bilirkişi raporuna itiraz, e-duruşma talebi, mazeret, kararın tebliği ve kesinleşme şerhi talebi, ödeme emrine itiraz ve vekâletname sunma dahil on bir şablon. Belge bir dosyaya bağlıysa mahkeme, esas numarası, taraflar ve duruşma kendiliğinden yazılır.</div>
+      <div class="card"><b class="t">Hukuk sekmesi</b>Taraf satırı (DAVACI, DAVALI, VEKİLİ, SANIK, MÜDAFİİ…), bölüm başlıkları (AÇIKLAMALAR, DELİLLER, HUKUKİ SEBEPLER, SONUÇ VE İSTEM, EKLER), bugünün tarihi ve imza bloğu tek tıkla eklenir.</div>
+      <div class="card"><b class="t">Kalıp metinler</b>Sık kullandığınız paragrafları kalıp olarak saklarsınız. [MÜVEKKİL] gibi boşlukları Folio sorar; [AVUKAT], [BARO SİCİL NO], [AVUKAT TC] ve [BUGÜN] gibi alanları profilinizden kendisi doldurur. Arşivinizde beş ya da daha fazla belgede tekrar eden paragrafları kalıp olarak önerir.</div>
+      <div class="card"><b class="t">Yazarken öneri</b>Yazdığınız sözcüğün altında kalıplarınız, profil bilgileriniz, hukuk ifadeleri ve sizin kullandığınız ifadeler önerilir. Tab ile kabul edersiniz. Kimlik numarası, telefon, IBAN ve adres gibi kişisel bilgiler öğrenilmez.</div>
+      <div class="card"><b class="t">Belge geçmişi ve kurtarma</b>Her belgenin son yirmi hâli saklanır; iki hâli sözcük sözcük karşılaştırabilir, eski bir hâle dönebilirsiniz. Kaydetmediğiniz değişiklikler on saniyede bir taslak olarak yazılır; bilgisayar beklenmedik şekilde kapansa da kaybolmaz.</div>
+      <div class="card"><b class="t">LifeOS Editör</b>Yalnız editörü açan ayrı bir program. Arşivi açmadan bir dilekçeyi hızlıca düzenlemek için kullanılır; görev çubuğunda kendi simgesiyle durur.</div>
+    </div>
+  </section>
+
+  <!-- LEGAL -->
+  <section>
+    <div class="eyebrow">Mevzuat ve içtihat <span class="old">var</span></div>
+    <h2>Kanun maddesi ve emsal karar dilekçenin yanında</h2>
+    <div class="row">
+      <div class="txt"><p>Dilekçenize “TMK m. 166/1-a”, “HMK’nın 297. maddesi” ya da “6100 sayılı Kanun’un…” gibi bir atıf yazdığınızda Folio bunu tanır; kanun maddelerinin altını düz, kararların altını noktalı çizgiyle çizer. Atfa tıkladığınızda madde metni belgenin üzerinde açılır.</p>
+      <ul><li>Maddeyi ve kararı kopyalayabilir, PDF, UDF ya da Word olarak kaydedebilirsiniz.</li><li>Belgede yazan daire ile bulunan karardaki daire farklıysa uyarır.</li><li>Açtığınız maddeler internet olmadan da açılır.</li><li>PDF’lerde de atıflar tanınır ve aynı şekilde açılır.</li></ul></div>
+      <div class="shot"><img src="file:///home/erkanoz/projeler/lifeosweb/public/folio/editor-madde.webp"></div>
+    </div>
+    <div class="grid">
+      <div class="card"><b class="t">İçtihat arama</b>Yargıtay, bölge adliye mahkemeleri, Danıştay, yerel mahkemeler, kanun yararına bozma ve Anayasa Mahkemesi kararlarında belgenin yanındaki panelden ararsınız. Tırnakla tam ifade, eksiyle hariç tutma; daireye, tarihe, esas ve karar numarasına göre daraltma. Aynı gerekçeli kararlar bir arada gösterilir.</div>
+      <div class="card"><b class="t">Dayanaklar paneli</b>Belgede atıf yapılan bütün kanun maddeleri ve kararlar kanuna ve mahkemeye göre gruplanmış tek bir listede görünür. Dilekçeyi göndermeden önce dayanaklarınızı bir arada kontrol edersiniz.</div>
+      <div class="card"><b class="t">Hukuk sözlüğü</b>Bir terime sağ tıklayıp “ne demek?” dediğinizde Adalet Bakanlığı sözlüğündeki anlamı ve kanunların o terimi nasıl tanımladığı açılır. İnternet gerekmez.</div>
+    </div>
+    <p class="lead" style="margin-top:16px">Maddeler ve kararlar Adalet Bakanlığı’nın resmî veri bankalarından, mevzuat.gov.tr’den ve Anayasa Mahkemesi karar bankasından alınır.</p>
+  </section>
+
+  <!-- ARCHIVE -->
+  <section class="soft">
+    <div class="eyebrow">Arşiv <span class="old">var</span></div>
+    <h2>Aradığınız evrakı içindeki bir cümleden bulun</h2>
+    <div class="row rev">
+      <div class="txt"><p>Evrak klasörlerinizi Folio’ya bir kez gösterirsiniz; UDF, PDF, Word ve Excel belgelerinin içeriği okunur. Arama yaptığınızda ifadenin geçtiği belgeler, geçtiği yerler işaretlenmiş olarak listelenir. Türkçe harfler ve büyük-küçük harf farkı aramayı bozmaz.</p>
+      <ul><li>Klasöre eklenen belge kendiliğinden arşive girer; Folio kapalıyken eklenenler bir sonraki açılışta bulunur.</li><li>Sonucun üzerinde biraz beklediğinizde belgenin içinden ilgili parçalar görünür.</li><li>Masaüstünde Ctrl+Alt+Boşluk ile, Folio’yu açmadan hızlı arama penceresi açılır.</li><li>Dosya yöneticisinde sağ tıklayıp “Folio ile önizle” ya da “Folio ile düzenle” diyebilirsiniz.</li><li>Arama için internet gerekmez.</li></ul></div>
+      <div class="shot"><img src="file:///home/erkanoz/projeler/lifeosweb/public/folio/library-search.webp"></div>
+    </div>
+  </section>
+
+  <!-- PDF TOOLS -->
+  <section>
+    <div class="eyebrow">PDF ve görüntü araçları <span class="old">var</span></div>
+    <h2>Taranmış evrakı küçültün, dönüştürün, okuyun</h2>
+    <div class="grid">
+      <div class="card"><b class="t">Kayıpsız boyut küçültme</b>PDF, TIFF, PNG ve JPEG dosyalarını görüntü kalitesini düşürmeden küçültür. Küçük çıkarsa yanına “_kucultulmus” adıyla yeni bir dosya yazar, aslına dokunmaz. İmzalı PDF’ler bozulmasın diye küçültülmez.</div>
+      <div class="card"><b class="t">TIFF’ten PDF’e</b>UYAP’tan inen TIFF dosyalarını görüntüsünü hiç değiştirmeden PDF’e çevirir; siyah-beyaz sayfalar yine siyah-beyaz ve küçük kalır.</div>
+      <div class="card"><b class="t">Metin tanıma (OCR)</b>Taranmış PDF’lerdeki, TIFF’lerdeki ve fotoğraflardaki Türkçe yazıyı okur. Okunan metin sayfanın yanında görünür, kopyalanabilir ve arşivde aranabilir. İsterseniz yalnız seçtiğiniz klasörler okunur.</div>
+    </div>
+    <p class="lead" style="margin-top:16px">Boyut küçültme ve metin tanıma Windows, Linux ve macOS sürümlerinde kullanılabilir; işlem tamamen bilgisayarınızda yapılır.</p>
+  </section>
+
+  <!-- SIGNING -->
+  <section class="soft">
+    <div class="eyebrow">İmza <span class="old">var</span></div>
+    <h2>E-imza kartıyla ya da mobil imzayla imzalayın</h2>
+    <div class="row">
+      <div class="txt"><p>E-imza kartınız takılıysa Folio kart sürücüsünü kendisi bulur; PIN kodunuzu girip sertifikanızı seçersiniz. Kartınız yanınızda değilse mobil imzayla telefonunuzdan onay verirsiniz; ekranda çıkan kodu telefonunuzdakiyle karşılaştırırsınız. Mobil imza Turkcell, Türk Telekom ve Vodafone hatlarında kullanılır.</p>
+      <ul><li>PIN kodunuz hiçbir yerde saklanmaz.</li><li>İmzalı bir belgeye mobil imzayla ikinci bir imza ekleyebilirsiniz.</li><li>Belgenin imzadan önceki hâli belge geçmişinde saklanır.</li><li>İmzalı UDF açıldığında imzalayan, sertifika ve imza zamanı bir bantta görünür.</li><li>Telefonda (Android) mobil imzayla imzalarsınız; telefon numarası profilinizden gelir.</li></ul></div>
+      <div class="shots2"><div class="shot"><img src="file:///home/erkanoz/projeler/lifeosweb/public/folio/sign-card.webp"></div><div class="shot"><img src="file:///home/erkanoz/projeler/lifeosweb/public/folio/sign-mobile.webp"></div></div>
+    </div>
+  </section>
+
+  <!-- UYAP CONNECT -->
+  <section>
+    <div class="eyebrow">Bağlantılar <span class="tag">yeni</span></div>
+    <h2>Üç kanala bir kez bağlanın</h2>
+    <div class="grid">
+      <div class="card"><b class="t">UYAP Web (Avukat Portalı)</b>Adalet E-İmza uygulamasıyla kartınızın PIN kodunu girerek ya da e-Devlet üzerinden mobil imza veya e-imzayla bağlanırsınız. Oturum yaklaşık üç saat açık kalır ve Folio’yu kapatıp açtığınızda kaybolmaz.</div>
+      <div class="card"><b class="t">UYAP Mobil</b>e-Devlet ile bir kez bağlandığınızda oturum yedi gün geçerlidir. Dosyalarınız, duruşmalarınız ve bildirimleriniz bu kanaldan gelir; mazeret talebi de buradan gönderilir.</div>
+      <div class="card"><b class="t">UETS</b>Mobil imza ya da e-imza kartıyla bağlanırsınız. TC kimlik numaranız avukat profilinizden gelir; her girişte yeniden yazmanız gerekmez.</div>
+    </div>
+    <p class="lead" style="margin-top:16px">Oturumlar bilgisayarınızda, işletim sisteminin güvenli anahtar deposunda saklanır. Avukat profiliniz UYAP’a bağlandığınızda adınız, baronuz, sicil numaralarınız ve TC kimlik numaranızla kendiliğinden dolar; sizin yazdığınız hiçbir bilgi değiştirilmez.</p>
+  </section>
+
+  <!-- PORTFOLIO -->
+  <section class="soft">
     <div class="eyebrow">UYAP Dosyalarım <span class="tag">yeni</span></div>
     <h2>Bütün dosyalarınız, tarafları ve evrakıyla</h2>
     <div class="row">
-      <div class="txt"><p>UYAP Mobil’e bağlandığınızda Folio açık dosyalarınızı tek seferde alır, sonra yalnız değişenleri günceller. Dosyaları tarafa, esas numarasına, mahkemeye ya da yeni gelen evraka göre süzebilirsiniz.</p>
-      <ul><li>Dosyanın sayfasında taraflar, yaklaşan duruşma, açık süre ve son gelişme bir satırda yazar.</li><li>Yeni gelen evrak “Yeni” olarak işaretlenir; sol menüdeki sayı yeni dosyaları ve evrakı gösterir.</li><li>Hukuk, icra, ceza ve idari dosyalar ayrı renklerle ayrılır.</li></ul></div>
-      <div class="shot"><img src="../../tool/screenshots/out/uyap-dosyalarim.png" alt="UYAP Dosyalarım"></div>
+      <div class="txt"><p>UYAP Mobil’e bağlandığınızda Folio açık dosyalarınızı tek seferde alır, sonra yalnız değişenleri günceller. Dosyaları tarafa, esas numarasına ya da mahkemeye göre arar; yeni evrak gelenleri, duruşması olanları ya da bu hafta duruşması olanları süzersiniz.</p>
+      <ul><li>Hukuk, icra, ceza ve idari dosyalar ayrı renklerle ayrılır.</li><li>Müvekkiliniz ve karşı taraf her satırda yazar.</li><li>Yeni gelen evrak “Yeni” olarak işaretlenir; sol menüdeki sayı yeni dosyaları gösterir.</li><li>Yargıtay ve Danıştay dosyalarını da ekleyebilirsiniz.</li></ul></div>
+      <div class="shot"><img src="../../tool/screenshots/out/uyap-dosyalarim.png"></div>
     </div>
   </section>
 
-  <section class="soft">
-    <div class="eyebrow">Evrak önizleme <span class="tag">yeni</span></div>
+  <!-- CASE PAGE + PREVIEW -->
+  <section>
+    <div class="eyebrow">Dosya sayfası ve evrak önizleme <span class="tag">yeni</span></div>
     <h2>Evrakı listeden ayrılmadan okuyun</h2>
     <div class="row rev">
-      <div class="txt"><p>Bir evraka tıkladığınızda evrak sağda açılır, liste solda olduğu yerde kalır. Ok tuşlarıyla bir sonraki evraka geçebilir, Esc ile önizlemeyi kapatabilirsiniz. Henüz indirilmemiş bir evraka tıkladığınızda Folio onu UYAP’tan indirip açar.</p>
-      <ul><li>İndirilen evrak, dosyanın klasörüne UYAP’taki özgün hâliyle kaydedilir.</li><li>Yüzlerce evrakı olan dosyalarda da liste akıcı kayar.</li><li>Telefonda evrak tam ekran açılır; kaydırarak bir sonrakine geçersiniz.</li></ul></div>
-      <div class="shot"><img src="../../tool/screenshots/out/dosya-onizleme.png" alt="Evrak önizleme"></div>
+      <div class="txt"><p>Dosyanın sayfasında taraflar, yaklaşan duruşma, açık süre ve son gelişme bir satırda yazar. Evraklar, bildirimler, duruşmalar, süreler ve tebligatlar, taraflar, künye ve sizin bu dosya için yazdığınız dilekçeler ayrı sekmelerdedir.</p>
+      <ul><li>Bir evraka tıkladığınızda evrak sağda açılır, liste solda olduğu yerde kalır. Ok tuşlarıyla bir sonrakine geçer, Esc ile önizlemeyi kapatırsınız.</li><li>İndirilmemiş bir evraka tıkladığınızda Folio onu UYAP’tan indirip açar.</li><li>Evrak, dosyanın klasörüne UYAP’taki özgün hâliyle kaydedilir; seçerek ya da hepsini birden indirebilirsiniz.</li><li>Künyede harç, tahsilat, reddiyat ve kalan tutar görünür.</li><li>Yüzlerce evrakı olan dosyalarda da liste akıcı kayar.</li></ul></div>
+      <div class="shot"><img src="../../tool/screenshots/out/dosya-onizleme.png"></div>
+    </div>
+    <div class="grid two">
+      <div class="card"><b class="t">Dosya, dilekçenin yanında</b>Editörde dilekçenizi bir dosyaya bağladığınızda dosyanın bilgileri, tarafları, evrakı ve harç-tahsilat dökümü sayfanın yanındaki panelde açılır. Tarafları tek tıkla metne eklersiniz. Bilgisayarınızda kayıtlı bir dosyayı UYAP’a bağlanmadan da açabilirsiniz.</div>
+      <div class="card"><b class="t">Dilekçe yaz</b>Dosyanın sayfasından “Dilekçe yaz” dediğinizde mahkemesi ve esas numarası yazılmış yeni bir UDF dilekçe açılır; dilekçe o dosyanın “Dilekçelerim” sekmesinde durur.</div>
     </div>
   </section>
 
-  <section>
-    <div class="eyebrow">UETS ve süre hesabı <span class="tag">yeni</span></div>
-    <h2>Tebligat geldiğinde süresi de hazır olsun</h2>
-    <div class="row">
-      <div class="txt"><p>Folio UETS kutunuzdaki bütün tebligatları alır ve son kırk günün tebligat paketlerini kendiliğinden indirir. Tebligat zarfındaki metni okur, gönderilen evrakın türünü ve dosyanın türünü bulur, tebliğ tarihinden doğan süreyi hesaplar.</p>
-      <ul><li>Elektronik tebligat, UETS adresine ulaştığı günü izleyen beşinci günün sonunda yapılmış sayılır; Folio süreyi buna göre başlatır.</li><li>Adli tatil, resmî tatiller ve yarım günler hesaba katılır.</li><li>Hesaplanan süre önce aday olarak gösterilir, gerekçesiyle birlikte. Onayladığınızda ajandaya girer.</li><li>Zarfta açıkça yazan süre, katalogdaki süreyle karşılaştırılır; uyuşmazlık size gösterilir.</li></ul></div>
-      <div class="shot"><img src="../../tool/screenshots/out/uets.png" alt="UETS"></div>
-    </div>
-    <div class="note">Folio süreyi hesaplar, ama son kararı siz verirsiniz: her süre gerekçesi ve dayandığı kanun maddesiyle gösterilir.</div>
-  </section>
-
+  <!-- SEND -->
   <section class="soft">
+    <div class="eyebrow">UYAP’a gönderme <span class="old">var</span></div>
+    <h2>Evrakı Folio’dan UYAP’a gönderin</h2>
+    <p class="lead">İmzaladığınız evrakı, tarayıcıda Avukat Portalı’nı açmadan UYAP’a gönderirsiniz. Göndermeden hemen önce dosya, taraflar, evrak türü ve belgenin son hâli bir kez daha UYAP’tan doğrulanır.</p>
+    <div class="steps">
+      <div><b>Bağlanın</b>Adalet E-İmza ya da e-Devlet ile UYAP Web’e bağlanın.</div>
+      <div><b>Dosyayı seçin</b>Bağlı dosya hazır gelir; değilse mahkemeyi, yılı ve esas numarasını seçin.</div>
+      <div><b>Evrakı hazırlayın</b>Evrak türünü UYAP’ın listesinden seçin, ekleri ekleyin. İmzasızsa önce imzalanır.</div>
+      <div><b>Son kontrol</b>Taraflar, vekiller ve belge aynı ekranda görünür; onaylayıp gönderin.</div>
+      <div><b>Takip edin</b>Devam Eden İşlemler, UYAP işlemi bitirene kadar her otuz saniyede bir yenilenir.</div>
+    </div>
+  </section>
+
+  <!-- NOTICES -->
+  <section>
     <div class="eyebrow">UYAP Bildirimleri <span class="tag">yeni</span></div>
     <h2>Dosyanızda bir gelişme olduğunda haberiniz olsun</h2>
-    <div class="row rev">
-      <div class="txt"><p>UYAP Mobil’den ve UYAP Web’den gelen bildirimler tek listede toplanır. Aynı bildirim iki kanaldan da gelirse bir kez gösterilir. Her bildirim, metninde adı geçen dosyaya bağlanır; bildirimden dosyaya tek tıkla gidersiniz.</p>
-      <ul><li>Yeni bildirim geldiğinde bilgisayarınızda ya da telefonunuzda uyarı çıkar; hangi türlerin uyarı vereceğini siz seçersiniz.</li><li>Okuduğunuz bildirim UYAP Mobil’de de okundu olarak işaretlenir.</li><li>Android’de Folio kapalıyken de bildirimler denetlenir; bilgisayarda Folio tepside çalışmayı sürdürür.</li></ul></div>
-      <div class="shot"><img src="../../tool/screenshots/out/bildirimler.png" alt="UYAP Bildirimleri"></div>
+    <div class="row">
+      <div class="txt"><p>UYAP Mobil’den ve UYAP Web’den gelen bildirimler tek listede toplanır; aynı bildirim iki kanaldan da gelirse bir kez gösterilir. Her bildirim, metninde adı geçen dosyaya bağlanır ve bildirimden dosyaya tek tıkla gidersiniz.</p>
+      <ul><li>Bildirimler türüne göre ayrılır: karar, tahsilat ve reddiyat, bilirkişi raporu, kanun yolu, kesinleşme, müzekkere ve tebligat, duruşma, taraf ve vekil.</li><li>Yeni bildirim geldiğinde bilgisayarınızda ya da telefonunuzda uyarı çıkar; hangi türlerin uyarı vereceğini siz seçersiniz.</li><li>Okuduğunuz bildirim UYAP Mobil’de de okundu olarak işaretlenir.</li><li>Android’de Folio kapalıyken de bildirimler denetlenir; bilgisayarda Folio pencereyi kapattığınızda tepside çalışmayı sürdürür.</li></ul></div>
+      <div class="shot"><img src="../../tool/screenshots/out/bildirimler.png"></div>
     </div>
   </section>
 
+  <!-- UETS -->
+  <section class="soft">
+    <div class="eyebrow">UETS ve süre hesabı <span class="tag">yeni</span></div>
+    <h2>Tebligat geldiğinde süresi de hazır olsun</h2>
+    <div class="row rev">
+      <div class="txt"><p>Folio UETS kutunuzdaki bütün tebligatları alır, her birini dosyasıyla eşleştirir ve son kırk günün tebligat paketlerini kendiliğinden indirir. Tebligat zarfındaki metni okur, gönderilen evrakın ve dosyanın türünü bulur, tebliğden doğan süreyi hesaplar.</p>
+      <ul><li>Elektronik tebligat, UETS adresine ulaştığı günü izleyen beşinci günün sonunda yapılmış sayılır (Tebligat Kanunu m. 7/a); Folio süreyi buna göre başlatır.</li><li>Adli tatil, resmî ve dinî bayramlar, yarım günler ve mali tatil hesaba katılır.</li><li>Hesaplanan süre önce aday olarak, gerekçesi ve dayandığı kanun maddesiyle gösterilir; onayladığınızda ajandaya girer.</li><li>Zarfta açıkça yazan süre katalogdaki süreyle karşılaştırılır; uyuşmazlık size gösterilir.</li><li>Ekleri tek tek ya da tebligat paketini bütün olarak indirebilirsiniz.</li></ul></div>
+      <div class="shot"><img src="../../tool/screenshots/out/uets.png"></div>
+    </div>
+    <div class="card" style="margin-top:22px"><b class="t">Süre kataloğu</b>HMK m. 127, 281, 345 ve 361; İİK m. 16, 32, 33, 62, 67, 89 (1, 2 ve 3. haciz ihbarnameleri), 168 ve 363; CMK m. 273 ve 291; İYUK m. 7, 16, 45 ve 46. Gerekçeli karar, ilam, istinaf ve temyiz kararı, genel haciz ve kambiyo ödeme emri, icra emri ve haciz ihbarnameleri tanınır. Katalogda olmayan bir süreyi “Elle süre hesapla” ile kendiniz hesaplayıp ajandaya eklersiniz.</div>
+    <div class="note">Folio süreyi hesaplar, son kararı siz verirsiniz: her süre gerekçesi ve dayandığı madde ile gösterilir, sizin onayınız olmadan ajandaya girmez.</div>
+  </section>
+
+  <!-- AGENDA -->
   <section>
     <div class="eyebrow">Ajanda <span class="tag">yeni</span></div>
     <h2>Duruşmalarınız ve süreleriniz bir takvimde</h2>
     <div class="row">
-      <div class="txt"><p>Duruşmalar UYAP’tan, süreler UETS’ten ajandaya gelir; kendi notlarınızı ve işlerinizi de ekleyebilirsiniz. Günlük, haftalık ve aylık görünüm arasında geçebilirsiniz.</p>
-      <ul><li>Mazeret dilekçesini duruşmanın ayrıntısından UYAP Mobil üzerinden gönderebilirsiniz.</li><li>Her süre hangi dosyaya ait olduğunu yazar; “Dosyaya git” ile dosyanın sayfası açılır.</li><li>Kırk günden eski süreler ajandayı kalabalıklaştırmaz.</li></ul></div>
-      <div class="shot"><img src="../../tool/screenshots/out/ajanda.png" alt="Ajanda"></div>
+      <div class="txt"><p>Duruşmalar UYAP Mobil’den ve UYAP Web’den, süreler UETS’ten ajandaya gelir; kendi notlarınızı ve işlerinizi de eklersiniz. Gün, hafta, ay ve liste görünümleri arasında geçebilirsiniz.</p>
+      <ul><li>Duruşmaya tıkladığınızda “Duruşma hazırlığı” kartı açılır: dosyanın son evrakı, notlarınız, dosyayı açma ve dilekçe başlatma.</li><li>Mazeret talebini kartın üzerinden UYAP Mobil’e gönderirsiniz.</li><li>Her süre hangi dosyaya ait olduğunu yazar; “Dosyaya git” ile dosyanın sayfası açılır.</li><li>Not, iş ya da süre eklerken süre hesaplayıcı tebliğ tarihinden son günü bulur.</li></ul></div>
+      <div class="shot"><img src="../../tool/screenshots/out/ajanda.png"></div>
     </div>
   </section>
 
+  <!-- VOICE -->
   <section class="soft">
-    <div class="eyebrow">Bağlantılar <span class="tag">yeni</span></div>
-    <h2>Üç kanala bir kez bağlanın</h2>
-    <div class="grid3">
-      <div><b>UYAP Web</b>Adalet E-İmza ile kartınızın PIN kodunu girerek ya da e-Devlet üzerinden mobil imzayla bağlanırsınız. Oturum yaklaşık üç saat açık kalır; Folio’yu kapatıp açtığınızda kaybolmaz.</div>
-      <div><b>UYAP Mobil</b>e-Devlet ile bir kez bağlandığınızda oturum yedi gün geçerlidir. Dosyalarınız, duruşmalarınız ve bildirimleriniz bu kanaldan gelir.</div>
-      <div><b>UETS</b>Mobil imza ya da e-imza kartıyla bağlanırsınız. TC kimlik numaranız avukat profilinizden gelir, her seferinde yazmanız gerekmez.</div>
+    <div class="eyebrow">Ses <span class="old">var</span></div>
+    <h2>Dilekçenizi dinleyin, söyleyerek yazın</h2>
+    <div class="row rev">
+      <div class="txt"><p>Folio yazdığınız metni Türkçe bir sesle okur; okunan cümle sayfada işaretlenir ve sayfa okumayı izler. Sesli yazmayı açtığınızda söyledikleriniz imlecin bulunduğu yere cümle cümle yazılır.</p>
+      <ul><li>“TMK m. 166” gibi kısaltmalar, madde numaraları, tarihler ve tutarlar açılarak okunur.</li><li>Seçtiğiniz bölümü ya da bir PDF’in seçili metnini dinleyebilirsiniz.</li><li>Ses modelleri ilk kullanımda bir kez indirilir; okuma ve yazma bilgisayarınızda yapılır, sesiniz hiçbir sunucuya gitmez.</li><li>Windows, Linux ve macOS sürümlerinde kullanılabilir.</li></ul></div>
+      <div class="shot"><img src="file:///home/erkanoz/projeler/lifeosweb/public/folio/sesli-okuma.webp"></div>
     </div>
-    <p class="lead" style="margin-top:18px">Oturumlar bilgisayarınızda, işletim sisteminin güvenli anahtar deposunda saklanır. Avukat profiliniz UYAP’a bağlandığınızda kendiliğinden dolar; sizin yazdığınız hiçbir bilgi değiştirilmez.</p>
   </section>
 
+  <!-- PHONE -->
   <section>
-    <div class="eyebrow">Editör <span class="old">var</span></div>
-    <h2>Arşiv, editör, kanun maddesi ve emsal karar</h2>
-    <p class="lead">Mevcut dört bölüm (içinden arama, Office’siz düzenleme, maddeyi hemen okuma, emsali dilekçenin yanında okuma) aynı metinle kalır; ekran görüntüleri yenilenir. Sesli okuma ve yazma, imza ve UYAP’a gönderme bölümleri de korunur.</p>
+    <div class="eyebrow">Telefon <span class="old">var</span> <span class="tag">yeni</span></div>
+    <h2>Adliyede de yanınızda</h2>
+    <div class="row">
+      <div class="txt"><p>Folio’nun Android sürümünde ajandanız, UETS tebligatlarınız, UYAP dosyalarınız ve bildirimleriniz telefonunuzdadır. Evrakınızı açar, okur, paylaşır ve mobil imzayla imzalarsınız.</p>
+      <ul><li><b>Kameradan tarama:</b> kâğıt belgeyi çektiğinizde Folio sayfanın kenarlarını bulur, görüntüyü düzeltir ve PDF olarak kaydeder; birden çok sayfayı tek PDF’te toplar.</li><li><b>Fotoğraf düzenleme:</b> belgeyi düzleştirir, kırpar, döndürür; parlaklık, kontrast ve “Belge” filtresiyle okunur hâle getirir; kişisel bir bilgiyi kalıcı olarak karartır ya da üzerine not yazarsınız. Asıl fotoğraf değişmez.</li><li><b>Paylaşma:</b> belgeyi WhatsApp’a, e-postaya ya da başka bir uygulamaya telefonun paylaşma ekranından gönderirsiniz; başka bir uygulamadan gelen belge Folio’da açılır.</li><li><b>Galeri:</b> fotoğraflarınızı tarihe göre görür, içindeki yazıyla arar, seçtiklerinizi bir UYAP dosyasının klasörüne koyarsınız.</li><li>Telefonda evrak tam ekran açılır; kaydırarak bir sonrakine geçersiniz.</li></ul></div>
+      <div class="shot phone"><img src="../../tool/screenshots/out/telefon-uets.png"></div>
+      <div class="shot phone"><img src="../../tool/screenshots/out/telefon-ajanda.png"></div>
+    </div>
   </section>
 
+  <!-- DESKTOP EXTRAS + SETTINGS -->
+  <section class="soft">
+    <div class="eyebrow">Kolaylıklar</div>
+    <h2>Gündelik işi hızlandıran ayrıntılar</h2>
+    <div class="grid">
+      <div class="card"><b class="t">Tepside çalışma</b>Pencereyi kapattığınızda Folio isterseniz sistem tepsisinde çalışmayı sürdürür; bildirimler ve eşitleme devam eder.</div>
+      <div class="card"><b class="t">Birden çok pencere</b>Bir dilekçeyi yeni pencerede düzenler, UYAP evrakını ikinci ekrana taşıyabilirsiniz.</div>
+      <div class="card"><b class="t">Klavye kısayolları</b>Ctrl+K arama, Ctrl+N yeni belge, Ctrl+Shift+E önizleme ile düzenleme arasında geçiş; F1 bütün kısayolları gösterir.</div>
+      <div class="card"><b class="t">Sürükle bırak</b>Bir dosyayı pencereye bıraktığınızda açılır; bir klasörü bıraktığınızda arşive eklenir.</div>
+      <div class="card"><b class="t">Ayarlar tek sayfada</b>Profil, bağlantılar, bildirimler, belgeler, editör, atıflar, e-imza, görünüm ve güncelleme bir sayfada; bir ayarı adıyla ararsınız. Açık, koyu ya da sisteme uyan tema seçilebilir.</div>
+      <div class="card"><b class="t">Varsayılan uygulama</b>UDF, PDF ve Word dosyalarının Folio ile açılmasını istediğiniz türler için seçersiniz.</div>
+    </div>
+  </section>
+
+  <!-- UPDATE + PRIVACY -->
+  <section>
+    <div class="eyebrow">Güncelleme ve güvenlik <span class="tag">yeni</span></div>
+    <h2>Folio kendini günceller, verinizi kendinde tutar</h2>
+    <div class="grid two">
+      <div class="card"><b class="t">Uygulama içinden güncelleme</b>Yeni bir sürüm yayımlandığında Folio size haber verir. Güncelle dediğinizde paket indirilir, imzası ve özeti denetlenir; Windows’ta kurulum, Linux’ta yerinde güncelleme, Android’de telefonun yükleme ekranı açılır.</div>
+      <div class="card"><b class="t">Veriniz sizde</b>Belgeleriniz, arşiviniz, dosyalarınız ve tebligatlarınız bilgisayarınızda tutulur. UYAP ve UETS oturumları işletim sisteminin güvenli anahtar deposunda saklanır; PIN kodunuz hiçbir yerde saklanmaz.</div>
+    </div>
+  </section>
+
+  <!-- VIDEO -->
   <section class="soft">
     <div class="eyebrow">Video <span class="tag">yeni</span></div>
-    <h2>Folio’yu üç dakikada görün</h2>
-    <p class="lead">UYAP’a bağlanmaktan bir tebligatın süresini onaylamaya, evrakı okumaktan dilekçeyi UYAP’a göndermeye kadar bir iş gününün akışı.</p>
-    <div class="video">▶ Kullanım videosu (kurmaca verilerle, sessiz, Türkçe alt yazılı)</div>
+    <h2>Folio’yu birkaç dakikada görün</h2>
+    <p class="lead">UYAP’a bağlanmaktan bir tebligatın süresini onaylamaya, evrakı okumaktan dilekçeyi yazıp UYAP’a göndermeye kadar bir iş gününün akışı.</p>
+    <div class="video">▶ Kullanım videosu (kurmaca verilerle, Türkçe alt yazılı)</div>
   </section>
 
+  <!-- DOWNLOAD -->
   <section>
-    <div class="eyebrow">Güncelleme <span class="tag">yeni</span></div>
-    <h2>Folio kendini günceller</h2>
-    <p class="lead">Yeni bir sürüm yayımlandığında Folio size haber verir. Güncelle dediğinizde paket indirilir, imzası ve özeti denetlenir; Windows’ta kurulum, Linux’ta yerinde güncelleme, Android’de telefonun yükleme ekranı açılır.</p>
-  </section>
-
-  <section class="soft">
     <div class="eyebrow">İndir <span class="old">var</span></div>
     <h2>Folio’yu indirin</h2>
-    <p class="lead">Windows, Linux ve Android paketleri; macOS için beta. Mevcut indirme bölümü aynen kalır.</p>
+    <p class="lead">Windows 10 ve 11, Linux (Ubuntu 24.04, Debian 13, Pardus 25 ve üstü) ve Android paketleri; macOS için beta. Mevcut indirme bölümü kurulum yönergeleriyle birlikte aynen kalır.</p>
   </section>
 </div>
 </body>
