@@ -106,18 +106,39 @@ class UyapMobileApi {
     return _identify();
   }
 
-  /// A session kept from before, its refresh token not yet expired.
+  /// A session kept from before, its refresh token not yet expired. Null
+  /// when UYAP refused it, and the kept tokens are dropped. When UYAP could
+  /// not be reached (no network yet at start, a server error) it throws
+  /// [UyapMobileUnreachable] and the kept tokens stay, to be tried again.
   Future<MobileSession?> restore(MobileTokens tokens) async {
     if (!tokens.refreshExpires.isAfter(DateTime.now())) return null;
     _generation++;
     _tokens = tokens;
     try {
       return await _identify();
-    } catch (_) {
-      _setTokens(null);
+    } catch (e) {
+      if (_transient(e)) {
+        // Not connected for now, but not forgotten: [onTokens] is not told.
+        _generation++;
+        _tokens = null;
+        session.value = null;
+        throw UyapMobileUnreachable('$e');
+      }
+      if (_tokens != null) _setTokens(null);
+      session.value = null;
       return null;
     }
   }
+
+  /// A failure that says nothing of the session: the network, a timeout or
+  /// UYAP's own server error.
+  static bool _transient(Object e) =>
+      e is SocketException ||
+      e is TimeoutException ||
+      e is HttpException ||
+      e is TlsException ||
+      e is _Unreachable ||
+      (e is _HttpError && e.status >= 500);
 
   Future<MobileSession> _identify() async {
     final user = await _get('mobile/avukat/user');
@@ -187,7 +208,9 @@ class UyapMobileApi {
       }, authorized: false);
       if (generation != _generation || !identical(_tokens, had)) return;
       _setTokens(had.renewed(data, DateTime.now()));
-    } on _HttpError {
+    } on _HttpError catch (e) {
+      // A server error is not a refusal: the session may well be good.
+      if (e.status >= 500) throw _Unreachable('$e');
       if (generation == _generation) {
         _setTokens(null);
         session.value = null;
@@ -405,6 +428,41 @@ class UyapMobileApi {
     );
   }
 
+  /// UYAP's own app caps an excuse's reason here; longer is refused here
+  /// rather than cut, so that half a reason is never sent as the whole.
+  static const excuseLimit = 500;
+
+  /// Asks for the hearing in [row] to be excused (`mazarettalep`), with
+  /// [row] taken fresh from [hearingRows]: its ids last a session, and a
+  /// stale one may land on another case. UYAP's answer: whether it took
+  /// the request, and what it said.
+  Future<({bool ok, String message})> requestExcuse(
+    Map<String, Object?> row,
+    String reason,
+  ) async {
+    String text(String key) => '${row[key] ?? ''}'.trim();
+    final data = await _post('mobile/avukat/mazarettalep', {
+      'dosyaId': text('dosyaId'),
+      'dosyaNo': text('dosyaNo'),
+      'birimId': text('birimId'),
+      'kayitId': text('kayitId'),
+      'durusmaTrhStr': text('durusmaTrhStr').isEmpty
+          ? text('tarihSaat')
+          : text('durusmaTrhStr'),
+      'talepMsg': reason,
+    });
+    final map = data is Map ? data : const {};
+    final said = _plain('${map['mesaj'] ?? map['message'] ?? ''}');
+    return (ok: map['result'] == true, message: said);
+  }
+
+  /// UYAP's notes come with HTML tags now and then.
+  static String _plain(String s) => s
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
   Future<List<Map<String, Object?>>> danistayChambers() async =>
       _list(await _get('mobile/avukat/danistaydaireleri'), 'danistayDairesi');
 
@@ -570,6 +628,22 @@ class MobileSession {
 
 class _Refused implements Exception {
   const _Refused();
+}
+
+/// UYAP Mobil could not be reached, so whether a kept session is still
+/// good is not known.
+class UyapMobileUnreachable implements Exception {
+  final String message;
+  const UyapMobileUnreachable(this.message);
+  @override
+  String toString() => 'UYAP Mobil’e ulaşılamadı: $message';
+}
+
+class _Unreachable implements Exception {
+  final String message;
+  const _Unreachable(this.message);
+  @override
+  String toString() => message;
 }
 
 class _HttpError implements Exception {

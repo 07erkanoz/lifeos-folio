@@ -136,6 +136,23 @@ void main() {
     );
   });
 
+  test('a listing says whether it is the whole box', () async {
+    final login = await api.startMobile(
+      tckn: '10000000146',
+      phone: '5321234567',
+      operator: MobileOperator.turkcell,
+    );
+    pendingPolls = 0;
+    await api.finishMobile(login);
+    final whole = await api.listing(pageSize: 50);
+    expect(whole.messages, hasLength(120));
+    expect(whole.complete, isTrue);
+    // The pages run out before the box does: not taken for the whole.
+    final cut = await api.listing(pageSize: 50, maxPages: 2);
+    expect(cut.messages, hasLength(100));
+    expect(cut.complete, isFalse);
+  });
+
   test('an ended session asks for a new login', () async {
     expect(() => api.messages(), throwsStateError);
   });

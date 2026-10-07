@@ -1607,9 +1607,19 @@ class _AgendaPageState extends State<AgendaPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: Tooltip(
-                  message: 'Mazeret UYAP Mobil bağlantısıyla gönderilir.',
+                  message: !_mobile.connected
+                      ? 'Mazeret UYAP Mobil ile gönderilir; önce UYAP Mobil’e '
+                            'bağlanın.'
+                      : h.at.isBefore(now)
+                      ? 'Geçmiş bir duruşma için mazeret gönderilemez.'
+                      : 'UYAP Mobil ile mazeret talebi gönderin.',
                   child: OutlinedButton(
-                    onPressed: null,
+                    key: const ValueKey('agenda-excuse'),
+                    // The mobile API alone takes excuses: whether the web
+                    // portal is connected too does not matter.
+                    onPressed: _mobile.connected && !h.at.isBefore(now)
+                        ? () => unawaited(_askExcuse(context, h))
+                        : null,
                     style: _buttonStyle(),
                     child: const Text(
                       'Mazeret',
@@ -1630,6 +1640,25 @@ class _AgendaPageState extends State<AgendaPage> {
   /// On a phone the hearing's card is a sheet from below: going to the case
   /// or into a petition closes it first, or the sheet stays over the page
   /// that opens.
+  /// The excuse's reason, asked before anything goes to UYAP; then UYAP's
+  /// own answer, whatever it is.
+  Future<void> _askExcuse(BuildContext context, PortalHearing h) async {
+    _leaveSheet(context);
+    final reason = await showDialog<String>(
+      context: this.context,
+      builder: (_) => _ExcuseDialog(hearing: h),
+    );
+    if (reason == null || !mounted) return;
+    final answer = await _sync.requestExcuse(h, reason);
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(this.context)?.showSnackBar(
+      SnackBar(
+        content: Text(answer.message),
+        duration: Duration(seconds: answer.ok ? 4 : 8),
+      ),
+    );
+  }
+
   void _leaveSheet(BuildContext context) {
     if (ModalRoute.of(context) is ModalBottomSheetRoute) {
       Navigator.of(context).pop();
@@ -2158,6 +2187,92 @@ class _AddItemDialogState extends State<_AddItemDialog> {
           key: const ValueKey('agenda-save'),
           onPressed: _save,
           child: const Text('Kaydet'),
+        ),
+      ],
+    );
+  }
+}
+
+/// The reason for an excuse, at most UYAP's own limit; sent only on the
+/// lawyer's word.
+class _ExcuseDialog extends StatefulWidget {
+  const _ExcuseDialog({required this.hearing});
+
+  final PortalHearing hearing;
+
+  @override
+  State<_ExcuseDialog> createState() => _ExcuseDialogState();
+}
+
+class _ExcuseDialogState extends State<_ExcuseDialog> {
+  final _reason = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _reason.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h = widget.hearing;
+    String two(int n) => n.toString().padLeft(2, '0');
+    final when =
+        '${two(h.at.day)}.${two(h.at.month)}.${h.at.year} '
+        '${two(h.at.hour)}:${two(h.at.minute)}';
+    final text = _reason.text.trim();
+    return AlertDialog(
+      title: const Text('Mazeret talebi'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${h.court} · ${h.number}\n$when duruşması',
+              style: const TextStyle(fontSize: 13, color: AgendaColors.muted),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('excuse-reason'),
+              controller: _reason,
+              autofocus: true,
+              minLines: 4,
+              maxLines: 8,
+              maxLength: UyapMobileApi.excuseLimit,
+              decoration: InputDecoration(
+                labelText: 'Mazeretin gerekçesi',
+                isDense: true,
+                labelStyle: const TextStyle(fontSize: 13),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ),
+            const Text(
+              'Talep UYAP Mobil üzerinden mahkemeye gönderilir. Göndermeden '
+              'önce duruşma UYAP’tan yeniden okunur.',
+              style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('excuse-send'),
+          onPressed: text.isEmpty ? null : () => Navigator.of(context).pop(text),
+          child: const Text('Gönder'),
         ),
       ],
     );

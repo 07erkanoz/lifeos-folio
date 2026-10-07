@@ -17,6 +17,7 @@ import 'observed.dart';
 import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_database.dart';
+import 'portal_hearing.dart';
 
 /// One channel's sync, as the screens show it.
 class ChannelSync {
@@ -98,14 +99,33 @@ class PortalSync extends ChangeNotifier {
     unawaited(_restoreMobile());
   }
 
-  Future<void> _restoreMobile() async {
-    if (_mobile.connected) return;
+  /// Takes the kept session up again. Without a network at start (a laptop
+  /// waking, Wi-Fi coming late) the session is not lost: it is tried again,
+  /// each wait longer, until UYAP answers yes or no.
+  Future<void> _restoreMobile({int attempt = 0}) async {
+    if (_mobile.connected || _disposed) return;
     final kept = MobileTokens.fromJson(await _secrets.read(_mobileSecret));
-    if (kept != null) await _mobile.restore(kept);
+    if (kept == null) return;
+    try {
+      await _mobile.restore(kept);
+    } on UyapMobileUnreachable {
+      if (attempt >= 8 || _disposed) return;
+      final wait = Duration(seconds: 15 * (1 << attempt).clamp(1, 16));
+      _restoreRetry?.cancel();
+      _restoreRetry = Timer(
+        wait,
+        () => unawaited(_restoreMobile(attempt: attempt + 1)),
+      );
+    }
   }
+
+  Timer? _restoreRetry;
+  bool _disposed = false;
 
   @override
   void dispose() {
+    _disposed = true;
+    _restoreRetry?.cancel();
     _web.session.removeListener(_webChanged);
     _mobile.session.removeListener(_mobileChanged);
     _uets.session.removeListener(_uetsChanged);
@@ -129,12 +149,31 @@ class PortalSync extends ChangeNotifier {
     if (!_uets.connected) return null;
     final kept = db.notices();
     final newest = kept.isEmpty ? null : kept.first.message.sent;
+    // The first time the whole box: a notice older than ninety days may
+    // still run a year's deadline. After that the last weeks again, every
+    // time, for what was read or deemed read since.
+    final recent = DateTime.now().subtract(const Duration(days: 45));
     final since = newest == null
-        ? DateTime.now().subtract(const Duration(days: 90))
-        : newest.subtract(const Duration(days: 1));
-    db.mergeNotices(await _uets.allMessages(since: since));
+        ? null
+        : newest.subtract(const Duration(days: 1)).isBefore(recent)
+        ? newest.subtract(const Duration(days: 1))
+        : recent;
+    final inbox = await _uets.listing(since: since);
+    db.mergeNotices(inbox.messages);
+    var whole = inbox.complete;
+    // What the lawyer moved to the archive is still a notice; a box
+    // without an archive folder is no failure.
+    try {
+      final archive = await _uets.listing(folder: uetsArchiveFolder, since: since);
+      db.mergeNotices(archive.messages);
+      whole = whole && archive.complete;
+    } on UetsAccessDenied {
+      // No archive here.
+    }
     matchNotices(db);
-    return null;
+    return whole
+        ? null
+        : 'UETS listesinin tamamı alınamadı; eşitlemeyi yeniden deneyin.';
   });
 
   void _mobileChanged() {
@@ -182,6 +221,96 @@ class PortalSync extends ChangeNotifier {
   /// document list first, else the mobile API's shorter list. What is kept
   /// of the case stays; the answer is merged in. Null when it worked, else
   /// what went wrong.
+  /// Asks UYAP to excuse [hearing] with [reason], through the mobile API:
+  /// the web portal has no such request. The hearing is looked up afresh in
+  /// that day's list, by its mobile id or else by its case and minute, and
+  /// only a single match is used, lest the request reach another case. A
+  /// hearing UYAP closed to excuses is not asked for at all.
+  Future<({bool ok, String message})> requestExcuse(
+    PortalHearing hearing,
+    String reason,
+  ) async {
+    final text = reason.trim();
+    if (text.isEmpty) {
+      return (ok: false, message: 'Mazeret gerekçesi boş olamaz.');
+    }
+    if (text.length > UyapMobileApi.excuseLimit) {
+      return (
+        ok: false,
+        message:
+            'Mazeret gerekçesi en fazla ${UyapMobileApi.excuseLimit} karakter '
+            'olabilir (${text.length} yazdınız).',
+      );
+    }
+    if (!_mobile.connected) {
+      return (ok: false, message: 'Mazeret için UYAP Mobil’e bağlanın.');
+    }
+    final day = DateTime(hearing.at.year, hearing.at.month, hearing.at.day);
+    final List<Map<String, Object?>> rows;
+    try {
+      rows = await _mobile.hearingRows(day, day);
+    } catch (e) {
+      return (ok: false, message: 'UYAP duruşma listesi alınamadı: $e');
+    }
+    final id = hearing.ids[PortalChannel.uyapMobile] ?? '';
+    final now = DateTime.now();
+    var fresh = [
+      for (final r in rows)
+        if (id.isNotEmpty && '${r['kayitId'] ?? ''}'.trim() == id) r,
+    ];
+    if (fresh.isEmpty) {
+      fresh = [
+        for (final r in rows)
+          if (parseHearing(r, PortalChannel.uyapMobile, now)?.key ==
+              hearing.key)
+            r,
+      ];
+    }
+    if (fresh.length != 1) {
+      return (
+        ok: false,
+        message: fresh.isEmpty
+            ? 'Duruşma UYAP’ın o günkü listesinde bulunamadı; kaldırılmış ya '
+                  'da ertelenmiş olabilir.'
+            : 'O gün aynı dosyada birden fazla duruşma var; yanlış duruşmaya '
+                  'gitmesin diye talep gönderilmedi.',
+      );
+    }
+    final row = fresh.single;
+    if (row['mazaretButonAktifmi'] != true) {
+      final why = '${row['mazaretDurumuAciklama'] ?? ''}'
+          .replaceAll(RegExp(r'<[^>]*>'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      return (
+        ok: false,
+        message: why.isEmpty
+            ? 'UYAP bu duruşmada mazeret talebine kapalı.'
+            : 'UYAP bu duruşmada mazeret kabul etmiyor: $why',
+      );
+    }
+    try {
+      final answer = await _mobile.requestExcuse(row, text);
+      return (
+        ok: answer.ok,
+        message: answer.message.isNotEmpty
+            ? answer.message
+            : answer.ok
+            ? 'Mazeret talebi UYAP’a iletildi.'
+            : 'UYAP talebi kabul etmedi.',
+      );
+    } catch (e) {
+      // The request may have arrived and only its answer been lost: a
+      // second excuse for one hearing is not to be sent blindly.
+      return (
+        ok: false,
+        message:
+            'Talep gönderilemedi ($e). Duruşmayı yenileyip talebin geçip '
+            'geçmediğini denetleyin; körlemesine yeniden göndermeyin.',
+      );
+    }
+  }
+
   Future<String?> syncCase(String key) async {
     final db = await _database();
     final kase = db.cases()[key];

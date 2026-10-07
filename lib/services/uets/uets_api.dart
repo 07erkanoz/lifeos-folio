@@ -288,6 +288,33 @@ class UetsApi {
     return out;
   }
 
+  /// Every message of [folder] since [since] (all of them without it), and
+  /// whether the list is whole: false when the pages ran out before the box
+  /// did, or a page brought only what was already seen, so that a short
+  /// list is never taken for the whole box.
+  Future<({List<UetsMessage> messages, bool complete})> listing({
+    int folder = 1,
+    DateTime? since,
+    int pageSize = 100,
+    int maxPages = 200,
+  }) async {
+    final out = <UetsMessage>[];
+    final seen = <String>{};
+    for (var page = 0; page < maxPages; page++) {
+      final rows = await messages(
+        folder: folder,
+        count: pageSize,
+        start: page * pageSize,
+        since: since,
+      );
+      final fresh = rows.where((m) => seen.add(m.id)).toList();
+      out.addAll(fresh);
+      if (rows.length < pageSize) return (messages: out, complete: true);
+      if (fresh.isEmpty) return (messages: out, complete: false);
+    }
+    return (messages: out, complete: false);
+  }
+
   Future<List<Map<String, Object?>>> folders() async {
     final data = await _send('GET', 'folders', null);
     return [
@@ -366,6 +393,9 @@ class UetsApi {
     if (code == 401) {
       logout();
       throw StateError('UETS oturumu sona erdi. Yeniden bağlanın.');
+    }
+    if (code == 403 || code == 404) {
+      throw UetsAccessDenied('UETS: ${_message(body, 'HTTP $code')}');
     }
     throw StateError('UETS: ${_message(body, 'HTTP $code')}');
   }
@@ -569,4 +599,13 @@ class UetsPart {
     mime: '${json['MimeTuru'] ?? ''}',
     signed: json['ImzaliMi'] == true,
   );
+}
+
+/// UETS's folder of archived notices (1 is the inbox, 5 the bin).
+const uetsArchiveFolder = 4;
+
+/// UETS answered, but would not give this: the session lives (a 403, or a
+/// folder this box has not).
+class UetsAccessDenied extends StateError {
+  UetsAccessDenied(super.message);
 }
