@@ -228,6 +228,14 @@ class MobileDrawer extends StatelessWidget {
                         ),
                         _item(
                           context,
+                          key: const ValueKey('drawer-messages'),
+                          icon: const Icon(Icons.forum_outlined),
+                          label: 'Mesajlar',
+                          selected: !home && group == 'mesajlar',
+                          onTap: () => onGroup('mesajlar'),
+                        ),
+                        _item(
+                          context,
                           key: const ValueKey('drawer-uyap'),
                           icon: const Icon(Icons.gavel_rounded),
                           label: 'UYAP Dosyalarım',

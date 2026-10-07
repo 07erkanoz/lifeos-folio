@@ -58,6 +58,7 @@ import '../services/platform/file_actions.dart';
 import 'office/office_network_page.dart';
 import 'office/office_offer_dialog.dart';
 import 'office/office_pairing_dialog.dart';
+import 'office/messages_page.dart';
 import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
 import 'widgets/share_document_dialog.dart';
@@ -1082,6 +1083,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'bildirim' ||
         value == 'buro' ||
         value == 'gorevler' ||
+        value == 'mesajlar' ||
         value == 'ayarlar' ||
         _isUyapGroup(value)) {
       return;
@@ -1106,6 +1108,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'bildirim' ||
       group == 'buro' ||
       group == 'gorevler' ||
+      group == 'mesajlar' ||
       group == 'ayarlar';
 
   /// The office's pages a phone opens from its first page.
@@ -1116,6 +1119,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'bildirim' ||
       group == 'buro' ||
       group == 'gorevler' ||
+      group == 'mesajlar' ||
       group == 'ayarlar';
 
   /// Laid out as a phone, as the window's build decides.
@@ -1705,6 +1709,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       ? _group != 'images' &&
                                             _group != 'buro' &&
                                             _group != 'gorevler' &&
+                                            _group != 'mesajlar' &&
                                             !_isUyapGroup(_group)
                                       : !_isFullPage(_group)))
                                 FoldingChrome(
@@ -1923,6 +1928,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? const OfficeNetworkPage()
                                               : _group == 'gorevler'
                                               ? const TasksPage()
+                                              : _group == 'mesajlar'
+                                              ? const MessagesPage()
                                               : _group == 'ayarlar'
                                               ? _settingsPage()
                                               : _overview(),

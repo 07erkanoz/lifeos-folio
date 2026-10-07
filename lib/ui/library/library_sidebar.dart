@@ -233,6 +233,14 @@ class LibrarySidebar extends StatelessWidget {
                   null,
                   key: const ValueKey('tasks-nav'),
                 ),
+                _nav(
+                  context,
+                  Icons.forum_outlined,
+                  'Mesajlar',
+                  'mesajlar',
+                  null,
+                  key: const ValueKey('messages-nav'),
+                ),
                 const SizedBox(height: 14),
                 if (!compact)
                   Padding(

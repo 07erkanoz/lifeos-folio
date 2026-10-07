@@ -55,6 +55,8 @@ void main() {
         EvrakConvertApp(library: library, appearance: theme),
       );
       await tester.pump();
+      await tester.ensureVisible(find.text('Ayarlar'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Ayarlar'));
       await tester.pumpAndSettle();
       // The settings are a page in the window now, the folders a page of

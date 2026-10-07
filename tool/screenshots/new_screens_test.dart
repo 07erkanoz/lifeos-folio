@@ -9,6 +9,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:evrak_convert/services/office/office_chat.dart';
+import 'package:evrak_convert/ui/office/messages_page.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/ui/office/tasks_page.dart';
 import 'package:evrak_convert/services/security/app_lock.dart';
@@ -399,6 +401,9 @@ void main() {
           tasks: OfficeTasks(
             file: () async => File('${dir.path}/$device/g.json'),
           ),
+          chats: OfficeChats(
+            file: () async => File('${dir.path}/$device/m.json'),
+          ),
         );
         Directory('${dir.path}/$device/gelen').createSync(recursive: true);
         net.inbox = () async => Directory('${dir.path}/$device/gelen');
@@ -549,6 +554,51 @@ void main() {
     );
     await tester.pump();
     await _shot(tester, 'gorev-sayfasi');
+    late String chatId;
+    await tester.runAsync(() async {
+      final chat = (await a.privateChat(b.self!.deviceId))!;
+      chatId = chat.id;
+      final pdf = File('${dir.path}/Ara Karar.pdf')
+        ..writeAsBytesSync(List.filled(30000, 1));
+      await a.post(
+        chat,
+        text: 'Ara kararı ekledim, duruşmadan önce okur musun?',
+        files: [pdf.path],
+      );
+      for (
+        var i = 0;
+        i < 200 && (b.chats.of(chat.id)?.messages.isEmpty ?? true);
+        i++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      await b.post(
+        b.chats.of(chat.id)!,
+        text: 'Tamam, akşama kadar bakıyorum.',
+      );
+      final word = (await a.broadcastChat())!;
+      await a.post(word, text: 'Cuma günü büro 14:00’te kapanacak.');
+      for (var i = 0; i < 100; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: Row(
+            children: [
+              SizedBox(width: 380, child: MessagesPage(network: b)),
+              const VerticalDivider(width: 1),
+              Expanded(
+                child: ChatThread(network: b, chatId: chatId),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await _shot(tester, 'mesajlar');
     tester.view.reset();
   });
 

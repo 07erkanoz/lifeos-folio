@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../editor/lawyer_profile.dart';
 import '../platform/app_directories.dart';
 import 'office_channel.dart';
+import 'office_chat.dart';
 import 'office_identity.dart';
 import 'office_known.dart';
 import 'office_ledger.dart';
@@ -31,11 +32,16 @@ class OfficeNetwork extends ChangeNotifier {
     KnownDevices? known,
     OfficeLedger? ledger,
     OfficeTasks? tasks,
+    OfficeChats? chats,
     this.platformName,
   }) : _settingsFile = settings ?? _defaultSettings,
        _known = known ?? KnownDevices(),
        ledger = ledger ?? OfficeLedger(),
-       tasks = tasks ?? OfficeTasks();
+       tasks = tasks ?? OfficeTasks(),
+       chats = chats ?? OfficeChats();
+
+  /// The talks this device is in (docs/buro.md, Mesajlaşma).
+  final OfficeChats chats;
 
   /// The tasks this device gives or was given.
   final OfficeTasks tasks;
@@ -93,6 +99,7 @@ class OfficeNetwork extends ChangeNotifier {
     List<String> paths, {
     String note = '',
     String? id,
+    Map<String, Object?> meta = const {},
   }) async {
     final identity = _identity;
     final known =
@@ -110,6 +117,7 @@ class OfficeNetwork extends ChangeNotifier {
       paths: paths,
       note: note,
       id: id,
+      meta: meta,
       onEnd: _ended,
     );
     _added(t);
@@ -132,6 +140,16 @@ class OfficeNetwork extends ChangeNotifier {
 
   void _ended(OfficeTransfer t) {
     unawaited(_log(t));
+    final message = t.meta['mesaj'];
+    if (message is String && t.state == TransferState.done) {
+      if (t.outgoing) {
+        unawaited(chats.delivered(message, t.peer.deviceId));
+      } else {
+        for (var i = 0; i < t.saved.length && i < t.files.length; i++) {
+          unawaited(chats.fileCame(message, t.files[i].name, t.saved[i]));
+        }
+      }
+    }
     notifyListeners();
   }
 
@@ -229,6 +247,23 @@ class OfficeNetwork extends ChangeNotifier {
     late final StreamSubscription<Map<String, Object?>> first;
     first = ch.messages.listen((m) async {
       await first.cancel();
+      if (m['t'] == 'sohbet') {
+        final theirs = Chat.fromJson(m['sohbet']);
+        if (theirs != null &&
+            await chats.merge(
+              theirs,
+              from: ch.peer.deviceId,
+              mayBroadcast: ledger.isManager,
+            )) {
+          notifyListeners();
+          _heard(theirs.id);
+        }
+        final mine = theirs == null ? null : chats.of(theirs.id);
+        await ch.send({'t': 'sohbet', 'sohbet': mine?.toJson()});
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await ch.close();
+        return;
+      }
       if (m['t'] == 'gorev') {
         final theirs = OfficeTask.fromJson(m['gorev']);
         if (theirs != null &&
@@ -248,11 +283,17 @@ class OfficeNetwork extends ChangeNotifier {
         await ch.close();
         return;
       }
+      final forChat =
+          m['meta'] is Map && (m['meta'] as Map)['sohbet'] is String;
+      final folder = await inbox();
       final t = m['t'] == 'offer'
           ? OfficeTransfer.receive(
               channel: ch,
               offer: m,
-              folder: await inbox(),
+              folder: forChat
+                  ? (await Directory(p.join(folder.path, 'Mesajlar'))
+                        .create(recursive: true))
+                  : folder,
               onEnd: _ended,
             )
           : null;
@@ -262,6 +303,15 @@ class OfficeNetwork extends ChangeNotifier {
       }
       transfers.removeWhere((old) => old.id == t.id && old.finished);
       _added(t);
+      final chat = chats.of('${t.meta['sohbet'] ?? ''}');
+      if (chat != null &&
+          (chat.members.containsKey(ch.peer.deviceId) ||
+              (chat.kind == ChatKind.broadcast &&
+                  ledger.isManager(ch.peer.deviceId)))) {
+        // A member's file with a message: taken unasked.
+        await t.accept();
+        return;
+      }
       if (_accepted.contains(t.id)) {
         await t.accept();
       } else {
@@ -452,6 +502,182 @@ class OfficeNetwork extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Something new came in a talk: for the notifications to tell.
+  void Function(Chat chat)? onChat;
+  void _heard(String chatId) {
+    final c = chats.of(chatId);
+    if (c != null) onChat?.call(c);
+  }
+
+  OfficeMember? get _me => ledger.member(_self?.deviceId ?? '');
+
+  /// The private talk with [deviceId], made if there is none yet.
+  Future<Chat?> privateChat(String deviceId) async {
+    final me = _me, them = ledger.member(deviceId);
+    if (me == null || them == null) return null;
+    final id = Chat.privateId(me.deviceId, them.deviceId);
+    final kept = chats.of(id);
+    if (kept != null) return kept;
+    final chat = Chat(
+      id: id,
+      kind: ChatKind.private,
+      by: me.deviceId,
+      members: {me.deviceId: me.name, them.deviceId: them.name},
+    );
+    await chats.put(chat);
+    notifyListeners();
+    return chat;
+  }
+
+  Future<Chat?> groupChat(String name, List<String> deviceIds) async {
+    final me = _me;
+    if (me == null) return null;
+    final chat = Chat(
+      id: Chat.newId(),
+      kind: ChatKind.group,
+      by: me.deviceId,
+      name: name.trim(),
+      members: {
+        me.deviceId: me.name,
+        for (final id in deviceIds) id: ledger.member(id)?.name ?? '',
+      },
+    );
+    await chats.put(chat);
+    notifyListeners();
+    unawaited(_shareChat(chat));
+    return chat;
+  }
+
+  /// The office's announcements: only managers write in it.
+  Future<Chat?> broadcastChat() async {
+    final me = _me, office = ledger.officeId;
+    if (me == null || office == null) return null;
+    final id = 'duyuru-${office.substring(0, 16)}';
+    final kept = chats.of(id);
+    if (kept != null) return kept;
+    if (me.role != OfficeRole.manager) return null;
+    final chat = Chat(
+      id: id,
+      kind: ChatKind.broadcast,
+      by: me.deviceId,
+      name: '${ledger.officeName} · duyurular',
+      members: {for (final m in ledger.members) m.deviceId: m.name},
+    );
+    await chats.put(chat);
+    notifyListeners();
+    return chat;
+  }
+
+  bool mayWrite(Chat chat) {
+    final me = _self?.deviceId ?? '';
+    return chat.kind == ChatKind.broadcast
+        ? ledger.isManager(me)
+        : chat.members.containsKey(me);
+  }
+
+  /// Sends words and files in a talk; the files go to each member on the
+  /// network now, and to the others when they come on it.
+  Future<String?> post(
+    Chat chat, {
+    String text = '',
+    List<String> files = const [],
+    int? voiceSeconds,
+  }) async {
+    final self = _self;
+    if (self == null) return 'Önce büro ağına katılın.';
+    if (!mayWrite(chat)) return 'Bu konuşmaya yalnız yöneticiler yazabilir.';
+    if (text.trim().isEmpty && files.isEmpty) return null;
+    final attachments = <ChatAttachment>[
+      for (final f in files)
+        ChatAttachment(
+          name: p.basename(f),
+          size: await File(f).length(),
+          kind: voiceSeconds != null
+              ? AttachmentKind.voice
+              : ChatAttachment.kindOf(f),
+          seconds: voiceSeconds,
+        ),
+    ];
+    final m = ChatMessage(
+      id: Chat.newId(),
+      by: self.deviceId,
+      byName: self.name,
+      at: DateTime.now(),
+      text: text.trim(),
+      attachments: attachments,
+    );
+    final to = _audience(chat);
+    await chats.add(chat, m, waiting: files.isEmpty ? const {} : to);
+    for (var i = 0; i < files.length; i++) {
+      await chats.fileCame(m.id, attachments[i].name, files[i]);
+    }
+    notifyListeners();
+    unawaited(_shareChat(chat));
+    return null;
+  }
+
+  Set<String> _audience(Chat chat) => {
+    ...(chat.kind == ChatKind.broadcast
+        ? {for (final m in ledger.members) m.deviceId}
+        : chat.members.keys),
+  }..remove(_self?.deviceId);
+
+  Future<void> _shareChat(Chat chat) async {
+    for (final id in _audience(chat)) {
+      final peer = _peers[id];
+      if (peer != null && peer.online) await _syncChat(peer, chat);
+    }
+  }
+
+  Future<void> _syncChat(OfficePeer peer, Chat chat) async {
+    final identity = _identity, host = peer.host;
+    final trusted = await _trusted(peer.deviceId);
+    if (identity == null || host == null || trusted == null) return;
+    try {
+      final ch = await OfficeChannel.open(
+        identity: identity,
+        peer: trusted,
+        host: host,
+        port: peer.port,
+      );
+      final reply = ch.messages.first.timeout(const Duration(seconds: 10));
+      await ch.send({'t': 'sohbet', 'sohbet': chat.toJson()});
+      final m = await reply;
+      await ch.close();
+      final theirs = Chat.fromJson(m['sohbet']);
+      if (theirs != null &&
+          await chats.merge(
+            theirs,
+            from: peer.deviceId,
+            mayBroadcast: ledger.isManager,
+          )) {
+        notifyListeners();
+        _heard(theirs.id);
+      }
+    } catch (_) {}
+    // This device's files that have not yet reached it.
+    for (final msg in chat.messages) {
+      final left = chats.pending[msg.id];
+      if (msg.by != _self?.deviceId ||
+          left == null ||
+          !left.contains(peer.deviceId)) {
+        continue;
+      }
+      final paths = [
+        for (final a in msg.attachments) ?chats.fileOf(msg.id, a.name),
+      ];
+      if (paths.isEmpty) continue;
+      await send(peer, paths, meta: {'sohbet': chat.id, 'mesaj': msg.id});
+    }
+  }
+
+  /// Every talk shared with [peer], when it comes on the network.
+  Future<void> _syncChats(OfficePeer peer) async {
+    for (final c in chats.all) {
+      if (_audience(c).contains(peer.deviceId)) await _syncChat(peer, c);
+    }
+  }
+
   /// Every task shared with [peer], when it comes on the network.
   Future<void> _syncTasks(OfficePeer peer) async {
     final manager = ledger.isManager(peer.deviceId);
@@ -583,6 +809,7 @@ class OfficeNetwork extends ChangeNotifier {
       await _loadKnown();
       await ledger.load();
       await tasks.load();
+      await chats.load();
       // Where the others will reach this Folio; what is said there comes in
       // the next step (docs/buro.md, Aktarım), till then it hangs up.
       // Both families: the others may find this one by either address.
@@ -710,7 +937,11 @@ class OfficeNetwork extends ChangeNotifier {
         if (peer.host != null &&
             isTrusted(peer.deviceId) &&
             _ledgerSynced.add(peer.deviceId)) {
-          unawaited(_syncLedger(peer).then((_) => _syncTasks(peer)));
+          unawaited(
+            _syncLedger(peer)
+                .then((_) => _syncTasks(peer))
+                .then((_) => _syncChats(peer)),
+          );
         }
       case BonsoirDiscoveryServiceLostEvent(:final service):
         final id =
@@ -748,6 +979,7 @@ class OfficeNetwork extends ChangeNotifier {
     await _loadKnown();
     await ledger.load();
     await tasks.load();
+    await chats.load();
     _server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     _server!.listen(_opened);
     _self = OfficePeer(

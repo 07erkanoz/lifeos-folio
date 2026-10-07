@@ -43,7 +43,11 @@ class OfficeTransfer extends ChangeNotifier {
     required this.files,
     required this.note,
     required this.at,
+    this.meta = const {},
   });
+
+  /// What the files belong to, such as a message (`sohbet`, `mesaj`).
+  final Map<String, Object?> meta;
 
   /// Pieces of a file in one message, and how many may be on the way
   /// before the other says it has them.
@@ -104,6 +108,7 @@ class OfficeTransfer extends ChangeNotifier {
     required List<String> paths,
     String note = '',
     String? id,
+    Map<String, Object?> meta = const {},
     void Function(OfficeTransfer)? onEnd,
   }) async {
     final files = <TransferFile>[];
@@ -120,6 +125,7 @@ class OfficeTransfer extends ChangeNotifier {
       files: files,
       note: note,
       at: DateTime.now(),
+      meta: meta,
     ).._onEnd = onEnd;
     t._paths.addAll(paths);
     unawaited(t._offer(identity, host, port));
@@ -148,6 +154,7 @@ class OfficeTransfer extends ChangeNotifier {
         'id': id,
         'files': [for (final f in files) f.toJson()],
         'note': note,
+        if (meta.isNotEmpty) 'meta': meta,
       });
       _set(TransferState.offered);
       final m = await answer.future.timeout(const Duration(minutes: 3));
@@ -252,6 +259,11 @@ class OfficeTransfer extends ChangeNotifier {
       files: files,
       note: note is String ? note : '',
       at: DateTime.now(),
+      meta: {
+        if (offer['meta'] case final Map m)
+          for (final e in m.entries)
+            if (e.value is String) '${e.key}': e.value,
+      },
     );
     t._channel = channel;
     t._folder = folder;

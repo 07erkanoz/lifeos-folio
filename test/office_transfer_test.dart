@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:evrak_convert/services/office/office_chat.dart';
 import 'package:evrak_convert/services/office/office_identity.dart';
 import 'package:evrak_convert/services/office/office_known.dart';
 import 'package:evrak_convert/services/office/office_ledger.dart';
@@ -38,6 +39,7 @@ void main() {
         file: () async => File('${dir.path}/$device/d.json'),
       ),
       tasks: OfficeTasks(file: () async => File('${dir.path}/$device/g.json')),
+      chats: OfficeChats(file: () async => File('${dir.path}/$device/m.json')),
     );
     Directory('${dir.path}/$device/gelen').createSync(recursive: true);
     net.inbox = () async => Directory('${dir.path}/$device/gelen');
@@ -252,4 +254,78 @@ void main() {
       );
     },
   );
+
+  test('private, group and broadcast talk, with a file, sealed', () async {
+    final c = await folio('Av. Selin Aksoy', 'selin-pc');
+    final asking = a.pair(c.self!)!;
+    await until(() => c.incoming.value?.code != null);
+    c.incoming.value!.confirm();
+    asking.confirm();
+    await until(() => a.isKnown(c.self!.deviceId));
+    for (final n in [a, b, c]) {
+      for (final o in [a, b, c]) {
+        if (n != o) n.seenForTesting(o.self!);
+      }
+    }
+    await a.foundOffice('Kaya Hukuk Bürosu');
+    await a.admit(b.self!.deviceId, OfficeRole.trainee);
+    await a.admit(c.self!.deviceId, OfficeRole.lawyer);
+    await until(
+      () => b.ledger.members.length == 3 && c.ledger.members.length == 3,
+    );
+    // Private, with a file.
+    final mine = (await a.privateChat(b.self!.deviceId))!;
+    final doc = file('Ara Karar.pdf', 70 * 1024);
+    expect(
+      await a.post(mine, text: 'Şuna bakar mısın?', files: [doc.path]),
+      isNull,
+    );
+    await until(() => b.chats.of(mine.id)?.messages.isNotEmpty ?? false);
+    final got = b.chats.of(mine.id)!.messages.single;
+    expect(got.text, 'Şuna bakar mısın?');
+    expect(got.attachments.single.name, 'Ara Karar.pdf');
+    await until(() => b.chats.fileOf(got.id, 'Ara Karar.pdf') != null);
+    expect(
+      File(b.chats.fileOf(got.id, 'Ara Karar.pdf')!).readAsBytesSync(),
+      doc.readAsBytesSync(),
+    );
+    expect(b.chats.fileOf(got.id, 'Ara Karar.pdf'), contains('Mesajlar'));
+    await until(() => a.chats.pending.isEmpty);
+    // A group: what one writes reaches the others.
+    final group = (await a.groupChat('Duruşma ekibi', [
+      b.self!.deviceId,
+      c.self!.deviceId,
+    ]))!;
+    await until(() => c.chats.of(group.id) != null);
+    await c.post(c.chats.of(group.id)!, text: 'Yarın 09:00 adliyedeyim.');
+    await until(() => (b.chats.of(group.id)?.messages.length ?? 0) == 1);
+    // The managers' word to all; a trainee writes nothing in it.
+    final word = (await a.broadcastChat())!;
+    await a.post(word, text: 'Cuma günü büro kapalı.');
+    await until(() => c.chats.of(word.id)?.messages.isNotEmpty ?? false);
+    await until(() => b.chats.of(word.id)?.messages.isNotEmpty ?? false);
+    expect(
+      await b.post(b.chats.of(word.id)!, text: 'Ben de duyurayım'),
+      isNotNull,
+    );
+    // Nor is one made up in a trainee's name taken in.
+    final forged = Chat.fromJson(word.toJson())!
+      ..messages.add(
+        ChatMessage(
+          id: 'x',
+          by: b.self!.deviceId,
+          byName: 'Mert',
+          at: DateTime.now(),
+          text: 'sahte',
+        ),
+      );
+    expect(
+      await c.chats.merge(
+        forged,
+        from: b.self!.deviceId,
+        mayBroadcast: c.ledger.isManager,
+      ),
+      isFalse,
+    );
+  });
 }
