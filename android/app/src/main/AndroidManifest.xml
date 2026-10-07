@@ -7,6 +7,9 @@
     <!-- Read-only access to the phone's own picture folders, so the gallery
          can show them where they are instead of copying them into the app. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- A newer Folio, downloaded from lifeos.com.tr and checked against
+         its signed manifest, handed to Android's installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <application

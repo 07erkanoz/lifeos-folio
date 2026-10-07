@@ -4,7 +4,9 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.ComponentName
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
@@ -22,6 +24,10 @@ class FileActions(private val activity: Activity, messenger: BinaryMessenger) {
             val action = call.method
             if (action == "shareMany") {
                 shareMany(call.argument<List<String>>("paths") ?: emptyList(), result)
+                return@setMethodCallHandler
+            }
+            if (action == "install") {
+                install(call.argument<String>("path"), result)
                 return@setMethodCallHandler
             }
             if (action !in setOf("openDefault", "openWith", "share")) {
@@ -117,4 +123,46 @@ class FileActions(private val activity: Activity, messenger: BinaryMessenger) {
     }
 
     fun dispose() { channel.setMethodCallHandler(null); io.shutdown() }
+
+    /**
+     * A newer Folio, downloaded and checked by Dart, handed to Android's own
+     * installer: Android asks the lawyer, and keeps the app's data. Without
+     * leave to install from Folio, the screen that gives it is opened, and
+     * "IZIN" tells Dart to try again after.
+     */
+    private fun install(path: String?, result: MethodChannel.Result) {
+        if (path == null) { result.error("FILE_ACTION", "Paket yolu eksik.", null); return }
+        if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
+            activity.startActivity(
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))
+            )
+            result.error("IZIN", "Folio’nun güncelleme kurmasına izin verin, sonra yeniden deneyin.", null)
+            return
+        }
+        io.execute {
+            try {
+                val source = File(path)
+                require(source.isFile) { "Paket bulunamadı." }
+                val folder = File(File(activity.cacheDir, "outgoing"), "guncelleme").apply { mkdirs() }
+                folder.listFiles()?.forEach { it.delete() }
+                val copy = File(folder, source.name)
+                source.copyTo(copy, overwrite = true, bufferSize = 256 * 1024)
+                val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.outgoing", copy)
+                activity.runOnUiThread {
+                    try {
+                        activity.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, "application/vnd.android.package-archive")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("FILE_ACTION", "Kurulum açılamadı: ${e.message}", null)
+                    }
+                }
+            } catch (e: Exception) {
+                activity.runOnUiThread { result.error("FILE_ACTION", e.message, null) }
+            }
+        }
+    }
 }

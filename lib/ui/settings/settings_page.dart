@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/editor/editor_settings.dart';
 import '../../services/editor/lawyer_profile.dart';
@@ -39,6 +38,7 @@ import '../widgets/folio_about_dialog.dart';
 import '../widgets/notice.dart';
 import '../widgets/signing_dialog.dart';
 import '../widgets/snippet_manager.dart';
+import '../widgets/update_dialog.dart';
 import '../widgets/uyap_connect_view.dart';
 
 /// The settings (docs/design/ayarlar-taslak.png): a page of their own on
@@ -1024,13 +1024,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   ? null
                   : _newer != null
                   ? FilledButton(
-                      onPressed: () => unawaited(
-                        launchUrl(
-                          _newer!.url,
-                          mode: LaunchMode.externalApplication,
-                        ),
-                      ),
-                      child: const Text('İndir'),
+                      key: const ValueKey('settings-update-install'),
+                      onPressed: () =>
+                          unawaited(UpdateDialog.show(context, _newer!)),
+                      child: const Text('Güncelle'),
                     )
                   : OutlinedButton(
                       key: const ValueKey('settings-update-check'),

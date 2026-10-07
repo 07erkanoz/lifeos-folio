@@ -50,7 +50,6 @@ import 'library/collapsing_overview.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -62,6 +61,7 @@ import '../models/evrak_file.dart';
 import '../services/library/file_library.dart';
 import '../services/library/recent_documents.dart';
 import '../services/update/update_check.dart';
+import 'widgets/update_dialog.dart';
 import '../services/platform/document_scan.dart';
 import 'mobile/document_home.dart';
 import 'mobile/mobile_drawer.dart';
@@ -226,14 +226,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: const Text('Sonra'),
           ),
           FilledButton.icon(
+            key: const ValueKey('update-open'),
             onPressed: () {
-              unawaited(
-                launchUrl(update.url, mode: LaunchMode.externalApplication),
-              );
-              UpdateCheck.instance.later();
+              messenger.hideCurrentMaterialBanner();
+              unawaited(UpdateDialog.show(context, update));
             },
             icon: const Icon(Icons.download_rounded, size: 18),
-            label: const Text('İndir'),
+            label: const Text('Güncelle'),
           ),
         ],
       ),
