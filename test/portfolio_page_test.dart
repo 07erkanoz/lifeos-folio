@@ -295,10 +295,13 @@ void main() {
     await tester.pump();
     expect(title, findsNothing);
     expect(find.byKey(const ValueKey('case-preview-show')), findsOneWidget);
-    // Choosing a document opens it again.
+    // Choosing a document opens it again; Esc closes it.
     await tester.tap(find.byKey(const ValueKey('case-doc-a')));
     await tester.pump();
     expect(tester.widget<Text>(title).data, 'Tensip Zaptı');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(title, findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

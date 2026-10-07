@@ -478,13 +478,27 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       ],
     );
     if (!_previewOpen) return list;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(width: 440, child: list),
-        VerticalDivider(width: 1, color: scheme.outlineVariant),
-        Expanded(child: _previewPane(context, entries)),
-      ],
+    // Esc closes the preview, wherever in the list or the document the
+    // keys are.
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, e) {
+        if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.escape) {
+          return KeyEventResult.ignored;
+        }
+        setState(() => _previewOpen = false);
+        _listFocus.requestFocus();
+        return KeyEventResult.handled;
+      },
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(width: 440, child: list),
+          VerticalDivider(width: 1, color: scheme.outlineVariant),
+          Expanded(child: _previewPane(context, entries)),
+        ],
+      ),
     );
   }
 
