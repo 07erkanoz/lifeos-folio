@@ -10,11 +10,14 @@ void main() {
   final asked = <(String, String, Object?)>[];
   var pendingPolls = 2;
   var total = 120;
+  // At most this many a page, whatever is asked: UETS may give fewer.
+  var cap = 1000;
 
   setUp(() async {
     asked.clear();
     pendingPolls = 2;
     total = 120;
+    cap = 1000;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((r) async {
       final text = await utf8.decoder.bind(r).join();
@@ -45,7 +48,8 @@ void main() {
         answer = {'status': 401, 'code': 602, 'message': 'Oturum yok'};
       } else if (path == 'messages') {
         final start = int.parse(r.uri.queryParameters['start'] ?? '0');
-        final count = int.parse(r.uri.queryParameters['count']!);
+        final asked = int.parse(r.uri.queryParameters['count']!);
+        final count = asked < cap ? asked : cap;
         answer = [
           for (var i = start; i < start + count && i < total; i++)
             {
@@ -151,6 +155,20 @@ void main() {
     final cut = await api.listing(pageSize: 50, maxPages: 2);
     expect(cut.messages, hasLength(100));
     expect(cut.complete, isFalse);
+  });
+
+  test('a page shorter than asked is not the end of the box', () async {
+    final login = await api.startMobile(
+      tckn: '10000000146',
+      phone: '5321234567',
+      operator: MobileOperator.turkcell,
+    );
+    pendingPolls = 0;
+    await api.finishMobile(login);
+    cap = 30;
+    final whole = await api.listing();
+    expect(whole.messages, hasLength(120));
+    expect(whole.complete, isTrue);
   });
 
   test('an ended session asks for a new login', () async {

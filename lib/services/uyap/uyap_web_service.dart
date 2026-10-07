@@ -88,6 +88,50 @@ class UyapWebService {
 
   void track(UyapSendReceipt receipt) => _sent.add(receipt);
 
+  /// The session as it may be kept between runs: its cookies, whose it is
+  /// and since when. Null when there is none. Kept only in this computer's
+  /// keystore (see `SecretStore`), never in a plain file.
+  Map<String, Object?>? exportSession() {
+    final s = session.value;
+    if (s == null || !_hasCookie) return null;
+    return {
+      'cookies': Map<String, String>.from(_cookies),
+      'tckn': _tckn,
+      'user': s.user,
+      'since': s.since.toUtc().toIso8601String(),
+      'route': s.route.name,
+    };
+  }
+
+  /// Takes up a session kept from before, if its lifetime has not run out,
+  /// and asks UYAP whether it still holds it ([check]): one UYAP ended is
+  /// let go of; one UYAP could not be asked about is kept, as [check] does.
+  Future<bool> restoreSession(Map<String, Object?> kept) async {
+    if (connected) return true;
+    final cookies = kept['cookies'];
+    final since = DateTime.tryParse('${kept['since'] ?? ''}');
+    final route = UyapLoginRoute.values
+        .where((r) => r.name == kept['route'])
+        .firstOrNull;
+    if (cookies is! Map || since == null || route == null) return false;
+    final s = UyapSession(
+      user: '${kept['user'] ?? ''}',
+      since: since,
+      route: route,
+    );
+    if (s.remaining() == Duration.zero) return false;
+    _cookies
+      ..clear()
+      ..addAll({for (final e in cookies.entries) '${e.key}': '${e.value}'});
+    if (!_hasCookie) {
+      _cookies.clear();
+      return false;
+    }
+    _tckn = '${kept['tckn'] ?? ''}';
+    session.value = s;
+    return check();
+  }
+
   void disconnect() {
     _cookies.clear();
     _tckn = '';

@@ -96,13 +96,58 @@ class PortalSync extends ChangeNotifier {
     _mobile.session.addListener(_mobileChanged);
     _uets.session.addListener(_uetsChanged);
     // The mobile session lasts a week: kept sealed between runs, and taken
-    // up again here. The web portal's three hours are not kept.
+    // up again here; the web portal's and UETS's sessions likewise, until
+    // they end (see _restoreKept).
     _mobile.onTokens = (tokens) => unawaited(
       tokens == null
           ? _secrets.remove(_mobileSecret)
           : _secrets.write(_mobileSecret, tokens.toJson()),
     );
     unawaited(_restoreMobile());
+    unawaited(_restoreKept());
+  }
+
+  static const _webSecret = 'uyap-web';
+  static const _uetsSecret = 'uets';
+
+  /// The web portal's and UETS's sessions, kept like the mobile one: in
+  /// this computer's keystore, until they end. Taken up again here; one its
+  /// portal no longer holds is dropped.
+  Future<void> _restoreKept() async {
+    final web = await _secrets.read(_webSecret);
+    if (web != null && !_web.connected) {
+      if (!await _web.restoreSession(web)) await _secrets.remove(_webSecret);
+    }
+    final uets = await _secrets.read(_uetsSecret);
+    if (uets != null && !_uets.connected) {
+      if (!await _uets.restoreSession(uets)) await _secrets.remove(_uetsSecret);
+    }
+    _restored = true;
+    _keepWeb();
+    _keepUets();
+  }
+
+  /// Not written over before the kept ones were taken up.
+  bool _restored = false;
+
+  void _keepWeb() {
+    if (!_restored) return;
+    final kept = _web.exportSession();
+    unawaited(
+      kept == null
+          ? _secrets.remove(_webSecret)
+          : _secrets.write(_webSecret, kept),
+    );
+  }
+
+  void _keepUets() {
+    if (!_restored) return;
+    final kept = _uets.exportSession();
+    unawaited(
+      kept == null
+          ? _secrets.remove(_uetsSecret)
+          : _secrets.write(_uetsSecret, kept),
+    );
   }
 
   /// Takes the kept session up again. Without a network at start (a laptop
@@ -128,6 +173,12 @@ class PortalSync extends ChangeNotifier {
   Timer? _restoreRetry;
   bool _disposed = false;
 
+  /// A sync still running when this is let go of ends without telling.
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -139,11 +190,13 @@ class PortalSync extends ChangeNotifier {
   }
 
   void _webChanged() {
+    _keepWeb();
     notifyListeners();
     if (_web.connected) unawaited(syncWeb());
   }
 
   void _uetsChanged() {
+    _keepUets();
     notifyListeners();
     if (_uets.connected) unawaited(syncUets());
   }
@@ -160,30 +213,36 @@ class PortalSync extends ChangeNotifier {
     }
     final kept = db.notices();
     final newest = kept.isEmpty ? null : kept.first.message.sent;
-    // The first time the whole box: a notice older than ninety days may
-    // still run a year's deadline. After that the last weeks again, every
-    // time, for what was read or deemed read since.
+    // The whole box until one whole reading of it is done (a box kept by an
+    // older Folio was read only for ninety days); after that the last
+    // weeks again, every time, for what was read or deemed read since.
+    final full = db.meta('uets_full_listing') != '1';
     final recent = DateTime.now().subtract(const Duration(days: 45));
-    final since = newest == null
+    final since = full || newest == null
         ? null
         : newest.subtract(const Duration(days: 1)).isBefore(recent)
         ? newest.subtract(const Duration(days: 1))
         : recent;
-    final inbox = await _uets.listing(since: since);
-    db.mergeNotices(inbox.messages);
-    var whole = inbox.complete;
-    // What the lawyer moved to the archive is still a notice; a box
-    // without an archive folder is no failure.
-    try {
-      final archive = await _uets.listing(
-        folder: uetsArchiveFolder,
-        since: since,
+    var whole = true;
+    // Every folder of the box but the bin: what the lawyer moved to the
+    // archive or a folder of their own is still a notice.
+    final folders = await _uets.noticeFolders();
+    for (var i = 0; i < folders.length; i++) {
+      _progress(
+        PortalChannel.uets,
+        folders.length == 1
+            ? 'Tebligatlar'
+            : 'Tebligatlar · klasör ${i + 1}/${folders.length}',
       );
-      db.mergeNotices(archive.messages);
-      whole = whole && archive.complete;
-    } on UetsAccessDenied {
-      // No archive here.
+      try {
+        final listing = await _uets.listing(folder: folders[i], since: since);
+        db.mergeNotices(listing.messages);
+        whole = whole && listing.complete;
+      } on UetsAccessDenied {
+        // A folder this box has not.
+      }
     }
+    if (full && whole) db.setMeta('uets_full_listing', '1');
     await _fetchManifests(db);
     await _loadDeadlineContext();
     matchNotices(db);

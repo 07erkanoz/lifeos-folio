@@ -238,6 +238,58 @@ class UetsApi {
     session.value = null;
   }
 
+  /// The session as it may be kept between runs: the token and when it
+  /// ends. UETS gives no refresh token, so a kept session lasts as long as
+  /// its token (about twenty-five minutes). Kept only in this computer's
+  /// keystore, and never with the TC number.
+  Map<String, Object?>? exportSession() {
+    final s = session.value;
+    final token = _token;
+    if (s == null || token == null || _expires == null) return null;
+    return {
+      'token': token,
+      'expires': _expires!.toUtc().toIso8601String(),
+      'method': s.method,
+      'accounts': s.accounts,
+    };
+  }
+
+  /// Takes up a kept session whose token has not ended, and asks UETS
+  /// whether it still holds it, as Banaozel does: the inbox's first
+  /// notice. Only a refusal (401) ends it; UETS out of reach keeps it.
+  Future<bool> restoreSession(Map<String, Object?> kept) async {
+    if (connected) return true;
+    final token = '${kept['token'] ?? ''}';
+    final expires = DateTime.tryParse('${kept['expires'] ?? ''}')?.toLocal();
+    if (token.isEmpty ||
+        expires == null ||
+        !expires.isAfter(DateTime.now().add(const Duration(minutes: 1)))) {
+      return false;
+    }
+    _token = token;
+    _expires = expires;
+    session.value = UetsSession(
+      expires: expires,
+      method: '${kept['method'] ?? ''}',
+      accounts: kept['accounts'] is int ? kept['accounts'] as int : 1,
+    );
+    try {
+      await messages(count: 1);
+    } on SocketException {
+      return true;
+    } on TimeoutException {
+      return true;
+    } on UetsAccessDenied {
+      // Alive, not allowed this: still a session.
+      return true;
+    } catch (_) {
+      // A refusal (401) has logged out already; UETS's own error has not,
+      // and says nothing of the session.
+      return connected;
+    }
+    return connected;
+  }
+
   // Mail.
 
   /// One page of a folder's messages, newest first: [count] from [start].
@@ -295,27 +347,62 @@ class UetsApi {
   /// whether the list is whole: false when the pages ran out before the box
   /// did, or a page brought only what was already seen, so that a short
   /// list is never taken for the whole box.
+  ///
+  /// The box is read fifty at a time, as Banaozel's server does; a page
+  /// shorter than asked is not taken for the end, since UETS may give
+  /// fewer than asked: only an empty page ends the box. Pages are moved on
+  /// by what came, not by what was asked.
   Future<({List<UetsMessage> messages, bool complete})> listing({
     int folder = 1,
     DateTime? since,
-    int pageSize = 100,
-    int maxPages = 200,
+    int pageSize = 50,
+    int maxPages = 400,
   }) async {
     final out = <UetsMessage>[];
     final seen = <String>{};
+    var start = 0;
     for (var page = 0; page < maxPages; page++) {
       final rows = await messages(
         folder: folder,
         count: pageSize,
-        start: page * pageSize,
+        start: start,
         since: since,
       );
+      if (rows.isEmpty) return (messages: out, complete: true);
       final fresh = rows.where((m) => seen.add(m.id)).toList();
       out.addAll(fresh);
-      if (rows.length < pageSize) return (messages: out, complete: true);
+      // A page of nothing new: the box is not moving on (an offset UETS
+      // does not honour); said, not taken for the end.
       if (fresh.isEmpty) return (messages: out, complete: false);
+      start += rows.length;
     }
     return (messages: out, complete: false);
+  }
+
+  /// The folders the box has, as UETS numbers them, the bin and the
+  /// evidence folder left out; the inbox and the archive when UETS will
+  /// not say.
+  Future<List<int>> noticeFolders() async {
+    try {
+      final ids = <int>{};
+      for (final f in await folders()) {
+        final id = int.tryParse('${f['id'] ?? f['folders_id'] ?? ''}');
+        // The evidence folder keeps receipts of delivery, not notices.
+        final name = [
+          for (final k in const ['name', 'ad', 'folder_name', 'type'])
+            '${f[k] ?? ''}',
+        ].join(' ').toLowerCase();
+        if (id == null ||
+            id == uetsBinFolder ||
+            name.contains('evidence') ||
+            name.contains('delil')) {
+          continue;
+        }
+        ids.add(id);
+      }
+      if (ids.isNotEmpty) return (ids..add(1)).toList()..sort();
+    } catch (_) {}
+    return const [1, uetsArchiveFolder];
   }
 
   Future<List<Map<String, Object?>>> folders() async {
@@ -614,8 +701,11 @@ class UetsPart {
   );
 }
 
-/// UETS's folder of archived notices (1 is the inbox, 5 the bin).
+/// UETS's folder of archived notices (1 is the inbox).
 const uetsArchiveFolder = 4;
+
+/// UETS's bin: what the lawyer threw away.
+const uetsBinFolder = 5;
 
 /// UETS answered, but would not give this: the session lives (a 403, or a
 /// folder this box has not).

@@ -45,9 +45,12 @@ void main() {
   final asked = <String>[];
   // Whose box the server shows: each box has notices of its own.
   var box = '';
+  // The start time each listing of the inbox asked from.
+  final starts = <String?>[];
 
   setUp(() async {
     asked.clear();
+    starts.clear();
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((r) async {
       final text = await utf8.decoder.bind(r).join();
@@ -72,9 +75,15 @@ void main() {
         };
       } else if (path == 'messages') {
         final folder = r.uri.queryParameters['folders_id'];
+        if (folder == '1' && r.uri.queryParameters['start'] == null) {
+          starts.add(r.uri.queryParameters['starttime']);
+        }
         if (folder == '4') {
           status = 404;
           answer = {'message': 'yok'};
+        } else if ((int.tryParse(r.uri.queryParameters['start'] ?? '') ?? 0) >
+            0) {
+          answer = [];
         } else {
           answer = [
             {
@@ -173,6 +182,24 @@ void main() {
     await again.syncUets();
     expect(again.state(PortalChannel.uets).problem, isNull);
     again.dispose();
+  });
+
+  test('a box an older Folio read in part is read whole once, then by its '
+      'last weeks', () async {
+    // What an older Folio kept: one notice, and no whole reading yet.
+    db.mergeNotices([
+      UetsMessage(id: 'old', subject: 'x', sent: DateTime.utc(2026, 9, 1)),
+    ]);
+    final s = sync(_MemorySecrets());
+    await login('10000000146');
+    await s.syncUets();
+    expect(asked, contains('messages'));
+    expect(starts.first, isNull, reason: 'the first reading has no start');
+    expect(db.meta('uets_full_listing'), '1');
+    starts.clear();
+    await s.syncUets();
+    expect(starts.first, isNotNull, reason: 'then the last weeks');
+    s.dispose();
   });
 
   test('a lost key does not lock the lawyer out of their own box', () async {
