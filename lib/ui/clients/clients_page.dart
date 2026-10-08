@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,10 @@ import '../../services/clients/client_statement_pdf.dart';
 import '../../services/clients/fee_reminders.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/platform/document_scan.dart';
+import '../../services/speech/speech_models.dart';
+import '../../services/speech/speech_session.dart';
+import '../widgets/speech_bar.dart';
+import '../widgets/speech_download_dialog.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
@@ -72,7 +77,11 @@ class ClientsPage extends StatefulWidget {
     this.seesMoney = true,
     this.inOffice = false,
     this.onEdit,
+    this.open,
   });
+
+  /// The client to open first (the search found it), by its key.
+  final String? open;
 
   /// A paper made for a client (a fee agreement, a receipt, a release),
   /// opened in the editor to be read over.
@@ -121,10 +130,15 @@ class _ClientsPageState extends State<ClientsPage> {
         if (t.daysLeft < 0) late[t.client.id] = (late[t.client.id] ?? 0) + 1;
       }
     }
+    final first = _entries.isEmpty ? widget.open : null;
     setState(() {
       _entries = db.clientEntries(lawyer: widget.lawyer);
       _late = late;
     });
+    if (first != null) {
+      final e = _entries.where((x) => x.key == first).firstOrNull;
+      if (e != null) _open(e);
+    }
   }
 
   int _lateOf(ClientEntry e) =>
@@ -181,11 +195,12 @@ class _ClientsPageState extends State<ClientsPage> {
     seesMoney: widget.seesMoney,
     inOffice: widget.inOffice,
     onEdit: widget.onEdit,
+    lookalikes: _db!.clientLookalikes(e, _entries),
     onOpenCase: widget.onOpenCase,
     onChanged: (key) {
       // A card made for a client only seen in the cases: it is the one
       // chosen now, under its id.
-      if (_selected != null) _selected = key;
+      if (_selected != null) _selected = key.isEmpty ? null : key;
       unawaited(_load());
     },
   );
@@ -342,10 +357,15 @@ class ClientCard extends StatefulWidget {
     this.seesMoney = true,
     this.inOffice = false,
     this.onEdit,
+    this.lookalikes = const [],
   });
 
   final ClientEntry entry;
   final ValueChanged<String>? onEdit;
+
+  /// The clients that may be this one written another way: offered to
+  /// be merged, never merged unasked.
+  final List<ClientEntry> lookalikes;
   final String person;
   final bool seesMoney, inOffice;
   final PortalDatabase database;
@@ -576,6 +596,69 @@ class _ClientCardState extends State<ClientCard> {
     }
   }
 
+  /// The client taken off the list, asked first: its records are kept,
+  /// and its cases no longer bring it back.
+  Future<void> _remove() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Müvekkil listeden kaldırılsın mı?'),
+        content: const Text(
+          'Kart ve kayıtları silinmez; müvekkil listede görünmez. '
+          'Dosyalarından yeniden gelmez.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('remove-ok'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Kaldır'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final card = _card().copyWith(removed: true);
+    _db.saveClient(card);
+    widget.onChanged?.call('');
+    // On a phone the card is a page of its own: back to the list.
+    if (mounted && MediaQuery.sizeOf(context).width < 900) {
+      unawaited(Navigator.of(context).maybePop());
+    }
+  }
+
+  /// [other] made this client's, asked first.
+  Future<void> _merge(ClientEntry other) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aynı müvekkil mi?'),
+        content: Text(
+          '"${titleName(other.name)}" bu müvekkille birleştirilsin mi? '
+          'Dosyaları ve kayıtları bu kartta görünür.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('merge-ok'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Birleştir'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final merged = _db.mergeClients(_card(), other);
+    if (mounted) setState(() => _client = merged);
+    widget.onChanged?.call(merged.id);
+  }
+
   /// Shared with the office, or no longer (KVKK: a client at a time).
   void _share(bool on) {
     final card = _card().copyWith(office: on);
@@ -630,6 +713,24 @@ class _ClientCardState extends State<ClientCard> {
     );
     if (saved == null) return;
     _keep(saved);
+    // The next step told, put on the agenda once, as a task of the case.
+    final step = saved.data['gorev'];
+    if (step is Map &&
+        step['baslik'] is String &&
+        (kept?.data['gorev'] as Map?)?['baslik'] != step['baslik']) {
+      _db.saveAgenda(
+        AgendaItem(
+          id: AgendaItem.newId(),
+          kind: 'task',
+          title: '${step['baslik']} · ${titleName(card.name)}',
+          body: 'Görüşme tutanağından (${_day(saved.created)})',
+          at: DateTime.tryParse('${step['tarih']}'),
+          allDay: true,
+          caseKey: saved.text('dosya').isEmpty ? null : saved.text('dosya'),
+          updated: DateTime.now(),
+        ),
+      );
+    }
     if (mounted) setState(() {});
     widget.onChanged?.call(card.id);
   }
@@ -803,6 +904,16 @@ class _ClientCardState extends State<ClientCard> {
                     icon: const Icon(Icons.receipt_long_outlined, size: 18),
                     label: const Text('Hesap dökümü'),
                   ),
+                PopupMenuButton<String>(
+                  key: const ValueKey('client-more'),
+                  onSelected: (_) => _remove(),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'kaldir',
+                      child: Text('Müvekkili listeden kaldır'),
+                    ),
+                  ],
+                ),
                 if (widget.inOffice)
                   FilterChip(
                     key: const ValueKey('client-share'),
@@ -942,6 +1053,26 @@ class _ClientCardState extends State<ClientCard> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 16),
       children: [
+        for (final o in widget.lookalikes)
+          Card(
+            key: ValueKey('lookalike-${o.key}'),
+            margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            elevation: 0,
+            color: AgendaColors.taskFill,
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.merge_type_rounded),
+              title: Text(
+                'Aynı kişi olabilir: ${titleName(o.name)}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text('${o.cases.length} dosya'),
+              trailing: TextButton(
+                onPressed: () => _merge(o),
+                child: const Text('Birleştir'),
+              ),
+            ),
+          ),
         if (widget.seesMoney)
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
@@ -1288,10 +1419,61 @@ class _MeetingFormState extends State<MeetingForm> {
   late final _decided = TextEditingController(
     text: _kept?.text('kararlar') ?? '',
   );
+  late final _step = TextEditingController(
+    text: '${(_kept?.data['gorev'] as Map?)?['baslik'] ?? ''}',
+  );
+  late DateTime _stepDay =
+      DateTime.tryParse('${(_kept?.data['gorev'] as Map?)?['tarih']}') ??
+      DateTime.now().add(const Duration(days: 3));
+
+  /// Dictation goes into the field last touched.
+  TextEditingController? _hearing;
+
+  /// Dictation on a computer, where Folio has its model (docs: sesli
+  /// okuma/yazma).
+  bool get _canDictate =>
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+
+  Future<void> _dictate(TextEditingController into) async {
+    final d = Dictation.instance;
+    if (d.state != ListenState.idle && d.owner == this) {
+      await d.stop();
+      return;
+    }
+    await ReadAloud.instance.stop();
+    if (!mounted) return;
+    final dir = await SpeechDownloadDialog.ensure(
+      context,
+      SpeechModel.dictation,
+    );
+    if (dir == null || !mounted) return;
+    _hearing = into;
+    await d.start(
+      modelDir: dir,
+      owner: this,
+      onText: (text) {
+        final c = _hearing;
+        if (c == null || text.trim().isEmpty) return;
+        final was = c.text;
+        c.text = was.isEmpty || was.endsWith(' ') || was.endsWith('\n')
+            ? '$was${text.trim()}'
+            : '$was ${text.trim()}';
+      },
+    );
+  }
+
+  Widget? _mic(TextEditingController c) => !_canDictate
+      ? null
+      : IconButton(
+          tooltip: 'Sesle yaz',
+          icon: const Icon(Icons.mic_none_rounded),
+          onPressed: () => unawaited(_dictate(c)),
+        );
 
   @override
   void dispose() {
-    for (final c in [_place, _people, _talked, _decided]) {
+    if (Dictation.instance.owner == this) unawaited(Dictation.instance.stop());
+    for (final c in [_place, _people, _talked, _decided, _step]) {
       c.dispose();
     }
     super.dispose();
@@ -1349,6 +1531,11 @@ class _MeetingFormState extends State<MeetingForm> {
       'konusulanlar': _talked.text.trim(),
       'kararlar': _decided.text.trim(),
       if (_case != null) 'dosya': _case,
+      if (_step.text.trim().isNotEmpty)
+        'gorev': {
+          'baslik': _step.text.trim(),
+          'tarih': _stepDay.toIso8601String(),
+        },
     };
     final kept = _kept;
     Navigator.pop(
@@ -1446,7 +1633,10 @@ class _MeetingFormState extends State<MeetingForm> {
               controller: _talked,
               minLines: 4,
               maxLines: 10,
-              decoration: const InputDecoration(labelText: 'Konuşulanlar'),
+              decoration: InputDecoration(
+                labelText: 'Konuşulanlar',
+                suffixIcon: _mic(_talked),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -1454,10 +1644,39 @@ class _MeetingFormState extends State<MeetingForm> {
               controller: _decided,
               minLines: 3,
               maxLines: 10,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Kararlar, talimatlar ve verilen yetkiler',
+                suffixIcon: _mic(_decided),
               ),
             ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('meeting-step'),
+                    controller: _step,
+                    decoration: const InputDecoration(
+                      labelText: 'Sonraki adım (görev olarak ajandaya)',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () async {
+                    final d = await showDatePicker(
+                      context: context,
+                      initialDate: _stepDay,
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
+                    if (d != null && mounted) setState(() => _stepDay = d);
+                  },
+                  child: Text(_day(_stepDay)),
+                ),
+              ],
+            ),
+            Center(child: SpeechBar(owner: this)),
             const SizedBox(height: 12),
             const Text(
               'Kaydedince "Tutanağı yazdır" ile çıkarıp müvekkile '

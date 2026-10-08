@@ -155,6 +155,19 @@ class GlobalSearchPanel extends StatelessWidget {
       onMore: onShowCases,
     );
     group(
+      'MÜVEKKİLLER',
+      results.clients,
+      results.clients.total,
+      (f, on) => _row(
+        context,
+        on,
+        Icons.people_alt_outlined,
+        titleName(f.name),
+        '${f.cases} dosya',
+        () => onPick(f),
+      ),
+    );
+    group(
       'TARAFLAR',
       results.parties,
       results.parties.total,

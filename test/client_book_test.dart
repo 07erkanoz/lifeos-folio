@@ -87,4 +87,27 @@ void main() {
     // Its time of writing, to the second, kept.
     expect(db.clientRecord('g2')!.created, DateTime(2026, 10, 6, 14, 10, 5));
   });
+
+  test('a name written another way is offered, not merged; merged, its '
+      'cases and records are the card\'s', () {
+    db.setRepresentation('a', const [(ad: 'AYŞE KARACA', rol: 'Davacı')]);
+    db.setRepresentation('b', const [(ad: 'A. KARACA', rol: 'Davalı')]);
+    db.setRepresentation('c', const [(ad: 'MEHMET KARACA', rol: 'Davacı')]);
+    db.setRepresentation('d', const [(ad: 'KARACA LTD. ŞTİ.', rol: 'Davacı')]);
+    final all = db.clientEntries();
+    ClientEntry named(String n) => all.firstWhere((e) => e.name == n);
+    expect(db.clientLookalikes(named('AYŞE KARACA'), all).map((e) => e.name), [
+      'A. KARACA',
+    ]);
+    expect(db.clientLookalikes(named('KARACA LTD. ŞTİ.'), all), isEmpty);
+    final card = Client(id: 'k1', name: 'AYŞE KARACA', updated: DateTime(2026));
+    db.saveClient(card);
+    db.mergeClients(card, named('A. KARACA'));
+    final after = db.clientEntries();
+    expect(after.map((e) => e.name), isNot(contains('A. KARACA')));
+    expect(after.firstWhere((e) => e.key == 'k1').cases.map((c) => c.caseKey), [
+      'a',
+      'b',
+    ]);
+  });
 }

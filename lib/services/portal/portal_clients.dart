@@ -175,7 +175,9 @@ extension PortalClients on PortalDatabase {
           name: c.name,
           client: c,
           cases: cases,
-          ids: [for (final x in cards) x.id],
+          ids: [
+            for (final x in cards) ...[x.id, ...x.absorbed],
+          ],
         ),
       );
     }
@@ -194,6 +196,63 @@ extension PortalClients on PortalDatabase {
 
   /// The cards and records, for one of the person's own devices: all of
   /// them.
+  /// The clients that may be [e] written another way: the same surname,
+  /// and each other word of the shorter name the start of the longer's
+  /// ("A. KARACA", "AYŞE KARACA"). A body's name is not guessed at.
+  List<ClientEntry> clientLookalikes(ClientEntry e, List<ClientEntry> all) {
+    List<String> words(String n) => [
+      for (final w in UyapWebService.fold(n).split(RegExp(r'[\s.]+')))
+        if (w.isNotEmpty) w,
+    ];
+    bool body(List<String> w) => w.any(
+      (x) => const {'ltd', 'sti', 'as', 'a.s', 'sirketi', 'koop'}.contains(x),
+    );
+    final mine = words(e.name);
+    if (mine.length < 2 || body(mine) || (e.client?.body ?? false)) {
+      return const [];
+    }
+    return [
+      for (final o in all)
+        if (o.key != e.key && !(o.client?.body ?? false))
+          if (words(o.name) case final theirs
+              when theirs.length >= 2 &&
+                  !body(theirs) &&
+                  theirs.last == mine.last &&
+                  UyapWebService.fold(o.name) != UyapWebService.fold(e.name) &&
+                  () {
+                    final a = mine.sublist(0, mine.length - 1);
+                    final b = theirs.sublist(0, theirs.length - 1);
+                    final (short, long) = a.length <= b.length
+                        ? (a, b)
+                        : (b, a);
+                    for (var i = 0; i < short.length; i++) {
+                      if (!long[i].startsWith(short[i]) &&
+                          !short[i].startsWith(long[i])) {
+                        return false;
+                      }
+                    }
+                    return true;
+                  }())
+            o,
+    ];
+  }
+
+  /// [other] told to be [card]'s client too: its names, and its card's
+  /// records, are [card]'s; its card kept, taken off the list.
+  Client mergeClients(Client card, ClientEntry other) {
+    final merged = card.copyWith(
+      names: {
+        ...card.names,
+        ...other.client?.folded ?? {UyapWebService.fold(other.name)},
+      }.toList(),
+      absorbed: {...card.absorbed, ...other.ids, ?other.client?.id}.toList(),
+    );
+    saveClient(merged);
+    final gone = other.client;
+    if (gone != null) saveClient(gone.copyWith(removed: true));
+    return merged;
+  }
+
   Map<String, Object?> clientsExport() => {
     'muvekkiller': [
       for (final r in _db.select('SELECT json FROM client'))

@@ -47,7 +47,11 @@ class CaseDetailPage extends StatefulWidget {
     this.links,
     this.showParties = false,
     this.showDocument,
+    this.onOpenClient,
   });
+
+  /// The client's card of a party the lawyer acts for, by its name.
+  final ValueChanged<String>? onOpenClient;
 
   /// The portal's key of the case.
   final String caseKey;
@@ -1375,11 +1379,28 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: side(
-                    'MÜVEKKİL',
-                    const Color(0xFF157A52),
-                    ours,
-                    counsel: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      side(
+                        'MÜVEKKİL',
+                        const Color(0xFF157A52),
+                        ours,
+                        counsel: false,
+                      ),
+                      if (widget.onOpenClient != null)
+                        TextButton.icon(
+                          key: const ValueKey('case-client-card'),
+                          onPressed: () =>
+                              widget.onOpenClient!(ours.first.name),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: const Icon(Icons.people_alt_outlined, size: 16),
+                          label: const Text('Müvekkil kartı'),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 24),

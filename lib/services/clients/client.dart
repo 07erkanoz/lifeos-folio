@@ -22,7 +22,11 @@ class Client {
     this.office = false,
     this.sharedOnce = false,
     this.person = '',
+    this.absorbed = const [],
   });
+
+  /// The cards told to be this client's too: their records are its.
+  final List<String> absorbed;
 
   final String id, name;
 
@@ -73,6 +77,7 @@ class Client {
     DateTime? updated,
     bool? removed,
     bool? office,
+    List<String>? absorbed,
   }) => Client(
     id: id,
     name: name ?? this.name,
@@ -88,6 +93,7 @@ class Client {
     office: office ?? this.office,
     sharedOnce: sharedOnce || (office ?? this.office),
     person: person,
+    absorbed: absorbed ?? this.absorbed,
   );
 
   Map<String, Object?> toJson() => {
@@ -105,6 +111,7 @@ class Client {
     'buro': office,
     'paylasildi': sharedOnce,
     'kisi': person,
+    'katilan': absorbed,
   };
 
   static Client? fromJson(Object? j) {
@@ -128,6 +135,10 @@ class Client {
       office: j['buro'] == true,
       sharedOnce: j['paylasildi'] == true || j['buro'] == true,
       person: s('kisi'),
+      absorbed: [
+        for (final n in j['katilan'] is List ? j['katilan'] as List : const [])
+          if (n is String) n,
+      ],
     );
   }
 

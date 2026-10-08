@@ -136,6 +136,15 @@ void main() {
     final byName = await s.find('ayşe karaca');
     expect(byName.cases.total, 2);
     expect(byName.parties.total, 1);
+    // The party the lawyer said they act for is their client, by name.
+    db.setRepresentation(caseKey('2024/318', civil), const [
+      (ad: 'AYŞE KARACA', rol: 'Davacı'),
+    ]);
+    final s2 = search();
+    expect(
+      (await s2.find('karaca')).clients.first.single.name,
+      'AYŞE KARACA',
+    );
     final party = byName.parties.first.single;
     expect(party.name, 'AYŞE KARACA');
     expect(party.cases.map((r) => r.kase.number), {'2024/318', '2025/77'});

@@ -6,6 +6,7 @@ import '../../services/portal/portal_hearing.dart';
 import '../../services/search/search_models.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_web_service.dart';
+import '../../services/clients/client.dart';
 import '../portfolio/portfolio_rows.dart';
 import 'search_worker.dart';
 
@@ -33,6 +34,13 @@ class FoundDocument extends Found {
   const FoundDocument(this.row, this.document);
   final PortfolioRow row;
   final UyapCaseDocument document;
+}
+
+/// A client of the lawyer's: their card.
+class FoundClient extends Found {
+  const FoundClient(this.key, this.name, this.cases);
+  final String key, name;
+  final int cases;
 }
 
 /// A document of the archive, found by its name or its text.
@@ -81,7 +89,10 @@ class GlobalSearchResults {
     this.files = const FoundGroup([]),
     this.filesTotal = 0,
     this.agenda = const FoundGroup([]),
+    this.clients = const FoundGroup([]),
   });
+
+  final FoundGroup<FoundClient> clients;
 
   final String query;
   final FoundGroup<FoundCase> cases;
@@ -98,6 +109,7 @@ class GlobalSearchResults {
       GlobalSearchResults(
         query: query,
         cases: cases,
+        clients: clients,
         parties: parties,
         documents: documents ? this.documents.opened : this.documents,
         files: files,
@@ -107,6 +119,7 @@ class GlobalSearchResults {
 
   bool get isEmpty =>
       cases.isEmpty &&
+      clients.isEmpty &&
       parties.isEmpty &&
       documents.isEmpty &&
       files.isEmpty &&
@@ -114,6 +127,7 @@ class GlobalSearchResults {
 
   List<FoundGroup<Found>> get _groups => [
     cases,
+    clients,
     parties,
     documents,
     files,
@@ -269,6 +283,20 @@ class GlobalSearch {
         watch.reset();
       }
     }
+    // The clients, few: searched here, their names folded once.
+    final clients = <(ClientEntry, String)>[];
+    try {
+      final db = database ?? await PortalDatabase.shared();
+      for (final e in db.clientEntries(lawyer: lawyer)) {
+        clients.add((
+          e,
+          UyapWebService.fold(
+            '${e.name} ${e.client?.idNo ?? ''} '
+            '${(e.client?.names ?? const []).join(' ')}',
+          ),
+        ));
+      }
+    } catch (_) {}
     final id = await worker.load(
       caseWords: caseWords,
       caseLasts: caseLasts,
@@ -286,6 +314,7 @@ class GlobalSearch {
       id: id,
       rows: rows,
       documents: documents,
+      clients: clients,
     );
   }
 
@@ -326,6 +355,11 @@ class GlobalSearch {
         FoundDocument(index.documents[i].$1, index.documents[i].$2),
     ];
 
+    final clients = [
+      for (final (e, folded) in index.clients)
+        if (ws.every(folded.contains))
+          FoundClient(e.key, e.name, e.cases.length),
+    ];
     final agenda = await _agenda(ws, {
       for (final i in hits.allCases) rows[i].key,
     });
@@ -334,6 +368,7 @@ class GlobalSearch {
     return GlobalSearchResults(
       query: query,
       cases: FoundGroup(cases, total: hits.casesTotal),
+      clients: FoundGroup(clients),
       parties: FoundGroup(parties, total: hits.partiesTotal),
       documents: FoundGroup(documents, total: hits.documentsTotal),
       files: FoundGroup(files),
@@ -426,7 +461,9 @@ class _Index {
     required this.id,
     required this.rows,
     required this.documents,
+    this.clients = const [],
   });
+  final List<(ClientEntry, String)> clients;
   final (int, int) version;
   final DateTime at;
   final int id;

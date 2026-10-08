@@ -70,6 +70,7 @@ import 'office/office_network_page.dart';
 import 'office/office_offer_dialog.dart';
 import 'office/office_pairing_dialog.dart';
 import 'office/messages_page.dart';
+import '../services/uyap/uyap_web_service.dart' show UyapWebService;
 import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
@@ -1498,6 +1499,26 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   GlobalSearch? _keptSearch;
 
+  /// The client card of a party the lawyer acts for, from its case.
+  Future<void> _openClientNamed(String name) async {
+    final db = await PortalDatabase.shared();
+    final folded = UyapWebService.fold(name);
+    final entry = db
+        .clientEntries(lawyer: _lawyerName)
+        .where(
+          (e) =>
+              UyapWebService.fold(e.name) == folded ||
+              (e.client?.folded.contains(folded) ?? false),
+        )
+        .firstOrNull;
+    if (!mounted) return;
+    _clientAsked = entry?.key;
+    await _selectGroup('muvekkiller');
+  }
+
+  /// The client a search found, for the clients' page to open.
+  String? _clientAsked;
+
   /// A row the home page's search found: its one place.
   void _openFound(Found found) {
     switch (found) {
@@ -1515,6 +1536,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         unawaited(_selectGroup('uyap:${row.key}', asked: true));
       case FoundFile(:final hit):
         unawaited(_openRecent(hit.file));
+      case FoundClient(:final key):
+        _clientAsked = key;
+        unawaited(_selectGroup('muvekkiller'));
       case FoundAgenda(:final day, :final hearing):
         _agendaDay = day;
         _agendaHearing = hearing?.key;
@@ -1677,6 +1701,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     final asked = _caseAsked;
     return CaseDetailPage(
+      onOpenClient: (name) => unawaited(_openClientNamed(name)),
       key: ValueKey('case-$key-${asked?.parties}-${asked?.document}'),
       caseKey: key,
       lawyer: _lawyerName,
@@ -2209,6 +2234,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? const TasksPage()
                                               : _group == 'muvekkiller'
                                               ? ClientsPage(
+                                                  key: ValueKey(
+                                                    'clients-$_clientAsked',
+                                                  ),
+                                                  open: _clientAsked,
                                                   lawyer: _lawyerName,
                                                   onEdit: (path) => unawaited(
                                                     _addFiles(
