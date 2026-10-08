@@ -204,6 +204,8 @@ class PortalDatabase {
         at TEXT NOT NULL, inputs TEXT NOT NULL, engine INTEGER NOT NULL,
         calendar INTEGER NOT NULL, state TEXT NOT NULL, due_day TEXT,
         change TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS deadline_history_id
+        ON deadline_history(deadline_id);
       CREATE TABLE IF NOT EXISTS deadline_legacy (
         legacy_id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
         body TEXT NOT NULL, at TEXT, all_day INTEGER NOT NULL,
@@ -1519,14 +1521,14 @@ class PortalDatabase {
             ? _db.select(
                 'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
                 'u.title_override, u.body_override, u.confirmed_inputs, '
-                'u.confirmed_at, u.dismissed FROM deadline d '
+                'u.confirmed_at, u.dismissed, $_confirmedDay FROM deadline d '
                 '${decidedOnly ? 'JOIN' : 'LEFT JOIN'} '
                 'deadline_user u ON u.deadline_id = d.id ORDER BY d.due_day',
               )
             : _db.select(
                 'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
                 'u.title_override, u.body_override, u.confirmed_inputs, '
-                'u.confirmed_at, u.dismissed FROM deadline d LEFT JOIN '
+                'u.confirmed_at, u.dismissed, $_confirmedDay FROM deadline d LEFT JOIN '
                 'deadline_user u ON u.deadline_id = d.id WHERE d.notice_id=? '
                 'ORDER BY d.due_day',
                 [noticeId],
@@ -1538,12 +1540,19 @@ class PortalDatabase {
     final rows = _db.select(
       'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
       'u.title_override, u.body_override, u.confirmed_inputs, '
-      'u.confirmed_at, u.dismissed FROM deadline d LEFT JOIN deadline_user u '
+      'u.confirmed_at, u.dismissed, $_confirmedDay FROM deadline d LEFT JOIN deadline_user u '
       'ON u.deadline_id = d.id WHERE d.id=?',
       [id],
     );
     return rows.isEmpty ? null : _keptDeadline(rows.first);
   }
+
+  /// The day a deadline had when the lawyer confirmed it: its history's
+  /// line of the inputs confirmed.
+  static const _confirmedDay =
+      '(SELECT h.due_day FROM deadline_history h WHERE h.deadline_id = d.id '
+      'AND h.inputs = u.confirmed_inputs ORDER BY h.seq DESC LIMIT 1) '
+      'AS confirmed_day';
 
   KeptDeadline _keptDeadline(Row r) {
     final record = DeadlineRecord(
@@ -1585,7 +1594,11 @@ class PortalDatabase {
                 : DateTime.parse(r['confirmed_at'] as String),
             dismissed: r['dismissed'] == 1,
           );
-    return KeptDeadline(record, user);
+    return KeptDeadline(
+      record,
+      user,
+      confirmedDay: r['confirmed_day'] as String?,
+    );
   }
 
   /// [noticeId]'s deadlines as the engine now makes them, in one

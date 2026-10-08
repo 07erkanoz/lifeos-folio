@@ -50,7 +50,13 @@ String _dayText(String key) {
 String deadlineStateText(KeptDeadline d) => d.confirmed
     ? 'Onaylandı'
     : d.reconfirm
-    ? 'Yeniden onayınızı bekliyor'
+    ? switch (d.previousDay) {
+        null => 'Yeniden onayınızı bekliyor',
+        final before when d.record.state != 'aday' =>
+          'Artık hesaplanmıyor; önce ${_dayText(before)} onaylanmıştı',
+        final before =>
+          'Yeniden onayınızı bekliyor; önce ${_dayText(before)} onaylanmıştı',
+      }
     : switch (d.record.state) {
         'aday' => 'Onayınızı bekliyor',
         'olayBekleniyor' => 'Başlangıç olayı bekleniyor',

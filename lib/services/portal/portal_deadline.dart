@@ -163,7 +163,10 @@ class DeadlineUser {
 class KeptDeadline {
   final DeadlineRecord record;
   final DeadlineUser? user;
-  const KeptDeadline(this.record, this.user);
+
+  /// The day it had when the lawyer confirmed it, as its history keeps it.
+  final String? confirmedDay;
+  const KeptDeadline(this.record, this.user, {this.confirmedDay});
 
   /// Confirmed by the lawyer on the very inputs it now has, and with a day.
   bool get confirmed =>
@@ -173,17 +176,35 @@ class KeptDeadline {
       user!.confirmedInputs == record.inputs;
 
   /// Confirmed once, on inputs it no longer has (a document, the case,
-  /// the engine or the calendar changed), and still made with a day: it
-  /// stays followed while the lawyer looks at it again. A change never
-  /// takes a deadline the lawyer followed off the agenda quietly.
+  /// the engine or the calendar changed): it stays followed while the
+  /// lawyer looks at it again, even when it is no longer made at all. A
+  /// change never takes a deadline the lawyer followed off the agenda
+  /// quietly (the audit's B22).
   bool get reconfirm =>
       !confirmed &&
-      record.state == 'aday' &&
-      record.dueDay != null &&
-      user?.confirmedInputs != null;
+      user?.confirmedInputs != null &&
+      ((record.state == 'aday' && record.dueDay != null) ||
+          confirmedDay != null);
 
-  /// The day the lawyer goes by: their own, else the engine's.
-  String? get day => user?.manualDay ?? record.dueDay;
+  /// The day confirmed before, while it differs from what is made now
+  /// (or nothing is): shown beside it until the lawyer decides.
+  String? get previousDay =>
+      reconfirm && confirmedDay != null && confirmedDay != _madeDay
+      ? confirmedDay
+      : null;
+
+  String? get _madeDay => record.state == 'aday' ? record.dueDay : null;
+
+  /// The day the lawyer goes by: their own, else the engine's. Waiting to
+  /// be confirmed again, the earlier of the one confirmed and the one made
+  /// now: the alarm comes for whichever may be the last day.
+  String? get day {
+    final manual = user?.manualDay;
+    if (manual != null) return manual;
+    if (!reconfirm) return record.dueDay;
+    final days = [?_madeDay, ?confirmedDay]..sort();
+    return days.firstOrNull;
+  }
 
   /// On the agenda, counted and alarmed: confirmed, to be confirmed again,
   /// or given a day by the lawyer; never one the lawyer took off.

@@ -16,6 +16,7 @@ import 'package:evrak_convert/services/uets/notice_deadlines.dart';
 import 'package:evrak_convert/services/uets/notice_matcher.dart';
 import 'package:evrak_convert/services/uets/uets_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
+import 'package:evrak_convert/ui/agenda/deadline_review.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // What the audit of 8 October 2026 found wrong in the deadline engine
@@ -316,6 +317,46 @@ void main() {
     expect(before.reconfirm, isTrue);
     expect(before.onAgenda, isTrue);
     expect(before.toReview, isTrue);
+  });
+
+  test('B22: the day confirmed is shown beside the one made now, the '
+      'earlier is followed; one no longer made stays on its confirmed day', () {
+    final r = records(
+      'Tebliğden itibaren iki hafta içinde beyanlarınızı sununuz.',
+    ).single;
+    final user = DeadlineUser(deadlineId: r.id, confirmedInputs: 'eski');
+    final made = DateTime.parse(r.dueDay!);
+    String key(DateTime t) =>
+        '${t.year}-${t.month.toString().padLeft(2, '0')}-'
+        '${t.day.toString().padLeft(2, '0')}';
+    final earlier = key(made.subtract(const Duration(days: 3)));
+    final later = key(made.add(const Duration(days: 3)));
+
+    final moved = KeptDeadline(r, user, confirmedDay: later);
+    expect(moved.previousDay, later);
+    expect(moved.day, r.dueDay);
+    expect(KeptDeadline(r, user, confirmedDay: earlier).day, earlier);
+    expect(deadlineStateText(moved), contains('önce'));
+    // The same day as confirmed: nothing to show beside it.
+    expect(KeptDeadline(r, user, confirmedDay: r.dueDay).previousDay, isNull);
+
+    final gone = KeptDeadline(r.withState('eski'), user, confirmedDay: later);
+    expect(gone.onAgenda, isTrue);
+    expect(gone.day, later);
+    expect(deadlineStateText(gone), startsWith('Artık hesaplanmıyor'));
+    // Never confirmed, a record no longer made is not followed.
+    expect(KeptDeadline(r.withState('eski'), null).onAgenda, isFalse);
+  });
+
+  test('B22: the day confirmed is read back from the history', () {
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    final r = records(
+      'Tebliğden itibaren iki hafta içinde beyanlarınızı sununuz.',
+    ).single;
+    db.replaceNoticeDeadlines(r.noticeId, [r]);
+    expect(db.confirmDeadline(r.id), isTrue);
+    expect(db.deadline(r.id)!.confirmedDay, r.dueDay);
   });
 
   group('stage C: a directive at a time', () {
