@@ -20,6 +20,8 @@ import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
 import '../agenda/uets_connect.dart';
+import '../search/global_search.dart';
+import '../search/global_search_panel.dart';
 import '../widgets/uyap_connect_view.dart';
 
 /// What the desktop's first page shows of the office, gathered by the home
@@ -72,6 +74,9 @@ class DesktopHome extends StatefulWidget {
     required this.onAgenda,
     required this.onUets,
     this.onNotices,
+    this.search,
+    this.onFound,
+    this.onShowCases,
     this.uyapFolder,
     this.links,
     this.now,
@@ -81,7 +86,20 @@ class DesktopHome extends StatefulWidget {
   final String name;
   final List<EvrakFile> recent;
   final DesktopHomeOffice office;
+
+  /// The archive searched for these words: Enter with nothing found, or
+  /// its group's "tümünü göster".
   final ValueChanged<String> onSearch;
+
+  /// What is found as it is typed, grouped (UYAP's cases, parties and
+  /// documents, the archive, the agenda); null for the archive alone.
+  final GlobalSearch? search;
+
+  /// Opens the one place of a row found.
+  final ValueChanged<Found>? onFound;
+
+  /// UYAP Dosyalarım searched for these words.
+  final ValueChanged<String>? onShowCases;
   final ValueChanged<EvrakFile> onOpen, onEdit, onSendUyap;
   final VoidCallback onArchive, onDrafts, onAgenda, onUets;
 
@@ -101,7 +119,18 @@ enum _Filter { all, petitions, uyap, scans, week }
 
 class _DesktopHomeState extends State<DesktopHome> {
   final _search = TextEditingController();
-  final _searchFocus = FocusNode();
+  late final _searchFocus = FocusNode(onKeyEvent: _searchKey);
+
+  /// What the search found, shown under it while it has the focus.
+  final _found = OverlayPortalController();
+  final _searchLink = LayerLink();
+  final _searchBox = GlobalKey();
+  GlobalSearchResults? _results;
+  int _at = 0;
+  bool _finding = false;
+  Timer? _findSoon;
+  Future<GlobalSearchResults?>? _finds;
+  int _findGeneration = 0;
   _Filter _filter = _Filter.all;
   Timer? _tick;
 
@@ -128,6 +157,14 @@ class _DesktopHomeState extends State<DesktopHome> {
   @override
   void initState() {
     super.initState();
+    // Away from the field, what it found closes; back, it opens again.
+    _searchFocus.addListener(() {
+      if (!_searchFocus.hasFocus) {
+        _found.hide();
+      } else if (_results != null) {
+        _found.show();
+      }
+    });
     _tick = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
@@ -143,6 +180,7 @@ class _DesktopHomeState extends State<DesktopHome> {
   @override
   void dispose() {
     _tick?.cancel();
+    _findSoon?.cancel();
     _search.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -421,47 +459,51 @@ class _DesktopHomeState extends State<DesktopHome> {
         Flexible(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 620),
-            child: TextField(
-              key: const ValueKey('home-search'),
-              controller: _search,
-              focusNode: _searchFocus,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (text) {
-                widget.onSearch(text.trim());
-                _search.clear();
-              },
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: scheme.surface,
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                hintText: 'Evrak adı ya da içinde geçen bir kelime…',
-                suffixIcon: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: scheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      Platform.isMacOS ? '⌘ K' : 'Ctrl K',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AgendaColors.muted,
+            child: _searchPortal(
+              TextField(
+                key: const ValueKey('home-search'),
+                controller: _search,
+                focusNode: _searchFocus,
+                textInputAction: TextInputAction.search,
+                onChanged: _typed,
+                onSubmitted: (text) => unawaited(_submitted(text)),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: scheme.surface,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  hintText: 'Evrak adı ya da içinde geçen bir kelime…',
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Container(
+                      // Its own width: aligned, it took the whole field's
+                      // and left nothing for what is typed.
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: scheme.outlineVariant),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        Platform.isMacOS ? '⌘ K' : 'Ctrl K',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AgendaColors.muted,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                suffixIconConstraints: const BoxConstraints(minHeight: 44),
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: scheme.outlineVariant),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: scheme.primary, width: 1.5),
+                  suffixIconConstraints: const BoxConstraints(minHeight: 44),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: scheme.primary, width: 1.5),
+                  ),
                 ),
               ),
             ),
@@ -469,6 +511,182 @@ class _DesktopHomeState extends State<DesktopHome> {
         ),
       ],
     );
+  }
+
+  /// The search's field, with what it found opened under it.
+  Widget _searchPortal(Widget field) => CompositedTransformTarget(
+    link: _searchLink,
+    child: OverlayPortal(
+      controller: _found,
+      overlayChildBuilder: (context) {
+        final results = _results;
+        final box = _searchBox.currentContext?.findRenderObject() as RenderBox?;
+        if (results == null || box == null || !box.hasSize) {
+          return const SizedBox.shrink();
+        }
+        final bottom = box.localToGlobal(Offset(0, box.size.height)).dy;
+        final room = MediaQuery.sizeOf(context).height - bottom - 24;
+        return Positioned(
+          width: box.size.width,
+          child: CompositedTransformFollower(
+            link: _searchLink,
+            targetAnchor: Alignment.bottomLeft,
+            offset: const Offset(0, 6),
+            child: TextFieldTapRegion(
+              child: Container(
+                key: const ValueKey('home-search-results'),
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x22000000),
+                      blurRadius: 24,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: room.clamp(160.0, 680.0),
+                  ),
+                  child: GlobalSearchPanel(
+                    results: results,
+                    selected: _at,
+                    searching: _finding,
+                    onPick: _open,
+                    onShowCases: () =>
+                        _leave(() => widget.onShowCases?.call(results.query)),
+                    onShowFiles: () =>
+                        _leave(() => widget.onSearch(results.query)),
+                    onOpenGroup: ({documents = false, agenda = false}) =>
+                        setState(
+                          () => _results = results.open(
+                            documents: documents,
+                            agenda: agenda,
+                          ),
+                        ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      child: KeyedSubtree(key: _searchBox, child: field),
+    ),
+  );
+
+  /// A letter typed: looked for a moment later, once typing pauses.
+  void _typed(String text) {
+    final search = widget.search;
+    if (search == null) return;
+    _findSoon?.cancel();
+    if (GlobalSearch.words(text).isEmpty) {
+      _findGeneration++;
+      _finds = null;
+      _found.hide();
+      setState(() {
+        _results = null;
+        _finding = false;
+      });
+      return;
+    }
+    setState(() => _finding = true);
+    _findSoon = Timer(
+      const Duration(milliseconds: 200),
+      () => unawaited(_find(text)),
+    );
+  }
+
+  Future<GlobalSearchResults?> _find(String text) {
+    final search = widget.search!;
+    final generation = ++_findGeneration;
+    return _finds = () async {
+      GlobalSearchResults? results;
+      try {
+        results = await search.find(text);
+      } catch (_) {
+        results = GlobalSearchResults(query: text.trim());
+      }
+      if (!mounted || generation != _findGeneration) return null;
+      setState(() {
+        _results = results;
+        _at = 0;
+        _finding = false;
+      });
+      if (_searchFocus.hasFocus) _found.show();
+      return results;
+    }();
+  }
+
+  /// Enter: the row the arrows are on, the first unless moved; nothing
+  /// found, the archive searched as before.
+  Future<void> _submitted(String text) async {
+    if (widget.search == null || GlobalSearch.words(text).isEmpty) {
+      _leave(() => widget.onSearch(text.trim()));
+      return;
+    }
+    var results = _results;
+    if (_findSoon?.isActive ?? false) {
+      _findSoon!.cancel();
+      results = await _find(text);
+    } else if (_finding) {
+      results = await _finds;
+    }
+    if (!mounted) return;
+    final shown = results?.shown ?? const <Found>[];
+    if (shown.isEmpty) {
+      _leave(() => widget.onSearch(text.trim()));
+    } else {
+      _open(shown[_at.clamp(0, shown.length - 1)]);
+    }
+  }
+
+  void _open(Found found) => _leave(() => widget.onFound?.call(found));
+
+  /// The search done: emptied and closed, then [go].
+  void _leave(VoidCallback go) {
+    _findSoon?.cancel();
+    _findGeneration++;
+    _found.hide();
+    _search.clear();
+    _searchFocus.unfocus();
+    setState(() {
+      _results = null;
+      _finding = false;
+      _at = 0;
+    });
+    go();
+  }
+
+  /// The arrows go through what was found, Escape closes it.
+  KeyEventResult _searchKey(FocusNode node, KeyEvent event) {
+    final results = _results;
+    if (event is KeyUpEvent || results == null || !_found.isShowing) {
+      return KeyEventResult.ignored;
+    }
+    final count = results.shown.length;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      _found.hide();
+      setState(() {});
+      return KeyEventResult.handled;
+    }
+    if (count == 0) return KeyEventResult.ignored;
+    if (key == LogicalKeyboardKey.arrowDown) {
+      setState(() => _at = (_at + 1) % count);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowUp) {
+      setState(() => _at = (_at - 1 + count) % count);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   // The portals.
@@ -685,7 +903,8 @@ class _DesktopHomeState extends State<DesktopHome> {
               style: OutlinedButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 foregroundColor: scheme.primary,
-                textStyle: const TextStyle(fontFamily: 'LiberationSans', 
+                textStyle: const TextStyle(
+                  fontFamily: 'LiberationSans',
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -708,7 +927,8 @@ class _DesktopHomeState extends State<DesktopHome> {
               onPressed: onAction,
               style: FilledButton.styleFrom(
                 visualDensity: VisualDensity.compact,
-                textStyle: const TextStyle(fontFamily: 'LiberationSans', 
+                textStyle: const TextStyle(
+                  fontFamily: 'LiberationSans',
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),

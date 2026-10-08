@@ -41,7 +41,14 @@ class AgendaPage extends StatefulWidget {
     this.onPetition,
     this.onChanged,
     this.onOpenNotice,
+    this.showDay,
+    this.showHearing,
   });
+
+  /// Opened at this day, and at this hearing in it: the home page's search
+  /// sent here.
+  final DateTime? showDay;
+  final String? showHearing;
 
   /// Tests pass their own; otherwise the one in Folio's data folder.
   final PortalDatabase? database;
@@ -120,9 +127,9 @@ DateTime _monday(DateTime t) => _day(t).subtract(Duration(days: t.weekday - 1));
 
 class _AgendaPageState extends State<AgendaPage> {
   PortalDatabase? _db;
-  _View _view = _View.week;
-  late DateTime _anchor = _day(_now());
-  String? _selected;
+  late _View _view = widget.showDay == null ? _View.week : _View.day;
+  late DateTime _anchor = _day(widget.showDay ?? _now());
+  late String? _selected = widget.showHearing;
   List<PortalHearing> _hearings = const [];
   List<AgendaItem> _items = const [];
 
@@ -173,6 +180,7 @@ class _AgendaPageState extends State<AgendaPage> {
     try {
       final json = jsonDecode(await (await _viewFile()).readAsString());
       final view = _View.values.asNameMap()[json is Map ? json['view'] : null];
+      if (widget.showDay != null) return;
       if (view != null && mounted && view != _view) {
         setState(() => _view = view);
         _reload();

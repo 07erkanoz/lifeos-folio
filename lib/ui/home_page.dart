@@ -48,6 +48,8 @@ import 'widgets/spreadsheet_viewer.dart';
 import 'widgets/hover_document_preview.dart';
 import 'portfolio/case_detail_page.dart';
 import 'portfolio/portfolio_page.dart';
+import 'search/global_search.dart';
+import 'search/global_search_page.dart';
 import 'desktop/desktop_home.dart';
 import 'widgets/editor_ribbon.dart';
 import 'widgets/desktop_frame.dart' show windowFullScreen;
@@ -1186,10 +1188,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _selectGroup(String value) async {
+  Future<void> _selectGroup(String value, {bool asked = false}) async {
     if (!await _leaveEditor()) return;
     ScrollChrome.show();
     setState(() {
+      if (!asked) _forgetAsked();
       _group = value;
       _mobileArchive = true;
       _showLibrary = true;
@@ -1461,6 +1464,87 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return true;
   }
 
+  /// What the home page's search asked the page it opens to show: UYAP
+  /// Dosyalarım searched for these words, a case at its parties or at a
+  /// document, the agenda at a day and a hearing.
+  String? _portfolioQuery;
+  ({bool parties, String? document})? _caseAsked;
+  DateTime? _agendaDay;
+  String? _agendaHearing;
+
+  void _forgetAsked() {
+    _portfolioQuery = null;
+    _caseAsked = null;
+    _agendaDay = null;
+    _agendaHearing = null;
+  }
+
+  /// The home page's search, made again when the lawyer's name changes:
+  /// whose side a party is on goes by it.
+  GlobalSearch get _globalSearch {
+    final kept = _keptSearch;
+    if (kept != null && kept.lawyer == _lawyerName) return kept;
+    return _keptSearch = GlobalSearch(
+      lawyer: _lawyerName,
+      archive: (text, limit) => _library.peek(text, limit: limit),
+    );
+  }
+
+  GlobalSearch? _keptSearch;
+
+  /// A row the home page's search found: its one place.
+  void _openFound(Found found) {
+    switch (found) {
+      case FoundCase(:final row):
+        unawaited(_selectGroup('uyap:${row.key}'));
+      case FoundParty(:final name, :final cases):
+        if (cases.length == 1) {
+          _caseAsked = (parties: true, document: null);
+          unawaited(_selectGroup('uyap:${cases.single.key}', asked: true));
+        } else {
+          _showCases(name);
+        }
+      case FoundDocument(:final row, :final document):
+        _caseAsked = (parties: false, document: document.key);
+        unawaited(_selectGroup('uyap:${row.key}', asked: true));
+      case FoundFile(:final hit):
+        unawaited(_openRecent(hit.file));
+      case FoundAgenda(:final day, :final hearing):
+        _agendaDay = day;
+        _agendaHearing = hearing?.key;
+        unawaited(_selectGroup('agenda', asked: true));
+    }
+  }
+
+  /// The search on a phone: a page of its own, left for the one place
+  /// chosen in it.
+  Future<void> _searchOnPhone() async {
+    final exit = await Navigator.of(context).push<SearchExit>(
+      MaterialPageRoute(
+        builder: (_) => GlobalSearchPage(search: _globalSearch),
+      ),
+    );
+    if (!mounted) return;
+    switch (exit) {
+      case SearchOpened(:final found):
+        _openFound(found);
+      case SearchShowCases(:final query):
+        _showCases(query);
+      case SearchShowFiles(:final query):
+        await _selectGroup('all');
+        if (!mounted) return;
+        _searchController.text = query;
+        _library.setQuery(query);
+      case null:
+    }
+  }
+
+  /// UYAP Dosyalarım searched for [query].
+  void _showCases(String query) {
+    _portfolioQuery = query;
+    unawaited(_selectGroup('uyap', asked: true));
+  }
+
   /// The desktop's first page (docs/design/masaustu-anasayfa-taslak.png).
   Widget _desktopHome() => DesktopHome(
     name: _lawyerName,
@@ -1473,6 +1557,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _searchController.text = text;
       _library.setQuery(text);
     },
+    search: _globalSearch,
+    onFound: _openFound,
+    onShowCases: _showCases,
     onOpen: (file) => unawaited(_openRecent(file)),
     onEdit: (file) => unawaited(_openRecent(file, edit: _editsAt(file))),
     onSendUyap: (file) async {
@@ -1493,6 +1580,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   );
 
   Widget _agendaPage() => AgendaPage(
+    key: ValueKey('agenda-$_agendaDay-$_agendaHearing'),
+    showDay: _agendaDay,
+    showHearing: _agendaHearing,
     onChanged: () => unawaited(_countAgenda()),
     onPetition: _agendaPetition,
     onOpenCase: _openPortalCase,
@@ -1569,17 +1659,27 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final key = _group.startsWith('uyap:') ? _group.substring(5) : null;
     if (key == null) {
       return PortfolioPage(
-        key: const ValueKey('portfolio'),
+        key: ValueKey('portfolio-${_portfolioQuery ?? ''}'),
         lawyer: _lawyerName,
-        onShowCase: (key) => setState(() => _group = 'uyap:$key'),
+        initialQuery: _portfolioQuery,
+        onShowCase: (key) => setState(() {
+          _caseAsked = null;
+          _group = 'uyap:$key';
+        }),
       );
     }
+    final asked = _caseAsked;
     return CaseDetailPage(
-      key: ValueKey('case-$key'),
+      key: ValueKey('case-$key-${asked?.parties}-${asked?.document}'),
       caseKey: key,
       lawyer: _lawyerName,
+      showParties: asked?.parties ?? false,
+      showDocument: asked?.document,
       onBack: () {
-        setState(() => _group = 'uyap');
+        setState(() {
+          _caseAsked = null;
+          _group = 'uyap';
+        });
         unawaited(_countAgenda());
       },
       onOpen: (file) =>
@@ -1818,6 +1918,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               fontWeight: FontWeight.w700,
                                               fontSize: 17,
                                             ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          key: const ValueKey(
+                                            'phone-search-open',
+                                          ),
+                                          tooltip: 'Ara',
+                                          onPressed: () =>
+                                              unawaited(_searchOnPhone()),
+                                          icon: const Icon(
+                                            Icons.search_rounded,
                                           ),
                                         ),
                                         IconButton(

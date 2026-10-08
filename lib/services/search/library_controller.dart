@@ -532,6 +532,14 @@ class LibraryController extends ChangeNotifier {
     searchNow();
   }
 
+  /// The first few documents [text] finds, for the home page's search,
+  /// without touching what the archive shows; null while the index opens.
+  Future<SearchPage?> peek(String text, {int limit = 5}) async {
+    final service = _service;
+    if (!ready || _disposed || service == null) return null;
+    return service.search(SearchQuery(text: text, limit: limit));
+  }
+
   Future<void> searchNow({bool more = false}) async {
     _debounce?.cancel();
     if (!ready || _disposed) return;

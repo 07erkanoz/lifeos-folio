@@ -26,9 +26,13 @@ class PortfolioPage extends StatefulWidget {
     this.lawyer = '',
     this.database,
     this.store,
+    this.initialQuery,
   });
 
   final ValueChanged<String> onShowCase;
+
+  /// Searched for at once: the home page's search sent here.
+  final String? initialQuery;
 
   /// "Av. Deniz Kaya": whose side is "MÜVEKKİL".
   final String lawyer;
@@ -66,6 +70,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
   @override
   void initState() {
     super.initState();
+    _search.text = widget.initialQuery ?? '';
     _sync?.addListener(_synced);
     _sync?.portfolioVersion.addListener(_grew);
     UyapCaseStore.changes.addListener(_changed);

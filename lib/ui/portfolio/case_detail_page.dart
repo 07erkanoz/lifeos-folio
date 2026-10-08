@@ -45,10 +45,18 @@ class CaseDetailPage extends StatefulWidget {
     this.database,
     this.controller,
     this.links,
+    this.showParties = false,
+    this.showDocument,
   });
 
   /// The portal's key of the case.
   final String caseKey;
+
+  /// Opened at its parties, from a search for one.
+  final bool showParties;
+
+  /// A document of it to open, by key, from a search for it.
+  final String? showDocument;
   final VoidCallback onBack;
   final ValueChanged<File> onOpen;
   final ValueChanged<UyapCaseLink>? onNewPetition;
@@ -197,8 +205,10 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _uyapNotices = db.uyapNotices(caseKey: kase.key);
       _petitions = petitions;
       _shownKey = _lastShown[kase.key];
+      if (widget.showParties) _tab = _Tab.parties;
       _loaded = true;
     });
+    _openAsked();
     await _seen();
     // Fetched again when it has not been for a while and a portal is
     // there to ask; the list shows what was kept meanwhile.
@@ -214,6 +224,26 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 const Duration(minutes: 30))) {
       unawaited(_c.refresh());
     }
+  }
+
+  /// The document a search asked for, shown once the list is there: beside
+  /// it on a wide window, on a page of its own on a phone.
+  void _openAsked() {
+    final key = widget.showDocument;
+    final record = _c.record;
+    if (key == null || record == null) return;
+    final d = [
+      for (final d in record.documents) ...[d, ...d.attachments],
+    ].where((d) => d.key == key).firstOrNull;
+    if (d == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (MediaQuery.sizeOf(context).width >= 900) {
+        _show(d);
+      } else {
+        unawaited(_openPreviewPage(d));
+      }
+    });
   }
 
   /// The case opened: no longer new, nor its documents.

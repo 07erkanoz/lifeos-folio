@@ -42,6 +42,16 @@ import 'package:evrak_convert/services/portal/uyap_notice.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/ui/agenda/uyap_notices_page.dart';
 import 'package:evrak_convert/ui/settings/settings_page.dart';
+import 'package:evrak_convert/models/evrak_file.dart';
+import 'package:evrak_convert/services/portal/observed.dart';
+import 'package:evrak_convert/services/portal/portal_channel.dart';
+import 'package:evrak_convert/services/search/search_models.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
+import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
+import 'package:evrak_convert/ui/desktop/desktop_home.dart';
+import 'package:evrak_convert/ui/search/global_search.dart';
+import 'package:evrak_convert/ui/search/global_search_page.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
 import 'package:flutter/material.dart';
@@ -862,6 +872,128 @@ void main() {
       await _shot(tester, name);
     }
     tester.view.reset();
+  });
+
+  testWidgets('global search', (tester) async {
+    tester.view.physicalSize = logical * pixelRatio;
+    tester.view.devicePixelRatio = pixelRatio;
+    addTearDown(tester.view.reset);
+    final root = Directory.systemTemp.createTempSync('folio_shot_search_');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final support = Directory('${root.path}/destek');
+    final store = UyapCaseStore(
+      directory: support,
+      settings: UyapSettings(directory: support, home: '${root.path}/ev'),
+    );
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    final at = DateTime.utc(2026, 10, 6);
+    final courts = [
+      ('2024/318', 'Antalya 3. Asliye Hukuk Mahkemesi', 'Alacak'),
+      ('2025/77', 'Antalya 2. İş Mahkemesi', 'İşçi Alacağı'),
+      ('2025/9184', 'Antalya 5. İcra Dairesi', 'İlamsız Takip'),
+    ];
+    db.mergeCases([
+      for (final (n, c, _) in courts)
+        PortalCase(
+          key: caseKey(n, c),
+          number: n,
+          court: c,
+          status: Observed('Açık', PortalChannel.uyapMobile, at),
+        ),
+    ], portfolio: true, baseline: true);
+    UyapCaseDocument doc(String key, String type, String day) =>
+        UyapCaseDocument(
+          key: key,
+          documentId: key,
+          caseId: '1',
+          type: type,
+          number: key,
+          approved: '$day 10:00',
+          sender: 'Mahkeme',
+          description: '',
+        );
+    var i = 0;
+    for (final (n, c, kind) in courts) {
+      i++;
+      await tester.runAsync(
+        () => store.keep(
+          target: UyapCase('$i', n, '', c),
+          details: UyapCaseDetails(kind: kind),
+          parties: [
+            const UyapParty('AYŞE KARACA', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+            UyapParty('KARACA YAPI A.Ş. $i', 'Davalı', 'Av. Murat Er', 'Kurum'),
+          ],
+          documents: UyapCaseDocuments([
+            doc('a$i', 'Karaca Bilirkişi Raporu', '0$i.10.2026'),
+          ]),
+        ),
+      );
+    }
+    db.saveAgenda(
+      AgendaItem(
+        id: 'n1',
+        kind: 'deadline',
+        title: 'Karaca bilirkişi raporuna itiraz',
+        at: DateTime(2026, 10, 20),
+        allDay: true,
+        updated: at,
+      ),
+    );
+    final search = GlobalSearch(
+      lawyer: 'Av. Deniz Kaya',
+      database: db,
+      store: store,
+      archive: (text, limit) async => SearchPage([
+        for (final name in [
+          'Karaca vekaletname.pdf',
+          'Karaca cevap dilekçesi.udf',
+        ])
+          SearchHit(
+            file: EvrakFile.fromPath('${root.path}/$name'),
+            excerpt: '… davacı Ayşe Karaca vekili olarak …',
+          ),
+      ], 2, 0),
+    );
+    await tester.runAsync(() => search.find('karaca'));
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: DesktopHome(
+            name: 'Av. Deniz Kaya',
+            recent: const [],
+            office: const DesktopHomeOffice(),
+            links: UyapCaseLinks(directory: support),
+            search: search,
+            onFound: (_) {},
+            onShowCases: (_) {},
+            onSearch: (_) {},
+            onOpen: (_) {},
+            onEdit: (_) {},
+            onSendUyap: (_) {},
+            onArchive: () {},
+            onDrafts: () {},
+            onAgenda: () {},
+            onUets: () {},
+          ),
+        ),
+      ),
+    );
+    final field = find.byKey(const ValueKey('home-search'));
+    await tester.tap(field);
+    await tester.enterText(field, 'karaca');
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await _shot(tester, 'genel-arama');
+    tester.view.physicalSize = const Size(390, 844) * 3;
+    tester.view.devicePixelRatio = 3;
+    await tester.pumpWidget(_app(GlobalSearchPage(search: search)));
+    await tester.enterText(
+      find.byKey(const ValueKey('phone-search')),
+      'karaca',
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await _shot(tester, 'genel-arama-telefon');
   });
 }
 
