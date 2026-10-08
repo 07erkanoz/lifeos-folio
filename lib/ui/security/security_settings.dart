@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../services/editor/profile_autofill.dart' show profileTc;
 import '../../services/uyap/uyap_mobile_api.dart';
 
 import 'package:flutter/services.dart';
@@ -68,13 +69,14 @@ class SecuritySettings extends StatelessWidget {
               title: 'Şifreyi değiştir',
               onTap: () => unawaited(_change(context)),
             ),
-            SettingsRow(
-              key: const ValueKey('settings-lock-code'),
-              icon: Icons.key_outlined,
-              title: 'Yeni kurtarma kodu',
-              subtitle: 'Eski kod geçersiz olur',
-              onTap: () => unawaited(_newCode(context)),
-            ),
+            if (!_lock.knowsWhose)
+              SettingsRow(
+                key: const ValueKey('settings-lock-code'),
+                icon: Icons.key_outlined,
+                title: 'Yeni kurtarma kodu',
+                subtitle: 'Eski kod geçersiz olur',
+                onTap: () => unawaited(_newCode(context)),
+              ),
             SettingsRow(
               key: const ValueKey('settings-lock-now'),
               icon: Icons.screen_lock_portrait_outlined,
@@ -88,8 +90,9 @@ class SecuritySettings extends StatelessWidget {
               'Şifre Folio’nun açılmasını korur; bilgisayardaki dosyaları '
               'şifrelemez. Bilgisayarınızın disk şifrelemesini (Windows’ta '
               'BitLocker, Mac’te FileVault, Linux’ta LUKS) de açık tutun. '
-              'Kurtarma kodunu kaybeder ve şifreyi unutursanız şifre '
-              'sıfırlanamaz.',
+              'Şifreyi unutursanız e-Devlet’e e-imza ya da mobil imzayla '
+              'girerek yenilersiniz; Folio avukatın TC numarasını '
+              'bilmiyorsa bunun yerine kurtarma kodu verilir.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
           ),
@@ -98,11 +101,31 @@ class SecuritySettings extends StatelessWidget {
     },
   );
 
-  /// Whose Folio it is, from UYAP Mobil's session when one is open: for
-  /// a forgotten password to be renewed by e-Devlet.
-  void _bindWhose() {
-    final tc = UyapMobileApi.instance.session.value?.tckn ?? '';
-    if (tc.isNotEmpty) unawaited(_lock.bindIdentity(tc));
+  /// Whose Folio it is: the lawyer's TC number from the profile, which
+  /// e-Devlet and UYAP fill, else from UYAP Mobil's session; empty when
+  /// neither knows.
+  static Future<String> _whose() async {
+    final fromProfile = await profileTc();
+    if (fromProfile.isNotEmpty) return fromProfile;
+    return UyapMobileApi.instance.session.value?.tckn ?? '';
+  }
+
+  /// A new password: with Folio knowing whose it is, e-Devlet renews it
+  /// when forgotten and no code is given; else a code to write down.
+  Future<void> _setPassword(BuildContext context, String password) async {
+    final tc = await _whose();
+    final code = await _lock.setPassword(password, withCode: tc.isEmpty);
+    if (tc.isNotEmpty) await _lock.bindIdentity(tc);
+    if (!context.mounted) return;
+    if (code != null) {
+      await _showCode(context, code);
+    } else {
+      _say(
+        context,
+        'Şifre konuldu. Unutursanız kilit ekranında e-Devlet’e e-imza ya da '
+        'mobil imzayla girerek yenilersiniz.',
+      );
+    }
   }
 
   Future<void> _turnOn(BuildContext context) async {
@@ -115,9 +138,7 @@ class SecuritySettings extends StatelessWidget {
           (v[0] != v[1] ? 'İki şifre aynı değil.' : null),
     );
     if (words == null || !context.mounted) return;
-    final code = await _lock.setPassword(words[0]);
-    _bindWhose();
-    if (context.mounted) await _showCode(context, code);
+    if (context.mounted) await _setPassword(context, words[0]);
   }
 
   Future<void> _turnOff(BuildContext context) async {
@@ -142,9 +163,7 @@ class SecuritySettings extends StatelessWidget {
       if (context.mounted) _say(context, 'Şimdiki şifre yanlış.');
       return;
     }
-    final code = await _lock.setPassword(words[1]);
-    _bindWhose();
-    if (context.mounted) await _showCode(context, code);
+    if (context.mounted) await _setPassword(context, words[1]);
   }
 
   Future<void> _newCode(BuildContext context) async {
@@ -154,9 +173,7 @@ class SecuritySettings extends StatelessWidget {
       if (context.mounted) _say(context, 'Şifre yanlış.');
       return;
     }
-    final code = await _lock.setPassword(words[0]);
-    _bindWhose();
-    if (context.mounted) await _showCode(context, code);
+    if (context.mounted) await _setPassword(context, words[0]);
   }
 
   void _say(BuildContext context, String text) =>

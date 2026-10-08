@@ -18,7 +18,7 @@ void main() {
     final l = lock();
     await l.load();
     expect(l.enabled, isFalse);
-    final code = await l.setPassword('büro-şifresi-1');
+    final code = (await l.setPassword('büro-şifresi-1'))!;
     expect(code, matches(RegExp(r'^([A-Z2-9]{4}-){5}[A-Z2-9]{4}$')));
     final kept = File('${dir.path}/kilit.json').readAsStringSync();
     expect(kept, isNot(contains('büro-şifresi-1')));
@@ -46,7 +46,7 @@ void main() {
 
   test('the recovery code sets a new password and is then spent', () async {
     final l = lock();
-    final code = await l.setPassword('büro-şifresi-1');
+    final code = (await l.setPassword('büro-şifresi-1'))!;
     l.lockNow();
     final next = await l.recover(
       code.toLowerCase().replaceAll('-', ' '),
@@ -76,12 +76,17 @@ void main() {
     // Bound once: a later session's number does not replace it.
     await l.bindIdentity('10987654321');
     l.lockNow();
-    expect(await l.recoverByIdentity('10987654321', '5678'), isNull);
-    final code = await l.recoverByIdentity('12345678901', '5678');
-    expect(code, isNotNull);
-    expect(await l.checkPassword('5678'), isTrue);
-    // Still whose it is, after the new password.
-    expect(l.knowsWhose, isTrue);
+    expect(await l.recoverByIdentity('10987654321', '5678'), isFalse);
+    expect(await l.recoverByIdentity('12345678901', '5678'), isTrue);
+    expect((l.locked, await l.checkPassword('5678')), (false, true));
+    // Still whose it is, and no code: e-Devlet is the way back.
+    expect((l.knowsWhose, l.hasCode), (true, false));
+  });
+
+  test('with whose it is known, no recovery code is made', () async {
+    final l = lock();
+    expect(await l.setPassword('1234', withCode: false), isNull);
+    expect(l.hasCode, isFalse);
   });
 
   testWidgets('the lock covers Folio with the time and the office name', (

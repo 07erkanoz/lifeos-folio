@@ -224,21 +224,20 @@ class _LockScreenState extends State<_LockScreen> {
     });
     final tc = await widget.identify!(context);
     if (!mounted) return;
-    final code = tc == null
-        ? null
-        : await widget.lock.recoverByIdentity(tc, _new.text);
+    final ok = tc != null && await widget.lock.recoverByIdentity(tc, _new.text);
     if (!mounted) return;
+    // Renewed, Folio opens: there is no code to write down.
     setState(() {
       _busy = false;
       if (tc == null) {
         _error = 'e-Devlet girişi tamamlanmadı.';
-      } else if (code == null) {
+      } else if (!ok) {
         _error =
             _waiting() ??
             'e-Devlet’e giren bu Folio’nun avukatı değil; şifre '
                 'yenilenmedi.';
       } else {
-        _newCode = code;
+        _recovering = false;
       }
     });
   }
@@ -322,15 +321,17 @@ class _LockScreenState extends State<_LockScreen> {
         ? Column(
             key: const ValueKey('lock-recover'),
             children: [
-              TextField(
-                key: const ValueKey('lock-code'),
-                controller: _code,
-                autofocus: true,
-                style: ink,
-                textCapitalization: TextCapitalization.characters,
-                decoration: field('Kurtarma kodu'),
-              ),
-              const SizedBox(height: 8),
+              if (widget.lock.hasCode) ...[
+                TextField(
+                  key: const ValueKey('lock-code'),
+                  controller: _code,
+                  autofocus: true,
+                  style: ink,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: field('Kurtarma kodu'),
+                ),
+                const SizedBox(height: 8),
+              ],
               TextField(
                 key: const ValueKey('lock-new'),
                 controller: _new,
@@ -348,18 +349,22 @@ class _LockScreenState extends State<_LockScreen> {
                 decoration: field('Yeni şifre (yeniden)'),
               ),
               const SizedBox(height: 12),
-              FilledButton(
-                key: const ValueKey('lock-recover-go'),
-                onPressed: _busy ? null : () => unawaited(_recover()),
-                child: const Text('Şifreyi yenile'),
-              ),
+              if (widget.lock.hasCode)
+                FilledButton(
+                  key: const ValueKey('lock-recover-go'),
+                  onPressed: _busy ? null : () => unawaited(_recover()),
+                  child: const Text('Kurtarma koduyla yenile'),
+                ),
               if (widget.identify != null && widget.lock.knowsWhose) ...[
                 const SizedBox(height: 10),
-                const Text(
-                  'Kurtarma kodu elinizde değilse yeni şifreyi yazın ve '
-                  'e-Devlet’e e-imza ya da mobil imzayla girin:',
+                Text(
+                  widget.lock.hasCode
+                      ? 'Kurtarma kodu elinizde değilse yeni şifreyi yazın '
+                            've e-Devlet’e e-imza ya da mobil imzayla girin:'
+                      : 'Yeni şifreyi yazın ve e-Devlet’e e-imza ya da '
+                            'mobil imzayla girin:',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12.5),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(

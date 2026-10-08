@@ -112,9 +112,15 @@ class AppLock extends ChangeNotifier {
       password.length < 4 ? 'Şifre en az 4 karakter olmalı.' : null;
 
   /// Sets the password (and turns the lock on); the recovery code it
-  /// returns is shown once and kept only as its hash.
-  Future<String> setPassword(String password, {int? idleMinutes}) async {
-    final code = newRecoveryCode();
+  /// returns is shown once and kept only as its hash. With [withCode]
+  /// false there is none: e-Devlet renews a forgotten password, Folio
+  /// knowing whose it is ([bindIdentity]).
+  Future<String?> setPassword(
+    String password, {
+    int? idleMinutes,
+    bool withCode = true,
+  }) async {
+    final code = withCode ? newRecoveryCode() : null;
     final salt = _random(16), recoverySalt = _random(16);
     // Whose Folio it is stays across a new password.
     final whose = {
@@ -126,8 +132,10 @@ class AppLock extends ChangeNotifier {
       'v': 1,
       'tuz': base64Encode(salt),
       'hash': await _hash(password, salt),
-      'ktuz': base64Encode(recoverySalt),
-      'khash': await _hash(_plainCode(code), recoverySalt),
+      if (code != null) ...{
+        'ktuz': base64Encode(recoverySalt),
+        'khash': await _hash(_plainCode(code), recoverySalt),
+      },
       'bosta': idleMinutes ?? this.idleMinutes,
     };
     await _save();
@@ -208,13 +216,18 @@ class AppLock extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Whether a recovery code was given and is kept.
+  bool get hasCode => _kept?['khash'] is String;
+
   /// "Şifremi unuttum", by e-Devlet (e-imza, mobil imza): the TC number it
-  /// gave is the lawyer's; a new password, and a new recovery code.
-  Future<String?> recoverByIdentity(String tckn, String newPassword) async {
+  /// gave is the lawyer's; a new password, and Folio open. False when it
+  /// is not theirs.
+  Future<bool> recoverByIdentity(String tckn, String newPassword) async {
     final tc = tckn.replaceAll(RegExp(r'\D'), '');
     final ok = await _try(() => _matches(tc, 'ttuz', 'thash'));
-    if (!ok) return null;
-    return setPassword(newPassword);
+    if (!ok) return false;
+    await setPassword(newPassword, withCode: false);
+    return true;
   }
 
   Future<bool> checkPassword(String password) =>

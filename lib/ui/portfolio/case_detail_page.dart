@@ -2754,10 +2754,8 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
                 icon: const Icon(Icons.download_rounded),
               )
             else ...[
-              SendToOfficeButton(
-                paths: () => [file.path],
-                text: _sentWith(widget.controller, d),
-              ),
+              // A phone's bar keeps room for the document's name: sending
+              // to the office is in "Diğer".
               IconButton(
                 key: const ValueKey('case-preview-share'),
                 tooltip: 'Paylaş',
@@ -2772,14 +2770,27 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
               ),
               PopupMenuButton<String>(
                 tooltip: 'Diğer',
-                onSelected: (v) => v == 'gorev'
-                    ? unawaited(widget.giveTask!(d))
-                    : _openInFolio(d),
+                onSelected: (v) => switch (v) {
+                  'gorev' => unawaited(widget.giveTask!(d)),
+                  'gonder' => unawaited(
+                    showSendToOffice(
+                      context,
+                      [file.path],
+                      text: _sentWith(widget.controller, d),
+                    ),
+                  ),
+                  _ => _openInFolio(d),
+                },
                 itemBuilder: (_) => [
                   const PopupMenuItem(
                     value: 'folio',
                     child: Text('Folio’da aç'),
                   ),
+                  if (OfficeNetwork.instance.sendTargets.isNotEmpty)
+                    const PopupMenuItem(
+                      value: 'gonder',
+                      child: Text('Gönder'),
+                    ),
                   if (widget.giveTask != null)
                     const PopupMenuItem(
                       value: 'gorev',

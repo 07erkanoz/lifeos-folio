@@ -5,6 +5,7 @@ import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import 'agenda/uyap_notices_page.dart';
 import '../services/office/office_inbox.dart';
+import '../services/editor/profile_autofill.dart' show profileTc;
 import '../services/security/app_lock.dart';
 import '../services/sync/folder_sync.dart';
 import '../services/sync/own_sync.dart';
@@ -905,10 +906,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  void _bindWhose() {
-    final tc = UyapMobileApi.instance.session.value?.tckn ?? '';
-    if (tc.isNotEmpty) unawaited(AppLock.instance.bindIdentity(tc));
-  }
+  /// Whose Folio it is, from the profile or UYAP Mobil's session: for a
+  /// forgotten lock password to be renewed by e-Devlet.
+  void _bindWhose() => unawaited(() async {
+    var tc = await profileTc();
+    if (tc.isEmpty) tc = UyapMobileApi.instance.session.value?.tckn ?? '';
+    if (tc.isNotEmpty) await AppLock.instance.bindIdentity(tc);
+  }());
 
   void _inboxChanged() {
     if (mounted) setState(() {});
