@@ -313,8 +313,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('agenda-review')), findsNothing);
     expect(db.agenda().map((i) => i.id), contains(id));
-    // A notice served more than forty days ago brings none, even with a
-    // year's time still to run.
+    // A notice served three years ago brings none: its time is long run.
     final old = db.deadlines(noticeId: 'old');
     expect(old, isNotEmpty);
     expect(old.every((d) => d.expired(now)), isTrue);

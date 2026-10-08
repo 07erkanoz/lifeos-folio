@@ -5,6 +5,7 @@
 library;
 
 import 'mahkeme_kategori.dart';
+import 'turkish_legal_calendar.dart';
 
 /// Parse edilmiş tebligat bilgileri.
 class TebligatParsed {
@@ -56,7 +57,12 @@ class TebligatParser {
     }
 
     final mahkemeTuru = _detectMahkemeTuru(mahkemeAdi);
-    final kategori = _kategoriBelirle(mahkemeTuru);
+    // Folio: the one classifier the UETS deadlines use too; two that
+    // disagreed gave "Bölge Adliye Mahkemesi 5. Ceza Dairesi" the civil
+    // courts' rules here and the criminal ones there.
+    final kategori =
+        TurkishLegalCalendar.kategoriFromMahkemeAdi(mahkemeAdi) ??
+        MahkemeKategorisi.bilinmeyen;
 
     return TebligatParsed(
       mahkemeAdi: mahkemeAdi,
@@ -105,46 +111,5 @@ class TebligatParser {
     if (lower.contains('icra')) return 'İcra'; // Genel icra
 
     return '';
-  }
-
-  /// Mahkeme türünden kategori belirle.
-  static MahkemeKategorisi _kategoriBelirle(String tur) {
-    switch (tur) {
-      case 'Aile':
-      case 'Asliye Hukuk':
-      case 'Ticaret':
-      case 'İş':
-      case 'Tüketici':
-      case 'Kadastro':
-      case 'Sulh Hukuk':
-      case 'Fikri Sınai':
-      case 'Bölge Adliye':
-      case 'Yargıtay':
-        return MahkemeKategorisi.hukuk;
-
-      case 'İcra':
-      case 'İcra Hukuk':
-      case 'İcra Ceza':
-        return MahkemeKategorisi.icra;
-
-      case 'Ağır Ceza':
-      case 'Asliye Ceza':
-      case 'Sulh Ceza':
-      case 'Çocuk Ağır Ceza':
-      case 'Çocuk':
-      case 'Savcılık':
-        return MahkemeKategorisi.ceza;
-
-      case 'İdare':
-      case 'Bölge İdare':
-      case 'Danıştay':
-        return MahkemeKategorisi.idare;
-
-      case 'Vergi':
-        return MahkemeKategorisi.vergi;
-
-      default:
-        return MahkemeKategorisi.bilinmeyen;
-    }
   }
 }

@@ -31,8 +31,11 @@ String _plain(String text) =>
 /// UYGULAMAPLANI §9.8, each taken only when it leaves a single case:
 /// the number and the unit exactly; the case's unit at the start of the
 /// notice's (the Court of Cassation's "… Tebligat Bölümü"); the first word,
-/// the place, alike (a prosecutor's bureau to its Başsavcılık). Two cases
-/// or more, or none, tie nothing: no guess is made.
+/// the place, alike, but only for a notice from a bureau or a prosecutor's
+/// office (a prosecutor's bureau to its Başsavcılık): a court's notice
+/// never ties to another court of the same place, "Ankara 1. Asliye Hukuk"
+/// to "Ankara 8. İş" by the same number. Two cases or more, or none, tie
+/// nothing: no guess is made.
 String? matchSubject(String subject, Iterable<PortalCase> cases) {
   final parsed = NoticeSubject.parse(subject);
   if (parsed == null) return null;
@@ -43,10 +46,11 @@ String? matchSubject(String subject, Iterable<PortalCase> cases) {
   ];
   if (sameNumber.isEmpty) return null;
   final firstWord = unit.split(' ').first;
+  final office = RegExp(r'\b(buro\w*|\w*savcilig\w*)\b').hasMatch(unit);
   for (final test in <bool Function(String court)>[
     (court) => court == unit,
     (court) => court.isNotEmpty && unit.startsWith(court),
-    (court) => court.split(' ').first == firstWord,
+    if (office) (court) => court.split(' ').first == firstWord,
   ]) {
     final found = [
       for (final c in sameNumber)

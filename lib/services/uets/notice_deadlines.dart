@@ -189,23 +189,22 @@ List<DeadlineRecord> noticeDeadlines(
       ? null
       : TurkishLegalCalendar.kategoriFromMahkemeAdi(subject.unit);
 
-  // The kinds of document, each with what told it.
+  // The kinds of document, each with what told it: a document at a time,
+  // so that two expert reports or two interim decisions in one package are
+  // two documents, each with its own deadlines, not one.
   final kinds = <({BelgeTuru tur, Map<String, Object?> evidence})>[];
   final seenKinds = <BelgeTuru>{};
-  final names = [for (final p in manifest.parts) p.name];
-  final fromParts = BelgeTuruTespit.ekTurleri(names);
-  for (final k in fromParts) {
-    if (!seenKinds.add(k.tur)) continue;
-    final part = manifest.parts.firstWhere((p) => p.name == k.ad);
-    kinds.add((
-      tur: k.tur,
-      evidence: {
-        'kaynak': 'ek',
-        'ad': k.ad,
-        'parca': part.id,
-        'sira': manifest.parts.indexOf(part),
-      },
-    ));
+  final fromParts = <({BelgeTuru tur, String ad})>[];
+  for (var i = 0; i < manifest.parts.length; i++) {
+    final part = manifest.parts[i];
+    for (final k in BelgeTuruTespit.ekTurleri([part.name])) {
+      fromParts.add(k);
+      seenKinds.add(k.tur);
+      kinds.add((
+        tur: k.tur,
+        evidence: {'kaynak': 'ek', 'ad': k.ad, 'parca': part.id, 'sira': i},
+      ));
+    }
   }
   if (kinds.isEmpty && (envelope?.envelopeText ?? '').isNotEmpty) {
     final t = BelgeTuruTespit.tebligatTuru(
@@ -260,6 +259,7 @@ List<DeadlineRecord> noticeDeadlines(
     required Map<String, Object?> evidence,
     required ({AidiyetSinyali sinyal, String neden}) sign,
     List<DeadlineReason> lead = const [],
+    String idSuffix = '',
   }) {
     final reasons = <DeadlineReason>[
       ...lead,
@@ -347,6 +347,16 @@ List<DeadlineRecord> noticeDeadlines(
       final item = c.items.single;
       raw = LegalDay.of(item.hamSonGun).key;
       due = LegalDay.of(item.etkiliSonGun).key;
+      if (item.tatilBelirsiz) {
+        reasons.add(
+          const DeadlineReason(
+            'tatilBelirsiz',
+            'Son gün adli tatile denk geliyor; davanın tatile tabi olup '
+                'olmadığı bilinmediğinden uzatma uygulanmadı. Tatile tabiyse '
+                'son gün daha geçtir; ayrıntıdaki dayanağa bakın.',
+          ),
+        );
+      }
       for (final note in item.dayanakNotlari) {
         reasons.add(DeadlineReason('dayanak', note));
       }
@@ -409,7 +419,7 @@ List<DeadlineRecord> noticeDeadlines(
       'takvim': TurkishLegalCalendar.takvimSurumu,
     });
     return DeadlineRecord(
-      id: 'uets:${m.id}:r:$ruleId',
+      id: 'uets:${m.id}:r:$ruleId$idSuffix',
       noticeId: m.id,
       caseKey: n.caseKey,
       ruleId: ruleId,
@@ -438,13 +448,19 @@ List<DeadlineRecord> noticeDeadlines(
 
   final out = <DeadlineRecord>[];
   final catalogued = <(DeadlineRecord, YasalSure)>[];
+  // A rule a second document of the same kind brings again is that
+  // document's: its id says which, the first keeping the id it always had.
+  final made = <String>{};
   for (final k in kinds) {
     for (final rule in surelerForBelgeTuru(k.tur, kategori)) {
       final info = kuralBilgisi(rule);
+      final ruleId = info?.id ?? _slug(rule.ad);
+      final again = !made.add(ruleId);
       catalogued.add((
         record(
           rule,
-          ruleId: info?.id ?? _slug(rule.ad),
+          ruleId: ruleId,
+          idSuffix: again ? ':p:${k.evidence['parca']}' : '',
           tur: k.tur,
           evidence: k.evidence,
           sign: aidiyetSinyali(
@@ -481,21 +497,27 @@ List<DeadlineRecord> noticeDeadlines(
   final joined = <int, List<EnvelopeDirective>>{};
   final apart = <EnvelopeDirective>[];
   for (final d in directives) {
-    // The same time is not enough: the same act too, else the two stay
-    // apart and each says so.
+    // The same time is not enough: the same act, the same start and the
+    // same party first, then the time; else the two stay apart and each
+    // says so.
     final fitting = [
       for (var j = 0; j < catalogued.length; j++)
         if (catalogued[j].$2.baslangic == SureBaslangici.teblig &&
-            _spanOf(catalogued[j].$2) == d.span &&
-            _fits(d.act, catalogued[j].$1.ruleId))
+            d.startsFrom == null &&
+            _sameParty(d.party, kuralBilgisi(catalogued[j].$2)?.yukumlu) &&
+            _fits(d.act, catalogued[j].$1.ruleId) &&
+            _spanOf(catalogued[j].$2) == d.span)
           j,
     ];
-    // Two rules it could be: joined to neither, shown apart.
-    final i = fitting.length == 1 ? fitting.single : -1;
-    if (i < 0) {
+    // Two rules it could be: joined to neither, shown apart. The same rule
+    // of two documents of a kind (two reports) is one rule: joined to both.
+    final rules = {for (final j in fitting) catalogued[j].$1.ruleId};
+    if (rules.length != 1) {
       apart.add(d);
     } else {
-      (joined[i] ??= []).add(d);
+      for (final j in fitting) {
+        (joined[j] ??= []).add(d);
+      }
     }
   }
   for (var i = 0; i < catalogued.length; i++) {
@@ -516,8 +538,10 @@ List<DeadlineRecord> noticeDeadlines(
                 for (final d in others)
                   DeadlineReason(
                     'zarfFarkli',
-                    'Zarf başka bir süre veriyor (${d.text}); o da ayrıca '
-                        'gösterildi.',
+                    'Zarfta bununla eşleşmeyen bir talimat var (${d.text}'
+                        '${d.party == null ? '' : ', ${_partyTitle(d.party!)}'}'
+                        '${d.startsFrom == null ? '' : ', ${_startTitle(d.startsFrom!)} başlayan'}'
+                        '); o da ayrıca gösterildi.',
                   ),
                 ...r.reasons,
               ],
@@ -530,22 +554,52 @@ List<DeadlineRecord> noticeDeadlines(
       miktar: d.amount,
       birim: d.unit,
       kanunMaddesi: 'Zarftaki ihtar',
+      // The court's own time, not the law's: the recess does not extend it
+      // as of course (HMK m.104).
+      nitelik: SureNiteligi.hakim,
+      // A time the envelope says runs from another event waits for that
+      // event's day; the service never stands in for it.
+      baslangic: switch (d.startsFrom) {
+        'tefhim' => SureBaslangici.tefhim,
+        'karar' => SureBaslangici.kararTarihi,
+        'ilan' => SureBaslangici.ilan,
+        'ogrenme' => SureBaslangici.ogrenme,
+        _ => SureBaslangici.teblig,
+      },
     );
+    final party = d.party;
     out.add(
       record(
         rule,
-        ruleId: 'zarf-${d.act}-${d.amount}${d.unit.name}',
+        ruleId: [
+          'zarf-${d.act}-${d.amount}${d.unit.name}',
+          ?d.startsFrom,
+          ?party,
+        ].join('-'),
         tur: kinds.isEmpty ? BelgeTuru.diger : kinds.first.tur,
         evidence: {'kaynak': 'zarf', 'ad': 'Tebligat zarfı'},
-        sign: (
-          sinyal: AidiyetSinyali.olasiBizim,
-          neden:
-              'Zarftaki talimat tebligatın muhatabına, yani size '
-              'yöneltilmiş.',
-        ),
+        // Spoken to its reader, the duty is the one served's; laid on a
+        // party by name, it is that party's, whoever was served.
+        sign: party == null
+            ? (
+                sinyal: AidiyetSinyali.olasiBizim,
+                neden:
+                    'Zarftaki talimat tebligatın muhatabına, yani size '
+                    'yöneltilmiş.',
+              )
+            : aidiyetSinyali(
+                yukumlu: switch (party) {
+                  'davaci' => Yukumlu.davaci,
+                  'davali' => Yukumlu.davali,
+                  'alacakli' => Yukumlu.alacakli,
+                  _ => Yukumlu.borclu,
+                },
+                taraflar: parties,
+                avukat: lawyer,
+              ),
         lead: [
           DeadlineReason('zarfAlinti', '“${d.quote}”'),
-          if (!d.fromService)
+          if (d.startsFrom == null && !d.fromService)
             const DeadlineReason(
               'baslangicVarsayildi',
               'Zarf sürenin neyden başladığını söylemiyor; tebliğden '
@@ -563,6 +617,32 @@ List<DeadlineRecord> noticeDeadlines(
   }
   return out;
 }
+
+/// Whether an envelope's directive laid on [party] (null: on its reader)
+/// can be the catalogued rule whose duty is [holder]'s.
+bool _sameParty(String? party, Yukumlu? holder) =>
+    party == null ||
+    holder == Yukumlu.taraflar ||
+    switch (party) {
+      'davaci' => holder == Yukumlu.davaci,
+      'davali' => holder == Yukumlu.davali,
+      'alacakli' => holder == Yukumlu.alacakli,
+      _ => holder == Yukumlu.borclu,
+    };
+
+String _startTitle(String event) => switch (event) {
+  'tefhim' => 'tefhimden',
+  'karar' => 'karar tarihinden',
+  'ilan' => 'ilandan',
+  _ => 'öğrenmeden',
+};
+
+String _partyTitle(String party) => switch (party) {
+  'davaci' => 'davacıya',
+  'davali' => 'davalıya',
+  'alacakli' => 'alacaklıya',
+  _ => 'borçluya',
+};
 
 ({int n, String unit}) _spanOf(YasalSure r) => switch (r.birim) {
   SureBirimi.hafta => (n: r.miktar * 7, unit: 'gun'),

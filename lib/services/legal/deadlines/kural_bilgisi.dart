@@ -15,6 +15,9 @@ enum Yukumlu {
   /// The creditor (the suit against a debtor's objection).
   alacakli,
 
+  /// The plaintiff (a time the court gives the one who sued).
+  davaci,
+
   /// Either side of the case may act (an appeal, an objection to a report);
   /// which one is the lawyer's is not told by the rule.
   taraflar,
@@ -49,8 +52,10 @@ const _kurallar = <YasalSure, KuralBilgisi>{
   sHaciz893Belge: KuralBilgisi('iik89-3-belge', Yukumlu.ucuncuKisi),
   sIcraMahkemesiIstinaf: KuralBilgisi('iik363', Yukumlu.taraflar),
   sCezaIstinafEski: KuralBilgisi('cmk273-eski', Yukumlu.taraflar),
+  sCezaIstinafEskiTefhim: KuralBilgisi('cmk273-eski-tefhim', Yukumlu.taraflar),
   sCezaIstinafYeni: KuralBilgisi('cmk273', Yukumlu.taraflar),
   sCezaTemyizEski: KuralBilgisi('cmk291-eski', Yukumlu.taraflar),
+  sCezaTemyizEskiTefhim: KuralBilgisi('cmk291-eski-tefhim', Yukumlu.taraflar),
   sCezaTemyizYeni: KuralBilgisi('cmk291', Yukumlu.taraflar),
   sIdariDava: KuralBilgisi('iyuk7-idari', Yukumlu.taraflar),
   sVergiDava: KuralBilgisi('iyuk7-vergi', Yukumlu.taraflar),

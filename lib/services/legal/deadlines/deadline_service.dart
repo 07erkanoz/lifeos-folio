@@ -32,6 +32,7 @@ class DeadlineItem {
     required this.dayanakNotlari,
     required this.uzadi,
     required this.guven,
+    this.tatilBelirsiz = false,
     this.onayDurumu = 'dogrulanmadi', // dogrulanmadi | onaylandi | degistirildi
   });
 
@@ -48,6 +49,10 @@ class DeadlineItem {
   final List<String> dayanakNotlari; // uzatma/kaydırma + güven notları
   final bool uzadi; // ham ≠ etkili mi
   final SureGuveni guven;
+
+  /// Son gün adli tatile denk geliyor, uzayıp uzamadığı bilinmiyor
+  /// (bkz. [DeadlineAdjustment.tatilBelirsiz]).
+  final bool tatilBelirsiz;
   final String onayDurumu;
 }
 
@@ -60,6 +65,7 @@ class DeadlineComputation {
     this.ogrenmeTarihi,
     required this.kategori,
     required this.items,
+    this.olayBekleyenler = const [],
   });
 
   /// Geriye dönük uyum: usulî tebliğ tarihi (5. gün).
@@ -76,6 +82,11 @@ class DeadlineComputation {
 
   /// Kalan güne göre artan sıralı (en acil önce).
   final List<DeadlineItem> items;
+
+  /// Başlangıç olayının (tefhim, karar, ilan, öğrenme) tarihi verilmediği
+  /// için hesaplanamayan kurallar. Tebliğ tarihi bunların yerine konmaz;
+  /// görev kaybolmasın diye ayrı döner, çağıran "olay bekleniyor" gösterir.
+  final List<({YasalSure sure, String eksikOlay})> olayBekleyenler;
 
   DeadlineItem? get enAcil => items.isEmpty ? null : items.first;
 }
@@ -168,6 +179,8 @@ class DeadlineService {
     required MahkemeKategorisi kategori,
     BelgeTuru belgeTuru = BelgeTuru.diger,
     DateTime? kararTarihi,
+    DateTime? tefhimTarihi,
+    DateTime? ilanTarihi,
     DateTime? now,
     bool? adliTatileTabi,
   }) {
@@ -178,6 +191,8 @@ class DeadlineService {
       kategori: kategori,
       belgeTuru: belgeTuru,
       kararTarihi: kararTarihi,
+      tefhimTarihi: tefhimTarihi,
+      ilanTarihi: ilanTarihi,
       now: now,
       tebligKaynagi: TebligKaynagi.besGunKurali,
       adliTatileTabi: adliTatileTabi,
@@ -196,6 +211,8 @@ class DeadlineService {
     required MahkemeKategorisi kategori,
     BelgeTuru belgeTuru = BelgeTuru.diger,
     DateTime? kararTarihi,
+    DateTime? tefhimTarihi,
+    DateTime? ilanTarihi,
     DateTime? now,
     bool? adliTatileTabi,
     List<YasalSure>? kurallar,
@@ -205,6 +222,8 @@ class DeadlineService {
     kategori: kategori,
     belgeTuru: belgeTuru,
     kararTarihi: kararTarihi,
+    tefhimTarihi: tefhimTarihi,
+    ilanTarihi: ilanTarihi,
     now: now,
     tebligKaynagi: TebligKaynagi.dogrudan,
     adliTatileTabi: adliTatileTabi,
@@ -237,6 +256,7 @@ class DeadlineService {
     kategori: kategori,
     belgeTuru: BelgeTuru.diger,
     kararTarihi: _dateOnly(baslangic),
+    tefhimTarihi: _dateOnly(baslangic),
     now: now,
     tebligKaynagi: TebligKaynagi.dogrudan,
     adliTatileTabi: adliTatileTabi,
@@ -249,6 +269,8 @@ class DeadlineService {
     required MahkemeKategorisi kategori,
     required BelgeTuru belgeTuru,
     DateTime? kararTarihi,
+    DateTime? tefhimTarihi,
+    DateTime? ilanTarihi,
     DateTime? now,
     required TebligKaynagi tebligKaynagi,
     bool? adliTatileTabi,
@@ -258,6 +280,9 @@ class DeadlineService {
     final usuli = _dateOnly(usuliTebligTarihi);
     final ogrenme = okunmaTarihi != null ? _dateOnly(okunmaTarihi) : null;
     final karar = kararTarihi != null ? _dateOnly(kararTarihi) : null;
+    final tefhim = tefhimTarihi != null ? _dateOnly(tefhimTarihi) : null;
+    final ilan = ilanTarihi != null ? _dateOnly(ilanTarihi) : null;
+    final bekleyenler = <({YasalSure sure, String eksikOlay})>[];
 
     // Tarih-etkin kuralları karar tarihine göre filtrele/dedupla.
     // `ozelKurallar` verilmişse katalog HİÇ sorgulanmaz: duruşmada verilen süre
@@ -269,42 +294,27 @@ class DeadlineService {
 
     final items = <DeadlineItem>[];
     for (final sure in kurallar) {
-      // Başlangıç tarihini tetikleyiciye göre seç.
-      DateTime baslangic;
+      // Başlangıç, kuralın kendi olayının tarihidir. O tarih yoksa tebliğ
+      // tarihi yerine KONMAZ: tefhim, karar ve ilan tebliğden önce olabilir,
+      // ikame son günü geç gösterir. Kural "olay bekleniyor" olarak döner.
+      final olay = switch (sure.baslangic) {
+        SureBaslangici.teblig => usuli,
+        SureBaslangici.ogrenme => ogrenme,
+        SureBaslangici.tefhim => tefhim,
+        SureBaslangici.kararTarihi => karar,
+        SureBaslangici.ilan => ilan,
+      };
+      if (olay == null) {
+        bekleyenler.add((
+          sure: sure,
+          eksikOlay: _baslangicEtiket(sure.baslangic),
+        ));
+        continue;
+      }
+      var baslangic = olay;
       var baslangicAdliTatilNedeniyleDegisti = false;
       var guven = sure.guven;
       final notlar = <String>[];
-      switch (sure.baslangic) {
-        case SureBaslangici.teblig:
-          baslangic = usuli;
-          break;
-        case SureBaslangici.ogrenme:
-          if (ogrenme != null) {
-            baslangic = ogrenme;
-          } else {
-            baslangic = usuli;
-            guven = SureGuveni.orta;
-            notlar.add(
-              'Öğrenme tarihi bilinmiyor; usulî tebliğ tarihi esas '
-              'alındı. Erken öğrenme varsa süre daha erken başlayabilir.',
-            );
-          }
-          break;
-        case SureBaslangici.tefhim:
-        case SureBaslangici.kararTarihi:
-        case SureBaslangici.ilan:
-          if (karar != null) {
-            baslangic = karar;
-          } else {
-            baslangic = usuli;
-            guven = SureGuveni.orta;
-            notlar.add(
-              'Başlangıç (tefhim/karar/ilan) tarihi bilinmiyor; usulî '
-              'tebliğ tarihi esas alındı — kontrol edin.',
-            );
-          }
-          break;
-      }
 
       // Ceza işinde başlangıç olayı adli tatil içindeyse tebligat/tefhim
       // geçerlidir fakat süre 1 Eylül'de işlemeye başlar. Bu, tatilden ÖNCE
@@ -337,23 +347,48 @@ class DeadlineService {
         // HMK m.103 / İYUK m.61: tatile tabi OLMAYAN işlerde uzatma yok.
         // Bilinmiyorsa (null) uzatma uygulanmaz — bkz. adjustDeadline.
         adliTatileTabi: adliTatileTabi,
+        // HMK m.104 yalnız kanunda belirtilen süreleri uzatır.
+        tatilUzatmaz: switch (sure.nitelik) {
+          SureNiteligi.kanuni => null,
+          SureNiteligi.hakim =>
+            '⚠ Son gün adli tatile denk geliyor; bu süreyi hâkim verdi. '
+                'HMK m.104 yalnız kanunda belirtilen süreleri uzattığından '
+                'uzatma uygulanmadı. Kararda başka bir şey yazıyorsa ona '
+                'göre düzeltin.',
+          SureNiteligi.maddi =>
+            'Bu süre maddi hukuka ait; adli tatil onu uzatmaz.',
+        },
       );
       notlar.addAll(adj.notes);
+      // Whether the recess extends it is not known, or a judge's time ends
+      // in it: not certain.
+      if ((adj.tatilBelirsiz ||
+              (sure.nitelik == SureNiteligi.hakim &&
+                  TurkishLegalCalendar.inAdliTatil(ham))) &&
+          guven == SureGuveni.yuksek) {
+        guven = SureGuveni.orta;
+      }
 
-      // Folio: a last day in a year whose religious holidays are projected
-      // is flagged, and one past the holiday table is not given as certain,
-      // since a holiday there would count as a working day.
-      final yil = adj.effectiveDate.year;
-      if (yil > TurkishLegalCalendar.kDiniBayramTabloSonYil) {
-        guven = SureGuveni.dusuk;
-        notlar.add(
-          '$yil yılının dini bayramları takvimde yok; son gün doğrulanamadı.',
-        );
-      } else if (TurkishLegalCalendar.diniBayramProjeksiyonYili(yil)) {
-        if (guven == SureGuveni.yuksek) guven = SureGuveni.orta;
-        notlar.add(
-          '$yil dini bayram tarihleri tahminidir; Diyanet takvimiyle doğrulayın.',
-        );
+      // Folio: every year the reckoning runs through is checked, not the
+      // last day's alone (a count of working days crosses holidays on the
+      // way): a year outside the holiday table is not given as certain,
+      // since a holiday there would count as a working day; a year whose
+      // religious holidays are projected is flagged.
+      for (var yil = baslangic.year; yil <= adj.effectiveDate.year; yil++) {
+        if (yil > TurkishLegalCalendar.kDiniBayramTabloSonYil ||
+            yil < TurkishLegalCalendar.kDiniBayramTabloIlkYil) {
+          guven = SureGuveni.dusuk;
+          notlar.add(
+            '$yil yılının dini bayramları takvimde yok; son gün '
+            'doğrulanamadı.',
+          );
+        } else if (TurkishLegalCalendar.diniBayramProjeksiyonYili(yil)) {
+          if (guven == SureGuveni.yuksek) guven = SureGuveni.orta;
+          notlar.add(
+            '$yil dini bayram tarihleri tahminidir; Diyanet takvimiyle '
+            'doğrulayın.',
+          );
+        }
       }
 
       items.add(
@@ -371,6 +406,7 @@ class DeadlineService {
           dayanakNotlari: notlar,
           uzadi: adj.extended || baslangicAdliTatilNedeniyleDegisti,
           guven: guven,
+          tatilBelirsiz: adj.tatilBelirsiz,
         ),
       );
     }
@@ -383,6 +419,7 @@ class DeadlineService {
       ogrenmeTarihi: ogrenme,
       kategori: kategori,
       items: items,
+      olayBekleyenler: bekleyenler,
     );
   }
 

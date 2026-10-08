@@ -28,6 +28,11 @@ class DeadlineAdjustment {
   /// Nihai son gün (adli tatil + iş günü kaydırması uygulanmış).
   final DateTime effectiveDate;
 
+  /// Son gün adli tatile denk geldi, fakat davanın tatile tabi olup
+  /// olmadığı ya da mahkemenin türü bilinmediği için uzayıp uzamadığı
+  /// söylenemiyor: sonuç kesin gösterilmez.
+  final bool tatilBelirsiz;
+
   /// Uygulanan kuralların hukuki dayanak notları (kullanıcıya gösterilir).
   final List<String> notes;
 
@@ -35,6 +40,7 @@ class DeadlineAdjustment {
     required this.rawDate,
     required this.effectiveDate,
     this.notes = const [],
+    this.tatilBelirsiz = false,
   });
 
   bool get extended =>
@@ -61,7 +67,9 @@ class TurkishLegalCalendar {
   /// The calendar's version, raised whenever a holiday or a rule of it
   /// changes: a deadline reckoned on another is reckoned again.
   ///   1 — 2026-10-07: tax recess start (5604 m.1/1), half holidays.
-  static const int takvimSurumu = 1;
+  ///   2 — 2026-10-08: HMK m.104 extends to 8 September (Yargıtay HGK);
+  ///       İYUK stays at 7 September.
+  static const int takvimSurumu = 2;
 
   /// The first year whose holidays are written down; before it a holiday
   /// would count as a working day.
@@ -219,7 +227,10 @@ class TurkishLegalCalendar {
         m.contains('danistay')) {
       return MahkemeKategorisi.idare;
     }
-    if (m.contains('ceza') || m.contains('savcılı') || m.contains('savcili')) {
+    if (m.contains('ceza') ||
+        m.contains('savcılı') ||
+        m.contains('savcili') ||
+        m.contains('çocuk mahkemesi')) {
       return MahkemeKategorisi.ceza;
     }
     if (m.contains('hukuk') ||
@@ -235,21 +246,22 @@ class TurkishLegalCalendar {
     return null;
   }
 
-  /// Adli tatil uzatmasının düştüğü gün.
-  ///
-  /// HMK m.104 ve İYUK m.8/3 FARKLI LAFIZLA AYNI GÜNE varır — 7 Eylül:
-  /// - HMK: "adli tatilin BİTTİĞİ günden itibaren bir hafta" → 31 Ağustos + 7.
-  /// - İYUK: "ara vermenin sona erdiği günü İZLEYEN tarihten itibaren yedi
-  ///   gün" → çapa 1 Eylül ve o gün BİRİNCİ gündür; yedinci gün 7 Eylül.
-  ///
-  /// DİKKAT: İYUK'ta çapa bir gün ileri diye ayrıca +1 EKLENMEZ; kaydırma
-  /// sayımın içinde. Bir kez o hataya düşüldü ve 8 Eylül üretildi — üretimde
-  /// hak kaybettiren yön. Danıştay İDDK somut olayda son günü 7 Eylül kabul
-  /// ediyor. CMK m.331/4 ise üç gün uzatır.
+  /// Adli tatil uzatmasının düştüğü gün. HMK ve İYUK AYRI kurallardır,
+  /// her biri kendi kabul testine bağlıdır; biri ötekine göre değiştirilmez.
+  /// - HMK m.104: "adli tatilin bittiği günden itibaren bir hafta". Yargıtay
+  ///   HGK (2017/20-2873 E., 2017/1449 K.) haftayı 1 Eylül'den sayar; son
+  ///   gün 8 Eylül. Yargıtay 2. HD 2021/2526 E., 2021/3729 K. 8 Eylül 2020
+  ///   tarihli istinafı süresinde kabul ediyor (mevzuat.adalet.gov.tr/ictihat
+  ///   /680583800). 7 Eylül gerçek son günden bir gün erken gösterir.
+  /// - İYUK m.8/3: "ara vermenin sona erdiği günü İZLEYEN tarihten itibaren
+  ///   yedi gün" → çapa 1 Eylül ve o gün BİRİNCİ gündür; yedinci gün 7 Eylül.
+  ///   Burada ayrıca +1 EKLENMEZ; Danıştay İDDK somut olayda son günü 7 Eylül
+  ///   kabul ediyor.
+  /// CMK m.331/4 ise üç gün uzatır.
   static DateTime? _tatilUzatmasi(DateTime tatilSonu, MahkemeKategorisi? k) {
     switch (k) {
       case MahkemeKategorisi.hukuk:
-        return DateTime(tatilSonu.year, tatilSonu.month, tatilSonu.day + 7);
+        return DateTime(tatilSonu.year, tatilSonu.month, tatilSonu.day + 8);
       case MahkemeKategorisi.idare:
       case MahkemeKategorisi.vergi:
         return DateTime(tatilSonu.year, tatilSonu.month, tatilSonu.day + 7);
@@ -278,9 +290,11 @@ class TurkishLegalCalendar {
     DateTime? baslangic,
     bool maliTatildeDurur = false,
     bool? adliTatileTabi,
+    String? tatilUzatmaz,
   }) {
     final notes = <String>[];
     var effective = DateTime(rawDate.year, rawDate.month, rawDate.day);
+    var tatilBelirsiz = false;
 
     // ── 0) Mali tatil durması (yalnız vergi dava açma gibi işaretli süreler) ──
     if (maliTatildeDurur && baslangic != null) {
@@ -296,7 +310,11 @@ class TurkishLegalCalendar {
     }
 
     // ── 1) Adli tatil uzatması ──
-    if (inAdliTatil(effective)) {
+    // A time the recess does not extend by its nature (a judge's time, one
+    // of substantive law): [tatilUzatmaz] says why, and nothing is added.
+    if (inAdliTatil(effective) && tatilUzatmaz != null) {
+      notes.add(tatilUzatmaz);
+    } else if (inAdliTatil(effective)) {
       final tatilSonu = DateTime(effective.year, 8, 31);
       final uzatilmis = _tatilUzatmasi(tatilSonu, kategori);
       // HMK m.104 uzatmayı YALNIZ "adli tatile tabi olan dava ve işlerde"
@@ -320,6 +338,7 @@ class TurkishLegalCalendar {
           '(HMK m.103 / İYUK m.61). Son gün tatil içinde kalır.',
         );
       } else if (kapiliKategori && adliTatileTabi == null) {
+        tatilBelirsiz = true;
         notes.add(
           '⚠ Son gün adli tatile denk geliyor, fakat davanın tatile '
           'tabi olup olmadığı belirlenemedi (HMK m.103 / İYUK m.61). '
@@ -340,8 +359,8 @@ class TurkishLegalCalendar {
           case MahkemeKategorisi.idare:
           case MahkemeKategorisi.vergi:
             // Uzatmanın dayanağı m.61 DEĞİL m.8/3'tür; m.61 çalışmaya ara
-            // vermenin kendisini düzenler, uzatmayı m.8/3 verir. Tarih HMK
-            // ile aynı (7 Eylül) — bkz. _tatilUzatmasi.
+            // vermenin kendisini düzenler, uzatmayı m.8/3 verir. Tarih 7
+            // Eylül, HMK'nın 8 Eylül'ünden ayrı — bkz. _tatilUzatmasi.
             effective = uzatilmis!;
             notes.add(
               'Son gün çalışmaya ara verme zamanına denk geldiğinden '
@@ -363,6 +382,7 @@ class TurkishLegalCalendar {
             break;
           case MahkemeKategorisi.bilinmeyen:
           case null:
+            tatilBelirsiz = true;
             notes.add(
               '⚠ Son gün adli tatile (20 Tem–31 Ağu) denk geliyor — '
               'mahkeme türüne göre süre uzayabilir (HMK m.104 / CMK m.331 / '
@@ -399,6 +419,7 @@ class TurkishLegalCalendar {
       rawDate: rawDate,
       effectiveDate: effective,
       notes: notes,
+      tatilBelirsiz: tatilBelirsiz,
     );
   }
 }

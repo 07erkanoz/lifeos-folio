@@ -148,9 +148,11 @@ void main() {
         );
 
     test('tabi olduğu BİLİNİYORSA m.104 uzatması uygulanır', () {
+      // Yargıtay HGK 2017/20-2873 E., 2017/1449 K.; 2. HD 2021/2526 E.,
+      // 2021/3729 K.: hafta 1 Eylül'den sayılır, son gün 8 Eylül.
       final s = hukuk(tabi: true).items.single;
       expect(iso(s.hamSonGun), '2026-08-08');
-      expect(iso(s.etkiliSonGun), '2026-09-07');
+      expect(iso(s.etkiliSonGun), '2026-09-08');
       expect(s.dayanakNotlari.join(' '), contains('HMK m.104'));
     });
 
@@ -169,7 +171,7 @@ void main() {
       expect(iso(s.etkiliSonGun), '2026-08-10');
       expect(s.dayanakNotlari.join(' '), contains('belirlenemedi'));
       // Uyarı, tabi olsaydı çıkacak tarihi de söylemeli.
-      expect(s.dayanakNotlari.join(' '), contains('07.09.2026'));
+      expect(s.dayanakNotlari.join(' '), contains('08.09.2026'));
     });
   });
 
@@ -178,9 +180,9 @@ void main() {
   /// İYUK m.8/3 çapası 1 Eylül'dür ve o gün BİRİNCİ gündür; yedinci gün
   /// 7 Eylül. Kaydırma sayımın içinde olduğu için ayrıca +1 EKLENMEZ —
   /// eklenince 8 Eylül çıkıyor ve bu hak kaybettiren yönde bir hatadır
-  /// (Danıştay İDDK somut olayda son günü 7 Eylül kabul ediyor). Yani tarih
-  /// HMK m.104 ile aynı; düzeltilmesi gereken tek şey DAYANAK atfıydı:
-  /// uzatmayı m.61 değil m.8/3 verir.
+  /// (Danıştay İDDK somut olayda son günü 7 Eylül kabul ediyor). HMK m.104'ün
+  /// 8 Eylül'ü ayrı kuraldır; İYUK ona göre değiştirilmez. Dayanak atfı da
+  /// düzeltildi: uzatmayı m.61 değil m.8/3 verir.
   group('İYUK m.8/3 — idari yargıda uzatma dayanağı', () {
     test('uzatma 7 Eylüldür ve dayanak m.8/3 olarak yazılır', () {
       final s = DeadlineService.computeFromUsuliTebligTarihi(
@@ -283,6 +285,7 @@ void main() {
       kanunMaddesi: 'HMK m.94 (kesin süre)',
       baslangic: SureBaslangici.tefhim,
       guven: SureGuveni.orta,
+      nitelik: SureNiteligi.hakim,
     );
 
     test('başlangıç TEFHİM tarihidir, tebliğ beklenmez', () {
@@ -298,9 +301,11 @@ void main() {
       expect(sonuc.items.single.sureMetni, '2 hafta');
     });
 
-    test('adli tatile TABİ işte HMK m.104 uzatması uygulanır', () {
+    test('adli tatile tabi işte de hâkimin süresi kendiliğinden UZAMAZ', () {
       // 12 Ağustos duruşması + 2 hafta = 26 Ağustos, adli tatilin İÇİNDE
-      // bitiyor. Tatile tabi işte son gün 7 Eylül'e uzar.
+      // bitiyor. HMK m.104 yalnız "kanunda belirtilen" süreleri uzatır;
+      // hâkimin verdiği süre için uzatma varsayılmaz, avukata kontrol
+      // etmesi söylenir (denetim raporu B12).
       final sonuc = DeadlineService.computeFromOzelSure(
         baslangic: d('2026-08-12'),
         sure: tanikListesi(),
@@ -308,8 +313,9 @@ void main() {
         now: d('2026-08-13'),
         adliTatileTabi: true,
       );
-      expect(iso(sonuc.items.single.etkiliSonGun), '2026-09-07');
-      expect(sonuc.items.single.uzadi, isTrue);
+      expect(iso(sonuc.items.single.etkiliSonGun), '2026-08-26');
+      expect(sonuc.items.single.uzadi, isFalse);
+      expect(sonuc.items.single.dayanakNotlari.join(' '), contains('hâkim'));
     });
 
     test('m.103 kapsamındaki işte uzatma YOKTUR', () {

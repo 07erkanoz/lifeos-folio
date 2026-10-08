@@ -19,12 +19,25 @@ class EnvelopeDirective {
   /// 'itiraz', 'cevap', 'beyan', 'odeme', 'delil' or 'genel'.
   final String act;
 
+  /// Another event the sentence says the time runs from: 'tefhim',
+  /// 'karar', 'ilan' or 'ogrenme'; null for the service, said or not.
+  /// Never stood in for by the service.
+  final String? startsFrom;
+
+  /// The party the sentence lays the duty on, when it names one instead of
+  /// speaking to its reader ("Davalı tarafa … ihtar olunur"): 'davaci',
+  /// 'davali', 'alacakli' or 'borclu'. A notice served on the lawyer does
+  /// not make every duty written in it the lawyer's.
+  final String? party;
+
   const EnvelopeDirective({
     required this.quote,
     required this.amount,
     required this.unit,
     required this.fromService,
     required this.act,
+    this.startsFrom,
+    this.party,
   });
 
   /// Days for comparing with a catalogue's rule: weeks are seven days;
@@ -122,7 +135,9 @@ List<EnvelopeDirective> envelopeDirectives(String text) {
         _ => SureBirimi.yil,
       };
       final act = _act(clause);
-      final key = '$amount|${unit.name}|$act';
+      final startsFrom = _startsFrom(clause);
+      final party = _speaksToReader(clause) ? null : _party(clause);
+      final key = '$amount|${unit.name}|$act|$startsFrom|$party';
       if (!seen.add(key)) continue;
       out.add(
         EnvelopeDirective(
@@ -133,6 +148,8 @@ List<EnvelopeDirective> envelopeDirectives(String text) {
           unit: unit,
           fromService: _fromService.hasMatch(clause),
           act: act,
+          startsFrom: startsFrom,
+          party: party,
         ),
       );
     }
@@ -147,6 +164,41 @@ final _fromService = RegExp(
   r'(tebli|tebellü)\p{L}*\s+(tarihinden\s+)?(itibaren|başla)',
   unicode: true,
 );
+
+/// "tefhimden itibaren", "kararın tebliğinden" is the service; "karar
+/// tarihinden itibaren", "ilandan itibaren", "öğrenmeden itibaren" are not.
+String? _startsFrom(String lower) {
+  final m = RegExp(
+    r'(tefhim|karar\s+tarihi|ilan|öğrenme)\p{L}*\s+(?:tarihinden\s+)?'
+    r'(?:itibaren|başla)',
+    unicode: true,
+  ).firstMatch(lower);
+  if (m == null) return null;
+  final w = m.group(1)!;
+  if (w.startsWith('tefhim')) return 'tefhim';
+  if (w.startsWith('karar')) return 'karar';
+  if (w.startsWith('ilan')) return 'ilan';
+  return 'ogrenme';
+}
+
+/// The party a clause gives its duty to: "davalı tarafa", "davacıya",
+/// "borçlu vekiline". Two parties named, or none: null.
+String? _party(String lower) {
+  final found = <String>{
+    for (final m in RegExp(
+      r'(davacı|davalı|alacaklı|borçlu)'
+      r'(?:\s+(?:tarafa|vekiline|vekillerine)|ya|ye|lara|lere)\b',
+      unicode: true,
+    ).allMatches(lower))
+      switch (m.group(1)!) {
+        'davacı' => 'davaci',
+        'davalı' => 'davali',
+        'alacaklı' => 'alacakli',
+        _ => 'borclu',
+      },
+  };
+  return found.length == 1 ? found.single : null;
+}
 
 bool _speaksToReader(String lower) =>
     lower.contains('hakkınız') ||

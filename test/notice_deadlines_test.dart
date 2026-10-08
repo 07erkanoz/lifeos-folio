@@ -309,7 +309,8 @@ void main() {
     });
 
     test('a confirmation holds while the inputs do, and falls when a '
-        'document changes, even under the same name (T60, T67)', () {
+        'document changes, even under the same name (T60, T67); the '
+        'deadline stays on the agenda, to be confirmed again (B22)', () {
       parts([('p1', '(1)GerekceliKarar.pdf')]);
       refreshNoticeDeadlines(db, now: now);
       final id = db.deadlines().single.record.id;
@@ -326,7 +327,9 @@ void main() {
         again.record.reasons.map((r) => r.code),
         contains('onaySonrasiDegisti'),
       );
-      expect(db.agenda(), isEmpty);
+      expect(again.reconfirm, isTrue);
+      expect(again.toReview, isTrue);
+      expect(db.agenda().map((i) => i.id), [id]);
     });
 
     test(

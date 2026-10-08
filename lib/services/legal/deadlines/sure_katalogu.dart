@@ -54,6 +54,22 @@ enum SureGuveni {
 ///
 /// SAF veri modeli — takvim hesabı İÇERMEZ. Gerçek (takvim-doğru) son gün için
 /// `yasal_sure.dart`'taki `hamSonTarih` extension'ı kullanılır.
+/// What a time limit is, for the judicial recess: HMK m.104 extends the
+/// times "kanunda belirtilen" alone.
+enum SureNiteligi {
+  /// A procedural time the law sets: the recess extends it where the case
+  /// is subject to the recess.
+  kanuni,
+
+  /// A time the judge set: never extended as of course (HMK m.104 speaks
+  /// of the law's times); the lawyer is told to check.
+  hakim,
+
+  /// A time of substantive law (İİK m.67's year): the recess does not
+  /// touch it (Yargıtay 11. HD, 2022/617 E., 2023/3521 K.).
+  maddi,
+}
+
 class YasalSure {
   const YasalSure({
     required this.ad,
@@ -66,9 +82,13 @@ class YasalSure {
     this.guven = SureGuveni.yuksek,
     this.guvenNotu, // alt tür/belirsizlik uyarısı
     this.maliTatildeDurur = false,
+    this.nitelik = SureNiteligi.kanuni,
   });
 
   final String ad;
+
+  /// Whether the judicial recess may extend it (see [SureNiteligi]).
+  final SureNiteligi nitelik;
   final int miktar;
   final String kanunMaddesi;
   final SureBirimi birim;
@@ -196,6 +216,7 @@ const sItirazinIptali = YasalSure(
   miktar: 1,
   birim: SureBirimi.yil,
   kanunMaddesi: 'İİK m.67',
+  nitelik: SureNiteligi.maddi,
 );
 const sOdemeEmriIik62 = YasalSure(
   ad: 'Ödeme emrine itiraz (genel haciz)',
@@ -337,6 +358,10 @@ const sIcraMahkemesiIstinaf = YasalSure(
 );
 
 // ── Ceza (CMK) — 7499 tarih-etkin geçişi ──
+// Eski rejimde süre hükmün açıklanmasından başlar; hüküm yokluğunda
+// açıklandıysa tebliğden. Hangisi olduğu tebligattan anlaşılmaz: iki
+// başlangıç ayrı satırdır, eski kural topluca tefhime ya da tebliğe
+// çevrilmez. Yüze karşı satırı tefhim günü bilinene dek beklemede kalır.
 const sCezaIstinafEski = YasalSure(
   ad: 'İstinaf süresi (eski hüküm)',
   miktar: 7,
@@ -345,8 +370,21 @@ const sCezaIstinafEski = YasalSure(
   gecerliBitisIso: k7499,
   guven: SureGuveni.orta,
   guvenNotu:
-      'Karar 1 Haziran 2024 ÖNCESİ ise 7 gün. Karar tarihi '
-      'belirsizse kontrol edin.',
+      'Karar 1 Haziran 2024 ÖNCESİ ve hüküm yokluğunuzda açıklandıysa '
+      'tebliğden 7 gün. Yüzünüze karşı açıklandıysa süre açıklamadan '
+      'başlar (ayrı satır). Karar tarihi belirsizse kontrol edin.',
+);
+const sCezaIstinafEskiTefhim = YasalSure(
+  ad: 'İstinaf süresi (eski hüküm, yüze karşı)',
+  miktar: 7,
+  birim: SureBirimi.gun,
+  kanunMaddesi: 'CMK m.273/1',
+  baslangic: SureBaslangici.tefhim,
+  gecerliBitisIso: k7499,
+  guven: SureGuveni.orta,
+  guvenNotu:
+      'Karar 1 Haziran 2024 ÖNCESİ ve hüküm yüzünüze karşı açıklandıysa '
+      'süre açıklamadan başlar; tebligat bu süreyi yeniden başlatmaz.',
 );
 const sCezaIstinafYeni = YasalSure(
   ad: 'İstinaf süresi',
@@ -367,8 +405,21 @@ const sCezaTemyizEski = YasalSure(
   gecerliBitisIso: k7499,
   guven: SureGuveni.orta,
   guvenNotu:
-      'Karar 1 Haziran 2024 ÖNCESİ ise hükmün açıklanmasından '
-      'itibaren 15 gün. Karar tarihi belirsizse kontrol edin.',
+      'Karar 1 Haziran 2024 ÖNCESİ ve hüküm yokluğunuzda açıklandıysa '
+      'tebliğden 15 gün. Yüzünüze karşı açıklandıysa süre açıklamadan '
+      'başlar (ayrı satır). Karar tarihi belirsizse kontrol edin.',
+);
+const sCezaTemyizEskiTefhim = YasalSure(
+  ad: 'Temyiz süresi (eski hüküm, yüze karşı)',
+  miktar: 15,
+  birim: SureBirimi.gun,
+  kanunMaddesi: 'CMK m.291/1',
+  baslangic: SureBaslangici.tefhim,
+  gecerliBitisIso: k7499,
+  guven: SureGuveni.orta,
+  guvenNotu:
+      'Karar 1 Haziran 2024 ÖNCESİ ve hüküm yüzünüze karşı açıklandıysa '
+      'süre açıklamadan başlar; tebligat bu süreyi yeniden başlatmaz.',
 );
 const sCezaTemyizYeni = YasalSure(
   ad: 'Temyiz süresi',

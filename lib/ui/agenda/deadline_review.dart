@@ -10,6 +10,7 @@ import 'agenda_page.dart' show AgendaColors;
 const _order = [
   'onaySonrasiDegisti',
   'olayBekleniyor',
+  'tatilBelirsiz',
   'gocEslesmedi',
   'eskiTamamlandi',
   'takipTuruBelirsiz',
@@ -46,6 +47,8 @@ String _dayText(String key) {
 /// What a deadline's state says to the lawyer.
 String deadlineStateText(KeptDeadline d) => d.confirmed
     ? 'Onaylandı'
+    : d.reconfirm
+    ? 'Yeniden onayınızı bekliyor'
     : switch (d.record.state) {
         'aday' => 'Onayınızı bekliyor',
         'olayBekleniyor' => 'Başlangıç olayı bekleniyor',

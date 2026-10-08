@@ -74,7 +74,11 @@ extension YasalSureTakvim on YasalSure {
 ///       the garnishment notice's stages, İİK m.363 for enforcement
 ///       courts, İYUK m.16, reports by jurisdiction; days counted on dates,
 ///       not hours.
-const sureHesapSurumu = 5;
+///   6 — 2026-10-08 (Folio, the audit of that day): no event's day stood
+///       in for by the service's; an envelope's start and the party it
+///       names kept; two documents of a kind are two; the old criminal
+///       regime's two starts apart; one court classifier.
+const sureHesapSurumu = 6;
 
 /// Kategori bazlı yasal süreler (belge türü kanun yolu kararıysa kullanılır).
 /// Değerler kanonik olgulardan (sure_katalogu.dart) gelir — TEK kaynak.
@@ -90,7 +94,11 @@ const kategoriYasalSureleri = <MahkemeKategorisi, List<YasalSure>>{
   // from a decision's service; they stay in the catalogue for the lawyer's
   // own reckoning.
   MahkemeKategorisi.icra: [sIcraMahkemesiIstinaf],
-  MahkemeKategorisi.ceza: [sCezaIstinafEski, sCezaIstinafYeni],
+  MahkemeKategorisi.ceza: [
+    sCezaIstinafEski,
+    sCezaIstinafEskiTefhim,
+    sCezaIstinafYeni,
+  ],
   // DÜZELTME (hukuki): gerekçeli karara karşı süre İSTİNAF/TEMYİZ'dir (İYUK
   // m.45/46 → 30 gün). Önceki eşleme dava açma sürelerini (60/30 gün, İYUK m.7)
   // gösteriyordu — idari yargıda 60 gün göstermek avukatı 30 gün GEÇ bırakırdı.
@@ -119,7 +127,11 @@ List<YasalSure> surelerForBelgeTuru(
     case BelgeTuru.istinafKarari:
       return switch (kategori) {
         MahkemeKategorisi.hukuk => const [sTemyizHukuk],
-        MahkemeKategorisi.ceza => const [sCezaTemyizEski, sCezaTemyizYeni],
+        MahkemeKategorisi.ceza => const [
+          sCezaTemyizEski,
+          sCezaTemyizEskiTefhim,
+          sCezaTemyizYeni,
+        ],
         MahkemeKategorisi.idare ||
         MahkemeKategorisi.vergi => const [sIdariKanunYolu],
         MahkemeKategorisi.icra ||

@@ -76,6 +76,7 @@ typedef TarafKaydi = ({String rol, String vekil});
       'işlem aleyhinizse sizin süreniz.',
     ),
     Yukumlu.davali => yan == _Yan.pasif ? bizim() : karsi('davalının'),
+    Yukumlu.davaci => yan == _Yan.aktif ? bizim() : karsi('davacının'),
     Yukumlu.borclu => yan == _Yan.pasif ? bizim() : karsi('borçlunun'),
     Yukumlu.alacakli => yan == _Yan.aktif ? bizim() : karsi('alacaklının'),
     Yukumlu.ucuncuKisi =>
@@ -90,6 +91,9 @@ enum _Yan { aktif, pasif, ucuncu, bilinmiyor }
 _Yan _yan(String rol) {
   final r = _kelimeler(rol).join(' ');
   bool has(String k) => r.contains(k);
+  // "Davalı-Karşı Davacı": sued in the main case, suing in the counter
+  // one; which side a duty is on depends on the case it is in.
+  if (has('karsi dava')) return _Yan.bilinmiyor;
   if (has('ucuncu') || has('3 kisi') || has('muhatap')) return _Yan.ucuncu;
   if (has('davaci') ||
       has('alacakli') ||

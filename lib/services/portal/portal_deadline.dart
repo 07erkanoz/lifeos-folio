@@ -172,13 +172,24 @@ class KeptDeadline {
       user?.confirmedInputs != null &&
       user!.confirmedInputs == record.inputs;
 
+  /// Confirmed once, on inputs it no longer has (a document, the case,
+  /// the engine or the calendar changed), and still made with a day: it
+  /// stays followed while the lawyer looks at it again. A change never
+  /// takes a deadline the lawyer followed off the agenda quietly.
+  bool get reconfirm =>
+      !confirmed &&
+      record.state == 'aday' &&
+      record.dueDay != null &&
+      user?.confirmedInputs != null;
+
   /// The day the lawyer goes by: their own, else the engine's.
   String? get day => user?.manualDay ?? record.dueDay;
 
-  /// On the agenda, counted and alarmed: confirmed, or given a day by the
-  /// lawyer; never one the lawyer took off.
+  /// On the agenda, counted and alarmed: confirmed, to be confirmed again,
+  /// or given a day by the lawyer; never one the lawyer took off.
   bool get onAgenda =>
-      !(user?.dismissed ?? false) && (confirmed || user?.manualDay != null);
+      !(user?.dismissed ?? false) &&
+      (confirmed || reconfirm || user?.manualDay != null);
 
   /// The lawyer has decided on it: confirmed, given a day, done, or taken
   /// off. Until then an old agenda row it was carried over from stays on
@@ -190,26 +201,31 @@ class KeptDeadline {
       (user?.dismissed ?? false);
 
   /// To be looked at: everything not on the agenda and not taken off,
-  /// including what is no longer made, until the lawyer decides.
+  /// including what is no longer made, until the lawyer decides; and what
+  /// is to be confirmed again.
   bool get toReview =>
-      !onAgenda && !(user?.dismissed ?? false) && !(user?.done ?? false);
+      (!onAgenda || reconfirm) &&
+      !(user?.dismissed ?? false) &&
+      !(user?.done ?? false);
 
-  /// Not put before the lawyer at [now]: its notice served more than forty
+  /// Not put before the lawyer at [now]: its last day more than a week
+  /// gone; or, its last day not known, its notice served more than forty
   /// days ago (a box read whole brings years of notices; Banaozel keeps to
-  /// forty days too), or its last day more than a week gone. It stays on
-  /// its notice's page; one the lawyer confirmed stays on the agenda.
+  /// forty days too). A long time limit whose last day is still to come is
+  /// shown however long ago it was served: ninety days from a notice two
+  /// months old are not gone. It stays on its notice's page; one the lawyer
+  /// confirmed stays on the agenda.
   bool expired(DateTime now) {
     final today = DateTime(now.year, now.month, now.day);
-    final start = record.startDay;
-    if (start != null &&
-        DateTime.parse(start)
-            .isBefore(DateTime(today.year, today.month, today.day - 40))) {
-      return true;
-    }
     final d = day;
-    return d != null &&
-        DateTime.parse(d)
-            .isBefore(DateTime(today.year, today.month, today.day - 7));
+    if (d != null) {
+      return DateTime.parse(d)
+          .isBefore(DateTime(today.year, today.month, today.day - 7));
+    }
+    final start = record.startDay;
+    return start != null &&
+        DateTime.parse(start)
+            .isBefore(DateTime(today.year, today.month, today.day - 40));
   }
 }
 
