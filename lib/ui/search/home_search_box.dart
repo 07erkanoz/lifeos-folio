@@ -62,6 +62,15 @@ class _HomeSearchBoxState extends State<HomeSearchBox> {
   @override
   void didUpdateWidget(HomeSearchBox old) {
     super.didUpdateWidget(old);
+    // Another search (another lawyer's name): what the old one finds is
+    // not shown.
+    if (old.search != widget.search) {
+      _findSoon?.cancel();
+      _findGeneration++;
+      _results = null;
+      // Empty, the list draws nothing; hidden here, in a build, it may not.
+      _finding = false;
+    }
     if (old.focusNode != widget.focusNode) {
       old.focusNode.removeListener(_focused);
       old.focusNode.onKeyEvent = null;

@@ -199,15 +199,21 @@ class GlobalSearch {
     return (UyapCaseStore.changes.value, db.casesRevision);
   }
 
+  /// The index of the portfolio as it is now: one made while it changed
+  /// is made again, once, for the search waiting on it.
   Future<_Index> _indexed() async {
-    final version = await _version();
-    final kept = _index;
-    if (kept != null &&
-        kept.version == version &&
-        _now().difference(kept.at) < const Duration(minutes: 10)) {
-      return Future.value(kept);
+    for (var tries = 0; ; tries++) {
+      final version = await _version();
+      final kept = _index;
+      if (kept != null &&
+          kept.version == version &&
+          _now().difference(kept.at) < const Duration(minutes: 10)) {
+        return kept;
+      }
+      final made = await (_making ??= _make(version)
+          .whenComplete(() => _making = null));
+      if (tries > 0 || made.version == await _version()) return made;
     }
-    return _making ??= _make(version).whenComplete(() => _making = null);
   }
 
   /// Made while the portfolio changes, it is kept under the version it
@@ -295,7 +301,7 @@ class GlobalSearch {
     final query = text.trim();
     final ws = words(query);
     final none = GlobalSearchResults(query: query);
-    if (ws.isEmpty) return none;
+    if (ws.isEmpty || _disposed) return none;
     final asked = ++_asked;
 
     final filesSoon = _files(query);
@@ -324,6 +330,7 @@ class GlobalSearch {
       for (final i in hits.allCases) rows[i].key,
     });
     final (files, filesTotal) = await filesSoon;
+    if (asked != _asked || _disposed) return none;
     return GlobalSearchResults(
       query: query,
       cases: FoundGroup(cases, total: hits.casesTotal),
