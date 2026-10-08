@@ -424,7 +424,10 @@ List<DeadlineRecord> noticeDeadlines(
         startAt?.day ??
         switch (rule.baslangic) {
           SureBaslangici.teblig => served,
-          SureBaslangici.ogrenme => read,
+          // Learnt when read, or at the latest when served: the law holds
+          // a notice served known (İİK m.16, the audit's finding 12).
+          SureBaslangici.ogrenme =>
+            read == null || served.key.compareTo(read.key) < 0 ? served : read,
           _ => null,
         };
     String? raw, due;
@@ -573,6 +576,13 @@ List<DeadlineRecord> noticeDeadlines(
   final alsoFor = <int, List<String>>{};
   for (final k in kinds) {
     for (final rule in surelerForBelgeTuru(k.tur, kategori)) {
+      // A tensip of the enforcement office is its decision, complained of
+      // (İİK m.16); an enforcement court's is not (the audit's finding 23).
+      if (k.tur == BelgeTuru.tensipZapti &&
+          rule == sIcraSikayet &&
+          !m.subject.toLowerCase().contains('cra dairesi')) {
+        continue;
+      }
       final info = kuralBilgisi(rule);
       final ruleId = info?.id ?? _slug(rule.ad);
       if (made[ruleId] case final at?) {

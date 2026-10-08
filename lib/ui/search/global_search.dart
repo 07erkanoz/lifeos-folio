@@ -208,9 +208,9 @@ class GlobalSearch {
 
   /// What the portfolio is made of now: the UYAP records kept, the cases
   /// the portals listed.
-  Future<(int, int)> _version() async {
+  Future<(int, int, int)> _version() async {
     final db = database ?? await PortalDatabase.shared();
-    return (UyapCaseStore.changes.value, db.casesRevision);
+    return (UyapCaseStore.changes.value, db.casesRevision, db.clientsRevision);
   }
 
   /// The index of the portfolio as it is now: one made while it changed
@@ -232,7 +232,7 @@ class GlobalSearch {
 
   /// Made while the portfolio changes, it is kept under the version it
   /// began with: the next search makes it again.
-  Future<_Index> _make((int, int) version) async {
+  Future<_Index> _make((int, int, int) version) async {
     final worker = await _started;
     final rows = await loadPortfolio(
       lawyer: lawyer,
@@ -464,7 +464,7 @@ class _Index {
     this.clients = const [],
   });
   final List<(ClientEntry, String)> clients;
-  final (int, int) version;
+  final (int, int, int) version;
   final DateTime at;
   final int id;
   final List<PortfolioRow> rows;

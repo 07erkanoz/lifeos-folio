@@ -972,6 +972,7 @@ class _ClientCardState extends State<ClientCard> {
                     onReverse: _reverse,
                     onOpen: (m) => _preview(m, 'Belge'),
                     onStatement: _statement,
+                    titleOf: _caseTitle,
                     onPaper: _paper,
                   ),
                 _meetings(meetings),

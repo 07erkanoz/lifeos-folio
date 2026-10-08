@@ -34,8 +34,10 @@ Future<Uint8List> clientStatementPdf({
   final base = pw.TextStyle(font: font, fontSize: 10);
   final head = pw.TextStyle(font: strong, fontSize: 10);
   final accounts = caseAccounts(records);
+  // The cases now the client's, and those whose accounts are kept though
+  // the case is theirs no longer.
   final keys = [
-    for (final k in [...cases.keys, if (accounts.containsKey('')) ''])
+    for (final k in {...cases.keys, ...accounts.keys})
       if (only == null || k == only)
         if (accounts.containsKey(k)) k,
   ];

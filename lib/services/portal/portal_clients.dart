@@ -13,7 +13,23 @@ extension PortalClients on PortalDatabase {
       locked INTEGER NOT NULL DEFAULT 0);
     CREATE INDEX IF NOT EXISTS client_record_client
       ON client_record(client_id);
+    CREATE TABLE IF NOT EXISTS clients_revision (n INTEGER NOT NULL);
+    INSERT INTO clients_revision SELECT 0
+      WHERE NOT EXISTS (SELECT 1 FROM clients_revision);
+    CREATE TRIGGER IF NOT EXISTS client_written AFTER INSERT ON client
+      BEGIN UPDATE clients_revision SET n = n + 1; END;
+    CREATE TRIGGER IF NOT EXISTS client_removed AFTER DELETE ON client
+      BEGIN UPDATE clients_revision SET n = n + 1; END;
+    CREATE TRIGGER IF NOT EXISTS representation_written
+      AFTER INSERT ON case_representation
+      BEGIN UPDATE clients_revision SET n = n + 1; END;
   ''';
+
+  /// Counted up at every client card written or removed, and every word
+  /// of whom the lawyer acts for: what was made of the clients stands
+  /// while it stays the same (the search's index).
+  int get clientsRevision =>
+      _db.select('SELECT n FROM clients_revision').first.columnAt(0) as int;
 
   void saveClient(Client c) {
     _putClient(c);

@@ -26,6 +26,13 @@ void main() {
       noticeEvents('ÇAĞRI KAĞIDI … 15/10/2026\n13:45\nDuruşma Günü').single.at,
       DateTime(2026, 10, 15, 13, 45),
     );
+    // Far into a long text, the words are read at the date's own place.
+    expect(
+      noticeEvents('${'\n' * 120}İŞBU duruşmanın 15/10/2026 günü saat 13:45')
+          .single
+          .kind,
+      'Duruşma',
+    );
     // A decision's or a filing's date sets nothing.
     expect(noticeEvents('24/11/2025 tarihli ihtiyati haciz kararına'), isEmpty);
   });

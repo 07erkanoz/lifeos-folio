@@ -121,6 +121,9 @@ class DeadlineUser {
   final String? confirmedInputs;
   final DateTime? confirmedAt;
 
+  /// The day it had when confirmed ('yyyy-mm-dd'), for every device.
+  final String? confirmedDay;
+
   /// Taken off the agenda by the lawyer; still shown on its notice.
   final bool dismissed;
 
@@ -133,6 +136,7 @@ class DeadlineUser {
     this.confirmedInputs,
     this.confirmedAt,
     this.dismissed = false,
+    this.confirmedDay,
   });
 
   DeadlineUser copyWith({
@@ -143,6 +147,7 @@ class DeadlineUser {
     String? bodyOverride,
     String? confirmedInputs,
     DateTime? confirmedAt,
+    String? confirmedDay,
     bool clearConfirmation = false,
     bool? dismissed,
   }) => DeadlineUser(
@@ -155,6 +160,7 @@ class DeadlineUser {
         ? null
         : confirmedInputs ?? this.confirmedInputs,
     confirmedAt: clearConfirmation ? null : confirmedAt ?? this.confirmedAt,
+    confirmedDay: clearConfirmation ? null : confirmedDay ?? this.confirmedDay,
     dismissed: dismissed ?? this.dismissed,
   );
 }

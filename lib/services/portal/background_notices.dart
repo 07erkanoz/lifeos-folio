@@ -37,17 +37,14 @@ abstract final class BackgroundNotices {
     if (!supported) return;
     try {
       await Workmanager().initialize(folioBackgroundDispatcher);
-      if (alerts.on && alerts.background) {
-        await Workmanager().registerPeriodicTask(
-          task,
-          task,
-          frequency: const Duration(minutes: 15),
-          constraints: Constraints(networkType: NetworkType.connected),
-          existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-        );
-      } else {
-        await Workmanager().cancelByUniqueName(task);
-      }
+      // Always: the agenda's alarms need no UYAP and no network; the
+      // UYAP check inside it goes by the lawyer's choice (see _check).
+      await Workmanager().registerPeriodicTask(
+        task,
+        task,
+        frequency: const Duration(minutes: 15),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+      );
     } catch (_) {
       // No background work on this phone: notifications come while Folio
       // is open, as before.

@@ -36,8 +36,13 @@ abstract final class AgendaReminders {
       '${t.day.toString().padLeft(2, '0')}.'
       '${t.month.toString().padLeft(2, '0')}.${t.year}';
 
-  /// What is due to be told at [now], each once; marked told.
-  static List<AgendaReminder> due(PortalDatabase db, DateTime now) {
+  /// What is due to be told at [now], each once; marked told only when
+  /// [mark] (a test's check), else by [tell] once shown.
+  static List<AgendaReminder> due(
+    PortalDatabase db,
+    DateTime now, {
+    bool mark = true,
+  }) {
     final today = DateTime(now.year, now.month, now.day);
     final sent = _sent(db);
     final out = <AgendaReminder>[];
@@ -86,15 +91,17 @@ abstract final class AgendaReminders {
         payload: 'ajanda:${h.key}',
       ));
     }
-    if (out.isNotEmpty) {
-      // The newest hundreds kept: the old ones are past telling.
-      final kept = sent.toList();
-      db.setMeta(
-        _sentKey,
-        jsonEncode(kept.length > 800 ? kept.sublist(kept.length - 800) : kept),
-      );
-    }
+    if (mark && out.isNotEmpty) _mark(db, [for (final r in out) r.key]);
     return out;
+  }
+
+  /// [keys] told, kept so; the newest hundreds: the old are past telling.
+  static void _mark(PortalDatabase db, List<String> keys) {
+    final kept = [..._sent(db), ...keys];
+    db.setMeta(
+      _sentKey,
+      jsonEncode(kept.length > 800 ? kept.sublist(kept.length - 800) : kept),
+    );
   }
 
   /// Tells what is due through [notices]; [private], what may show of it
@@ -104,22 +111,28 @@ abstract final class AgendaReminders {
     SystemNotices? notices,
     bool Function()? private,
     DateTime? now,
+    bool ask = false,
   }) async {
     final system = notices ?? SystemNotices.instance;
-    final todo = due(db, now ?? DateTime.now());
+    final todo = due(db, now ?? DateTime.now(), mark: false);
+    final told = <String>[];
     for (final r in todo) {
       final hide = private?.call() ?? false;
-      await system
-          .show(
+      final ok = await system
+          .shown(
             id: r.key.hashCode & 0x7fffffff,
             title: hide ? 'LifeOS Folio' : r.title,
             body: hide ? 'Ajandada yaklaşan bir iş var' : r.body,
             payload: r.payload,
-            ask: false,
+            // Asked for in sight; in the background there is no one to ask.
+            ask: ask,
           )
-          .catchError((Object _) {});
+          .catchError((Object _) => false);
+      // Not shown (no leave yet): told again at the next check.
+      if (ok) told.add(r.key);
     }
-    return todo.length;
+    if (told.isNotEmpty) _mark(db, told);
+    return told.length;
   }
 
   static Timer? _timer;
@@ -129,7 +142,7 @@ abstract final class AgendaReminders {
     _timer?.cancel();
     Future<void> check() async {
       try {
-        await tell(await PortalDatabase.shared(), private: private);
+        await tell(await PortalDatabase.shared(), private: private, ask: true);
       } catch (_) {}
     }
 

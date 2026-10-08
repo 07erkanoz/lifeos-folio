@@ -225,8 +225,9 @@ const sIhaleninFeshi = YasalSure(
   baslangic: SureBaslangici.kararTarihi,
   guven: SureGuveni.orta,
   guvenNotu:
-      'Süre ihale gününden başlar; ihaleden haberi olmayan ilgili için '
-      'öğrenmeden. Tutanaktaki ihale gününü girin.',
+      'Süre ihale gününden başlar (ihaleden haberi olmayan ilgili için '
+      'öğrenmeden): tutanaktaki ihale gününe yedi gün ekleyip son günü '
+      'elle girin.',
 );
 
 /// CMK m.297/3: the chief prosecutor's opinion, served to the one it goes
@@ -283,6 +284,8 @@ const sIcraSikayet = YasalSure(
   miktar: 7,
   birim: SureBirimi.gun,
   kanunMaddesi: 'İİK m.16',
+  // From the day it was learnt: read, or served if earlier.
+  baslangic: SureBaslangici.ogrenme,
   guven: SureGuveni.orta,
   guvenNotu:
       'İcra dosyasının türüne göre süre/dayanak değişir; belgeden '

@@ -2,7 +2,6 @@ import '../portal/observed.dart';
 import '../portal/portal_channel.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_hearing.dart';
-import '../uyap/uyap_web_service.dart' show UyapWebService;
 
 /// A day a notice's papers set: a hearing, an on-site inspection (keşif),
 /// a hearing on an objection (mürafaa); its kind and its minute.
@@ -17,14 +16,28 @@ final _when = RegExp(
 /// günü saat 10.00'da yapılmasına", "duruşmasının 15/12/2025 günü saat
 /// 11:15'a bırakılmasına", a summons's "Duruşma Günü … 15/10/2026 13:45".
 /// A date that only names a decision or a filing sets nothing.
+/// [text] lowercased and its Turkish letters plain, a letter for a letter:
+/// the words around a date are read at the date's own place.
+String _plain(String text) {
+  const from = 'İIıŞşĞğÜüÖöÇçÂâÎîÛû';
+  const to = 'iiissgguuooccaaiiuu';
+  final out = StringBuffer();
+  for (final ch in text.split('')) {
+    final i = from.indexOf(ch);
+    out.write(i >= 0 ? to[i] : (ch.length == 1 ? ch.toLowerCase() : ch));
+  }
+  return out.toString();
+}
+
 List<NoticeEvent> noticeEvents(String text) {
-  final folded = UyapWebService.fold(text);
+  final folded = _plain(text);
+  assert(folded.length == text.length);
   final out = <NoticeEvent>[];
   for (final m in _when.allMatches(text)) {
     final d = int.parse(m[1]!), mo = int.parse(m[2]!), y = int.parse(m[3]!);
     final h = int.parse(m[4]!), mi = int.parse(m[5]!);
     if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59) continue;
-    // The words around it, folded alike (fold keeps the length).
+    // The words around it, at the same place in the plain text.
     final from = (m.start - 90).clamp(0, folded.length);
     final to = (m.end + 60).clamp(0, folded.length);
     final near = folded.substring(from, to);
@@ -71,8 +84,21 @@ int refreshNoticeEvents(PortalDatabase db, {DateTime? now}) {
     final key =
         kept.caseKey ??
         (number.isEmpty || court.isEmpty ? null : caseKey(number, court));
-    if (key == null || !seen.add(key)) continue;
-    final events = [for (final t in texts) ...noticeEvents(t)];
+    if (key == null) continue;
+    // Each kind from the case's newest notice that tells of one: a newer
+    // notice of none (a report) leaves an earlier inspection standing.
+    final told = [for (final t in texts) ...noticeEvents(t)];
+    final kinds = {
+      for (final e in told)
+        if (!seen.contains('$key|${e.kind}')) e.kind,
+    };
+    final events = [
+      for (final e in told)
+        if (kinds.contains(e.kind)) e,
+    ];
+    for (final k in kinds) {
+      seen.add('$key|$k');
+    }
     if (events.isEmpty) continue;
     cases.add(key);
     final known = db.caseOf(key);

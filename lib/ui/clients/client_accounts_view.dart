@@ -23,6 +23,7 @@ class ClientAccountsView extends StatelessWidget {
     required this.onReverse,
     this.onOpen,
     this.onStatement,
+    this.titleOf,
     this.onPaper,
   });
 
@@ -30,6 +31,9 @@ class ClientAccountsView extends StatelessWidget {
   /// fee agreement), 'ibra' (its release); for a movement, 'tahsilat'.
   final void Function(String paper, String caseKey, ClientRecord? movement)?
   onPaper;
+
+  /// A case's title by its key, for an account of a case no longer listed.
+  final String Function(String caseKey)? titleOf;
 
   /// A case's statement, to give the client.
   final void Function(String caseKey)? onStatement;
@@ -57,7 +61,10 @@ class ClientAccountsView extends StatelessWidget {
       children: [
         for (final c in [
           ...cases,
-          if (accounts.containsKey('')) (key: '', title: 'Dosyasız'),
+          // Accounts of cases no longer the client's, and of none.
+          for (final k in accounts.keys)
+            if (!cases.any((c) => c.key == k))
+              (key: k, title: k.isEmpty ? 'Dosyasız' : (titleOf?.call(k) ?? k)),
         ])
           _account(
             context,
@@ -500,10 +507,11 @@ class FeeDialog extends StatefulWidget {
 }
 
 class _FeeDialogState extends State<FeeDialog> {
+  // The kuruş shown too: one saved again unchanged keeps them.
   late final _fixed = TextEditingController(
     text: (widget.kept?.data['tutar'] as int?) == null
         ? ''
-        : '${(widget.kept!.data['tutar'] as int) ~/ 100}',
+        : lira(widget.kept!.data['tutar'] as int).replaceAll(' TL', ''),
   );
   late final _share = TextEditingController(
     text: '${widget.kept?.data['yuzde'] ?? ''}',
@@ -514,7 +522,16 @@ class _FeeDialogState extends State<FeeDialog> {
   late final _note = TextEditingController(
     text: widget.kept?.text('not') ?? '',
   );
-  DateTime _first = DateTime.now();
+
+  /// The plan's first day as it was; today for a new agreement.
+  late DateTime _first = () {
+    final plan = widget.kept?.data['taksitler'];
+    if (plan is List && plan.isNotEmpty && plan.first is Map) {
+      final d = DateTime.tryParse('${(plan.first as Map)['tarih']}');
+      if (d != null) return d;
+    }
+    return DateTime.now();
+  }();
 
   @override
   void dispose() {
@@ -529,19 +546,38 @@ class _FeeDialogState extends State<FeeDialog> {
     final share = num.tryParse(_share.text.replaceAll(',', '.')) ?? 0;
     final count = (int.tryParse(_count.text) ?? 1).clamp(1, 60);
     final each = fixed ~/ count;
-    final plan = [
-      if (fixed > 0)
-        for (var i = 0; i < count; i++)
-          {
-            'tarih': DateTime(
-              _first.year,
-              _first.month + i,
-              _first.day,
-            ).toIso8601String(),
-            // The rest of the division on the last.
-            'tutar': i == count - 1 ? fixed - each * (count - 1) : each,
-          },
-    ];
+    // The same day of each month, or the month's last when it has none
+    // (the 31st of January, then the 28th of February).
+    DateTime monthOn(int i) {
+      final last = DateTime(_first.year, _first.month + i + 1, 0).day;
+      return DateTime(
+        _first.year,
+        _first.month + i,
+        _first.day > last ? last : _first.day,
+      );
+    }
+
+    final kept = widget.kept;
+    final keptPlan = kept?.data['taksitler'];
+    // The plan unchanged (only the note changed): kept as it was.
+    final same =
+        kept != null &&
+        keptPlan is List &&
+        kept.data['tutar'] == fixed &&
+        keptPlan.length == (fixed > 0 ? count : 0) &&
+        (keptPlan.isEmpty ||
+            DateTime.tryParse('${(keptPlan.first as Map)['tarih']}') == _first);
+    final plan = same
+        ? keptPlan
+        : [
+            if (fixed > 0)
+              for (var i = 0; i < count; i++)
+                {
+                  'tarih': monthOn(i).toIso8601String(),
+                  // The rest of the division on the last.
+                  'tutar': i == count - 1 ? fixed - each * (count - 1) : each,
+                },
+          ];
     final data = {
       'dosya': widget.caseKey,
       'tutar': fixed,
@@ -550,7 +586,6 @@ class _FeeDialogState extends State<FeeDialog> {
       'not': _note.text.trim(),
     };
     final now = DateTime.now();
-    final kept = widget.kept;
     Navigator.pop(
       context,
       kept == null

@@ -380,6 +380,13 @@ void main() {
     db.replaceNoticeDeadlines(r.noticeId, [r]);
     expect(db.confirmDeadline(r.id), isTrue);
     expect(db.deadline(r.id)!.confirmedDay, r.dueDay);
+    // Kept with the confirmation, it goes to another device that has no
+    // history of it.
+    final other = PortalDatabase.memory();
+    addTearDown(other.dispose);
+    other.replaceNoticeDeadlines(r.noticeId, [r.withState('eski')]);
+    other.agendaMerge(db.agendaExport());
+    expect(other.deadline(r.id)!.user!.confirmedDay, r.dueDay);
   });
 
   group('stage C: a directive at a time', () {

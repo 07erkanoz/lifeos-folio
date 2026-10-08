@@ -237,6 +237,10 @@ class PortalDatabase {
     if (!columns.contains('updated')) {
       _db.execute('ALTER TABLE deadline_user ADD COLUMN updated TEXT');
     }
+    // The day a deadline had when confirmed, for every device (B22).
+    if (!columns.contains('confirmed_day')) {
+      _db.execute('ALTER TABLE deadline_user ADD COLUMN confirmed_day TEXT');
+    }
   }
 
   /// Told after the lawyer changed the agenda here, for their other
@@ -1100,6 +1104,7 @@ class PortalDatabase {
       'body_override',
       'confirmed_inputs',
       'confirmed_at',
+      'confirmed_day',
       'dismissed',
     ];
     bool newer(
@@ -1189,7 +1194,8 @@ class PortalDatabase {
         _db.execute(
           '''INSERT OR REPLACE INTO deadline_user(deadline_id, done,
              manual_day, title_override, body_override, confirmed_inputs,
-             confirmed_at, dismissed, updated) VALUES(?,?,?,?,?,?,?,?,?)''',
+             confirmed_at, dismissed, updated, confirmed_day)
+             VALUES(?,?,?,?,?,?,?,?,?,?)''',
           [
             id,
             r['done'] == 1 ? 1 : 0,
@@ -1200,6 +1206,7 @@ class PortalDatabase {
             text('confirmed_at'),
             r['dismissed'] == 1 ? 1 : 0,
             updated.toIso8601String(),
+            text('confirmed_day'),
           ],
         );
         changedHere = true;
@@ -1587,14 +1594,16 @@ class PortalDatabase {
             ? _db.select(
                 'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
                 'u.title_override, u.body_override, u.confirmed_inputs, '
-                'u.confirmed_at, u.dismissed, $_confirmedDay FROM deadline d '
+                'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, '
+                '$_confirmedDay FROM deadline d '
                 '${decidedOnly ? 'JOIN' : 'LEFT JOIN'} '
                 'deadline_user u ON u.deadline_id = d.id ORDER BY d.due_day',
               )
             : _db.select(
                 'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
                 'u.title_override, u.body_override, u.confirmed_inputs, '
-                'u.confirmed_at, u.dismissed, $_confirmedDay FROM deadline d LEFT JOIN '
+                'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, '
+                '$_confirmedDay FROM deadline d LEFT JOIN '
                 'deadline_user u ON u.deadline_id = d.id WHERE d.notice_id=? '
                 'ORDER BY d.due_day',
                 [noticeId],
@@ -1606,7 +1615,8 @@ class PortalDatabase {
     final rows = _db.select(
       'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
       'u.title_override, u.body_override, u.confirmed_inputs, '
-      'u.confirmed_at, u.dismissed, $_confirmedDay FROM deadline d LEFT JOIN deadline_user u '
+      'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, '
+      '$_confirmedDay FROM deadline d LEFT JOIN deadline_user u '
       'ON u.deadline_id = d.id WHERE d.id=?',
       [id],
     );
@@ -1659,11 +1669,13 @@ class PortalDatabase {
                 ? null
                 : DateTime.parse(r['confirmed_at'] as String),
             dismissed: r['dismissed'] == 1,
+            confirmedDay: r['u_day'] as String?,
           );
     return KeptDeadline(
       record,
       user,
-      confirmedDay: r['confirmed_day'] as String?,
+      // Kept with the confirmation, else read from the history.
+      confirmedDay: r['u_day'] as String? ?? r['confirmed_day'] as String?,
     );
   }
 
@@ -1765,7 +1777,7 @@ class PortalDatabase {
     _db.execute(
       '''INSERT OR REPLACE INTO deadline_user(deadline_id, done, manual_day,
          title_override, body_override, confirmed_inputs, confirmed_at,
-         dismissed, updated) VALUES(?,?,?,?,?,?,?,?,?)''',
+         dismissed, updated, confirmed_day) VALUES(?,?,?,?,?,?,?,?,?,?)''',
       [
         u.deadlineId,
         u.done ? 1 : 0,
@@ -1776,6 +1788,7 @@ class PortalDatabase {
         u.confirmedAt?.toIso8601String(),
         u.dismissed ? 1 : 0,
         DateTime.now().toIso8601String(),
+        u.confirmedDay,
       ],
     );
     changed?.call();
@@ -1794,6 +1807,7 @@ class PortalDatabase {
       (kept.user ?? DeadlineUser(deadlineId: id)).copyWith(
         confirmedInputs: kept.record.inputs,
         confirmedAt: now ?? DateTime.now(),
+        confirmedDay: kept.record.dueDay,
       ),
     );
     return true;

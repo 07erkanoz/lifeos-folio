@@ -114,7 +114,19 @@ class SystemNotices {
     String? payload,
     bool ask = true,
   }) async {
-    if (!await _start()) return;
+    await shown(id: id, title: title, body: body, payload: payload, ask: ask);
+  }
+
+  /// [show], answering whether it was shown: what is told once (an
+  /// alarm) is marked told only then.
+  Future<bool> shown({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+    bool ask = true,
+  }) async {
+    if (!await _start()) return false;
     if (ask) await askLeave();
     try {
       await _plugin.show(
@@ -126,7 +138,8 @@ class SystemNotices {
           android: AndroidNotificationDetails(
             'uyap_bildirim',
             'UYAP bildirimleri',
-            channelDescription: 'UYAP Mobil ve UYAP Web’den gelen yeni bildirimler',
+            channelDescription:
+                'UYAP Mobil ve UYAP Web’den gelen yeni bildirimler',
             importance: Importance.high,
             priority: Priority.high,
           ),
@@ -135,8 +148,10 @@ class SystemNotices {
           linux: LinuxNotificationDetails(),
         ),
       );
+      return true;
     } catch (_) {
       // Not shown; the page and the badge still tell of it.
+      return false;
     }
   }
 }

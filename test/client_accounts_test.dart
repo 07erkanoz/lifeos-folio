@@ -315,4 +315,37 @@ void main() {
       expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
     },
   );
+
+  test('a card merged into another tells its instalments as that one\'s', () {
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    db.saveClient(
+      Client(
+        id: 'k1',
+        name: 'Ayşe Karaca',
+        updated: DateTime(2026),
+      ).copyWith(absorbed: ['k2']),
+    );
+    db.saveClient(
+      Client(
+        id: 'k2',
+        name: 'A. Karaca',
+        updated: DateTime(2026),
+      ).copyWith(removed: true),
+    );
+    final f = fee('a', 1000, [(DateTime(2026, 10, 11), 1000)]);
+    db.saveClientRecord(
+      ClientRecord(
+        id: f.id,
+        clientId: 'k2',
+        kind: f.kind,
+        data: f.data,
+        created: f.created,
+        by: f.by,
+        updated: f.updated,
+      ),
+    );
+    final due = FeeReminders.open(db, DateTime(2026, 10, 8));
+    expect(due.single.client.id, 'k1');
+  });
 }

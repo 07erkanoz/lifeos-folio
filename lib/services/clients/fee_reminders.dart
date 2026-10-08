@@ -44,9 +44,17 @@ class FeeReminders {
   static List<DueInstalment> open(PortalDatabase db, DateTime now) {
     final today = DateTime(now.year, now.month, now.day);
     final cards = {for (final c in db.clientCards()) c.id: c};
+    // A card merged into another is that one's: its records with it.
+    final canon = <String, String>{
+      for (final c in cards.values)
+        if (!c.removed) ...{for (final a in c.absorbed) a: c.id, c.id: c.id},
+    };
     final byClient = <String, List<ClientRecord>>{};
     for (final r in db.allClientRecords()) {
-      if (!r.removed && r.kind.money) (byClient[r.clientId] ??= []).add(r);
+      final id = canon[r.clientId];
+      if (id != null && !r.removed && r.kind.money) {
+        (byClient[id] ??= []).add(r);
+      }
     }
     final out = <DueInstalment>[];
     for (final e in byClient.entries) {
