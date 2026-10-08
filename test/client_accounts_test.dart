@@ -206,15 +206,24 @@ void main() {
               .firstWhere((c) => c['id'] == 'k1');
       expect(gone['ad'], '');
       expect(gone.containsKey('telefon'), isFalse);
-      // No one changes another's card: Selin's word for Deniz's is not taken.
-      final forged = mine.clientsOfficeExport(money: true, me: 'deniz');
-      expect(
-        theirs.clientsOfficeMerge(forged, money: true, me: 'x', from: 'selin'),
-        isFalse,
-      );
       expect(theirs.clientRecord('g1'), isNull);
       expect(theirs.clientRecord('m1'), isNull);
       expect(theirs.clientRecord('g2'), isNotNull);
+      // No one changes another's card: Selin's word for Deniz's is not
+      // taken by a third.
+      final forged = mine.clientsOfficeExport(money: true, me: 'deniz');
+      final third = PortalDatabase.memory();
+      addTearDown(third.dispose);
+      third.saveClient(mine.clientCard('k2')!);
+      expect(
+        third.clientsOfficeMerge(
+          forged,
+          money: true,
+          me: 'okan',
+          from: 'selin',
+        ),
+        isFalse,
+      );
     });
   });
 
