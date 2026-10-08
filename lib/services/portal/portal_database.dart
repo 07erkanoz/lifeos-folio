@@ -149,6 +149,13 @@ class PortalDatabase {
         key TEXT PRIMARY KEY, first_seen TEXT NOT NULL DEFAULT '',
         seen_at TEXT, fresh INTEGER NOT NULL DEFAULT 0, change TEXT,
         change_at TEXT);
+      CREATE TABLE IF NOT EXISTS cases_revision (n INTEGER NOT NULL);
+      INSERT INTO cases_revision SELECT 0
+        WHERE NOT EXISTS (SELECT 1 FROM cases_revision);
+      CREATE TRIGGER IF NOT EXISTS cases_written AFTER INSERT ON cases
+        BEGIN UPDATE cases_revision SET n = n + 1; END;
+      CREATE TRIGGER IF NOT EXISTS cases_removed AFTER DELETE ON cases
+        BEGIN UPDATE cases_revision SET n = n + 1; END;
       CREATE TABLE IF NOT EXISTS uets_part (
         notice_id TEXT NOT NULL, part_id TEXT NOT NULL, name TEXT NOT NULL,
         mime TEXT NOT NULL DEFAULT '', seq INTEGER NOT NULL,
@@ -267,6 +274,11 @@ class PortalDatabase {
     for (final row in _db.select('SELECT key, json FROM cases'))
       row['key'] as String: _case(row['json'] as String),
   };
+
+  /// Counted up at every case written or removed, by any connection: what
+  /// was made of the cases stands while it stays the same.
+  int get casesRevision =>
+      _db.select('SELECT n FROM cases_revision').first.columnAt(0) as int;
 
   /// One case as kept; null when it is not. Not all of them read for one.
   PortalCase? caseOf(String key) {
@@ -691,6 +703,13 @@ class PortalDatabase {
   );
 
   // Agenda
+
+  /// Changes since it was opened, made here or by another connection (a
+  /// worker's): what was read of it stands while this stays the same.
+  (int, int) get revision => (
+    _db.select('PRAGMA data_version').first.columnAt(0) as int,
+    _db.select('SELECT total_changes()').first.columnAt(0) as int,
+  );
 
   /// The agenda: the lawyer's own notes, tasks and deadlines, and the
   /// notices' deadlines the lawyer confirmed or gave a day (see

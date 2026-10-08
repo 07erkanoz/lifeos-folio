@@ -15,6 +15,7 @@ import 'package:evrak_convert/ui/desktop/desktop_home.dart';
 import 'package:evrak_convert/ui/portfolio/case_detail_page.dart';
 import 'package:evrak_convert/ui/search/global_search.dart';
 import 'package:evrak_convert/ui/search/global_search_page.dart';
+import 'package:evrak_convert/ui/search/search_worker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -180,6 +181,93 @@ void main() {
     expect(more.agenda.first, hasLength(5));
     expect(more.agenda.more, isTrue);
     expect(more.open(agenda: true).agenda.first, hasLength(6));
+  });
+
+  test('on a worker of its own, the same is found', () async {
+    final s = GlobalSearch(
+      lawyer: 'Av. Deniz Kaya',
+      database: db,
+      store: store,
+      now: () => DateTime(2026, 10, 8),
+      inline: false,
+    );
+    addTearDown(s.dispose);
+    final r = await s.find('ayşe karaca');
+    expect(r.cases.total, 2);
+    expect(r.parties.first.single.cases, hasLength(2));
+    final t = await s.find('tensip');
+    expect(t.documents.first.map((f) => f.document.key), ['c', 'a']);
+  });
+
+  test('a hundred of each come back, newest first, and how many in all; '
+      'a search of an older load answers nothing', () async {
+    final worker = await SearchWorker.start();
+    addTearDown(worker.stop);
+    final days = [for (var i = 0; i < 150; i++) i];
+    final id = await worker.load(
+      caseWords: ['2024/1 Antalya'],
+      caseLasts: [0],
+      partyCases: [0, 0],
+      partyNames: ['AYŞE KARACA', 'Ayşe Karaca'],
+      partyRoles: ['Davacı', 'Davacı'],
+      documentCases: [for (final _ in days) 0],
+      documentWords: [for (final i in days) 'Tensip Zaptı $i'],
+      documentApproved: [
+        for (final i in days)
+          '${(i % 28 + 1).toString().padLeft(2, '0')}.'
+              '${(i ~/ 28 + 1).toString().padLeft(2, '0')}.2026 10:00',
+      ],
+      documentSent: [for (final _ in days) ''],
+    );
+    final hits = (await worker.find(id, ['tensip']))!;
+    expect(hits.documentsTotal, 150);
+    expect(hits.documents, hasLength(SearchWorker.limit));
+    expect(hits.documents.first, 149);
+    // A name written two ways is one party.
+    expect((await worker.find(id, ['karaca']))!.partiesTotal, 1);
+    final newer = await worker.load(
+      caseWords: const [],
+      caseLasts: const [],
+      partyCases: const [],
+      partyNames: const [],
+      partyRoles: const [],
+      documentCases: const [],
+      documentWords: const [],
+      documentApproved: const [],
+      documentSent: const [],
+    );
+    expect(await worker.find(id, ['tensip']), isNull);
+    expect((await worker.find(newer, ['tensip']))!.documentsTotal, 0);
+  });
+
+  test('every case found is told, past the hundred shown, for their '
+      'hearings; a stopped worker answers with an error', () async {
+    final worker = await SearchWorker.start();
+    final id = await worker.load(
+      caseWords: [for (var i = 0; i < 120; i++) 'Antalya $i'],
+      caseLasts: [for (var i = 0; i < 120; i++) i],
+      partyCases: const [],
+      partyNames: const [],
+      partyRoles: const [],
+      documentCases: const [],
+      documentWords: const [],
+      documentApproved: const [],
+      documentSent: const [],
+    );
+    final hits = (await worker.find(id, ['antalya']))!;
+    expect(hits.cases, hasLength(SearchWorker.limit));
+    expect(hits.allCases, hasLength(120));
+    worker.stop();
+    await expectLater(worker.find(id, ['antalya']), throwsStateError);
+  });
+
+  test('a case the portals list anew is counted in the cases\' revision', () {
+    final before = db.casesRevision;
+    db.mergeCases([kase('2026/5', civil)], portfolio: true);
+    expect(db.casesRevision, greaterThan(before));
+    final after = db.casesRevision;
+    db.mergeCases([kase('2026/5', civil)], portfolio: true);
+    expect(db.casesRevision, after);
   });
 
   testWidgets('typed, the home page lists what it found; Enter and the '

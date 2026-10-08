@@ -978,6 +978,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _keptSearch?.dispose();
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
     OfficeNetwork.instance.removeListener(_officeCounted);
     OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
@@ -1484,6 +1485,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   GlobalSearch get _globalSearch {
     final kept = _keptSearch;
     if (kept != null && kept.lawyer == _lawyerName) return kept;
+    kept?.dispose();
     return _keptSearch = GlobalSearch(
       lawyer: _lawyerName,
       archive: (text, limit) => _library.peek(text, limit: limit),

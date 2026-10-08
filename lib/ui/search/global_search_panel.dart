@@ -97,6 +97,18 @@ class GlobalSearchPanel extends StatelessWidget {
           KeyedSubtree(key: ValueKey('found-$i'), child: row(f, i == selected)),
         );
       }
+      if (found.cut) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+            child: Text(
+              'İlk ${found.items.length} gösteriliyor; daha fazla kelimeyle '
+              'arayın.',
+              style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+            ),
+          ),
+        );
+      }
       if (more != null && onMore != null) {
         children.add(
           Align(

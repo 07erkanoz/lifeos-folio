@@ -42,6 +42,7 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
   GlobalSearchResults? _results;
   bool _finding = false;
   Timer? _soon;
+  Future<GlobalSearchResults?>? _finds;
   int _generation = 0;
 
   @override
@@ -58,48 +59,59 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
     super.dispose();
   }
 
+  /// A letter typed: what was asked for before it is no longer wanted,
+  /// even when it comes back in the pause.
   void _typed(String text) {
     _soon?.cancel();
+    _generation++;
     if (GlobalSearch.words(text).isEmpty) {
-      _generation++;
+      _finds = null;
       setState(() {
         _results = null;
         _finding = false;
       });
       return;
     }
-    setState(() => _finding = true);
+    if (!_finding) setState(() => _finding = true);
     _soon = Timer(
       const Duration(milliseconds: 250),
       () => unawaited(_find(text)),
     );
   }
 
-  Future<GlobalSearchResults?> _find(String text) async {
+  Future<GlobalSearchResults?> _find(String text) {
     final generation = ++_generation;
-    GlobalSearchResults results;
-    try {
-      results = await widget.search.find(text);
-    } catch (_) {
-      results = GlobalSearchResults(query: text.trim());
-    }
-    if (!mounted || generation != _generation) return null;
-    setState(() {
-      _results = results;
-      _finding = false;
-    });
-    return results;
+    return _finds = () async {
+      GlobalSearchResults results;
+      try {
+        results = await widget.search.find(text);
+      } catch (_) {
+        results = GlobalSearchResults(query: text.trim());
+      }
+      if (!mounted || generation != _generation) return null;
+      setState(() {
+        _results = results;
+        _finding = false;
+      });
+      return results;
+    }();
   }
 
   Future<void> _submitted(String text) async {
     if (GlobalSearch.words(text).isEmpty) return;
     var results = _results;
-    if (_finding) {
-      _soon?.cancel();
+    // Asked already, its answer awaited; not asked again.
+    if (_soon?.isActive ?? false) {
+      _soon!.cancel();
       results = await _find(text);
+    } else if (_finding) {
+      results = await _finds;
     }
-    if (!mounted) return;
-    final first = results?.shown.firstOrNull;
+    // Typed on while it was awaited: what Enter was for is gone.
+    if (!mounted || results == null || _field.text.trim() != text.trim()) {
+      return;
+    }
+    final first = results.shown.firstOrNull;
     if (first != null) {
       Navigator.pop(context, SearchOpened(first));
     } else {

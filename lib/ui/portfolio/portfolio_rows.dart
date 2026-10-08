@@ -265,7 +265,12 @@ Future<List<PortfolioRow>> loadPortfolio({
       kept[caseKey(record.number, record.court)] = record;
     }
   } catch (_) {}
+  // Three readings of the database, the window let draw between them:
+  // one after the other they held it for some fifty milliseconds.
+  Future<void> breathe() => Future<void>.delayed(Duration.zero);
+  await breathe();
   final states = db.caseStates();
+  await breathe();
   final now = DateTime.now();
   final next = <String, PortalHearing>{};
   for (final h in db.hearings(
@@ -274,6 +279,7 @@ Future<List<PortfolioRow>> loadPortfolio({
   )) {
     next.putIfAbsent(h.caseKey, () => h);
   }
+  await breathe();
   return [
     for (final kase in db.cases().values)
       () {
