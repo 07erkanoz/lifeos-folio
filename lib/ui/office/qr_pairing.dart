@@ -30,6 +30,7 @@ class _QrInviteDialogState extends State<QrInviteDialog> {
   bool _loading = true;
   Timer? _expiry;
   OfficePairing? _pairing;
+  bool _walled = false;
 
   OfficeNetwork get _net => widget.network;
 
@@ -38,6 +39,11 @@ class _QrInviteDialogState extends State<QrInviteDialog> {
     super.initState();
     _net.qrPairing.addListener(_came);
     unawaited(_renew());
+    unawaited(
+      OfficeNetwork.firewallBlocks().then((on) {
+        if (mounted && on) setState(() => _walled = true);
+      }),
+    );
   }
 
   Future<void> _renew() async {
@@ -133,6 +139,7 @@ class _QrInviteDialogState extends State<QrInviteDialog> {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
+          if (_walled) ...[const SizedBox(height: 12), const FirewallNote()],
         ],
       );
     }
@@ -333,5 +340,37 @@ class _Result extends StatelessWidget {
       const SizedBox(width: 12),
       Expanded(child: Text(text, style: const TextStyle(height: 1.4))),
     ],
+  );
+}
+
+/// This computer's firewall (ufw) lets no other device in: what to run,
+/// once, for the person's phone and the office to reach it.
+class FirewallNote extends StatelessWidget {
+  const FirewallNote({super.key});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('firewall-note'),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF4E5),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Bu bilgisayarın güvenlik duvarı (ufw) açık ve başka cihazların '
+          'bağlanmasına izin vermiyor. Bir kez uçbirimde şu iki komutu '
+          'çalıştırın:',
+          style: TextStyle(fontSize: 12.5, color: Color(0xFF6B4A12)),
+        ),
+        SizedBox(height: 6),
+        SelectableText(
+          'sudo ufw allow 47900/tcp\nsudo ufw allow 5353/udp',
+          style: TextStyle(fontFamily: 'monospace', fontSize: 12.5),
+        ),
+      ],
+    ),
   );
 }

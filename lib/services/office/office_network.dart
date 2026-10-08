@@ -1594,6 +1594,34 @@ class OfficeNetwork extends ChangeNotifier {
     _knownDevices = {for (final d in await _known.all()) d.deviceId: d};
   }
 
+  /// The one port Folio listens on, so that a firewall needs one rule
+  /// for it (`sudo ufw allow 47900/tcp`); another when it is taken.
+  static const port = 47900;
+
+  static Future<ServerSocket> _bindServer() async {
+    try {
+      return await ServerSocket.bind(
+        InternetAddress.anyIPv6,
+        port,
+        v6Only: false,
+      );
+    } on SocketException {
+      return ServerSocket.bind(InternetAddress.anyIPv6, 0, v6Only: false);
+    }
+  }
+
+  /// Whether this computer's firewall keeps others out: ufw on Linux,
+  /// which lets nothing in until told to. Windows asks by itself.
+  static Future<bool> firewallBlocks() async {
+    if (!Platform.isLinux) return false;
+    try {
+      final r = await Process.run('systemctl', ['is-active', 'ufw']);
+      return '${r.stdout}'.trim() == 'active';
+    } catch (_) {
+      return false;
+    }
+  }
+
   int _silent = 0;
 
   /// A talk another Folio opened: knowing by a code, for now; what is
@@ -1707,11 +1735,7 @@ class OfficeNetwork extends ChangeNotifier {
       // Where the others will reach this Folio; what is said there comes in
       // the next step (docs/buro.md, Aktarım), till then it hangs up.
       // Both families: the others may find this one by either address.
-      _server = await ServerSocket.bind(
-        InternetAddress.anyIPv6,
-        0,
-        v6Only: false,
-      );
+      _server = await _bindServer();
       _server!.listen(_opened);
       _self = await _describe(_identity!, _server!.port);
       OfficeChannel.me = _about(_self!);

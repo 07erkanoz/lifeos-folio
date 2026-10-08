@@ -42,6 +42,17 @@ class _SyncPageState extends State<SyncPage> {
   OwnSync get _sync => widget.sync ?? OwnSync.instance;
   FolderSync get _folders => widget.folderSync ?? FolderSync.instance;
   bool _syncing = false;
+  bool _walled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(
+      OfficeNetwork.firewallBlocks().then((on) {
+        if (mounted && on) setState(() => _walled = true);
+      }),
+    );
+  }
 
   static bool get _phone =>
       defaultTargetPlatform == TargetPlatform.android ||
@@ -226,6 +237,10 @@ class _SyncPageState extends State<SyncPage> {
                     color: AgendaColors.muted,
                   ),
                 ),
+              ],
+              if (_walled) ...[
+                const SizedBox(height: 10),
+                const FirewallNote(),
               ],
               const SizedBox(height: 10),
               Wrap(
