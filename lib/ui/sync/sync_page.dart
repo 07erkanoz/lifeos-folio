@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../services/office/office_known.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_peer.dart';
+import '../../services/sync/folder_sync.dart';
 import '../../services/sync/own_sync.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../office/qr_pairing.dart';
@@ -14,10 +15,20 @@ import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 /// Senkron (docs/design, the approved mock): the person's own devices and
 /// what they keep alike when on the same network.
 class SyncPage extends StatefulWidget {
-  const SyncPage({super.key, this.network, this.sync});
+  const SyncPage({
+    super.key,
+    this.network,
+    this.sync,
+    this.folderSync,
+    this.archiveFolders,
+  });
 
   final OfficeNetwork? network;
   final OwnSync? sync;
+  final FolderSync? folderSync;
+
+  /// The library's folders, to choose one to keep alike.
+  final List<String> Function()? archiveFolders;
 
   @override
   State<SyncPage> createState() => _SyncPageState();
@@ -26,6 +37,7 @@ class SyncPage extends StatefulWidget {
 class _SyncPageState extends State<SyncPage> {
   OfficeNetwork get _net => widget.network ?? OfficeNetwork.instance;
   OwnSync get _sync => widget.sync ?? OwnSync.instance;
+  FolderSync get _folders => widget.folderSync ?? FolderSync.instance;
   bool _syncing = false;
 
   static bool get _phone =>
@@ -45,7 +57,7 @@ class _SyncPageState extends State<SyncPage> {
     return ColoredBox(
       color: dark ? scheme.surface : AgendaColors.page,
       child: ListenableBuilder(
-        listenable: Listenable.merge([_net, _sync]),
+        listenable: Listenable.merge([_net, _sync, _folders]),
         builder: (context, _) => LayoutBuilder(
           builder: (context, box) {
             final wide = box.maxWidth >= 900;
@@ -66,6 +78,8 @@ class _SyncPageState extends State<SyncPage> {
                         _devices(context, own),
                         const SizedBox(height: 12),
                         _parts(context),
+                        const SizedBox(height: 12),
+                        _folderCard(context),
                         const SizedBox(height: 12),
                         _sessions(context),
                       ],
@@ -403,6 +417,176 @@ class _SyncPageState extends State<SyncPage> {
                   ),
                 );
               }(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFolder() async {
+    final shared = {for (final f in _folders.folders.values) f.path};
+    final choices = [
+      for (final path in widget.archiveFolders?.call() ?? const <String>[])
+        if (!shared.contains(path)) path,
+    ];
+    if (choices.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Eşitlenecek bir arşiv klasörü yok. Önce Ayarlar’daki Arşiv '
+            'klasörleri’nden bir klasör ekleyin.',
+          ),
+        ),
+      );
+      return;
+    }
+    final path = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Hangi klasör eşitlensin?'),
+        children: [
+          for (final path in choices)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, path),
+              child: Text(path, style: const TextStyle(fontSize: 13)),
+            ),
+        ],
+      ),
+    );
+    if (path != null) await _folders.share(path);
+  }
+
+  Future<void> _join(OfferedFolder o) async {
+    var existing = true;
+    if (_phone) {
+      final answer = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('“${o.name}” bu telefona gelsin mi?'),
+          content: const Text(
+            'Klasördeki mevcut dosyalar da gelsin mi, yoksa yalnız bundan '
+            'sonra eklenen ve değişen dosyalar mı? Telefonda yer kısıtlıysa '
+            'yalnız yenileri seçin.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Yalnız yeniler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Mevcutlar da gelsin'),
+            ),
+          ],
+        ),
+      );
+      if (answer == null) return;
+      existing = answer;
+    }
+    await _folders.join(o.id, existing: existing);
+  }
+
+  Widget _folderCard(BuildContext context) {
+    final mine = _folders.folders.values.toList();
+    final offered = _folders.offered.values.toList();
+    return _card(
+      context,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 13, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.folder_outlined),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Klasörler',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'Seçtiğiniz klasörler iki yönde eşitlenir. İkisinde de '
+                        'değişen dosyanın iki hâli kalır; silinen 30 gün '
+                        'Senkron çöpünde durur.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                OutlinedButton(
+                  key: const ValueKey('sync-folder-pick'),
+                  onPressed: () => unawaited(_pickFolder()),
+                  child: const Text('Klasör seç'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (final f in mine)
+              Padding(
+                key: ValueKey('sync-folder-${f.id}'),
+                padding: const EdgeInsets.fromLTRB(40, 2, 0, 2),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_rounded,
+                      size: 16,
+                      color: AgendaColors.ok,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        [
+                          f.name,
+                          if (_folders.counts[f.id] case final n?) '$n dosya',
+                          if (f.since != null) 'yalnız yeniler',
+                        ].join(' · '),
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Eşitlemeyi durdur',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => unawaited(_folders.stop(f.id)),
+                      icon: const Icon(Icons.close_rounded, size: 17),
+                    ),
+                  ],
+                ),
+              ),
+            for (final o in offered)
+              Padding(
+                key: ValueKey('sync-offered-${o.id}'),
+                padding: const EdgeInsets.fromLTRB(40, 4, 0, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${o.name} · paylaşan: ${o.fromName}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    FilledButton.tonal(
+                      key: ValueKey('sync-join-${o.id}'),
+                      onPressed: () => unawaited(_join(o)),
+                      child: const Text('Bu cihazda da eşitle'),
+                    ),
+                  ],
+                ),
+              ),
+            if (mine.isEmpty && offered.isEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(40, 2, 0, 4),
+                child: Text(
+                  'Henüz eşitlenen klasör yok.',
+                  style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+                ),
+              ),
           ],
         ),
       ),

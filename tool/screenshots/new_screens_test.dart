@@ -30,6 +30,7 @@ import 'package:evrak_convert/ui/office/office_network_page.dart';
 import 'package:evrak_convert/ui/office/send_to_office.dart';
 import 'package:evrak_convert/ui/sync/sync_page.dart';
 import 'package:evrak_convert/services/sync/own_sync.dart';
+import 'package:evrak_convert/services/sync/folder_sync.dart';
 import 'package:evrak_convert/ui/office/qr_pairing.dart';
 import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
@@ -676,6 +677,7 @@ void main() {
     addTearDown(() => dir.deleteSync(recursive: true));
     late OfficeNetwork pc;
     late OwnSync sync;
+    late FolderSync folders;
     await tester.runAsync(() async {
       Future<OfficeNetwork> folio(String device, OfficePlatform os) async {
         final net = OfficeNetwork(
@@ -734,7 +736,26 @@ void main() {
         file: () async => File('${dir.path}/senkron-tel.json'),
         sessions: _ShotSessions({'uets'}),
       ).start();
+      FolderSync make(OfficeNetwork net, String device) => FolderSync(
+        network: net,
+        file: () async => File('${dir.path}/$device/klasor.json'),
+        bin: () async => Directory('${dir.path}/$device/cop'),
+        root: () => '${dir.path}/$device/Senkron',
+      );
+      folders = make(pc, 'pc');
+      await folders.start();
+      final onPhone = make(phone, 'tel');
+      await onPhone.start();
+      final mine = Directory('${dir.path}/Dilekçeler')..createSync();
+      for (var i = 1; i <= 3; i++) {
+        File('${mine.path}/Dilekçe $i.pdf').writeAsStringSync('$i');
+      }
+      await folders.share(mine.path);
+      final photos = Directory('${dir.path}/Tutanaklar')..createSync();
+      File('${photos.path}/Tutanak.pdf').writeAsStringSync('t');
+      await onPhone.share(photos.path);
       await pc.syncOwn();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
     });
     for (final (size, name) in [
       (logical, 'senkron'),
@@ -746,7 +767,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           Scaffold(
-            body: SyncPage(network: pc, sync: sync),
+            body: SyncPage(network: pc, sync: sync, folderSync: folders),
           ),
         ),
       );

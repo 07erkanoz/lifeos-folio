@@ -4,6 +4,7 @@ import 'agenda/mobile_connect.dart';
 import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import 'agenda/uyap_notices_page.dart';
+import '../services/sync/folder_sync.dart';
 import '../services/sync/own_sync.dart';
 import '../services/office/office_network.dart';
 import '../services/office/office_notices.dart';
@@ -731,6 +732,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // The agenda and the sessions kept alike with the person's own
       // devices, once the portals' sessions are started.
       unawaited(OwnSync.instance.start());
+      FolderSync.instance.onAdded = (path) =>
+          unawaited(_library.addPaths([path]));
+      unawaited(FolderSync.instance.start());
       // New UYAP notifications, told on the computer's or phone's own.
       PortalSync.instance.onNewNotices = (n) => unawaited(
         PortalDatabase.shared().then((db) => tellUyapNotices(db, n)),
@@ -1985,7 +1989,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               : _group == 'buro'
                                               ? const OfficeNetworkPage()
                                               : _group == 'senkron'
-                                              ? const SyncPage()
+                                              ? SyncPage(
+                                                  archiveFolders: () => [
+                                                    for (final s
+                                                        in _library.sources)
+                                                      if (s.folder) s.path,
+                                                  ],
+                                                )
                                               : _group == 'gorevler'
                                               ? const TasksPage()
                                               : _group == 'mesajlar'

@@ -207,8 +207,16 @@ class OfficeNetwork extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A folder's files another own device sent came whole (see FolderSync).
+  void Function(OfficeTransfer t)? onOwnFiles;
+
   void _ended(OfficeTransfer t) {
     unawaited(_log(t));
+    if (!t.outgoing &&
+        t.state == TransferState.done &&
+        t.meta['senkron'] is String) {
+      onOwnFiles?.call(t);
+    }
     if (t.state == TransferState.done) unawaited(_metOwnDevice(t.talkedTo));
     final taskId = t.meta['gorev'], caseKey = t.meta['dosya'];
     if (taskId is String &&
@@ -675,6 +683,13 @@ class OfficeNetwork extends ChangeNotifier {
       }
       final meta = m['meta'] is Map ? m['meta'] as Map : const {};
       final forChat = meta['sohbet'] is String;
+      // A folder's files from another own device (see FolderSync): only by
+      // the person's key's proof, put aside until they are put in place.
+      final forSync = meta['senkron'] is String;
+      if (forSync && !ch.vouched) {
+        await ch.close();
+        return;
+      }
       final forTask = meta['gorev'] is String && meta['dosya'] is String;
       final folder = await inbox();
       final taskFolder = forTask
@@ -692,7 +707,10 @@ class OfficeNetwork extends ChangeNotifier {
           ? OfficeTransfer.receive(
               channel: ch,
               offer: m,
-              folder: forChat
+              folder: forSync
+                  ? (await Directory(p.join(folder.path, '.folio-senkron'))
+                        .create(recursive: true))
+                  : forChat
                   ? (await Directory(p.join(folder.path, 'Mesajlar'))
                         .create(recursive: true))
                   : taskFolder != null
@@ -724,7 +742,7 @@ class OfficeNetwork extends ChangeNotifier {
         await t.accept();
         return;
       }
-      if (ch.vouched) {
+      if (ch.vouched || forSync) {
         // From one of this person's own devices, by its key's proof:
         // theirs already.
         await t.accept();
@@ -963,9 +981,8 @@ class OfficeNetwork extends ChangeNotifier {
   String get me => ledger.personOf(_self?.deviceId ?? '');
 
   /// Every device of [people] in the office, but this one.
-  Set<String> _devicesOf(Iterable<String> people) => {
-    for (final p in people) ...ledger.devicesOf(p),
-  }..remove(_self?.deviceId);
+  Set<String> _devicesOf(Iterable<String> people) =>
+      {for (final p in people) ...ledger.devicesOf(p)}..remove(_self?.deviceId);
 
   /// The same rule for any member: what a task that came is checked by.
   bool _mayGiveFrom(String giver, String to) {

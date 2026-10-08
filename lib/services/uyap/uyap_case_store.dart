@@ -305,7 +305,7 @@ class UyapCaseStore {
       final bytes = stale.fold<int>(0, (n, path) => n + stats[path]!.size);
       // Much of it is read apart, for the window not to stand still.
       final read = bytes > 512 * 1024
-          ? await Isolate.run(() => _readRecords(stale))
+          ? await _readApart(stale)
           : _readRecords(stale);
       for (final path in stale) {
         final record = read[path];
@@ -330,6 +330,11 @@ class UyapCaseStore {
 
   /// Records read before, by file: when and how large the file was then.
   static final _parsed = <String, (DateTime, int, UyapCaseRecord)>{};
+
+  // Not inside an async body: there the closure would hold its futures,
+  // which cannot go to another isolate.
+  static Future<Map<String, UyapCaseRecord>> _readApart(List<String> paths) =>
+      Isolate.run(() => _readRecords(paths));
 
   static Map<String, UyapCaseRecord> _readRecords(List<String> paths) => {
     for (final path in paths) path: ?_readRecord(path),
