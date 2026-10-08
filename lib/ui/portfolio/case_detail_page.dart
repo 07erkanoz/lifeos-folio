@@ -134,6 +134,12 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   /// Whether the last build put the preview beside the list.
   bool _previewShowing = false;
 
+  /// The whole heading shown while a document is open beside the list:
+  /// asked for with "Ayrıntılar", or the list scrolled up. Kept from case
+  /// to case while Folio runs.
+  static bool _detailsWanted = false;
+  bool _scrolledUp = false;
+
   bool _closePreview() {
     if (!mounted || !_previewShowing) return false;
     setState(() => _previewOpen = false);
@@ -408,26 +414,53 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _header(context, kase, true, facts: true),
+        // A document open beside the list: the heading in a line, the
+        // document given its room; the whole of it again when asked for
+        // or when the list is scrolled up, as the app's other pages do.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          alignment: Alignment.topCenter,
+          child: _previewShowing && !_detailsWanted && !_scrolledUp
+              ? _foldedHeader(context, kase)
+              : _header(context, kase, true, facts: true),
+        ),
         if (_c.busy != null || _c.error != null) ...[
           const SizedBox(height: 8),
           _status(context),
         ],
         const SizedBox(height: 10),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: _card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _tabBar(context),
-                  Expanded(
-                    child: _tab == _Tab.documents && _c.record != null
-                        ? _documentsSplit(context)
-                        : SingleChildScrollView(child: _tabBody(context, true)),
-                  ),
-                ],
+          child: NotificationListener<ScrollUpdateNotification>(
+            onNotification: (n) {
+              if (!_previewShowing || n.metrics.axis != Axis.vertical) {
+                return false;
+              }
+              final delta = n.scrollDelta ?? 0;
+              final up = delta < -6 || n.metrics.pixels <= 0;
+              final down = delta > 6 && n.metrics.pixels > 0;
+              if (up && !_scrolledUp) {
+                setState(() => _scrolledUp = true);
+              } else if (down && _scrolledUp) {
+                setState(() => _scrolledUp = false);
+              }
+              return false;
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _tabBar(context),
+                    Expanded(
+                      child: _tab == _Tab.documents && _c.record != null
+                          ? _documentsSplit(context)
+                          : SingleChildScrollView(
+                              child: _tabBody(context, true),
+                            ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -435,6 +468,87 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       ],
     ),
   );
+
+  /// The heading in a line, a document open beside the list: the case,
+  /// its court and kind, the next hearing, and the way to the rest.
+  Widget _foldedHeader(BuildContext context, PortalCase kase) {
+    final record = _c.record;
+    final type = record?.details.kind.isNotEmpty == true
+        ? record!.details.kind
+        : '${kase.details?.value['tur'] ?? ''}';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final hearing = ([
+      for (final h in _hearings)
+        if (!h.at.isBefore(today)) h,
+    ]..sort((a, b) => a.at.compareTo(b.at))).firstOrNull;
+    return Container(
+      key: const ValueKey('case-header-folded'),
+      padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'UYAP Dosyalarım',
+            onPressed: widget.onBack,
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          Text(
+            kase.number,
+            style: const TextStyle(
+              fontFamily: 'Consolas',
+              fontFamilyFallback: ['Cascadia Mono', 'monospace'],
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: [
+                      kase.court,
+                      if (type.trim().isNotEmpty) type.trim(),
+                    ].join(' · '),
+                  ),
+                  if (hearing != null) ...[
+                    const TextSpan(text: ' · Duruşma '),
+                    TextSpan(
+                      text: '${dayText(hearing.at)} ${clockText(hearing.at)}',
+                      style: const TextStyle(
+                        color: AgendaColors.deadline,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+            ),
+          ),
+          TextButton.icon(
+            key: const ValueKey('case-header-details'),
+            onPressed: () => setState(() => _detailsWanted = true),
+            icon: const Icon(Icons.expand_more_rounded, size: 18),
+            label: const Text('Ayrıntılar'),
+          ),
+          IconButton(
+            tooltip: 'UYAP’tan tazele',
+            onPressed: _c.busy != null ? null : () => unawaited(_refresh()),
+            icon: const Icon(Icons.sync_rounded, size: 19),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// The parties, the next hearing and deadline, the last news.
   Widget _factsLine(BuildContext context) {
@@ -624,6 +738,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     setState(() {
       _shownKey = d.key;
       _previewOpen = true;
+      // A document opened: the heading in its line again.
+      _scrolledUp = false;
     });
     final kase = _kase;
     if (kase != null) _lastShown[kase.key] = d.key;
@@ -939,6 +1055,18 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         parseDay(record?.details.openedOn);
     final now = DateTime.now();
     final actions = [
+      // The whole heading asked for beside an open document: back to its
+      // line.
+      if (facts && _previewShowing && (_detailsWanted || _scrolledUp))
+        TextButton.icon(
+          key: const ValueKey('case-header-fold'),
+          onPressed: () => setState(() {
+            _detailsWanted = false;
+            _scrolledUp = false;
+          }),
+          icon: const Icon(Icons.expand_less_rounded, size: 18),
+          label: const Text('Daralt'),
+        ),
       if (widget.onNewPetition != null)
         FilledButton.icon(
           key: const ValueKey('case-petition'),
@@ -2803,11 +2931,9 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
                 onSelected: (v) => switch (v) {
                   'gorev' => unawaited(widget.giveTask!(d)),
                   'gonder' => unawaited(
-                    showSendToOffice(
-                      context,
-                      [file.path],
-                      text: _sentWith(widget.controller, d),
-                    ),
+                    showSendToOffice(context, [
+                      file.path,
+                    ], text: _sentWith(widget.controller, d)),
                   ),
                   _ => _openInFolio(d),
                 },
@@ -2817,10 +2943,7 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
                     child: Text('Folio’da aç'),
                   ),
                   if (OfficeNetwork.instance.sendTargets.isNotEmpty)
-                    const PopupMenuItem(
-                      value: 'gonder',
-                      child: Text('Gönder'),
-                    ),
+                    const PopupMenuItem(value: 'gonder', child: Text('Gönder')),
                   if (widget.giveTask != null)
                     const PopupMenuItem(
                       value: 'gorev',

@@ -311,6 +311,16 @@ void main() {
     await open(document: 'b');
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('case-preview-close')), findsOneWidget);
+    // A document beside the list: the heading in a line, the whole of it
+    // when asked for, and back.
+    expect(find.byKey(const ValueKey('case-header-folded')), findsOneWidget);
+    expect(find.byKey(const ValueKey('case-number')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('case-header-details')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('case-number')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('case-header-fold')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('case-header-folded')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
