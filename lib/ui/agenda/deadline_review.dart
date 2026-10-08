@@ -9,8 +9,10 @@ import 'agenda_page.dart' show AgendaColors;
 /// left to the details.
 const _order = [
   'onaySonrasiDegisti',
+  'sayiCelisiyor',
   'olayBekleniyor',
   'tatilBelirsiz',
+  'kesinSure',
   'gocEslesmedi',
   'eskiTamamlandi',
   'takipTuruBelirsiz',

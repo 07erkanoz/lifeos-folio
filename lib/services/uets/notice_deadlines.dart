@@ -219,7 +219,9 @@ List<DeadlineRecord> noticeDeadlines(
     for (final d in documents)
       if (d.state != 'ustveri') d,
   ];
-  // The notice's list's parts; with no list, the package's documents.
+  // The notice's list's parts; with no list, the package's documents, or
+  // their names while they are not read yet (the audit's D16).
+  final attached = envelope?.attachments ?? const [];
   final listedParts = manifest.parts.isNotEmpty
       ? [
           for (var i = 0; i < manifest.parts.length; i++)
@@ -232,7 +234,8 @@ List<DeadlineRecord> noticeDeadlines(
                   .firstOrNull,
             ),
         ]
-      : [
+      : docs.isNotEmpty
+      ? [
           for (final d in docs)
             (
               id: 'ek${d.seq}',
@@ -240,6 +243,16 @@ List<DeadlineRecord> noticeDeadlines(
               seq: d.seq,
               doc: d as NoticeDocument?,
             ),
+        ]
+      : [
+          for (var i = 0; i < attached.length; i++)
+            if (!attached[i].name.toLowerCase().endsWith('.xml'))
+              (
+                id: 'ek$i',
+                name: attached[i].name,
+                seq: i,
+                doc: null as NoticeDocument?,
+              ),
         ];
   for (final part in listedParts) {
     final doc = part.doc;
@@ -663,7 +676,14 @@ List<DeadlineRecord> noticeDeadlines(
         if (catalogued[j].$2.baslangic == SureBaslangici.teblig &&
             d.startsFrom == null &&
             _sameParty(d.party, kuralBilgisi(catalogued[j].$2)?.yukumlu) &&
-            _fits(d.act, catalogued[j].$1.ruleId) &&
+            // A decision's words only bear a rule out: any act its clause
+            // names will do; a time that makes a deadline goes by its own.
+            (sd.$1.makes
+                ? _fits(d.act, catalogued[j].$1.ruleId)
+                : {
+                    d.act,
+                    ...d.acts,
+                  }.any((a) => _fits(a, catalogued[j].$1.ruleId))) &&
             _spanOf(catalogued[j].$2) == d.span)
           j,
     ];
@@ -784,6 +804,18 @@ List<DeadlineRecord> noticeDeadlines(
             'zarfAlinti',
             s.envelope ? '“${d.quote}”' : '“${d.quote}” (${s.name})',
           ),
+          if (d.otherAmount case final other?)
+            DeadlineReason(
+              'sayiCelisiyor',
+              'Süre belgede iki türlü yazılmış (${d.amount} ve $other); '
+                  'kısa olanı gösterildi. Belgeye bakıp doğrusunu seçin.',
+            ),
+          if (d.strict)
+            const DeadlineReason(
+              'kesinSure',
+              'Mahkeme bunu kesin süre olarak verdi; süresinde yapılmayan '
+                  'işlemin hakkı düşebilir (HMK m.94).',
+            ),
           for (final (o, _) in group.skip(1))
             DeadlineReason(
               'zarfIleUyumlu',

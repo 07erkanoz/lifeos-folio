@@ -315,4 +315,120 @@ void main() {
     expect(before.onAgenda, isTrue);
     expect(before.toReview, isTrue);
   });
+
+  group('stage C: a directive at a time', () {
+    test(
+      'B03/D01–D03: the court’s “kesin süre” and an OCR’s plain letters',
+      () {
+        final d1 = envelopeDirectives(
+          'Davacıya tanık listesini sunması için tebliğden itibaren iki '
+          'haftalık kesin süre verilmesine.',
+        ).single;
+        expect(
+          (d1.amount, d1.unit, d1.act, d1.party, d1.strict),
+          (2, SureBirimi.hafta, 'delil', 'davaci', true),
+        );
+        expect(
+          envelopeDirectives(
+            'Tebliğden itibaren iki hafta kesin süre verilmesine.',
+          ),
+          hasLength(1),
+        );
+        final ocr = envelopeDirectives(
+          'Tebligden itibaren iki hafta icinde itirazlarinizi bildiriniz.',
+        ).single;
+        expect(
+          (ocr.act, ocr.toReader, ocr.fromService),
+          ('itiraz', true, true),
+        );
+      },
+    );
+
+    test('B04/D04: a warning the court quotes is a directive; a law it '
+        'quotes is not', () {
+      expect(
+        envelopeDirectives(
+          'İHTAR: “Tebliğden itibaren iki hafta içinde itirazlarınızı '
+          'bildiriniz.”',
+        ),
+        hasLength(1),
+      );
+      expect(
+        envelopeDirectives(
+          'Kanun şöyle der: “işveren kazadan sonraki 3 iş günü içinde '
+          'bildirimde bulunur.” Bilgilerinize sunulur.',
+        ),
+        isEmpty,
+      );
+    });
+
+    test('B05/D05, D18, D20: two times in a sentence, two parties with one '
+        'time, each its own', () {
+      expect(
+        envelopeDirectives(
+          'Tebliğden itibaren beş gün içinde itirazlarınızı bildirmeniz ve '
+          'on gün içinde borcunuzu ödemeniz ihtar olunur.',
+        ).map((d) => (d.amount, d.act)),
+        [(5, 'itiraz'), (10, 'odeme')],
+      );
+      expect(
+        envelopeDirectives(
+          'Tebliğden itibaren iki hafta içinde tanık listenizi sununuz. '
+          'Tebliğden itibaren iki hafta içinde delil avansınızı yatırınız.',
+        ),
+        hasLength(2),
+      );
+      expect(
+        envelopeDirectives(
+          'Davacıya tebliğden itibaren iki hafta içinde tanık listesini '
+          'sunması ihtar olunur. Davalıya tebliğden itibaren iki hafta '
+          'içinde belgelerini delil olarak sunması ihtar olunur.',
+        ).map((d) => d.party),
+        ['davaci', 'davali'],
+      );
+    });
+
+    test('the report’s example: four obligations, “aynı sürede” the one '
+        'before, one with no start to count from', () {
+      final ds = envelopeDirectives(
+        'Davacıya, tebliğden itibaren iki haftalık kesin sürede tanık '
+        'listesini sunması; davalıya aynı sürede delil avansını yatırması; '
+        'taraflara bilirkişi raporuna karşı iki hafta içinde beyanda '
+        'bulunmaları; vekillere duruşmadan bir hafta önce mazeretlerini '
+        'bildirmeleri ihtar olunur.',
+      );
+      expect(ds.map((d) => (d.party, d.act, d.amount)), [
+        ('davaci', 'delil', 2),
+        ('davali', 'odeme', 2),
+        (null, 'beyan', 2),
+      ]);
+      expect(ds[1].strict, isTrue);
+    });
+
+    test('“iki (3) hafta”: the two are not chosen between silently', () {
+      final d = envelopeDirectives(
+        'Tebliğden itibaren iki (3) hafta içinde beyanlarınızı sununuz.',
+      ).single;
+      expect((d.amount, d.otherAmount), (2, 3));
+      final r = records(
+        'Tebliğden itibaren iki (3) hafta içinde beyanlarınızı sununuz.',
+      ).single;
+      expect(r.reasons.map((x) => x.code), contains('sayiCelisiyor'));
+    });
+
+    test('D16: with no list and nothing read yet, the documents’ names', () {
+      final r = noticeDeadlines(
+        db.notice('audit')!,
+        manifest: (state: 'hata', fetchedAt: null, parts: const []),
+        envelope: const NoticeEnvelope(
+          noticeId: 'audit',
+          state: 'zarfYok',
+          attachments: [
+            (name: 'Gerekçeli Karar.pdf', path: '/sentetik/karar.pdf'),
+          ],
+        ),
+      );
+      expect(r, isNotEmpty);
+    });
+  });
 }
