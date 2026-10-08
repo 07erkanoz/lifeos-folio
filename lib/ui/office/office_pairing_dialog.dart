@@ -70,6 +70,21 @@ class OfficePairingDialog extends StatelessWidget {
                 ),
               ),
             ),
+            if (state == PairingState.code)
+              StatefulBuilder(
+                builder: (context, set) => CheckboxListTile(
+                  key: const ValueKey('pairing-mine'),
+                  contentPadding: EdgeInsets.zero,
+                  value: pairing.mine,
+                  onChanged: (v) => set(() => pairing.mine = v ?? false),
+                  title: const Text('Bu cihaz da benim'),
+                  subtitle: const Text(
+                    'İşaretlerseniz iki cihaz aynı kişi anahtarını kullanır; '
+                    'kendi cihazlarınız birbirini bundan sonra kod sormadan tanır.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
             const SizedBox(height: 12),
             if (state == PairingState.confirmed)
               waiting('Karşı tarafın onayı bekleniyor…')

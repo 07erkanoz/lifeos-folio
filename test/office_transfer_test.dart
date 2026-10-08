@@ -421,4 +421,44 @@ void main() {
       await until(() => a.packages.pending.isEmpty);
     },
   );
+
+  test(
+    'one person’s devices share a key once and then know each other unasked',
+    () async {
+      final laptop = await folio('Av. Erkan Öz', 'dizustu');
+      final phone = await folio('Av. Erkan Öz', 'telefon');
+      final tablet = await folio('Av. Erkan Öz', 'tablet');
+      Future<void> meet(OfficeNetwork x, OfficeNetwork y) async {
+        x.seenForTesting(y.self!);
+        y.seenForTesting(x.self!);
+        final asking = x.pair(y.self!)!;
+        await until(
+          () => y.incoming.value?.code != null && asking.code != null,
+        );
+        // The same name: "Bu cihaz da benim" comes ticked.
+        expect(asking.mine, isTrue);
+        y.incoming.value!.confirm();
+        asking.confirm();
+        await until(() => x.self!.userId == y.self!.userId);
+      }
+
+      await meet(laptop, phone);
+      await meet(laptop, tablet);
+      expect(tablet.self!.userId, phone.self!.userId);
+      // The phone and the tablet never met by a code.
+      expect(phone.isKnown(tablet.self!.deviceId), isFalse);
+      phone.seenForTesting(tablet.self!);
+      tablet.seenForTesting(phone.self!);
+      final t = (await phone.send(tablet.self!, [file('Not.txt', 2000).path]))!;
+      await until(() => tablet.incomingOffer.value != null);
+      await tablet.acceptOffer(tablet.incomingOffer.value!);
+      await until(() => t.state == TransferState.done);
+      // Known to each other now, as their own.
+      await until(
+        () =>
+            phone.isKnown(tablet.self!.deviceId) &&
+            tablet.isKnown(phone.self!.deviceId),
+      );
+    },
+  );
 }

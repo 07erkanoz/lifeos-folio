@@ -68,6 +68,10 @@ class OfficeTransfer extends ChangeNotifier {
   int get moved => _moved;
   int get total => files.fold(0, (n, f) => n + f.size);
 
+  /// The device as the channel proved it: for one of the person's own
+  /// devices met first here, with the key it showed.
+  KnownDevice get talkedTo => _channel?.peer ?? peer;
+
   /// Where the files came to, once each is whole and checked.
   final saved = <String>[];
 

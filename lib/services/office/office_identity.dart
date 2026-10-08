@@ -30,6 +30,59 @@ class OfficeIdentity {
   String get userId => idOf(userPublic.bytes);
 
   static const _name = 'buro_kimlik';
+  static const _cert = 'folio-kendi-cihaz-1';
+
+  /// The person's key's private part, to give to another of their own
+  /// devices over a sealed channel; nowhere else.
+  Future<List<int>> userSeed() => user.extractPrivateKeyBytes();
+
+  /// The person's key signing this device's: what tells the person's other
+  /// devices that it is theirs, with no code asked.
+  Future<String> userCertificate() async => base64Encode(
+    (await Ed25519().sign([
+      ...utf8.encode(_cert),
+      ...utf8.encode(deviceId),
+      ...devicePublic.bytes,
+    ], keyPair: user)).bytes,
+  );
+
+  /// Whether [certificate] is the person's key's word for [devicePublic].
+  Future<bool> vouches(List<int> devicePublic, String? certificate) async {
+    if (certificate == null) return false;
+    try {
+      return await Ed25519().verify(
+        [
+          ...utf8.encode(_cert),
+          ...utf8.encode(idOf(devicePublic)),
+          ...devicePublic,
+        ],
+        signature: Signature(base64Decode(certificate), publicKey: userPublic),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The same device with the person's key of another of their devices:
+  /// kept in place of its own.
+  Future<OfficeIdentity> adoptUser(List<int> seed, {SecretStore? store}) async {
+    final user = await Ed25519().newKeyPairFromSeed(seed);
+    final safe = store ?? SecretStore();
+    final stored = await safe
+        .write(_name, {
+          'cihaz': base64Encode(await device.extractPrivateKeyBytes()),
+          'kullanici': base64Encode(seed),
+        })
+        .timeout(const Duration(seconds: 5), onTimeout: () => false)
+        .catchError((Object _) => false);
+    return OfficeIdentity._(
+      device: device,
+      devicePublic: devicePublic,
+      user: user,
+      userPublic: await user.extractPublicKey(),
+      kept: stored,
+    );
+  }
 
   /// The first sixteen hex digits of the key's SHA-256: enough to tell an
   /// office's devices apart, short enough for a DNS-SD name.

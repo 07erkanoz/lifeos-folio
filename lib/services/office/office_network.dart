@@ -108,8 +108,7 @@ class OfficeNetwork extends ChangeNotifier {
     Map<String, Object?> meta = const {},
   }) async {
     final identity = _identity;
-    final known =
-        _knownDevices[to.deviceId] ?? ledger.member(to.deviceId)?.asKnown;
+    final known = await _trustedFor(_peers[to.deviceId] ?? to);
     final seen = _peers[to.deviceId] ?? to;
     final host = seen.host;
     if (identity == null || known == null || host == null || seen.port == 0) {
@@ -146,6 +145,7 @@ class OfficeNetwork extends ChangeNotifier {
 
   void _ended(OfficeTransfer t) {
     unawaited(_log(t));
+    if (t.state == TransferState.done) unawaited(_metOwnDevice(t.talkedTo));
     final taskId = t.meta['gorev'], caseKey = t.meta['dosya'];
     if (taskId is String &&
         caseKey is String &&
@@ -236,12 +236,14 @@ class OfficeNetwork extends ChangeNotifier {
     final identity = _identity, self = _self;
     if (identity == null || self == null) return null;
     if (_pairing != null && !_pairing!.finished) return null;
-    return _pairing = OfficePairing.start(
+    final pairing = _pairing = OfficePairing.start(
       identity: identity,
       self: self,
       peer: peer,
       onKnown: _knownNow,
     );
+    _watchPairing(pairing);
+    return pairing;
   }
 
   /// Forgets a known device: it must be known by its code again before
@@ -265,9 +267,15 @@ class OfficeNetwork extends ChangeNotifier {
       known: _trusted,
     );
     if (ch == null) return;
+    unawaited(_metOwn(ch));
     late final StreamSubscription<Map<String, Object?>> first;
     first = ch.messages.listen((m) async {
       await first.cancel();
+      if (m['t'] == 'kullanici') {
+        await _adopt(ch, m['tohum']);
+        await ch.close();
+        return;
+      }
       if (m['t'] == 'sohbet') {
         final theirs = Chat.fromJson(m['sohbet']);
         if (theirs != null &&
@@ -367,7 +375,153 @@ class OfficeNetwork extends ChangeNotifier {
       await _known.of(deviceId) ?? ledger.member(deviceId)?.asKnown;
 
   bool isTrusted(String deviceId) =>
-      _knownDevices.containsKey(deviceId) || ledger.member(deviceId) != null;
+      _knownDevices.containsKey(deviceId) ||
+      ledger.member(deviceId) != null ||
+      _ownOnNetwork(deviceId);
+
+  /// A device on the network under this person's key: believed only when
+  /// its certificate holds, in the channel's handshake.
+  bool _ownOnNetwork(String deviceId) {
+    final me = _identity?.userId;
+    return me != null && _peers[deviceId]?.userId == me;
+  }
+
+  /// What a channel to [peer] is opened against: the device as known, or
+  /// one of the person's own with its key to be shown and vouched for.
+  Future<KnownDevice?> _trustedFor(OfficePeer peer) async {
+    final known = await _trusted(peer.deviceId);
+    if (known != null || !_ownOnNetwork(peer.deviceId)) return known;
+    return KnownDevice(
+      deviceId: peer.deviceId,
+      userId: peer.userId,
+      publicKey: '',
+      name: peer.name,
+      device: peer.device,
+      platform: peer.platform,
+      knownAt: DateTime.now(),
+    );
+  }
+
+  /// Devices that, knowing this one, both said are the same person's:
+  /// from them alone is a person's key taken.
+  final _ownConsent = <String>{};
+
+  int get _ownCount =>
+      _knownDevices.values.where((d) => d.userId == _identity?.userId).length;
+
+  void _watchPairing(OfficePairing pairing) {
+    pairing.ownCount = _ownCount;
+    void done() {
+      if (pairing.state != PairingState.done || !pairing.bothMine) return;
+      pairing.removeListener(done);
+      final other = pairing.other;
+      if (other == null) return;
+      _ownConsent.add(other.deviceId);
+      unawaited(
+        _unify(other, mine: pairing.ownCount, theirs: pairing.theirOwnCount),
+      );
+    }
+
+    pairing.addListener(done);
+  }
+
+  /// Two devices of one person, each with a key of its own: the smaller
+  /// key's id is kept, and given to the other over a sealed channel.
+  Future<void> _unify(
+    OfficePeer other, {
+    required int mine,
+    required int theirs,
+  }) async {
+    final identity = _identity;
+    if (identity == null || other.userId == identity.userId) return;
+    // The key shared by more devices is kept; else the smaller id's.
+    final keep = mine != theirs
+        ? mine > theirs
+        : identity.userId.compareTo(other.userId) < 0;
+    if (!keep) return;
+    final seen = _peers[other.deviceId] ?? other;
+    final host = seen.host;
+    final trusted = await _trusted(other.deviceId);
+    if (host == null || seen.port == 0 || trusted == null) return;
+    try {
+      final ch = await OfficeChannel.open(
+        identity: identity,
+        peer: trusted,
+        host: host,
+        port: seen.port,
+      );
+      // It is to hold this person's key: counted, before it is sent, so that a next pairing finds it: counted as one of their devices.
+      await _knownNow(
+        KnownDevice(
+          deviceId: trusted.deviceId,
+          userId: identity.userId,
+          publicKey: trusted.publicKey,
+          name: trusted.name,
+          device: trusted.device,
+          platform: trusted.platform,
+          knownAt: trusted.knownAt,
+          code: trusted.code,
+        ),
+      );
+      await ch.send({
+        't': 'kullanici',
+        'tohum': base64Encode(await identity.userSeed()),
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await ch.close();
+    } catch (_) {}
+  }
+
+  /// A person's key from their own device that both said is theirs.
+  Future<void> _adopt(OfficeChannel ch, Object? seed) async {
+    final identity = _identity, self = _self;
+    if (identity == null || self == null || seed is! String) return;
+    if (!_ownConsent.remove(ch.peer.deviceId)) return;
+    final bytes = base64Decode(seed);
+    if (bytes.length != 32) return;
+    final next = await identity.adoptUser(bytes);
+    _identity = next;
+    _self = OfficePeer(
+      deviceId: self.deviceId,
+      userId: next.userId,
+      name: self.name,
+      device: self.device,
+      platform: self.platform,
+      host: self.host,
+      port: self.port,
+    );
+    // The known record of the giver is under the person's key now too.
+    final giver = _knownDevices[ch.peer.deviceId];
+    if (giver != null) {
+      await _knownNow(
+        KnownDevice(
+          deviceId: giver.deviceId,
+          userId: next.userId,
+          publicKey: giver.publicKey,
+          name: giver.name,
+          device: giver.device,
+          platform: giver.platform,
+          knownAt: giver.knownAt,
+          code: giver.code,
+        ),
+      );
+    }
+    if (_broadcast != null) {
+      await _broadcast?.stop();
+      await _announce(_self!);
+    }
+    notifyListeners();
+  }
+
+  /// One of the person's own devices, met over a vouched channel: known
+  /// from now on, with no code asked.
+  Future<void> _metOwn(OfficeChannel ch) => _metOwnDevice(ch.peer);
+
+  Future<void> _metOwnDevice(KnownDevice p) async {
+    if (p.userId != _identity?.userId || p.publicKey.isEmpty) return;
+    if (_knownDevices.containsKey(p.deviceId)) return;
+    await _knownNow(p);
+  }
 
   Future<void> _ledgerCame(Object? records) async {
     if (records is List && await ledger.merge(records)) {
@@ -381,7 +535,7 @@ class OfficeNetwork extends ChangeNotifier {
     final identity = _identity;
     final host = peer.host;
     if (identity == null || host == null || peer.port == 0) return;
-    final trusted = await _trusted(peer.deviceId);
+    final trusted = await _trustedFor(peer);
     if (trusted == null || (!ledger.exists && !isTrusted(peer.deviceId))) {
       return;
     }
@@ -392,6 +546,7 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
+      unawaited(_metOwn(ch));
       final reply = ch.messages.first.timeout(const Duration(seconds: 10));
       await ch.send({'t': 'defter', 'kayit': ledger.records});
       final m = await reply;
@@ -554,7 +709,7 @@ class OfficeNetwork extends ChangeNotifier {
 
   Future<void> _syncTask(OfficePeer peer, OfficeTask task) async {
     final identity = _identity, host = peer.host;
-    final trusted = await _trusted(peer.deviceId);
+    final trusted = await _trustedFor(peer);
     if (identity == null || host == null || trusted == null) return;
     try {
       final ch = await OfficeChannel.open(
@@ -563,6 +718,7 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
+      unawaited(_metOwn(ch));
       final reply = ch.messages.first.timeout(const Duration(seconds: 10));
       await ch.send({'t': 'gorev', 'gorev': task.toJson()});
       final m = await reply;
@@ -726,7 +882,7 @@ class OfficeNetwork extends ChangeNotifier {
 
   Future<void> _syncChat(OfficePeer peer, Chat chat) async {
     final identity = _identity, host = peer.host;
-    final trusted = await _trusted(peer.deviceId);
+    final trusted = await _trustedFor(peer);
     if (identity == null || host == null || trusted == null) return;
     try {
       final ch = await OfficeChannel.open(
@@ -735,6 +891,7 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
+      unawaited(_metOwn(ch));
       final reply = ch.messages.first.timeout(const Duration(seconds: 10));
       await ch.send({'t': 'sohbet', 'sohbet': chat.toJson()});
       final m = await reply;
@@ -865,6 +1022,7 @@ class OfficeNetwork extends ChangeNotifier {
         onKnown: _knownNow,
       );
       _pairing = pairing;
+      _watchPairing(pairing);
       if (!pairing.finished) incoming.value = pairing;
     });
   }
@@ -917,6 +1075,7 @@ class OfficeNetwork extends ChangeNotifier {
       );
       _server!.listen(_opened);
       _self = await _describe(_identity!, _server!.port);
+      OfficeChannel.me = _about(_self!);
       await _announce(_self!);
       await _look();
       _joined = true;
@@ -1089,8 +1248,15 @@ class OfficeNetwork extends ChangeNotifier {
       host: '127.0.0.1',
       port: _server!.port,
     );
+    OfficeChannel.me = _about(_self!);
     _joined = true;
   }
+
+  static Map<String, String> _about(OfficePeer self) => {
+    'n': self.name,
+    'c': self.device,
+    'p': self.platform.name,
+  };
 
   /// For tests: a peer as if it had been found.
   @visibleForTesting

@@ -6,6 +6,7 @@ import 'package:cryptography/cryptography.dart';
 import 'office_identity.dart';
 import 'office_known.dart';
 import 'office_link.dart';
+import 'office_peer.dart';
 
 /// An encrypted talk between two known devices (docs/buro.md, Aktarım).
 ///
@@ -34,6 +35,10 @@ class OfficeChannel {
 
   static const _context = 'folio-buro-kanal-1';
 
+  /// This device's name, computer and system, said in a hello so that one
+  /// of the person's own devices meeting it first knows what to call it.
+  static Map<String, String> me = const {};
+
   static List<int> _signed(List<int> starter, List<int> answerer) => [
     ...utf8.encode(_context),
     ...starter,
@@ -55,6 +60,10 @@ class OfficeChannel {
       link.send({
         't': 'hello',
         'id': identity.deviceId,
+        'dk': base64Encode(identity.devicePublic.bytes),
+        'uc': await identity.userCertificate(),
+        'u': identity.userId,
+        ...me,
         'eph': base64Encode(minePublic),
         'sig': base64Encode(
           (await Ed25519().sign(
@@ -65,6 +74,26 @@ class OfficeChannel {
       });
       final m = await reply;
       final theirs = _bytes(m['eph']);
+      // One of the person's own devices not yet known: its key is its own
+      // word, believed only with the person's key's signature over it.
+      if (peer.publicKey.isEmpty) {
+        final key = _bytes(m['dk']);
+        if (key == null ||
+            key.length != 32 ||
+            OfficeIdentity.idOf(key) != peer.deviceId ||
+            !await identity.vouches(key, m['uc'] as String?)) {
+          throw const OfficeChannelException('Karşı cihaz doğrulanamadı.');
+        }
+        peer = KnownDevice(
+          deviceId: peer.deviceId,
+          userId: identity.userId,
+          publicKey: base64Encode(key),
+          name: peer.name,
+          device: peer.device,
+          platform: peer.platform,
+          knownAt: DateTime.now(),
+        );
+      }
       if (m['t'] != 'hello-ok' ||
           m['id'] != peer.deviceId ||
           theirs == null ||
@@ -91,7 +120,25 @@ class OfficeChannel {
     try {
       final id = hello['id'];
       final theirs = _bytes(hello['eph']);
-      final peer = id is String ? await known(id) : null;
+      var peer = id is String ? await known(id) : null;
+      final key = _bytes(hello['dk']);
+      if (peer == null &&
+          id is String &&
+          key != null &&
+          key.length == 32 &&
+          OfficeIdentity.idOf(key) == id &&
+          await identity.vouches(key, hello['uc'] as String?)) {
+        // One of the person's own devices, vouched for by their key.
+        peer = KnownDevice(
+          deviceId: id,
+          userId: identity.userId,
+          publicKey: base64Encode(key),
+          name: '${hello['n'] ?? ''}',
+          device: '${hello['c'] ?? ''}',
+          platform: OfficePlatform.of('${hello['p']}'),
+          knownAt: DateTime.now(),
+        );
+      }
       if (peer == null ||
           theirs == null ||
           theirs.length != 32 ||
@@ -104,6 +151,8 @@ class OfficeChannel {
       link.send({
         't': 'hello-ok',
         'id': identity.deviceId,
+        'dk': base64Encode(identity.devicePublic.bytes),
+        'uc': await identity.userCertificate(),
         'eph': base64Encode(minePublic),
         'sig': base64Encode(
           (await Ed25519().sign(

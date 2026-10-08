@@ -9,6 +9,7 @@ import 'office_identity.dart';
 import 'office_known.dart';
 import 'office_link.dart';
 import 'office_peer.dart';
+import '../uyap/uyap_web_service.dart';
 
 enum PairingState {
   /// Reaching the other device.
@@ -78,6 +79,19 @@ class OfficePairing extends ChangeNotifier {
   String? _reason;
 
   late final List<int> _mineNonce = _random(32);
+
+  /// "Bu cihaz da benim": the other device is the user's own. Set at first
+  /// when both say the same name; the user changes it before confirming.
+  bool mine = false;
+  bool _theirsMine = false;
+
+  /// How many other devices share this one's person's key, and the other's:
+  /// the key already shared more is the one kept.
+  int ownCount = 0;
+  int theirOwnCount = 0;
+
+  /// Both users said the other device is their own.
+  bool get bothMine => mine && _theirsMine;
   List<int>? _theirNonce, _theirCommit;
   bool _mine = false, _theirs = false;
 
@@ -199,6 +213,9 @@ class OfficePairing extends ChangeNotifier {
     if (peer == null) return false;
     _other = peer;
     _otherKey = base64Encode(key);
+    mine =
+        peer.name.trim().isNotEmpty &&
+        UyapWebService.fold(peer.name) == UyapWebService.fold(_self.name);
     return true;
   }
 
@@ -250,6 +267,8 @@ class OfficePairing extends ChangeNotifier {
         );
       case 'confirm' when _code != null:
         _theirs = true;
+        _theirsMine = m['benim'] == true;
+        theirOwnCount = m['kendi'] is int ? m['kendi'] as int : 0;
         unawaited(_maybeDone());
       case 'reject':
         _end(PairingState.rejected, 'Karşı tarafta reddedildi.');
@@ -294,7 +313,7 @@ class OfficePairing extends ChangeNotifier {
   void confirm() {
     if (_code == null || _mine || finished) return;
     _mine = true;
-    _link?.send({'t': 'confirm'});
+    _link?.send({'t': 'confirm', 'benim': mine, 'kendi': ownCount});
     _set(PairingState.confirmed);
     unawaited(_maybeDone());
   }
