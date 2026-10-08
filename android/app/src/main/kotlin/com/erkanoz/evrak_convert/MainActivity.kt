@@ -187,28 +187,52 @@ class MainActivity : FlutterActivity() {
     private fun emit(method: String, value: Any) = runOnUiThread {
         if (ready) channel.invokeMethod(method, value) else pending.add(method to value)
     }
-    private fun accept(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_VIEW && intent?.action != Intent.ACTION_SEND) return
-        val uri = intent.data ?: intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return
-        previewIo.execute {
-            try {
-                var name = uri.lastPathSegment ?: "belge"
-                if (uri.scheme == "content") contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-                    if (it.moveToFirst()) name = it.getString(0) ?: name
-                }
-                name = safeName(name)
-                if (!extensions.contains(name.substringAfterLast('.', "").lowercase())) {
-                    // Providers occasionally omit the extension from DISPLAY_NAME.
-                    val ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(contentResolver.getType(uri))
-                    if (ext != null && extensions.contains(ext)) name += ".$ext"
-                    else throw IllegalArgumentException("Bu belge türü desteklenmiyor: $name")
-                }
-                val directory = File(cacheDir, "incoming/${hash(uri.toString())}").apply { mkdirs() }
-                val target = File(directory, name)
-                copy(uri, target)
-                emit("openFiles", listOf(target.absolutePath))
-            } catch (e: Exception) { emit("openError", "Belge açılamadı: ${e.message}") }
+    private fun accept(received: Intent?) {
+        val intent = received ?: return
+        val uris: List<Uri> = when (intent.action) {
+            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
+            Intent.ACTION_SEND -> listOfNotNull(intent.data ?: streamOf(intent))
+            // Several documents shared at once: each one kept, all opened.
+            Intent.ACTION_SEND_MULTIPLE -> streamsOf(intent)
+            else -> emptyList()
         }
+        if (uris.isEmpty()) return
+        previewIo.execute {
+            val opened = mutableListOf<String>()
+            val failed = mutableListOf<String>()
+            for (uri in uris) {
+                try {
+                    opened.add(keep(uri))
+                } catch (e: Exception) {
+                    failed.add(e.message ?: "bilinmeyen hata")
+                }
+            }
+            if (opened.isNotEmpty()) emit("openFiles", opened)
+            if (failed.isNotEmpty()) emit("openError", "Belge açılamadı: ${failed.joinToString("; ")}")
+        }
+    }
+    @Suppress("DEPRECATION")
+    private fun streamOf(intent: Intent): Uri? = intent.getParcelableExtra(Intent.EXTRA_STREAM)
+    @Suppress("DEPRECATION")
+    private fun streamsOf(intent: Intent): List<Uri> =
+        intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.toList() ?: emptyList()
+    /** [uri] copied into Folio's cache under its own name; its path. */
+    private fun keep(uri: Uri): String {
+        var name = uri.lastPathSegment ?: "belge"
+        if (uri.scheme == "content") contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) name = it.getString(0) ?: name
+        }
+        name = safeName(name)
+        if (!extensions.contains(name.substringAfterLast('.', "").lowercase())) {
+            // Providers occasionally omit the extension from DISPLAY_NAME.
+            val ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(contentResolver.getType(uri))
+            if (ext != null && extensions.contains(ext)) name += ".$ext"
+            else throw IllegalArgumentException("Bu belge türü desteklenmiyor: $name")
+        }
+        val directory = File(cacheDir, "incoming/${hash(uri.toString())}").apply { mkdirs() }
+        val target = File(directory, name)
+        copy(uri, target)
+        return target.absolutePath
     }
     @Deprecated("Android callback retained for Flutter Activity compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

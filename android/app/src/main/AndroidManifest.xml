@@ -78,6 +78,17 @@
                 <data android:mimeType="image/bmp" />
                 <data android:mimeType="image/svg+xml" />
             </intent-filter>
+            <!-- "Paylaş → Folio" from another app (WhatsApp, e-posta, Dosyalar):
+                 one document or several; native code keeps the kinds Folio
+                 opens and says which it could not. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="text/*" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

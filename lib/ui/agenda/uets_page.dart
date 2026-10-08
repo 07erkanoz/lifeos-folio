@@ -25,6 +25,7 @@ import 'agenda_page.dart' show AgendaColors;
 import '../mobile/scroll_chrome.dart';
 import '../portfolio/portfolio_rows.dart' show titleName;
 import 'channel_bar.dart';
+import '../office/send_to_office.dart';
 import 'deadline_choice_dialog.dart';
 import 'deadline_review.dart';
 import 'uets_connect.dart';
@@ -1506,7 +1507,26 @@ class _UetsPageState extends State<UetsPage> {
       key: const ValueKey('uets-files'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _kicker('EKLER · ${kept.attachments.length}'),
+        Row(
+          children: [
+            Expanded(child: _kicker('EKLER · ${kept.attachments.length}')),
+            // The package's documents to the office, with the notice they
+            // came by; nothing shown where there is no one to send to.
+            SendToOfficeButton(
+              paths: () => [
+                ?kept.envelopePath,
+                for (final a in kept.attachments)
+                  if (!a.path.toLowerCase().endsWith('.xml')) a.path,
+              ],
+              text:
+                  [
+                    for (final n in _notices)
+                      if (n.message.id == kept.noticeId) n.message.subject,
+                  ].firstOrNull ??
+                  '',
+            ),
+          ],
+        ),
         if (docs.where((d) => !d.read).length case final unread when unread > 0)
           Container(
             key: const ValueKey('uets-files-unread'),
