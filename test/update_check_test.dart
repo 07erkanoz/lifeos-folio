@@ -182,7 +182,7 @@ void _bannerTest() {
       EvrakConvertApp(library: library, appearance: theme),
     );
     await tester.pump();
-    UpdateCheck.instance.available.value = UpdateManifest(
+    final manifest = UpdateManifest(
       platform: 'linux-x64',
       version: '1.2.0',
       build: 5,
@@ -192,13 +192,19 @@ void _bannerTest() {
       notes: const {'tr': 'Güncelleme bildirimi eklendi.'},
       published: DateTime(2026, 9, 29),
     );
+    UpdateCheck.instance.ready.value = manifest;
+    UpdateCheck.instance.available.value = manifest;
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('update-banner')), findsOneWidget);
+    // A card at the window's foot, not a strip across its top.
+    expect(find.byKey(const ValueKey('update-card')), findsOneWidget);
     expect(find.text('LifeOS Folio 1.2.0 hazır'), findsOneWidget);
     expect(find.text('Güncelleme bildirimi eklendi.'), findsOneWidget);
     await tester.tap(find.text('Sonra'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('update-banner')), findsNothing);
+    expect(find.byKey(const ValueKey('update-card')), findsNothing);
+    // Still there, at the top of the settings.
+    expect(UpdateCheck.instance.ready.value, manifest);
+    UpdateCheck.instance.ready.value = null;
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.runAsync(() async {
       library.dispose();

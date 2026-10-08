@@ -40,6 +40,7 @@ import '../widgets/folio_about_dialog.dart';
 import '../widgets/notice.dart';
 import '../widgets/signing_dialog.dart';
 import '../widgets/snippet_manager.dart';
+import '../widgets/update_card.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/uyap_connect_view.dart';
 
@@ -1259,6 +1260,16 @@ class _SettingsPageState extends State<SettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (!wide) ...[_searchField(), const SizedBox(height: 4)],
+                // A release still to install stands above everything.
+                ValueListenableBuilder(
+                  valueListenable: UpdateCheck.instance.ready,
+                  builder: (context, update, _) => update == null
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 12, bottom: 4),
+                          child: UpdateCard(update: update),
+                        ),
+                ),
                 for (final s in shown) _sectionView(context, s, wide),
                 if (shown.isEmpty)
                   const Padding(

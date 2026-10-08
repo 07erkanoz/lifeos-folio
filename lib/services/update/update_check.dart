@@ -39,6 +39,10 @@ class UpdateCheck {
   /// The newer release, while there is one the reader has not skipped.
   final available = ValueNotifier<UpdateManifest?>(null);
 
+  /// The newer release still to be installed: kept after "Sonra", for the
+  /// settings to offer at their top; gone only when it is skipped.
+  final ready = ValueNotifier<UpdateManifest?>(null);
+
   Timer? _first, _every;
 
   /// The platform name a manifest is published under; null where Folio is
@@ -87,6 +91,7 @@ class UpdateCheck {
       final newer = manifest.build > await _currentBuild();
       final skipped = manifest.build == await _skipped();
       available.value = newer && !skipped ? manifest : null;
+      ready.value = available.value;
       return available.value;
     } catch (e) {
       debugPrint('Güncelleme denetimi: $e');
@@ -97,6 +102,7 @@ class UpdateCheck {
   /// Never offers [manifest]'s build again; a later one still will be.
   Future<void> skip(UpdateManifest manifest) async {
     available.value = null;
+    ready.value = null;
     try {
       final file = await _settings();
       await file.parent.create(recursive: true);

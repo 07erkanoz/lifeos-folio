@@ -69,7 +69,7 @@ import '../models/evrak_file.dart';
 import '../services/library/file_library.dart';
 import '../services/library/recent_documents.dart';
 import '../services/update/update_check.dart';
-import 'widgets/update_dialog.dart';
+import 'widgets/update_card.dart';
 import '../services/platform/document_scan.dart';
 import 'mobile/document_home.dart';
 import 'mobile/mobile_drawer.dart';
@@ -198,53 +198,58 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  /// A newer Folio has been published: say so across the top, where it
-  /// stays until the reader chooses. Nothing is downloaded until asked.
+  /// A newer Folio has been published: a card at the window's foot, on
+  /// the right on a computer, across on a phone, until the reader chooses.
+  /// "Sonra" puts it away; the settings keep it at their top.
+  OverlayEntry? _updateCard;
+
   void _updateAvailable() {
+    _updateCard?.remove();
+    _updateCard = null;
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-    messenger.hideCurrentMaterialBanner();
     final update = UpdateCheck.instance.available.value;
-    if (update == null) return;
-    final notes = update.notes['tr'] ?? update.notes['en'] ?? '';
-    messenger.showMaterialBanner(
-      MaterialBanner(
-        key: const ValueKey('update-banner'),
-        leading: const Icon(Icons.system_update_alt_rounded),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'LifeOS Folio ${update.version} hazır',
-              style: const TextStyle(fontWeight: FontWeight.w700),
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (update == null || overlay == null) return;
+    void later() {
+      _updateCard?.remove();
+      _updateCard = null;
+      UpdateCheck.instance.later();
+    }
+
+    _updateCard = OverlayEntry(
+      builder: (context) {
+        final phone = MediaQuery.sizeOf(context).width < 700;
+        return Positioned(
+          right: 16,
+          left: phone ? 16 : null,
+          bottom: 16 + MediaQuery.paddingOf(context).bottom,
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              width: phone ? null : 400,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: 1),
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+                builder: (context, v, child) => Opacity(
+                  opacity: v,
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - v) * 24),
+                    child: child,
+                  ),
+                ),
+                child: UpdateCard(
+                  update: update,
+                  onLater: later,
+                  floating: true,
+                ),
+              ),
             ),
-            if (notes.isNotEmpty)
-              Text(notes, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => unawaited(UpdateCheck.instance.skip(update)),
-            child: const Text('Bu sürümü atla'),
           ),
-          TextButton(
-            onPressed: UpdateCheck.instance.later,
-            child: const Text('Sonra'),
-          ),
-          FilledButton.icon(
-            key: const ValueKey('update-open'),
-            onPressed: () {
-              messenger.hideCurrentMaterialBanner();
-              unawaited(UpdateDialog.show(context, update));
-            },
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: const Text('Güncelle'),
-          ),
-        ],
-      ),
+        );
+      },
     );
+    overlay.insert(_updateCard!);
   }
 
   void _openMobileArchive() => setState(() {

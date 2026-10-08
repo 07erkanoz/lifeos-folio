@@ -221,7 +221,8 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
             if (i > 0) const Divider(height: 1),
             _person(context, person),
           ],
-          if (people.length < 2)
+          // Alone only when no other device is listed, the user's own too.
+          if (people.fold<int>(0, (n, p) => n + p.devices.length) < 2)
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Text(
@@ -874,13 +875,6 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     ),
                   ],
                 ),
-            const SizedBox(height: 10),
-            const Text(
-              'Sıradaki adımlarda: UYAP dosyasından evrak ve UETS evrakı '
-              'göndermek; kendi cihazlarınız arasında Senkron sayfasından '
-              'klasör, ajanda ve oturum eşitlemek.',
-              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
-            ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               key: const ValueKey('office-leave'),

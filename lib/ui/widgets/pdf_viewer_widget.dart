@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart' show PointerSignalEvent;
+import 'package:crypto/crypto.dart' show md5;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -83,6 +85,20 @@ class PdfViewerWidget extends StatefulWidget {
 
   @override
   State<PdfViewerWidget> createState() => _PdfViewerWidgetState();
+
+  static List<Object?> _stamp(String path) {
+    try {
+      final stat = File(path).statSync();
+      return [stat.size, stat.modified.microsecondsSinceEpoch];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// The name the viewer keeps an in-memory document by: its content's.
+  @visibleForTesting
+  static String sourceNameOf(List<int> bytes, String? path) =>
+      'preview-${md5.convert(bytes)}-${path ?? ''}.pdf';
 }
 
 class _PdfViewerWidgetState extends State<PdfViewerWidget> {
@@ -450,12 +466,27 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
   }
 
   void _setDocumentRef() {
+    // The viewer keeps documents by their source's name: one name for
+    // every document given as bytes showed the first of them again for
+    // each one after (a UDF's preview showing another case's document).
+    // Named by their content, each is itself.
     _documentRef = widget.bytes != null
         ? PdfDocumentRefData(
             widget.bytes!,
-            sourceName: widget.filePath ?? 'preview.pdf',
+            sourceName: PdfViewerWidget.sourceNameOf(
+              widget.bytes!,
+              widget.filePath,
+            ),
           )
-        : PdfDocumentRefFile(widget.filePath!);
+        // And a file by its size and time too: one downloaded again to the
+        // same name is not the copy kept from before.
+        : PdfDocumentRefFile(
+            widget.filePath!,
+            key: PdfDocumentRefKey(
+              widget.filePath!,
+              PdfViewerWidget._stamp(widget.filePath!),
+            ),
+          );
   }
 
   @override
