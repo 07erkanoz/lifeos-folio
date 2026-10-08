@@ -23,6 +23,7 @@ class MobileDrawer extends StatelessWidget {
     this.uetsUnread = 0,
     this.uyapNotices = 0,
     this.messagesUnread = 0,
+    this.office = false,
     this.tasksOpen = 0,
     this.uyapCases = 0,
     this.sync,
@@ -37,6 +38,10 @@ class MobileDrawer extends StatelessWidget {
   final VoidCallback onSyncComputer;
   final int agendaToday, uetsUnread, uyapCases, uyapNotices;
   final int messagesUnread, tasksOpen;
+
+  /// Whether an office is founded; without one there are no tasks or
+  /// messages to go to.
+  final bool office;
   final PortalSync? sync;
 
   Widget _section(String text) => Padding(
@@ -221,36 +226,38 @@ class MobileDrawer extends StatelessWidget {
                           selected: !home && group == 'buro',
                           onTap: () => onGroup('buro'),
                         ),
-                        _item(
-                          context,
-                          key: const ValueKey('drawer-tasks'),
-                          icon: const Icon(Icons.task_alt_rounded),
-                          label: 'Görevler',
-                          selected: !home && group == 'gorevler',
-                          trailing: tasksOpen > 0
-                              ? _pill(
-                                  '$tasksOpen',
-                                  AgendaColors.hearing,
-                                  Colors.white,
-                                )
-                              : null,
-                          onTap: () => onGroup('gorevler'),
-                        ),
-                        _item(
-                          context,
-                          key: const ValueKey('drawer-messages'),
-                          icon: const Icon(Icons.forum_outlined),
-                          label: 'Mesajlar',
-                          selected: !home && group == 'mesajlar',
-                          trailing: messagesUnread > 0
-                              ? _pill(
-                                  '$messagesUnread',
-                                  AgendaColors.deadline,
-                                  Colors.white,
-                                )
-                              : null,
-                          onTap: () => onGroup('mesajlar'),
-                        ),
+                        if (office) ...[
+                          _item(
+                            context,
+                            key: const ValueKey('drawer-tasks'),
+                            icon: const Icon(Icons.task_alt_rounded),
+                            label: 'Görevler',
+                            selected: !home && group == 'gorevler',
+                            trailing: tasksOpen > 0
+                                ? _pill(
+                                    '$tasksOpen',
+                                    AgendaColors.hearing,
+                                    Colors.white,
+                                  )
+                                : null,
+                            onTap: () => onGroup('gorevler'),
+                          ),
+                          _item(
+                            context,
+                            key: const ValueKey('drawer-messages'),
+                            icon: const Icon(Icons.forum_outlined),
+                            label: 'Mesajlar',
+                            selected: !home && group == 'mesajlar',
+                            trailing: messagesUnread > 0
+                                ? _pill(
+                                    '$messagesUnread',
+                                    AgendaColors.deadline,
+                                    Colors.white,
+                                  )
+                                : null,
+                            onTap: () => onGroup('mesajlar'),
+                          ),
+                        ],
                         _item(
                           context,
                           key: const ValueKey('drawer-uyap'),

@@ -51,6 +51,10 @@ class LibrarySidebar extends StatelessWidget {
   /// The office's unread messages and the open tasks given to this user.
   final int messagesUnread, tasksOpen;
 
+  /// Whether an office is founded; without one there are no tasks or
+  /// messages to go to.
+  final bool office;
+
   /// Widens the panel folded on the UYAP pages, or folds it again; null
   /// where the window's width decides alone.
   final VoidCallback? onTogglePanel;
@@ -75,6 +79,7 @@ class LibrarySidebar extends StatelessWidget {
     this.uetsUnread = 0,
     this.uyapNotices = 0,
     this.messagesUnread = 0,
+    this.office = false,
     this.tasksOpen = 0,
     this.onTogglePanel,
   });
@@ -230,28 +235,30 @@ class LibrarySidebar extends StatelessWidget {
                   null,
                   key: const ValueKey('office-network-nav'),
                 ),
-                _nav(
-                  context,
-                  Icons.task_alt_rounded,
-                  'Görevler',
-                  'gorevler',
-                  null,
-                  key: const ValueKey('tasks-nav'),
-                  badge: tasksOpen > 0
-                      ? _badge(context, '$tasksOpen', danger: false)
-                      : null,
-                ),
-                _nav(
-                  context,
-                  Icons.forum_outlined,
-                  'Mesajlar',
-                  'mesajlar',
-                  null,
-                  key: const ValueKey('messages-nav'),
-                  badge: messagesUnread > 0
-                      ? _badge(context, '$messagesUnread', danger: true)
-                      : null,
-                ),
+                if (office) ...[
+                  _nav(
+                    context,
+                    Icons.task_alt_rounded,
+                    'Görevler',
+                    'gorevler',
+                    null,
+                    key: const ValueKey('tasks-nav'),
+                    badge: tasksOpen > 0
+                        ? _badge(context, '$tasksOpen', danger: false)
+                        : null,
+                  ),
+                  _nav(
+                    context,
+                    Icons.forum_outlined,
+                    'Mesajlar',
+                    'mesajlar',
+                    null,
+                    key: const ValueKey('messages-nav'),
+                    badge: messagesUnread > 0
+                        ? _badge(context, '$messagesUnread', danger: true)
+                        : null,
+                  ),
+                ],
                 const SizedBox(height: 14),
                 if (!compact)
                   Padding(

@@ -847,6 +847,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   int _officeUnread = 0, _officeTasks = 0;
 
+  /// Whether an office is founded: Görevler and Mesajlar are shown only
+  /// then.
+  bool _officeFounded = false;
+
   /// The office's counts for the menus, redrawn only when they change: the
   /// network speaks often, a transfer's progress at every piece.
   void _officeCounted() {
@@ -856,10 +860,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final open = net.tasks.all
         .where((t) => t.open && t.assignees.containsKey(me))
         .length;
-    if (mounted && (unread != _officeUnread || open != _officeTasks)) {
+    final office = net.ledger.officeId != null;
+    if (mounted &&
+        (unread != _officeUnread ||
+            open != _officeTasks ||
+            office != _officeFounded)) {
       setState(() {
         _officeUnread = unread;
         _officeTasks = open;
+        _officeFounded = office;
       });
     }
   }
@@ -2219,6 +2228,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uetsUnread: _uetsUnread,
     uyapNotices: _uyapNoticesUnread,
     messagesUnread: _officeUnread,
+    office: _officeFounded,
     tasksOpen: _officeTasks,
     uyapAvailable: true,
     showHome: !(Platform.isAndroid || Platform.isIOS),
@@ -2242,6 +2252,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uetsUnread: _uetsUnread,
     uyapNotices: _uyapNoticesUnread,
     messagesUnread: _officeUnread,
+    office: _officeFounded,
     tasksOpen: _officeTasks,
     uyapCases: _portfolioOpen ?? _uyapCases.length,
     onHome: () {
