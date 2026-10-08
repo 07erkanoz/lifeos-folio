@@ -281,24 +281,70 @@ class UyapCaseStore {
   /// Every case kept on this computer, each with how many of its documents
   /// are saved where Folio searches; the last fetched first. A case is
   /// listed once it has been fetched, a document or none.
-  Future<List<(UyapCaseRecord, int)>> cases() async {
+  Future<List<(UyapCaseRecord, int)>> cases({bool counted = true}) async {
     await settings.load();
     final folder = Directory(p.join((await _root()).path, 'dosyalar'));
     if (!await folder.exists()) return const [];
-    final out = <(UyapCaseRecord, int)>[];
+    final stats = <String, FileStat>{};
     await for (final entry in folder.list()) {
       if (entry is! File || !entry.path.endsWith('.json')) continue;
-      try {
-        final json = jsonDecode(await entry.readAsString());
-        if (json is! Map) continue;
-        final record = UyapCaseRecord.fromJson(json.cast<String, Object?>());
-        out.add((record, savedFiles(record).length));
-      } catch (_) {
-        // A record that cannot be read is not listed.
+      stats[entry.path] = await entry.stat();
+    }
+    // Only what changed since it was last read is read again: hundreds of
+    // cases are megabytes of JSON, most of it their documents' lists.
+    bool same(String path) {
+      final kept = _parsed[path], stat = stats[path]!;
+      return kept != null && kept.$1 == stat.modified && kept.$2 == stat.size;
+    }
+
+    final stale = [
+      for (final path in stats.keys)
+        if (!same(path)) path,
+    ];
+    if (stale.isNotEmpty) {
+      final bytes = stale.fold<int>(0, (n, path) => n + stats[path]!.size);
+      // Much of it is read apart, for the window not to stand still.
+      final read = bytes > 512 * 1024
+          ? await Isolate.run(() => _readRecords(stale))
+          : _readRecords(stale);
+      for (final path in stale) {
+        final record = read[path];
+        if (record == null) {
+          _parsed.remove(path);
+        } else {
+          _parsed[path] = (stats[path]!.modified, stats[path]!.size, record);
+        }
       }
     }
+    _parsed.removeWhere(
+      (path, _) => p.isWithin(folder.path, path) && !stats.containsKey(path),
+    );
+    final out = <(UyapCaseRecord, int)>[
+      for (final path in stats.keys)
+        if (_parsed[path] case (_, _, final record))
+          (record, counted ? savedFiles(record).length : 0),
+    ];
     out.sort((a, b) => b.$1.fetchedAt.compareTo(a.$1.fetchedAt));
     return out;
+  }
+
+  /// Records read before, by file: when and how large the file was then.
+  static final _parsed = <String, (DateTime, int, UyapCaseRecord)>{};
+
+  static Map<String, UyapCaseRecord> _readRecords(List<String> paths) => {
+    for (final path in paths) path: ?_readRecord(path),
+  };
+
+  static UyapCaseRecord? _readRecord(String path) {
+    try {
+      final json = jsonDecode(File(path).readAsStringSync());
+      // A record that cannot be read is not listed.
+      return json is Map
+          ? UyapCaseRecord.fromJson(json.cast<String, Object?>())
+          : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// [record]'s documents saved in its folder where Folio searches and

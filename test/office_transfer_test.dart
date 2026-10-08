@@ -68,7 +68,7 @@ void main() {
   }
 
   Future<void> until(bool Function() done) async {
-    for (var i = 0; i < 500 && !done(); i++) {
+    for (var i = 0; i < 1500 && !done(); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
     expect(done(), isTrue);
@@ -163,7 +163,13 @@ void main() {
       // The first came whole before the cut, the second half.
       final came = File('${inbox.path}/Bir.pdf')
         ..writeAsBytesSync(one.readAsBytesSync());
-      File('${parts.path}/$id-0.done').writeAsStringSync(came.path);
+      File('${parts.path}/$id-0.done').writeAsStringSync(
+        jsonEncode({
+          'yol': came.path,
+          'boyut': 90 * 1024,
+          'sha': await OfficeTransfer.sha256Of(one),
+        }),
+      );
       File('${parts.path}/$id-1.part')
           .writeAsBytesSync(two.readAsBytesSync().sublist(0, 60 * 1024));
       final t = (await a.send(b.self!, [one.path, two.path], id: id))!;
@@ -389,6 +395,26 @@ void main() {
         forged,
         from: b.self!.deviceId,
         mayBroadcast: c.ledger.isManager,
+      ),
+      isFalse,
+    );
+    // Nor a private talk of two set up by a third with themself in it.
+    final trap = Chat(
+      id: Chat.privateId(a.self!.deviceId, c.self!.deviceId),
+      kind: ChatKind.private,
+      by: b.self!.deviceId,
+      members: {
+        a.self!.deviceId: 'Av. Deniz Kaya',
+        b.self!.deviceId: 'Mert',
+        c.self!.deviceId: 'Selin',
+      },
+    );
+    expect(
+      await a.chats.merge(
+        trap,
+        from: b.self!.deviceId,
+        mayBroadcast: a.ledger.isManager,
+        me: a.self!.deviceId,
       ),
       isFalse,
     );

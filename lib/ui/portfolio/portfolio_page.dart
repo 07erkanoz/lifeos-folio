@@ -68,16 +68,38 @@ class _PortfolioPageState extends State<PortfolioPage> {
     super.initState();
     _sync?.addListener(_synced);
     _sync?.portfolioVersion.addListener(_grew);
-    UyapCaseStore.changes.addListener(_reload);
+    UyapCaseStore.changes.addListener(_changed);
+    // What was shown the last time, at once; then read again.
+    final last = _lastShown;
+    if (last != null &&
+        identical(last.$1, widget.database) &&
+        identical(last.$2, widget.store)) {
+      _rows = last.$3;
+    }
     _reload();
   }
+
+  /// The rows last shown, with the database and store they came from.
+  static (PortalDatabase?, UyapCaseStore?, List<PortfolioRow>)? _lastShown;
+
+  /// A case's record saved: a burst of them, as while documents are
+  /// fetched, read once.
+  void _changed() {
+    _changedSoon?.cancel();
+    _changedSoon = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) unawaited(_reload());
+    });
+  }
+
+  Timer? _changedSoon;
 
   @override
   void dispose() {
     _sync?.removeListener(_synced);
     _sync?.portfolioVersion.removeListener(_grew);
     _grewSoon?.cancel();
-    UyapCaseStore.changes.removeListener(_reload);
+    UyapCaseStore.changes.removeListener(_changed);
+    _changedSoon?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -103,7 +125,26 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
   Timer? _grewSoon;
 
-  Future<void> _reload() async {
+  Future<void>? _loading;
+  bool _again = false;
+
+  /// One reading at a time: asked while one runs, it reads once more after
+  /// it, so that an older reading never comes after a newer one.
+  Future<void> _reload() {
+    if (_loading != null) {
+      _again = true;
+      return _loading!;
+    }
+    return _loading = _read().whenComplete(() {
+      _loading = null;
+      if (_again && mounted) {
+        _again = false;
+        unawaited(_reload());
+      }
+    });
+  }
+
+  Future<void> _read() async {
     try {
       final rows = await loadPortfolio(
         lawyer: widget.lawyer.isNotEmpty
@@ -117,6 +158,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
       final at = await sync?.portfolioAt();
       final checked = await sync?.casesCheckedAt();
       if (!mounted) return;
+      _lastShown = (widget.database, widget.store, rows);
       setState(() {
         _rows = rows;
         _includeClosed = include;

@@ -156,12 +156,15 @@ class PortfolioRow {
     return '${d['davaTuru'] ?? d['tur'] ?? ''}'.trim();
   }
 
-  DateTime? get opened =>
+  late final DateTime? opened =
       parseDay(kase.details?.value['acilis']) ??
       parseDay(record?.details.openedOn);
 
-  /// The documents not yet looked at.
-  List<UyapCaseDocument> get freshDocuments {
+  /// The documents not yet looked at. Worked out once a row: the sort
+  /// and the filters ask it of every row again and again.
+  late final List<UyapCaseDocument> freshDocuments = _freshDocuments();
+
+  List<UyapCaseDocument> _freshDocuments() {
     final r = record;
     if (r == null || r.fresh.isEmpty) return const [];
     return [
@@ -173,10 +176,9 @@ class PortfolioRow {
     ];
   }
 
-  int get freshCount {
-    final kept = freshDocuments.length;
-    return kept > state.fresh ? kept : state.fresh;
-  }
+  late final int freshCount = freshDocuments.length > state.fresh
+      ? freshDocuments.length
+      : state.fresh;
 
   /// "Davacı", "Alacaklı": the role the lawyer stands in.
   String? get ourRole => ours.isEmpty ? null : titleName(ours.first.role);
@@ -188,7 +190,9 @@ class PortfolioRow {
   }
 
   /// When something last happened in it, for "Son gelişme önce".
-  DateTime get lastChange {
+  late final DateTime lastChange = _lastChange();
+
+  DateTime _lastChange() {
     final times = <DateTime>[
       ?state.changeAt,
       ?state.firstSeen,
@@ -255,7 +259,9 @@ Future<List<PortfolioRow>> loadPortfolio({
   final db = database ?? await PortalDatabase.shared();
   final kept = <String, UyapCaseRecord>{};
   try {
-    for (final (record, _) in await (store ?? UyapCaseStore.instance).cases()) {
+    for (final (record, _) in await (store ?? UyapCaseStore.instance).cases(
+      counted: false,
+    )) {
       kept[caseKey(record.number, record.court)] = record;
     }
   } catch (_) {}
