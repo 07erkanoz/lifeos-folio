@@ -407,6 +407,23 @@ void main() {
       expect(ds[1].strict, isTrue);
     });
 
+    test('the court’s “süre verilmesine” is a directive with no word of the '
+        'service; a time given to an expert is not a party’s', () {
+      final d = envelopeDirectives(
+        '2-Taraflara bu davaya ilişkin delil bildirme süresi içinde '
+        'bildirdikleri ancak sunmadıkları eksik delillerini sunmaları için '
+        'iki hafta kesin süre verilmesine.',
+      ).single;
+      expect((d.amount, d.act, d.strict), (2, 'delil', true));
+      expect(
+        envelopeDirectives(
+          'Rapor düzenlenmesinin istenmesine, raporunu ibraz etmek üzere '
+          'bilirkişilere 30 gün süre verilmesine.',
+        ),
+        isEmpty,
+      );
+    });
+
     test('“iki (3) hafta”: the two are not chosen between silently', () {
       final d = envelopeDirectives(
         'Tebliğden itibaren iki (3) hafta içinde beyanlarınızı sununuz.',

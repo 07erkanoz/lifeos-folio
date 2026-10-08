@@ -186,9 +186,13 @@ List<EnvelopeDirective> envelopeDirectives(String text) {
       final part = own.substring(partFrom, partTo);
       // A directive: spoken to its reader, of the service, or the court's
       // warning ("… ihtar olunur", "… ihtarına") the clause belongs to.
+      // The court's own order "… süre verilmesine" is a directive too,
+      // with no word of the service (measured on a real box, 8 October
+      // 2026: "taraflara … iki hafta kesin süre verilmesine").
       if (!_speaksToReader(clause) &&
           !clause.contains('tebli') &&
-          !own.contains('ihtar')) {
+          !own.contains('ihtar') &&
+          !clause.contains('verilmesine')) {
         continue;
       }
       if (RegExp(
@@ -231,6 +235,16 @@ List<EnvelopeDirective> envelopeDirectives(String text) {
       }
       if (amount == null || amount <= 0) continue;
       final act = _act(part, at - partFrom, end - partFrom);
+      // A time the court gives an expert or a buyer at an auction is
+      // theirs, no party's: "raporunu sunmak üzere bilirkişiye 15 günlük
+      // süre". Only when it is said to them just before the time, and not
+      // a payment, which is a party's ("bilirkişi ücretini yatırması").
+      if (act != 'odeme' &&
+          RegExp(r'bilirkisi(?:ye|lere)\b|ihale alicisi|alicisinin').hasMatch(
+            own.substring(at - 80 < partFrom ? partFrom : at - 80, at),
+          )) {
+        continue;
+      }
       final startsFrom = _startsFrom(part) ?? _startsFrom(clause);
       final toReader = _speaksToReader(part) || _speaksToReader(clause);
       final party = toReader ? null : _party(part) ?? _party(clause);
