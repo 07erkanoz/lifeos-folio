@@ -3,6 +3,7 @@ import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_deadline.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
+import 'package:evrak_convert/services/uets/notice_documents.dart';
 import 'package:evrak_convert/services/uets/notice_matcher.dart';
 import 'package:evrak_convert/services/uets/uets_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
@@ -155,17 +156,110 @@ void main() {
     expect(find.byKey(const ValueKey('uets-row-m2')), findsNothing);
   });
 
-  testWidgets('a deadline reckoned by hand on the notice goes on the agenda '
-      'as the lawyer’s own', (tester) async {
+  testWidgets('the lawyer adds a deadline of their own: chosen, reckoned '
+      'before it is kept, the notice’s record and confirmed', (tester) async {
     final db = await pump(tester);
-    await tester.ensureVisible(find.byKey(const ValueKey('uets-manual')));
-    await tester.tap(find.byKey(const ValueKey('uets-manual')));
+    await tester.ensureVisible(find.byKey(const ValueKey('uets-add-deadline')));
+    await tester.tap(find.byKey(const ValueKey('uets-add-deadline')));
     await tester.pumpAndSettle();
-    expect(find.text('Elle süre hesapla'), findsWidgets);
-    await tester.tap(find.byKey(const ValueKey('manual-save')));
+    expect(find.text('Süre ekle'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('choice-hmk394')));
     await tester.pumpAndSettle();
-    final own = db.agenda().where((i) => i.id.startsWith('own:uets:m1:'));
-    expect(own, isNotEmpty);
-    expect(own.first.kind, 'deadline');
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('choice-result')),
+        matching: find.textContaining('Son gün'),
+      ),
+      findsOne,
+    );
+    await tester.tap(find.byKey(const ValueKey('choice-save')));
+    await tester.pumpAndSettle();
+    final own = db
+        .deadlines(noticeId: 'm1')
+        .where((d) => d.record.ruleId == 'hmk394')
+        .single;
+    expect(own.record.id, startsWith('uets:m1:a:'));
+    expect(own.record.evidence['kaynak'], 'avukat');
+    expect(own.confirmed, isTrue);
+    expect(db.agenda().map((i) => i.id), contains(own.record.id));
+    // Made again, it stays: the lawyer's choice is kept, not a note.
+    matchNotices(db, now: now);
+    expect(db.deadline(own.record.id)!.confirmed, isTrue);
+  });
+
+  testWidgets('a deadline Folio made is changed for one the lawyer chooses; '
+      'the first is taken off, not deleted', (tester) async {
+    final db = await pump(tester);
+    final made = db.deadlines(noticeId: 'm1').first;
+    final change = find.byKey(ValueKey('review-change-${made.record.id}'));
+    await tester.ensureVisible(change);
+    await tester.tap(change);
+    await tester.pumpAndSettle();
+    expect(find.text('Süreyi değiştir'), findsWidgets);
+    await tester.ensureVisible(find.byKey(const ValueKey('choice-ozel')));
+    await tester.tap(find.byKey(const ValueKey('choice-ozel')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('choice-purpose')),
+      'Kesin süre: tanık listesi',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('choice-save')));
+    await tester.pumpAndSettle();
+    expect(db.deadline(made.record.id)!.user!.dismissed, isTrue);
+    final own = db
+        .deadlines(noticeId: 'm1')
+        .where((d) => d.record.evidence['kaynak'] == 'avukat')
+        .single;
+    expect(own.record.title, 'Kesin süre: tanık listesi');
+    expect(own.record.evidence['yerine'], made.record.id);
+    expect(own.onAgenda, isTrue);
+  });
+
+  testWidgets('a package not wholly read says so, document by document, and '
+      'no “no deadline” is told of it', (tester) async {
+    await pump(
+      tester,
+      before: (db) {
+        db.saveEnvelope(
+          const NoticeEnvelope(
+            noticeId: 'm2',
+            state: 'indirildi',
+            envelopeText: 'Duruşma davetiyesi.',
+            attachments: [
+              (name: 'Davetiye.pdf', path: '/sentetik/a.pdf'),
+              (name: 'Ek-2.tif', path: '/sentetik/b.tif'),
+            ],
+          ),
+        );
+        db.saveNoticeDocuments('m2', [
+          for (final (i, state) in const [(0, 'okundu'), (1, 'metinYok')])
+            NoticeDocument(
+              noticeId: 'm2',
+              seq: i,
+              name: i == 0 ? 'Davetiye.pdf' : 'Ek-2.tif',
+              path: i == 0 ? '/sentetik/a.pdf' : '/sentetik/b.tif',
+              digest: 'h$i',
+              state: state,
+              reader: noticeReaderVersion,
+              readAt: DateTime(2026, 9, 21),
+            ),
+        ]);
+      },
+    );
+    await tester.tap(find.byKey(const ValueKey('uets-row-m2')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('uets-files-unread')), findsOne);
+    final files = find.byKey(const ValueKey('uets-files'));
+    expect(
+      find.descendant(of: files, matching: find.text('Okunamadı')),
+      findsOne,
+    );
+    expect(
+      find.descendant(of: files, matching: find.text('Okundu')),
+      findsOne,
+    );
+    expect(find.textContaining('2 belgeden 1 tanesi okunamadı'), findsOne);
+    expect(find.textContaining('adından süre doğuran'), findsNothing);
   });
 }

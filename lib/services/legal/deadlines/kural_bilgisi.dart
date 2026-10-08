@@ -51,6 +51,7 @@ const _kurallar = <YasalSure, KuralBilgisi>{
   sHaciz893Dava: KuralBilgisi('iik89-3-dava', Yukumlu.ucuncuKisi),
   sHaciz893Belge: KuralBilgisi('iik89-3-belge', Yukumlu.ucuncuKisi),
   sIcraMahkemesiIstinaf: KuralBilgisi('iik363', Yukumlu.taraflar),
+  sTedbirItiraz: KuralBilgisi('hmk394', Yukumlu.taraflar),
   sCezaIstinafEski: KuralBilgisi('cmk273-eski', Yukumlu.taraflar),
   sCezaIstinafEskiTefhim: KuralBilgisi('cmk273-eski-tefhim', Yukumlu.taraflar),
   sCezaIstinafYeni: KuralBilgisi('cmk273', Yukumlu.taraflar),

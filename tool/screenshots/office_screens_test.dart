@@ -20,6 +20,7 @@ import 'package:evrak_convert/services/portal/portal_hearing.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/portal/uyap_notice.dart';
 import 'package:evrak_convert/services/uets/notice_deadlines.dart';
+import 'package:evrak_convert/services/uets/notice_documents.dart';
 import 'package:evrak_convert/services/uets/notice_matcher.dart';
 import 'package:evrak_convert/services/uets/uets_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
@@ -963,6 +964,40 @@ void main() {
     addTearDown(tester.view.reset);
     final db = _office();
     final sync = _sync(db);
+    // The interim decision's package kept and read: a document read, one
+    // not; its deadlines made from them.
+    db.saveEnvelope(
+      const NoticeEnvelope(
+        noticeId: 'm6',
+        state: 'indirildi',
+        envelopeText: 'Tebligat zarfı.',
+        attachments: [
+          (name: 'Ara Karar.pdf', path: '/sentetik/ara-karar.pdf'),
+          (name: 'Ek-2.tif', path: '/sentetik/ek-2.tif'),
+        ],
+      ),
+    );
+    db.saveNoticeDocuments('m6', [
+      for (final (i, name, state) in const [
+        (0, 'Ara Karar.pdf', 'okundu'),
+        (1, 'Ek-2.tif', 'metinYok'),
+      ])
+        NoticeDocument(
+          noticeId: 'm6',
+          seq: i,
+          name: name,
+          path: i == 0 ? '/sentetik/ara-karar.pdf' : '/sentetik/ek-2.tif',
+          digest: 'h$i',
+          state: state,
+          text: i == 0
+              ? 'ARA KARAR\nKararın tebliğinden itibaren iki hafta içinde '
+                    'istinaf yolu açık olmak üzere'
+              : '',
+          reader: noticeReaderVersion,
+          readAt: now,
+        ),
+    ]);
+    refreshNoticeDeadlines(db, only: {'m6'});
     debugDisableShadows = false;
     try {
       for (final (size, suffix) in [(logical, ''), (phone, 'telefon-')]) {
@@ -993,13 +1028,23 @@ void main() {
                 now: () => now,
                 onOpenCase: (_) => true,
                 onOpenFile: (_) {},
-                initialNotice: size == logical ? 'm1' : null,
+                initialNotice: size == logical ? 'm6' : null,
               ),
             ),
           ),
         );
         await _settle(tester);
         await _shot(tester, '${suffix}uets');
+        if (size != logical) {
+          await tester.tap(find.byKey(const ValueKey('uets-row-m6')));
+          await _settle(tester);
+          await _shot(tester, '${suffix}uets-tebligat');
+        }
+        final add = find.byKey(const ValueKey('uets-add-deadline'));
+        await tester.ensureVisible(add);
+        await tester.tap(add);
+        await _settle(tester);
+        await _shot(tester, '${suffix}uets-sure-ekle');
         await tester.pumpWidget(const SizedBox());
       }
     } finally {

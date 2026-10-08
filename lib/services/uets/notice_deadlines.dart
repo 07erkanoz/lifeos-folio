@@ -12,6 +12,7 @@ import '../legal/deadlines/turkish_legal_calendar.dart';
 import '../legal/deadlines/yasal_sure.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_deadline.dart';
+import 'deadline_choice.dart';
 import 'envelope_directives.dart';
 import 'notice_documents.dart';
 import 'notice_matcher.dart';
@@ -81,6 +82,7 @@ void refreshNoticeDeadlines(
           (state: 'alinmadi', fetchedAt: null, parts: const []),
       envelope: envelopes[n.message.id],
       documents: db.noticeDocuments(n.message.id),
+      choices: db.deadlineChoices(n.message.id),
       takipTuru: switch (db.meta('takip:${n.message.id}')) {
         final v? when v.isNotEmpty => v,
         _ => null,
@@ -177,6 +179,9 @@ List<DeadlineRecord> noticeDeadlines(
 
   /// Its package's documents as read (see [readNoticeDocuments]).
   List<NoticeDocument> documents = const [],
+
+  /// The deadlines the lawyer chose for it (see [DeadlineChoice]).
+  List<DeadlineChoice> choices = const [],
   List<TarafKaydi> parties = const [],
   String? lawyer,
   DateTime? now,
@@ -326,15 +331,18 @@ List<DeadlineRecord> noticeDeadlines(
     required Map<String, Object?> evidence,
     required ({AidiyetSinyali sinyal, String neden}) sign,
     List<DeadlineReason> lead = const [],
+    String? id,
+    ({String event, LegalDay day})? startAt,
   }) {
     final reasons = <DeadlineReason>[
       ...lead,
-      const DeadlineReason(
-        'besGunKurali',
-        'Tebliğ, tebligatın elektronik adresinize ulaştığı (UETS kutusuna '
-            'girdiği) günü izleyen 5. günün sonunda yapılmış sayıldı (Tebligat '
-            'K. m.7/a). Okuma tarihi bunu değiştirmez.',
-      ),
+      if (startAt == null)
+        const DeadlineReason(
+          'besGunKurali',
+          'Tebliğ, tebligatın elektronik adresinize ulaştığı (UETS kutusuna '
+              'girdiği) günü izleyen 5. günün sonunda yapılmış sayıldı (Tebligat '
+              'K. m.7/a). Okuma tarihi bunu değiştirmez.',
+        ),
       if (!turkeyOffsetKnown(sent))
         const DeadlineReason(
           'eskiSaat',
@@ -387,11 +395,13 @@ List<DeadlineRecord> noticeDeadlines(
     ];
 
     // The event the rule starts from, never stood in for by another.
-    final LegalDay? start = switch (rule.baslangic) {
-      SureBaslangici.teblig => served,
-      SureBaslangici.ogrenme => read,
-      _ => null,
-    };
+    final LegalDay? start =
+        startAt?.day ??
+        switch (rule.baslangic) {
+          SureBaslangici.teblig => served,
+          SureBaslangici.ogrenme => read,
+          _ => null,
+        };
     String? raw, due;
     var state = 'aday';
     if (start == null) {
@@ -496,19 +506,21 @@ List<DeadlineRecord> noticeDeadlines(
       'takvim': TurkishLegalCalendar.takvimSurumu,
     });
     return DeadlineRecord(
-      id: 'uets:${m.id}:r:$ruleId',
+      id: id ?? 'uets:${m.id}:r:$ruleId',
       noticeId: m.id,
       caseKey: n.caseKey,
       ruleId: ruleId,
       title: rule.ad,
       law: rule.kanunMaddesi,
-      startEvent: switch (rule.baslangic) {
-        SureBaslangici.teblig => 'teblig',
-        SureBaslangici.ogrenme => 'ogrenme',
-        SureBaslangici.tefhim => 'tefhim',
-        SureBaslangici.ilan => 'ilan',
-        SureBaslangici.kararTarihi => 'karar',
-      },
+      startEvent:
+          startAt?.event ??
+          switch (rule.baslangic) {
+            SureBaslangici.teblig => 'teblig',
+            SureBaslangici.ogrenme => 'ogrenme',
+            SureBaslangici.tefhim => 'tefhim',
+            SureBaslangici.ilan => 'ilan',
+            SureBaslangici.kararTarihi => 'karar',
+          },
       startDay: start?.key,
       rawDay: raw,
       dueDay: due,
@@ -548,9 +560,7 @@ List<DeadlineRecord> noticeDeadlines(
       final until = DateTime.tryParse(rule.gecerliBitisIso ?? '');
       if (rule.baslangic == SureBaslangici.tefhim &&
           until != null &&
-          inserted.isAfter(
-            LegalDay.of(until).addDays(rule.gun + 60),
-          )) {
+          inserted.isAfter(LegalDay.of(until).addDays(rule.gun + 60))) {
         continue;
       }
       made[ruleId] = catalogued.length;
@@ -743,7 +753,15 @@ List<DeadlineRecord> noticeDeadlines(
         evidence: s.evidence,
         // Spoken to its reader, the duty is the one served's; laid on a
         // party by name, it is that party's, whoever was served.
-        sign: party == null
+        sign: party == null && !d.toReader
+            // Told of the service only, to no one: either side's, as a way
+            // of appeal is.
+            ? aidiyetSinyali(
+                yukumlu: Yukumlu.taraflar,
+                taraflar: parties,
+                avukat: lawyer,
+              )
+            : party == null
             ? (
                 sinyal: AidiyetSinyali.olasiBizim,
                 neden: s.envelope
@@ -786,6 +804,36 @@ List<DeadlineRecord> noticeDeadlines(
                   '${s.envelope ? 'zarftakinden' : 'ektekinden'} farklı; '
                   'ikisi de gösterildi.',
             ),
+        ],
+      ),
+    );
+  }
+  // The lawyer's own: each the rule they chose, from the day they gave.
+  for (final c in choices) {
+    final rule = c.rule;
+    if (rule == null) continue;
+    final day = c.startDay == null ? null : DateTime.tryParse(c.startDay!);
+    out.add(
+      record(
+        rule,
+        id: c.deadlineId,
+        ruleId: c.ruleId,
+        tur: kinds.isEmpty ? BelgeTuru.diger : kinds.first.tur,
+        evidence: {'kaynak': 'avukat', 'secim': c.id, 'yerine': ?c.replaces},
+        sign: (
+          sinyal: AidiyetSinyali.olasiBizim,
+          neden: 'Bu süreyi siz eklediniz.',
+        ),
+        startAt: day == null && c.startEvent == 'teblig'
+            ? null
+            : (event: c.startEvent, day: LegalDay.of(day ?? sent)),
+        lead: [
+          DeadlineReason(
+            'avukatSecti',
+            c.replaces == null
+                ? 'Bu süreyi siz seçtiniz.'
+                : 'Bu süreyi Folio’nun önerdiği sürenin yerine siz seçtiniz.',
+          ),
         ],
       ),
     );

@@ -30,6 +30,12 @@ class EnvelopeDirective {
   /// not make every duty written in it the lawyer's.
   final String? party;
 
+  /// Whether the sentence speaks to its reader ("… sununuz", "hakkınız");
+  /// one that only tells of the service ("kararın tebliğinden itibaren iki
+  /// hafta içinde istinaf yolu açık") lays its duty on no one in
+  /// particular.
+  final bool toReader;
+
   const EnvelopeDirective({
     required this.quote,
     required this.amount,
@@ -38,6 +44,7 @@ class EnvelopeDirective {
     required this.act,
     this.startsFrom,
     this.party,
+    this.toReader = true,
   });
 
   /// Days for comparing with a catalogue's rule: weeks are seven days;
@@ -136,7 +143,8 @@ List<EnvelopeDirective> envelopeDirectives(String text) {
       };
       final act = _act(clause);
       final startsFrom = _startsFrom(clause);
-      final party = _speaksToReader(clause) ? null : _party(clause);
+      final toReader = _speaksToReader(clause);
+      final party = toReader ? null : _party(clause);
       final key = '$amount|${unit.name}|$act|$startsFrom|$party';
       if (!seen.add(key)) continue;
       out.add(
@@ -150,6 +158,7 @@ List<EnvelopeDirective> envelopeDirectives(String text) {
           act: act,
           startsFrom: startsFrom,
           party: party,
+          toReader: toReader,
         ),
       );
     }

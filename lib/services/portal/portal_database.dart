@@ -9,6 +9,7 @@ import '../platform/app_directories.dart';
 import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_deadline.dart';
+import '../uets/deadline_choice.dart';
 import '../uets/notice_documents.dart';
 import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
@@ -163,6 +164,10 @@ class PortalDatabase {
         state TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', note TEXT,
         reader INTEGER NOT NULL, read_at TEXT NOT NULL,
         PRIMARY KEY(notice_id, seq));
+      CREATE TABLE IF NOT EXISTS deadline_choice (
+        id TEXT PRIMARY KEY, notice_id TEXT NOT NULL, json TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS deadline_choice_notice
+        ON deadline_choice(notice_id);
       CREATE TABLE IF NOT EXISTS deadline (
         id TEXT PRIMARY KEY, notice_id TEXT NOT NULL, case_key TEXT,
         rule_id TEXT NOT NULL, title TEXT NOT NULL, law TEXT NOT NULL,
@@ -1253,6 +1258,21 @@ class PortalDatabase {
       rethrow;
     }
   }
+
+  /// A deadline the lawyer chose for a notice (see [DeadlineChoice]).
+  void saveDeadlineChoice(DeadlineChoice c) => _db.execute(
+    'INSERT OR REPLACE INTO deadline_choice(id, notice_id, json) '
+    'VALUES(?,?,?)',
+    [c.id, c.noticeId, jsonEncode(c.toJson())],
+  );
+
+  List<DeadlineChoice> deadlineChoices(String noticeId) => [
+    for (final r in _db.select(
+      'SELECT json FROM deadline_choice WHERE notice_id=? ORDER BY rowid',
+      [noticeId],
+    ))
+      DeadlineChoice.fromJson(jsonDecode(r['json'] as String) as Map),
+  ];
 
   List<NoticeDocument> noticeDocuments(String noticeId) => [
     for (final r in _db.select(

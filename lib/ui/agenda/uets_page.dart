@@ -9,13 +9,12 @@ import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/legal/deadlines/belge_turu.dart';
 import '../../services/legal/deadlines/turkish_legal_calendar.dart';
-import '../../services/legal/deadlines/mahkeme_kategori.dart';
-import '../../services/legal/deadlines/deadline_service.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_deadline.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/uets/envelope_directives.dart';
 import '../../services/uets/notice_deadlines.dart';
+import '../../services/uets/notice_documents.dart';
 import '../../services/uets/notice_matcher.dart';
 import '../../services/uets/notice_packages.dart';
 import '../../services/uets/uets_api.dart';
@@ -23,6 +22,7 @@ import '../../services/uyap/uyap_case_store.dart';
 import 'agenda_page.dart' show AgendaColors;
 import '../mobile/scroll_chrome.dart';
 import 'channel_bar.dart';
+import 'deadline_choice_dialog.dart';
 import 'deadline_review.dart';
 import 'uets_connect.dart';
 
@@ -885,6 +885,7 @@ class _UetsPageState extends State<UetsPage> {
         if (d.record.noticeId == m.id) d,
     ];
     final manifest = _db?.manifest(m.id);
+    final cover = _coverage(m.id);
     Widget row(String label, String value) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -1049,7 +1050,26 @@ class _UetsPageState extends State<UetsPage> {
             children: [
               _kicker('SÜRELER'),
               const SizedBox(height: 8),
-              if (deadlines.isEmpty)
+              if (deadlines.isEmpty && cover != null)
+                Text(
+                  key: const ValueKey('uets-coverage'),
+                  cover.reading
+                      ? 'Belgeler okunuyor; süreler okuma bitince hesaplanır.'
+                      : cover.unread > 0
+                      ? '${cover.total} belgeden ${cover.unread} tanesi '
+                            'okunamadı. Bu tebligatta süre olup olmadığı kesin '
+                            'değil; okunamayan belgeyi açıp kontrol edin.'
+                      : '${cover.total} belgenin hepsi okundu; süre doğuran '
+                            'bir belge ya da talimat bulunmadı. Gerekirse '
+                            '“Süre ekle” ile kendiniz ekleyin.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: !cover.reading && cover.unread > 0
+                        ? const Color(0xFF7A4B00)
+                        : AgendaColors.muted,
+                  ),
+                )
+              else if (deadlines.isEmpty)
                 Text(
                   switch (manifest?.state) {
                     'alinmadi' || null =>
@@ -1082,6 +1102,7 @@ class _UetsPageState extends State<UetsPage> {
                 for (final d in deadlines)
                   DeadlineReviewTile(
                     deadline: d,
+                    onChange: () => unawaited(_addDeadline(n, replacing: d)),
                     onConfirm:
                         d.confirmed ||
                             d.record.state != 'aday' ||
@@ -1116,10 +1137,10 @@ class _UetsPageState extends State<UetsPage> {
               ],
               const SizedBox(height: 6),
               TextButton.icon(
-                key: const ValueKey('uets-manual'),
-                onPressed: () => _reckonByHand(n),
-                icon: const Icon(Icons.calculate_outlined, size: 16),
-                label: const Text('Elle süre hesapla'),
+                key: const ValueKey('uets-add-deadline'),
+                onPressed: () => unawaited(_addDeadline(n)),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Süre ekle'),
               ),
             ],
           ),
@@ -1173,36 +1194,102 @@ class _UetsPageState extends State<UetsPage> {
     );
   }
 
-  /// A deadline reckoned by the lawyer on the notice itself: kept as the
-  /// lawyer's own agenda deadline, tied to the notice's case.
-  Future<void> _reckonByHand(KeptNotice n) async {
-    final items = await showDialog<List<AgendaItem>>(
-      context: context,
-      builder: (_) => _ManualDeadlineDialog(notice: n),
+  /// How far a notice's package was read (the audit's B25): null when it
+  /// has no package kept; [reading] while its documents are not read yet.
+  ({int total, int unread, bool reading})? _coverage(String id) {
+    final e = _envelopes[id];
+    if (e == null || e.state == 'hata' || e.attachments.isEmpty) return null;
+    final docs = [
+      for (final d in _db?.noticeDocuments(id) ?? const <NoticeDocument>[])
+        if (d.state != 'ustveri') d,
+    ];
+    final total = [
+      for (final a in e.attachments)
+        if (!a.path.toLowerCase().endsWith('.xml')) a,
+    ].length;
+    return (
+      total: total,
+      unread: docs.where((d) => !d.read).length,
+      reading: docs.isEmpty && total > 0,
     );
+  }
+
+  /// The lawyer's own deadline for the notice, or one in place of a
+  /// deadline Folio made ([replacing]): kept as the notice's record, and
+  /// confirmed, choosing it being the lawyer's word.
+  Future<void> _addDeadline(KeptNotice n, {KeptDeadline? replacing}) async {
     final db = _db;
-    if (items == null || items.isEmpty || db == null) return;
-    for (final i in items) {
-      db.saveAgenda(i);
-    }
+    if (db == null) return;
+    final id = n.message.id;
+    final docs = db.noticeDocuments(id);
+    final unit = docs
+        .map((d) => d.caseFile)
+        .whereType<NoticeCaseFile>()
+        .firstOrNull;
+    final hint = [
+      _envelopes[id]?.envelopeText ?? '',
+      for (final d in docs)
+        if (d.hasText) d.text,
+    ].join('\n');
+    final choice = await askDeadlineChoice(
+      context,
+      noticeId: id,
+      served: n.message.served ?? DateTime.now(),
+      category:
+          TurkishLegalCalendar.kategoriFromMahkemeAdi(unit?.unitName) ??
+          TurkishLegalCalendar.kategoriFromMahkemeAdi(
+            NoticeSubject.parse(n.message.subject)?.unit,
+          ),
+      hint: hint.length > 50000 ? hint.substring(0, 50000) : hint,
+      replacing: replacing?.record.id,
+      replacingRule: replacing?.record.ruleId,
+    );
+    if (choice == null || !mounted) return;
+    db.saveDeadlineChoice(choice);
+    if (replacing != null) db.removeAgenda(replacing.record.id);
+    refreshNoticeDeadlines(
+      db,
+      parties: NoticeDeadlineContext.parties,
+      lawyer: NoticeDeadlineContext.lawyer,
+      only: {id},
+    );
+    db.confirmDeadline(choice.deadlineId);
     _reload();
     widget.onChanged?.call();
-    if (mounted) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('${items.length} süre ajandaya eklendi.')),
-      );
-    }
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(content: Text('Süre eklendi ve onaylandı.')),
+    );
   }
 
   /// The package's documents as kept on this computer, each opened in
   /// Folio.
-  Widget _keptFiles(BuildContext context, NoticeEnvelope kept) => _card(
+  Widget _keptFiles(
+    BuildContext context,
+    NoticeEnvelope kept,
+    List<NoticeDocument> docs,
+  ) => _card(
     context,
     child: Column(
       key: const ValueKey('uets-files'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _kicker('EKLER · ${kept.attachments.length}'),
+        if (docs.where((d) => !d.read).length case final unread when unread > 0)
+          Container(
+            key: const ValueKey('uets-files-unread'),
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF6E5),
+              border: Border.all(color: const Color(0xFFF2D59B)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$unread belge okunamadı; bu tebligattaki süreleri o belgeyi '
+              'açıp kendiniz kontrol edin.',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF7A4B00)),
+            ),
+          ),
         const SizedBox(height: 6),
         if (kept.attachments.isEmpty)
           const Text(
@@ -1236,6 +1323,30 @@ class _UetsPageState extends State<UetsPage> {
                       style: const TextStyle(fontSize: 12.5),
                     ),
                   ),
+                  if (docs.where((d) => d.path == a.path).firstOrNull
+                      case final doc?)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, right: 6),
+                      child: Text(
+                        switch (doc.state) {
+                          'okundu' => 'Okundu',
+                          'ocr' => 'Görüntüden okundu',
+                          'ustveri' => 'Dosya bilgileri',
+                          'kismi' => 'Kısmen okundu',
+                          'kayip' => 'Bulunamadı',
+                          _ => 'Okunamadı',
+                        },
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: doc.read
+                              ? FontWeight.w400
+                              : FontWeight.w700,
+                          color: doc.read
+                              ? AgendaColors.muted
+                              : const Color(0xFFC62828),
+                        ),
+                      ),
+                    ),
                   const Icon(
                     Icons.open_in_new,
                     size: 15,
@@ -1493,7 +1604,9 @@ class _UetsPageState extends State<UetsPage> {
   Widget _attachments(BuildContext context, KeptNotice n) {
     final m = n.message;
     final kept = _envelopes[m.id];
-    if (kept != null && kept.state != 'hata') return _keptFiles(context, kept);
+    if (kept != null && kept.state != 'hata') {
+      return _keptFiles(context, kept, _db?.noticeDocuments(m.id) ?? const []);
+    }
     final parts = _parts[m.id];
     final busy = _partsLoading == m.id || _downloading != null;
     return _card(
@@ -1811,190 +1924,6 @@ class _CaseChooserState extends State<_CaseChooser> {
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Vazgeç'),
-        ),
-      ],
-    );
-  }
-}
-
-/// The lawyer's own reckoning for a notice: the kind of document, the day
-/// it was served and the court's jurisdiction; the result kept as the
-/// lawyer's own deadlines.
-class _ManualDeadlineDialog extends StatefulWidget {
-  const _ManualDeadlineDialog({required this.notice});
-
-  final KeptNotice notice;
-
-  @override
-  State<_ManualDeadlineDialog> createState() => _ManualDeadlineDialogState();
-}
-
-class _ManualDeadlineDialogState extends State<_ManualDeadlineDialog> {
-  static const _kinds = [
-    BelgeTuru.gerekceliKarar,
-    BelgeTuru.istinafKarari,
-    BelgeTuru.davaDilekcesi,
-    BelgeTuru.bilirkisiRaporu,
-    BelgeTuru.odemeEmri,
-    BelgeTuru.odemeEmriKambiyo,
-    BelgeTuru.icraEmri,
-    BelgeTuru.hacizIhbarnamesiBirinci,
-    BelgeTuru.hacizIhbarnamesiIkinci,
-    BelgeTuru.hacizIhbarnamesiUcuncu,
-  ];
-
-  late BelgeTuru _kind = _kinds.first;
-  late DateTime _served = widget.notice.message.served ?? DateTime.now();
-  late MahkemeKategorisi _category =
-      TurkishLegalCalendar.kategoriFromMahkemeAdi(
-        NoticeSubject.parse(widget.notice.message.subject)?.unit,
-      ) ??
-      MahkemeKategorisi.hukuk;
-
-  List<DeadlineItem> get _items => DeadlineService.computeFromUsuliTebligTarihi(
-    usuliTebligTarihi: _served,
-    kategori: _category,
-    belgeTuru: _kind,
-  ).items;
-
-  @override
-  Widget build(BuildContext context) {
-    String day(DateTime d) =>
-        '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
-    final items = _items;
-    InputDecoration field(String label) => InputDecoration(
-      labelText: label,
-      isDense: true,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-    );
-    return AlertDialog(
-      title: const Text('Elle süre hesapla'),
-      content: SizedBox(
-        width: 480,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DropdownButtonFormField<BelgeTuru>(
-                key: const ValueKey('manual-kind'),
-                isExpanded: true,
-                initialValue: _kind,
-                decoration: field('Belge türü'),
-                items: [
-                  for (final k in _kinds)
-                    DropdownMenuItem(
-                      value: k,
-                      child: Text(belgeTuruEtiket[k] ?? k.name),
-                    ),
-                ],
-                onChanged: (k) => setState(() => _kind = k ?? _kind),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<MahkemeKategorisi>(
-                isExpanded: true,
-                initialValue: _category,
-                decoration: field('Yargı kolu'),
-                items: const [
-                  DropdownMenuItem(
-                    value: MahkemeKategorisi.hukuk,
-                    child: Text('Hukuk'),
-                  ),
-                  DropdownMenuItem(
-                    value: MahkemeKategorisi.icra,
-                    child: Text('İcra'),
-                  ),
-                  DropdownMenuItem(
-                    value: MahkemeKategorisi.ceza,
-                    child: Text('Ceza'),
-                  ),
-                  DropdownMenuItem(
-                    value: MahkemeKategorisi.idare,
-                    child: Text('İdare'),
-                  ),
-                  DropdownMenuItem(
-                    value: MahkemeKategorisi.vergi,
-                    child: Text('Vergi'),
-                  ),
-                ],
-                onChanged: (k) => setState(() => _category = k ?? _category),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _served,
-                    firstDate: DateTime(_served.year - 5),
-                    lastDate: DateTime(_served.year + 2),
-                    helpText: 'Tebliğ günü',
-                  );
-                  if (picked != null) setState(() => _served = picked);
-                },
-                icon: const Icon(Icons.event, size: 16),
-                label: Text('Tebliğ günü: ${day(_served)}'),
-              ),
-              const SizedBox(height: 12),
-              if (items.isEmpty)
-                const Text(
-                  'Bu belge türü ve yargı kolu için katalogda süre yok.',
-                  style: TextStyle(color: AgendaColors.muted),
-                ),
-              for (final i in items)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '${day(i.etkiliSonGun)}  ',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: AgendaColors.deadlineText,
-                          ),
-                        ),
-                        TextSpan(
-                          text: '${i.sureAdi} · ${i.kanun} · ${i.sureMetni}',
-                        ),
-                        if (i.dayanakNotlari.isNotEmpty)
-                          TextSpan(
-                            text: '\n${i.dayanakNotlari.join(' ')}',
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              color: AgendaColors.muted,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Vazgeç'),
-        ),
-        FilledButton(
-          key: const ValueKey('manual-save'),
-          onPressed: items.isEmpty
-              ? null
-              : () => Navigator.of(context).pop([
-                  for (final i in items)
-                    AgendaItem(
-                      id: 'own:uets:${widget.notice.message.id}:${i.sureAdi}:${i.etkiliSonGun.toIso8601String().substring(0, 10)}',
-                      kind: 'deadline',
-                      title: i.sureAdi,
-                      body: '${i.kanun} · elle hesaplandı (UETS)',
-                      at: i.etkiliSonGun,
-                      allDay: true,
-                      caseKey: widget.notice.caseKey,
-                      updated: DateTime.now(),
-                    ),
-                ]),
-          child: const Text('Ajandaya ekle'),
         ),
       ],
     );

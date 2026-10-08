@@ -70,6 +70,7 @@ class DeadlineReviewTile extends StatelessWidget {
     this.subtitle,
     this.onOpenCase,
     this.onOpenNotice,
+    this.onChange,
   });
 
   final KeptDeadline deadline;
@@ -86,6 +87,10 @@ class DeadlineReviewTile extends StatelessWidget {
 
   /// Goes to its notice on the UETS page.
   final VoidCallback? onOpenNotice;
+
+  /// Another deadline in its place, chosen by the lawyer; null where it
+  /// cannot be changed from here.
+  final VoidCallback? onChange;
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +188,12 @@ class DeadlineReviewTile extends StatelessWidget {
                     key: ValueKey('review-confirm-${r.id}'),
                     onPressed: onConfirm,
                     child: const Text('Onayla'),
+                  ),
+                if (onChange != null)
+                  TextButton(
+                    key: ValueKey('review-change-${r.id}'),
+                    onPressed: onChange,
+                    child: const Text('Süreyi değiştir'),
                   ),
                 TextButton(
                   key: ValueKey('review-day-${r.id}'),

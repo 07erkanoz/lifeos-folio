@@ -188,6 +188,18 @@ const sCevapHmk127 = YasalSure(
   birim: SureBirimi.hafta,
   kanunMaddesi: 'HMK m.127',
 );
+/// HMK m.394/1: the other side's objection to an interim injunction given
+/// without hearing it, in a week from its enforcement, or from its service
+/// when not present then. Not chosen from a document's kind: the lawyer
+/// picks it for a notice (an interim decision is no kind with a time).
+const sTedbirItiraz = YasalSure(
+  ad: 'İhtiyati tedbire itiraz',
+  miktar: 1,
+  birim: SureBirimi.hafta,
+  kanunMaddesi: 'HMK m.394',
+  guvenNotu:
+      'Tedbir uygulanırken hazır bulunduysanız süre uygulamadan başlar.',
+);
 const sBilirkisiRaporu = YasalSure(
   ad: 'Bilirkişi raporuna itiraz',
   miktar: 2,
