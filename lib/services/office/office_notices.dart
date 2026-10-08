@@ -12,6 +12,8 @@ import '../security/app_lock.dart';
 import 'office_chat.dart';
 import 'office_network.dart';
 import 'office_task.dart';
+import 'task_hearings.dart';
+import '../portal/portal_database.dart';
 
 /// The office's words as the system's notifications (docs/buro.md,
 /// Bildirimler): a message, a task's step, a device asking to be known and
@@ -76,6 +78,11 @@ void tellOffice(OfficeNetwork net, {SystemNotices? notices, AppLock? lock}) {
         '${t.title}: ${e.text}',
       ),
       TaskEventKind.message => ('${e.byName} · ${t.title}', e.text),
+      // Told to those it is given to; the giver moved it, and knows.
+      TaskEventKind.dueMoved when t.by != net.me => (
+        'Görevin son günü değişti',
+        '${t.title}: ${e.text.split('-').reversed.join('.')}',
+      ),
       TaskEventKind.progress => (
         'Görevde ilerleme',
         '${t.title}: %${e.percent ?? t.percent}',
@@ -86,20 +93,30 @@ void tellOffice(OfficeNetwork net, {SystemNotices? notices, AppLock? lock}) {
     show('g${e.id}', title, body, 'gorev:${t.id}', 'Görevde yeni bir hareket');
   };
 
-  TaskReminders.instance.start(net, (t, d) {
-    final when = d < 0
-        ? '${-d} gün gecikti'
-        : d == 0
-        ? 'bugün son gün'
-        : '$d gün kaldı';
-    show(
-      'h${t.id}$d${DateTime.now().day}',
-      'Görev: $when',
-      t.title,
-      'gorev:${t.id}',
-      'Görevin son günü yaklaşıyor',
-    );
-  });
+  TaskReminders.instance.start(
+    net,
+    (t, d) {
+      final when = d < 0
+          ? '${-d} gün gecikti'
+          : d == 0
+          ? 'bugün son gün'
+          : '$d gün kaldı';
+      show(
+        'h${t.id}$d${DateTime.now().day}',
+        'Görev: $when',
+        t.title,
+        'gorev:${t.id}',
+        'Görevin son günü yaklaşıyor',
+      );
+    },
+    moved: (m) => show(
+      'd${m.task.id}${m.next?.key ?? ''}',
+      m.next == null ? 'Duruşma kaldırıldı' : 'Duruşma ertelendi',
+      '${m.task.title}: son gün sorulmayı bekliyor.',
+      'gorev:${m.task.id}',
+      'Bir görevin duruşması değişti',
+    ),
+  );
 
   net.incoming.addListener(() {
     final p = net.incoming.value;
@@ -220,18 +237,37 @@ class TaskReminders {
   /// Checks now and every hour while Folio runs.
   void start(
     OfficeNetwork net,
-    void Function(OfficeTask t, int daysLeft) tell,
-  ) {
+    void Function(OfficeTask t, int daysLeft) tell, {
+    void Function(HearingMove move)? moved,
+  }) {
     _timer?.cancel();
     Future<void> check() async {
       await load();
       final me = net.self == null ? null : net.me;
       if (me == null) return;
       final todo = due(net.tasks.all, me, DateTime.now());
-      if (todo.isEmpty) return;
+      // A hearing a given task's due day goes by moved: the giver told
+      // once of each, the Görevler page asking what to do.
+      final moves = <HearingMove>[];
+      if (moved != null) {
+        try {
+          for (final m in hearingMoves(
+            net.tasks.all,
+            me,
+            await PortalDatabase.shared(),
+            DateTime.now(),
+          )) {
+            if (_sent.add('d|${m.task.id}|${m.next?.key ?? ''}')) moves.add(m);
+          }
+        } catch (_) {}
+      }
+      if (todo.isEmpty && moves.isEmpty) return;
       await _save();
       for (final (t, d) in todo) {
         tell(t, d);
+      }
+      for (final m in moves) {
+        moved?.call(m);
       }
     }
 

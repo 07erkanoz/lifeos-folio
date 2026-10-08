@@ -1133,6 +1133,7 @@ class OfficeNetwork extends ChangeNotifier {
     TaskPriority priority = TaskPriority.normal,
     List<TaskCase> cases = const [],
     Map<String, TaskPackage> packed = const {},
+    TaskHearing? hearing,
   }) async {
     final self = _self;
     if (self == null) return 'Önce büro ağına katılın.';
@@ -1160,6 +1161,7 @@ class OfficeNetwork extends ChangeNotifier {
       priority: priority,
       cases: cases,
       supervisor: trainee ? self.name : '',
+      hearing: hearing,
     );
     task.events.add(
       await _sign(

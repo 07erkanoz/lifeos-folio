@@ -351,7 +351,7 @@ class _AgendaPageState extends State<AgendaPage> {
     if (me.isEmpty) return const [];
     return [
       for (final t in net.tasks.all)
-        if (t.due != null &&
+        if (t.dueDay != null &&
             t.open &&
             (t.assignees.containsKey(me) || t.by == me))
           AgendaItem(
@@ -363,7 +363,7 @@ class _AgendaPageState extends State<AgendaPage> {
                 '${t.cases.first.number} · ${t.cases.first.court}',
               '${t.byName} → ${t.assignees.values.join(', ')}',
             ].join('\n'),
-            at: DateTime(t.due!.year, t.due!.month, t.due!.day, 9),
+            at: DateTime(t.dueDay!.year, t.dueDay!.month, t.dueDay!.day, 9),
             allDay: true,
             updated: t.createdAt,
           ),

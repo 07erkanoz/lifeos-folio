@@ -120,6 +120,50 @@ enum TaskEventKind {
   approved,
   returned,
   cancelled,
+
+  /// The giver moved the due day: [TaskEvent.text] is the new day
+  /// ('yyyy-mm-dd'), [TaskEvent.itemId] the hearing it now goes by, if
+  /// any. Asked when a hearing the day goes by is moved; never by itself.
+  dueMoved,
+}
+
+/// A due day that goes by a hearing: [daysBefore] days before the hearing
+/// [hearingKey] of [caseKey], which was at [at] when the task was given.
+class TaskHearing {
+  const TaskHearing({
+    required this.hearingKey,
+    required this.caseKey,
+    required this.at,
+    required this.daysBefore,
+  });
+
+  final String hearingKey, caseKey;
+  final DateTime at;
+  final int daysBefore;
+
+  /// The due day it gives for a hearing at [hearing].
+  static DateTime dueFor(DateTime hearing, int daysBefore) =>
+      DateTime(hearing.year, hearing.month, hearing.day - daysBefore);
+
+  Map<String, Object?> toJson() => {
+    'anahtar': hearingKey,
+    'dosya': caseKey,
+    'tarih': at.toIso8601String(),
+    'gun': daysBefore,
+  };
+
+  static TaskHearing? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final at = DateTime.tryParse('${j['tarih']}');
+    final days = j['gun'];
+    if (at == null || days is! int || j['anahtar'] is! String) return null;
+    return TaskHearing(
+      hearingKey: j['anahtar'] as String,
+      caseKey: '${j['dosya'] ?? ''}',
+      at: at,
+      daysBefore: days,
+    );
+  }
 }
 
 /// Something that happened in a task: who, what, when, with what words
@@ -265,6 +309,7 @@ class OfficeTask {
     this.priority = TaskPriority.normal,
     this.cases = const [],
     this.supervisor = '',
+    this.hearing,
     List<TaskEvent>? events,
   }) : events = events ?? [];
 
@@ -279,6 +324,30 @@ class OfficeTask {
 
   /// The lawyer who supervises a trainee's part (Av. K. m. 26).
   final String supervisor;
+
+  /// The hearing the due day was given by, if it was ("duruşmadan 7 gün
+  /// önce").
+  final TaskHearing? hearing;
+
+  /// The giver's last moving of the due day, if any.
+  TaskEvent? get _moved {
+    TaskEvent? last;
+    for (final e in timeline) {
+      if (e.kind == TaskEventKind.dueMoved) last = e;
+    }
+    return last;
+  }
+
+  /// The due day as it stands: the giver's last move of it, else the one
+  /// given.
+  DateTime? get dueDay {
+    final m = _moved;
+    return m == null ? due : DateTime.tryParse(m.text) ?? due;
+  }
+
+  /// The hearing the due day goes by now: the one the giver last moved it
+  /// to, else the one it was given by.
+  String? get hearingKey => _moved?.itemId ?? hearing?.hearingKey;
   final List<TaskEvent> events;
 
   /// Whom it concerns: the giver and those it is given to.
@@ -341,7 +410,7 @@ class OfficeTask {
 
   /// Days left to the due day: negative when late, null when none is set.
   int? daysLeft(DateTime now) {
-    final d = due;
+    final d = dueDay;
     if (d == null) return null;
     return DateTime(
       d.year,
@@ -370,6 +439,7 @@ class OfficeTask {
     'oncelik': priority.name,
     'dosyalar': [for (final c in cases) c.toJson()],
     if (supervisor.isNotEmpty) 'gozetim': supervisor,
+    if (hearing != null) 'durusma': hearing!.toJson(),
     'olaylar': [for (final e in events) e.toJson()],
   };
 
@@ -399,6 +469,7 @@ class OfficeTask {
           if (c is Map) TaskCase.fromJson(c),
       ],
       supervisor: '${j['gozetim'] ?? ''}',
+      hearing: TaskHearing.fromJson(j['durusma']),
       events: [
         for (final e in (j['olaylar'] as List? ?? const []))
           ?TaskEvent.fromJson(e),
@@ -418,7 +489,8 @@ bool mayDo(OfficeTask task, TaskEventKind kind, String who) {
     TaskEventKind.given ||
     TaskEventKind.approved ||
     TaskEventKind.returned ||
-    TaskEventKind.cancelled => giver,
+    TaskEventKind.cancelled ||
+    TaskEventKind.dueMoved => giver,
     TaskEventKind.accepted ||
     TaskEventKind.progress ||
     TaskEventKind.delivered ||

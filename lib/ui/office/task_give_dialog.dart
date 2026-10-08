@@ -61,6 +61,16 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
   final _cases = <_Draft>[];
   DateTime? _due;
 
+  /// The due day given by a case's hearing: which case's, and how many
+  /// days before it; null for a day of its own.
+  ({String caseKey, int days})? _byHearing;
+
+  /// The cases with a hearing still to come, for "duruşmaya göre".
+  List<_Draft> get _withHearing => [
+    for (final c in _cases)
+      if (c.row.hearing case final h? when h.at.isAfter(DateTime.now())) c,
+  ];
+
   /// The rest of a task, asked for only when wanted.
   bool _more = false;
   TaskPriority _priority = TaskPriority.normal;
@@ -170,7 +180,12 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: now.add(const Duration(days: 730)),
     );
-    if (day != null) setState(() => _due = day);
+    if (day != null) {
+      setState(() {
+        _byHearing = null;
+        _due = day;
+      });
+    }
   }
 
   String? _packing;
@@ -248,6 +263,22 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
       priority: _priority,
       cases: cases,
       packed: packed,
+      hearing: switch (_byHearing) {
+        final b? => switch (_cases
+            .where((c) => c.row.key == b.caseKey)
+            .firstOrNull
+            ?.row
+            .hearing) {
+          final h? => TaskHearing(
+            hearingKey: h.key,
+            caseKey: b.caseKey,
+            at: h.at,
+            daysBefore: b.days,
+          ),
+          null => null,
+        },
+        null => null,
+      },
     );
     if (!mounted) return;
     if (error != null) {
@@ -332,15 +363,18 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                     ChoiceChip(
                       key: ValueKey('task-due-$days'),
                       label: Text(text),
-                      selected: _due == _dayAfter(days),
-                      onSelected: (on) =>
-                          setState(() => _due = on ? _dayAfter(days) : null),
+                      selected: _byHearing == null && _due == _dayAfter(days),
+                      onSelected: (on) => setState(() {
+                        _byHearing = null;
+                        _due = on ? _dayAfter(days) : null;
+                      }),
                     ),
                   ActionChip(
                     key: const ValueKey('task-due'),
                     avatar: const Icon(Icons.event_rounded, size: 16),
                     label: Text(
                       _due == null ||
+                              _byHearing != null ||
                               _quickDays.any((q) => _dayAfter(q.$1) == _due)
                           ? 'Tarih seç'
                           : dayText(_due!),
@@ -349,6 +383,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                   ),
                 ],
               ),
+              if (_withHearing.isNotEmpty) ..._hearingDue(context),
               if (_cases.isNotEmpty) ...[
                 label('DOSYALAR VE İŞLER'),
                 for (final c in _cases) _caseCard(context, c),
@@ -438,6 +473,94 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
       ),
     ),
   );
+
+  /// "Duruşmaya göre": the hearing (chosen among the cases' when more
+  /// than one has one) and how many days before it the work is due.
+  List<Widget> _hearingDue(BuildContext context) {
+    final cases = _withHearing;
+    final chosen =
+        cases.where((c) => c.row.key == _byHearing?.caseKey).firstOrNull ??
+        cases.first;
+    final h = chosen.row.hearing!;
+    String two(int v) => v.toString().padLeft(2, '0');
+    final at =
+        '${two(h.at.day)}.${two(h.at.month)}.${h.at.year} '
+        '${two(h.at.hour)}:${two(h.at.minute)}';
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 6),
+        child: Text(
+          'DURUŞMAYA GÖRE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: .6,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+      if (cases.length > 1)
+        DropdownButton<String>(
+          key: const ValueKey('task-hearing-case'),
+          isExpanded: true,
+          value: chosen.row.key,
+          items: [
+            for (final c in cases)
+              DropdownMenuItem(
+                value: c.row.key,
+                child: Text(
+                  '${c.row.kase.number} · ${c.row.kase.court}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: (key) => setState(() {
+            if (key == null) return;
+            final days = _byHearing?.days;
+            _byHearing = days == null ? null : (caseKey: key, days: days);
+            final row = cases.firstWhere((c) => c.row.key == key).row;
+            if (days != null) _due = TaskHearing.dueFor(row.hearing!.at, days);
+          }),
+        ),
+      Text(
+        'Duruşma: $at · ${chosen.row.kase.court} · ${chosen.row.kase.number}',
+        key: const ValueKey('task-hearing'),
+        style: const TextStyle(fontSize: 12.5),
+      ),
+      const SizedBox(height: 6),
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final days in const [1, 3, 7, 14])
+            if (!TaskHearing.dueFor(h.at, days).isBefore(_dayAfter(0)))
+              ChoiceChip(
+                key: ValueKey('task-hearing-$days'),
+                label: Text('$days gün önce'),
+                selected:
+                    _byHearing?.days == days &&
+                    _byHearing?.caseKey == chosen.row.key,
+                onSelected: (on) => setState(() {
+                  _byHearing = on
+                      ? (caseKey: chosen.row.key, days: days)
+                      : null;
+                  _due = on ? TaskHearing.dueFor(h.at, days) : null;
+                }),
+              ),
+        ],
+      ),
+      if (_byHearing != null && _due != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            'Son gün: ${dayText(_due!)} · duruşmadan ${_byHearing!.days} gün '
+            'önce. Duruşma ertelenirse size sorulur.',
+            key: const ValueKey('task-hearing-due'),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF1B6B3A)),
+          ),
+        ),
+    ];
+  }
 
   static const _quickDays = [
     (0, 'Bugün'),

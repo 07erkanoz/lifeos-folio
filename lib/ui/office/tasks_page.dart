@@ -7,6 +7,9 @@ import 'package:path/path.dart' as p;
 import '../../services/office/office_network.dart';
 import '../../services/office/office_notices.dart' show TaskReminders;
 import '../../services/office/office_task.dart';
+import '../../services/office/task_hearings.dart';
+import '../../services/portal/portal_database.dart';
+import '../../services/portal/portal_sync.dart';
 import '../../services/platform/file_actions.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
@@ -18,11 +21,14 @@ enum _View { all, given, mine, load }
 (String, Color) dueOf(OfficeTask t, DateTime now) {
   final d = t.daysLeft(now);
   if (d == null) return ('son gün yok', AgendaColors.muted);
-  if (!t.open) return ('son gün ${dayText(t.due!)}', AgendaColors.muted);
+  if (!t.open) return ('son gün ${dayText(t.dueDay!)}', AgendaColors.muted);
   if (d < 0) return ('${-d} gün gecikti', AgendaColors.deadline);
   if (d == 0) return ('bugün son gün', AgendaColors.task);
   if (d <= 3) return ('$d gün kaldı', AgendaColors.task);
-  return ('son gün ${dayText(t.due!)} · $d gün', AgendaColors.muted);
+  final before = t.hearing == null
+      ? ''
+      : ' · duruşmadan ${t.hearing!.daysBefore} gün önce';
+  return ('son gün ${dayText(t.dueDay!)} · $d gün$before', AgendaColors.muted);
 }
 
 Color _stageInk(TaskStage s) => switch (s) {
@@ -49,9 +55,13 @@ Widget _tag(String text, Color ink) => Container(
 /// columns by their stage, each with its due day, how far along it is and
 /// its last word.
 class TasksPage extends StatefulWidget {
-  const TasksPage({super.key, this.network, this.now});
+  const TasksPage({super.key, this.network, this.now, this.database});
   final OfficeNetwork? network;
   final DateTime Function()? now;
+
+  /// Where the hearings are read from, for a due day that goes by one; the
+  /// app's own unless a test passes one.
+  final PortalDatabase? database;
 
   @override
   State<TasksPage> createState() => _TasksPageState();
@@ -61,6 +71,103 @@ class _TasksPageState extends State<TasksPage> {
   OfficeNetwork get _net => widget.network ?? OfficeNetwork.instance;
   _View? _view;
   TaskStage? _stage;
+  PortalDatabase? _db;
+
+  @override
+  void initState() {
+    super.initState();
+    PortalSync.started?.addListener(_hearingsChanged);
+    () async {
+      try {
+        final db = widget.database ?? await PortalDatabase.shared();
+        if (mounted) setState(() => _db = db);
+      } catch (_) {
+        // No hearings to read: no due day is asked about.
+      }
+    }();
+  }
+
+  @override
+  void dispose() {
+    PortalSync.started?.removeListener(_hearingsChanged);
+    super.dispose();
+  }
+
+  /// A sync may have moved a hearing a task's due day goes by.
+  void _hearingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// "Duruşma ertelendi": the giver asked to move the due day, or keep it.
+  Widget _move(BuildContext context, HearingMove m) {
+    final t = m.task;
+    final next = m.next;
+    final due = m.due;
+    final c = t.cases.where((c) => c.caseKey == t.hearing!.caseKey).firstOrNull;
+    return Container(
+      key: ValueKey('task-hearing-move-${t.id}'),
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: const Color(0xFFF2D59B)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            next == null
+                ? 'Duruşma kaldırıldı${c == null ? '' : ': ${c.number}'}'
+                : 'Duruşma ertelendi${c == null ? '' : ': ${c.number}'}',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '“${t.title}” görevinin son günü duruşmadan '
+            '${t.hearing!.daysBefore} gün önceye bağlıydı. '
+            '${next == null ? 'Dosyanın ileri tarihli bir duruşması yok; son gün olduğu gibi kalır.' : 'Duruşma ${dayText(next.at)} tarihine alındı. Son gün ${dayText(t.dueDay!)} yerine ${dayText(due!)} olsun mu?'}',
+            style: const TextStyle(fontSize: 12.5, height: 1.4),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              if (next != null && due != null)
+                FilledButton(
+                  key: ValueKey('task-hearing-move-go-${t.id}'),
+                  onPressed: () => unawaited(
+                    _net.act(
+                      t,
+                      TaskEventKind.dueMoved,
+                      text: _ymd(due),
+                      itemId: next.key,
+                    ),
+                  ),
+                  child: Text('Kaydır (${dayText(due)})'),
+                ),
+              TextButton(
+                key: ValueKey('task-hearing-move-keep-${t.id}'),
+                onPressed: () => unawaited(
+                  _net.act(
+                    t,
+                    TaskEventKind.dueMoved,
+                    text: _ymd(t.dueDay!),
+                    itemId: next?.key ?? 'yok',
+                  ),
+                ),
+                child: Text(next == null ? 'Tamam' : 'Eski günde kalsın'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _ymd(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +247,9 @@ class _TasksPageState extends State<TasksPage> {
                       ],
                     ),
                   ),
+                  if (_net.ledger.exists && _db != null)
+                    for (final m in hearingMoves(_net.tasks.all, me, _db!, now))
+                      _move(context, m),
                   Expanded(
                     child: !_net.ledger.exists
                         ? const Center(
@@ -687,7 +797,7 @@ class _TaskDetailState extends State<TaskDetail> {
         ],
         if (doer &&
             t.open &&
-            t.due != null &&
+            t.dueDay != null &&
             !TaskReminders.instance.seen(t.id))
           TextButton(
             key: const ValueKey('task-seen'),
@@ -1025,6 +1135,8 @@ class _TaskDetailState extends State<TaskDetail> {
       TaskEventKind.approved => 'onayladı',
       TaskEventKind.returned => 'geri gönderdi',
       TaskEventKind.cancelled => 'iptal etti',
+      TaskEventKind.dueMoved =>
+        'son günü ${DateTime.tryParse(e.text) == null ? 'değiştirdi' : '${dayText(DateTime.parse(e.text))} yaptı'}',
       TaskEventKind.message => '',
     };
     return Padding(

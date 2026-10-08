@@ -1,7 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:evrak_convert/services/office/office_notices.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
+import 'package:evrak_convert/services/office/task_hearings.dart';
+import 'package:evrak_convert/services/portal/portal_channel.dart';
+import 'package:evrak_convert/services/portal/portal_database.dart';
+import 'package:evrak_convert/services/portal/portal_hearing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 OfficeTask task({DateTime? due, List<TaskCase> cases = const []}) => OfficeTask(
@@ -157,5 +162,102 @@ void main() {
     expect(on(DateTime(2026, 10, 22)), isEmpty);
     // Not given to them: nothing.
     expect(r.due([t], 'giver', DateTime(2026, 10, 20)), isEmpty);
+  });
+
+  group('a due day that goes by a hearing', () {
+    final hearingAt = DateTime(2026, 11, 12, 10, 30);
+    OfficeTask byHearing() =>
+        OfficeTask(
+            id: 't2',
+            title: 'Bilirkişi raporuna beyan',
+            by: 'giver',
+            byName: 'Av. Deniz Kaya',
+            assignees: const {'doer': 'Stj. Av. Mert Yıldız'},
+            createdAt: DateTime(2026, 10, 8),
+            due: TaskHearing.dueFor(hearingAt, 7),
+            hearing: TaskHearing(
+              hearingKey: 'h1',
+              caseKey: 'k',
+              at: hearingAt,
+              daysBefore: 7,
+            ),
+          )
+          ..events.add(
+            TaskEvent.create(TaskEventKind.given, 'giver', 'Av. Deniz Kaya'),
+          );
+
+    test('given as days before, kept with what was given, moved only by '
+        'the giver', () {
+      final t = byHearing();
+      expect(t.dueDay, DateTime(2026, 11, 5));
+      final back = OfficeTask.fromJson(jsonDecode(jsonEncode(t.toJson())))!;
+      expect(back.hearing!.daysBefore, 7);
+      expect(back.hearingKey, 'h1');
+      expect(t.terms, contains('durusma'));
+      expect(mayDo(t, TaskEventKind.dueMoved, 'giver'), isTrue);
+      expect(mayDo(t, TaskEventKind.dueMoved, 'doer'), isFalse);
+      t.events.add(
+        TaskEvent(
+          id: 'm',
+          kind: TaskEventKind.dueMoved,
+          by: 'giver',
+          byName: 'Av. Deniz Kaya',
+          at: DateTime(2026, 10, 9),
+          text: '2026-12-03',
+          itemId: 'h2',
+        ),
+      );
+      expect(t.dueDay, DateTime(2026, 12, 3));
+      expect(t.hearingKey, 'h2');
+    });
+
+    test('a hearing gone is asked about, with the next one; answered, not '
+        'again; none to come, the day stays', () {
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      PortalHearing hearing(String key, DateTime at) => PortalHearing(
+        key: key,
+        caseKey: 'k',
+        number: '2025/412',
+        court: 'Antalya 3. Asliye Hukuk Mahkemesi',
+        at: at,
+      );
+      final now = DateTime(2026, 10, 10);
+      final t = byHearing();
+      db.mergeHearings(
+        PortalChannel.uyapWeb,
+        DateTime(2026, 10, 1),
+        DateTime(2027, 1, 1),
+        [hearing('h1', hearingAt)],
+        complete: true,
+      );
+      expect(hearingMoves([t], 'giver', db, now), isEmpty);
+      // Moved: UYAP lists another time, the old one goes.
+      db.mergeHearings(
+        PortalChannel.uyapWeb,
+        DateTime(2026, 10, 1),
+        DateTime(2027, 1, 1),
+        [hearing('h2', DateTime(2026, 12, 10, 10, 30))],
+        complete: true,
+      );
+      final m = hearingMoves([t], 'giver', db, now).single;
+      expect(m.next!.key, 'h2');
+      expect(m.due, DateTime(2026, 12, 3));
+      // Not the doer's to answer.
+      expect(hearingMoves([t], 'doer', db, now), isEmpty);
+      t.events.add(
+        TaskEvent(
+          id: 'keep',
+          kind: TaskEventKind.dueMoved,
+          by: 'giver',
+          byName: 'Av. Deniz Kaya',
+          at: DateTime(2026, 10, 10),
+          text: '2026-11-05',
+          itemId: 'h2',
+        ),
+      );
+      expect(hearingMoves([t], 'giver', db, now), isEmpty);
+      expect(t.dueDay, DateTime(2026, 11, 5));
+    });
   });
 }

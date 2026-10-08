@@ -36,6 +36,8 @@ import 'package:evrak_convert/services/sync/folder_sync.dart';
 import 'package:evrak_convert/ui/office/qr_pairing.dart';
 import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
+import 'package:evrak_convert/services/portal/portal_hearing.dart';
+import 'package:evrak_convert/ui/portfolio/portfolio_rows.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/portal/uyap_notice.dart';
@@ -528,6 +530,25 @@ void main() {
           ),
         ],
       );
+      // A due day by a hearing, the hearing since moved.
+      await a.giveTask(
+        title: 'Bilirkişi raporuna beyan',
+        to: [b.self!.deviceId],
+        due: DateTime(2026, 11, 5),
+        hearing: TaskHearing(
+          hearingKey: 'eski-durusma',
+          caseKey: caseKey('2025/412', 'Antalya 3. Asliye Hukuk Mahkemesi'),
+          at: DateTime(2026, 11, 12, 10, 30),
+          daysBefore: 7,
+        ),
+        cases: [
+          TaskCase(
+            caseKey: caseKey('2025/412', 'Antalya 3. Asliye Hukuk Mahkemesi'),
+            number: '2025/412',
+            court: 'Antalya 3. Asliye Hukuk Mahkemesi',
+          ),
+        ],
+      );
       await a.giveTask(
         title: 'Haciz ihbarnamesine itiraz',
         to: [b.self!.deviceId],
@@ -560,7 +581,26 @@ void main() {
       }
       shown = a.tasks.all.firstWhere((t) => t.title.startsWith('Bilirkişi'));
     });
-    await tester.pumpWidget(_app(Scaffold(body: TasksPage(network: a))));
+    final hearings = PortalDatabase.memory();
+    addTearDown(hearings.dispose);
+    hearings.mergeHearings(
+      PortalChannel.uyapWeb,
+      DateTime(2026, 10, 1),
+      DateTime(2027, 2, 1),
+      [
+        PortalHearing(
+          key: 'yeni-durusma',
+          caseKey: caseKey('2025/412', 'Antalya 3. Asliye Hukuk Mahkemesi'),
+          number: '2025/412',
+          court: 'Antalya 3. Asliye Hukuk Mahkemesi',
+          at: DateTime(2026, 12, 10, 10, 30),
+        ),
+      ],
+      complete: true,
+    );
+    await tester.pumpWidget(
+      _app(Scaffold(body: TasksPage(network: a, database: hearings))),
+    );
     await tester.pump();
     await _shot(tester, 'gorevler');
     await tester.tap(find.byKey(const ValueKey('tasks-view-load')));
@@ -602,6 +642,39 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('task-more')));
     await tester.pump();
     await _shot(tester, 'gorev-ver-ayrinti');
+    // A case with a hearing to come: "duruşmaya göre".
+    final withHearing = PortfolioRow(
+      kase: PortalCase.create(
+        number: '2025/412',
+        court: 'Antalya 3. Asliye Hukuk Mahkemesi',
+      ),
+      state: const CaseState(),
+      hearing: PortalHearing(
+        key: 'h',
+        caseKey: caseKey('2025/412', 'Antalya 3. Asliye Hukuk Mahkemesi'),
+        number: '2025/412',
+        court: 'Antalya 3. Asliye Hukuk Mahkemesi',
+        at: DateTime.now().add(const Duration(days: 35)),
+      ),
+      ours: const [],
+      others: const [],
+    );
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: TaskGiveDialog(
+            network: a,
+            rows: [withHearing],
+            initialCaseKey: withHearing.key,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('task-hearing-7')));
+    await tester.pump();
+    await _shot(tester, 'gorev-ver-durusma');
     tester.view.physicalSize = logical * pixelRatio;
     late String chatId;
     await tester.runAsync(() async {
@@ -994,6 +1067,8 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
     await _shot(tester, 'genel-arama-telefon');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 300));
   });
 }
 
