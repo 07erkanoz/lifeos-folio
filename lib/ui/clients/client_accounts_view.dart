@@ -22,7 +22,11 @@ class ClientAccountsView extends StatelessWidget {
     required this.onFee,
     required this.onReverse,
     this.onOpen,
+    this.onStatement,
   });
+
+  /// A case's statement, to give the client.
+  final void Function(String caseKey)? onStatement;
 
   /// A movement's receipt seen, printed or shared.
   final void Function(ClientRecord movement)? onOpen;
@@ -117,10 +121,20 @@ class ClientAccountsView extends StatelessWidget {
             subtitle: a.fee?.text('not').isNotEmpty ?? false
                 ? Text(a.fee!.text('not'))
                 : null,
-            trailing: TextButton(
-              key: ValueKey('fee-$key'),
-              onPressed: () => onFee(key, a.fee),
-              child: Text(a.fee == null ? 'Anlaşma ekle' : 'Değiştir'),
+            trailing: Wrap(
+              children: [
+                if (onStatement != null && a.movements.isNotEmpty)
+                  TextButton(
+                    key: ValueKey('statement-$key'),
+                    onPressed: () => onStatement!(key),
+                    child: const Text('Döküm'),
+                  ),
+                TextButton(
+                  key: ValueKey('fee-$key'),
+                  onPressed: () => onFee(key, a.fee),
+                  child: Text(a.fee == null ? 'Anlaşma ekle' : 'Değiştir'),
+                ),
+              ],
             ),
           ),
           for (final t in instalments)

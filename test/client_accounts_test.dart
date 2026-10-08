@@ -5,6 +5,9 @@ import 'dart:io';
 import 'package:evrak_convert/services/clients/client_accounts.dart';
 import 'package:evrak_convert/services/clients/client_file_sync.dart';
 import 'package:evrak_convert/services/clients/client_files.dart';
+import 'package:evrak_convert/services/clients/client_statement_pdf.dart';
+import 'package:evrak_convert/services/clients/fee_reminders.dart';
+import 'package:flutter/services.dart' show ByteData;
 import 'package:evrak_convert/ui/clients/attachment_preview.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -244,4 +247,55 @@ void main() {
     );
     expect(await attachmentPdf(there), there.readAsBytesSync());
   });
+
+  test('an instalment is told three days before, on its day and late, '
+      'each once; one paid is not told', () {
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    db.saveClient(
+      Client(id: 'k1', name: 'Ayşe Karaca', updated: DateTime(2026)),
+    );
+    db.saveClientRecord(
+      fee('a', 30000, [
+        (DateTime(2026, 9, 1), 15000),
+        (DateTime(2026, 10, 11), 15000),
+      ]),
+    );
+    final r = FeeReminders(
+      file: () async => File('${Directory.systemTemp.path}/yok-hatirlatma'),
+    );
+    final first = r.due(db, DateTime(2026, 10, 8, 9));
+    expect(first.map((t) => t.daysLeft), [3]);
+    expect(r.due(db, DateTime(2026, 10, 8, 15)), isEmpty);
+    expect(r.due(db, DateTime(2026, 10, 11)).map((t) => t.daysLeft), [0]);
+    expect(r.due(db, DateTime(2026, 10, 12)).map((t) => t.daysLeft), [-1]);
+    // The first paid: the second is still owed, nothing else told.
+    db.saveClientRecord(move('p1', 'a', MovementKind.feePaid, 15000));
+    expect(FeeReminders.open(db, DateTime(2026, 10, 12)).map((t) => t.due), [
+      DateTime(2026, 10, 11),
+    ]);
+  });
+
+  test(
+    'the statement prints each case\'s movements and what is owed',
+    () async {
+      ByteData font(String style) => ByteData.sublistView(
+        File('fonts/pdf/LiberationSerif-$style.ttf').readAsBytesSync(),
+      );
+      final bytes = await clientStatementPdf(
+        client: Client(id: 'k1', name: 'Ayşe Karaca', updated: DateTime(2026)),
+        records: [
+          fee('a', 45000, [(DateTime(2026, 3, 12), 45000)]),
+          move('1', 'a', MovementKind.feePaid, 15000),
+          move('2', 'a', MovementKind.feePaid, 10, reverses: '1'),
+        ],
+        cases: const {'a': '2024/318 · Antalya 3. Asliye Hukuk'},
+        lawyer: 'Av. Deniz Kaya',
+        now: DateTime(2026, 10, 8),
+        regular: font('Regular'),
+        bold: font('Bold'),
+      );
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    },
+  );
 }

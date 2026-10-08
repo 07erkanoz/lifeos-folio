@@ -14,6 +14,8 @@ import 'office_network.dart';
 import 'office_task.dart';
 import 'task_hearings.dart';
 import '../portal/portal_database.dart';
+import '../clients/client_accounts.dart' show lira;
+import '../clients/fee_reminders.dart';
 
 /// The office's words as the system's notifications (docs/buro.md,
 /// Bildirimler): a message, a task's step, a device asking to be known and
@@ -115,6 +117,23 @@ void tellOffice(OfficeNetwork net, {SystemNotices? notices, AppLock? lock}) {
       '${m.task.title}: son gün sorulmayı bekliyor.',
       'gorev:${m.task.id}',
       'Bir görevin duruşması değişti',
+    ),
+  );
+
+  // A client's fee instalment coming or late, to one who sees the money;
+  // locked, not whose or how much.
+  FeeReminders.instance.start(
+    () => net.seesMoney,
+    (t) => show(
+      'u${t.client.id}${t.caseKey}${t.due.day}${t.daysLeft}',
+      t.daysLeft < 0
+          ? 'Taksit ${-t.daysLeft} gün gecikti'
+          : t.daysLeft == 0
+          ? 'Bugün taksit günü'
+          : '${t.daysLeft} gün sonra taksit',
+      '${t.client.name}: ${lira(t.amount)}',
+      'muvekkil:${t.client.id}',
+      'Bir taksit hatırlatması',
     ),
   );
 

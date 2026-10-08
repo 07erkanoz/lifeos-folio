@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
 import '../../services/clients/client_files.dart';
+import '../../services/clients/client_statement_pdf.dart';
+import '../../services/clients/fee_reminders.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/platform/document_scan.dart';
 import '../../services/portal/portal_hearing.dart';
@@ -91,6 +93,10 @@ class _ClientsPageState extends State<ClientsPage> {
   PortalDatabase? _db;
   List<ClientEntry> _entries = const [];
   String _query = '';
+
+  /// The clients whose instalments are late, by card id: how many.
+  Map<String, int> _late = const {};
+  bool _onlyLate = false;
   String? _selected;
 
   @override
@@ -102,14 +108,32 @@ class _ClientsPageState extends State<ClientsPage> {
   Future<void> _load() async {
     final db = _db ??= widget.database ?? await PortalDatabase.shared();
     if (!mounted) return;
-    setState(() => _entries = db.clientEntries(lawyer: widget.lawyer));
+    final late = <String, int>{};
+    if (widget.seesMoney) {
+      for (final t in FeeReminders.open(db, DateTime.now())) {
+        if (t.daysLeft < 0) late[t.client.id] = (late[t.client.id] ?? 0) + 1;
+      }
+    }
+    setState(() {
+      _entries = db.clientEntries(lawyer: widget.lawyer);
+      _late = late;
+    });
   }
+
+  int _lateOf(ClientEntry e) =>
+      [for (final id in e.ids) _late[id] ?? 0].fold(0, (a, b) => a + b);
 
   List<ClientEntry> get _shown {
     final q = UyapWebService.fold(_query.trim());
-    if (q.isEmpty) return _entries;
+    final base = _onlyLate
+        ? [
+            for (final e in _entries)
+              if (_lateOf(e) > 0) e,
+          ]
+        : _entries;
+    if (q.isEmpty) return base;
     return [
-      for (final e in _entries)
+      for (final e in base)
         if (UyapWebService.fold(
           '${e.name} ${e.client?.idNo ?? ''} '
           '${[for (final c in e.cases) _db?.caseOf(c.caseKey)?.number ?? ''].join(' ')}',
@@ -187,6 +211,19 @@ class _ClientsPageState extends State<ClientsPage> {
             ),
           ),
         ),
+        if (_late.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                key: const ValueKey('clients-late'),
+                label: Text('Taksiti gecikmiş ${_late.length}'),
+                selected: _onlyLate,
+                onSelected: (v) => setState(() => _onlyLate = v),
+              ),
+            ),
+          ),
         const SizedBox(height: 8),
         Expanded(
           child: shown.isEmpty
@@ -215,8 +252,16 @@ class _ClientsPageState extends State<ClientsPage> {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(
-                        '${e.cases.length} dosya',
-                        style: const TextStyle(fontSize: 12),
+                        [
+                          '${e.cases.length} dosya',
+                          if (_lateOf(e) > 0) '${_lateOf(e)} taksit gecikti',
+                        ].join(' · '),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _lateOf(e) > 0
+                              ? AgendaColors.deadlineText
+                              : null,
+                        ),
                       ),
                       onTap: () => _open(e),
                     );
@@ -429,6 +474,30 @@ class _ClientCardState extends State<ClientCard> {
     );
     if (mounted) setState(() {});
     widget.onChanged?.call(m.clientId);
+  }
+
+  /// The client's statement (all cases, or [only]), seen, printed, shared.
+  Future<void> _statement([String? only]) async {
+    final card = _card();
+    final records = [
+      for (final r in _records())
+        if (r.kind.money) r,
+    ];
+    final cases = {
+      for (final c in widget.entry.cases) c.caseKey: _caseTitle(c.caseKey),
+    };
+    await showClientAttachment(
+      context,
+      title: 'Hesap dökümü',
+      fileName: 'Hesap dökümü ${titleName(card.name)}.pdf',
+      pdf: () => clientStatementPdf(
+        client: card,
+        records: records,
+        cases: cases,
+        lawyer: widget.lawyer,
+        only: only,
+      ),
+    );
   }
 
   /// Shared with the office, or no longer (KVKK: a client at a time).
@@ -651,6 +720,13 @@ class _ClientCardState extends State<ClientCard> {
                   icon: const Icon(Icons.assignment_ind_outlined, size: 18),
                   label: const Text('Vekâletname'),
                 ),
+                if (widget.seesMoney)
+                  OutlinedButton.icon(
+                    key: const ValueKey('client-statement'),
+                    onPressed: () => _statement(),
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: const Text('Hesap dökümü'),
+                  ),
                 if (widget.inOffice)
                   FilterChip(
                     key: const ValueKey('client-share'),
@@ -702,6 +778,7 @@ class _ClientCardState extends State<ClientCard> {
                     onFee: _fee,
                     onReverse: _reverse,
                     onOpen: (m) => _preview(m, 'Belge'),
+                    onStatement: _statement,
                   ),
                 _meetings(meetings),
                 _attorneys(attorneys),
@@ -799,6 +876,44 @@ class _ClientCardState extends State<ClientCard> {
               ],
             ),
           ),
+        if (widget.seesMoney && _client != null)
+          ...() {
+            final due = [
+              for (final t in FeeReminders.open(_db, DateTime.now()))
+                if (widget.entry.ids.contains(t.client.id) ||
+                    t.client.id == _client!.id)
+                  t,
+            ];
+            return [
+              if (due.isNotEmpty)
+                _section('TAKSİTLER', [
+                  for (final t in due)
+                    ListTile(
+                      dense: true,
+                      leading: Icon(
+                        t.daysLeft < 0
+                            ? Icons.error_outline_rounded
+                            : Icons.schedule_rounded,
+                        size: 20,
+                        color: t.daysLeft < 0
+                            ? AgendaColors.deadline
+                            : AgendaColors.task,
+                      ),
+                      title: Text('${_day(t.due)} · ${lira(t.amount)}'),
+                      subtitle: Text(
+                        [
+                          _caseTitle(t.caseKey),
+                          t.daysLeft < 0
+                              ? '${-t.daysLeft} gün gecikti'
+                              : t.daysLeft == 0
+                              ? 'bugün'
+                              : '${t.daysLeft} gün kaldı',
+                        ].join(' · '),
+                      ),
+                    ),
+                ]),
+            ];
+          }(),
         _section('YAKLAŞAN DURUŞMALAR', [
           if (hearings.isEmpty)
             const ListTile(dense: true, title: Text('Yaklaşan duruşma yok.')),

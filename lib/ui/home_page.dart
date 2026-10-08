@@ -1622,6 +1622,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     for (final (prefix, group) in const [
       ('mesaj:', 'mesajlar'),
       ('gorev:', 'gorevler'),
+      ('muvekkil:', 'muvekkiller'),
       ('buro:', 'buro'),
     ]) {
       if (payload.startsWith(prefix)) {
