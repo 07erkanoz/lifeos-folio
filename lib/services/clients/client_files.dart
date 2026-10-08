@@ -145,11 +145,16 @@ class ClientFiles {
   /// [f] taken off this device, its folder's file alone.
   Future<void> forget(String clientId, ClientFile f) async {
     try {
-      for (final file in [
-        await placeFor(clientId, f),
-        ?await _legacy(clientId, f),
-      ]) {
-        if (await file.exists()) await file.delete();
+      final here = await placeFor(clientId, f);
+      if (await here.exists()) await here.delete();
+      // An earlier Folio's file goes only when it is this one's content: a
+      // name another device sent cannot take another record's file.
+      final old = await _legacy(clientId, f);
+      if (old != null &&
+          await old.exists() &&
+          !FileSystemEntity.isLinkSync(old.path) &&
+          sha256.convert(await old.readAsBytes()).toString() == f.sha256) {
+        await old.delete();
       }
     } catch (_) {}
   }

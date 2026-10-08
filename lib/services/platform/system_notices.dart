@@ -84,12 +84,20 @@ class SystemNotices {
   Future<bool> _allowed() async {
     try {
       if (Platform.isAndroid) {
-        return await _plugin
-                .resolvePlatformSpecificImplementation<
-                  AndroidFlutterLocalNotificationsPlugin
-                >()
-                ?.areNotificationsEnabled() ??
-            true;
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        if (!(await android?.areNotificationsEnabled() ?? true)) return false;
+        // The app let show, its channel may still be turned off.
+        final channels = await android?.getNotificationChannels();
+        final ours = channels?.where((c) => c.id == 'uyap_bildirim');
+        if (ours != null &&
+            ours.isNotEmpty &&
+            ours.first.importance == Importance.none) {
+          return false;
+        }
+        return true;
       }
       if (Platform.isIOS) {
         final o = await _plugin

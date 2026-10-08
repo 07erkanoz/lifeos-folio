@@ -276,6 +276,19 @@ extension PortalClients on PortalDatabase {
 
   /// The cards and records, for one of the person's own devices: all of
   /// them; but the money others wrote while this person may not see it.
+  /// What others than [me] wrote of client [id], taken off here.
+  void _forgetOthersOf(String id, String me) {
+    for (final r in _db.select(
+      'SELECT id, json FROM client_record WHERE client_id=?',
+      [id],
+    )) {
+      final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
+      if (rec != null && rec.person == me && me.isNotEmpty) continue;
+      _db.execute('DELETE FROM client_record WHERE id=?', [r['id']]);
+      if (rec != null) removedClientRecords.add(rec);
+    }
+  }
+
   Map<String, Object?> clientsExport() {
     final allowed = PortalDatabase.clientMoneyAllowed?.call() ?? true;
     final me = PortalDatabase.clientPerson?.call() ?? '';
@@ -347,7 +360,9 @@ extension PortalClients on PortalDatabase {
     required String me,
     required String from,
   }) {
-    if (from.isEmpty) return false;
+    // Nothing from no one; nothing from this person's own devices either:
+    // those keep alike through their own channel, the card whole.
+    if (from.isEmpty || from == me) return false;
     var changed = false;
     _transaction(() {
       for (final j in theirs['muvekkiller'] as List? ?? const []) {
@@ -416,6 +431,7 @@ extension PortalClients on PortalDatabase {
     bool money = true,
     String? author,
   }) {
+    final me = PortalDatabase.clientPerson?.call() ?? '';
     var changed = false;
     _transaction(() {
       for (final j in theirs['muvekkiller'] as List? ?? const []) {
@@ -425,11 +441,25 @@ extension PortalClients on PortalDatabase {
         if (kept != null && !c.updated.isAfter(kept.updated)) continue;
         _putClient(c);
         changed = true;
+        // A colleague's client unshared, come from an own device: what
+        // others wrote of it goes here too, this person's stays.
+        if (c.removed && c.person.isNotEmpty && c.person != me) {
+          _forgetOthersOf(c.id, me);
+        }
       }
       for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {
         final r = ClientRecord.fromJson(j);
         // Money from, or for, one who may not see it is not taken.
         if (r == null || (!money && r.kind.money)) continue;
+        // Of a colleague's client unshared, only this person's own.
+        final card = clientCard(r.clientId);
+        if (card != null &&
+            card.removed &&
+            card.person.isNotEmpty &&
+            card.person != me &&
+            r.person != me) {
+          continue;
+        }
         // From the office, only its writer's own: a record kept here is
         // changed by no one else, nor moved to another client or kind.
         if (author != null) {

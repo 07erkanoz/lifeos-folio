@@ -325,6 +325,161 @@ void registerTests() {
       expect(await files.locate('k1', f), isNull);
     },
   );
+
+  // The third review's.
+  test(
+    'office revocation between own devices preserves the private owner card',
+    () {
+      final source = PortalDatabase.memory(), target = PortalDatabase.memory();
+      addTearDown(source.dispose);
+      addTearDown(target.dispose);
+      final oldPerson = PortalDatabase.clientPerson,
+          oldMoney = PortalDatabase.clientMoneyAllowed;
+      PortalDatabase.clientPerson = () => 'deniz';
+      PortalDatabase.clientMoneyAllowed = () => false;
+      addTearDown(() {
+        PortalDatabase.clientPerson = oldPerson;
+        PortalDatabase.clientMoneyAllowed = oldMoney;
+      });
+      source.saveClient(card(office: false, year: 2026));
+      target.saveClient(card());
+      target.clientsOfficeMerge(
+        source.clientsOfficeExport(money: false, me: 'deniz'),
+        money: false,
+        me: 'deniz',
+        from: 'deniz',
+      );
+      target.agendaMerge(source.agendaExport());
+      expect(target.clientCard('k1')!.name, 'Ayşe');
+      expect(target.clientCard('k1')!.removed, isFalse);
+      expect(target.clientCard('k1')!.office, isFalse);
+    },
+  );
+
+  test('an own-device revocation clears foreign records', () {
+    final oldPerson = PortalDatabase.clientPerson,
+        oldMoney = PortalDatabase.clientMoneyAllowed;
+    PortalDatabase.clientPerson = () => 'selin';
+    PortalDatabase.clientMoneyAllowed = () => false;
+    addTearDown(() {
+      PortalDatabase.clientPerson = oldPerson;
+      PortalDatabase.clientMoneyAllowed = oldMoney;
+    });
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    db.saveClient(card());
+    db.saveClientRecord(record('foreign', 'deniz'));
+    final source = PortalDatabase.memory();
+    addTearDown(source.dispose);
+    source.saveClient(card());
+    source.clientsOfficeMerge(
+      {
+        'muvekkiller': [card(office: false, year: 2026).toJson()],
+      },
+      money: false,
+      me: 'selin',
+      from: 'deniz',
+    );
+    db.agendaMerge(source.agendaExport());
+    expect(db.clientCard('k1')!.removed, isTrue);
+    expect(db.clientRecord('foreign'), isNull);
+  });
+
+  test('a stale own-device packet cannot restore a revoked foreign record', () {
+    final oldPerson = PortalDatabase.clientPerson,
+        oldMoney = PortalDatabase.clientMoneyAllowed;
+    PortalDatabase.clientPerson = () => 'selin';
+    PortalDatabase.clientMoneyAllowed = () => false;
+    addTearDown(() {
+      PortalDatabase.clientPerson = oldPerson;
+      PortalDatabase.clientMoneyAllowed = oldMoney;
+    });
+    final source = PortalDatabase.memory(), target = PortalDatabase.memory();
+    addTearDown(source.dispose);
+    addTearDown(target.dispose);
+    source.saveClient(card());
+    source.saveClientRecord(record('foreign', 'deniz'));
+    target.saveClient(card());
+    target.clientsOfficeMerge(
+      {
+        'muvekkiller': [card(office: false, year: 2026).toJson()],
+      },
+      money: false,
+      me: 'selin',
+      from: 'deniz',
+    );
+    target.agendaMerge(source.agendaExport());
+    expect(target.clientCard('k1')!.removed, isTrue);
+    expect(target.clientRecord('foreign'), isNull);
+  });
+
+  test(
+    'legacy cleanup cannot delete another locked record attachment',
+    () async {
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      final root = await Directory.systemTemp.createTemp(
+        'folio-legacy-collateral-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final files = ClientFiles(root: () async => root);
+      final ownFile = await files.keepBytes(
+        'k1',
+        'signed.pdf',
+        Uint8List.fromList([1, 2, 3]),
+      );
+      db.saveClient(card());
+      db.saveClientRecord(
+        record(
+          'own',
+          'selin',
+          data: {
+            'ekler': [clientFileJson(ownFile)],
+          },
+        ).copyWith(locked: true),
+      );
+      final malicious = (
+        name: 'other.pdf',
+        path: ownFile.path,
+        sha256: sha256.convert([4, 5, 6]).toString(),
+      );
+      db.clientsOfficeMerge(
+        {
+          'muvekkilKayitlari': [
+            record(
+              'foreign',
+              'deniz',
+              data: {
+                'ekler': [clientFileJson(malicious)],
+              },
+            ).toJson(),
+          ],
+        },
+        money: false,
+        me: 'selin',
+        from: 'deniz',
+      );
+      db.clientsOfficeMerge(
+        {
+          'muvekkiller': [card(office: false, year: 2026).toJson()],
+        },
+        money: false,
+        me: 'selin',
+        from: 'deniz',
+      );
+      final still = {
+        for (final r in db.allClientRecords())
+          for (final f in clientFilesOf(r)) '${r.clientId}|${f.sha256}',
+      };
+      for (final r in db.removedClientRecords)
+        for (final f in clientFilesOf(r)) {
+          if (!still.contains('${r.clientId}|${f.sha256}'))
+            await files.forget(r.clientId, f);
+        }
+      expect(db.clientRecord('own')!.locked, isTrue);
+      expect(await files.locate('k1', ownFile), isNotNull);
+    },
+  );
 }
 
 List<DeadlineRecord> enforcement(
