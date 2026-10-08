@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart' as hash;
 import 'package:cryptography/cryptography.dart';
@@ -231,6 +232,98 @@ class OfficeLedger {
   Future<String?> remove(OfficeIdentity identity, String deviceId) =>
       _change(identity, {'k': 'cikar', 'cihaz': deviceId});
 
+  static const _alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+  /// The recovery code's key: the code is written down, the key never kept.
+  static Future<SimpleKeyPair?> _recoveryKey(String code) async {
+    final clean = code.toUpperCase().replaceAll(RegExp(r'[^0-9A-Z]'), '');
+    if (clean.length != 32) return null;
+    final bits = StringBuffer();
+    for (final c in clean.split('')) {
+      final v = _alphabet.indexOf(
+        c == 'O'
+            ? '0'
+            : c == 'I' || c == 'L'
+            ? '1'
+            : c,
+      );
+      if (v < 0) return null;
+      bits.write(v.toRadixString(2).padLeft(5, '0'));
+    }
+    final b = bits.toString();
+    final bytes = [
+      for (var i = 0; i + 8 <= b.length; i += 8)
+        int.parse(b.substring(i, i + 8), radix: 2),
+    ];
+    final seed = hash.sha256.convert([
+      ...utf8.encode('folio-buro-kurtarma-1'),
+      ...bytes,
+    ]).bytes;
+    return Ed25519().newKeyPairFromSeed(seed);
+  }
+
+  static String _newCode() {
+    final r = Random.secure();
+    final chars = [for (var i = 0; i < 32; i++) _alphabet[r.nextInt(32)]];
+    return [for (var i = 0; i < 32; i += 4) chars.sublist(i, i + 4).join()]
+        .join('-');
+  }
+
+  /// The founder's recovery code: written down, it brings the founder back
+  /// on a new device should all theirs be lost. A new one voids the last.
+  Future<String?> makeRecovery(OfficeIdentity identity) async {
+    if (!(member(identity.deviceId)?.founder ?? false)) return null;
+    final code = _newCode();
+    final key = await _recoveryKey(code);
+    final r = await _sign(identity, {
+      'k': 'kurtarma',
+      'up': base64Encode((await key!.extractPublicKey()).bytes),
+      'buro': officeId,
+      'onceki': idOf(_records.last),
+    });
+    final before = _records.length;
+    await _apply([r]);
+    return _records.length == before ? null : code;
+  }
+
+  bool get hasRecovery => _state.recovery != null;
+
+  /// This device, not of the office, comes in as its founder by the
+  /// recovery code. Why not, in the user's words, when it cannot.
+  Future<String?> recover(
+    OfficeIdentity identity,
+    OfficePeer self,
+    String code,
+  ) async {
+    if (!exists) return 'Önce büronun bir cihazıyla tanışın.';
+    if (member(identity.deviceId) != null) return null;
+    if (_state.recovery == null) return 'Bu büronun kurtarma kodu yok.';
+    final key = await _recoveryKey(code);
+    if (key == null) return 'Kod 32 harf ve rakam olmalı.';
+    final record = {
+      'k': 'kurtar',
+      ..._about(self, base64Encode(identity.devicePublic.bytes)),
+      'buro': officeId,
+      'onceki': idOf(_records.last),
+      'imzalayan': identity.deviceId,
+      'at': DateTime.now().toUtc().toIso8601String(),
+    };
+    final word = await Ed25519().sign(
+      utf8.encode(_canonical(record)),
+      keyPair: key,
+    );
+    final withWord = {...record, 'kurtarma': base64Encode(word.bytes)};
+    final sig = await Ed25519().sign(
+      utf8.encode(_canonical(withWord)),
+      keyPair: identity.device,
+    );
+    final before = _records.length;
+    await _apply([
+      {...withWord, 'sig': base64Encode(sig.bytes)},
+    ]);
+    return _records.length == before ? 'Kurtarma kodu tutmadı.' : null;
+  }
+
   /// What a device signs to be taken into [office] as one of [person]'s:
   /// without it no member can add a device that is not theirs.
   static List<int> consentOf(String office, String person, String device) =>
@@ -352,7 +445,7 @@ class OfficeLedger {
           final d = depth[idOf(a)]!.compareTo(depth[idOf(b)]!);
           return d != 0 ? d : idOf(a).compareTo(idOf(b));
         });
-    String? office;
+    String? office, recovery;
     var name = '';
     final members = <String, OfficeMember>{};
     final kept = <Map<String, Object?>>[];
@@ -373,9 +466,51 @@ class OfficeLedger {
         continue;
       }
       if (office == null || r['buro'] != office) continue;
+      final subject = '${r['cihaz']}';
+      if (kind == 'kurtar') {
+        // A new device, by the founder's recovery code: the founder again.
+        final key = r['dk'], word = r['kurtarma'];
+        final founder = members.values.where((m) => m.founder).firstOrNull;
+        if (recovery == null || founder == null) continue;
+        if (key is! String || word is! String) continue;
+        if (r['imzalayan'] != subject || members.containsKey(subject)) continue;
+        if (OfficeIdentity.idOf(base64Decode(key)) != subject) continue;
+        if (!await _holds(r, key)) continue;
+        final plain = {...r}
+          ..remove('sig')
+          ..remove('kurtarma');
+        if (!await OfficeIdentity.signedBy(
+          recovery,
+          utf8.encode(_canonical(plain)),
+          word,
+        )) {
+          continue;
+        }
+        members[subject] = OfficeMember(
+          deviceId: subject,
+          userId: founder.userId,
+          publicKey: key,
+          name: founder.name,
+          device: '${r['c'] ?? ''}',
+          platform: OfficePlatform.of('${r['p']}'),
+          role: OfficeRole.manager,
+          since: DateTime.tryParse('${r['at']}')?.toLocal() ?? DateTime(2026),
+          founder: true,
+          person: founder.person,
+        );
+        kept.add(r);
+        continue;
+      }
       final signer = members[r['imzalayan']];
       if (signer == null) continue;
-      final subject = '${r['cihaz']}';
+      if (kind == 'kurtarma') {
+        final up = r['up'];
+        if (!signer.founder || up is! String) continue;
+        if (!await _holds(r, signer.publicKey)) continue;
+        recovery = up;
+        kept.add(r);
+        continue;
+      }
       if (kind == 'kendi') {
         // A member's own device, by the member: theirs in all but its key.
         final key = r['dk'];
@@ -456,7 +591,7 @@ class OfficeLedger {
       }
       kept.add(r);
     }
-    return _State(office, name, members, kept);
+    return _State(office, name, members, kept, recovery);
   }
 
   static OfficeMember? _member(
@@ -500,13 +635,23 @@ class OfficeLedger {
 }
 
 class _State {
-  const _State(this.officeId, this.officeName, this.members, this.kept);
+  const _State(
+    this.officeId,
+    this.officeName,
+    this.members,
+    this.kept, [
+    this.recovery,
+  ]);
   const _State.empty()
     : officeId = null,
       officeName = '',
       members = const {},
-      kept = const [];
+      kept = const [],
+      recovery = null;
   final String? officeId;
+
+  /// The founder's recovery code's public key, the latest.
+  final String? recovery;
   final String officeName;
   final Map<String, OfficeMember> members;
   final List<Map<String, Object?>> kept;

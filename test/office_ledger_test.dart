@@ -176,4 +176,44 @@ void main() {
       isNotNull,
     );
   });
+
+  test('the founder comes back on a new device by the recovery code', () async {
+    final (deniz, denizPeer, _) = await device('Av. Deniz Kaya');
+    final (fresh, freshPeer, _) = await device('Av. Deniz Kaya');
+    final (selin, selinPeer, _) = await device('Av. Selin Aksoy');
+    final l = ledger('kurucu');
+    await l.found(deniz, denizPeer, 'Kaya Hukuk Bürosu');
+    expect(l.hasRecovery, isFalse);
+    // Only the founder makes one.
+    expect(await l.makeRecovery(selin), isNull);
+    final code = (await l.makeRecovery(deniz))!;
+    expect(code, matches(RegExp(r'^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$')));
+    // The ledger as a colleague's device gives it to the new one.
+    final there = ledger('yeni');
+    expect(await there.merge(l.records), isTrue);
+    expect(await there.recover(fresh, freshPeer, 'YANLIS-KOD'), isNotNull);
+    final wrong = code.replaceRange(
+      0,
+      4,
+      code.startsWith('0000') ? '1111' : '0000',
+    );
+    expect(await there.recover(fresh, freshPeer, wrong), isNotNull);
+    expect(await there.recover(fresh, freshPeer, code.toLowerCase()), isNull);
+    final back = there.member(fresh.deviceId)!;
+    expect(
+      (back.founder, back.role, back.person),
+      (true, OfficeRole.manager, deniz.deviceId),
+    );
+    // Taken by the office's other devices as the founder.
+    expect(await l.merge(there.records), isTrue);
+    expect(l.member(fresh.deviceId)?.founder, isTrue);
+    final again = ledger('baska');
+    await again.merge(l.records);
+    final newer = (await l.makeRecovery(deniz))!;
+    await again.merge(l.records);
+    final (late, latePeer, _) = await device('Av. Deniz Kaya');
+    // The last code voids the one before.
+    expect(await again.recover(late, latePeer, code), isNotNull);
+    expect(await again.recover(late, latePeer, newer), isNull);
+  });
 }

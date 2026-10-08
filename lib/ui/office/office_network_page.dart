@@ -633,9 +633,143 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
               ),
             ),
           ],
+          if (l.member(_net.self?.deviceId ?? '')?.founder ?? false) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const ValueKey('office-recovery-make'),
+                  onPressed: () => unawaited(_makeRecovery()),
+                  icon: const Icon(Icons.key_rounded, size: 17),
+                  label: Text(
+                    l.hasRecovery
+                        ? 'Yeni kurtarma kodu oluştur'
+                        : 'Kurtarma kodu oluştur',
+                  ),
+                ),
+              ),
+            ),
+          ] else if (l.member(_net.self?.deviceId ?? '') == null) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const ValueKey('office-recovery-use'),
+                  onPressed: () => unawaited(_useRecovery()),
+                  icon: const Icon(Icons.key_rounded, size: 17),
+                  label: const Text('Kurucuyum, kurtarma kodum var'),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _makeRecovery() async {
+    final again = _net.ledger.hasRecovery;
+    if (again) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Yeni kurtarma kodu'),
+          content: const Text(
+            'Yeni kod oluşturulunca eski kod geçersiz olur. Devam edilsin mi?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yeni kod oluştur'),
+            ),
+          ],
+        ),
+      );
+      if (go != true) return;
+    }
+    final code = await _net.makeRecovery();
+    if (!mounted || code == null) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Kurtarma kodunuz'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Bu kodu kâğıda yazıp güvenli bir yerde saklayın. Bütün '
+                'cihazlarınızı kaybederseniz, yeni cihazda bir meslektaşınızın '
+                'cihazıyla tanışıp bu kodu girerek büronun kurucusu olarak '
+                'devam edersiniz. Kod bir daha gösterilmez.',
+              ),
+              const SizedBox(height: 14),
+              SelectableText(
+                code,
+                key: const ValueKey('office-recovery-code'),
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Yazdım'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _useRecovery() async {
+    final field = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Kurtarma kodu'),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            controller: field,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              hintText: 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, field.text),
+            child: const Text('Kurucu olarak devam et'),
+          ),
+        ],
+      ),
+    );
+    field.dispose();
+    if (code == null || code.trim().isEmpty) return;
+    await _say(_net.recoverFounder(code));
   }
 
   Future<void> _send(OfficePeer d) async {

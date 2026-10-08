@@ -1187,10 +1187,8 @@ class OfficeNetwork extends ChangeNotifier {
   Future<TaskEvent> _sign(OfficeTask task, TaskEvent e) async =>
       e.signed(await _identity!.signAsDevice(_signed(task, e)));
 
-  static List<int> _signed(OfficeTask task, TaskEvent e) => e.signedOf(
-    task.id,
-    e.kind == TaskEventKind.given ? task.terms : '',
-  );
+  static List<int> _signed(OfficeTask task, TaskEvent e) =>
+      e.signedOf(task.id, e.kind == TaskEventKind.given ? task.terms : '');
 
   /// The member's device key, from the office's ledger: what a step or a
   /// message is checked against.
@@ -1516,6 +1514,30 @@ class OfficeNetwork extends ChangeNotifier {
     final identity = _identity;
     if (identity == null) return 'Önce büro ağına katılın.';
     return _after(await ledger.setRole(identity, deviceId, role));
+  }
+
+  /// The founder's recovery code, new; null when this is not the founder.
+  Future<String?> makeRecovery() async {
+    final identity = _identity;
+    if (identity == null) return null;
+    final code = await ledger.makeRecovery(identity);
+    if (code != null) {
+      notifyListeners();
+      unawaited(_shareLedger());
+    }
+    return code;
+  }
+
+  /// Comes into the office as its founder, by the recovery code.
+  Future<String?> recoverFounder(String code) async {
+    final identity = _identity, self = _self;
+    if (identity == null || self == null) return 'Önce büro ağına katılın.';
+    final error = await ledger.recover(identity, self, code);
+    if (error == null) {
+      notifyListeners();
+      unawaited(_shareLedger());
+    }
+    return error;
   }
 
   Future<String?> removeMember(String deviceId) async {
