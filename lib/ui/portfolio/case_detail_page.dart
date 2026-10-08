@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../../preview_app.dart' show openPreviewWindow;
 import '../../services/platform/editor_window.dart';
+import '../../services/office/office_network.dart';
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
@@ -20,6 +21,8 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
+import '../office/task_give_dialog.dart';
+import '../office/tasks_page.dart' show TaskDetail, dueOf;
 import '../widgets/file_preview.dart';
 import '../widgets/share_as.dart';
 import 'portfolio_rows.dart';
@@ -68,7 +71,16 @@ class CaseDetailPage extends StatefulWidget {
   State<CaseDetailPage> createState() => _CaseDetailPageState();
 }
 
-enum _Tab { documents, notices, hearings, deadlines, parties, facts, petitions }
+enum _Tab {
+  documents,
+  notices,
+  hearings,
+  deadlines,
+  parties,
+  facts,
+  petitions,
+  tasks,
+}
 
 enum _DocFilter { all, fresh, decisions, petitions, notDownloaded }
 
@@ -1568,7 +1580,68 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     _Tab.notices => _noticesTab(context),
     _Tab.facts => _factsTab(context),
     _Tab.petitions => _petitionsTab(context),
+    _Tab.tasks => _tasksTab(context),
   };
+
+  /// The office's tasks over this case: given here, followed here.
+  Widget _tasksTab(BuildContext context) => ListenableBuilder(
+    listenable: OfficeNetwork.instance,
+    builder: (context, _) {
+      final net = OfficeNetwork.instance;
+      final now = DateTime.now();
+      final tasks = [
+        for (final t in net.tasks.all)
+          if (t.cases.any((c) => c.caseKey == widget.caseKey)) t,
+      ];
+      final canGive = net.ledger.members.any((m) => net.mayGive(m.deviceId));
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (canGive)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  key: const ValueKey('case-give-task'),
+                  onPressed: () => unawaited(
+                    showDialog<void>(
+                      context: context,
+                      builder: (_) => TaskGiveDialog(
+                        network: net,
+                        initialCaseKey: widget.caseKey,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_task_rounded, size: 18),
+                  label: const Text('Bu dosya için görev ver'),
+                ),
+              ),
+            if (tasks.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'Bu dosyaya bağlı görev yok.',
+                  style: TextStyle(color: AgendaColors.muted),
+                ),
+              ),
+            for (final t in tasks)
+              ListTile(
+                key: ValueKey('case-task-${t.id}'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(t.title),
+                subtitle: Text(
+                  '${t.stage.label} · %${t.percent} · ${dueOf(t, now).$1} · '
+                  '${t.byName} → ${t.assignees.values.join(', ')}',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => unawaited(TaskDetail.show(context, net, t)),
+              ),
+          ],
+        ),
+      );
+    },
+  );
 
   Widget _tabBar(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -1654,6 +1727,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             tab(_Tab.parties, 'Taraflar', parties),
             tab(_Tab.facts, 'Künye', null),
             tab(_Tab.petitions, 'Dilekçelerim', _petitions.length),
+            tab(
+              _Tab.tasks,
+              'Görevler',
+              OfficeNetwork.instance.tasks.all
+                  .where((t) => t.cases.any((c) => c.caseKey == widget.caseKey))
+                  .length,
+            ),
           ],
         ),
       ),

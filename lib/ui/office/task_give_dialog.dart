@@ -22,7 +22,15 @@ class _Draft {
 /// one or more cases each with its things to do and the documents that go
 /// with it, a due day, a priority and a note.
 class TaskGiveDialog extends StatefulWidget {
-  const TaskGiveDialog({super.key, required this.network, this.rows});
+  const TaskGiveDialog({
+    super.key,
+    required this.network,
+    this.rows,
+    this.initialCaseKey,
+  });
+
+  /// A case to start with: the one whose page it was given from.
+  final String? initialCaseKey;
 
   final OfficeNetwork network;
 
@@ -58,14 +66,27 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
     final given = widget.rows;
     if (given != null) {
       _rows = given;
+      _startWith();
     } else {
       unawaited(
         loadPortfolio(lawyer: _net.self?.name ?? '')
             .then((rows) {
-              if (mounted) setState(() => _rows = rows);
+              if (!mounted) return;
+              setState(() {
+                _rows = rows;
+                _startWith();
+              });
             })
             .catchError((Object _) {}),
       );
+    }
+  }
+
+  void _startWith() {
+    final key = widget.initialCaseKey;
+    final row = _rows.where((r) => r.key == key).firstOrNull;
+    if (row != null && !_cases.any((c) => c.row.key == key)) {
+      _cases.add(_Draft(row)..items.add((TextEditingController(), '')));
     }
   }
 

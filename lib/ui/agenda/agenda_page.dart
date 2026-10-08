@@ -4,12 +4,14 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
 import 'package:path/path.dart' as p;
 
 import '../../services/legal/deadlines/belge_turu.dart';
 import '../../services/legal/deadlines/deadline_service.dart';
 import '../../services/legal/deadlines/mahkeme_kategori.dart';
 import '../../services/legal/deadlines/sure_katalogu.dart' show SureGuveni;
+import '../../services/office/office_network.dart';
 import '../../services/platform/app_directories.dart';
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
@@ -21,6 +23,7 @@ import '../../services/uets/notice_matcher.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../mobile/scroll_chrome.dart';
+import '../office/tasks_page.dart' show TaskDetail;
 import 'channel_bar.dart';
 import 'deadline_review.dart';
 import '../widgets/folio_select.dart';
@@ -236,7 +239,7 @@ class _AgendaPageState extends State<AgendaPage> {
             ? to
             : today.add(const Duration(days: 30)),
       );
-      _items = db.agenda();
+      _items = [...db.agenda(), ..._officeItems()];
       _review =
           [
             for (final d in db.deadlines())
@@ -332,7 +335,40 @@ class _AgendaPageState extends State<AgendaPage> {
     widget.onChanged?.call();
   }
 
+  /// The office's open tasks with a due day, given to this user or by
+  /// them, on that day; a tap opens the task, not a tick.
+  List<AgendaItem> _officeItems() {
+    final net = OfficeNetwork.instance;
+    final me = net.self?.deviceId ?? '';
+    if (me.isEmpty) return const [];
+    return [
+      for (final t in net.tasks.all)
+        if (t.due != null &&
+            t.open &&
+            (t.assignees.containsKey(me) || t.by == me))
+          AgendaItem(
+            id: 'gorev-${t.id}',
+            kind: 'task',
+            title: 'Görev: ${t.title}',
+            body: [
+              if (t.cases.isNotEmpty)
+                '${t.cases.first.number} · ${t.cases.first.court}',
+              '${t.byName} → ${t.assignees.values.join(', ')}',
+            ].join('\n'),
+            at: DateTime(t.due!.year, t.due!.month, t.due!.day, 9),
+            allDay: true,
+            updated: t.createdAt,
+          ),
+    ];
+  }
+
   void _toggle(AgendaItem item) {
+    if (item.id.startsWith('gorev-')) {
+      final net = OfficeNetwork.instance;
+      final task = net.tasks.of(item.id.substring(6));
+      if (task != null) unawaited(TaskDetail.show(context, net, task));
+      return;
+    }
     _db?.saveAgenda(item.copyWith(done: !item.done));
     _reload();
     widget.onChanged?.call();
@@ -548,7 +584,8 @@ class _AgendaPageState extends State<AgendaPage> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
-              textStyle: const TextStyle(fontFamily: 'LiberationSans', 
+              textStyle: const TextStyle(
+                fontFamily: 'LiberationSans',
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -1586,7 +1623,10 @@ class _AgendaPageState extends State<AgendaPage> {
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(fontFamily: 'LiberationSans', fontSize: 12),
+              textStyle: const TextStyle(
+                fontFamily: 'LiberationSans',
+                fontSize: 12,
+              ),
             ),
             icon: const Icon(Icons.add, size: 15),
             label: const Text('İş ekle'),

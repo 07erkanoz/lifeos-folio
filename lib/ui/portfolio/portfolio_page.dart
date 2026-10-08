@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../services/office/office_network.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
@@ -10,6 +11,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
+import '../office/tasks_page.dart' show TaskDetail;
 import '../widgets/uyap_connect_view.dart';
 import 'portfolio_rows.dart';
 
@@ -392,6 +394,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                 )
               else ...[
                 SliverToBoxAdapter(child: _phoneControls(context)),
+                SliverToBoxAdapter(child: _tasked(context)),
                 SliverToBoxAdapter(child: _phoneResult(context)),
                 if (shown.isEmpty)
                   SliverToBoxAdapter(child: _noMatch(context))
@@ -1688,6 +1691,87 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
   // The list.
 
+  /// Cases that came with tasks given to this user (docs/design/
+  /// buro-yonetim-taslak.png, 2b): seen here though UYAP does not let the
+  /// user open them; a tap opens the task, its case and documents in it.
+  Widget _tasked(BuildContext context) => ListenableBuilder(
+    listenable: OfficeNetwork.instance,
+    builder: (context, _) => _taskedNow(context),
+  );
+
+  Widget _taskedNow(BuildContext context) {
+    final net = OfficeNetwork.instance;
+    final me = net.self?.deviceId ?? '';
+    final rows = [
+      for (final t in net.tasks.all)
+        if (t.open && t.assignees.containsKey(me))
+          for (final c in t.cases) (t, c, net.receivedCase(t, c.caseKey)),
+    ];
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('portfolio-tasked'),
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border.all(color: AgendaColors.task.withValues(alpha: .5)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+            child: Text(
+              'GÖREVLE GELEN DOSYALAR · ${rows.length}',
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .7,
+                color: AgendaColors.taskText,
+              ),
+            ),
+          ),
+          for (final (t, c, got) in rows)
+            InkWell(
+              key: ValueKey('portfolio-tasked-${t.id}-${c.caseKey}'),
+              onTap: () => unawaited(TaskDetail.show(context, net, t)),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${c.number} · ${c.court}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      [
+                        '${t.byName} verdi',
+                        t.title,
+                        if (got != null) '${got.documents.length} evrak',
+                        if (got == null) 'evrak geliyor',
+                        if (c.items.isNotEmpty) '${c.items.length} iş',
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _list(BuildContext context, bool wide) {
     final scheme = Theme.of(context).colorScheme;
     final visible = _visible;
@@ -1696,6 +1780,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _controls(context, wide),
+        _tasked(context),
         const SizedBox(height: 8),
         Expanded(
           child: Container(
