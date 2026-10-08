@@ -7,6 +7,7 @@ import 'package:workmanager/workmanager.dart';
 
 import '../security/secret_store.dart';
 import '../uyap/uyap_mobile_api.dart';
+import 'agenda_reminders.dart';
 import 'portal_database.dart';
 import 'portal_sync.dart';
 import 'uyap_notice.dart';
@@ -75,6 +76,11 @@ abstract final class BackgroundNotices {
   /// One check: UYAP Mobil's newest notifications kept, the new ones told.
   static Future<void> check() async {
     final db = await PortalDatabase.shared();
+    // The agenda's alarms first, with or without a UYAP session: in the
+    // background, only that something is due shows.
+    try {
+      await AgendaReminders.tell(db, private: () => true);
+    } catch (_) {}
     try {
       _note(db, await _check(db));
     } catch (e) {

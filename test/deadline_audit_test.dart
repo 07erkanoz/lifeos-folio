@@ -9,6 +9,7 @@ import 'package:evrak_convert/services/legal/deadlines/tebligat_parser.dart';
 import 'package:evrak_convert/services/legal/deadlines/turkish_legal_calendar.dart';
 import 'package:evrak_convert/services/legal/deadlines/yasal_sure.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
+import 'package:evrak_convert/services/portal/agenda_reminders.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_deadline.dart';
 import 'package:evrak_convert/services/uets/deadline_choice.dart';
@@ -347,6 +348,28 @@ void main() {
     expect(deadlineStateText(gone), startsWith('Artık hesaplanmıyor'));
     // Never confirmed, a record no longer made is not followed.
     expect(KeptDeadline(r.withState('eski'), null).onAgenda, isFalse);
+  });
+
+  test('B23: a deadline followed is told before its last day, each stage '
+      'once; a hearing the day before; nothing not followed', () {
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    final r = records(
+      'Tebliğden itibaren iki hafta içinde beyanlarınızı sununuz.',
+    ).single;
+    db.replaceNoticeDeadlines(r.noticeId, [r]);
+    final last = DateTime.parse(r.dueDay!);
+    final before3 = last.subtract(const Duration(days: 3));
+    // Not confirmed: not followed, not told.
+    expect(AgendaReminders.due(db, before3), isEmpty);
+    db.confirmDeadline(r.id);
+    final told = AgendaReminders.due(db, before3);
+    expect(told.single.title, '3 gün sonra son gün');
+    expect(
+      AgendaReminders.due(db, before3.add(const Duration(hours: 5))),
+      isEmpty,
+    );
+    expect(AgendaReminders.due(db, last).single.title, 'Bugün son gün');
   });
 
   test('B22: the day confirmed is read back from the history', () {

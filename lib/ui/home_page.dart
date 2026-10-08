@@ -71,6 +71,7 @@ import 'office/office_offer_dialog.dart';
 import 'office/office_pairing_dialog.dart';
 import 'office/messages_page.dart';
 import '../services/uyap/uyap_web_service.dart' show UyapWebService;
+import '../services/portal/agenda_reminders.dart';
 import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
@@ -734,6 +735,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       OfficeNetwork.instance.incomingOffer.addListener(_offerCame);
       OfficeNetwork.instance.arrived.addListener(_filesArrived);
       tellOffice(OfficeNetwork.instance);
+      // The agenda's alarms: deadlines' last days, hearings (B23).
+      AgendaReminders.start(private: () => AppLock.instance.locked);
       OfficeNetwork.instance.addListener(_officeCounted);
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
@@ -1647,6 +1650,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ('mesaj:', 'mesajlar'),
       ('gorev:', 'gorevler'),
       ('muvekkil:', 'muvekkiller'),
+      ('ajanda:', 'agenda'),
       ('buro:', 'buro'),
     ]) {
       if (payload.startsWith(prefix)) {
