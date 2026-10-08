@@ -969,7 +969,22 @@ class PortalDatabase {
       for (final r in _db.select('SELECT * FROM deadline_user'))
         {for (final c in r.keys) c: r[c]},
     ],
+    // The deadlines the lawyer chose, and whom they act for in a case.
+    'secimler': [
+      for (final r in _db.select(
+        'SELECT id, notice_id, json FROM deadline_choice',
+      ))
+        {for (final c in r.keys) c: r[c]},
+    ],
+    'temsil': [
+      for (final r in _db.select('SELECT * FROM case_representation'))
+        {for (final c in r.keys) c: r[c]},
+    ],
   };
+
+  /// The notices whose deadlines the last [agendaMerge] gave other grounds
+  /// to (a deadline chosen, whom the lawyer acts for), to be made again.
+  Set<String> mergedNotices = const {};
 
   /// Takes another device's [agendaExport]: the newer of each row, and
   /// what was taken off after it was last changed. True when anything here
@@ -1113,6 +1128,48 @@ class PortalDatabase {
         );
         changedHere = true;
       }
+      final touched = <String>{};
+      for (final r in (theirs['secimler'] as List? ?? const [])) {
+        if (r is! Map || r['id'] is! String || r['notice_id'] is! String) {
+          continue;
+        }
+        if (r['json'] is! String) continue;
+        final had = _db.select('SELECT 1 FROM deadline_choice WHERE id=?', [
+          r['id'],
+        ]);
+        if (had.isNotEmpty) continue;
+        _db.execute(
+          'INSERT INTO deadline_choice(id, notice_id, json) VALUES(?,?,?)',
+          [r['id'], r['notice_id'], r['json']],
+        );
+        touched.add(r['notice_id'] as String);
+        changedHere = true;
+      }
+      for (final r in (theirs['temsil'] as List? ?? const [])) {
+        if (r is! Map || r['case_key'] is! String || r['json'] is! String) {
+          continue;
+        }
+        final key = r['case_key'] as String, updated = when(r['updated']);
+        final here = _db.select(
+          'SELECT updated FROM case_representation WHERE case_key=?',
+          [key],
+        );
+        if (here.isNotEmpty && !updated.isAfter(when(here.first['updated']))) {
+          continue;
+        }
+        _db.execute(
+          'INSERT OR REPLACE INTO case_representation(case_key, json, updated) '
+          'VALUES(?,?,?)',
+          [key, r['json'], updated.toIso8601String()],
+        );
+        for (final n in _db.select('SELECT id FROM uets WHERE case_key=?', [
+          key,
+        ])) {
+          touched.add(n['id'] as String);
+        }
+        changedHere = true;
+      }
+      mergedNotices = touched;
       _db.execute('COMMIT');
     } catch (_) {
       _db.execute('ROLLBACK');
@@ -1376,12 +1433,8 @@ class PortalDatabase {
     String caseKey,
     List<({String ad, String rol})> parties,
   ) {
-    if (parties.isEmpty) {
-      _db.execute('DELETE FROM case_representation WHERE case_key=?', [
-        caseKey,
-      ]);
-      return;
-    }
+    // None said is kept too, as an empty word: the lawyer's other devices
+    // would bring the old one back otherwise.
     _db.execute(
       'INSERT OR REPLACE INTO case_representation(case_key, json, updated) '
       'VALUES(?,?,?)',

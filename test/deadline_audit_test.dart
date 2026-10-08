@@ -10,6 +10,7 @@ import 'package:evrak_convert/services/legal/deadlines/yasal_sure.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_deadline.dart';
+import 'package:evrak_convert/services/uets/deadline_choice.dart';
 import 'package:evrak_convert/services/uets/envelope_directives.dart';
 import 'package:evrak_convert/services/uets/notice_deadlines.dart';
 import 'package:evrak_convert/services/uets/notice_matcher.dart';
@@ -531,5 +532,40 @@ void main() {
       expect(tekYanda(['Suça Sürüklenen Çocuk']), isTrue);
       expect(tekYanda(['Davacı-Karşı Davalı']), isFalse);
     });
+  });
+
+  test('a deadline chosen and whom the lawyer acts for go to their other '
+      'devices; one taken back is not brought back', () {
+    final phone = PortalDatabase.memory();
+    addTearDown(phone.dispose);
+    phone.mergeNotices([
+      UetsMessage(
+        id: 'audit',
+        subject: 'Ankara 1. Asliye Hukuk Mahkemesi [2026/100]',
+        sent: DateTime.utc(2026, 9, 1, 9),
+      ),
+    ]);
+    db.saveDeadlineChoice(
+      DeadlineChoice(
+        id: 'c1',
+        noticeId: 'audit',
+        ruleId: 'hmk394',
+        created: DateTime(2026, 10, 8),
+      ),
+    );
+    db.setRepresentation('k', const [(ad: 'AYŞE ÖRNEK', rol: 'Davacı')]);
+    expect(phone.agendaMerge(db.agendaExport()), isTrue);
+    expect(phone.deadlineChoices('audit').single.ruleId, 'hmk394');
+    expect(phone.representation('k').single.ad, 'AYŞE ÖRNEK');
+    expect(phone.mergedNotices, contains('audit'));
+    // Taken back on the desktop a moment later: so on the phone too.
+    db.setRepresentation('k', const []);
+    final later = db.agendaExport();
+    // Its time a little after the first.
+    (later['temsil'] as List).cast<Map>().single['updated'] = DateTime.now()
+        .add(const Duration(seconds: 1))
+        .toIso8601String();
+    phone.agendaMerge(later);
+    expect(phone.representation('k'), isEmpty);
   });
 }

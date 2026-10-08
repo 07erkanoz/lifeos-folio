@@ -9,6 +9,7 @@ import '../office/office_network.dart';
 import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
+import '../uets/notice_deadlines.dart';
 
 /// Senkron (docs/buro.md): what one person's own devices keep alike when
 /// they are on the same network, each part on or off on this device.
@@ -212,6 +213,16 @@ class OwnSync extends ChangeNotifier {
         export: () async => db.agendaExport(),
         merge: (theirs) async {
           final changed = db.agendaMerge(theirs);
+          // A deadline chosen, or whom the lawyer acts for, on another
+          // device: those notices' deadlines made again here.
+          if (db.mergedNotices.isNotEmpty) {
+            refreshNoticeDeadlines(
+              db,
+              parties: NoticeDeadlineContext.parties,
+              lawyer: NoticeDeadlineContext.lawyer,
+              only: db.mergedNotices,
+            );
+          }
           // The agenda's pages read it again.
           if (changed) PortalSync.started?.notifyListeners();
           return changed;
