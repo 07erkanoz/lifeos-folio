@@ -226,6 +226,14 @@ class MobileDrawer extends StatelessWidget {
                           selected: !home && group == 'buro',
                           onTap: () => onGroup('buro'),
                         ),
+                        _item(
+                          context,
+                          key: const ValueKey('drawer-sync'),
+                          icon: const Icon(Icons.sync_rounded),
+                          label: 'Senkron',
+                          selected: !home && group == 'senkron',
+                          onTap: () => onGroup('senkron'),
+                        ),
                         if (office) ...[
                           _item(
                             context,

@@ -364,6 +364,100 @@ class OfficeNetwork extends ChangeNotifier {
     return pairing;
   }
 
+  /// What one person's own devices keep alike (docs/buro.md, Senkron), by
+  /// name: the agenda, the sessions. Given only over a channel the
+  /// person's key vouched for.
+  final ownParts = <String, OwnPart>{};
+
+  /// When each of the person's own devices was last made alike with this.
+  final synced = <String, DateTime>{};
+
+  final _ownLast = <String, DateTime>{};
+  Timer? _ownSoon;
+
+  /// This person's other devices this one knows as theirs, the newest
+  /// first.
+  List<KnownDevice> get ownKnown => [
+    for (final d in known)
+      if (d.userId == _identity?.userId && d.deviceId != _self?.deviceId) d,
+  ];
+
+  bool isOnline(String deviceId) => _peers[deviceId]?.online ?? false;
+
+  /// The person's own devices on the network now, as they say.
+  List<OfficePeer> get ownOnline => [
+    for (final p in _peers.values)
+      if (p.online &&
+          p.host != null &&
+          p.userId == _identity?.userId &&
+          p.deviceId != _self?.deviceId)
+        p,
+  ];
+
+  /// Something kept alike changed here: told to the person's other devices
+  /// within a few seconds, a burst of changes once.
+  void ownChanged() {
+    _ownSoon?.cancel();
+    _ownSoon = Timer(const Duration(seconds: 3), () => unawaited(syncOwn()));
+  }
+
+  /// "Şimdi eşitle": with each of the person's own devices on the network.
+  Future<void> syncOwn() async {
+    for (final peer in ownOnline) {
+      await _syncOwnWith(peer, now: true);
+    }
+  }
+
+  Future<Map<String, Object?>> _ownParts() async => {
+    for (final e in ownParts.entries)
+      e.key: await e.value.export().catchError((Object _) => null),
+  };
+
+  Future<void> _ownCame(Object? theirs) async {
+    if (theirs is! Map) return;
+    for (final e in ownParts.entries) {
+      if (!theirs.containsKey(e.key)) continue;
+      try {
+        await e.value.merge(theirs[e.key]);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _syncOwnWith(OfficePeer peer, {bool now = false}) async {
+    final identity = _identity, host = peer.host;
+    if (identity == null || host == null || ownParts.isEmpty) return;
+    // Seen again and again on the network: not every time.
+    final last = _ownLast[peer.deviceId];
+    if (!now &&
+        last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 30)) {
+      return;
+    }
+    _ownLast[peer.deviceId] = DateTime.now();
+    final trusted = await _trustedFor(peer);
+    if (trusted == null) return;
+    try {
+      final ch = await OfficeChannel.open(
+        identity: identity,
+        peer: trusted,
+        host: host,
+        port: peer.port,
+      );
+      unawaited(_metOwn(ch));
+      if (!ch.vouched) {
+        await ch.close();
+        return;
+      }
+      final reply = ch.messages.first.timeout(const Duration(seconds: 20));
+      await ch.send({'t': 'senkron', 'parcalar': await _ownParts()});
+      final m = await reply;
+      await ch.close();
+      await _ownCame(m['parcalar']);
+      synced[peer.deviceId] = DateTime.now();
+      notifyListeners();
+    } catch (_) {}
+  }
+
   /// Starts knowing [peer] by a code; null while another is being known.
   OfficePairing? pair(OfficePeer peer) {
     final identity = _identity, self = _self;
@@ -453,6 +547,20 @@ class OfficeNetwork extends ChangeNotifier {
           't': 'gorev',
           'gorev': mine != null && _maySee(mine, from) ? mine.toJson() : null,
         });
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await ch.close();
+        return;
+      }
+      if (m['t'] == 'senkron') {
+        // Only to one of this person's own devices, by its key's proof.
+        if (!ch.vouched) {
+          await ch.close();
+          return;
+        }
+        await _ownCame(m['parcalar']);
+        await ch.send({'t': 'senkron', 'parcalar': await _ownParts()});
+        synced[ch.peer.deviceId] = DateTime.now();
+        notifyListeners();
         await Future<void>.delayed(const Duration(milliseconds: 200));
         await ch.close();
         return;
@@ -1359,6 +1467,7 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// Stops announcing and looking; Folio will not join at its next start.
   Future<void> leave() async {
+    _ownSoon?.cancel();
     await _close();
     _joined = false;
     _peers.clear();
@@ -1463,6 +1572,9 @@ class OfficeNetwork extends ChangeNotifier {
                 .then((_) => _syncChats(peer)),
           );
         }
+        if (peer.host != null && peer.userId == _identity?.userId) {
+          unawaited(_syncOwnWith(peer));
+        }
       case BonsoirDiscoveryServiceLostEvent(:final service):
         final id =
             service.attributes['id'] ?? service.name.replaceFirst('folio-', '');
@@ -1546,4 +1658,14 @@ class SendTarget {
   /// A member of the office, whose files wait for them; else an own device.
   final bool member;
   final bool online;
+}
+
+/// One thing a person's own devices keep alike: what this device has of
+/// it, and taking what another has.
+class OwnPart {
+  const OwnPart({required this.export, required this.merge});
+  final Future<Object?> Function() export;
+
+  /// True when anything here changed.
+  final Future<bool> Function(Object? theirs) merge;
 }

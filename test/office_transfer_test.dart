@@ -10,6 +10,7 @@ import 'package:evrak_convert/services/office/office_ledger.dart';
 import 'package:evrak_convert/services/office/office_link.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_pairing.dart';
+import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
@@ -423,10 +424,7 @@ void main() {
       id: Chat.privateId(a.self!.deviceId, c.self!.deviceId),
       kind: ChatKind.group,
       by: b.self!.deviceId,
-      members: {
-        a.self!.deviceId: 'Av. Deniz Kaya',
-        b.self!.deviceId: 'Mert',
-      },
+      members: {a.self!.deviceId: 'Av. Deniz Kaya', b.self!.deviceId: 'Mert'},
     );
     expect(
       await a.chats.merge(
@@ -616,4 +614,88 @@ void main() {
       expect(second.state, PairingState.failed);
     },
   );
+
+  test('one person’s devices keep their agenda alike, by proof only', () async {
+    final laptop = await folio('Av. Erkan Öz', 'dizustu2');
+    final phone = await folio('Av. Erkan Öz', 'telefon2');
+    laptop.seenForTesting(phone.self!);
+    phone.seenForTesting(laptop.self!);
+    final asking = laptop.pair(phone.self!)!;
+    await until(
+      () => phone.incoming.value?.code != null && asking.code != null,
+    );
+    phone.incoming.value!.confirm();
+    asking.confirm();
+    await until(() => laptop.self!.userId == phone.self!.userId);
+    final pcDb = PortalDatabase.memory(), phoneDb = PortalDatabase.memory();
+    addTearDown(pcDb.dispose);
+    addTearDown(phoneDb.dispose);
+    for (final (net, db) in [(laptop, pcDb), (phone, phoneDb)]) {
+      net.ownParts['ajanda'] = OwnPart(
+        export: () async => db.agendaExport(),
+        merge: (theirs) async => db.agendaMerge(theirs),
+      );
+    }
+    pcDb.saveAgenda(
+      AgendaItem(
+        id: 'n1',
+        kind: 'note',
+        title: 'Bilirkişi raporuna itiraz',
+        updated: DateTime(2026, 10, 8, 9),
+      ),
+    );
+    laptop.seenForTesting(phone.self!);
+    phone.seenForTesting(laptop.self!);
+    await laptop.syncOwn();
+    expect(
+      [for (final i in phoneDb.agenda()) i.title],
+      ['Bilirkişi raporuna itiraz'],
+    );
+    expect(laptop.synced.containsKey(phone.self!.deviceId), isTrue);
+    phoneDb.removeAgenda('n1');
+    await phone.syncOwn();
+    expect(pcDb.agenda(), isEmpty);
+    // A colleague's device, known by a code, gets none of it.
+    final other = await folio('Av. Selin Aksoy', 'selin2');
+    final asked = laptop.pair(other.self!)!;
+    other.seenForTesting(laptop.self!);
+    laptop.seenForTesting(other.self!);
+    await until(() => other.incoming.value?.code != null && asked.code != null);
+    asked.mine = false;
+    other.incoming.value!.mine = false;
+    other.incoming.value!.confirm();
+    asked.confirm();
+    await until(() => laptop.isKnown(other.self!.deviceId));
+    final otherDb = PortalDatabase.memory();
+    addTearDown(otherDb.dispose);
+    other.ownParts['ajanda'] = OwnPart(
+      export: () async => otherDb.agendaExport(),
+      merge: (theirs) async => otherDb.agendaMerge(theirs),
+    );
+    pcDb.saveAgenda(
+      AgendaItem(
+        id: 'n2',
+        kind: 'note',
+        title: 'Gizli',
+        updated: DateTime(2026),
+      ),
+    );
+    // Even announced as the same person, it is not taken for theirs.
+    final o = other.self!;
+    laptop.seenForTesting(
+      OfficePeer(
+        deviceId: o.deviceId,
+        userId: laptop.self!.userId,
+        name: o.name,
+        device: o.device,
+        platform: o.platform,
+        host: o.host,
+        port: o.port,
+      ),
+    );
+    expect(laptop.ownOnline.map((p) => p.deviceId), contains(o.deviceId));
+    await laptop.syncOwn();
+    expect(otherDb.agenda(), isEmpty);
+    expect(laptop.synced.containsKey(o.deviceId), isFalse);
+  });
 }

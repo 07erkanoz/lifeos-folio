@@ -190,8 +190,23 @@ class PortalDatabase {
         local_read INTEGER, first_seen TEXT NOT NULL, updated TEXT NOT NULL,
         PRIMARY KEY(source, id));
       CREATE INDEX IF NOT EXISTS uyap_notice_sent ON uyap_notice(sent);
+      CREATE TABLE IF NOT EXISTS agenda_removed (
+        id TEXT PRIMARY KEY, at TEXT NOT NULL);
     ''');
+    // When the lawyer last decided on a deadline: for the newer to win
+    // between their own devices.
+    final columns = {
+      for (final r in _db.select('PRAGMA table_info(deadline_user)'))
+        r['name'] as String,
+    };
+    if (!columns.contains('updated')) {
+      _db.execute('ALTER TABLE deadline_user ADD COLUMN updated TEXT');
+    }
   }
+
+  /// Told after the lawyer changed the agenda here, for their other
+  /// devices to hear of it; not after what came from those.
+  static void Function()? changed;
 
   final Database _db;
 
@@ -873,6 +888,7 @@ class PortalDatabase {
       return;
     }
     _saveAgendaRow(item);
+    changed?.call();
   }
 
   void _saveAgendaRow(AgendaItem item) => _db.execute(
@@ -904,6 +920,131 @@ class PortalDatabase {
       return;
     }
     _db.execute('DELETE FROM agenda WHERE id=?', [id]);
+    // Kept, so that it is not brought back from another device.
+    _db.execute('INSERT OR REPLACE INTO agenda_removed(id, at) VALUES(?,?)', [
+      id,
+      DateTime.now().toIso8601String(),
+    ]);
+    changed?.call();
+  }
+
+  /// The agenda as the lawyer's other devices take it (docs/buro.md,
+  /// Senkron): their own rows, those taken off, and their word on the
+  /// notices' deadlines. Notices' old rows stay on each device.
+  Map<String, Object?> agendaExport() => {
+    'satirlar': [
+      for (final r in _db.select(
+        'SELECT * FROM agenda WHERE id NOT IN '
+        '(SELECT legacy_id FROM deadline_legacy)',
+      ))
+        {for (final c in r.keys) c: r[c]},
+    ],
+    'silinen': {
+      for (final r in _db.select('SELECT id, at FROM agenda_removed'))
+        r['id'] as String: r['at'] as String,
+    },
+    'kararlar': [
+      for (final r in _db.select('SELECT * FROM deadline_user'))
+        {for (final c in r.keys) c: r[c]},
+    ],
+  };
+
+  /// Takes another device's [agendaExport]: the newer of each row, and
+  /// what was taken off after it was last changed. True when anything here
+  /// changed.
+  bool agendaMerge(Object? theirs) {
+    if (theirs is! Map) return false;
+    var changedHere = false;
+    DateTime when(Object? v) =>
+        DateTime.tryParse('${v ?? ''}') ?? DateTime(2000);
+    final removed = <String, DateTime>{
+      for (final r in _db.select('SELECT id, at FROM agenda_removed'))
+        r['id'] as String: when(r['at']),
+    };
+    final mine = <String, DateTime>{
+      for (final r in _db.select('SELECT id, updated FROM agenda'))
+        r['id'] as String: when(r['updated']),
+    };
+    _db.execute('BEGIN');
+    try {
+      final gone = theirs['silinen'];
+      if (gone is Map) {
+        for (final e in gone.entries) {
+          final id = '${e.key}', at = when(e.value);
+          final had = mine[id];
+          if (had != null && !had.isAfter(at)) {
+            _db.execute('DELETE FROM agenda WHERE id=?', [id]);
+            mine.remove(id);
+            changedHere = true;
+          }
+          if (removed[id] == null || removed[id]!.isBefore(at)) {
+            _db.execute(
+              'INSERT OR REPLACE INTO agenda_removed(id, at) VALUES(?,?)',
+              [id, at.toIso8601String()],
+            );
+            removed[id] = at;
+          }
+        }
+      }
+      for (final r in (theirs['satirlar'] as List? ?? const [])) {
+        if (r is! Map || r['id'] is! String || r['kind'] is! String) continue;
+        final id = r['id'] as String, updated = when(r['updated']);
+        if (removed[id] != null && !updated.isAfter(removed[id]!)) continue;
+        if (mine[id] != null && !updated.isAfter(mine[id]!)) continue;
+        _db.execute(
+          '''INSERT OR REPLACE INTO agenda
+             (id, kind, title, body, at, all_day, done, case_key, hearing_key,
+              updated) VALUES(?,?,?,?,?,?,?,?,?,?)''',
+          [
+            id,
+            r['kind'],
+            '${r['title'] ?? ''}',
+            '${r['body'] ?? ''}',
+            r['at'] is String ? r['at'] : null,
+            r['all_day'] == 1 ? 1 : 0,
+            r['done'] == 1 ? 1 : 0,
+            r['case_key'] is String ? r['case_key'] : null,
+            r['hearing_key'] is String ? r['hearing_key'] : null,
+            updated.toIso8601String(),
+          ],
+        );
+        changedHere = true;
+      }
+      final decided = <String, DateTime>{
+        for (final r in _db.select(
+          'SELECT deadline_id, updated FROM deadline_user',
+        ))
+          r['deadline_id'] as String: when(r['updated']),
+      };
+      for (final r in (theirs['kararlar'] as List? ?? const [])) {
+        if (r is! Map || r['deadline_id'] is! String) continue;
+        final id = r['deadline_id'] as String, updated = when(r['updated']);
+        if (decided[id] != null && !updated.isAfter(decided[id]!)) continue;
+        String? text(String k) => r[k] is String ? r[k] as String : null;
+        _db.execute(
+          '''INSERT OR REPLACE INTO deadline_user(deadline_id, done,
+             manual_day, title_override, body_override, confirmed_inputs,
+             confirmed_at, dismissed, updated) VALUES(?,?,?,?,?,?,?,?,?)''',
+          [
+            id,
+            r['done'] == 1 ? 1 : 0,
+            text('manual_day'),
+            text('title_override'),
+            text('body_override'),
+            text('confirmed_inputs'),
+            text('confirmed_at'),
+            r['dismissed'] == 1 ? 1 : 0,
+            updated.toIso8601String(),
+          ],
+        );
+        changedHere = true;
+      }
+      _db.execute('COMMIT');
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      return false;
+    }
+    return changedHere;
   }
 
   static String _dayKey(DateTime d) =>
@@ -1199,21 +1340,25 @@ class PortalDatabase {
       ),
   ];
 
-  void saveDeadlineUser(DeadlineUser u) => _db.execute(
-    '''INSERT OR REPLACE INTO deadline_user(deadline_id, done, manual_day,
-       title_override, body_override, confirmed_inputs, confirmed_at,
-       dismissed) VALUES(?,?,?,?,?,?,?,?)''',
-    [
-      u.deadlineId,
-      u.done ? 1 : 0,
-      u.manualDay,
-      u.titleOverride,
-      u.bodyOverride,
-      u.confirmedInputs,
-      u.confirmedAt?.toIso8601String(),
-      u.dismissed ? 1 : 0,
-    ],
-  );
+  void saveDeadlineUser(DeadlineUser u) {
+    _db.execute(
+      '''INSERT OR REPLACE INTO deadline_user(deadline_id, done, manual_day,
+         title_override, body_override, confirmed_inputs, confirmed_at,
+         dismissed, updated) VALUES(?,?,?,?,?,?,?,?,?)''',
+      [
+        u.deadlineId,
+        u.done ? 1 : 0,
+        u.manualDay,
+        u.titleOverride,
+        u.bodyOverride,
+        u.confirmedInputs,
+        u.confirmedAt?.toIso8601String(),
+        u.dismissed ? 1 : 0,
+        DateTime.now().toIso8601String(),
+      ],
+    );
+    changed?.call();
+  }
 
   /// Confirms [id] on the inputs it has now; refused for one without a day.
   bool confirmDeadline(String id, {DateTime? now}) {

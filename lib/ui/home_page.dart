@@ -4,6 +4,7 @@ import 'agenda/mobile_connect.dart';
 import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import 'agenda/uyap_notices_page.dart';
+import '../services/sync/own_sync.dart';
 import '../services/office/office_network.dart';
 import '../services/office/office_notices.dart';
 import '../services/platform/system_notices.dart';
@@ -56,6 +57,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../services/platform/file_actions.dart';
+import 'sync/sync_page.dart';
 import 'office/send_to_office.dart';
 import 'office/office_network_page.dart';
 import 'office/office_offer_dialog.dart';
@@ -722,6 +724,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       OfficeNetwork.instance.incoming.addListener(_pairingAsked);
       OfficeNetwork.instance.incomingOffer.addListener(_offerCame);
       tellOffice(OfficeNetwork.instance);
+      // The agenda kept alike with the person's own devices.
+      unawaited(OwnSync.instance.start());
       OfficeNetwork.instance.addListener(_officeCounted);
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
@@ -1120,6 +1124,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'uets' ||
         value == 'bildirim' ||
         value == 'buro' ||
+        value == 'senkron' ||
         value == 'gorevler' ||
         value == 'mesajlar' ||
         value == 'ayarlar' ||
@@ -1145,6 +1150,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'uets' ||
       group == 'bildirim' ||
       group == 'buro' ||
+      group == 'senkron' ||
       group == 'gorevler' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
@@ -1156,6 +1162,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'uets' ||
       group == 'bildirim' ||
       group == 'buro' ||
+      group == 'senkron' ||
       group == 'gorevler' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
@@ -1757,6 +1764,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   (mobile
                                       ? _group != 'images' &&
                                             _group != 'buro' &&
+                                            _group != 'senkron' &&
                                             _group != 'gorevler' &&
                                             _group != 'mesajlar' &&
                                             !_isUyapGroup(_group)
@@ -1975,6 +1983,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? _noticesPage()
                                               : _group == 'buro'
                                               ? const OfficeNetworkPage()
+                                              : _group == 'senkron'
+                                              ? const SyncPage()
                                               : _group == 'gorevler'
                                               ? const TasksPage()
                                               : _group == 'mesajlar'

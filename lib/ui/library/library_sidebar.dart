@@ -235,6 +235,14 @@ class LibrarySidebar extends StatelessWidget {
                   null,
                   key: const ValueKey('office-network-nav'),
                 ),
+                _nav(
+                  context,
+                  Icons.sync_rounded,
+                  'Senkron',
+                  'senkron',
+                  null,
+                  key: const ValueKey('sync-nav'),
+                ),
                 if (office) ...[
                   _nav(
                     context,

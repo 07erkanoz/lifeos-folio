@@ -28,6 +28,8 @@ import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/ui/office/office_network_page.dart';
 import 'package:evrak_convert/ui/office/send_to_office.dart';
+import 'package:evrak_convert/ui/sync/sync_page.dart';
+import 'package:evrak_convert/services/sync/own_sync.dart';
 import 'package:evrak_convert/ui/office/qr_pairing.dart';
 import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
@@ -666,6 +668,84 @@ void main() {
       await _shot(tester, name);
     }
     lock.dispose();
+    tester.view.reset();
+  });
+
+  testWidgets('senkron', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('folio_sync_shot_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    late OfficeNetwork pc;
+    late OwnSync sync;
+    await tester.runAsync(() async {
+      Future<OfficeNetwork> folio(String device, OfficePlatform os) async {
+        final net = OfficeNetwork(
+          settings: () async => File('${dir.path}/$device/buro.json'),
+          known: KnownDevices(
+            file: () async => File('${dir.path}/$device/k.json'),
+          ),
+          ledger: OfficeLedger(
+            file: () async => File('${dir.path}/$device/d.json'),
+          ),
+          tasks: OfficeTasks(
+            file: () async => File('${dir.path}/$device/g.json'),
+          ),
+          chats: OfficeChats(
+            file: () async => File('${dir.path}/$device/m.json'),
+          ),
+        );
+        final identity = await OfficeIdentity.load(store: _MemoryStore());
+        await net.listenForTesting(
+          identity,
+          OfficePeer(
+            deviceId: identity.deviceId,
+            userId: identity.userId,
+            name: 'Av. Deniz Kaya',
+            device: device,
+            platform: os,
+          ),
+        );
+        return net;
+      }
+
+      pc = await folio('deniz-masaustu', OfficePlatform.windows);
+      final phone = await folio('Telefon', OfficePlatform.android);
+      pc.seenForTesting(phone.self!);
+      phone.seenForTesting(pc.self!);
+      final asking = pc.pair(phone.self!)!;
+      for (var i = 0; i < 300 && phone.incoming.value?.code == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      phone.incoming.value!.confirm();
+      asking.confirm();
+      for (var i = 0; i < 300 && pc.self!.userId != phone.self!.userId; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      final db = PortalDatabase.memory();
+      sync = OwnSync(
+        network: pc,
+        database: () async => db,
+        file: () async => File('${dir.path}/senkron.json'),
+      );
+      await sync.start();
+      await pc.syncOwn();
+    });
+    for (final (size, name) in [
+      (logical, 'senkron'),
+      (const Size(390, 844), 'senkron-telefon'),
+    ]) {
+      tester.view.physicalSize = size * pixelRatio;
+      tester.view.devicePixelRatio = pixelRatio;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: SyncPage(network: pc, sync: sync),
+          ),
+        ),
+      );
+      await tester.pump();
+      await _shot(tester, name);
+    }
     tester.view.reset();
   });
 
