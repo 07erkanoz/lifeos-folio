@@ -1351,7 +1351,8 @@ class OfficeNetwork extends ChangeNotifier {
 
   void _messageCame(String chatId, ChatMessage m) {
     final c = chats.of(chatId);
-    if (c != null && m.by != me) onMessage?.call(c, m);
+    // A correction is no new message: nothing is told of it.
+    if (c != null && m.by != me && !m.isCorrection) onMessage?.call(c, m);
   }
 
   void _taskMoved(String taskId, TaskEvent e) {
@@ -1485,6 +1486,41 @@ class OfficeNetwork extends ChangeNotifier {
     return null;
   }
 
+  /// [original], one of this person's own messages, corrected to [text],
+  /// or [delete]d: a signed message of its own that every device in the
+  /// talk applies (see [Chat.ordered]). Files already sent stay where they
+  /// came; the talk no longer shows them.
+  Future<String?> correct(
+    Chat chat,
+    ChatMessage original, {
+    String text = '',
+    bool delete = false,
+  }) async {
+    final self = _self;
+    if (self == null) return 'Önce büro ağına katılın.';
+    if (original.by != me) {
+      return 'Yalnız kendi mesajınızı değiştirebilirsiniz.';
+    }
+    if (!delete && text.trim().isEmpty) return 'Mesajı boş bırakmayın; silin.';
+    final unsigned = ChatMessage(
+      id: Chat.newId(),
+      by: me,
+      device: self.deviceId,
+      byName: self.name,
+      at: DateTime.now(),
+      text: delete ? '' : text.trim(),
+      replaces: original.id,
+      deleted: delete,
+    );
+    final m = unsigned.signed(
+      await _identity!.signAsDevice(unsigned.signedOf(chat.id)),
+    );
+    await chats.add(chat, m);
+    notifyListeners();
+    unawaited(_shareChat(chat));
+    return null;
+  }
+
   /// The devices a talk goes to: every device of its people, this
   /// person's others too, while they are of the office.
   Set<String> _audience(Chat chat) => {
@@ -1529,8 +1565,10 @@ class OfficeNetwork extends ChangeNotifier {
         notifyListeners();
       }
     } catch (_) {}
-    // This device's files that have not yet reached it.
-    for (final msg in chat.messages) {
+    // This device's files that have not yet reached it. A copy is gone
+    // through: a message written while a file is on its way joins the
+    // talk meanwhile.
+    for (final msg in [...chat.messages]) {
       final left = chats.pending[msg.id];
       if (msg.device != _self?.deviceId ||
           left == null ||

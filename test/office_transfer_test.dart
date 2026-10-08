@@ -365,6 +365,26 @@ void main() {
     );
     expect(b.chats.fileOf(got.id, 'Ara Karar.pdf'), contains('Mesajlar'));
     await until(() => a.chats.pending.isEmpty);
+    // The writer corrects their words, then takes them back: so for all.
+    final sent = a.chats.of(mine.id)!.ordered.single;
+    expect(
+      await a.correct(mine, sent, text: 'Şuna bakar mısın, acil?'),
+      isNull,
+    );
+    await until(
+      () =>
+          b.chats.of(mine.id)!.ordered.single.text == 'Şuna bakar mısın, acil?',
+    );
+    expect(b.chats.of(mine.id)!.edited(sent.id), isTrue);
+    expect(b.chats.unread(b.chats.of(mine.id)!, b.me), 1);
+    // No one corrects another's words.
+    expect(
+      await b.correct(b.chats.of(mine.id)!, sent, text: 'başka'),
+      isNotNull,
+    );
+    expect(await a.correct(mine, sent, delete: true), isNull);
+    await until(() => b.chats.of(mine.id)!.ordered.single.deleted);
+    expect(b.chats.of(mine.id)!.ordered.single.attachments, isEmpty);
     // A group: what one writes reaches the others.
     final group = (await a.groupChat('Duruşma ekibi', [
       b.self!.deviceId,

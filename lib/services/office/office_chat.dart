@@ -81,8 +81,19 @@ class ChatMessage {
     this.attachments = const [],
     this.signature = '',
     String? device,
+    this.replaces,
+    this.deleted = false,
   }) : device = device ?? by;
   final String id, by, byName, text;
+
+  /// A correction of an earlier message of the same writer: [replaces] is
+  /// its id, [text] its new words, or [deleted]. Messages are only ever
+  /// added to a talk, never changed; a correction is a message of its own,
+  /// signed like the rest, and only its writer's own is ever applied.
+  final String? replaces;
+  final bool deleted;
+
+  bool get isCorrection => replaces != null;
 
   /// The device that wrote and signed it: one of [by]'s, the person's.
   final String device;
@@ -95,7 +106,13 @@ class ChatMessage {
   /// What its writer signs: the words, the files and the talk they are in.
   List<int> signedOf(String chatId) => utf8.encode(
     [
-      'folio-mesaj-2',
+      // A correction signs what it corrects too; a message signs as before.
+      if (replaces != null) ...[
+        'folio-mesaj-duzeltme-1',
+        replaces!,
+        deleted ? 'sil' : 'duzelt',
+      ] else
+        'folio-mesaj-2',
       chatId,
       id,
       by,
@@ -117,6 +134,21 @@ class ChatMessage {
     attachments: attachments,
     signature: signature,
     device: device,
+    replaces: replaces,
+    deleted: deleted,
+  );
+
+  /// The same message with a correction applied: its new words, or none.
+  ChatMessage corrected(ChatMessage c) => ChatMessage(
+    id: id,
+    by: by,
+    byName: byName,
+    at: at,
+    text: c.deleted ? '' : c.text,
+    attachments: c.deleted ? const [] : attachments,
+    signature: signature,
+    device: device,
+    deleted: c.deleted,
   );
 
   Map<String, Object?> toJson() => {
@@ -129,6 +161,8 @@ class ChatMessage {
       'ekler': [for (final a in attachments) a.toJson()],
     if (signature.isNotEmpty) 'imza': signature,
     if (device != by) 'cihaz': device,
+    'yerine': ?replaces,
+    if (deleted) 'silindi': true,
   };
   static ChatMessage? fromJson(Object? j) {
     if (j is! Map || j['id'] is! String || j['kim'] is! String) return null;
@@ -146,6 +180,8 @@ class ChatMessage {
       ],
       signature: j['imza'] is String ? j['imza'] as String : '',
       device: j['cihaz'] is String ? j['cihaz'] as String : null,
+      replaces: j['yerine'] is String ? j['yerine'] as String : null,
+      deleted: j['silindi'] == true,
     );
   }
 }
@@ -168,9 +204,35 @@ class Chat {
   final Map<String, String> members;
   final List<ChatMessage> messages;
 
-  List<ChatMessage> get ordered =>
-      [...messages]..sort((a, b) => a.at.compareTo(b.at));
-  ChatMessage? get last => messages.isEmpty ? null : ordered.last;
+  /// The talk as it reads: its messages in order, each with its writer's
+  /// last correction applied; the corrections themselves not shown.
+  List<ChatMessage> get ordered {
+    final sorted = [...messages]..sort((a, b) => a.at.compareTo(b.at));
+    final byId = {
+      for (final m in sorted)
+        if (!m.isCorrection) m.id: m,
+    };
+    final last = <String, ChatMessage>{};
+    for (final c in sorted) {
+      if (!c.isCorrection) continue;
+      // Only the writer's own: no one corrects another's words.
+      if (byId[c.replaces]?.by != c.by) continue;
+      last[c.replaces!] = c;
+    }
+    return [
+      for (final m in sorted)
+        if (!m.isCorrection) last[m.id] == null ? m : m.corrected(last[m.id]!),
+    ];
+  }
+
+  /// Whether a message was corrected after it was written.
+  bool edited(String messageId) =>
+      messages.any((c) => c.replaces == messageId && !c.deleted);
+
+  ChatMessage? get last {
+    final shown = ordered;
+    return shown.isEmpty ? null : shown.last;
+  }
 
   /// The other person's name for a private talk, else its own name.
   String titleFor(String me) => switch (kind) {
@@ -254,7 +316,12 @@ class OfficeChats {
   int unread(Chat c, String me) {
     final seen = _read[c.id];
     return c.messages
-        .where((m) => m.by != me && (seen == null || m.at.isAfter(seen)))
+        .where(
+          (m) =>
+              !m.isCorrection &&
+              m.by != me &&
+              (seen == null || m.at.isAfter(seen)),
+        )
         .length;
   }
 

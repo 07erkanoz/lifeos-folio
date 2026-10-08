@@ -698,6 +698,15 @@ void main() {
         b.chats.of(chat.id)!,
         text: 'Tamam, akşama kadar bakıyorum.',
       );
+      // One corrected, one taken back.
+      final talk = b.chats.of(chat.id)!;
+      await b.correct(
+        talk,
+        talk.ordered.last,
+        text: 'Tamam, akşama kadar bakıp size dönüyorum.',
+      );
+      await b.post(talk, text: 'Yanlış dosyaya yazdım');
+      await b.correct(talk, talk.ordered.last, delete: true);
       final word = (await a.broadcastChat())!;
       await a.post(word, text: 'Cuma günü büro 14:00’te kapanacak.');
       for (var i = 0; i < 100; i++) {

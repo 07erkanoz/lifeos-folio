@@ -305,6 +305,7 @@ class _MessagesPageState extends State<MessagesPage> {
 
   static String _preview(ChatMessage? m) {
     if (m == null) return 'Henüz mesaj yok';
+    if (m.deleted) return '${m.byName}: mesaj silindi';
     if (m.text.isNotEmpty) return '${m.byName}: ${m.text}';
     final a = m.attachments.firstOrNull;
     return switch (a?.kind) {
@@ -571,16 +572,134 @@ class _ChatThreadState extends State<ChatThread> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${mine ? 'Siz' : m.byName} · ${dayText(m.at)} ${clockText(m.at)}',
-              style: const TextStyle(fontSize: 10.5, color: AgendaColors.muted),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    '${mine ? 'Siz' : m.byName} · ${dayText(m.at)} '
+                    '${clockText(m.at)}'
+                    '${!m.deleted && chat.edited(m.id) ? ' · düzenlendi' : ''}',
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: AgendaColors.muted,
+                    ),
+                  ),
+                ),
+                // One's own words: corrected or taken back, for all.
+                if (mine && !m.deleted)
+                  SizedBox(
+                    width: 26,
+                    height: 20,
+                    child: PopupMenuButton<String>(
+                      key: ValueKey('chat-message-menu-${m.id}'),
+                      tooltip: 'Mesaj',
+                      padding: EdgeInsets.zero,
+                      iconSize: 16,
+                      icon: const Icon(
+                        Icons.more_horiz_rounded,
+                        color: AgendaColors.muted,
+                      ),
+                      onSelected: (v) => unawaited(
+                        v == 'sil' ? _delete(chat, m) : _edit(chat, m),
+                      ),
+                      itemBuilder: (_) => [
+                        if (m.text.isNotEmpty)
+                          const PopupMenuItem(
+                            value: 'duzelt',
+                            child: Text('Düzelt'),
+                          ),
+                        const PopupMenuItem(value: 'sil', child: Text('Sil')),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-            if (m.text.isNotEmpty) Text(m.text),
+            if (m.deleted)
+              const Text(
+                'Bu mesaj silindi',
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: AgendaColors.muted,
+                ),
+              )
+            else if (m.text.isNotEmpty)
+              Text(m.text),
             for (final a in m.attachments) _attachment(context, m, a),
           ],
         ),
       ),
     );
+  }
+
+  /// The writer's own message, its words corrected for everyone in the talk.
+  Future<void> _edit(Chat chat, ChatMessage m) async {
+    final field = TextEditingController(text: m.text);
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mesajı düzelt'),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            key: const ValueKey('chat-edit-field'),
+            controller: field,
+            autofocus: true,
+            minLines: 1,
+            maxLines: 6,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('chat-edit-save'),
+            onPressed: () => Navigator.pop(context, field.text),
+            child: const Text('Kaydet'),
+          ),
+        ],
+      ),
+    );
+    field.dispose();
+    if (text == null || text.trim() == m.text.trim()) return;
+    final error = await _net.correct(chat, m, text: text);
+    if (error != null && mounted) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  /// The writer's own message taken back, for everyone in the talk.
+  Future<void> _delete(Chat chat, ChatMessage m) async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mesaj silinsin mi?'),
+        content: const Text(
+          'Mesaj konuşmadaki herkesten silinir; yerinde “Bu mesaj silindi” '
+          'yazar. Önceden gönderilmiş dosyalar alanların cihazında kalır.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('chat-delete-yes'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true) return;
+    final error = await _net.correct(chat, m, delete: true);
+    if (error != null && mounted) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(error)));
+    }
   }
 
   Widget _attachment(BuildContext context, ChatMessage m, ChatAttachment a) {
