@@ -823,6 +823,7 @@ class OfficeNetwork extends ChangeNotifier {
 
   void _watchPairing(OfficePairing pairing) {
     pairing.ownCount = _ownCount;
+    pairing.member = ledger.member(_self?.deviceId ?? '') != null;
     void done() {
       if (pairing.state != PairingState.done || !pairing.bothMine) return;
       pairing.removeListener(done);
@@ -830,7 +831,13 @@ class OfficeNetwork extends ChangeNotifier {
       if (other == null) return;
       _ownConsent.add(other.deviceId);
       unawaited(
-        _unify(other, mine: pairing.ownCount, theirs: pairing.theirOwnCount),
+        _unify(
+          other,
+          mine: pairing.ownCount,
+          theirs: pairing.theirOwnCount,
+          memberHere: pairing.member,
+          memberThere: pairing.theirMember,
+        ),
       );
     }
 
@@ -843,11 +850,17 @@ class OfficeNetwork extends ChangeNotifier {
     OfficePeer other, {
     required int mine,
     required int theirs,
+    bool memberHere = false,
+    bool memberThere = false,
   }) async {
     final identity = _identity;
     if (identity == null || other.userId == identity.userId) return;
-    // The key shared by more devices is kept; else the smaller id's.
-    final keep = mine != theirs
+    // An office member's key is kept, the office knowing them by it; else
+    // the key shared by more devices; else the smaller id's. Both devices
+    // say what they know of it, so both decide alike.
+    final keep = memberHere != memberThere
+        ? memberHere
+        : mine != theirs
         ? mine > theirs
         : identity.userId.compareTo(other.userId) < 0;
     if (!keep) return;

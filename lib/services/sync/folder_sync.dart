@@ -215,14 +215,19 @@ class FolderSync extends ChangeNotifier {
   }
 
   /// Keeps an offered folder here too, under Senkron's folder; with
-  /// [existing] false only what changes from now on comes.
-  Future<void> join(String id, {bool existing = true}) async {
-    final o = offered.remove(id);
-    if (o == null || folders.containsKey(id)) return;
+  /// [existing] false only what changes from now on comes. Why not, when
+  /// it cannot be.
+  Future<String?> join(String id, {bool existing = true}) async {
+    final o = offered[id];
+    if (o == null || folders.containsKey(id)) return null;
     var dir = Directory(p.join(_root(), _safeName(o.name)));
     for (var n = 2; await dir.exists(); n++) {
       dir = Directory(p.join(_root(), '${_safeName(o.name)} ($n)'));
     }
+    // Not inside a folder kept alike already, nor around one.
+    final why = whyNot(dir.path);
+    if (why != null) return why;
+    offered.remove(id);
     await dir.create(recursive: true);
     folders[id] = SyncedFolder(
       id: id,
@@ -234,6 +239,7 @@ class FolderSync extends ChangeNotifier {
     onAdded?.call(dir.path);
     notifyListeners();
     unawaited(_net.syncOwn());
+    return null;
   }
 
   /// Keeps it no more; its files stay where they are.

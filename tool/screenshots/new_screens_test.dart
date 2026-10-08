@@ -774,6 +774,23 @@ void main() {
       await tester.pump();
       await _shot(tester, name);
     }
+    // Not yet on: one button, no office needed.
+    final off = OfficeNetwork();
+    tester.view.physicalSize = const Size(390, 844) * pixelRatio;
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: SyncPage(
+            network: off,
+            sync: OwnSync(network: off, sessions: _ShotSessions({})),
+            folderSync: FolderSync(network: off),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await _shot(tester, 'senkron-kapali');
     tester.view.reset();
   });
 

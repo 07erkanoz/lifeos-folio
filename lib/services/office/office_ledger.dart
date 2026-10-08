@@ -302,6 +302,7 @@ class OfficeLedger {
     if (key == null) return 'Kod 32 harf ve rakam olmalı.';
     final record = {
       'k': 'kurtar',
+      'kod': _state.recoveryId,
       ..._about(self, base64Encode(identity.devicePublic.bytes)),
       'buro': officeId,
       'onceki': idOf(_records.last),
@@ -426,6 +427,36 @@ class OfficeLedger {
   /// The office as its valid records make it, in the order they were
   /// signed; the founding record of another office is no part of this one.
   static Future<_State> _replay(List<Map<String, Object?>> records) async {
+    var all = records;
+    for (var round = 0; round < 8; round++) {
+      final state = await _replayOnce(all);
+      // A recovery by a code older than the last stands only if the last
+      // was made after it, on a ledger that had it: one hung later on an
+      // old branch, by a code made void, does not.
+      final last = state.recoveryId;
+      final ids = {for (final r in all) idOf(r): r};
+      final before = <String>{};
+      for (var at = last; at != null && before.add(at);) {
+        final o = ids[at]?['onceki'];
+        at = o is String ? o : null;
+      }
+      final stale = {
+        for (final r in state.kept)
+          if (r['k'] == 'kurtar' &&
+              r['kod'] != last &&
+              !before.contains(idOf(r)))
+            idOf(r),
+      };
+      if (stale.isEmpty) return state;
+      all = [
+        for (final r in all)
+          if (!stale.contains(idOf(r))) r,
+      ];
+    }
+    return _replayOnce(all);
+  }
+
+  static Future<_State> _replayOnce(List<Map<String, Object?>> records) async {
     // Each record's place is how far it is from the founding along the
     // records it says it came after; a record whose predecessor is not here
     // waits outside. Equal places are put by id, the same on every device.
@@ -451,7 +482,7 @@ class OfficeLedger {
           final d = depth[idOf(a)]!.compareTo(depth[idOf(b)]!);
           return d != 0 ? d : idOf(a).compareTo(idOf(b));
         });
-    String? office, recovery;
+    String? office, recovery, recoveryId;
     var name = '';
     final members = <String, OfficeMember>{};
     final kept = <Map<String, Object?>>[];
@@ -478,6 +509,8 @@ class OfficeLedger {
         final key = r['dk'], word = r['kurtarma'];
         final founder = members.values.where((m) => m.founder).firstOrNull;
         if (recovery == null || founder == null) continue;
+        // By the code that was the latest where it stands.
+        if (r['kod'] != recoveryId) continue;
         if (key is! String || word is! String) continue;
         if (r['imzalayan'] != subject || members.containsKey(subject)) continue;
         if (OfficeIdentity.idOf(base64Decode(key)) != subject) continue;
@@ -514,6 +547,7 @@ class OfficeLedger {
         if (!signer.founder || up is! String) continue;
         if (!await _holds(r, signer.publicKey)) continue;
         recovery = up;
+        recoveryId = idOf(r);
         kept.add(r);
         continue;
       }
@@ -537,11 +571,9 @@ class OfficeLedger {
         final up = r['up'], uc = r['uc'], mc = r['mc'];
         if (up is! String || uc is! String || mc is! String) continue;
         final userKey = base64Decode(up);
-        if (!await OfficeIdentity.vouchedBy(
-              userKey,
-              base64Decode(key),
-              uc,
-            ) ||
+        // The person's key the member came in under, not one made anew.
+        if (OfficeIdentity.idOf(userKey) != signer.userId) continue;
+        if (!await OfficeIdentity.vouchedBy(userKey, base64Decode(key), uc) ||
             !await OfficeIdentity.vouchedBy(
               userKey,
               base64Decode(signer.publicKey),
@@ -613,7 +645,7 @@ class OfficeLedger {
       }
       kept.add(r);
     }
-    return _State(office, name, members, kept, recovery);
+    return _State(office, name, members, kept, recovery, recoveryId);
   }
 
   static OfficeMember? _member(
@@ -663,17 +695,19 @@ class _State {
     this.members,
     this.kept, [
     this.recovery,
+    this.recoveryId,
   ]);
   const _State.empty()
     : officeId = null,
       officeName = '',
       members = const {},
       kept = const [],
-      recovery = null;
+      recovery = null,
+      recoveryId = null;
   final String? officeId;
 
-  /// The founder's recovery code's public key, the latest.
-  final String? recovery;
+  /// The founder's recovery code's public key, the latest, and its record.
+  final String? recovery, recoveryId;
   final String officeName;
   final Map<String, OfficeMember> members;
   final List<Map<String, Object?>> kept;

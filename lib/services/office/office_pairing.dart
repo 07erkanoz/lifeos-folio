@@ -99,6 +99,11 @@ class OfficePairing extends ChangeNotifier {
   int ownCount = 0;
   int theirOwnCount = 0;
 
+  /// Whether this device, and the other, is a member of an office: a
+  /// member's person key is the one kept, the office knowing them by it.
+  bool member = false;
+  bool theirMember = false;
+
   /// Both users said the other device is their own.
   bool get bothMine => mine && _theirsMine;
   List<int>? _theirNonce, _theirCommit;
@@ -307,6 +312,7 @@ class OfficePairing extends ChangeNotifier {
         _theirs = true;
         _theirsMine = m['benim'] == true;
         theirOwnCount = m['kendi'] is int ? m['kendi'] as int : 0;
+        theirMember = m['uye'] == true;
         unawaited(_maybeDone());
       case 'reject':
         _end(PairingState.rejected, 'Karşı tarafta reddedildi.');
@@ -353,7 +359,12 @@ class OfficePairing extends ChangeNotifier {
   void confirm() {
     if (_code == null || _mine || finished) return;
     _mine = true;
-    _link?.send({'t': 'confirm', 'benim': mine, 'kendi': ownCount});
+    _link?.send({
+      't': 'confirm',
+      'benim': mine,
+      'kendi': ownCount,
+      'uye': member,
+    });
     _set(PairingState.confirmed);
     unawaited(_maybeDone());
   }

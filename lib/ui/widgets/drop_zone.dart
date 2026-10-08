@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -105,22 +106,39 @@ class _DropZoneOverlayState extends State<DropZoneOverlay> {
 }
 
 /// The files among [paths], a folder's own and its folders' too, at most
-/// [limit]: what is dropped to be sent.
-List<String> droppedFiles(List<String> paths, {int limit = 500}) {
+/// [limit]; [more] when there were more. Links are not followed and
+/// nothing under a name starting with a dot is taken: what is dropped to
+/// be sent is what the user sees in it.
+({List<String> files, bool more}) droppedFiles(
+  List<String> paths, {
+  int limit = 500,
+}) {
   final out = <String>[];
+  var more = false;
+  bool hidden(String root, String path) =>
+      p.split(p.relative(path, from: root)).any((s) => s.startsWith('.'));
   for (final path in paths) {
-    if (out.length >= limit) break;
     if (FileSystemEntity.isDirectorySync(path)) {
       try {
-        for (final e in Directory(path).listSync(recursive: true)) {
-          if (out.length >= limit) break;
-          final name = e.uri.pathSegments.where((s) => s.isNotEmpty).last;
-          if (e is File && !name.startsWith('.')) out.add(e.path);
+        for (final e in Directory(
+          path,
+        ).listSync(recursive: true, followLinks: false)) {
+          if (e is! File || hidden(path, e.path)) continue;
+          if (out.length >= limit) {
+            more = true;
+            break;
+          }
+          out.add(e.path);
         }
       } catch (_) {}
-    } else if (FileSystemEntity.isFileSync(path)) {
+    } else if (FileSystemEntity.isFileSync(path) &&
+        !FileSystemEntity.isLinkSync(path)) {
+      if (out.length >= limit) {
+        more = true;
+        break;
+      }
       out.add(path);
     }
   }
-  return out;
+  return (files: out, more: more);
 }

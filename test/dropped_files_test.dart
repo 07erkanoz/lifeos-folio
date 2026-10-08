@@ -13,12 +13,17 @@ void main() {
     Directory('${folder.path}/Alt').createSync();
     File('${folder.path}/Alt/Ek 2.pdf').writeAsStringSync('e');
     File('${folder.path}/.gizli').writeAsStringSync('g');
-    final got = droppedFiles([one.path, folder.path, '${dir.path}/yok.pdf']);
+    Directory('${folder.path}/.saklı').createSync();
+    File('${folder.path}/.saklı/Ek 3.pdf').writeAsStringSync('g');
+    final got = droppedFiles([one.path, folder.path, '${dir.path}/yok.pdf'])
+        .files;
     expect(got.map((p) => p.split(Platform.pathSeparator).last).toSet(), {
       'Dilekçe.udf',
       'Ek 1.pdf',
       'Ek 2.pdf',
     });
-    expect(droppedFiles([folder.path], limit: 1), hasLength(1));
+    final few = droppedFiles([folder.path], limit: 1);
+    expect((few.files.length, few.more), (1, true));
+    expect(droppedFiles([folder.path]).more, isFalse);
   });
 }

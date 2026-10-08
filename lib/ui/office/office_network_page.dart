@@ -110,8 +110,18 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
 
   /// Files dropped on the page: whom they go to is asked.
   void _dropped(List<String> paths) {
-    final files = droppedFiles(paths);
+    final (:files, :more) = droppedFiles(paths);
     if (files.isEmpty) return;
+    if (more) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Bıraktıklarınızda ${files.length} dosyadan fazlası var; ilk '
+            '${files.length} dosya gönderilecek.',
+          ),
+        ),
+      );
+    }
     if (_net.sendTargets.isEmpty) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(

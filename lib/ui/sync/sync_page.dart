@@ -172,13 +172,31 @@ class _SyncPageState extends State<SyncPage> {
               style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            if (!_net.joined)
+            if (!_net.joined) ...[
               const Text(
-                'Senkron, Büro ağı açıkken çalışır. Büro ağı sayfasından ağa '
-                'katılın.',
+                'Senkron açılınca bu cihaz aynı ağdaki kendi cihazlarınızı '
+                'bulur. Büro kurmanız gerekmez; başka kimse sizin cihazınızı '
+                'tanımadan hiçbir şey alamaz.',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
-              )
-            else ...[
+              ),
+              if (_net.error != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _net.error!,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AgendaColors.taskText,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                key: const ValueKey('sync-join'),
+                onPressed: _net.starting ? null : () => unawaited(_net.join()),
+                icon: const Icon(Icons.sync_rounded),
+                label: Text(_net.starting ? 'Açılıyor…' : 'Senkronu aç'),
+              ),
+            ] else ...[
               if (self != null)
                 _deviceRow(
                   icon(self.platform),
@@ -491,7 +509,11 @@ class _SyncPageState extends State<SyncPage> {
       if (answer == null) return;
       existing = answer;
     }
-    await _folders.join(o.id, existing: existing);
+    final why = await _folders.join(o.id, existing: existing);
+    if (why != null && mounted) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(why)));
+    }
   }
 
   Widget _folderCard(BuildContext context) {

@@ -240,12 +240,20 @@ void main() {
     // Taken by the office's other devices as the founder.
     expect(await l.merge(there.records), isTrue);
     expect(l.member(fresh.deviceId)?.founder, isTrue);
+    // A copy of the ledger as it was under the first code.
+    final old = ledger('eski');
+    await old.merge(l.records);
+    final newer = (await l.makeRecovery(deniz))!;
+    // The recovery made before the new code stands.
+    expect(l.member(fresh.deviceId)?.founder, isTrue);
+    // One hung on the old branch by the voided code does not.
+    final (late, latePeer, _) = await device('Av. Deniz Kaya');
+    expect(await old.recover(late, latePeer, code), isNull);
+    expect(await l.merge(old.records), isFalse);
+    expect(l.member(late.deviceId), isNull);
+    // By the new code, it does.
     final again = ledger('baska');
     await again.merge(l.records);
-    final newer = (await l.makeRecovery(deniz))!;
-    await again.merge(l.records);
-    final (late, latePeer, _) = await device('Av. Deniz Kaya');
-    // The last code voids the one before.
     expect(await again.recover(late, latePeer, code), isNotNull);
     expect(await again.recover(late, latePeer, newer), isNull);
   });

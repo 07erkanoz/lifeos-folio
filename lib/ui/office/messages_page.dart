@@ -422,10 +422,28 @@ class _ChatThreadState extends State<ChatThread> {
   /// Files dropped on the talk: sent in it, with the words being written.
   Future<void> _dropped(List<String> paths) async {
     final chat = _net.chats.of(widget.chatId);
-    final files = droppedFiles(paths);
+    final (:files, :more) = droppedFiles(paths);
     if (chat == null || files.isEmpty || !_net.mayWrite(chat)) return;
-    await _say(_net.post(chat, text: _text.text, files: files));
-    _text.clear();
+    if (more) _tooMany(files.length);
+    final error = await _net.post(chat, text: _text.text, files: files);
+    if (!mounted) return;
+    // The words written stay when they did not go.
+    if (error == null) {
+      _text.clear();
+    } else {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  void _tooMany(int sent) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Klasörde $sent dosyadan fazlası var; ilk $sent dosya gönderiliyor.',
+        ),
+      ),
+    );
   }
 
   @override
