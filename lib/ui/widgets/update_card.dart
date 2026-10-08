@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../services/update/update_check.dart';
 import '../../services/update/update_manifest.dart';
 import 'update_dialog.dart';
 
@@ -109,14 +108,6 @@ class UpdateCard extends StatelessWidget {
               spacing: 6,
               runSpacing: 4,
               children: [
-                TextButton(
-                  key: const ValueKey('update-skip'),
-                  onPressed: () {
-                    unawaited(UpdateCheck.instance.skip(update));
-                    onLater?.call();
-                  },
-                  child: const Text('Bu sürümü atla'),
-                ),
                 if (onLater != null)
                   TextButton(
                     key: const ValueKey('update-later'),

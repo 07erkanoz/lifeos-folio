@@ -142,13 +142,14 @@ void main() {
       expect(await check(manifest, installed: 6).check(), isNull);
     });
 
-    test('a skipped build is not offered again; a later one is', () async {
+    test('a release put off is offered again at the next check', () async {
       seedKey = await publicKey();
       final first = check(await signed(body(build: 5)));
-      final offered = await first.check();
-      await first.skip(offered!);
-      expect(await check(await signed(body(build: 5))).check(), isNull);
-      expect((await check(await signed(body(build: 6))).check())?.build, 6);
+      expect(await first.check(), isNotNull);
+      first.later();
+      expect(first.available.value, isNull);
+      expect(first.ready.value?.build, 5);
+      expect((await check(await signed(body(build: 5))).check())?.build, 5);
     });
 
     test('nothing published, or nothing readable, is quiet', () async {

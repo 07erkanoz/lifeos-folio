@@ -4,9 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path/path.dart' as p;
 
-import '../platform/app_directories.dart';
 import 'update_manifest.dart';
 
 /// Looks, now and then, whether a newer Folio has been published, and says
@@ -16,12 +14,12 @@ class UpdateCheck {
   UpdateCheck({
     @visibleForTesting Future<String?> Function(Uri address)? fetch,
     @visibleForTesting Future<int> Function()? currentBuild,
+    // Where a skipped release was once kept; nothing is skipped now.
     @visibleForTesting Future<File> Function()? settings,
     @visibleForTesting String? platform,
     @visibleForTesting List<int>? key,
   }) : _fetch = fetch ?? _get,
        _currentBuild = currentBuild ?? _installedBuild,
-       _settings = settings ?? _settingsFile,
        _platform = platform ?? platformName,
        // A named argument may not begin with an underscore, so `this._key`
        // cannot be one.
@@ -32,7 +30,6 @@ class UpdateCheck {
 
   final Future<String?> Function(Uri address) _fetch;
   final Future<int> Function() _currentBuild;
-  final Future<File> Function() _settings;
   final String? _platform;
   final List<int>? _key;
 
@@ -89,8 +86,8 @@ class UpdateCheck {
         key: _key,
       );
       final newer = manifest.build > await _currentBuild();
-      final skipped = manifest.build == await _skipped();
-      available.value = newer && !skipped ? manifest : null;
+      // Put off, never refused: a newer release is offered at every check.
+      available.value = newer ? manifest : null;
       ready.value = available.value;
       return available.value;
     } catch (e) {
@@ -99,35 +96,8 @@ class UpdateCheck {
     }
   }
 
-  /// Never offers [manifest]'s build again; a later one still will be.
-  Future<void> skip(UpdateManifest manifest) async {
-    available.value = null;
-    ready.value = null;
-    try {
-      final file = await _settings();
-      await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode({'skippedBuild': manifest.build}));
-    } catch (_) {}
-  }
-
-  /// Hides the notice until the next check.
+  /// Puts the card away until the next check; the settings keep it.
   void later() => available.value = null;
-
-  Future<int?> _skipped() async {
-    try {
-      final file = await _settings();
-      if (!await file.exists()) return null;
-      final json = jsonDecode(await file.readAsString());
-      return json is Map && json['skippedBuild'] is int
-          ? json['skippedBuild'] as int
-          : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static Future<File> _settingsFile() async =>
-      File(p.join((await folioSupportDirectory()).path, 'update.json'));
 
   static Future<int> _installedBuild() async =>
       int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0;
