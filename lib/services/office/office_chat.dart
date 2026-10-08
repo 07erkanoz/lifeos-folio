@@ -349,6 +349,9 @@ class OfficeChats {
     Future<bool> real(ChatMessage m) async =>
         authentic == null || await authentic(theirs.id, m);
     final mine = _chats[theirs.id];
+    // A talk is of the kind it was made: what its members say is checked
+    // by the talk kept here, never by what another says it is.
+    if (mine != null && mine.kind != theirs.kind) return false;
     final members = mine?.members ?? theirs.members;
     if (theirs.kind != ChatKind.broadcast && !members.containsKey(from)) {
       return false;

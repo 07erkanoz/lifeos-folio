@@ -607,16 +607,18 @@ class OfficeNetwork extends ChangeNotifier {
       transfers.removeWhere((old) => old.id == t.id && old.finished);
       _added(t);
       final chat = chats.of('${t.meta['sohbet'] ?? ''}');
+      final writer = ch.peer.deviceId;
       if (chat != null &&
-          (chat.members.containsKey(ch.peer.deviceId) ||
-              (chat.kind == ChatKind.broadcast &&
-                  ledger.isManager(ch.peer.deviceId)))) {
+          _mayHear(chat, writer) &&
+          (chat.kind != ChatKind.broadcast || ledger.isManager(writer))) {
         // A member's file with a message: taken unasked.
         await t.accept();
         return;
       }
       final task = tasks.of('${t.meta['gorev'] ?? ''}');
-      if (task != null && task.by == ch.peer.deviceId) {
+      if (task != null &&
+          task.by == ch.peer.deviceId &&
+          ledger.member(task.by) != null) {
         // A case of a task given to this device, from its giver.
         await t.accept();
         return;
