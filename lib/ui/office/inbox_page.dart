@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -34,6 +35,8 @@ class InboxPage extends StatefulWidget {
 
 class _InboxPageState extends State<InboxPage> {
   OfficeInbox get _inbox => widget.inbox ?? OfficeInbox.instance;
+
+  static bool get _phone => Platform.isAndroid || Platform.isIOS;
 
   @override
   void initState() {
@@ -142,12 +145,13 @@ class _InboxPageState extends State<InboxPage> {
                         ],
                       ),
                     ),
-                    OutlinedButton.icon(
-                      key: const ValueKey('inbox-folder'),
-                      onPressed: () => unawaited(_folder()),
-                      icon: const Icon(Icons.folder_open_rounded, size: 18),
-                      label: const Text('Klasörü aç'),
-                    ),
+                    if (!_phone)
+                      OutlinedButton.icon(
+                        key: const ValueKey('inbox-folder'),
+                        onPressed: () => unawaited(_folder()),
+                        icon: const Icon(Icons.folder_open_rounded, size: 18),
+                        label: const Text('Klasörü aç'),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -314,6 +318,9 @@ class _InboxPageState extends State<InboxPage> {
                   'klasor' when i.paths.isNotEmpty => unawaited(
                     FileActions.invoke('showFolder', i.paths.first),
                   ),
+                  'paylas' when i.paths.isNotEmpty => unawaited(
+                    FileActions.shareMany(i.paths),
+                  ),
                   'sil' => unawaited(_remove(i)),
                   _ => null,
                 },
@@ -327,10 +334,16 @@ class _InboxPageState extends State<InboxPage> {
                           value: 'okunmadi',
                           child: Text('Okunmadı yap'),
                         ),
-                  const PopupMenuItem(
-                    value: 'klasor',
-                    child: Text('Klasörde göster'),
-                  ),
+                  // A phone shows no folder: it shares.
+                  _phone
+                      ? const PopupMenuItem(
+                          value: 'paylas',
+                          child: Text('Paylaş'),
+                        )
+                      : const PopupMenuItem(
+                          value: 'klasor',
+                          child: Text('Klasörde göster'),
+                        ),
                   const PopupMenuItem(value: 'sil', child: Text('Sil')),
                 ],
               ),

@@ -382,6 +382,15 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
   }
 
   Widget _device(BuildContext context, OfficePeer d) {
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final self0 = d.deviceId == _net.self?.deviceId;
+    final mayAdmit =
+        !self0 &&
+        _net.isKnown(d.deviceId) &&
+        _net.ledger.exists &&
+        _net.ledger.member(d.deviceId) == null &&
+        _net.ledger.isManager(_net.self?.deviceId ?? '');
+    final maySend = !self0 && _net.isTrusted(d.deviceId) && d.online;
     final self = d.deviceId == _net.self?.deviceId;
     final now = (widget.now ?? DateTime.now)();
     final seen = d.lastSeen;
@@ -442,11 +451,29 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
               style: const TextStyle(fontSize: 13),
             ),
           ),
-          if (!self &&
-              _net.isKnown(d.deviceId) &&
-              _net.ledger.exists &&
-              _net.ledger.member(d.deviceId) == null &&
-              _net.ledger.isManager(_net.self?.deviceId ?? ''))
+          // On a phone, what can be done with it in one menu: the
+          // name keeps the row.
+          if (narrow && (mayAdmit || maySend))
+            PopupMenuButton<Object>(
+              key: ValueKey('office-device-menu-${d.deviceId}'),
+              tooltip: 'İşlemler',
+              onSelected: (v) => v is OfficeRole
+                  ? unawaited(_say(_net.admit(d.deviceId, v)))
+                  : unawaited(_send(d)),
+              itemBuilder: (_) => [
+                if (maySend)
+                  const PopupMenuItem(value: 'gonder', child: Text('Gönder')),
+                if (mayAdmit)
+                  for (final r in OfficeRole.values)
+                    PopupMenuItem(
+                      value: r,
+                      child: Text(
+                        'Büroya ${r.label.toLowerCase()} olarak ekle',
+                      ),
+                    ),
+              ],
+            ),
+          if (!narrow && mayAdmit)
             PopupMenuButton<OfficeRole>(
               key: ValueKey('office-admit-${d.deviceId}'),
               tooltip: 'Büroya ekle',
@@ -466,7 +493,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                 ),
               ),
             ),
-          if (!self && _net.isTrusted(d.deviceId) && d.online)
+          if (!narrow && maySend)
             TextButton.icon(
               key: ValueKey('office-send-${d.deviceId}'),
               onPressed: () => unawaited(_send(d)),
@@ -1074,7 +1101,6 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     IconButton(
                       key: ValueKey('office-forget-${k.deviceId}'),
                       tooltip: 'Tanımayı kaldır',
-                      visualDensity: VisualDensity.compact,
                       onPressed: () => unawaited(_net.forget(k.deviceId)),
                       icon: const Icon(Icons.close_rounded, size: 17),
                     ),

@@ -927,19 +927,23 @@ class _PortfolioPageState extends State<PortfolioPage> {
             style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
           if (_words.isNotEmpty && other > 0)
-            TextButton(
-              key: const ValueKey('portfolio-other-side'),
-              onPressed: () => setState(() {
-                _closed = !_closed;
-                _shown = 100;
-              }),
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-              ),
-              child: Text(
-                _closed ? 'açıklarda $other daha' : 'kapalılarda $other daha',
-                style: const TextStyle(fontSize: 12),
+            Flexible(
+              child: TextButton(
+                key: const ValueKey('portfolio-other-side'),
+                onPressed: () => setState(() {
+                  _closed = !_closed;
+                  _shown = 100;
+                }),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                ),
+                child: Text(
+                  _closed ? 'açıklarda $other daha' : 'kapalılarda $other daha',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
             )
           else if (_filtered)
@@ -1470,8 +1474,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
             ),
           ),
           const SizedBox(width: 12),
+          // On a phone the words keep most of the row.
           SizedBox(
-            width: 220,
+            width: MediaQuery.sizeOf(context).width < 600 ? 72 : 220,
             child: LinearProgressIndicator(
               value: value,
               minHeight: 5,

@@ -1531,39 +1531,43 @@ class _UetsPageState extends State<UetsPage> {
             for (final part in parts)
               InkWell(
                 onTap: busy ? null : () => _download(n, part),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: Row(
-                    children: [
-                      Icon(
-                        part.signed
-                            ? Icons.verified_outlined
-                            : Icons.insert_drive_file_outlined,
-                        size: 16,
-                        color: AgendaColors.hearing,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          part.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12.5),
-                        ),
-                      ),
-                      if (_downloading == '${m.id}/${part.id}')
-                        const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      else
-                        const Icon(
-                          Icons.download_outlined,
+                // A finger's height, a short name or not.
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Row(
+                      children: [
+                        Icon(
+                          part.signed
+                              ? Icons.verified_outlined
+                              : Icons.insert_drive_file_outlined,
                           size: 16,
-                          color: AgendaColors.muted,
+                          color: AgendaColors.hearing,
                         ),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            part.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                        if (_downloading == '${m.id}/${part.id}')
+                          const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          const Icon(
+                            Icons.download_outlined,
+                            size: 16,
+                            color: AgendaColors.muted,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1757,7 +1761,16 @@ class _CaseChooserState extends State<_CaseChooser> {
       ),
       content: SizedBox(
         width: 440,
-        height: 420,
+        // No taller than the screen leaves over the keyboard.
+        height: math.max(
+          180.0,
+          math.min(
+            420.0,
+            MediaQuery.sizeOf(context).height -
+                MediaQuery.viewInsetsOf(context).bottom -
+                240,
+          ),
+        ),
         child: Column(
           children: [
             TextField(

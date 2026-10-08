@@ -108,25 +108,33 @@ class _MessagesPageState extends State<MessagesPage> {
                     padding: EdgeInsets.all(12),
                     child: Text('Büroda başka üye yok.'),
                   ),
-                for (final m in members)
-                  group
-                      ? CheckboxListTile(
-                          value: chosen.contains(m.deviceId),
-                          title: Text(m.name),
-                          subtitle: Text(m.role.label),
-                          onChanged: (v) => set(
-                            () => v == true
-                                ? chosen.add(m.deviceId)
-                                : chosen.remove(m.deviceId),
-                          ),
-                        )
-                      : ListTile(
-                          key: ValueKey('chat-to-${m.deviceId}'),
-                          title: Text(m.name),
-                          subtitle: Text(m.role.label),
-                          onTap: () =>
-                              Navigator.pop(context, ('', [m.deviceId])),
-                        ),
+                // Many members scroll; the dialog stays on the screen.
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final m in members)
+                        group
+                            ? CheckboxListTile(
+                                value: chosen.contains(m.deviceId),
+                                title: Text(m.name),
+                                subtitle: Text(m.role.label),
+                                onChanged: (v) => set(
+                                  () => v == true
+                                      ? chosen.add(m.deviceId)
+                                      : chosen.remove(m.deviceId),
+                                ),
+                              )
+                            : ListTile(
+                                key: ValueKey('chat-to-${m.deviceId}'),
+                                title: Text(m.name),
+                                subtitle: Text(m.role.label),
+                                onTap: () =>
+                                    Navigator.pop(context, ('', [m.deviceId])),
+                              ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),

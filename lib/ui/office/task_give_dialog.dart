@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -76,8 +77,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
     // One to give to: already chosen.
     final others = [
       for (final m in _net.ledger.people)
-        if (m.deviceId != _net.me && _net.mayGive(m.deviceId))
-          m.deviceId,
+        if (m.deviceId != _net.me && _net.mayGive(m.deviceId)) m.deviceId,
     ];
     if (others.length == 1) _to.add(others.single);
     final given = widget.rows;
@@ -497,19 +497,31 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                DropdownButton<String>(
-                  value: names.containsKey(who) ? who : '',
-                  underline: const SizedBox.shrink(),
-                  onChanged: (v) =>
-                      setState(() => c.items[i] = (field, v ?? '')),
-                  items: [
-                    const DropdownMenuItem(
-                      value: '',
-                      child: Text('Herhangi biri'),
-                    ),
-                    for (final e in names.entries)
-                      DropdownMenuItem(value: e.key, child: Text(e.value)),
-                  ],
+                // Bounded, a long name shortened: on a phone the item's
+                // words keep their room.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 130),
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: names.containsKey(who) ? who : '',
+                    underline: const SizedBox.shrink(),
+                    onChanged: (v) =>
+                        setState(() => c.items[i] = (field, v ?? '')),
+                    items: [
+                      const DropdownMenuItem(
+                        value: '',
+                        child: Text(
+                          'Herhangi biri',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      for (final e in names.entries)
+                        DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value, overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -622,7 +634,16 @@ class _CasePickerState extends State<_CasePicker> {
       title: const Text('Dosya seçin'),
       content: SizedBox(
         width: 520,
-        height: 420,
+        // No taller than the screen leaves over the keyboard.
+        height: math.max(
+          180.0,
+          math.min(
+            420.0,
+            MediaQuery.sizeOf(context).height -
+                MediaQuery.viewInsetsOf(context).bottom -
+                240,
+          ),
+        ),
         child: Column(
           children: [
             TextField(

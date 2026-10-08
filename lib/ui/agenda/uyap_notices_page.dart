@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -123,6 +124,8 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
 
   Future<void> _choose(UyapNotice n) async {
     setState(() => _selected = n.key);
+    // Opened is read, here and on UYAP: at once, not when the page closes.
+    if (!n.read) unawaited(_sync.markNotices([n], read: true));
     if (_narrow) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -141,8 +144,6 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
         ),
       );
     }
-    // Opened is read, here and on UYAP.
-    if (!n.read) await _sync.markNotices([n], read: true);
   }
 
   void _openCase(String key) => widget.onOpenCase?.call(key);
@@ -259,12 +260,14 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
       ],
     );
     final actions = [
-      IconButton(
-        key: const ValueKey('notices-alerts'),
-        tooltip: 'Masaüstü uyarıları',
-        onPressed: () => unawaited(_alerts(context)),
-        icon: const Icon(Icons.notifications_active_outlined),
-      ),
+      // The computer's own alerts: a phone tells by its notifications.
+      if (!Platform.isAndroid && !Platform.isIOS)
+        IconButton(
+          key: const ValueKey('notices-alerts'),
+          tooltip: 'Masaüstü uyarıları',
+          onPressed: () => unawaited(_alerts(context)),
+          icon: const Icon(Icons.notifications_active_outlined),
+        ),
       OutlinedButton.icon(
         key: const ValueKey('notices-read-all'),
         onPressed: unread == 0

@@ -663,9 +663,10 @@ class _AgendaPageState extends State<AgendaPage> {
               ),
               SegmentedButton<_View>(
                 showSelectedIcon: false,
+                // Looks compact, takes a finger's height.
                 style: const ButtonStyle(
                   visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  tapTargetSize: MaterialTapTargetSize.padded,
                 ),
                 segments: const [
                   ButtonSegment(value: _View.day, label: Text('Gün')),

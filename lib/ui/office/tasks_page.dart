@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -955,11 +956,13 @@ class _TaskDetailState extends State<TaskDetail> {
                       unawaited(FileActions.invoke('openDefault', path)),
                   child: const Text('Aç'),
                 ),
-                TextButton(
-                  onPressed: () =>
-                      unawaited(FileActions.invoke('showFolder', path)),
-                  child: const Text('Klasörde göster'),
-                ),
+                // A phone shows no folder.
+                if (!Platform.isAndroid && !Platform.isIOS)
+                  TextButton(
+                    onPressed: () =>
+                        unawaited(FileActions.invoke('showFolder', path)),
+                    child: const Text('Klasörde göster'),
+                  ),
               ],
             ),
           if (got.documents.isEmpty)

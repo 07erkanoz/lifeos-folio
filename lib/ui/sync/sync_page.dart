@@ -306,15 +306,23 @@ class _SyncPageState extends State<SyncPage> {
       children: [
         Icon(icon, size: 19),
         const SizedBox(width: 10),
-        Expanded(child: Text(name, style: const TextStyle(fontSize: 13))),
-        if (detail != null)
-          Text(
-            detail,
-            style: TextStyle(
-              fontSize: 12,
-              color: online ? AgendaColors.ok : AgendaColors.muted,
-            ),
+        // The state under the name: a phone has no room beside it.
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: const TextStyle(fontSize: 13)),
+              if (detail != null)
+                Text(
+                  detail,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: online ? AgendaColors.ok : AgendaColors.muted,
+                  ),
+                ),
+            ],
           ),
+        ),
       ],
     ),
   );
@@ -459,19 +467,34 @@ class _SyncPageState extends State<SyncPage> {
                     : there.isNotEmpty
                     ? 'açık · ${_nameOf(there.first)}'
                     : 'kapalı';
+                // On a phone the button goes under its words.
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(40, 4, 0, 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '$label · $status',
-                          style: const TextStyle(fontSize: 13),
+                  child: MediaQuery.sizeOf(context).width < 600
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$label · $status',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            if (action != null) ...[
+                              const SizedBox(height: 4),
+                              action,
+                            ],
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '$label · $status',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            ?action,
+                          ],
                         ),
-                      ),
-                      ?action,
-                    ],
-                  ),
                 );
               }(),
           ],
@@ -551,6 +574,13 @@ class _SyncPageState extends State<SyncPage> {
   Widget _folderCard(BuildContext context) {
     final mine = _folders.folders.values.toList();
     final offered = _folders.offered.values.toList();
+    // On a phone the buttons go under the words they are about.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final pick = OutlinedButton(
+      key: const ValueKey('sync-folder-pick'),
+      onPressed: () => unawaited(_pickFolder()),
+      child: const Text('Klasör seç'),
+    );
     return _card(
       context,
       child: Padding(
@@ -582,13 +612,14 @@ class _SyncPageState extends State<SyncPage> {
                     ],
                   ),
                 ),
-                OutlinedButton(
-                  key: const ValueKey('sync-folder-pick'),
-                  onPressed: () => unawaited(_pickFolder()),
-                  child: const Text('Klasör seç'),
-                ),
+                if (!narrow) pick,
               ],
             ),
+            if (narrow)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(40, 8, 0, 0),
+                child: pick,
+              ),
             const SizedBox(height: 6),
             for (final f in mine)
               Padding(
@@ -625,13 +656,14 @@ class _SyncPageState extends State<SyncPage> {
               Padding(
                 key: ValueKey('sync-offered-${o.id}'),
                 padding: const EdgeInsets.fromLTRB(40, 4, 0, 4),
-                child: Row(
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Expanded(
-                      child: Text(
-                        '${o.name} · paylaşan: ${o.fromName}',
-                        style: const TextStyle(fontSize: 13),
-                      ),
+                    Text(
+                      '${o.name} · paylaşan: ${o.fromName}',
+                      style: const TextStyle(fontSize: 13),
                     ),
                     FilledButton.tonal(
                       key: ValueKey('sync-join-${o.id}'),
