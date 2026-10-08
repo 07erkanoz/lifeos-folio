@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
+import '../../services/legal/deadlines/aidiyet.dart';
 import '../../services/legal/deadlines/belge_turu.dart';
 import '../../services/legal/deadlines/turkish_legal_calendar.dart';
 import '../../services/portal/portal_database.dart';
@@ -19,8 +20,10 @@ import '../../services/uets/notice_matcher.dart';
 import '../../services/uets/notice_packages.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_case_store.dart';
+import '../../services/uyap/uyap_web_service.dart' show UyapParty;
 import 'agenda_page.dart' show AgendaColors;
 import '../mobile/scroll_chrome.dart';
+import '../portfolio/portfolio_rows.dart' show titleName;
 import 'channel_bar.dart';
 import 'deadline_choice_dialog.dart';
 import 'deadline_review.dart';
@@ -46,6 +49,10 @@ class UetsPage extends StatefulWidget {
   /// The notice to show selected, coming from its deadline elsewhere.
   final String? initialNotice;
 
+  /// Where the cases' parties are read from, for whom the lawyer acts for;
+  /// the app's own unless a test passes one.
+  final UyapCaseStore? store;
+
   /// Something kept changed: the sidebar's count may need refreshing.
   final VoidCallback? onChanged;
 
@@ -58,6 +65,7 @@ class UetsPage extends StatefulWidget {
     this.onOpenFile,
     this.onChanged,
     this.initialNotice,
+    this.store,
   });
 
   @override
@@ -1050,6 +1058,8 @@ class _UetsPageState extends State<UetsPage> {
             children: [
               _kicker('SÜRELER'),
               const SizedBox(height: 8),
+              if (n.caseKey != null)
+                _representation(context, n, n.caseKey!, deadlines),
               if (deadlines.isEmpty && cover != null)
                 Text(
                   key: const ValueKey('uets-coverage'),
@@ -1190,6 +1200,220 @@ class _UetsPageState extends State<UetsPage> {
           _reload();
           widget.onChanged?.call();
         },
+      ),
+    );
+  }
+
+  /// The parties of each case, by its key, as UYAP or a notice's package
+  /// gave them: name and role, for whom the lawyer acts for.
+  final _partiesOf = <String, List<({String ad, String rol, String vekil})>>{};
+  final _partiesAsked = <String>{};
+
+  /// The case the lawyer is saying whom they act for in, its choices open.
+  String? _choosingFor;
+
+  void _askParties(String key, KeptNotice n) {
+    if (!_partiesAsked.add(key)) return;
+    // The package's own list of the case's parties, at once; UYAP's, with
+    // the lawyers, in its place once read.
+    final file = (_db?.noticeDocuments(n.message.id) ?? const [])
+        .map((d) => d.caseFile)
+        .whereType<NoticeCaseFile>()
+        .firstOrNull;
+    _partiesOf[key] = [
+      for (final t
+          in file?.parties ??
+              const <({String name, String role, bool institution})>[])
+        if (t.name.trim().isNotEmpty) (ad: t.name, rol: t.role, vekil: ''),
+    ];
+    final kase = _cases[key];
+    if (kase == null) return;
+    () async {
+      try {
+        final record = await (widget.store ?? UyapCaseStore.instance).load(
+          kase.court,
+          kase.number,
+        );
+        final parties = <({String ad, String rol, String vekil})>[
+          for (final t in record?.parties ?? const <UyapParty>[])
+            if (t.name.trim().isNotEmpty)
+              (ad: t.name, rol: t.role, vekil: t.lawyer),
+        ];
+        if (parties.isEmpty || !mounted) return;
+        setState(() => _partiesOf[key] = parties);
+      } catch (_) {}
+    }();
+  }
+
+  /// Whom the lawyer acts for in the case (the audit's §7): asked once
+  /// when a deadline's owner is not known, then said in a line that can
+  /// be changed. Every notice of the case goes by it.
+  Widget _representation(
+    BuildContext context,
+    KeptNotice n,
+    String key,
+    List<KeptDeadline> deadlines,
+  ) {
+    final db = _db;
+    if (db == null) return const SizedBox.shrink();
+    final said = db.representation(key);
+    _askParties(key, n);
+    final parties = _partiesOf[key];
+    // Where UYAP names the lawyer among a party's lawyers: whom it says
+    // they act for, the lawyer not asked when it tells one side.
+    final byUyap = [
+      for (final t
+          in parties ?? const <({String ad, String rol, String vekil})>[])
+        if (vekilOlarakGeciyor(t.vekil, NoticeDeadlineContext.lawyer))
+          (ad: t.ad, rol: t.rol),
+    ];
+    final told = byUyap.isNotEmpty && tekYanda(byUyap.map((t) => t.rol));
+    final unknown = deadlines.any(
+      (d) => d.record.ownership == AidiyetSinyali.belirsiz.name,
+    );
+    final choosing = _choosingFor == key || (said.isEmpty && !told && unknown);
+    if (!choosing) {
+      final shown = said.isNotEmpty ? said : (told ? byUyap : const []);
+      if (shown.isEmpty) return const SizedBox.shrink();
+      return Container(
+        key: const ValueKey('uets-represented'),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE6F4EC),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${said.isEmpty ? 'UYAP’a göre bu dosyada' : 'Bu dosyada'} '
+                '${[for (final t in shown) '${titleName(t.ad)} (${t.rol})'].join(', ')} '
+                'vekilisiniz.',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: Color(0xFF1B6B3A),
+                ),
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('uets-represented-change'),
+              onPressed: () => setState(() => _choosingFor = key),
+              child: const Text('Değiştir'),
+            ),
+          ],
+        ),
+      );
+    }
+    // Chosen so far: the lawyer's word, else what UYAP suggests.
+    final chosen = said.isNotEmpty ? said : byUyap;
+    bool on(({String ad, String rol, String vekil}) t) =>
+        chosen.any((s) => s.ad == t.ad && s.rol == t.rol);
+    return Container(
+      key: const ValueKey('uets-represent-ask'),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AgendaColors.hearingFill,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Bu dosyada kimi temsil ediyorsunuz?',
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: AgendaColors.hearingText,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Bir kez seçin; sürenin size mi karşı tarafa mı ait olduğu buna '
+            'göre belirlenir.',
+            style: TextStyle(fontSize: 12, color: AgendaColors.hearingText),
+          ),
+          const SizedBox(height: 10),
+          if (parties == null)
+            const Text(
+              'Taraflar okunuyor…',
+              style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+            )
+          else if (parties.isEmpty)
+            const Text(
+              'Bu dosyanın tarafları henüz bilinmiyor; dosyayı UYAP’tan '
+              'tazeleyin.',
+              style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+            )
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final t in parties)
+                  FilterChip(
+                    key: ValueKey('uets-represent-${t.ad}-${t.rol}'),
+                    selected: on(t),
+                    label: Text('${titleName(t.ad)} · ${t.rol}'),
+                    onSelected: (_) {
+                      final next = on(t)
+                          ? [
+                              for (final s in chosen)
+                                if (!(s.ad == t.ad && s.rol == t.rol)) s,
+                            ]
+                          : [...chosen, (ad: t.ad, rol: t.rol)];
+                      db.setRepresentation(key, next);
+                      refreshNoticeDeadlines(
+                        db,
+                        parties: NoticeDeadlineContext.parties,
+                        lawyer: NoticeDeadlineContext.lawyer,
+                        only: {
+                          for (final x in _notices)
+                            if (x.caseKey == key) x.message.id,
+                        },
+                      );
+                      _reload();
+                      widget.onChanged?.call();
+                    },
+                  ),
+              ],
+            ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Birden fazla müvekkiliniz varsa hepsini seçin.',
+                  style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+                ),
+              ),
+              if (said.isNotEmpty || chosen.isNotEmpty)
+                TextButton(
+                  key: const ValueKey('uets-represent-done'),
+                  onPressed: () {
+                    // UYAP's suggestion kept as the lawyer's word.
+                    if (said.isEmpty) {
+                      db.setRepresentation(key, chosen);
+                      refreshNoticeDeadlines(
+                        db,
+                        parties: NoticeDeadlineContext.parties,
+                        lawyer: NoticeDeadlineContext.lawyer,
+                        only: {
+                          for (final x in _notices)
+                            if (x.caseKey == key) x.message.id,
+                        },
+                      );
+                      _reload();
+                      widget.onChanged?.call();
+                    }
+                    setState(() => _choosingFor = null);
+                  },
+                  child: Text(said.isEmpty ? 'Doğru' : 'Tamam'),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

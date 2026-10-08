@@ -164,6 +164,8 @@ class PortalDatabase {
         state TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', note TEXT,
         reader INTEGER NOT NULL, read_at TEXT NOT NULL,
         PRIMARY KEY(notice_id, seq));
+      CREATE TABLE IF NOT EXISTS case_representation (
+        case_key TEXT PRIMARY KEY, json TEXT NOT NULL, updated TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS deadline_choice (
         id TEXT PRIMARY KEY, notice_id TEXT NOT NULL, json TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS deadline_choice_notice
@@ -1257,6 +1259,44 @@ class PortalDatabase {
       _db.execute('ROLLBACK');
       rethrow;
     }
+  }
+
+  /// Whom the lawyer said they act for in the case [caseKey]: each party's
+  /// name and role; empty while not said.
+  List<({String ad, String rol})> representation(String caseKey) {
+    final rows = _db.select(
+      'SELECT json FROM case_representation WHERE case_key=?',
+      [caseKey],
+    );
+    if (rows.isEmpty) return const [];
+    return [
+      for (final t in jsonDecode(rows.first['json'] as String) as List)
+        if (t is Map) (ad: '${t['ad']}', rol: '${t['rol']}'),
+    ];
+  }
+
+  /// [parties] the lawyer acts for in [caseKey]; none forgets it.
+  void setRepresentation(
+    String caseKey,
+    List<({String ad, String rol})> parties,
+  ) {
+    if (parties.isEmpty) {
+      _db.execute('DELETE FROM case_representation WHERE case_key=?', [
+        caseKey,
+      ]);
+      return;
+    }
+    _db.execute(
+      'INSERT OR REPLACE INTO case_representation(case_key, json, updated) '
+      'VALUES(?,?,?)',
+      [
+        caseKey,
+        jsonEncode([
+          for (final t in parties) {'ad': t.ad, 'rol': t.rol},
+        ]),
+        DateTime.now().toIso8601String(),
+      ],
+    );
   }
 
   /// A deadline the lawyer chose for a notice (see [DeadlineChoice]).

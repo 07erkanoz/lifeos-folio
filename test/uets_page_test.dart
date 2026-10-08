@@ -1,11 +1,15 @@
+import 'dart:io';
+
 import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_deadline.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/uets/notice_documents.dart';
+import 'package:evrak_convert/services/uets/notice_deadlines.dart';
 import 'package:evrak_convert/services/uets/notice_matcher.dart';
 import 'package:evrak_convert/services/uets/uets_api.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/agenda/uets_page.dart';
@@ -19,6 +23,7 @@ void main() {
     WidgetTester tester, {
     Size size = const Size(1440, 900),
     void Function(PortalDatabase db)? before,
+    UyapCaseStore? store,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -62,6 +67,7 @@ void main() {
               database: () async => db,
             ),
             now: () => now,
+            store: store,
           ),
         ),
       ),
@@ -255,11 +261,117 @@ void main() {
       find.descendant(of: files, matching: find.text('Okunamadı')),
       findsOne,
     );
-    expect(
-      find.descendant(of: files, matching: find.text('Okundu')),
-      findsOne,
-    );
+    expect(find.descendant(of: files, matching: find.text('Okundu')), findsOne);
     expect(find.textContaining('2 belgeden 1 tanesi okunamadı'), findsOne);
     expect(find.textContaining('adından süre doğuran'), findsNothing);
+  });
+
+  testWidgets('asked once whom they act for, the lawyer’s word tells whose '
+      'every deadline of the case is, and can be changed', (tester) async {
+    final db = await pump(
+      tester,
+      before: (db) {
+        db.saveEnvelope(
+          const NoticeEnvelope(
+            noticeId: 'm1',
+            state: 'indirildi',
+            envelopeText:
+                'Davacıya tebliğden itibaren iki haftalık kesin süre içinde '
+                'gider avansını yatırması ihtar olunur.',
+            attachments: [
+              (name: 'dosyaBilgileriV1.xml', path: '/sentetik/d.xml'),
+            ],
+          ),
+        );
+        db.saveNoticeDocuments('m1', [
+          NoticeDocument(
+            noticeId: 'm1',
+            seq: 0,
+            name: 'dosyaBilgileriV1.xml',
+            path: '/sentetik/d.xml',
+            digest: 'h',
+            state: 'ustveri',
+            text: const NoticeCaseFile(
+              number: '2025/412',
+              parties: [
+                (name: 'AYŞE ÖRNEK', role: 'Davacı', institution: false),
+                (name: 'ÖRNEK YAPI A.Ş.', role: 'Davalı', institution: true),
+              ],
+            ).toJson(),
+            reader: noticeReaderVersion,
+            readAt: DateTime(2026, 10, 2),
+          ),
+        ]);
+      },
+    );
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    final ask = find.byKey(const ValueKey('uets-represent-ask'));
+    await tester.ensureVisible(ask);
+    expect(ask, findsOne);
+    final chip = find.byKey(const ValueKey('uets-represent-AYŞE ÖRNEK-Davacı'));
+    await tester.tap(chip);
+    await tester.pumpAndSettle();
+    expect(
+      db.representation(
+        caseKey('2025/412', 'Antalya 3. Asliye Hukuk Mahkemesi'),
+      ),
+      [(ad: 'AYŞE ÖRNEK', rol: 'Davacı')],
+    );
+    expect(find.byKey(const ValueKey('uets-represented')), findsOne);
+    expect(find.textContaining('Ayşe Örnek (Davacı) vekilisiniz'), findsOne);
+    final own = db
+        .deadlines(noticeId: 'm1')
+        .where((d) => d.record.ruleId.startsWith('zarf-odeme'))
+        .single;
+    expect(own.record.ownership, 'olasiBizim');
+    await tester.tap(find.byKey(const ValueKey('uets-represented-change')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('uets-represent-ask')), findsOne);
+  });
+
+  testWidgets('where UYAP names the lawyer on one side, it tells whom they '
+      'act for, and the lawyer is not asked', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('folio_uets_rep_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final store = UyapCaseStore(
+      directory: dir,
+      settings: UyapSettings(directory: dir, home: '${dir.path}/ev'),
+    );
+    await tester.runAsync(
+      () => store.keep(
+        target: const UyapCase(
+          '1',
+          '2025/412',
+          '',
+          'Antalya 3. Asliye Hukuk Mahkemesi',
+        ),
+        details: const UyapCaseDetails(),
+        parties: const [
+          UyapParty('AYŞE ÖRNEK', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+          UyapParty('ÖRNEK YAPI A.Ş.', 'Davalı', 'Av. Murat Er', 'Kurum'),
+        ],
+        documents: const UyapCaseDocuments([]),
+      ),
+    );
+    final lawyer = NoticeDeadlineContext.lawyer;
+    NoticeDeadlineContext.lawyer = 'Av. Deniz Kaya';
+    addTearDown(() => NoticeDeadlineContext.lawyer = lawyer);
+    await pump(tester, store: store);
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.byKey(const ValueKey('uets-represent-ask')), findsNothing);
+    expect(
+      find.textContaining('UYAP’a göre bu dosyada Ayşe Örnek (Davacı)'),
+      findsOne,
+    );
   });
 }

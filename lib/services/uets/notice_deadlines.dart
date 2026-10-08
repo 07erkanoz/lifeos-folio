@@ -83,6 +83,7 @@ void refreshNoticeDeadlines(
       envelope: envelopes[n.message.id],
       documents: db.noticeDocuments(n.message.id),
       choices: db.deadlineChoices(n.message.id),
+      represented: n.caseKey == null ? const [] : db.representation(n.caseKey!),
       takipTuru: switch (db.meta('takip:${n.message.id}')) {
         final v? when v.isNotEmpty => v,
         _ => null,
@@ -184,6 +185,10 @@ List<DeadlineRecord> noticeDeadlines(
   List<DeadlineChoice> choices = const [],
   List<TarafKaydi> parties = const [],
   String? lawyer,
+
+  /// Whom the lawyer said they act for in its case (see
+  /// [PortalDatabase.representation]); before any guess by names.
+  List<({String ad, String rol})> represented = const [],
   DateTime? now,
 
   /// The lawyer's word on a payment order that does not say its kind of
@@ -335,6 +340,13 @@ List<DeadlineRecord> noticeDeadlines(
   final envelopeDigest = envelopeText.isEmpty
       ? null
       : sha256.convert(utf8.encode(envelopeText)).toString();
+
+  /// Whose a duty of [yukumlu] is: by whom the lawyer said they act for in
+  /// the case, else by the lawyer's name in its party list.
+  ({AidiyetSinyali sinyal, String neden}) whose(Yukumlu yukumlu) =>
+      represented.isNotEmpty
+      ? aidiyetTemsilden(yukumlu: yukumlu, temsil: represented)
+      : aidiyetSinyali(yukumlu: yukumlu, taraflar: parties, avukat: lawyer);
 
   /// One rule's record: its start, its day, why it is as it is.
   DeadlineRecord record(
@@ -583,11 +595,7 @@ List<DeadlineRecord> noticeDeadlines(
           ruleId: ruleId,
           tur: k.tur,
           evidence: k.evidence,
-          sign: aidiyetSinyali(
-            yukumlu: info?.yukumlu ?? Yukumlu.taraflar,
-            taraflar: parties,
-            avukat: lawyer,
-          ),
+          sign: whose(info?.yukumlu ?? Yukumlu.taraflar),
           lead: [
             if (envelope == null)
               const DeadlineReason(
@@ -776,11 +784,7 @@ List<DeadlineRecord> noticeDeadlines(
         sign: party == null && !d.toReader
             // Told of the service only, to no one: either side's, as a way
             // of appeal is.
-            ? aidiyetSinyali(
-                yukumlu: Yukumlu.taraflar,
-                taraflar: parties,
-                avukat: lawyer,
-              )
+            ? whose(Yukumlu.taraflar)
             : party == null
             ? (
                 sinyal: AidiyetSinyali.olasiBizim,
@@ -789,16 +793,12 @@ List<DeadlineRecord> noticeDeadlines(
                           'yöneltilmiş.'
                     : 'Ekteki talimat belgeyi okuyana, yani size yöneltilmiş.',
               )
-            : aidiyetSinyali(
-                yukumlu: switch (party) {
-                  'davaci' => Yukumlu.davaci,
-                  'davali' => Yukumlu.davali,
-                  'alacakli' => Yukumlu.alacakli,
-                  _ => Yukumlu.borclu,
-                },
-                taraflar: parties,
-                avukat: lawyer,
-              ),
+            : whose(switch (party) {
+                'davaci' => Yukumlu.davaci,
+                'davali' => Yukumlu.davali,
+                'alacakli' => Yukumlu.alacakli,
+                _ => Yukumlu.borclu,
+              }),
         lead: [
           DeadlineReason(
             'zarfAlinti',

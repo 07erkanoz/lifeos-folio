@@ -431,4 +431,60 @@ void main() {
       expect(r, isNotEmpty);
     });
   });
+
+  group('§7: whom the lawyer acts for', () {
+    test('said once, it tells whose a duty is, before any name', () {
+      const plaintiff = [(ad: 'Ayşe Örnek', rol: 'Davacı')];
+      expect(
+        aidiyetTemsilden(yukumlu: Yukumlu.davaci, temsil: plaintiff).sinyal,
+        AidiyetSinyali.olasiBizim,
+      );
+      expect(
+        aidiyetTemsilden(yukumlu: Yukumlu.davali, temsil: plaintiff).sinyal,
+        AidiyetSinyali.olasiKarsi,
+      );
+      expect(
+        aidiyetTemsilden(yukumlu: Yukumlu.taraflar, temsil: plaintiff).sinyal,
+        AidiyetSinyali.belirsiz,
+      );
+      // A defendant who counter-sues: which suit the duty is in, not told.
+      expect(
+        aidiyetTemsilden(
+          yukumlu: Yukumlu.davali,
+          temsil: const [(ad: 'Örnek A.Ş.', rol: 'Davalı-Karşı Davacı')],
+        ).sinyal,
+        AidiyetSinyali.belirsiz,
+      );
+    });
+
+    test('a lawyer named among a party’s lawyers; “Talep Eden” is the one '
+        'who asks', () {
+      expect(
+        vekilOlarakGeciyor('AYSE CELIK, MEHMET ER', 'Av. Ayşe Çelik'),
+        isTrue,
+      );
+      expect(vekilOlarakGeciyor('AYSE CELIKBAS', 'Av. Ayşe Çelik'), isFalse);
+      expect(tekYanda(['Talep Eden']), isTrue);
+      expect(tekYanda(['Davacı', 'Davalı']), isFalse);
+    });
+
+    test('the engine goes by it for a duty laid on a party', () {
+      const text =
+          'Davacıya tebliğden itibaren iki haftalık kesin süre içinde gider '
+          'avansını yatırması ihtar olunur.';
+      final r = noticeDeadlines(
+        db.notice('audit')!,
+        manifest: (state: 'alindi', fetchedAt: null, parts: const []),
+        envelope: const NoticeEnvelope(
+          noticeId: 'audit',
+          state: 'indirildi',
+          envelopeText: text,
+        ),
+        represented: const [(ad: 'Ayşe Örnek', rol: 'Davacı')],
+        now: DateTime(2026, 10, 8),
+      ).single;
+      expect(r.ownership, AidiyetSinyali.olasiBizim.name);
+      expect(r.reasons.map((x) => x.text).join(), contains('siz belirttiniz'));
+    });
+  });
 }

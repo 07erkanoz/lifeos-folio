@@ -996,6 +996,23 @@ void main() {
           reader: noticeReaderVersion,
           readAt: now,
         ),
+      NoticeDocument(
+        noticeId: 'm6',
+        seq: 2,
+        name: 'dosyaBilgileriV1.xml',
+        path: '/sentetik/dosya.xml',
+        digest: 'h2',
+        state: 'ustveri',
+        text: const NoticeCaseFile(
+          number: '2025/933',
+          parties: [
+            (name: 'DENİZ YILMAZ', role: 'Davacı', institution: false),
+            (name: 'ÖRNEK LOJİSTİK A.Ş.', role: 'Davalı', institution: true),
+          ],
+        ).toJson(),
+        reader: noticeReaderVersion,
+        readAt: now,
+      ),
     ]);
     refreshNoticeDeadlines(db, only: {'m6'});
     debugDisableShadows = false;

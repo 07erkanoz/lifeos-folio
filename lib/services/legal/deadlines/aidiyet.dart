@@ -84,6 +84,66 @@ typedef TarafKaydi = ({String rol, String vekil});
   };
 }
 
+/// The sign for a rule whose duty is [yukumlu], from the parties the
+/// lawyer said they act for in the case ([temsil]: name and role), which
+/// stands before any guess by names (the audit's §7). A party on both
+/// sides (a defendant who counter-sues) leaves a party's duty not known:
+/// which suit it belongs to the document does not tell.
+({AidiyetSinyali sinyal, String neden}) aidiyetTemsilden({
+  required Yukumlu yukumlu,
+  required List<({String ad, String rol})> temsil,
+}) {
+  final kim = [for (final t in temsil) '${t.ad} (${t.rol})'].join(', ');
+  final yanlar = {for (final t in temsil) _yan(t.rol)};
+  ({AidiyetSinyali sinyal, String neden}) belirsiz(String neden) =>
+      (sinyal: AidiyetSinyali.belirsiz, neden: neden);
+  if (yukumlu == Yukumlu.taraflar) {
+    return belirsiz(
+      'Bu süre her iki taraf için işler; bu dosyada $kim vekilisiniz. '
+      'Karar ya da işlem aleyhinizse sizin süreniz.',
+    );
+  }
+  if (yanlar.contains(_Yan.bilinmiyor) || yanlar.length > 1) {
+    return belirsiz(
+      'Bu dosyada $kim vekilisiniz; birden fazla sıfat ya da karşı dava '
+      'var. Sürenin asıl davaya mı karşı davaya mı ait olduğu belgeden '
+      'anlaşılmadı.',
+    );
+  }
+  final yan = yanlar.single;
+  final bizim = switch (yukumlu) {
+    Yukumlu.davali || Yukumlu.borclu => yan == _Yan.pasif,
+    Yukumlu.davaci || Yukumlu.alacakli => yan == _Yan.aktif,
+    Yukumlu.ucuncuKisi => yan == _Yan.ucuncu,
+    Yukumlu.taraflar => false,
+  };
+  return bizim
+      ? (
+          sinyal: AidiyetSinyali.olasiBizim,
+          neden: 'Bu dosyada $kim vekili olduğunuzu siz belirttiniz.',
+        )
+      : (
+          sinyal: AidiyetSinyali.olasiKarsi,
+          neden:
+              'Bu dosyada $kim vekili olduğunuzu siz belirttiniz; bu süre '
+              'karşı tarafın.',
+        );
+}
+
+/// Whether the lawyer [avukat] is named in a party's lawyers [vekil]: all
+/// the words of the name, Turkish letters folded ("Av. Ayşe ÇELİK" in
+/// "AYSE CELIK, MEHMET ER").
+bool vekilOlarakGeciyor(String vekil, String? avukat) {
+  final ad = _kelimeler(avukat ?? '')..removeWhere((w) => w == 'av');
+  return ad.length >= 2 && _kelimeler(vekil).toSet().containsAll(ad);
+}
+
+/// Whether [roller] all stand on one known side.
+bool tekYanda(Iterable<String> roller) {
+  final yanlar = {for (final r in roller) _yan(r)};
+  return yanlar.length == 1 && !yanlar.contains(_Yan.bilinmiyor);
+}
+
 enum _Yan { aktif, pasif, ucuncu, bilinmiyor }
 
 /// The side a role is on: the one who sues or claims, the one sued or
@@ -100,7 +160,9 @@ _Yan _yan(String rol) {
       has('musteki') ||
       has('katilan') ||
       has('magdur') ||
-      has('basvuran')) {
+      has('basvuran') ||
+      // The one who asks in a non-contentious case.
+      has('talep eden')) {
     return _Yan.aktif;
   }
   if (has('davali') ||
