@@ -176,7 +176,9 @@ class PortalSync extends ChangeNotifier {
         final tokens = MobileTokens.fromJson(data);
         if (tokens == null) return false;
         // Kept first: renewed later here, it is these that renew.
-        await _secrets.write(_mobileSecret, tokens.toJson());
+        if (!await _secrets.write(_mobileSecret, tokens.toJson())) {
+          return false;
+        }
         try {
           if (await _mobile.restore(tokens) == null) return false;
         } on UyapMobileUnreachable {
@@ -185,9 +187,14 @@ class PortalSync extends ChangeNotifier {
         }
         return true;
       case 'uets':
-        return _uets.restoreSession(data);
+        if (!await _uets.restoreSession(data)) return false;
+        // Kept before it is said taken: the giver ends its own on that.
+        final kept = _uets.exportSession();
+        return kept != null && await _secrets.write(_uetsSecret, kept);
       case 'web':
-        return _web.restoreSession(data);
+        if (!await _web.restoreSession(data)) return false;
+        final kept = _web.exportSession();
+        return kept != null && await _secrets.write(_webSecret, kept);
     }
     return false;
   }

@@ -135,4 +135,45 @@ void main() {
     // The founder can let the other manager go.
     expect(await l.remove(deniz, murat.deviceId), isNull);
   });
+
+  test('a member adds a device of theirs only with its own word', () async {
+    final (deniz, denizPeer, _) = await device('Av. Deniz Kaya');
+    final (mert, _, mertKnown) = await device('Stj. Av. Mert Yıldız');
+    final (phone, _, phoneKnown) = await device('Av. Deniz Kaya');
+    final (_, _, strangerKnown) = await device('Yabancı');
+    final l = ledger('kendi');
+    await l.found(deniz, denizPeer, 'Kaya Hukuk Bürosu');
+    await l.admit(deniz, mertKnown, OfficeRole.trainee);
+    // A device that did not say so is not taken in as anyone's.
+    expect(
+      await l.addOwnDevice(mert, strangerKnown, consent: 'uydurma'),
+      isNotNull,
+    );
+    expect(l.member(strangerKnown.deviceId), isNull);
+    // With the phone's own signature: the founder's, as manager.
+    final consent = await phone.signAsDevice(
+      OfficeLedger.consentOf(l.officeId!, deniz.deviceId, phone.deviceId),
+    );
+    expect(await l.addOwnDevice(deniz, phoneKnown, consent: consent), isNull);
+    final m = l.member(phone.deviceId)!;
+    expect(
+      (m.person, m.role, m.name),
+      (deniz.deviceId, OfficeRole.manager, 'Av. Deniz Kaya'),
+    );
+    expect(l.people.length, 2);
+    // Consent for one person is no consent for another.
+    final (other, _, otherKnown) = await device('Başka');
+    final forDeniz = await other.signAsDevice(
+      OfficeLedger.consentOf(l.officeId!, deniz.deviceId, other.deviceId),
+    );
+    expect(
+      await l.addOwnDevice(mert, otherKnown, consent: forDeniz),
+      isNotNull,
+    );
+    // The founder's phone is no second manager: the last stays.
+    expect(
+      await l.setRole(deniz, deniz.deviceId, OfficeRole.lawyer),
+      isNotNull,
+    );
+  });
 }

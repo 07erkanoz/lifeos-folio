@@ -158,10 +158,11 @@ class TaskEvent {
 
   /// What its maker signs: the step and the task it is in, so that it
   /// can be neither changed nor moved to another.
-  List<int> signedOf(String taskId) => utf8.encode(
+  List<int> signedOf(String taskId, [String terms = '']) => utf8.encode(
     [
       'folio-gorev-olayi-2',
       taskId,
+      terms,
       id,
       kind.name,
       by,
@@ -353,6 +354,10 @@ class OfficeTask {
 
   TaskEvent? get last => timeline.isEmpty ? null : timeline.last;
 
+  /// What the giver gave, as its "given" step signs it: no one on the way
+  /// changes the title, the day, the cases or whom it is given to.
+  String get terms => jsonEncode(toJson()..remove('olaylar'));
+
   Map<String, Object?> toJson() => {
     'id': id,
     'baslik': title,
@@ -491,7 +496,7 @@ class OfficeTasks {
     OfficeTask theirs, {
     required String from,
     void Function(TaskEvent event)? added,
-    Future<bool> Function(String taskId, TaskEvent event)? authentic,
+    Future<bool> Function(OfficeTask task, TaskEvent event)? authentic,
     bool Function(OfficeTask task)? mayCreate,
 
     /// From another of this person's own devices, by its key's proof: it
@@ -501,7 +506,7 @@ class OfficeTasks {
     // Each step only as its maker signed it: one in the task cannot put
     // words in another's mouth.
     Future<bool> real(TaskEvent e) async =>
-        authentic == null || await authentic(theirs.id, e);
+        authentic == null || await authentic(theirs, e);
     if (!theirs.people.contains(from)) return false;
     final mine = _tasks[theirs.id];
     if (mine == null) {

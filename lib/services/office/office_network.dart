@@ -224,6 +224,7 @@ class OfficeNetwork extends ChangeNotifier {
         t.state == TransferState.done) {
       if (t.outgoing) {
         packages.pending.remove('$taskId|$caseKey|${t.peer.deviceId}');
+        packages.delivered.add('$taskId|$caseKey|${t.peer.deviceId}');
         unawaited(packages.save());
       } else {
         unawaited(
@@ -394,6 +395,28 @@ class OfficeNetwork extends ChangeNotifier {
         >
         Function(Map<String, Object?> asked)
       >{};
+
+  /// Another own device takes this one into its office as its person's:
+  /// signed only while this one is of no other office.
+  Future<(Map<String, Object?>, Future<void> Function(Map<String, Object?>?)?)>
+  _consent(Map<String, Object?> asked) async {
+    final identity = _identity, office = asked['buro'], person = asked['kisi'];
+    if (identity == null ||
+        office is! String ||
+        person is! String ||
+        (ledger.exists && ledger.officeId != office) ||
+        ledger.member(identity.deviceId) != null) {
+      return (<String, Object?>{'ret': true}, null);
+    }
+    return (
+      <String, Object?>{
+        'onay': await identity.signAsDevice(
+          OfficeLedger.consentOf(office, person, identity.deviceId),
+        ),
+      },
+      null,
+    );
+  }
 
   /// Asks one of the person's own devices [kind]; [then] says the last
   /// word from its answer. Null when it is not on the network, not proved
@@ -640,7 +663,9 @@ class OfficeNetwork extends ChangeNotifier {
       }
       if (m['t'] == 'kendi') {
         // A question only one of the person's own devices may ask.
-        final answer = ownAnswers['${m['tur']}'];
+        final answer = m['tur'] == 'buro-katil'
+            ? _consent
+            : ownAnswers['${m['tur']}'];
         if (!ch.vouched || answer == null) {
           await ch.send({'t': 'kendi', 'yok': true});
           await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -915,9 +940,18 @@ class OfficeNetwork extends ChangeNotifier {
     if (identity == null || d.publicKey.isEmpty || !ledger.exists) return;
     if (ledger.member(identity.deviceId) == null) return;
     if (ledger.member(d.deviceId) != null) return;
-    if (await ledger.addOwnDevice(identity, d) == null) {
+    final office = ledger.officeId!;
+    final answer = await askOwn(
+      d.deviceId,
+      'buro-katil',
+      body: {'buro': office, 'kisi': me},
+    );
+    final consent = answer?['onay'];
+    if (consent is! String) return;
+    if (await ledger.addOwnDevice(identity, d, consent: consent) == null) {
       notifyListeners();
       unawaited(_shareLedger());
+      await _queueForNewDevices();
     }
   }
 
@@ -931,7 +965,30 @@ class OfficeNetwork extends ChangeNotifier {
     if (records is List && await ledger.merge(records)) {
       notifyListeners();
       unawaited(_shareLedger());
+      await _queueForNewDevices();
     }
+  }
+
+  /// A device added to a person a task here was given to gets its cases
+  /// too: queued as for the others, not again where they came.
+  Future<void> _queueForNewDevices() async {
+    var queued = false;
+    for (final MapEntry(key: key, value: paths) in packages.sources.entries) {
+      final parts = key.split('|');
+      if (parts.length != 2) continue;
+      final task = tasks.of(parts[0]);
+      if (task == null || task.by != me || !task.open) continue;
+      for (final id in _devicesOf(task.assignees.keys)) {
+        final each = '$key|$id';
+        if (packages.pending.containsKey(each) ||
+            packages.delivered.contains(each)) {
+          continue;
+        }
+        packages.pending[each] = paths;
+        queued = true;
+      }
+    }
+    if (queued) await packages.save();
   }
 
   /// The ledger said to a trusted device on the network, and theirs heard.
@@ -1038,7 +1095,7 @@ class OfficeNetwork extends ChangeNotifier {
     );
     task.events.add(
       await _sign(
-        task.id,
+        task,
         TaskEvent.create(
           TaskEventKind.given,
           me,
@@ -1051,6 +1108,7 @@ class OfficeNetwork extends ChangeNotifier {
     for (final c in cases) {
       final pack = packed[c.caseKey];
       if (pack == null || pack.paths.isEmpty) continue;
+      packages.sources['${task.id}|${c.caseKey}'] = pack.paths;
       // To each device of each it is given to, this person's others too.
       for (final id in _devicesOf(to)) {
         packages.pending['${task.id}|${c.caseKey}|$id'] = pack.paths;
@@ -1107,7 +1165,7 @@ class OfficeNetwork extends ChangeNotifier {
     final ok = await tasks.add(
       task,
       await _sign(
-        task.id,
+        task,
         TaskEvent.create(
           kind,
           me,
@@ -1126,8 +1184,13 @@ class OfficeNetwork extends ChangeNotifier {
     return null;
   }
 
-  Future<TaskEvent> _sign(String taskId, TaskEvent e) async =>
-      e.signed(await _identity!.signAsDevice(e.signedOf(taskId)));
+  Future<TaskEvent> _sign(OfficeTask task, TaskEvent e) async =>
+      e.signed(await _identity!.signAsDevice(_signed(task, e)));
+
+  static List<int> _signed(OfficeTask task, TaskEvent e) => e.signedOf(
+    task.id,
+    e.kind == TaskEventKind.given ? task.terms : '',
+  );
 
   /// The member's device key, from the office's ledger: what a step or a
   /// message is checked against.
@@ -1146,8 +1209,8 @@ class OfficeNetwork extends ChangeNotifier {
   bool _mayCreate(OfficeTask t) =>
       t.assignees.keys.every((to) => _mayGiveFrom(t.by, to));
 
-  Future<bool> _taskAuthentic(String taskId, TaskEvent e) =>
-      _byMember(e.by, e.device, e.signedOf(taskId), e.signature);
+  Future<bool> _taskAuthentic(OfficeTask task, TaskEvent e) =>
+      _byMember(e.by, e.device, _signed(task, e), e.signature);
 
   Future<bool> _messageAuthentic(String chatId, ChatMessage m) =>
       _byMember(m.by, m.device, m.signedOf(chatId), m.signature);

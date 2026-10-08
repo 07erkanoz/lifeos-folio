@@ -141,6 +141,13 @@ class TaskPackages {
   /// "task|case|device" → the files to send.
   final pending = <String, List<String>>{};
 
+  /// "task|case" → the files a task given here sends: for a device its
+  /// person adds later.
+  final sources = <String, List<String>>{};
+
+  /// "task|case|device" that came whole there.
+  final delivered = <String>{};
+
   /// "task|case" → the files that came.
   final _received = <String, List<String>>{};
   bool _loaded = false;
@@ -164,6 +171,12 @@ class TaskPackages {
       (j['gelen'] as Map? ?? const {}).forEach(
         (k, v) => _received['$k'] = [for (final x in v as List) '$x'],
       );
+      (j['kaynak'] as Map? ?? const {}).forEach(
+        (k, v) => sources['$k'] = [for (final x in v as List) '$x'],
+      );
+      delivered.addAll([
+        for (final x in (j['teslim'] as List? ?? const [])) '$x',
+      ]);
     } catch (_) {}
   }
 
@@ -174,7 +187,12 @@ class TaskPackages {
         await file.parent.create(recursive: true);
         final part = File('${file.path}.part');
         await part.writeAsString(
-          jsonEncode({'bekleyen': pending, 'gelen': _received}),
+          jsonEncode({
+            'bekleyen': pending,
+            'gelen': _received,
+            'kaynak': sources,
+            'teslim': delivered.toList(),
+          }),
           flush: true,
         );
         await part.rename(file.path);

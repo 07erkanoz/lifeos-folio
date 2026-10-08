@@ -231,13 +231,19 @@ class OfficeLedger {
   Future<String?> remove(OfficeIdentity identity, String deviceId) =>
       _change(identity, {'k': 'cikar', 'cihaz': deviceId});
 
+  /// What a device signs to be taken into [office] as one of [person]'s:
+  /// without it no member can add a device that is not theirs.
+  static List<int> consentOf(String office, String person, String device) =>
+      utf8.encode('folio-buro-kendi-1|$office|$person|$device');
+
   /// One of this member's own devices, added by the member: the same
   /// person, role and name. Asks no manager; the device must be the
   /// member's own, which the member's Folio has proved (see vouched).
   Future<String?> addOwnDevice(
     OfficeIdentity identity,
-    KnownDevice device,
-  ) async {
+    KnownDevice device, {
+    required String consent,
+  }) async {
     if (!exists) return 'Önce bir büro kurun.';
     if (member(identity.deviceId) == null) return 'Bu cihaz büroda değil.';
     if (member(device.deviceId) != null) return null;
@@ -245,6 +251,7 @@ class OfficeLedger {
       'k': 'kendi',
       'cihaz': device.deviceId,
       'dk': device.publicKey,
+      'onay': consent,
       'c': device.device,
       'p': device.platform.name,
       'buro': officeId,
@@ -375,6 +382,16 @@ class OfficeLedger {
         if (key is! String || members.containsKey(subject)) continue;
         if (OfficeIdentity.idOf(base64Decode(key)) != subject) continue;
         if (!await _holds(r, signer.publicKey)) continue;
+        // The device's own word that it is to be this person's.
+        final consent = r['onay'];
+        if (consent is! String ||
+            !await OfficeIdentity.signedBy(
+              key,
+              consentOf(office, signer.person, subject),
+              consent,
+            )) {
+          continue;
+        }
         members[subject] = OfficeMember(
           deviceId: subject,
           userId: signer.userId,
