@@ -171,3 +171,45 @@ class _Targets extends StatelessWidget {
     );
   }
 }
+
+/// A short note to go with files sent straight to a device; null when the
+/// sending is given up.
+Future<String?> askSendNote(BuildContext context, int files) async {
+  final field = TextEditingController();
+  final note = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(files == 1 ? 'Dosyayı gönder' : '$files dosyayı gönder'),
+      content: SizedBox(
+        width: 380,
+        child: TextField(
+          key: const ValueKey('send-direct-note'),
+          controller: field,
+          autofocus: true,
+          maxLength: 200,
+          maxLines: 2,
+          minLines: 1,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Not (isteğe bağlı)',
+            hintText: 'ör. 2024/318 bilirkişi raporu, yarın bakılacak',
+            counterText: '',
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('send-direct-go'),
+          onPressed: () => Navigator.pop(context, field.text.trim()),
+          child: const Text('Gönder'),
+        ),
+      ],
+    ),
+  );
+  field.dispose();
+  return note;
+}

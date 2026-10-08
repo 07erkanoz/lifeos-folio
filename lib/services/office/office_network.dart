@@ -263,7 +263,10 @@ class OfficeNetwork extends ChangeNotifier {
       File(p.join((await _settingsFile()).parent.path, 'buro_aktarimlar.json'));
 
   /// The transfers' record: who sent what to whom, when, and how it ended.
-  Future<void> _log(OfficeTransfer t) async {
+  // One write at a time, and whole: Gelenler reads it as it is written.
+  Future<void> _logging = Future.value();
+
+  Future<void> _log(OfficeTransfer t) => _logging = _logging.then((_) async {
     try {
       final file = await _logFile();
       var list = <Object?>[];
@@ -273,9 +276,11 @@ class OfficeNetwork extends ChangeNotifier {
       }
       list.insert(0, recordOf(t));
       if (list.length > 500) list = list.sublist(0, 500);
-      await file.writeAsString(jsonEncode(list));
+      final part = File('${file.path}.part');
+      await part.writeAsString(jsonEncode(list), flush: true);
+      await part.rename(file.path);
     } catch (_) {}
-  }
+  });
 
   /// [t] as the transfers' record keeps it; a file with a message has the
   /// message's words for its note.
@@ -286,6 +291,9 @@ class OfficeNetwork extends ChangeNotifier {
       final m = chat.messages.where((m) => m.id == t.meta['mesaj']).firstOrNull;
       if (m != null && m.text.isNotEmpty) j['not'] = m.text;
     }
+    // A task's case: by the task's title.
+    final task = tasks.of('${t.meta['gorev'] ?? ''}');
+    if (task != null) j['gorevAdi'] = task.title;
     return j;
   }
 

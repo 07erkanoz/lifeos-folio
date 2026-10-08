@@ -232,6 +232,7 @@ class _InboxPageState extends State<InboxPage> {
       clockText(i.at),
       if (i.size > 0) sizeText(i.size),
       if (i.withMessage) 'mesajla geldi',
+      if (i.task case final t?) 'görevle geldi: $t',
     ].join(' · ');
     return Card(
       key: ValueKey('inbox-${i.id}'),

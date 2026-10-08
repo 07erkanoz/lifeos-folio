@@ -534,6 +534,14 @@ void main() {
       // The giver's paths go nowhere.
       expect(got.details['dosyalar'], isEmpty);
       await until(() => a.packages.pending.isEmpty);
+      // In Gelenler too, by the task's title.
+      final inbox = OfficeInbox(
+        network: b,
+        file: () async => File('${dir.path}/gelenler-b.json'),
+      );
+      await inbox.start();
+      await until(() => inbox.items.isNotEmpty);
+      expect(inbox.items.single.task, 'İncele');
     },
   );
 

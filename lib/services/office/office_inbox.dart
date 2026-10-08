@@ -21,6 +21,7 @@ class InboxItem {
     required this.note,
     required this.at,
     this.withMessage = false,
+    this.task,
   });
 
   final String id, from, device, note;
@@ -31,10 +32,21 @@ class InboxItem {
   /// Came with a message: also in Mesajlar.
   final bool withMessage;
 
+  /// The title of the task whose case it came with.
+  final String? task;
+
   static InboxItem? fromLog(Map<String, Object?> e) {
     if (e['yon'] != 'gelen' || e['durum'] != 'done') return null;
-    // A folder's files have their place; a task's case is on the task.
-    if (e['tur'] == 'senkron' || e['tur'] == 'gorev') return null;
+    // Every delivery, but a folder's files kept alike: those have their
+    // place and are no delivery; nor a voice message, which is heard in
+    // its talk.
+    if (e['tur'] == 'senkron') return null;
+    final names = [for (final n in (e['dosyalar'] as List? ?? const [])) '$n'];
+    if (e['tur'] == 'sohbet' &&
+        names.isNotEmpty &&
+        names.every((n) => n.toLowerCase().endsWith('.wav'))) {
+      return null;
+    }
     final at = DateTime.tryParse('${e['at']}');
     final id = e['id'];
     if (at == null || id is! String) return null;
@@ -42,12 +54,13 @@ class InboxItem {
       id: id,
       from: '${e['kisi'] ?? ''}',
       device: '${e['cihaz'] ?? ''}',
-      names: [for (final n in (e['dosyalar'] as List? ?? const [])) '$n'],
+      names: names,
       paths: [for (final n in (e['yollar'] as List? ?? const [])) '$n'],
       size: e['boyut'] is int ? e['boyut'] as int : 0,
       note: '${e['not'] ?? ''}',
       at: at.toLocal(),
       withMessage: e['tur'] == 'sohbet',
+      task: e['tur'] == 'gorev' ? '${e['gorevAdi'] ?? 'görev'}' : null,
     );
   }
 }

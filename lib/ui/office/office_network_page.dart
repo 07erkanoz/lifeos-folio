@@ -816,8 +816,10 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
       for (final f in picked?.files ?? const <PlatformFile>[])
         if (f.path != null) f.path!,
     ];
-    if (paths.isEmpty) return;
-    final t = await _net.send(d, paths);
+    if (paths.isEmpty || !mounted) return;
+    final note = await askSendNote(context, paths.length);
+    if (note == null) return;
+    final t = await _net.send(d, paths, note: note);
     if (t == null && mounted) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Cihaz şu anda ağda görünmüyor.')),
