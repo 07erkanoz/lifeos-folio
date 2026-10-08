@@ -128,13 +128,18 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
                 initialEntries: [
                   // A navigator of its own: e-Devlet's dialog opens over
                   // the lock, never over what it keeps hidden.
+                  // With no hero controller of its own: sharing the app's
+                  // left it tied to this navigator once gone, and every
+                  // page opened after failed (HeroController.didChangeTop).
                   OverlayEntry(
-                    builder: (_) => Navigator(
-                      onGenerateRoute: (_) => PageRouteBuilder<void>(
-                        pageBuilder: (_, _, _) => _LockScreen(
-                          lock: _lock,
-                          office: _office,
-                          identify: widget.identify,
+                    builder: (_) => HeroControllerScope.none(
+                      child: Navigator(
+                        onGenerateRoute: (_) => PageRouteBuilder<void>(
+                          pageBuilder: (_, _, _) => _LockScreen(
+                            lock: _lock,
+                            office: _office,
+                            identify: widget.identify,
+                          ),
                         ),
                       ),
                     ),
