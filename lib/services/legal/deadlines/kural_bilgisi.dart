@@ -39,6 +39,7 @@ const _kurallar = <YasalSure, KuralBilgisi>{
   sIkinciCevap: KuralBilgisi('hmk136-ikinci', Yukumlu.davali),
   sKanunYoluCevapHukuk: KuralBilgisi('hmk347', Yukumlu.taraflar),
   sKanunYoluCevapCeza: KuralBilgisi('cmk277', Yukumlu.taraflar),
+  sTeblignameCevap: KuralBilgisi('cmk297-3', Yukumlu.taraflar),
   sBilirkisiRaporu: KuralBilgisi('hmk281', Yukumlu.taraflar),
   sIcraSikayet: KuralBilgisi('iik16', Yukumlu.taraflar),
   sItirazinIptali: KuralBilgisi('iik67', Yukumlu.alacakli),

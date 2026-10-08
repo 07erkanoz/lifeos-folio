@@ -85,7 +85,10 @@ extension YasalSureTakvim on YasalSure {
 ///   8 — 2026-10-09 (Folio): the other side's appeal answered in two weeks
 ///       (HMK m.347/366, CMK m.277/297), its answer and the reply to an
 ///       answer in two weeks (HMK m.136), each a kind of its own.
-const sureHesapSurumu = 8;
+///   9 — 2026-10-09 (Folio): a sale's notice complained of in seven days
+///       (İİK m.16), the chief prosecutor's opinion answered in two weeks
+///       (CMK m.297/3).
+const sureHesapSurumu = 9;
 
 /// Kategori bazlı yasal süreler (belge türü kanun yolu kararıysa kullanılır).
 /// Değerler kanonik olgulardan (sure_katalogu.dart) gelir — TEK kaynak.
@@ -201,6 +204,14 @@ List<YasalSure> surelerForBelgeTuru(
         MahkemeKategorisi.ceza => const [sKanunYoluCevapCeza],
         _ => const [],
       };
+    // A sale's notice: its terms complained of in seven days from it.
+    case BelgeTuru.satisIlani:
+      return const [sIcraSikayet];
+    case BelgeTuru.tebligname:
+      return kategori == MahkemeKategorisi.ceza ||
+              kategori == MahkemeKategorisi.bilinmeyen
+          ? const [sTeblignameCevap]
+          : const [];
     case BelgeTuru.temyizKarari:
     case BelgeTuru.tensipZapti:
     case BelgeTuru.araKarar:

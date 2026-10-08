@@ -214,6 +214,15 @@ const sIkinciCevap = YasalSure(
       'dosyanın usulüne bakın.',
 );
 
+/// CMK m.297/3: the chief prosecutor's opinion, served to the one it goes
+/// against, answered in two weeks.
+const sTeblignameCevap = YasalSure(
+  ad: 'Tebliğnameye cevap',
+  miktar: 2,
+  birim: SureBirimi.hafta,
+  kanunMaddesi: 'CMK m.297/3',
+);
+
 /// The answer to the other side's appeal, in two weeks from its service:
 /// HMK m.347/2, in an appeal on points of law through m.366; CMK m.277/1
 /// and m.297/1 (two weeks since Law 7499).

@@ -669,5 +669,12 @@ void main() {
     // Two weeks, and the simple procedure's exception said.
     expect(sKanunYoluCevapCeza.miktar * 7, 14);
     expect(sCevabaCevap.guvenNotu, contains('317'));
+    // A sale's notice is complained of in seven days; the chief
+    // prosecutor's opinion answered in two weeks.
+    expect(kind('(2)Satis_Ilani.pdf'), BelgeTuru.satisIlani);
+    expect(kind('(2)Tebligname.pdf'), BelgeTuru.tebligname);
+    expect(rules(BelgeTuru.satisIlani, MahkemeKategorisi.icra), ['iik16']);
+    expect(rules(BelgeTuru.tebligname, MahkemeKategorisi.ceza), ['cmk297-3']);
+    expect(rules(BelgeTuru.tebligname, MahkemeKategorisi.hukuk), isEmpty);
   });
 }

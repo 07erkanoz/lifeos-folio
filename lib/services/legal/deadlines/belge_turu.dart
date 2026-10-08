@@ -27,6 +27,12 @@ enum BelgeTuru {
   cevabaCevapDilekcesi,
   // The other side's appeal (istinaf or temyiz), served to be answered.
   kanunYoluDilekcesi,
+  // A sale's notice served to the parties (İİK m.127): complained of in
+  // seven days (m.16).
+  satisIlani,
+  // The Court of Cassation's chief prosecutor's opinion served (CMK
+  // m.297/3): answered in two weeks.
+  tebligname,
   tensipZapti,
   araKarar,
   bilirkisiRaporu,
@@ -56,6 +62,8 @@ const belgeTuruEtiket = <BelgeTuru, String>{
   BelgeTuru.cevapDilekcesi: 'Cevap Dilekçesi',
   BelgeTuru.cevabaCevapDilekcesi: 'Cevaba Cevap Dilekçesi',
   BelgeTuru.kanunYoluDilekcesi: 'İstinaf / Temyiz Dilekçesi',
+  BelgeTuru.satisIlani: 'Satış İlanı',
+  BelgeTuru.tebligname: 'Tebliğname',
   BelgeTuru.tensipZapti: 'Tensip Zaptı',
   BelgeTuru.araKarar: 'Ara Karar',
   BelgeTuru.bilirkisiRaporu: 'Bilirkişi Raporu',
@@ -286,6 +294,8 @@ class BelgeTuruTespit {
       return BelgeTuru.tebligatZarfi;
     }
     if (h('tensip')) return BelgeTuru.tensipZapti;
+    if (h('satis ilan')) return BelgeTuru.satisIlani;
+    if (h('tebligname')) return BelgeTuru.tebligname;
     if (h('odeme emri') || h('odemeemri')) return _odemeEmri(s);
     if (h('icra emri')) return BelgeTuru.icraEmri;
     if (h('haciz ihbar')) return _hacizAsamasi(s);
@@ -422,6 +432,7 @@ class BelgeTuruTespit {
     BelgeTuru.hacizIhbarnamesiIkinci ||
     BelgeTuru.hacizIhbarnamesiUcuncu => 90,
     BelgeTuru.kanunYoluDilekcesi => 75,
+    BelgeTuru.satisIlani || BelgeTuru.tebligname => 72,
     BelgeTuru.davaDilekcesi ||
     BelgeTuru.cevapDilekcesi ||
     BelgeTuru.cevabaCevapDilekcesi => 70,
