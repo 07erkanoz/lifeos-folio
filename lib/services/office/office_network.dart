@@ -1615,8 +1615,36 @@ class OfficeNetwork extends ChangeNotifier {
   static Future<bool> firewallBlocks() async {
     if (!Platform.isLinux) return false;
     try {
+      if (await (await _firewallMark()).exists()) return false;
       final r = await Process.run('systemctl', ['is-active', 'ufw']);
       return '${r.stdout}'.trim() == 'active';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Kept once the firewall was opened from Folio: ufw's rules cannot be
+  /// read without the administrator.
+  static Future<File> _firewallMark() async => File(
+    p.join((await folioSupportDirectory()).path, 'guvenlik_duvari.json'),
+  );
+
+  /// "İzin ver": the system's own password window (pkexec), the same one
+  /// that asks when software is installed, then the two rules. True when
+  /// they were added.
+  static Future<bool> openFirewall() async {
+    if (!Platform.isLinux) return false;
+    try {
+      final r = await Process.run('pkexec', [
+        'sh',
+        '-c',
+        'ufw allow $port/tcp && ufw allow 5353/udp',
+      ]);
+      if (r.exitCode != 0) return false;
+      final mark = await _firewallMark();
+      await mark.parent.create(recursive: true);
+      await mark.writeAsString('{"kapi":$port}');
+      return true;
     } catch (_) {
       return false;
     }

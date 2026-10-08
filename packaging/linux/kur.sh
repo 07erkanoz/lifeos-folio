@@ -19,4 +19,21 @@ mv "$target.yeni" "$target"
 rm -rf "$target.eski"
 python3 "$target/kurulum/install_local.py" "$target/lifeos_folio" >/dev/null
 echo "LifeOS Folio kuruldu: $target"
+# With ufw on, nothing reaches Folio from the person's phone or the
+# office; asked once here, where the installer already is in a terminal.
+if [ -t 0 ] && command -v systemctl >/dev/null 2>&1 &&
+  [ "$(systemctl is-active ufw 2>/dev/null)" = active ]; then
+  printf '%s' "Güvenlik duvarı (ufw) açık. Telefonunuz ve büronuz bu bilgisayara bağlanabilsin mi? [E/h] "
+  read -r cevap || cevap=h
+  case "$cevap" in
+    h | H | hayır | Hayır) ;;
+    *)
+      if sudo ufw allow 47900/tcp && sudo ufw allow 5353/udp; then
+        data="${XDG_DATA_HOME:-$HOME/.local/share}/com.erkanoz.evrak_convert"
+        mkdir -p "$data"
+        printf '{"kapi":47900}' >"$data/guvenlik_duvari.json"
+      fi
+      ;;
+  esac
+fi
 echo "Uygulama menüsünden açabilirsiniz."

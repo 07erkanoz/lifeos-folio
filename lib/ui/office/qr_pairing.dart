@@ -343,34 +343,79 @@ class _Result extends StatelessWidget {
   );
 }
 
-/// This computer's firewall (ufw) lets no other device in: what to run,
-/// once, for the person's phone and the office to reach it.
-class FirewallNote extends StatelessWidget {
-  const FirewallNote({super.key});
+/// This computer's firewall (ufw) lets no other device in: one button
+/// asks the system's own password window, as installing does; the
+/// commands are there only should that not be at hand.
+class FirewallNote extends StatefulWidget {
+  const FirewallNote({super.key, this.onOpened});
+  final VoidCallback? onOpened;
 
   @override
-  Widget build(BuildContext context) => Container(
-    key: const ValueKey('firewall-note'),
-    padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFF4E5),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Bu bilgisayarın güvenlik duvarı (ufw) açık ve başka cihazların '
-          'bağlanmasına izin vermiyor. Bir kez uçbirimde şu iki komutu '
-          'çalıştırın:',
-          style: TextStyle(fontSize: 12.5, color: Color(0xFF6B4A12)),
-        ),
-        SizedBox(height: 6),
-        SelectableText(
-          'sudo ufw allow 47900/tcp\nsudo ufw allow 5353/udp',
-          style: TextStyle(fontFamily: 'monospace', fontSize: 12.5),
-        ),
-      ],
-    ),
-  );
+  State<FirewallNote> createState() => _FirewallNoteState();
+}
+
+class _FirewallNoteState extends State<FirewallNote> {
+  bool _busy = false, _failed = false, _opened = false;
+
+  Future<void> _open() async {
+    setState(() => _busy = true);
+    final ok = await OfficeNetwork.openFirewall();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _failed = !ok;
+      _opened = ok;
+    });
+    if (ok) widget.onOpened?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_opened) {
+      return const _Result(
+        ok: true,
+        text:
+            'Güvenlik duvarında izin verildi; öbür cihazlar artık '
+            'bağlanabilir.',
+      );
+    }
+    return Container(
+      key: const ValueKey('firewall-note'),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Bu bilgisayarın güvenlik duvarı öbür cihazların bağlanmasına '
+            'izin vermiyor. “İzin ver”e basın; bilgisayarınız şifrenizi '
+            'bir kez sorar.',
+            style: TextStyle(fontSize: 12.5, color: Color(0xFF6B4A12)),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.tonal(
+            key: const ValueKey('firewall-open'),
+            onPressed: _busy ? null : () => unawaited(_open()),
+            child: Text(_busy ? 'Bekleniyor…' : 'İzin ver'),
+          ),
+          if (_failed) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'İzin verilemedi. Bilgisayarınızı yöneten biri uçbirimde şu '
+              'iki komutu bir kez çalıştırabilir:',
+              style: TextStyle(fontSize: 12, color: Color(0xFF6B4A12)),
+            ),
+            const SizedBox(height: 4),
+            const SelectableText(
+              'sudo ufw allow 47900/tcp\nsudo ufw allow 5353/udp',
+              style: TextStyle(fontFamily: 'monospace', fontSize: 12.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
