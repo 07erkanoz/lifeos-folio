@@ -1,3 +1,6 @@
+import 'dart:math';
+import 'dart:convert';
+
 import '../editor/document_history.dart';
 
 import 'dart:io';
@@ -49,6 +52,13 @@ class UdfSigningService {
 
   Future<List<SigningCard>> cards({String? driver}) =>
       _exclusive(_cards, driver);
+
+  /// Whose card it is, by proof: the card signs fresh random bytes, the
+  /// signature is checked against its certificate, and the TC number in
+  /// that certificate is given; null when no certificate on it does both.
+  /// For the lock's "Şifremi unuttum"; no trust chain is checked.
+  Future<String?> provenTckn(SigningCard card, String pin) =>
+      _exclusive(_provenTckn, (card: card, pin: pin));
   Future<List<SigningCertificate>> certificates(SigningCard card, String pin) =>
       _exclusive(_certificates, (card: card, pin: pin));
 
@@ -371,3 +381,35 @@ String _error(Pkcs11Exception e) => switch (e.returnValue) {
   _ =>
     'Kart işlemi tamamlanamadı (${e.rvName}). Diğer imza uygulamalarının kartı kullanmadığını kontrol edin.',
 };
+
+String? _provenTckn(({SigningCard card, String pin}) args) {
+  final session = Pkcs11Session(args.card.module.path);
+  try {
+    session.initialize();
+    session.openSession(args.card.token.slotId);
+    session.login(args.pin);
+    final r = Random.secure();
+    final challenge = Uint8List.fromList([
+      ...utf8.encode('folio-kilit-kimlik-1:'),
+      for (var i = 0; i < 32; i++) r.nextInt(256),
+    ]);
+    for (final cert in session.getCertificates()) {
+      final tc = parseX509Certificate(cert.derBytes)?.subjectSerialNumber
+          ?.replaceAll(RegExp(r'\D'), '');
+      if (tc == null || tc.length != 11) continue;
+      try {
+        final signature = session.sign(challenge, cert.keyId);
+        if (UdfSigningService.verifyRsa(cert.derBytes, challenge, signature)) {
+          return tc;
+        }
+      } on Pkcs11Exception {
+        // Another certificate on the card may sign.
+      }
+    }
+    return null;
+  } on Pkcs11Exception catch (e) {
+    throw StateError(_error(e));
+  } finally {
+    session.dispose();
+  }
+}

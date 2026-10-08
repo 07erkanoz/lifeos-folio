@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -164,6 +165,10 @@ class _LockScreen extends StatefulWidget {
 }
 
 class _LockScreenState extends State<_LockScreen> {
+  /// A computer reads the e-imza card; a phone signs in to e-Devlet.
+  static bool get _desktop =>
+      Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+
   final _password = TextEditingController();
   final _code = TextEditingController();
   final _new = TextEditingController();
@@ -235,11 +240,11 @@ class _LockScreenState extends State<_LockScreen> {
     setState(() {
       _busy = false;
       if (tc == null) {
-        _error = 'e-Devlet girişi tamamlanmadı.';
+        _error = 'Doğrulama tamamlanmadı.';
       } else if (!ok) {
         _error =
             _waiting() ??
-            'e-Devlet’e giren bu Folio’nun avukatı değil; şifre '
+            'Doğrulanan kişi bu Folio’nun avukatı değil; şifre '
                 'yenilenmedi.';
       } else {
         _recovering = false;
@@ -365,9 +370,11 @@ class _LockScreenState extends State<_LockScreen> {
                 Text(
                   widget.lock.hasCode
                       ? 'Kurtarma kodu elinizde değilse yeni şifreyi yazın '
-                            've e-Devlet’e e-imza ya da mobil imzayla girin:'
-                      : 'Yeni şifreyi yazın ve e-Devlet’e e-imza ya da '
-                            'mobil imzayla girin:',
+                            've ${_desktop ? 'e-imzanızla' : 'mobil imzayla'} '
+                            'doğrulayın:'
+                      : 'Yeni şifreyi yazın ve '
+                            '${_desktop ? 'e-imzanızla' : 'mobil imzayla'} '
+                            'doğrulayın:',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70, fontSize: 12.5),
                 ),
@@ -382,7 +389,9 @@ class _LockScreenState extends State<_LockScreen> {
                       ? null
                       : () => unawaited(_recoverByEdevlet()),
                   icon: const Icon(Icons.verified_user_outlined, size: 18),
-                  label: const Text('e-Devlet ile doğrula'),
+                  label: Text(
+                    _desktop ? 'E-imza ile doğrula' : 'Mobil imza ile doğrula',
+                  ),
                 ),
               ],
               TextButton(

@@ -24,7 +24,7 @@ import 'preview_app.dart';
 import 'services/platform/editor_window.dart' show previewFlag;
 import 'ui/home_page.dart';
 import 'ui/widgets/desktop_frame.dart';
-import 'ui/agenda/mobile_connect.dart' show edevletIdentity;
+import 'ui/security/identity_check.dart';
 import 'ui/security/app_lock_gate.dart';
 import 'ui/widgets/onboarding_gate.dart';
 import 'ui/widgets/folio_about_dialog.dart';
@@ -368,12 +368,12 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                   if (context != null) showFolioAbout(context);
                 },
                 child: AppLockGate(
-                  identify: edevletIdentity,
+                  identify: lockIdentity,
                   child: child ?? const SizedBox.shrink(),
                 ),
               )
             : AppLockGate(
-                identify: edevletIdentity,
+                identify: lockIdentity,
                 child: child ?? const SizedBox.shrink(),
               );
         // On a phone a dialog opens from below, the screen's width, its top
