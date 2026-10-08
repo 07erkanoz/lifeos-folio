@@ -8,7 +8,7 @@
 PRODUCT_NAME = LifeOS Folio
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.erkanoz.evrakConvert
+PRODUCT_BUNDLE_IDENTIFIER = com.lifeos.folio
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.erkanoz. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 LifeOS. All rights reserved.

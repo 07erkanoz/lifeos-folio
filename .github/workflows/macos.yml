@@ -2,8 +2,11 @@ name: macOS
 run-name: LifeOS Folio · macOS · ${{ github.sha }}
 # No one working on Folio has a Mac, so this machine is where the Mac build is
 # made and tried: the suite, the app built, and the package a tester installs.
-# The package is signed ad hoc, not by Apple: it opens after the tester allows
-# it once in System Settings → Privacy & Security.
+# With the Developer ID certificate and the App Store Connect key in the
+# repository's secrets, the package is signed by Apple's Developer ID and
+# notarized, and opens like any app; without them it is signed ad hoc and
+# opens after the tester allows it once in System Settings → Privacy &
+# Security.
 on:
   workflow_dispatch:
     inputs:
@@ -44,6 +47,32 @@ jobs:
           done
           lipo -create "$RUNNER_TEMP"/folio-edevlet-arm64 "$RUNNER_TEMP"/folio-edevlet-x86_64 \
             -output "$RUNNER_TEMP/folio-edevlet"
+      - name: İmza sertifikasını yükle
+        # Into a keychain of this run alone, gone with the machine.
+        env:
+          P12: ${{ secrets.MACOS_DEVELOPER_ID_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then
+            echo "::notice::Developer ID sertifikası yok: paket yerel imzayla yapılacak."
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/folio.keychain-db"
+          pass="$(openssl rand -hex 24)"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/id.p12"
+          security create-keychain -p "$pass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$pass" "$keychain"
+          security import "$RUNNER_TEMP/id.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pass" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/id.p12"
+          identity="$(security find-identity -v -p codesigning "$keychain" | sed -nE 's/.*"(Developer ID Application:[^"]+)".*/\1/p' | head -1)"
+          if [ -z "$identity" ]; then
+            echo "::error::Sertifikada Developer ID Application kimliği bulunamadı."
+            exit 1
+          fi
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
       - name: Paketle
         run: |
           version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+.*/\1/p' pubspec.yaml)"
@@ -57,16 +86,55 @@ jobs:
           else
             echo "::warning::native_tools/macos-universal yok: OCR ve PDF küçültme bu pakette çalışmaz."
           fi
-          # Ad hoc, inside out: every program in the bundle, then the bundle.
-          find "$app/Contents/Resources/tools/bin" "$app/Contents/MacOS" -type f -perm -u+x 2>/dev/null \
-            | while read -r tool; do codesign --force --sign - "$tool"; done
-          codesign --force --deep --sign - "$app"
+          if [ -n "${SIGN_IDENTITY:-}" ]; then
+            # Developer ID, inside out, with the hardened runtime and a
+            # timestamp, as notarization asks: every library and program in
+            # the bundle, the frameworks, the app with its entitlements.
+            sign() { codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$@"; }
+            find "$app/Contents" -type f \( -name '*.dylib' -o -perm -u+x \) \
+              ! -path '*/MacOS/LifeOS Folio' 2>/dev/null \
+              | while read -r f; do
+                  if file "$f" | grep -q 'Mach-O'; then sign "$f"; fi
+                done
+            find "$app/Contents/Frameworks" -maxdepth 1 -name '*.framework' 2>/dev/null \
+              | while read -r f; do sign "$f"; done
+            sign --entitlements macos/Runner/Release.entitlements "$app"
+          else
+            # Ad hoc, inside out: every program in the bundle, then the bundle.
+            find "$app/Contents/Resources/tools/bin" "$app/Contents/MacOS" -type f -perm -u+x 2>/dev/null \
+              | while read -r tool; do codesign --force --sign - "$tool"; done
+            codesign --force --deep --sign - "$app"
+          fi
           codesign --verify --deep --strict "$app"
           lipo -info "$app/Contents/MacOS/LifeOS Folio"
           mkdir -p dmg && cp -R "$app" dmg/ && ln -s /Applications dmg/Applications
           hdiutil create -volname "LifeOS Folio" -srcfolder dmg -ov -format UDZO \
             "LifeOS-Folio-$version-macOS.dmg"
+          if [ -n "${SIGN_IDENTITY:-}" ]; then
+            codesign --force --timestamp --sign "$SIGN_IDENTITY" "LifeOS-Folio-$version-macOS.dmg"
+          fi
           echo "DMG=LifeOS-Folio-$version-macOS.dmg" >> "$GITHUB_ENV"
+      - name: Apple onayı (notarization)
+        # Apple looks the package over and gives it its ticket, stapled to it
+        # so that it opens on a Mac with no network as well.
+        if: env.SIGN_IDENTITY != ''
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          if [ -z "$ASC_KEY_P8" ]; then
+            echo "::error::App Store Connect anahtarı yok: imzalı paket Apple onayına gönderilemedi."
+            exit 1
+          fi
+          key="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          echo "$ASC_KEY_P8" | base64 --decode > "$key"
+          xcrun notarytool submit "$DMG" --key "$key" --key-id "$ASC_KEY_ID" \
+            --issuer "$ASC_ISSUER_ID" --wait --timeout 30m
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          spctl --assess --type open --context context:primary-signature -v "$DMG"
+          rm "$key"
       - name: Açılıyor mu
         # Started the way a tester starts it, left a few seconds, then closed:
         # a crash at start shows here rather than on the tester's Mac.
@@ -90,7 +158,7 @@ jobs:
           tag="mac-deneme-${GITHUB_RUN_ID}"
           gh release create "$tag" "$DMG" --target "$GITHUB_SHA" --prerelease --latest=false \
             --title "LifeOS Folio · Mac deneme · ${GITHUB_RUN_ID}" \
-            --notes "Mac için deneme paketi. Apple tarafından imzalı değildir: ilk açılışta Sistem Ayarları → Gizlilik ve Güvenlik'ten \"Yine de Aç\" seçilmelidir."
+            --notes "$(if [ -n "${SIGN_IDENTITY:-}" ]; then echo 'Mac için deneme paketi; Apple Developer ID ile imzalı ve Apple onaylı.'; else echo 'Mac için deneme paketi. Apple tarafından imzalı değildir: ilk açılışta Sistem Ayarları → Gizlilik ve Güvenlik'"'"'ten "Yine de Aç" seçilmelidir.'; fi)"
       - uses: actions/upload-artifact@v4
         if: ${{ !inputs.publish }}
         with:

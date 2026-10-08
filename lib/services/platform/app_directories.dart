@@ -9,10 +9,37 @@ import 'package:path_provider/path_provider.dart';
 /// when the visible brand changes, including the index, theme and signing setup.
 Future<Directory> folioSupportDirectory() async {
   final current = await getApplicationSupportDirectory();
+  if (Platform.isMacOS) {
+    await (_macMoved ??= bringOverMacData(current));
+    return current;
+  }
   if (!Platform.isWindows) return current;
   final stable = Directory(p.join(current.parent.path, 'LifeOS Evrakçı'));
   await stable.create(recursive: true);
   return stable;
+}
+
+Future<void>? _macMoved;
+
+/// The Mac app's name before Apple's account: its folder was named for it.
+const _oldMacId = 'com.erkanoz.evrakConvert';
+
+/// What a Mac test build kept under the old name, moved to [current] the
+/// first time Folio opens under the new one: [current] is still empty then,
+/// and anything already in it stays and the old folder with it.
+@visibleForTesting
+Future<void> bringOverMacData(Directory current) async {
+  try {
+    final old = Directory(p.join(current.parent.path, _oldMacId));
+    if (p.equals(old.path, current.path) || !await old.exists()) return;
+    if (await current.exists()) {
+      if (!await current.list().isEmpty) return;
+      await current.delete();
+    }
+    await old.rename(current.path);
+  } catch (_) {
+    // What cannot be moved stays where it was; nothing is lost.
+  }
 }
 
 /// What every window of Folio's must see alike: the UYAP cases and what is
