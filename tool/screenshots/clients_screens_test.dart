@@ -17,6 +17,7 @@ import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:evrak_convert/ui/clients/clients_page.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -233,6 +234,10 @@ void main() {
       tester.view.physicalSize = size * pixelRatio;
       tester.view.devicePixelRatio = pixelRatio;
       addTearDown(tester.view.reset);
+      // The computer's sizes for the computer's picture.
+      if (size.width > 900) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      }
       final db = await data();
       addTearDown(db.dispose);
       await tester.pumpWidget(
@@ -253,6 +258,7 @@ void main() {
       await tester.tap(find.text('Hesaplar'));
       await tester.pumpAndSettle();
       await _shot(tester, '$name-hesap');
+      debugDefaultTargetPlatformOverride = null;
     });
   }
 }

@@ -128,9 +128,10 @@ class AppTheme {
         fillColor: surface,
         // A field the height of a button beside it, its label the size of
         // the text it names.
-        contentPadding: const EdgeInsets.symmetric(
+        // Smaller on a computer, where a mouse needs no finger's room.
+        contentPadding: EdgeInsets.symmetric(
           horizontal: 14,
-          vertical: 15,
+          vertical: _desktop ? 11 : 13,
         ),
         hintStyle: TextStyle(color: muted, fontSize: 14),
         labelStyle: TextStyle(color: muted, fontSize: 13.5),
@@ -161,7 +162,10 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
+          padding: EdgeInsets.symmetric(
+            horizontal: _desktop ? 16 : 18,
+            vertical: _desktop ? 11 : 14,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
@@ -171,7 +175,10 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: border),
           foregroundColor: text,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+          padding: EdgeInsets.symmetric(
+            horizontal: _desktop ? 14 : 16,
+            vertical: _desktop ? 11 : 14,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
@@ -182,6 +189,22 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
+      // A list's row at the page's text size on a computer, not Material's
+      // sixteen points made for a finger.
+      listTileTheme: _desktop
+          ? ListTileThemeData(
+              titleTextStyle: TextStyle(
+                fontFamily: 'LiberationSans',
+                fontSize: 14,
+                color: text,
+              ),
+              subtitleTextStyle: TextStyle(
+                fontFamily: 'LiberationSans',
+                fontSize: 12.5,
+                color: muted,
+              ),
+            )
+          : null,
       chipTheme: base.chipTheme.copyWith(
         side: BorderSide(color: border),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
