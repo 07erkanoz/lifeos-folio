@@ -49,8 +49,10 @@ class ClientFiles {
   /// that two files of one name are two (content-addressed).
   static String storedName(String sha, String name) {
     final clean = p.basename(name).replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    // The whole digest: a part of one could be another file's.
-    return '$sha-$clean';
+    // The whole digest: a part of one could be another file's. The name
+    // after it kept short enough for any disk (its own name stays in the
+    // record), its extension with it.
+    return '$sha-${_short(clean, 180)}';
   }
 
   Future<Directory> _folderOf(String clientId) async {
@@ -291,4 +293,17 @@ Future<Uint8List> meetingMinutesPdf({
     ),
   );
   return doc.save();
+}
+
+/// [name] cut to at most [bytes] UTF-8 bytes, its extension kept.
+String _short(String name, int bytes) {
+  if (utf8.encode(name).length <= bytes) return name;
+  final ext = p.extension(name);
+  final keepExt = utf8.encode(ext).length <= 16 ? ext : '';
+  var stem = p.basenameWithoutExtension(name);
+  final room = bytes - utf8.encode(keepExt).length;
+  while (stem.isNotEmpty && utf8.encode(stem).length > room) {
+    stem = stem.substring(0, stem.length - 1);
+  }
+  return '$stem$keepExt';
 }

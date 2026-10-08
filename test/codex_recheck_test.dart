@@ -644,6 +644,23 @@ void registerTests() {
       expect(target.clientRecord('foreign'), isNull);
     },
   );
+
+  // The fifth review's: a long name still fits a disk.
+  test('a long file name is kept, cut to fit, its extension with it', () async {
+    final root = await Directory.systemTemp.createTemp('folio-long-');
+    addTearDown(() => root.delete(recursive: true));
+    final files = ClientFiles(root: () async => root);
+    final name = '${'ş' * 120}.pdf';
+    final kept = await files.keepBytes(
+      'k1',
+      name,
+      Uint8List.fromList([1, 2, 3]),
+    );
+    expect(kept.name, name);
+    expect(await files.locate('k1', kept), isNotNull);
+    expect(utf8.encode(kept.path.split('/').last).length <= 255, isTrue);
+    expect(kept.path.endsWith('.pdf'), isTrue);
+  });
 }
 
 List<DeadlineRecord> enforcement(
