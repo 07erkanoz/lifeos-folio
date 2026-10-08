@@ -2,6 +2,7 @@ import '../editor/suggestions/phrases.dart' show foldPhrase;
 import '../portal/portal_case.dart';
 import '../portal/portal_database.dart';
 import 'notice_deadlines.dart';
+import 'notice_documents.dart';
 import 'uets_api.dart';
 
 /// A notification's subject read: "Antalya 3. Asliye Hukuk Mahkemesi
@@ -94,6 +95,29 @@ Future<void> matchNoticesGently(PortalDatabase db, {DateTime? now}) async {
     lawyer: NoticeDeadlineContext.lawyer,
     now: now,
   );
+}
+
+/// Ties notice [id], if untied, to the case its package's own description
+/// (dosyaBilgileri) names: the same number and UYAP's name of the same
+/// unit, word for word. The subject's words are a guess beside it.
+void tieByCaseFile(PortalDatabase db, String id) {
+  final n = db.notice(id);
+  if (n == null || n.link != null) return;
+  final file = db
+      .noticeDocuments(id)
+      .map((d) => d.caseFile)
+      .whereType<NoticeCaseFile>()
+      .firstOrNull;
+  if (file == null || file.number.isEmpty || file.unitName.isEmpty) return;
+  final unit = _plain(file.unitName);
+  final found = [
+    for (final c in db.cases().values)
+      if (c.number.split(' - ').first.replaceAll(' ', '') ==
+              file.number.replaceAll(' ', '') &&
+          _plain(c.court) == unit)
+        c,
+  ];
+  if (found.length == 1) db.linkNotice(id, found.single.key, 'auto');
 }
 
 /// Ties every untied notification to its case where its subject leaves

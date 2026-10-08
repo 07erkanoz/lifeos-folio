@@ -14,6 +14,7 @@ import '../platform/app_directories.dart';
 import '../legal/deadlines/aidiyet.dart';
 import '../security/secret_store.dart';
 import '../uets/notice_deadlines.dart';
+import '../uets/notice_documents.dart';
 import '../uets/notice_packages.dart';
 import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
@@ -401,6 +402,20 @@ class PortalSync extends ChangeNotifier {
           only: {id},
         ),
       );
+      // Every package's documents read, the ones kept before too, each
+      // notice's deadlines made again as its documents are read.
+      await readNoticeDocuments(
+        db,
+        onRead: (id) {
+          tieByCaseFile(db, id);
+          refreshNoticeDeadlines(
+            db,
+            parties: NoticeDeadlineContext.parties,
+            lawyer: NoticeDeadlineContext.lawyer,
+            only: {id},
+          );
+        },
+      );
     }
     return whole
         ? null
@@ -424,6 +439,8 @@ class PortalSync extends ChangeNotifier {
       only: {id},
       recent: null,
     );
+    await readNoticeDocuments(db, only: {id});
+    tieByCaseFile(db, id);
     refreshNoticeDeadlines(
       db,
       parties: NoticeDeadlineContext.parties,

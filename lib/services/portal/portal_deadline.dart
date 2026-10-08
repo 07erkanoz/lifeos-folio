@@ -209,8 +209,8 @@ class KeptDeadline {
       !(user?.done ?? false);
 
   /// Not put before the lawyer at [now]: its last day more than a week
-  /// gone; or, its last day not known, its notice served more than forty
-  /// days ago (a box read whole brings years of notices; Banaozel keeps to
+  /// gone; or, its last day not known, its start (else its notice's
+  /// service) more than forty days ago (a box read whole brings years of notices; Banaozel keeps to
   /// forty days too). A long time limit whose last day is still to come is
   /// shown however long ago it was served: ninety days from a notice two
   /// months old are not gone. It stays on its notice's page; one the lawyer
@@ -222,7 +222,7 @@ class KeptDeadline {
       return DateTime.parse(d)
           .isBefore(DateTime(today.year, today.month, today.day - 7));
     }
-    final start = record.startDay;
+    final start = record.startDay ?? record.evidence['teblig'] as String?;
     return start != null &&
         DateTime.parse(start)
             .isBefore(DateTime(today.year, today.month, today.day - 40));

@@ -78,7 +78,11 @@ extension YasalSureTakvim on YasalSure {
 ///       in for by the service's; an envelope's start and the party it
 ///       names kept; two documents of a kind are two; the old criminal
 ///       regime's two starts apart; one court classifier.
-const sureHesapSurumu = 6;
+///   7 — 2026-10-08 (Folio): the package's documents read: a document's
+///       kind from its heading when its name tells nothing, the court's
+///       own documents' directives, the unit from dosyaBilgileri, the
+///       documents' digests among the inputs.
+const sureHesapSurumu = 7;
 
 /// Kategori bazlı yasal süreler (belge türü kanun yolu kararıysa kullanılır).
 /// Değerler kanonik olgulardan (sure_katalogu.dart) gelir — TEK kaynak.

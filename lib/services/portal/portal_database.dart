@@ -9,6 +9,7 @@ import '../platform/app_directories.dart';
 import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_deadline.dart';
+import '../uets/notice_documents.dart';
 import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
 import 'portal_hearing.dart';
@@ -156,6 +157,12 @@ class PortalDatabase {
         notice_id TEXT PRIMARY KEY, state TEXT NOT NULL, folder TEXT,
         package_path TEXT, envelope_path TEXT, envelope_text TEXT,
         attachments TEXT NOT NULL DEFAULT '[]', fetched_at TEXT, error TEXT);
+      CREATE TABLE IF NOT EXISTS uets_document (
+        notice_id TEXT NOT NULL, seq INTEGER NOT NULL, name TEXT NOT NULL,
+        path TEXT NOT NULL, part_id TEXT, digest TEXT NOT NULL,
+        state TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', note TEXT,
+        reader INTEGER NOT NULL, read_at TEXT NOT NULL,
+        PRIMARY KEY(notice_id, seq));
       CREATE TABLE IF NOT EXISTS deadline (
         id TEXT PRIMARY KEY, notice_id TEXT NOT NULL, case_key TEXT,
         rule_id TEXT NOT NULL, title TEXT NOT NULL, law TEXT NOT NULL,
@@ -1212,6 +1219,61 @@ class PortalDatabase {
         ? null
         : DateTime.parse(r['fetched_at'] as String),
     error: r['error'] as String?,
+  );
+
+  /// A notice's documents as read (see [readNoticeDocuments]), all of
+  /// them at once in place of those read before.
+  void saveNoticeDocuments(String noticeId, List<NoticeDocument> docs) {
+    _db.execute('BEGIN');
+    try {
+      _db.execute('DELETE FROM uets_document WHERE notice_id=?', [noticeId]);
+      for (final d in docs) {
+        _db.execute(
+          '''INSERT INTO uets_document(notice_id, seq, name, path, part_id,
+             digest, state, text, note, reader, read_at)
+             VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
+          [
+            d.noticeId,
+            d.seq,
+            d.name,
+            d.path,
+            d.partId,
+            d.digest,
+            d.state,
+            d.text,
+            d.note,
+            d.reader,
+            d.readAt.toIso8601String(),
+          ],
+        );
+      }
+      _db.execute('COMMIT');
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  List<NoticeDocument> noticeDocuments(String noticeId) => [
+    for (final r in _db.select(
+      'SELECT * FROM uets_document WHERE notice_id=? ORDER BY seq',
+      [noticeId],
+    ))
+      _document(r),
+  ];
+
+  NoticeDocument _document(Row r) => NoticeDocument(
+    noticeId: r['notice_id'] as String,
+    seq: r['seq'] as int,
+    name: r['name'] as String,
+    path: r['path'] as String,
+    partId: r['part_id'] as String?,
+    digest: r['digest'] as String,
+    state: r['state'] as String,
+    text: r['text'] as String,
+    note: r['note'] as String?,
+    reader: r['reader'] as int,
+    readAt: DateTime.parse(r['read_at'] as String),
   );
 
   // Notices' deadlines

@@ -240,8 +240,9 @@ void main() {
     );
   });
 
-  test('B18: two documents of a kind in one package are two deadlines, the '
-      'first keeping the id it always had', () {
+  test('B18: two documents of a kind in one package (a report and its '
+      'annex) run one time from one day: one deadline naming both, not two '
+      'that say the same', () {
     final made = noticeDeadlines(
       db.notice('audit')!,
       manifest: (
@@ -254,10 +255,12 @@ void main() {
       ),
       now: DateTime(2026, 10, 8),
     );
-    final ids = [for (final r in made) r.id];
-    expect(ids, hasLength(2));
-    expect(ids.first, 'uets:audit:r:${made.first.ruleId}');
-    expect(ids.last, 'uets:audit:r:${made.first.ruleId}:p:p2');
+    final r = made.single;
+    expect(r.id, 'uets:audit:r:${r.ruleId}');
+    expect(
+      r.reasons.firstWhere((x) => x.code == 'birdenCokBelge').text,
+      contains('(2)BilirkisiRaporu.pdf'),
+    );
   });
 
   test('B19: an envelope’s time joins the rule of the same act, party and '

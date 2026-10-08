@@ -13,6 +13,7 @@ import '../legal/deadlines/yasal_sure.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_deadline.dart';
 import 'envelope_directives.dart';
+import 'notice_documents.dart';
 import 'notice_matcher.dart';
 
 /// What the notices' deadlines are made with beyond the database: each
@@ -79,6 +80,7 @@ void refreshNoticeDeadlines(
           manifests[n.message.id] ??
           (state: 'alinmadi', fetchedAt: null, parts: const []),
       envelope: envelopes[n.message.id],
+      documents: db.noticeDocuments(n.message.id),
       takipTuru: switch (db.meta('takip:${n.message.id}')) {
         final v? when v.isNotEmpty => v,
         _ => null,
@@ -172,6 +174,9 @@ List<DeadlineRecord> noticeDeadlines(
   })
   manifest,
   NoticeEnvelope? envelope,
+
+  /// Its package's documents as read (see [readNoticeDocuments]).
+  List<NoticeDocument> documents = const [],
   List<TarafKaydi> parties = const [],
   String? lawyer,
   DateTime? now,
@@ -185,9 +190,17 @@ List<DeadlineRecord> noticeDeadlines(
   if (sent == null) return const [];
   final at = now ?? DateTime.now();
   final subject = NoticeSubject.parse(m.subject);
-  final category = subject == null
-      ? null
-      : TurkishLegalCalendar.kategoriFromMahkemeAdi(subject.unit);
+  // The unit by the package's own description first (UYAP's name of it),
+  // the subject's words after.
+  final caseFile = documents
+      .map((d) => d.caseFile)
+      .whereType<NoticeCaseFile>()
+      .firstOrNull;
+  final category =
+      TurkishLegalCalendar.kategoriFromMahkemeAdi(caseFile?.unitName) ??
+      (subject == null
+          ? null
+          : TurkishLegalCalendar.kategoriFromMahkemeAdi(subject.unit));
 
   // The kinds of document, each with what told it: a document at a time,
   // so that two expert reports or two interim decisions in one package are
@@ -195,15 +208,69 @@ List<DeadlineRecord> noticeDeadlines(
   final kinds = <({BelgeTuru tur, Map<String, Object?> evidence})>[];
   final seenKinds = <BelgeTuru>{};
   final fromParts = <({BelgeTuru tur, String ad})>[];
-  for (var i = 0; i < manifest.parts.length; i++) {
-    final part = manifest.parts[i];
-    for (final k in BelgeTuruTespit.ekTurleri([part.name])) {
-      fromParts.add(k);
-      seenKinds.add(k.tur);
-      kinds.add((
-        tur: k.tur,
-        evidence: {'kaynak': 'ek', 'ad': k.ad, 'parca': part.id, 'sira': i},
-      ));
+  // The court's documents read, with their kinds, for their directives.
+  final courtDocuments = <(NoticeDocument, BelgeTuru)>[];
+  final docs = [
+    for (final d in documents)
+      if (d.state != 'ustveri') d,
+  ];
+  // The notice's list's parts; with no list, the package's documents.
+  final listedParts = manifest.parts.isNotEmpty
+      ? [
+          for (var i = 0; i < manifest.parts.length; i++)
+            (
+              id: manifest.parts[i].id,
+              name: manifest.parts[i].name,
+              seq: i,
+              doc: docs
+                  .where((d) => d.partId == manifest.parts[i].id)
+                  .firstOrNull,
+            ),
+        ]
+      : [
+          for (final d in docs)
+            (
+              id: 'ek${d.seq}',
+              name: d.name,
+              seq: d.seq,
+              doc: d as NoticeDocument?,
+            ),
+        ];
+  for (final part in listedParts) {
+    final doc = part.doc;
+    final byName = BelgeTuruTespit.ekTurleri([part.name]);
+    // A name that tells nothing: what the document itself says it is,
+    // by its heading.
+    final byText = byName.isEmpty && doc != null && doc.hasText
+        ? BelgeTuruTespit.tebligatTuru(const [], metin: doc.text)
+        : null;
+    final BelgeTuru tur;
+    final String source;
+    if (byName.isNotEmpty) {
+      tur = byName.single.tur;
+      source = 'ek';
+      fromParts.add(byName.single);
+    } else if (byText != null && !BelgeTuruTespit.belirsiz(byText)) {
+      tur = byText;
+      source = 'ekIcerik';
+    } else {
+      continue;
+    }
+    seenKinds.add(tur);
+    kinds.add((
+      tur: tur,
+      evidence: {
+        'kaynak': source,
+        'ad': part.name,
+        'parca': part.id,
+        'sira': part.seq,
+        'ozet': ?doc?.digest,
+      },
+    ));
+    if (doc != null &&
+        doc.hasText &&
+        (_courtKinds.contains(tur) || _confirmingKinds.contains(tur))) {
+      courtDocuments.add((doc, tur));
     }
   }
   if (kinds.isEmpty && (envelope?.envelopeText ?? '').isNotEmpty) {
@@ -259,7 +326,6 @@ List<DeadlineRecord> noticeDeadlines(
     required Map<String, Object?> evidence,
     required ({AidiyetSinyali sinyal, String neden}) sign,
     List<DeadlineReason> lead = const [],
-    String idSuffix = '',
   }) {
     final reasons = <DeadlineReason>[
       ...lead,
@@ -274,6 +340,12 @@ List<DeadlineRecord> noticeDeadlines(
           'eskiSaat',
           '2016 öncesi bir tebligat: o yılların yaz saati uygulaması '
               'hesaba katılmadı.',
+        ),
+      if (evidence['kaynak'] == 'ekIcerik')
+        DeadlineReason(
+          'turIcerikten',
+          'Belge türü dosyanın adından değil, belgenin kendi başlığından '
+              'anlaşıldı (${evidence['ad']}).',
         ),
       if (evidence['kaynak'] == 'konu')
         const DeadlineReason(
@@ -400,6 +472,11 @@ List<DeadlineRecord> noticeDeadlines(
       'manifestZamani': manifest.fetchedAt,
       'zarf': envelope?.state,
       'zarfMetni': envelopeDigest,
+      // What the documents' contents were when it was reckoned (B24): one
+      // read again, or changed, asks for the confirmation again.
+      'belgeler': [
+        for (final d in documents) [d.seq, d.digest, d.state, d.reader],
+      ],
       'kanit': evidence,
       'dosya': n.caseKey,
       'bag': n.link,
@@ -419,7 +496,7 @@ List<DeadlineRecord> noticeDeadlines(
       'takvim': TurkishLegalCalendar.takvimSurumu,
     });
     return DeadlineRecord(
-      id: 'uets:${m.id}:r:$ruleId$idSuffix',
+      id: 'uets:${m.id}:r:$ruleId',
       noticeId: m.id,
       caseKey: n.caseKey,
       ruleId: ruleId,
@@ -438,7 +515,9 @@ List<DeadlineRecord> noticeDeadlines(
       state: state,
       ownership: sign.sinyal.name,
       reasons: reasons,
-      evidence: evidence,
+      // The day of service too: a deadline with no day of its own goes by
+      // its notice's age (see [KeptDeadline.expired]).
+      evidence: {...evidence, 'teblig': served.key},
       engine: sureHesapSurumu,
       calendar: TurkishLegalCalendar.takvimSurumu,
       inputs: inputs,
@@ -448,19 +527,37 @@ List<DeadlineRecord> noticeDeadlines(
 
   final out = <DeadlineRecord>[];
   final catalogued = <(DeadlineRecord, YasalSure)>[];
-  // A rule a second document of the same kind brings again is that
-  // document's: its id says which, the first keeping the id it always had.
-  final made = <String>{};
+  // A rule two documents of a kind bring in one notice (a report and its
+  // annexes, two reports) starts on the same day and ends on the same day:
+  // one deadline, which names every document it runs for (the audit's
+  // B18: a repeated service's evidence joined). Notices of other days are
+  // other deadlines.
+  final made = <String, int>{};
+  final alsoFor = <int, List<String>>{};
   for (final k in kinds) {
     for (final rule in surelerForBelgeTuru(k.tur, kategori)) {
       final info = kuralBilgisi(rule);
       final ruleId = info?.id ?? _slug(rule.ad);
-      final again = !made.add(ruleId);
+      if (made[ruleId] case final at?) {
+        (alsoFor[at] ??= []).add('${k.evidence['ad']}');
+        continue;
+      }
+      // The old criminal regime's time from a pronouncement in presence:
+      // the pronouncement came before 1 June 2024, so the time ran out
+      // within weeks of it. A notice served long after cannot bring it.
+      final until = DateTime.tryParse(rule.gecerliBitisIso ?? '');
+      if (rule.baslangic == SureBaslangici.tefhim &&
+          until != null &&
+          inserted.isAfter(
+            LegalDay.of(until).addDays(rule.gun + 60),
+          )) {
+        continue;
+      }
+      made[ruleId] = catalogued.length;
       catalogued.add((
         record(
           rule,
           ruleId: ruleId,
-          idSuffix: again ? ':p:${k.evidence['parca']}' : '',
           tur: k.tur,
           evidence: k.evidence,
           sign: aidiyetSinyali(
@@ -488,15 +585,66 @@ List<DeadlineRecord> noticeDeadlines(
     }
   }
 
+  for (final e in alsoFor.entries) {
+    final (r, rule) = catalogued[e.key];
+    catalogued[e.key] = (
+      r.withState(
+        r.state,
+        reasons: [
+          ...r.reasons,
+          DeadlineReason(
+            'birdenCokBelge',
+            'Aynı süre bu tebligattaki başka belgeler için de işliyor: '
+                '${e.value.join(', ')}.',
+          ),
+        ],
+      ),
+      rule,
+    );
+  }
+
   // The envelope's directives: one that gives a catalogued rule's own time
   // joins it, as its second source; one that gives another time is a
   // deadline of its own, both told of the other.
-  final directives = envelopeText.isEmpty
-      ? const <EnvelopeDirective>[]
-      : envelopeDirectives(envelopeText);
-  final joined = <int, List<EnvelopeDirective>>{};
-  final apart = <EnvelopeDirective>[];
-  for (final d in directives) {
+  // The directives: the envelope's, and those of the court's own documents
+  // read (a tensip, an interim decision, a hearing's minutes, a decision):
+  // not a party's petition, whose "iki hafta içinde" is no duty of anyone's.
+  final sources = <_DirectiveSource>[
+    if (envelopeText.isNotEmpty)
+      _DirectiveSource(
+        key: 'zarf',
+        envelope: true,
+        name: 'Tebligat zarfı',
+        text: envelopeText,
+        makes: true,
+        evidence: const {'kaynak': 'zarf', 'ad': 'Tebligat zarfı'},
+        tur: kinds.isEmpty ? BelgeTuru.diger : kinds.first.tur,
+      ),
+    for (final (d, tur) in courtDocuments)
+      _DirectiveSource(
+        key: 'ek${d.seq}',
+        envelope: false,
+        name: d.name,
+        text: d.text,
+        makes: _courtKinds.contains(tur),
+        evidence: {
+          'kaynak': 'ekTalimat',
+          'ad': d.name,
+          'parca': ?d.partId,
+          'sira': d.seq,
+          'ozet': d.digest,
+        },
+        tur: tur,
+      ),
+  ];
+  final directives = [
+    for (final source in sources)
+      for (final d in envelopeDirectives(source.text)) (source, d),
+  ];
+  final joined = <int, List<(_DirectiveSource, EnvelopeDirective)>>{};
+  final apart = <(_DirectiveSource, EnvelopeDirective)>[];
+  for (final sd in directives) {
+    final d = sd.$2;
     // The same time is not enough: the same act, the same start and the
     // same party first, then the time; else the two stay apart and each
     // says so.
@@ -513,32 +661,46 @@ List<DeadlineRecord> noticeDeadlines(
     // of two documents of a kind (two reports) is one rule: joined to both.
     final rules = {for (final j in fitting) catalogued[j].$1.ruleId};
     if (rules.length != 1) {
-      apart.add(d);
+      if (sd.$1.makes) apart.add(sd);
     } else {
       for (final j in fitting) {
-        (joined[j] ??= []).add(d);
+        (joined[j] ??= []).add(sd);
       }
     }
+  }
+  // The same directive in the envelope and in a document (the envelope
+  // often repeats the tensip's warning) is one deadline, told of both: the
+  // first source makes it, the envelope before the documents.
+  final groups = <String, List<(_DirectiveSource, EnvelopeDirective)>>{};
+  for (final sd in apart) {
+    final d = sd.$2;
+    (groups['${d.act}|${d.amount}|${d.unit.name}|${d.startsFrom}|${d.party}'] ??=
+            [])
+        .add(sd);
   }
   for (var i = 0; i < catalogued.length; i++) {
     final (r, rule) = catalogued[i];
     final with_ = joined[i] ?? const [];
-    final others = apart;
+    final others = [for (final g in groups.values) g.first];
     out.add(
       with_.isEmpty && others.isEmpty
           ? r
           : r.withState(
               r.state,
               reasons: [
-                for (final d in with_)
+                for (final (s, d) in with_)
                   DeadlineReason(
                     'zarfIleUyumlu',
-                    'Zarf da aynı süreyi veriyor (${d.text}): “${d.quote}”',
+                    s.envelope
+                        ? 'Zarf da aynı süreyi veriyor (${d.text}): “${d.quote}”'
+                        : 'Aynı süre ekte de yazıyor (${d.text}; ${s.name}): '
+                              '“${d.quote}”',
                   ),
-                for (final d in others)
+                for (final (s, d) in others)
                   DeadlineReason(
                     'zarfFarkli',
-                    'Zarfta bununla eşleşmeyen bir talimat var (${d.text}'
+                    '${s.envelope ? 'Zarfta' : 'Ekte'} bununla eşleşmeyen bir '
+                        'talimat var (${d.text}'
                         '${d.party == null ? '' : ', ${_partyTitle(d.party!)}'}'
                         '${d.startsFrom == null ? '' : ', ${_startTitle(d.startsFrom!)} başlayan'}'
                         '); o da ayrıca gösterildi.',
@@ -548,12 +710,13 @@ List<DeadlineRecord> noticeDeadlines(
             ),
     );
   }
-  for (final d in apart) {
+  for (final group in groups.values) {
+    final (s, d) = group.first;
     final rule = YasalSure(
-      ad: 'Zarftaki süre · ${_actTitle(d.act)}',
+      ad: '${s.envelope ? 'Zarftaki' : 'Ekteki'} süre · ${_actTitle(d.act)}',
       miktar: d.amount,
       birim: d.unit,
-      kanunMaddesi: 'Zarftaki ihtar',
+      kanunMaddesi: s.envelope ? 'Zarftaki ihtar' : 'Ekteki talimat',
       // The court's own time, not the law's: the recess does not extend it
       // as of course (HMK m.104).
       nitelik: SureNiteligi.hakim,
@@ -572,20 +735,21 @@ List<DeadlineRecord> noticeDeadlines(
       record(
         rule,
         ruleId: [
-          'zarf-${d.act}-${d.amount}${d.unit.name}',
+          '${s.envelope ? 'zarf' : s.key}-${d.act}-${d.amount}${d.unit.name}',
           ?d.startsFrom,
           ?party,
         ].join('-'),
-        tur: kinds.isEmpty ? BelgeTuru.diger : kinds.first.tur,
-        evidence: {'kaynak': 'zarf', 'ad': 'Tebligat zarfı'},
+        tur: s.tur,
+        evidence: s.evidence,
         // Spoken to its reader, the duty is the one served's; laid on a
         // party by name, it is that party's, whoever was served.
         sign: party == null
             ? (
                 sinyal: AidiyetSinyali.olasiBizim,
-                neden:
-                    'Zarftaki talimat tebligatın muhatabına, yani size '
-                    'yöneltilmiş.',
+                neden: s.envelope
+                    ? 'Zarftaki talimat tebligatın muhatabına, yani size '
+                          'yöneltilmiş.'
+                    : 'Ekteki talimat belgeyi okuyana, yani size yöneltilmiş.',
               )
             : aidiyetSinyali(
                 yukumlu: switch (party) {
@@ -598,18 +762,29 @@ List<DeadlineRecord> noticeDeadlines(
                 avukat: lawyer,
               ),
         lead: [
-          DeadlineReason('zarfAlinti', '“${d.quote}”'),
+          DeadlineReason(
+            'zarfAlinti',
+            s.envelope ? '“${d.quote}”' : '“${d.quote}” (${s.name})',
+          ),
+          for (final (o, _) in group.skip(1))
+            DeadlineReason(
+              'zarfIleUyumlu',
+              o.envelope
+                  ? 'Zarf da aynı talimatı veriyor.'
+                  : 'Aynı talimat ekte de yazıyor (${o.name}).',
+            ),
           if (d.startsFrom == null && !d.fromService)
-            const DeadlineReason(
+            DeadlineReason(
               'baslangicVarsayildi',
-              'Zarf sürenin neyden başladığını söylemiyor; tebliğden '
-                  'başladığı kabul edildi.',
+              '${s.envelope ? 'Zarf' : 'Belge'} sürenin neyden başladığını '
+                  'söylemiyor; tebliğden başladığı kabul edildi.',
             ),
           if (catalogued.isNotEmpty)
             DeadlineReason(
               'zarfFarkli',
               'Kanunun süresi (${catalogued.map((c) => c.$2.sureMetni).toSet().join(', ')}) '
-                  'zarftakinden farklı; ikisi de gösterildi.',
+                  '${s.envelope ? 'zarftakinden' : 'ektekinden'} farklı; '
+                  'ikisi de gösterildi.',
             ),
         ],
       ),
@@ -617,6 +792,56 @@ List<DeadlineRecord> noticeDeadlines(
   }
   return out;
 }
+
+/// Where a directive was read: the envelope, or a document of the court.
+class _DirectiveSource {
+  const _DirectiveSource({
+    required this.key,
+    required this.envelope,
+    required this.name,
+    required this.text,
+    required this.makes,
+    required this.evidence,
+    required this.tur,
+  });
+  final String key;
+  final bool envelope;
+
+  /// Whether a directive of it that no rule holds is a deadline of its
+  /// own; else it only bears a rule out.
+  final bool makes;
+  final String name;
+  final String text;
+  final Map<String, Object?> evidence;
+  final BelgeTuru tur;
+}
+
+/// The court's own documents whose times are the judge's, not the law's:
+/// their directives are read. Not a party's petition or an expert's report,
+/// which only quote or propose; nor a decision or an order to pay, whose
+/// times the catalogue holds and whose text repeats the law (measured on
+/// the box's 116 documents, 8 October 2026: read, those gave a second,
+/// noisier copy of the catalogue's own deadline).
+const _courtKinds = {
+  BelgeTuru.tensipZapti,
+  BelgeTuru.araKarar,
+  BelgeTuru.durusmaTutanagi,
+  BelgeTuru.durusmaDavetiyesi,
+  BelgeTuru.muzekkere,
+};
+
+/// A court's decisions and orders: their directives only bear out the
+/// catalogue's deadline ("tebliğden itibaren iki hafta içinde istinaf"),
+/// never make one of their own.
+const _confirmingKinds = {
+  BelgeTuru.gerekceliKarar,
+  BelgeTuru.kararIlami,
+  BelgeTuru.istinafKarari,
+  BelgeTuru.temyizKarari,
+  BelgeTuru.odemeEmri,
+  BelgeTuru.odemeEmriKambiyo,
+  BelgeTuru.icraEmri,
+};
 
 /// Whether an envelope's directive laid on [party] (null: on its reader)
 /// can be the catalogued rule whose duty is [holder]'s.
