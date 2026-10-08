@@ -66,6 +66,8 @@ class _SyncPageState extends State<SyncPage> {
                         _devices(context, own),
                         const SizedBox(height: 12),
                         _parts(context),
+                        const SizedBox(height: 12),
+                        _sessions(context),
                       ],
                     ),
                   ),
@@ -271,4 +273,139 @@ class _SyncPageState extends State<SyncPage> {
       ],
     ),
   );
+
+  static const _kinds = {
+    'mobil': 'UYAP Mobil',
+    'uets': 'UETS',
+    'web': 'UYAP Web',
+  };
+
+  String _nameOf(KnownDevice d) => d.device.isEmpty ? d.name : d.device;
+
+  Future<void> _move(Future<String?> Function() doIt) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    setState(() => _syncing = true);
+    final error = await doIt();
+    if (!mounted) return;
+    setState(() => _syncing = false);
+    messenger?.showSnackBar(
+      SnackBar(content: Text(error ?? 'Oturum taşındı.')),
+    );
+  }
+
+  Widget _sessions(BuildContext context) {
+    final here = _sync.heldHere;
+    final online = [
+      for (final d in _net.ownKnown)
+        if (_net.isOnline(d.deviceId)) d,
+    ];
+    return _card(
+      context,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 13, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.key_rounded),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Oturumlar',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'Yeniden e-imza atmadan öbür cihazınızda devam edin. '
+                        'Oturum tek cihazda açık olur; aldığınız cihaza geçer.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (final MapEntry(key: kind, value: label) in _kinds.entries)
+              () {
+                final there = [
+                  for (final d in online)
+                    if (_sync.held[d.deviceId]?.contains(kind) ?? false) d,
+                ];
+                final Widget? action;
+                if (here.contains(kind) && online.isNotEmpty) {
+                  action = online.length == 1
+                      ? OutlinedButton(
+                          key: ValueKey('sync-give-$kind'),
+                          onPressed: _syncing
+                              ? null
+                              : () => unawaited(
+                                  _move(
+                                    () => _sync.give(
+                                      online.single.deviceId,
+                                      kind,
+                                    ),
+                                  ),
+                                ),
+                          child: const Text('Öbür cihaza ver'),
+                        )
+                      : PopupMenuButton<KnownDevice>(
+                          key: ValueKey('sync-give-$kind'),
+                          tooltip: 'Hangi cihaza?',
+                          onSelected: (d) => unawaited(
+                            _move(() => _sync.give(d.deviceId, kind)),
+                          ),
+                          itemBuilder: (_) => [
+                            for (final d in online)
+                              PopupMenuItem(value: d, child: Text(_nameOf(d))),
+                          ],
+                          child: const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Text('Cihaza ver…'),
+                          ),
+                        );
+                } else if (!here.contains(kind) && there.isNotEmpty) {
+                  action = OutlinedButton(
+                    key: ValueKey('sync-take-$kind'),
+                    onPressed: _syncing
+                        ? null
+                        : () => unawaited(
+                            _move(() => _sync.take(there.first.deviceId, kind)),
+                          ),
+                    child: const Text('Bu cihaza al'),
+                  );
+                } else {
+                  action = null;
+                }
+                final status = here.contains(kind)
+                    ? 'bu cihazda açık'
+                    : there.isNotEmpty
+                    ? 'açık · ${_nameOf(there.first)}'
+                    : 'kapalı';
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(40, 4, 0, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$label · $status',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      ?action,
+                    ],
+                  ),
+                );
+              }(),
+          ],
+        ),
+      ),
+    );
+  }
 }

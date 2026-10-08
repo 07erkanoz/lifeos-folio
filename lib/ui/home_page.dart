@@ -724,12 +724,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       OfficeNetwork.instance.incoming.addListener(_pairingAsked);
       OfficeNetwork.instance.incomingOffer.addListener(_offerCame);
       tellOffice(OfficeNetwork.instance);
-      // The agenda kept alike with the person's own devices.
-      unawaited(OwnSync.instance.start());
       OfficeNetwork.instance.addListener(_officeCounted);
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
       PortalSync.instance.noticesVersion.addListener(_portalSynced);
+      // The agenda and the sessions kept alike with the person's own
+      // devices, once the portals' sessions are started.
+      unawaited(OwnSync.instance.start());
       // New UYAP notifications, told on the computer's or phone's own.
       PortalSync.instance.onNewNotices = (n) => unawaited(
         PortalDatabase.shared().then((db) => tellUyapNotices(db, n)),

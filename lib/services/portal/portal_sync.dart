@@ -146,6 +146,65 @@ class PortalSync extends ChangeNotifier {
     }
   }
 
+  /// The sessions one of the lawyer's own devices can take over (docs/
+  /// buro.md, Senkron): UYAP Mobil, UETS and the UYAP web portal.
+  static const sessionKinds = ['mobil', 'uets', 'web'];
+
+  bool holds(String kind) => switch (kind) {
+    'mobil' => _mobile.connected,
+    'uets' => _uets.connected,
+    'web' => _web.connected,
+    _ => false,
+  };
+
+  /// The session of [kind] as it goes to another own device; null when
+  /// this one has none.
+  Map<String, Object?>? sessionOf(String kind) => switch (kind) {
+    'mobil' => _mobile.tokens?.toJson(),
+    'uets' => _uets.exportSession(),
+    'web' => _web.exportSession(),
+    _ => null,
+  };
+
+  /// Takes up a session another own device gave; false when the portal
+  /// does not hold it.
+  Future<bool> takeSession(String kind, Object? kept) async {
+    if (kept is! Map) return false;
+    final data = kept.cast<String, Object?>();
+    switch (kind) {
+      case 'mobil':
+        final tokens = MobileTokens.fromJson(data);
+        if (tokens == null) return false;
+        // Kept first: renewed later here, it is these that renew.
+        await _secrets.write(_mobileSecret, tokens.toJson());
+        try {
+          if (await _mobile.restore(tokens) == null) return false;
+        } on UyapMobileUnreachable {
+          // UYAP out of reach: kept, and taken up when it answers.
+          unawaited(_restoreMobile());
+        }
+        return true;
+      case 'uets':
+        return _uets.restoreSession(data);
+      case 'web':
+        return _web.restoreSession(data);
+    }
+    return false;
+  }
+
+  /// Ends the session of [kind] here only: it went on to another own
+  /// device.
+  void dropSession(String kind) {
+    switch (kind) {
+      case 'mobil':
+        _mobile.moved();
+      case 'uets':
+        _uets.logout();
+      case 'web':
+        _web.disconnect();
+    }
+  }
+
   static const _webSecret = 'uyap-web';
   static const _uetsSecret = 'uets';
 

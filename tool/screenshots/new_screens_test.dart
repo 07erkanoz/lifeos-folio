@@ -725,8 +725,15 @@ void main() {
         network: pc,
         database: () async => db,
         file: () async => File('${dir.path}/senkron.json'),
+        sessions: _ShotSessions({'mobil'}),
       );
       await sync.start();
+      await OwnSync(
+        network: phone,
+        database: () async => PortalDatabase.memory(),
+        file: () async => File('${dir.path}/senkron-tel.json'),
+        sessions: _ShotSessions({'uets'}),
+      ).start();
       await pc.syncOwn();
     });
     for (final (size, name) in [
@@ -815,4 +822,19 @@ class _Targets extends OfficeNetwork {
       online: true,
     ),
   ];
+}
+
+class _ShotSessions implements SessionHolder {
+  _ShotSessions(this.open);
+  final Set<String> open;
+  @override
+  bool holds(String kind) => open.contains(kind);
+  @override
+  Map<String, Object?>? sessionOf(String kind) => null;
+  @override
+  Future<bool> takeSession(String kind, Object? kept) async => false;
+  @override
+  void dropSession(String kind) {}
+  @override
+  void listen(VoidCallback changed) {}
 }

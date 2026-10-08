@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:evrak_convert/services/office/office_chat.dart';
 import 'package:evrak_convert/services/office/office_identity.dart';
@@ -11,6 +10,8 @@ import 'package:evrak_convert/services/office/office_link.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_pairing.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
+import 'package:evrak_convert/services/sync/own_sync.dart';
+import 'package:flutter/foundation.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
@@ -698,4 +699,79 @@ void main() {
     expect(otherDb.agenda(), isEmpty);
     expect(laptop.synced.containsKey(o.deviceId), isFalse);
   });
+
+  test('a session moves to one’s own device and ends where it was', () async {
+    final pc = await folio('Av. Erkan Öz', 'dizustu3');
+    final phone = await folio('Av. Erkan Öz', 'telefon3');
+    pc.seenForTesting(phone.self!);
+    phone.seenForTesting(pc.self!);
+    final asking = pc.pair(phone.self!)!;
+    await until(
+      () => phone.incoming.value?.code != null && asking.code != null,
+    );
+    phone.incoming.value!.confirm();
+    asking.confirm();
+    await until(() => pc.self!.userId == phone.self!.userId);
+    pc.seenForTesting(phone.self!);
+    phone.seenForTesting(pc.self!);
+    final pcHas = _Sessions({
+      'mobil': {'access': 'a1', 'refresh': 'r1'},
+    });
+    final phoneHas = _Sessions({});
+    final dir2 = Directory.systemTemp.createTempSync('folio_own_');
+    addTearDown(() => dir2.deleteSync(recursive: true));
+    OwnSync own(OfficeNetwork net, _Sessions s, String name) => OwnSync(
+      network: net,
+      database: () async => PortalDatabase.memory(),
+      file: () async => File('${dir2.path}/$name.json'),
+      sessions: s,
+    );
+    final onPc = own(pc, pcHas, 'pc'), onPhone = own(phone, phoneHas, 'tel');
+    await onPc.start();
+    await onPhone.start();
+    await phone.syncOwn();
+    // Each knows what the other holds.
+    expect(onPhone.held[pc.self!.deviceId], {'mobil'});
+    // "Bu cihaza al" on the phone: it opens there and ends on the computer.
+    expect(await onPhone.take(pc.self!.deviceId, 'mobil'), isNull);
+    await until(() => !pcHas.holds('mobil'));
+    expect(phoneHas.sessionOf('mobil'), {'access': 'a1', 'refresh': 'r1'});
+    // And back with "ver".
+    expect(await onPhone.give(pc.self!.deviceId, 'mobil'), isNull);
+    expect(pcHas.holds('mobil'), isTrue);
+    expect(phoneHas.holds('mobil'), isFalse);
+    // Nothing to take: said so.
+    expect(await onPc.take(phone.self!.deviceId, 'uets'), isNotNull);
+  });
+}
+
+class _Sessions implements SessionHolder {
+  _Sessions(this.kept);
+  final Map<String, Map<String, Object?>> kept;
+  final _told = <VoidCallback>[];
+
+  @override
+  bool holds(String kind) => kept.containsKey(kind);
+  @override
+  Map<String, Object?>? sessionOf(String kind) => kept[kind];
+  @override
+  Future<bool> takeSession(String kind, Object? data) async {
+    if (data is! Map) return false;
+    kept[kind] = data.cast<String, Object?>();
+    for (final t in _told) {
+      t();
+    }
+    return true;
+  }
+
+  @override
+  void dropSession(String kind) {
+    kept.remove(kind);
+    for (final t in _told) {
+      t();
+    }
+  }
+
+  @override
+  void listen(VoidCallback changed) => _told.add(changed);
 }

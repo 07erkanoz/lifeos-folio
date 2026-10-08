@@ -189,6 +189,14 @@ class UyapMobileApi {
     return s;
   }
 
+  /// Ends the session here only, not at UYAP: it went on to another of the
+  /// lawyer's own devices, whose renewals would end this copy anyway.
+  void moved() {
+    _generation++;
+    _setTokens(null);
+    session.value = null;
+  }
+
   Future<void> logout() async {
     final had = _tokens != null;
     try {

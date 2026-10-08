@@ -369,6 +369,67 @@ class OfficeNetwork extends ChangeNotifier {
   /// person's key vouched for.
   final ownParts = <String, OwnPart>{};
 
+  /// What this device answers one of the person's own devices asking, by
+  /// kind: its answer, and what to do with the asker's last word, null when
+  /// it says none.
+  final ownAnswers =
+      <
+        String,
+        Future<
+          (
+            Map<String, Object?>,
+            Future<void> Function(Map<String, Object?>? word)?,
+          )
+        >
+        Function(Map<String, Object?> asked)
+      >{};
+
+  /// Asks one of the person's own devices [kind]; [then] says the last
+  /// word from its answer. Null when it is not on the network, not proved
+  /// the person's own, or did not answer.
+  Future<Map<String, Object?>?> askOwn(
+    String deviceId,
+    String kind, {
+    Map<String, Object?> body = const {},
+    Future<Map<String, Object?>?> Function(Map<String, Object?> answer)? then,
+  }) async {
+    final identity = _identity, peer = _peers[deviceId];
+    final host = peer?.host;
+    if (identity == null || peer == null || host == null || !peer.online) {
+      return null;
+    }
+    final trusted = await _trustedFor(peer);
+    if (trusted == null) return null;
+    try {
+      final ch = await OfficeChannel.open(
+        identity: identity,
+        peer: trusted,
+        host: host,
+        port: peer.port,
+      );
+      if (!ch.vouched) {
+        await ch.close();
+        return null;
+      }
+      final reply = ch.messages.first.timeout(const Duration(seconds: 30));
+      await ch.send({...body, 't': 'kendi', 'tur': kind});
+      final answer = await reply;
+      if (answer['yok'] == true) {
+        await ch.close();
+        return null;
+      }
+      final word = then == null ? null : await then(answer);
+      if (word != null) {
+        await ch.send(word);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+      await ch.close();
+      return answer;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// When each of the person's own devices was last made alike with this.
   final synced = <String, DateTime>{};
 
@@ -547,6 +608,28 @@ class OfficeNetwork extends ChangeNotifier {
           't': 'gorev',
           'gorev': mine != null && _maySee(mine, from) ? mine.toJson() : null,
         });
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await ch.close();
+        return;
+      }
+      if (m['t'] == 'kendi') {
+        // A question only one of the person's own devices may ask.
+        final answer = ownAnswers['${m['tur']}'];
+        if (!ch.vouched || answer == null) {
+          await ch.send({'t': 'kendi', 'yok': true});
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          await ch.close();
+          return;
+        }
+        final (said, after) = await answer(m);
+        final next = after == null
+            ? null
+            : ch.messages.first
+                  .timeout(const Duration(seconds: 40))
+                  .then<Map<String, Object?>?>((w) => w)
+                  .catchError((Object _) => null);
+        await ch.send({...said, 't': 'kendi'});
+        if (after != null) await after(await next);
         await Future<void>.delayed(const Duration(milliseconds: 200));
         await ch.close();
         return;
