@@ -45,6 +45,13 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
   int _generation = 0;
 
   @override
+  void initState() {
+    super.initState();
+    // Made ready while the first word is typed.
+    unawaited(widget.search.prepare().catchError((Object _) {}));
+  }
+
+  @override
   void dispose() {
     _soon?.cancel();
     _field.dispose();

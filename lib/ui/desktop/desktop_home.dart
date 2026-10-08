@@ -161,8 +161,10 @@ class _DesktopHomeState extends State<DesktopHome> {
     _searchFocus.addListener(() {
       if (!_searchFocus.hasFocus) {
         _found.hide();
-      } else if (_results != null) {
-        _found.show();
+      } else {
+        // What is searched is made ready while the first word is typed.
+        unawaited(widget.search?.prepare().catchError((Object _) {}));
+        if (_results != null) _found.show();
       }
     });
     _tick = Timer.periodic(const Duration(seconds: 30), (_) {

@@ -135,30 +135,64 @@ class GlobalSearch {
 
   static const perGroup = 5;
 
-  /// The portfolio, read once for a run of searches: each letter typed
-  /// does not read every case again.
-  List<PortfolioRow>? _rows;
-  DateTime? _rowsAt;
-  int _rowsVersion = -1;
+  /// The portfolio and its words folded, made once for a run of searches
+  /// and kept until a case's record changes (or ten minutes pass): a box
+  /// holds tens of thousands of documents, and folding each of them at
+  /// every letter typed held the window for seconds.
+  _Index? _index;
+  Future<_Index>? _making;
 
-  Future<List<PortfolioRow>> _portfolio() async {
+  /// Made ahead, as the field is entered: the first letter finds it ready.
+  Future<void> prepare() => _indexed();
+
+  Future<_Index> _indexed() {
     final version = UyapCaseStore.changes.value;
-    final at = _rowsAt;
-    if (_rows != null &&
-        version == _rowsVersion &&
-        at != null &&
-        _now().difference(at) < const Duration(seconds: 30)) {
-      return _rows!;
+    final kept = _index;
+    if (kept != null &&
+        kept.version == version &&
+        _now().difference(kept.at) < const Duration(minutes: 10)) {
+      return Future.value(kept);
     }
+    return _making ??= _make(version).whenComplete(() => _making = null);
+  }
+
+  Future<_Index> _make(int version) async {
     final rows = await loadPortfolio(
       lawyer: lawyer,
       database: database,
       store: store,
     );
-    _rows = rows;
-    _rowsAt = _now();
-    _rowsVersion = version;
-    return rows;
+    final parties = <(PortfolioRow, UyapParty, String)>[];
+    final documents = <(PortfolioRow, UyapCaseDocument, String, int)>[];
+    var done = 0;
+    for (final r in rows) {
+      // Its case's words folded already, as the list keeps them.
+      r.haystack;
+      for (final party in [...r.ours, ...r.others]) {
+        parties.add((r, party, UyapWebService.fold(party.name)));
+      }
+      for (final d in r.record?.documents ?? const <UyapCaseDocument>[]) {
+        for (final x in [d, ...d.attachments]) {
+          documents.add((
+            r,
+            x,
+            UyapWebService.fold('${x.type} ${x.description}'),
+            // Its date read once, for the order: read at each comparison,
+            // a short word's tens of thousands took half a second.
+            x.date?.millisecondsSinceEpoch ?? 0,
+          ));
+        }
+      }
+      // A few cases at a time, the window let breathe between them.
+      if (++done % 4 == 0) await Future<void>.delayed(Duration.zero);
+    }
+    return _index = _Index(
+      version: version,
+      at: _now(),
+      rows: rows,
+      parties: parties,
+      documents: documents,
+    );
   }
 
   /// The words of [text], folded; none when it is shorter than two letters.
@@ -174,7 +208,8 @@ class GlobalSearch {
     bool has(String folded) => ws.every(folded.contains);
 
     final filesSoon = _files(query);
-    final rows = await _portfolio();
+    final index = await _indexed();
+    final rows = index.rows;
     final cases = [
       for (final r in rows)
         if (has(r.haystack)) FoundCase(r),
@@ -182,36 +217,21 @@ class GlobalSearch {
 
     // A party by its name, once for all its cases.
     final parties = <String, (UyapParty, List<PortfolioRow>)>{};
-    for (final r in rows) {
-      for (final party in [...r.ours, ...r.others]) {
-        final name = UyapWebService.fold(party.name);
-        if (name.isEmpty || !has(name)) continue;
-        final seen = parties.putIfAbsent(name, () => (party, []));
-        if (!seen.$2.contains(r)) seen.$2.add(r);
-      }
+    for (final (r, party, name) in index.parties) {
+      if (name.isEmpty || !has(name)) continue;
+      final seen = parties.putIfAbsent(name, () => (party, []));
+      if (!seen.$2.contains(r)) seen.$2.add(r);
     }
     final found = [
       for (final (party, cases) in parties.values)
         FoundParty(party.name, party.role, cases),
     ]..sort((a, b) => b.cases.length.compareTo(a.cases.length));
 
-    final documents = <FoundDocument>[];
-    for (final r in rows) {
-      for (final d in [
-        for (final d in r.record?.documents ?? const <UyapCaseDocument>[]) ...[
-          d,
-          ...d.attachments,
-        ],
-      ]) {
-        if (has(UyapWebService.fold('${d.type} ${d.description}'))) {
-          documents.add(FoundDocument(r, d));
-        }
-      }
-    }
-    final far = DateTime(1900);
-    documents.sort(
-      (a, b) => (b.document.date ?? far).compareTo(a.document.date ?? far),
-    );
+    final matched = [
+      for (final e in index.documents)
+        if (has(e.$3)) e,
+    ]..sort((a, b) => b.$4.compareTo(a.$4));
+    final documents = [for (final (r, d, _, _) in matched) FoundDocument(r, d)];
 
     final agenda = await _agenda(has, cases);
     final (files, filesTotal) = await filesSoon;
@@ -244,6 +264,8 @@ class GlobalSearch {
     bool Function(String) has,
     List<FoundCase> cases,
   ) async {
+    // The agenda read as it is now: a note just written is found at once,
+    // and there are only so many of them.
     final db = database ?? await PortalDatabase.shared();
     final items = [
       for (final i in db.agenda())
@@ -272,4 +294,20 @@ class GlobalSearch {
       return ra == 0 ? a.day!.compareTo(b.day!) : b.day!.compareTo(a.day!);
     });
   }
+}
+
+/// The portfolio's words folded once, for searching them many times.
+class _Index {
+  const _Index({
+    required this.version,
+    required this.at,
+    required this.rows,
+    required this.parties,
+    required this.documents,
+  });
+  final int version;
+  final DateTime at;
+  final List<PortfolioRow> rows;
+  final List<(PortfolioRow, UyapParty, String)> parties;
+  final List<(PortfolioRow, UyapCaseDocument, String, int)> documents;
 }
