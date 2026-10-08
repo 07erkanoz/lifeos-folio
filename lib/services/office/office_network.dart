@@ -1612,10 +1612,30 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// Whether this computer's firewall keeps others out: ufw on Linux,
   /// which lets nothing in until told to. Windows asks by itself.
-  static Future<bool> firewallBlocks() async {
+  /// The port this Folio listens on now: [port], or another when that
+  /// was taken.
+  int get listeningPort => _server?.port ?? port;
+
+  /// The local networks only: the office's and the home's, never all of
+  /// the internet.
+  static const _local = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'];
+
+  /// The rules that let the person's phone and the office in on [at].
+  static List<String> firewallRules(int at) => [
+    for (final net in _local) ...[
+      'ufw allow from $net to any port $at proto tcp',
+      'ufw allow from $net to any port 5353 proto udp',
+    ],
+  ];
+
+  static Future<bool> firewallBlocks({int at = port}) async {
     if (!Platform.isLinux) return false;
     try {
-      if (await (await _firewallMark()).exists()) return false;
+      final mark = await _firewallMark();
+      if (await mark.exists()) {
+        final kept = jsonDecode(await mark.readAsString());
+        if (kept is Map && kept['kapi'] == at) return false;
+      }
       final r = await Process.run('systemctl', ['is-active', 'ufw']);
       return '${r.stdout}'.trim() == 'active';
     } catch (_) {
@@ -1623,27 +1643,29 @@ class OfficeNetwork extends ChangeNotifier {
     }
   }
 
-  /// Kept once the firewall was opened from Folio: ufw's rules cannot be
-  /// read without the administrator.
+  /// Kept once the firewall was opened from Folio, with the port it was
+  /// opened for: ufw's rules cannot be read without the administrator. A
+  /// hint only, for Folio to say no more; it opens nothing.
   static Future<File> _firewallMark() async => File(
     p.join((await folioSupportDirectory()).path, 'guvenlik_duvari.json'),
   );
 
   /// "İzin ver": the system's own password window (pkexec), the same one
-  /// that asks when software is installed, then the two rules. True when
-  /// they were added.
-  static Future<bool> openFirewall() async {
+  /// that asks when software is installed, then the rules for [at], from
+  /// the local networks only. True when they were added.
+  static Future<bool> openFirewall({int at = port}) async {
     if (!Platform.isLinux) return false;
     try {
+      // Fixed words only: nothing the user or the network says is in it.
       final r = await Process.run('pkexec', [
         'sh',
         '-c',
-        'ufw allow $port/tcp && ufw allow 5353/udp',
+        firewallRules(at).join(' && '),
       ]);
       if (r.exitCode != 0) return false;
       final mark = await _firewallMark();
       await mark.parent.create(recursive: true);
-      await mark.writeAsString('{"kapi":$port}');
+      await mark.writeAsString(jsonEncode({'kapi': at}));
       return true;
     } catch (_) {
       return false;

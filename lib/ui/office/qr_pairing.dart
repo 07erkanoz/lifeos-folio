@@ -40,7 +40,7 @@ class _QrInviteDialogState extends State<QrInviteDialog> {
     _net.qrPairing.addListener(_came);
     unawaited(_renew());
     unawaited(
-      OfficeNetwork.firewallBlocks().then((on) {
+      OfficeNetwork.firewallBlocks(at: _net.listeningPort).then((on) {
         if (mounted && on) setState(() => _walled = true);
       }),
     );
@@ -139,7 +139,10 @@ class _QrInviteDialogState extends State<QrInviteDialog> {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
-          if (_walled) ...[const SizedBox(height: 12), const FirewallNote()],
+          if (_walled) ...[
+            const SizedBox(height: 12),
+            FirewallNote(at: _net.listeningPort),
+          ],
         ],
       );
     }
@@ -347,7 +350,10 @@ class _Result extends StatelessWidget {
 /// asks the system's own password window, as installing does; the
 /// commands are there only should that not be at hand.
 class FirewallNote extends StatefulWidget {
-  const FirewallNote({super.key, this.onOpened});
+  const FirewallNote({super.key, this.at = OfficeNetwork.port, this.onOpened});
+
+  /// The port Folio listens on.
+  final int at;
   final VoidCallback? onOpened;
 
   @override
@@ -359,7 +365,7 @@ class _FirewallNoteState extends State<FirewallNote> {
 
   Future<void> _open() async {
     setState(() => _busy = true);
-    final ok = await OfficeNetwork.openFirewall();
+    final ok = await OfficeNetwork.openFirewall(at: widget.at);
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -405,13 +411,16 @@ class _FirewallNoteState extends State<FirewallNote> {
             const SizedBox(height: 8),
             const Text(
               'İzin verilemedi. Bilgisayarınızı yöneten biri uçbirimde şu '
-              'iki komutu bir kez çalıştırabilir:',
+              'komutları bir kez çalıştırabilir:',
               style: TextStyle(fontSize: 12, color: Color(0xFF6B4A12)),
             ),
             const SizedBox(height: 4),
-            const SelectableText(
-              'sudo ufw allow 47900/tcp\nsudo ufw allow 5353/udp',
-              style: TextStyle(fontFamily: 'monospace', fontSize: 12.5),
+            SelectableText(
+              [
+                for (final rule in OfficeNetwork.firewallRules(widget.at))
+                  'sudo $rule',
+              ].join('\n'),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
             ),
           ],
         ],

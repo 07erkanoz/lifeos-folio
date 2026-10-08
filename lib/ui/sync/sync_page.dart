@@ -48,7 +48,7 @@ class _SyncPageState extends State<SyncPage> {
   void initState() {
     super.initState();
     unawaited(
-      OfficeNetwork.firewallBlocks().then((on) {
+      OfficeNetwork.firewallBlocks(at: _net.listeningPort).then((on) {
         if (mounted && on) setState(() => _walled = true);
       }),
     );
@@ -240,7 +240,7 @@ class _SyncPageState extends State<SyncPage> {
               ],
               if (_walled) ...[
                 const SizedBox(height: 10),
-                const FirewallNote(),
+                FirewallNote(at: _net.listeningPort),
               ],
               const SizedBox(height: 10),
               Wrap(

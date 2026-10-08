@@ -251,6 +251,11 @@ void main() {
     expect(await old.recover(late, latePeer, code), isNull);
     expect(await l.merge(old.records), isFalse);
     expect(l.member(late.deviceId), isNull);
+    // Nor when, founder on that branch, it makes a code of its own.
+    expect(await old.makeRecovery(late), isNotNull);
+    await l.merge(old.records);
+    expect(l.member(late.deviceId), isNull);
+    expect(l.member(fresh.deviceId)?.founder, isTrue);
     // By the new code, it does.
     final again = ledger('baska');
     await again.merge(l.records);

@@ -278,6 +278,13 @@ class OfficeLedger {
     final r = await _sign(identity, {
       'k': 'kurtarma',
       'up': base64Encode((await key!.extractPublicKey()).bytes),
+      // The code it takes the place of, and the recoveries by it that
+      // stand: no other by that code ever will.
+      'yerine': _state.recoveryId,
+      'kalan': [
+        for (final k in _records)
+          if (k['k'] == 'kurtar') idOf(k),
+      ],
       'buro': officeId,
       'onceki': idOf(_records.last),
     });
@@ -430,21 +437,24 @@ class OfficeLedger {
     var all = records;
     for (var round = 0; round < 8; round++) {
       final state = await _replayOnce(all);
-      // A recovery by a code older than the last stands only if the last
-      // was made after it, on a ledger that had it: one hung later on an
-      // old branch, by a code made void, does not.
-      final last = state.recoveryId;
-      final ids = {for (final r in all) idOf(r): r};
-      final before = <String>{};
-      for (var at = last; at != null && before.add(at);) {
-        final o = ids[at]?['onceki'];
-        at = o is String ? o : null;
+      // A recovery by a code stands only while every code made in its
+      // place names it as standing: one hung later on any branch by a
+      // code made void does not, wherever it sorts, nor what its device
+      // did as founder after. The same rule on every device.
+      final standing = <String, List<Set<String>>>{};
+      for (final r in state.kept) {
+        final instead = r['yerine'];
+        if (r['k'] != 'kurtarma' || instead is! String) continue;
+        (standing[instead] ??= []).add({
+          for (final k in (r['kalan'] as List? ?? const [])) '$k',
+        });
       }
       final stale = {
         for (final r in state.kept)
           if (r['k'] == 'kurtar' &&
-              r['kod'] != last &&
-              !before.contains(idOf(r)))
+              (standing['${r['kod']}'] ?? const <Set<String>>[]).any(
+                (kept) => !kept.contains(idOf(r)),
+              ))
             idOf(r),
       };
       if (stale.isEmpty) return state;
@@ -545,6 +555,8 @@ class OfficeLedger {
       if (kind == 'kurtarma') {
         final up = r['up'];
         if (!signer.founder || up is! String) continue;
+        // In the place of the code that was the latest where it stands.
+        if (r['yerine'] != recoveryId) continue;
         if (!await _holds(r, signer.publicKey)) continue;
         recovery = up;
         recoveryId = idOf(r);

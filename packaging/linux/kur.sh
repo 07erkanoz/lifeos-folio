@@ -28,7 +28,14 @@ if [ -t 0 ] && command -v systemctl >/dev/null 2>&1 &&
   case "$cevap" in
     h | H | hayır | Hayır) ;;
     *)
-      if sudo ufw allow 47900/tcp && sudo ufw allow 5353/udp; then
+      # From the local networks only, never all of the internet.
+      acik=1
+      for ag in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
+        sudo ufw allow from "$ag" to any port 47900 proto tcp >/dev/null &&
+          sudo ufw allow from "$ag" to any port 5353 proto udp >/dev/null ||
+          acik=0
+      done
+      if [ "$acik" = 1 ]; then
         data="${XDG_DATA_HOME:-$HOME/.local/share}/com.erkanoz.evrak_convert"
         mkdir -p "$data"
         printf '{"kapi":47900}' >"$data/guvenlik_duvari.json"

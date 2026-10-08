@@ -91,7 +91,13 @@ class OfficePairing extends ChangeNotifier {
 
   /// "Bu cihaz da benim": the other device is the user's own. Set at first
   /// when both say the same name; the user changes it before confirming.
-  bool mine = false;
+  bool get mine => _mineValue;
+  set mine(bool value) {
+    _mineValue = value;
+    _mineChosen = true;
+  }
+
+  bool _mineValue = false, _mineChosen = false;
   bool _theirsMine = false;
 
   /// How many other devices share this one's person's key, and the other's:
@@ -247,9 +253,12 @@ class OfficePairing extends ChangeNotifier {
     if (peer == null) return false;
     _other = peer;
     _otherKey = base64Encode(key);
-    mine =
-        peer.name.trim().isNotEmpty &&
-        UyapWebService.fold(peer.name) == UyapWebService.fold(_self.name);
+    // The same name ticks it at first; what the user chose stays.
+    if (!_mineChosen) {
+      _mineValue =
+          peer.name.trim().isNotEmpty &&
+          UyapWebService.fold(peer.name) == UyapWebService.fold(_self.name);
+    }
     return true;
   }
 
