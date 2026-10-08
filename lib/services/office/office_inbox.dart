@@ -117,6 +117,8 @@ class OfficeInbox extends ChangeNotifier {
       for (final e in await _net.transferLog())
         if (InboxItem.fromLog(e) case final i? when !_gone.contains(i.id)) i,
     ];
+    // The one that came last, its record perhaps not yet written.
+    _came();
     notifyListeners();
   }
 
@@ -125,7 +127,11 @@ class OfficeInbox extends ChangeNotifier {
     final t = _net.arrived.value;
     if (t == null) return;
     final item = InboxItem.fromLog({..._net.recordOf(t), 'durum': 'done'});
-    if (item == null || _items.any((i) => i.id == item.id)) return;
+    if (item == null ||
+        _gone.contains(item.id) ||
+        _items.any((i) => i.id == item.id)) {
+      return;
+    }
     _items = [item, ..._items];
     notifyListeners();
   }
