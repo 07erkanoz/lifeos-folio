@@ -14,6 +14,8 @@ import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'office_offer_dialog.dart' show sizeText;
 import 'office_pairing_dialog.dart';
 import 'qr_pairing.dart';
+import 'send_to_office.dart';
+import '../widgets/drop_zone.dart';
 
 /// Büro ağı (docs/buro.md, docs/design/buro-paylasim-taslak.png): the
 /// Folios on the office's network under their people. Sending, knowing a
@@ -43,59 +45,85 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final scheme = Theme.of(context).colorScheme;
-    return ColoredBox(
-      color: dark ? scheme.surface : AgendaColors.page,
-      child: ListenableBuilder(
-        listenable: _net,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, box) {
-            final wide = box.maxWidth >= 900;
-            final pad = wide ? 24.0 : 12.0;
-            return ListView(
-              key: const ValueKey('office-network'),
-              padding: EdgeInsets.fromLTRB(pad, wide ? 18 : 10, pad, 24),
-              children: [
-                _head(context),
-                const SizedBox(height: 14),
-                if (!_net.joined)
-                  _join(context)
-                else if (wide)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          children: [
-                            _office(context),
-                            const SizedBox(height: 12),
-                            _people(context),
-                          ],
+    return DropZoneOverlay(
+      title: 'Göndermek için bırakın',
+      subtitle: 'Kime gönderileceğini seçeceksiniz',
+      onFilesDropped: _dropped,
+      child: ColoredBox(
+        color: dark ? scheme.surface : AgendaColors.page,
+        child: ListenableBuilder(
+          listenable: _net,
+          builder: (context, _) => LayoutBuilder(
+            builder: (context, box) {
+              final wide = box.maxWidth >= 900;
+              final pad = wide ? 24.0 : 12.0;
+              return ListView(
+                key: const ValueKey('office-network'),
+                padding: EdgeInsets.fromLTRB(pad, wide ? 18 : 10, pad, 24),
+                children: [
+                  _head(context),
+                  const SizedBox(height: 14),
+                  if (!_net.joined)
+                    _join(context)
+                  else if (wide)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            children: [
+                              _office(context),
+                              const SizedBox(height: 12),
+                              _people(context),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          children: [_transfers(context), _thisDevice(context)],
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            children: [
+                              _transfers(context),
+                              _thisDevice(context),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  )
-                else ...[
-                  _office(context),
-                  const SizedBox(height: 12),
-                  _people(context),
-                  const SizedBox(height: 12),
-                  _transfers(context),
-                  _thisDevice(context),
+                      ],
+                    )
+                  else ...[
+                    _office(context),
+                    const SizedBox(height: 12),
+                    _people(context),
+                    const SizedBox(height: 12),
+                    _transfers(context),
+                    _thisDevice(context),
+                  ],
                 ],
-              ],
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
+  }
+
+  /// Files dropped on the page: whom they go to is asked.
+  void _dropped(List<String> paths) {
+    final files = droppedFiles(paths);
+    if (files.isEmpty) return;
+    if (_net.sendTargets.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Gönderebileceğiniz kimse yok. Önce bir cihazı tanıyın ya da '
+            'büroyu kurun.',
+          ),
+        ),
+      );
+      return;
+    }
+    unawaited(showSendToOffice(context, files, network: _net));
   }
 
   Widget _head(BuildContext context) {

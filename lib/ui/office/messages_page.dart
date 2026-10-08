@@ -13,6 +13,7 @@ import '../../services/office/office_network.dart';
 import '../../services/platform/file_actions.dart';
 import '../../services/speech/speech_session.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../widgets/drop_zone.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'office_offer_dialog.dart' show sizeText;
 
@@ -155,9 +156,7 @@ class _MessagesPageState extends State<MessagesPage> {
         Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => Scaffold(
-              appBar: AppBar(
-                title: Text(chat.titleFor(_net.me)),
-              ),
+              appBar: AppBar(title: Text(chat.titleFor(_net.me))),
               body: ChatThread(network: _net, chatId: chat.id),
             ),
           ),
@@ -420,8 +419,24 @@ class _ChatThreadState extends State<ChatThread> {
     unawaited(_say(_net.post(chat, text: text)));
   }
 
+  /// Files dropped on the talk: sent in it, with the words being written.
+  Future<void> _dropped(List<String> paths) async {
+    final chat = _net.chats.of(widget.chatId);
+    final files = droppedFiles(paths);
+    if (chat == null || files.isEmpty || !_net.mayWrite(chat)) return;
+    await _say(_net.post(chat, text: _text.text, files: files));
+    _text.clear();
+  }
+
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
+  Widget build(BuildContext context) => DropZoneOverlay(
+    title: 'Göndermek için bırakın',
+    subtitle: 'Dosyalar bu konuşmaya gider',
+    onFilesDropped: (paths) => unawaited(_dropped(paths)),
+    child: _thread(context),
+  );
+
+  Widget _thread(BuildContext context) => ListenableBuilder(
     listenable: _net,
     builder: (context, _) {
       final chat = _net.chats.of(widget.chatId);

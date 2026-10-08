@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 
@@ -11,7 +13,15 @@ class DropZoneOverlay extends StatefulWidget {
     super.key,
     required this.child,
     required this.onFilesDropped,
+    this.enabled = true,
+    this.title = 'Evrakları Buraya Bırakın',
+    this.subtitle =
+        'Dosya veya klasör ekleyin; desteklenen evraklar arşivlensin',
   });
+
+  /// Off where a page of its own takes what is dropped.
+  final bool enabled;
+  final String title, subtitle;
 
   @override
   State<DropZoneOverlay> createState() => _DropZoneOverlayState();
@@ -23,6 +33,7 @@ class _DropZoneOverlayState extends State<DropZoneOverlay> {
   @override
   Widget build(BuildContext context) {
     return DropTarget(
+      enable: widget.enabled,
       onDragEntered: (_) => setState(() => _isDragging = true),
       onDragExited: (_) => setState(() => _isDragging = false),
       onDragDone: (details) {
@@ -57,26 +68,26 @@ class _DropZoneOverlayState extends State<DropZoneOverlay> {
                         ),
                       ],
                     ),
-                    child: const Column(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.file_download_outlined,
                           size: 48,
                           color: AppColors.primary,
                         ),
-                        SizedBox(height: 12),
+                        const SizedBox(height: 12),
                         Text(
-                          'Evrakları Buraya Bırakın',
-                          style: TextStyle(
+                          widget.title,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Dosya veya klasör ekleyin; desteklenen evraklar arşivlensin',
-                          style: TextStyle(
+                          widget.subtitle,
+                          style: const TextStyle(
                             fontSize: 13,
                             color: AppColors.darkTextMuted,
                           ),
@@ -91,4 +102,25 @@ class _DropZoneOverlayState extends State<DropZoneOverlay> {
       ),
     );
   }
+}
+
+/// The files among [paths], a folder's own and its folders' too, at most
+/// [limit]: what is dropped to be sent.
+List<String> droppedFiles(List<String> paths, {int limit = 500}) {
+  final out = <String>[];
+  for (final path in paths) {
+    if (out.length >= limit) break;
+    if (FileSystemEntity.isDirectorySync(path)) {
+      try {
+        for (final e in Directory(path).listSync(recursive: true)) {
+          if (out.length >= limit) break;
+          final name = e.uri.pathSegments.where((s) => s.isNotEmpty).last;
+          if (e is File && !name.startsWith('.')) out.add(e.path);
+        }
+      } catch (_) {}
+    } else if (FileSystemEntity.isFileSync(path)) {
+      out.add(path);
+    }
+  }
+  return out;
 }

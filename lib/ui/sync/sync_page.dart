@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import '../../services/sync/folder_sync.dart';
 import '../../services/sync/own_sync.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../office/qr_pairing.dart';
+import '../widgets/drop_zone.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 
 /// Senkron (docs/design, the approved mock): the person's own devices and
@@ -54,41 +56,46 @@ class _SyncPageState extends State<SyncPage> {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final scheme = Theme.of(context).colorScheme;
-    return ColoredBox(
-      color: dark ? scheme.surface : AgendaColors.page,
-      child: ListenableBuilder(
-        listenable: Listenable.merge([_net, _sync, _folders]),
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, box) {
-            final wide = box.maxWidth >= 900;
-            final pad = wide ? 24.0 : 12.0;
-            final own = _net.ownKnown;
-            return ListView(
-              key: const ValueKey('sync-page'),
-              padding: EdgeInsets.fromLTRB(pad, wide ? 18 : 10, pad, 24),
-              children: [
-                _head(context, own.isNotEmpty),
-                const SizedBox(height: 14),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _devices(context, own),
-                        const SizedBox(height: 12),
-                        _parts(context),
-                        const SizedBox(height: 12),
-                        _folderCard(context),
-                        const SizedBox(height: 12),
-                        _sessions(context),
-                      ],
+    return DropZoneOverlay(
+      title: 'Klasörü buraya bırakın',
+      subtitle: 'Bırakılan klasör kendi cihazlarınızla eşitlenir',
+      onFilesDropped: (paths) => unawaited(_dropped(paths)),
+      child: ColoredBox(
+        color: dark ? scheme.surface : AgendaColors.page,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([_net, _sync, _folders]),
+          builder: (context, _) => LayoutBuilder(
+            builder: (context, box) {
+              final wide = box.maxWidth >= 900;
+              final pad = wide ? 24.0 : 12.0;
+              final own = _net.ownKnown;
+              return ListView(
+                key: const ValueKey('sync-page'),
+                padding: EdgeInsets.fromLTRB(pad, wide ? 18 : 10, pad, 24),
+                children: [
+                  _head(context, own.isNotEmpty),
+                  const SizedBox(height: 14),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 720),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _devices(context, own),
+                          const SizedBox(height: 12),
+                          _parts(context),
+                          const SizedBox(height: 12),
+                          _folderCard(context),
+                          const SizedBox(height: 12),
+                          _sessions(context),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -592,6 +599,29 @@ class _SyncPageState extends State<SyncPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _dropped(List<String> paths) async {
+    final folders = [
+      for (final path in paths)
+        if (FileSystemEntity.isDirectorySync(path)) path,
+    ];
+    if (folders.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Buraya klasör bırakın. Dosya göndermek için Büro ağı sayfasına '
+            'bırakın.',
+          ),
+        ),
+      );
+      return;
+    }
+    for (final path in folders) {
+      // Searched in the archive too, as a chosen folder is.
+      _folders.onAdded?.call(path);
+      await _share(path);
+    }
   }
 
   /// A folder to keep alike: chosen, or dropped on the page.

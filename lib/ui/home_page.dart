@@ -1652,6 +1652,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           child: Focus(
             autofocus: true,
             child: DropZoneOverlay(
+              // Pages that take what is dropped themselves.
+              enabled: !const {
+                'senkron',
+                'buro',
+                'mesajlar',
+              }.contains(_group),
               onFilesDropped: _addFiles,
               child: Scaffold(
                 drawer: mobile ? _mobileDrawer(mobileHome) : null,
