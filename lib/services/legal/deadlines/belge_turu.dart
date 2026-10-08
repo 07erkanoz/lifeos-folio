@@ -22,6 +22,11 @@ enum BelgeTuru {
   hacizIhbarnamesiUcuncu,
   davaDilekcesi,
   cevapDilekcesi,
+  // The plaintiff's reply to an answer: the defendant's second answer
+  // follows it (HMK m.136).
+  cevabaCevapDilekcesi,
+  // The other side's appeal (istinaf or temyiz), served to be answered.
+  kanunYoluDilekcesi,
   tensipZapti,
   araKarar,
   bilirkisiRaporu,
@@ -49,6 +54,8 @@ const belgeTuruEtiket = <BelgeTuru, String>{
   BelgeTuru.hacizIhbarnamesiUcuncu: 'Üçüncü Haciz İhbarnamesi (89/3)',
   BelgeTuru.davaDilekcesi: 'Dava Dilekçesi',
   BelgeTuru.cevapDilekcesi: 'Cevap Dilekçesi',
+  BelgeTuru.cevabaCevapDilekcesi: 'Cevaba Cevap Dilekçesi',
+  BelgeTuru.kanunYoluDilekcesi: 'İstinaf / Temyiz Dilekçesi',
   BelgeTuru.tensipZapti: 'Tensip Zaptı',
   BelgeTuru.araKarar: 'Ara Karar',
   BelgeTuru.bilirkisiRaporu: 'Bilirkişi Raporu',
@@ -301,6 +308,15 @@ class BelgeTuruTespit {
       return BelgeTuru.temyizKarari;
     }
     if (h('gerekceli karar') || h('gerekceli')) return BelgeTuru.gerekceliKarar;
+    // An appeal's own petition: the other side's to answer. Its answer, a
+    // second answer and a reply to an appeal are answered by no one.
+    if ((h('istinaf') || h('temyiz')) && h('cevap')) return BelgeTuru.diger;
+    if ((h('istinaf') || h('temyiz')) &&
+        (h('dilekce') || h('basvuru') || h('talep') || h('talebi'))) {
+      return BelgeTuru.kanunYoluDilekcesi;
+    }
+    if (h('ikinci cevap')) return BelgeTuru.diger;
+    if (h('cevaba cevap')) return BelgeTuru.cevabaCevapDilekcesi;
     if (h('cevap dilekce')) return BelgeTuru.cevapDilekcesi;
     if (h('dava dilekce')) return BelgeTuru.davaDilekcesi;
     if (h('durusma') && h('davet')) return BelgeTuru.durusmaDavetiyesi;
@@ -405,7 +421,10 @@ class BelgeTuruTespit {
     BelgeTuru.hacizIhbarnamesiBirinci ||
     BelgeTuru.hacizIhbarnamesiIkinci ||
     BelgeTuru.hacizIhbarnamesiUcuncu => 90,
-    BelgeTuru.davaDilekcesi || BelgeTuru.cevapDilekcesi => 70,
+    BelgeTuru.kanunYoluDilekcesi => 75,
+    BelgeTuru.davaDilekcesi ||
+    BelgeTuru.cevapDilekcesi ||
+    BelgeTuru.cevabaCevapDilekcesi => 70,
     BelgeTuru.iddianame => 60,
     BelgeTuru.tensipZapti || BelgeTuru.araKarar => 40,
     BelgeTuru.bilirkisiRaporu ||

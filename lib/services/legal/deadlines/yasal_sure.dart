@@ -82,7 +82,10 @@ extension YasalSureTakvim on YasalSure {
 ///       kind from its heading when its name tells nothing, the court's
 ///       own documents' directives, the unit from dosyaBilgileri, the
 ///       documents' digests among the inputs.
-const sureHesapSurumu = 7;
+///   8 — 2026-10-09 (Folio): the other side's appeal answered in two weeks
+///       (HMK m.347/366, CMK m.277/297), its answer and the reply to an
+///       answer in two weeks (HMK m.136), each a kind of its own.
+const sureHesapSurumu = 8;
 
 /// Kategori bazlı yasal süreler (belge türü kanun yolu kararıysa kullanılır).
 /// Değerler kanonik olgulardan (sure_katalogu.dart) gelir — TEK kaynak.
@@ -181,8 +184,24 @@ List<YasalSure> surelerForBelgeTuru(
       return kategori == MahkemeKategorisi.ceza
           ? const []
           : const [sBilirkisiRaporu];
-    case BelgeTuru.temyizKarari:
+    // The answers' turns, in civil courts alone: HMK m.136.
     case BelgeTuru.cevapDilekcesi:
+      return kategori == MahkemeKategorisi.hukuk
+          ? const [sCevabaCevap]
+          : const [];
+    case BelgeTuru.cevabaCevapDilekcesi:
+      return kategori == MahkemeKategorisi.hukuk
+          ? const [sIkinciCevap]
+          : const [];
+    // An appeal served to the other side to answer. Not in administrative
+    // courts here: İYUK's answer to an istinaf is not checked yet.
+    case BelgeTuru.kanunYoluDilekcesi:
+      return switch (kategori) {
+        MahkemeKategorisi.hukuk => const [sKanunYoluCevapHukuk],
+        MahkemeKategorisi.ceza => const [sKanunYoluCevapCeza],
+        _ => const [],
+      };
+    case BelgeTuru.temyizKarari:
     case BelgeTuru.tensipZapti:
     case BelgeTuru.araKarar:
     case BelgeTuru.durusmaDavetiyesi:

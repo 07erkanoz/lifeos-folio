@@ -188,6 +188,48 @@ const sCevapHmk127 = YasalSure(
   birim: SureBirimi.hafta,
   kanunMaddesi: 'HMK m.127',
 );
+
+/// HMK m.136/1: the plaintiff's reply to the answer, in two weeks from
+/// its service; the defendant's second answer, in two weeks from the
+/// reply's. Not in the simple procedure (HMK m.317/3), which a case's
+/// court alone does not tell: the lawyer is to look.
+const sCevabaCevap = YasalSure(
+  ad: 'Cevaba cevap süresi',
+  miktar: 2,
+  birim: SureBirimi.hafta,
+  kanunMaddesi: 'HMK m.136',
+  guven: SureGuveni.orta,
+  guvenNotu:
+      'Basit yargılama usulünde cevaba cevap verilmez (HMK m.317/3); '
+      'dosyanın usulüne bakın.',
+);
+const sIkinciCevap = YasalSure(
+  ad: 'İkinci cevap süresi',
+  miktar: 2,
+  birim: SureBirimi.hafta,
+  kanunMaddesi: 'HMK m.136',
+  guven: SureGuveni.orta,
+  guvenNotu:
+      'Basit yargılama usulünde ikinci cevap verilmez (HMK m.317/3); '
+      'dosyanın usulüne bakın.',
+);
+
+/// The answer to the other side's appeal, in two weeks from its service:
+/// HMK m.347/2, in an appeal on points of law through m.366; CMK m.277/1
+/// and m.297/1 (two weeks since Law 7499).
+const sKanunYoluCevapHukuk = YasalSure(
+  ad: 'Kanun yolu dilekçesine cevap',
+  miktar: 2,
+  birim: SureBirimi.hafta,
+  kanunMaddesi: 'HMK m.347, m.366',
+);
+const sKanunYoluCevapCeza = YasalSure(
+  ad: 'Kanun yolu dilekçesine cevap',
+  miktar: 2,
+  birim: SureBirimi.hafta,
+  kanunMaddesi: 'CMK m.277, m.297',
+);
+
 /// HMK m.394/1: the other side's objection to an interim injunction given
 /// without hearing it, in a week from its enforcement, or from its service
 /// when not present then. Not chosen from a document's kind: the lawyer
@@ -197,8 +239,7 @@ const sTedbirItiraz = YasalSure(
   miktar: 1,
   birim: SureBirimi.hafta,
   kanunMaddesi: 'HMK m.394',
-  guvenNotu:
-      'Tedbir uygulanırken hazır bulunduysanız süre uygulamadan başlar.',
+  guvenNotu: 'Tedbir uygulanırken hazır bulunduysanız süre uygulamadan başlar.',
 );
 const sBilirkisiRaporu = YasalSure(
   ad: 'Bilirkişi raporuna itiraz',

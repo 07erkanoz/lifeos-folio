@@ -585,4 +585,48 @@ void main() {
     phone.agendaMerge(later);
     expect(phone.representation('k'), isEmpty);
   });
+
+  test('the other side\'s appeal is answered in two weeks, and an answer '
+      'by a reply in a civil court; their answers by no one', () {
+    BelgeTuru kind(String name) => BelgeTuruTespit.tebligatTuru([name]);
+    expect(
+      kind('(2)Istinaf_Basvuru_Dilekcesi.pdf'),
+      BelgeTuru.kanunYoluDilekcesi,
+    );
+    expect(kind('(2)Istinaf_Talebi.pdf'), BelgeTuru.kanunYoluDilekcesi);
+    expect(kind('(2)TemyizBasvuruDilekcesi.pdf'), BelgeTuru.kanunYoluDilekcesi);
+    expect(kind('(2)Istinaf_Cevap_Dilekcesi.pdf'), BelgeTuru.diger);
+    expect(
+      kind('(2)Cevaba_Cevap_Dilekcesi.pdf'),
+      BelgeTuru.cevabaCevapDilekcesi,
+    );
+    expect(kind('(2)Ikinci_Cevap_Dilekcesi.pdf'), BelgeTuru.diger);
+    expect(kind('(2)CevapDilekcesi.pdf'), BelgeTuru.cevapDilekcesi);
+
+    List<String> rules(BelgeTuru t, MahkemeKategorisi k) => [
+      for (final r in surelerForBelgeTuru(t, k)) kuralBilgisi(r)!.id,
+    ];
+    expect(rules(BelgeTuru.kanunYoluDilekcesi, MahkemeKategorisi.hukuk), [
+      'hmk347',
+    ]);
+    expect(rules(BelgeTuru.kanunYoluDilekcesi, MahkemeKategorisi.ceza), [
+      'cmk277',
+    ]);
+    expect(
+      rules(BelgeTuru.kanunYoluDilekcesi, MahkemeKategorisi.idare),
+      isEmpty,
+    );
+    expect(rules(BelgeTuru.cevapDilekcesi, MahkemeKategorisi.hukuk), [
+      'hmk136-cevaba',
+    ]);
+    expect(rules(BelgeTuru.cevabaCevapDilekcesi, MahkemeKategorisi.hukuk), [
+      'hmk136-ikinci',
+    ]);
+    expect(rules(BelgeTuru.cevapDilekcesi, MahkemeKategorisi.ceza), isEmpty);
+    expect(kuralBilgisi(sCevabaCevap)!.yukumlu, Yukumlu.davaci);
+    expect(kuralBilgisi(sIkinciCevap)!.yukumlu, Yukumlu.davali);
+    // Two weeks, and the simple procedure's exception said.
+    expect(sKanunYoluCevapCeza.miktar * 7, 14);
+    expect(sCevabaCevap.guvenNotu, contains('317'));
+  });
 }
