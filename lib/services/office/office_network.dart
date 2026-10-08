@@ -420,6 +420,7 @@ class OfficeNetwork extends ChangeNotifier {
               mayBroadcast: ledger.isManager,
               added: (msg) => _messageCame(theirs.id, msg),
               authentic: _messageAuthentic,
+              me: _self?.deviceId,
             )) {
           notifyListeners();
         }
@@ -443,6 +444,7 @@ class OfficeNetwork extends ChangeNotifier {
               from: ch.peer.deviceId,
               added: (e) => _taskMoved(theirs.id, e),
               authentic: _taskAuthentic,
+              mayCreate: _mayCreate,
             )) {
           notifyListeners();
         }
@@ -725,8 +727,11 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// Whether this device may give a task to [to]: a manager to anyone, a
   /// lawyer to themself, a trainee or a secretary; no one else.
-  bool mayGive(String to) {
-    final me = ledger.member(_self?.deviceId ?? '');
+  bool mayGive(String to) => _mayGiveFrom(_self?.deviceId ?? '', to);
+
+  /// The same rule for any member: what a task that came is checked by.
+  bool _mayGiveFrom(String giver, String to) {
+    final me = ledger.member(giver);
     final them = ledger.member(to);
     if (me == null || them == null) return false;
     return switch (me.role) {
@@ -803,6 +808,13 @@ class OfficeNetwork extends ChangeNotifier {
       final parts = key.split('|');
       if (parts.length != 3) continue;
       if (parts[0] != task.id || (only != null && parts[2] != only)) continue;
+      // A case only to one it is still given to, still of the office.
+      if (!task.assignees.containsKey(parts[2]) ||
+          ledger.member(parts[2]) == null) {
+        packages.pending.remove(key);
+        await packages.save();
+        continue;
+      }
       final peer = _peers[parts[2]];
       if (peer == null || !peer.online) continue;
       await send(
@@ -864,6 +876,9 @@ class OfficeNetwork extends ChangeNotifier {
     return OfficeIdentity.signedBy(key, data, signature);
   }
 
+  bool _mayCreate(OfficeTask t) =>
+      t.assignees.keys.every((to) => _mayGiveFrom(t.by, to));
+
   Future<bool> _taskAuthentic(String taskId, TaskEvent e) =>
       _byMember(e.by, e.signedOf(taskId), e.signature);
 
@@ -920,6 +935,7 @@ class OfficeNetwork extends ChangeNotifier {
             from: peer.deviceId,
             added: (e) => _taskMoved(theirs.id, e),
             authentic: _taskAuthentic,
+            mayCreate: _mayCreate,
           )) {
         notifyListeners();
       }
@@ -1098,6 +1114,7 @@ class OfficeNetwork extends ChangeNotifier {
             mayBroadcast: ledger.isManager,
             added: (msg) => _messageCame(theirs.id, msg),
             authentic: _messageAuthentic,
+            me: _self?.deviceId,
           )) {
         notifyListeners();
       }
@@ -1162,6 +1179,9 @@ class OfficeNetwork extends ChangeNotifier {
   Future<String?> removeMember(String deviceId) async {
     final identity = _identity;
     if (identity == null) return 'Önce büro ağına katılın.';
+    // What was still to go to them does not.
+    packages.pending.removeWhere((key, _) => key.endsWith('|$deviceId'));
+    await packages.save();
     return _after(await ledger.remove(identity, deviceId));
   }
 

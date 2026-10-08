@@ -287,10 +287,21 @@ class OfficeTransfer extends ChangeNotifier {
   /// cut, it is neither asked for nor written twice.
   File _doneOf(int i) => File(p.join(_parts.path, '$id-$i.done'));
 
+  /// Only the very file offered now: the same size and contents as the
+  /// one that came, still there and unchanged.
   Future<String?> _cameTo(int i) async {
     try {
-      final path = await _doneOf(i).readAsString();
-      return await File(path).exists() ? path : null;
+      final j = jsonDecode(await _doneOf(i).readAsString());
+      if (j is! Map) return null;
+      final path = '${j['yol']}';
+      if (j['boyut'] != files[i].size || j['sha'] != files[i].sha256) {
+        return null;
+      }
+      final file = File(path);
+      if (!await file.exists() || await file.length() != files[i].size) {
+        return null;
+      }
+      return await sha256Of(file) == files[i].sha256 ? path : null;
     } catch (_) {
       return null;
     }
@@ -377,7 +388,14 @@ class OfficeTransfer extends ChangeNotifier {
         }
         final target = _unique(files[f].name);
         await part.rename(target.path);
-        await _doneOf(f).writeAsString(target.path, flush: true);
+        await _doneOf(f).writeAsString(
+          jsonEncode({
+            'yol': target.path,
+            'boyut': files[f].size,
+            'sha': files[f].sha256,
+          }),
+          flush: true,
+        );
         saved.add(target.path);
         await _channel?.send({'t': 'got', 'f': f, 'ok': true});
         if (f == files.length - 1 && saved.length == files.length) _done();

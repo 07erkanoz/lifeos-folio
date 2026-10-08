@@ -344,6 +344,7 @@ class OfficeChats {
     required bool Function(String deviceId) mayBroadcast,
     void Function(ChatMessage message)? added,
     Future<bool> Function(String chatId, ChatMessage message)? authentic,
+    String? me,
   }) async {
     Future<bool> real(ChatMessage m) async =>
         authentic == null || await authentic(theirs.id, m);
@@ -358,6 +359,17 @@ class OfficeChats {
     if (mine == null) {
       if (theirs.kind == ChatKind.broadcast && !mayBroadcast(theirs.by)) {
         return false;
+      }
+      // A talk new here must be one this device is in, and a private one
+      // the very talk of its two: else one could set up another's private
+      // talk with themself in it, and hear what is said there.
+      if (me != null && theirs.kind != ChatKind.broadcast) {
+        final ids = theirs.members.keys.toList();
+        if (!theirs.members.containsKey(me)) return false;
+        if (theirs.kind == ChatKind.private &&
+            (ids.length != 2 || theirs.id != Chat.privateId(ids[0], ids[1]))) {
+          return false;
+        }
       }
       final kept = Chat.fromJson(theirs.toJson())!..messages.clear();
       for (final m in theirs.messages.where(allowed)) {

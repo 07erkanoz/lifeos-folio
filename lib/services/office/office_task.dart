@@ -482,6 +482,7 @@ class OfficeTasks {
     required String from,
     void Function(TaskEvent event)? added,
     Future<bool> Function(String taskId, TaskEvent event)? authentic,
+    bool Function(OfficeTask task)? mayCreate,
   }) async {
     // Each step only as its maker signed it: one in the task cannot put
     // words in another's mouth.
@@ -492,6 +493,15 @@ class OfficeTasks {
     if (mine == null) {
       // Only its giver brings a task into being here.
       if (from != theirs.by) return false;
+      // And only one who may give it to each it is given to, in its own
+      // signed word.
+      if (mayCreate != null && !mayCreate(theirs)) return false;
+      final given = theirs.events
+          .where((e) => e.kind == TaskEventKind.given && e.by == theirs.by)
+          .firstOrNull;
+      if (authentic != null && (given == null || !await real(given))) {
+        return false;
+      }
       final kept = OfficeTask.fromJson(theirs.toJson())!..events.clear();
       for (final e in theirs.events) {
         if (mayDo(kept, e.kind, e.by) && await real(e)) kept.events.add(e);

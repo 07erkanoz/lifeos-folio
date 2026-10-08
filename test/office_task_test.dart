@@ -118,6 +118,23 @@ void main() {
         isFalse,
       );
       expect(store.of('t2'), isNull);
+      // Nor one from its giver who may not give it, or without its giver's
+      // signed word.
+      final unallowed = OfficeTask.fromJson({...mine.toJson(), 'id': 't3'})!;
+      expect(
+        await store
+            .merge(unallowed, from: mine.by, mayCreate: (_) => false)
+            .catchError((_) => false),
+        isFalse,
+      );
+      final unsigned = OfficeTask.fromJson({...mine.toJson(), 'id': 't4'})!;
+      expect(
+        await store
+            .merge(unsigned, from: mine.by, authentic: (_, _) async => false)
+            .catchError((_) => false),
+        isFalse,
+      );
+      expect(store.of('t3') ?? store.of('t4'), isNull);
     },
   );
 
