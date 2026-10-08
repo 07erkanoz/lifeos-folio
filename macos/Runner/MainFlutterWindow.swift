@@ -15,8 +15,26 @@ class MainFlutterWindow: NSWindow {
     SpellCheck.register(messenger)
     FileActions.register(messenger, view: flutterViewController.view)
     OpenedDocuments.register(messenger)
+    // Finder's Hizmetler › "Folio'da aç", and the iPhone as a scanner.
+    NSApp.servicesProvider = FolioServices.shared
+    NSUpdateDynamicServices()
+    ContinuityScan.addMenu()
 
     super.awakeFromNib()
+  }
+
+  /// The window takes a picture or a PDF from the iPhone (Continuity
+  /// Camera); see the NSServicesMenuRequestor extension below.
+  override func validRequestor(
+    forSendType sendType: NSPasteboard.PasteboardType?,
+    returnType: NSPasteboard.PasteboardType?
+  ) -> Any? {
+    if sendType == nil, let type = returnType,
+      type == .pdf || NSImage.imageTypes.contains(type.rawValue)
+    {
+      return self
+    }
+    return super.validRequestor(forSendType: sendType, returnType: returnType)
   }
 }
 
@@ -186,5 +204,80 @@ enum FileActions {
       default: result(FlutterMethodNotImplemented)
       }
     }
+  }
+}
+
+
+/// Finder's Hizmetler menu, "Folio'da aç" (Info.plist, NSServices): the
+/// files chosen opened in Folio, as "Birlikte Aç" would.
+final class FolioServices: NSObject {
+  static let shared = FolioServices()
+
+  @objc func openInFolio(
+    _ pboard: NSPasteboard, userData: String,
+    error: AutoreleasingUnsafeMutablePointer<NSString>
+  ) {
+    let urls =
+      pboard.readObjects(
+        forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+      as? [URL] ?? []
+    OpenedDocuments.receive(urls.map { $0.path })
+    NSApp.activate(ignoringOtherApps: true)
+  }
+}
+
+/// The iPhone or iPad as Folio's camera (Continuity Camera): Dosya ›
+/// "iPhone veya iPad'den tara" takes a photo or scans pages on the phone,
+/// and what comes is kept in Belgeler/Folio Taramalar and opened.
+enum ContinuityScan {
+  static func addMenu() {
+    guard let main = NSApp.mainMenu else { return }
+    let file = NSMenuItem(title: "Dosya", action: nil, keyEquivalent: "")
+    let menu = NSMenu(title: "Dosya")
+    let scan = NSMenuItem(
+      title: "iPhone veya iPad'den tara", action: nil, keyEquivalent: "")
+    scan.identifier = NSMenuItem.importFromDeviceIdentifier
+    menu.addItem(scan)
+    file.submenu = menu
+    main.insertItem(file, at: min(1, main.numberOfItems))
+  }
+
+  /// [data] kept as a scan of its own name; its path.
+  static func keep(_ data: Data, ext: String) -> String? {
+    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+    guard let base = docs.first else { return nil }
+    let folder = base.appendingPathComponent("Folio Taramalar", isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let stamp = DateFormatter()
+    stamp.dateFormat = "yyyy-MM-dd HH.mm.ss"
+    let url = folder.appendingPathComponent("Tarama \(stamp.string(from: Date())).\(ext)")
+    do {
+      try data.write(to: url)
+      return url.path
+    } catch {
+      return nil
+    }
+  }
+}
+
+extension MainFlutterWindow: NSServicesMenuRequestor {
+  func readSelection(from pboard: NSPasteboard) -> Bool {
+    var path: String?
+    if let pdf = pboard.data(forType: .pdf) {
+      path = ContinuityScan.keep(pdf, ext: "pdf")
+    } else if let image = NSImage(pasteboard: pboard),
+      let tiff = image.tiffRepresentation,
+      let bitmap = NSBitmapImageRep(data: tiff),
+      let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
+    {
+      path = ContinuityScan.keep(jpeg, ext: "jpg")
+    }
+    guard let path else { return false }
+    OpenedDocuments.receive([path])
+    return true
+  }
+
+  func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
+    false
   }
 }
