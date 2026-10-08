@@ -13,6 +13,10 @@ class LibrarySidebar extends StatelessWidget {
   final VoidCallback pickFolder;
   final VoidCallback showStatus;
   final ValueChanged<String> selectGroup;
+
+  /// A folder sent to the office or this person's devices ([office]), or
+  /// shared out of Folio; null where it is not offered.
+  final void Function(String path, {required bool office})? shareFolder;
   final ValueChanged<int> selectFolder;
 
   /// The UYAP cases kept on this computer, listed under UYAP when it is
@@ -71,6 +75,7 @@ class LibrarySidebar extends StatelessWidget {
     required this.pickFolder,
     required this.showStatus,
     required this.selectGroup,
+    this.shareFolder,
     required this.selectFolder,
     this.uyapCases = const [],
     this.uyapCount,
@@ -92,6 +97,34 @@ class LibrarySidebar extends StatelessWidget {
 
   bool _isUyapFolder(String path) =>
       uyapFolder != null && p.equals(path, uyapFolder!);
+
+  /// A folder's own menu: sent or shared whole, its subfolders with it.
+  Future<void> _folderMenu(BuildContext context, String path) async {
+    final share = shareFolder;
+    if (share == null) return;
+    final v = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.send_outlined),
+              title: const Text('Klasörü gönder (büro / cihazlarım)'),
+              onTap: () => Navigator.pop(context, 'buro'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.ios_share_rounded),
+              title: const Text('Klasörü paylaş'),
+              onTap: () => Navigator.pop(context, 'paylas'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (v != null) share(path, office: v == 'buro');
+  }
+
   @override
   Widget build(BuildContext context) => _content(context);
 
@@ -362,14 +395,41 @@ class LibrarySidebar extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 12),
                               ),
-                              trailing: Text(
-                                '${source.count}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: scheme.onSurfaceVariant,
-                                ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${source.count}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  if (shareFolder != null)
+                                    IconButton(
+                                      key: ValueKey(
+                                        'folder-share-${source.id}',
+                                      ),
+                                      tooltip: 'Klasörü gönder ya da paylaş',
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 28,
+                                        minHeight: 28,
+                                      ),
+                                      icon: const Icon(
+                                        Icons.ios_share_rounded,
+                                        size: 16,
+                                      ),
+                                      onPressed: () =>
+                                          _folderMenu(context, source.path),
+                                    ),
+                                ],
                               ),
                               onTap: () => selectFolder(source.id),
+                              onLongPress: shareFolder == null
+                                  ? null
+                                  : () => _folderMenu(context, source.path),
                             ),
                           ),
                         ),

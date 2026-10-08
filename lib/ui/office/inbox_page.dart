@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../services/office/office_inbox.dart';
 import '../../services/office/office_network.dart';
 import '../../services/platform/file_actions.dart';
+import '../../services/platform/folder_zip.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'office_offer_dialog.dart' show sizeText;
@@ -19,9 +20,13 @@ class InboxPage extends StatefulWidget {
     this.inbox,
     required this.onOpen,
     this.onSearchable,
+    this.onOpenFolder,
   });
 
   final OfficeInbox? inbox;
+
+  /// A folder that came (as a zip, opened), shown in the archive.
+  final void Function(String folder)? onOpenFolder;
 
   /// Opens a file in Folio.
   final void Function(String path) onOpen;
@@ -63,7 +68,22 @@ class _InboxPageState extends State<InboxPage> {
 
   void _open(InboxItem i) {
     unawaited(_inbox.markRead(i));
-    if (i.paths.isNotEmpty) widget.onOpen(i.paths.first);
+    if (i.paths.isEmpty) return;
+    final first = i.paths.first;
+    final folder = widget.onOpenFolder;
+    // A folder sent comes as a zip: opened as the folder it was.
+    if (folder != null && first.toLowerCase().endsWith('.zip')) {
+      unawaited(
+        unzipFolder(first).then(
+          folder,
+          onError: (Object _) {
+            widget.onOpen(first);
+          },
+        ),
+      );
+      return;
+    }
+    widget.onOpen(first);
   }
 
   Future<void> _remove(InboxItem i) async {

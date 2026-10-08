@@ -72,6 +72,7 @@ import 'office/office_pairing_dialog.dart';
 import 'office/messages_page.dart';
 import '../services/uyap/uyap_web_service.dart' show UyapWebService;
 import '../services/portal/agenda_reminders.dart';
+import '../services/platform/folder_zip.dart';
 import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
@@ -2218,6 +2219,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? const OfficeNetworkPage()
                                               : _group == 'gelenler'
                                               ? InboxPage(
+                                                  onOpenFolder: (dir) =>
+                                                      unawaited(
+                                                        _addFiles([dir]),
+                                                      ),
                                                   onSearchable:
                                                       _inboxSearchable,
                                                   onOpen: (path) => unawaited(
@@ -2502,6 +2507,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _closeDrawer();
       _pickFolder();
     },
+    shareFolder: (path, {required office}) =>
+        unawaited(_shareFolder(path, office: office)),
     showStatus: () {
       _closeDrawer();
       _showStatus();
@@ -3447,6 +3454,32 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (mounted && action != null) await _previewAction(action, file);
     } finally {
       _documentActionsOpen = false;
+    }
+  }
+
+  /// A folder sent or shared whole, as a zip with its subfolders.
+  Future<void> _shareFolder(String path, {required bool office}) async {
+    _closeDrawer();
+    showNotice(context, 'Klasör hazırlanıyor…');
+    final String zip;
+    try {
+      zip = await zipFolder(path);
+    } catch (e) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Klasör hazırlanamadı',
+          detail: '$e',
+          kind: NoticeKind.error,
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    if (office) {
+      await showSendToOffice(context, [zip]);
+    } else {
+      await _previewAction('share', EvrakFile.fromPath(zip));
     }
   }
 
