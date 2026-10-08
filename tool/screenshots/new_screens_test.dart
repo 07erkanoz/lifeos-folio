@@ -872,7 +872,13 @@ class _ShotSessions implements SessionHolder {
   @override
   Future<bool> takeSession(String kind, Object? kept) async => false;
   @override
-  void dropSession(String kind) {}
-  @override
   void listen(VoidCallback changed) {}
+  @override
+  Future<Map<String, Object?>?> freshMobile() async => null;
+  @override
+  bool keepMobileAlike(Object? theirs) => false;
+  @override
+  void renewMobileThrough(Future<Map<String, Object?>?> Function()? ask) {}
+  @override
+  void listenMobileTokens(VoidCallback changed) {}
 }

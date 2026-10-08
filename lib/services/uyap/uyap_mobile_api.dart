@@ -87,6 +87,11 @@ class UyapMobileApi {
   /// end the session.
   Future<MobileTokens?> Function()? keptTokens;
 
+  /// Another of the lawyer's own devices that renews the session they
+  /// share: asked first, so that one refresh token is not spent on two
+  /// devices; null when there is none to ask (see `OwnSync`).
+  Future<MobileTokens?> Function()? renewElsewhere;
+
   void _setTokens(MobileTokens? tokens) {
     _tokens = tokens;
     onTokens?.call(tokens);
@@ -189,12 +194,24 @@ class UyapMobileApi {
     return s;
   }
 
-  /// Ends the session here only, not at UYAP: it went on to another of the
-  /// lawyer's own devices, whose renewals would end this copy anyway.
-  void moved() {
-    _generation++;
-    _setTokens(null);
-    session.value = null;
+  /// The session's tokens good for a while yet, renewed first when about
+  /// to end: what this device gives the person's other devices that ask.
+  Future<MobileTokens?> freshTokens() async {
+    final t = _tokens;
+    if (t == null) return null;
+    if (t.accessExpires.isBefore(
+      DateTime.now().add(const Duration(minutes: 5)),
+    )) {
+      await _refresh();
+    }
+    return _tokens;
+  }
+
+  /// Tokens another of the lawyer's own devices renewed for the session
+  /// both hold: taken up and kept, the session going on as it was.
+  void adopt(MobileTokens tokens) {
+    if (_tokens == null) return;
+    _setTokens(tokens);
   }
 
   Future<void> logout() async {
@@ -232,6 +249,18 @@ class UyapMobileApi {
           return;
         }
         had = kept;
+      }
+      // The device that renews for both, first; this one only when it
+      // cannot be reached.
+      MobileTokens? there;
+      try {
+        there = await renewElsewhere?.call();
+      } catch (_) {}
+      if (there != null &&
+          there.accessExpires.isAfter(now.add(const Duration(seconds: 30)))) {
+        if (generation != _generation || !identical(_tokens, had)) return;
+        _setTokens(there);
+        return;
       }
       final data = await _send('POST', 'auth/refresh', {
         'refreshToken': had.refresh,

@@ -18,6 +18,7 @@ class OwnSync extends ChangeNotifier {
     Future<PortalDatabase> Function()? database,
     Future<File> Function()? file,
     SessionHolder? sessions,
+    this.phone,
   }) : _net = network ?? OfficeNetwork.instance,
        _database = database ?? PortalDatabase.shared,
        _file = file ?? _default,
@@ -77,33 +78,39 @@ class OwnSync extends ChangeNotifier {
     _net.ownParts[sessionsPart] = OwnPart(
       export: () async => {
         'cihaz': _net.self?.deviceId,
+        'telefon': _isPhone,
         'acik': heldHere.toList(),
+        // UYAP Mobil's latest tokens: the other goes on with them, not
+        // with a refresh token this one may have spent.
+        'mobil': ?_sessions.sessionOf('mobil'),
       },
       merge: (theirs) async {
         if (theirs is! Map || theirs['cihaz'] is! String) return false;
-        held[theirs['cihaz'] as String] = {
+        final id = theirs['cihaz'] as String;
+        held[id] = {
           for (final k in (theirs['acik'] as List? ?? const [])) '$k',
         };
+        if (theirs['telefon'] == true) _phones.add(id);
+        _sessions.keepMobileAlike(theirs['mobil']);
         notifyListeners();
         return false;
       },
     );
-    // Another own device asks for a session: given, and ended here once
-    // it says it took it.
+    // Another own device asks for a session: shared, kept here too.
     _net.ownAnswers['oturum-ver'] = (asked) async {
-      final kind = '${asked['kanal']}';
-      final data = _sessions.sessionOf(kind);
-      if (data == null) return (<String, Object?>{'bos': true}, null);
+      final data = _sessions.sessionOf('${asked['kanal']}');
       return (
-        <String, Object?>{'oturum': data},
-        (Map<String, Object?>? word) async {
-          if (word?['aldim'] == true) {
-            _sessions.dropSession(kind);
-            _changedHere();
-          }
-        },
+        data == null
+            ? <String, Object?>{'bos': true}
+            : <String, Object?>{'oturum': data},
+        null,
       );
     };
+    // A phone renews UYAP Mobil through a computer of the person's.
+    _net.ownAnswers['jeton-tazele'] = (asked) async =>
+        (<String, Object?>{'jeton': await _sessions.freshMobile()}, null);
+    if (_isPhone) _sessions.renewMobileThrough(_renewThroughComputer);
+    _sessions.listenMobileTokens(_net.ownChanged);
     // Another own device gives one.
     _net.ownAnswers['oturum-al'] = (asked) async {
       final ok = await _sessions.takeSession(
@@ -122,34 +129,53 @@ class OwnSync extends ChangeNotifier {
     _mine = heldHere;
   }
 
+  /// The person's own devices that said they are phones.
+  final _phones = <String>{};
+
+  /// Whether this device is a phone; by the platform when not said.
+  final bool? phone;
+  bool get _isPhone =>
+      phone ??
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  /// A computer of the person's on the network that holds UYAP Mobil's
+  /// session renews it for this phone: one refresh token, one spender.
+  Future<Map<String, Object?>?> _renewThroughComputer() async {
+    for (final peer in _net.ownOnline) {
+      if (_phones.contains(peer.deviceId)) continue;
+      if (!(held[peer.deviceId]?.contains('mobil') ?? false)) continue;
+      final answer = await _net.askOwn(peer.deviceId, 'jeton-tazele');
+      final tokens = answer?['jeton'];
+      if (tokens is Map) return tokens.cast<String, Object?>();
+    }
+    return null;
+  }
+
   void _changedHere() {
     notifyListeners();
     _net.ownChanged();
   }
 
-  /// "Bu cihaza al": the session of [kind] comes here from [deviceId] and
-  /// ends there. Why not, in the user's words, when it cannot.
+  /// "Bu cihazda da aç": the session of [kind] [deviceId] has, opened
+  /// here too; it stays open there. Why not, in the user's words.
   Future<String?> take(String deviceId, String kind) async {
-    var took = false;
     final answer = await _net.askOwn(
       deviceId,
       'oturum-ver',
       body: {'kanal': kind},
-      then: (answer) async {
-        if (answer['oturum'] == null) return null;
-        took = await _sessions.takeSession(kind, answer['oturum']);
-        return {'aldim': took};
-      },
     );
     if (answer == null) return 'Cihaza ulaşılamadı. Aynı ağda ve açık mı?';
     if (answer['bos'] == true) return 'O cihazda bu oturum açık değil.';
-    if (!took) return 'Oturum alınamadı; süresi dolmuş olabilir.';
-    held[deviceId]?.remove(kind);
+    if (!await _sessions.takeSession(kind, answer['oturum'])) {
+      return 'Oturum açılamadı; süresi dolmuş olabilir.';
+    }
     _changedHere();
     return null;
   }
 
-  /// "Telefona ver": the session of [kind] goes to [deviceId] and ends here.
+  /// "Öbür cihazla paylaş": the session of [kind] opened on [deviceId] too;
+  /// it stays open here.
   Future<String?> give(String deviceId, String kind) async {
     final data = _sessions.sessionOf(kind);
     if (data == null) return 'Bu cihazda bu oturum açık değil.';
@@ -160,9 +186,8 @@ class OwnSync extends ChangeNotifier {
     );
     if (answer == null) return 'Cihaza ulaşılamadı. Aynı ağda ve açık mı?';
     if (answer['aldim'] != true) {
-      return 'Oturum verilemedi; süresi dolmuş olabilir.';
+      return 'Oturum paylaşılamadı; süresi dolmuş olabilir.';
     }
-    _sessions.dropSession(kind);
     (held[deviceId] ??= {}).add(kind);
     _changedHere();
     return null;
@@ -205,10 +230,21 @@ abstract interface class SessionHolder {
   bool holds(String kind);
   Map<String, Object?>? sessionOf(String kind);
   Future<bool> takeSession(String kind, Object? kept);
-  void dropSession(String kind);
 
   /// Told when a session opens or ends here.
   void listen(VoidCallback changed);
+
+  /// UYAP Mobil's tokens, renewed when about to end, for one that asks.
+  Future<Map<String, Object?>?> freshMobile();
+
+  /// Another own device's tokens for the shared session, when newer.
+  bool keepMobileAlike(Object? theirs);
+
+  /// Who renews UYAP Mobil for this device; null for itself.
+  void renewMobileThrough(Future<Map<String, Object?>?> Function()? ask);
+
+  /// Told when UYAP Mobil's tokens change here.
+  void listenMobileTokens(VoidCallback changed);
 }
 
 /// Folio's own sessions, once Folio started them: a test never wakes the
@@ -224,7 +260,17 @@ class _PortalSessions implements SessionHolder {
   Future<bool> takeSession(String kind, Object? kept) async =>
       await _sync?.takeSession(kind, kept) ?? false;
   @override
-  void dropSession(String kind) => _sync?.dropSession(kind);
-  @override
   void listen(VoidCallback changed) => _sync?.addListener(changed);
+  @override
+  Future<Map<String, Object?>?> freshMobile() async =>
+      await _sync?.freshMobile();
+  @override
+  bool keepMobileAlike(Object? theirs) =>
+      _sync?.keepMobileAlike(theirs) ?? false;
+  @override
+  void renewMobileThrough(Future<Map<String, Object?>?> Function()? ask) =>
+      _sync?.renewMobileThrough(ask);
+  @override
+  void listenMobileTokens(VoidCallback changed) =>
+      PortalSync.mobileTokensChanged = changed;
 }

@@ -357,7 +357,7 @@ class _SyncPageState extends State<SyncPage> {
     if (!mounted) return;
     setState(() => _syncing = false);
     messenger?.showSnackBar(
-      SnackBar(content: Text(error ?? 'Oturum taşındı.')),
+      SnackBar(content: Text(error ?? 'Oturum öbür cihazda da açık.')),
     );
   }
 
@@ -391,7 +391,10 @@ class _SyncPageState extends State<SyncPage> {
                       ),
                       Text(
                         'Yeniden e-imza atmadan öbür cihazınızda devam edin. '
-                        'Oturum tek cihazda açık olur; aldığınız cihaza geçer.',
+                        'İki cihazda da açık kalır; UYAP Mobil’i telefon, '
+                        'bilgisayarınız üzerinden yeniler. UYAP Web aynı anda '
+                        'tek işlem kabul eder; iki cihazdan birlikte '
+                        'kullanılırsa oturum düşebilir.',
                         style: TextStyle(fontSize: 12),
                       ),
                     ],
@@ -421,7 +424,7 @@ class _SyncPageState extends State<SyncPage> {
                                     ),
                                   ),
                                 ),
-                          child: const Text('Öbür cihaza ver'),
+                          child: const Text('Öbür cihazla paylaş'),
                         )
                       : PopupMenuButton<KnownDevice>(
                           key: ValueKey('sync-give-$kind'),
@@ -435,7 +438,7 @@ class _SyncPageState extends State<SyncPage> {
                           ],
                           child: const Padding(
                             padding: EdgeInsets.all(8),
-                            child: Text('Cihaza ver…'),
+                            child: Text('Paylaş…'),
                           ),
                         );
                 } else if (!here.contains(kind) && there.isNotEmpty) {
@@ -446,7 +449,7 @@ class _SyncPageState extends State<SyncPage> {
                         : () => unawaited(
                             _move(() => _sync.take(there.first.deviceId, kind)),
                           ),
-                    child: const Text('Bu cihaza al'),
+                    child: const Text('Bu cihazda da aç'),
                   );
                 } else {
                   action = null;

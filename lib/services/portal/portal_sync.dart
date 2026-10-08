@@ -128,11 +128,14 @@ class PortalSync extends ChangeNotifier {
     // they end (see _restoreKept).
     _mobile.keptTokens = () async =>
         MobileTokens.fromJson(await _secrets.read(_mobileSecret));
-    _mobile.onTokens = (tokens) => unawaited(
-      tokens == null
-          ? _secrets.remove(_mobileSecret)
-          : _secrets.write(_mobileSecret, tokens.toJson()),
-    );
+    _mobile.onTokens = (tokens) {
+      unawaited(
+        tokens == null
+            ? _secrets.remove(_mobileSecret)
+            : _secrets.write(_mobileSecret, tokens.toJson()),
+      );
+      mobileTokensChanged?.call();
+    };
     unawaited(_restoreMobile());
     unawaited(_restoreKept());
     // UYAP's notifications are asked for now and then while a portal is
@@ -199,17 +202,35 @@ class PortalSync extends ChangeNotifier {
     return false;
   }
 
-  /// Ends the session of [kind] here only: it went on to another own
-  /// device.
-  void dropSession(String kind) {
-    switch (kind) {
-      case 'mobil':
-        _mobile.moved();
-      case 'uets':
-        _uets.logout();
-      case 'web':
-        _web.disconnect();
+  /// Told when UYAP Mobil's tokens change here, renewed or taken up: the
+  /// person's other devices that share the session hear of it.
+  static VoidCallback? mobileTokensChanged;
+
+  /// The session's tokens, renewed when about to end, for another own
+  /// device that renews through this one.
+  Future<Map<String, Object?>?> freshMobile() async =>
+      (await _mobile.freshTokens())?.toJson();
+
+  /// Who renews UYAP Mobil's session for this device (see
+  /// [UyapMobileApi.renewElsewhere]).
+  void renewMobileThrough(Future<Map<String, Object?>?> Function()? ask) =>
+      _mobile.renewElsewhere = ask == null
+      ? null
+      : () async => MobileTokens.fromJson(await ask());
+
+  /// The session's tokens as another own device has them, when they are
+  /// newer than these: taken up, so that both go on with the latest and
+  /// neither renews with one UYAP may have made void.
+  bool keepMobileAlike(Object? theirs) {
+    final tokens = MobileTokens.fromJson(theirs);
+    final mine = _mobile.tokens;
+    if (tokens == null || mine == null || !_mobile.connected) return false;
+    if (tokens.refresh == mine.refresh && tokens.access == mine.access) {
+      return false;
     }
+    if (!tokens.accessExpires.isAfter(mine.accessExpires)) return false;
+    _mobile.adopt(tokens);
+    return true;
   }
 
   static const _webSecret = 'uyap-web';

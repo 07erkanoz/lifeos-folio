@@ -702,49 +702,62 @@ void main() {
     expect(laptop.synced.containsKey(o.deviceId), isFalse);
   });
 
-  test('a session moves to one’s own device and ends where it was', () async {
-    final pc = await folio('Av. Erkan Öz', 'dizustu3');
-    final phone = await folio('Av. Erkan Öz', 'telefon3');
-    pc.seenForTesting(phone.self!);
-    phone.seenForTesting(pc.self!);
-    final asking = pc.pair(phone.self!)!;
-    await until(
-      () => phone.incoming.value?.code != null && asking.code != null,
-    );
-    phone.incoming.value!.confirm();
-    asking.confirm();
-    await until(() => pc.self!.userId == phone.self!.userId);
-    pc.seenForTesting(phone.self!);
-    phone.seenForTesting(pc.self!);
-    final pcHas = _Sessions({
-      'mobil': {'access': 'a1', 'refresh': 'r1'},
-    });
-    final phoneHas = _Sessions({});
-    final dir2 = Directory.systemTemp.createTempSync('folio_own_');
-    addTearDown(() => dir2.deleteSync(recursive: true));
-    OwnSync own(OfficeNetwork net, _Sessions s, String name) => OwnSync(
-      network: net,
-      database: () async => PortalDatabase.memory(),
-      file: () async => File('${dir2.path}/$name.json'),
-      sessions: s,
-    );
-    final onPc = own(pc, pcHas, 'pc'), onPhone = own(phone, phoneHas, 'tel');
-    await onPc.start();
-    await onPhone.start();
-    await phone.syncOwn();
-    // Each knows what the other holds.
-    expect(onPhone.held[pc.self!.deviceId], {'mobil'});
-    // "Bu cihaza al" on the phone: it opens there and ends on the computer.
-    expect(await onPhone.take(pc.self!.deviceId, 'mobil'), isNull);
-    await until(() => !pcHas.holds('mobil'));
-    expect(phoneHas.sessionOf('mobil'), {'access': 'a1', 'refresh': 'r1'});
-    // And back with "ver".
-    expect(await onPhone.give(pc.self!.deviceId, 'mobil'), isNull);
-    expect(pcHas.holds('mobil'), isTrue);
-    expect(phoneHas.holds('mobil'), isFalse);
-    // Nothing to take: said so.
-    expect(await onPc.take(phone.self!.deviceId, 'uets'), isNotNull);
-  });
+  test(
+    'a session is shared with one’s own device, and renewed for both',
+    () async {
+      final pc = await folio('Av. Erkan Öz', 'dizustu3');
+      final phone = await folio('Av. Erkan Öz', 'telefon3');
+      pc.seenForTesting(phone.self!);
+      phone.seenForTesting(pc.self!);
+      final asking = pc.pair(phone.self!)!;
+      await until(
+        () => phone.incoming.value?.code != null && asking.code != null,
+      );
+      phone.incoming.value!.confirm();
+      asking.confirm();
+      await until(() => pc.self!.userId == phone.self!.userId);
+      pc.seenForTesting(phone.self!);
+      phone.seenForTesting(pc.self!);
+      final pcHas = _Sessions({
+        'mobil': {'access': 'a1', 'refresh': 'r1'},
+      });
+      final phoneHas = _Sessions({});
+      final dir2 = Directory.systemTemp.createTempSync('folio_own_');
+      addTearDown(() => dir2.deleteSync(recursive: true));
+      OwnSync own(OfficeNetwork net, _Sessions s, String name, bool isPhone) =>
+          OwnSync(
+            network: net,
+            database: () async => PortalDatabase.memory(),
+            file: () async => File('${dir2.path}/$name.json'),
+            sessions: s,
+            phone: isPhone,
+          );
+      final onPc = own(pc, pcHas, 'pc', false);
+      final onPhone = own(phone, phoneHas, 'tel', true);
+      await onPc.start();
+      await onPhone.start();
+      await phone.syncOwn();
+      // Each knows what the other holds, and the computer's tokens came.
+      expect(onPhone.held[pc.self!.deviceId], {'mobil'});
+      expect(phoneHas.alike.last, {'access': 'a1', 'refresh': 'r1'});
+      // "Bu cihazda da aç" on the phone: open there, still open here.
+      expect(await onPhone.take(pc.self!.deviceId, 'mobil'), isNull);
+      expect(phoneHas.sessionOf('mobil'), {'access': 'a1', 'refresh': 'r1'});
+      expect(pcHas.holds('mobil'), isTrue);
+      // The phone renews through the computer: one refresh token, one
+      // spender; the computer only renews for itself.
+      expect(phoneHas.renewer, isNotNull);
+      expect(pcHas.renewer, isNull);
+      pcHas.fresh = {'access': 'a2', 'refresh': 'r2'};
+      expect(await phoneHas.renewer!(), {'access': 'a2', 'refresh': 'r2'});
+      // "Öbür cihazla paylaş": shared the other way, kept here too.
+      phoneHas.kept['uets'] = {'token': 't'};
+      expect(await onPhone.give(pc.self!.deviceId, 'uets'), isNull);
+      expect(pcHas.holds('uets') && phoneHas.holds('uets'), isTrue);
+      // Nothing to share: said so.
+      expect(await onPc.take(phone.self!.deviceId, 'web'), isNotNull);
+    },
+  );
 
   test('a person’s tasks and talks are on all their devices', () async {
     final boss = await folio('Av. Selin Aksoy', 'selin4');
@@ -833,6 +846,11 @@ class _Sessions implements SessionHolder {
   final Map<String, Map<String, Object?>> kept;
   final _told = <VoidCallback>[];
 
+  /// What the other device's tokens were, as they came.
+  final alike = <Object?>[];
+  Map<String, Object?>? fresh;
+  Future<Map<String, Object?>?> Function()? renewer;
+
   @override
   bool holds(String kind) => kept.containsKey(kind);
   @override
@@ -848,13 +866,18 @@ class _Sessions implements SessionHolder {
   }
 
   @override
-  void dropSession(String kind) {
-    kept.remove(kind);
-    for (final t in _told) {
-      t();
-    }
+  void listen(VoidCallback changed) => _told.add(changed);
+  @override
+  Future<Map<String, Object?>?> freshMobile() async => fresh ?? kept['mobil'];
+  @override
+  bool keepMobileAlike(Object? theirs) {
+    if (theirs != null) alike.add(theirs);
+    return false;
   }
 
   @override
-  void listen(VoidCallback changed) => _told.add(changed);
+  void renewMobileThrough(Future<Map<String, Object?>?> Function()? ask) =>
+      renewer = ask;
+  @override
+  void listenMobileTokens(VoidCallback changed) {}
 }
