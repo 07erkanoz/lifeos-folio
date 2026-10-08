@@ -84,11 +84,13 @@ Taslaktaki beş görünüm:
 - **Kod:** İki cihaz ilk kez konuşurken ECDH (X25519) ile ortak bir anahtar kurulur. İki tarafın açık anahtarlarından ve oturum verisinden altı haneli bir doğrulama kodu üretilir; iki ekranda aynı kod görünür.
 - **Onay:** İki taraf da "Kodlar aynı, tanı" der. Bundan sonra karşı cihazın açık anahtarı "tanınan cihazlar" listesine yazılır.
 - **Kaldırma:** Tanınan bir cihaz Kendi cihazlarım ya da kişiler listesinden kaldırılabilir. Kaldırılan cihaz yeniden tanınana kadar hiçbir şey gönderemez, alamaz.
-- **Kendi cihazınızı tanıtma:** Kişi kendi yeni cihazını tanıtırken kullanıcı anahtarı da o cihaza geçer. Bunun için iki cihazda aynı profil adının görünmesi ve kodun onaylanması gerekir.
+- **Kendi cihazınızı tanıtma:** Kod ekranında "Bu cihaz da benim" işaretlenirse kullanıcı anahtarı karşı cihaza geçer. İki cihazda aynı profil adı görünüyorsa kutu işaretli gelir. Anahtarı paylaşan cihazlar birbirini, aralarında kod olmadan da tanır; her cihaz bağlantıda kişi anahtarıyla imzalı sertifikasını gösterir.
+- **QR ile tanıma (telefon):** Bilgisayarda Büro ağı'nda "Telefonumu ekle" bir QR gösterir: bilgisayarın adresleri, kapısı, cihaz kimliği ve beş dakikalık, tek kullanımlık bir sır. Telefon "QR okut" ile okur; sırrı bildiğini HMAC ile kanıtlar, bilgisayar da QR'daki cihaz olduğunu anahtarıyla kanıtlar. Kod karşılaştırılmaz ve telefon kişinin kendi cihazı sayılır.
+- **Kendi cihaz denetimi:** Bir cihazın "kendi cihazım" sayılması yalnız kanaldaki sertifikaya dayanır (`OfficeChannel.vouched`). Cihazın duyurduğu kullanıcı kimliği kanıt sayılmaz.
 
 ### Aktarım
 
-- **Bağlantı:** Tanınan cihazlar arasında TLS 1.3 ya da Noise (XX) ile şifreli bir bağlantı kurulur. Taraflar birbirini tanıma sırasında saklanan açık anahtarlarla doğrular; sertifika otoritesi gerekmez.
+- **Bağlantı:** Tanınan cihazlar arasında her konuşma şifrelidir (3. adım: X25519, HKDF, ChaCha20-Poly1305). Taraflar birbirini tanıma sırasında saklanan açık anahtarlarla doğrular; sertifika otoritesi gerekmez. Söz almayan bağlantı 20 saniyede kapanır; aynı anda en çok 32 bağlantı bekleyebilir.
 - **Teklif ve kabul:**
   1. Gönderen bir "teklif" yollar: ne gönderildiği, dosya adları, boyutları, SHA-256 özetleri, not ve bağlı olduğu UYAP dosyası.
   2. Alan taraf kabul eder.
@@ -118,19 +120,18 @@ UYAP oturum kimlikleri (dosyaId gibi) pakete girmez. Bunlar oturumluktur ve kar�
 ### Klasör eşitleme (kendi cihazlar)
 
 - **Kim ve ne:** Yalnız aynı kişinin cihazları arasında, seçilen klasörler eşitlenir.
-- **Nasıl:** Her cihaz klasörün bir dizinini tutar: göreli yol, boyut, değişiklik zamanı, SHA-256. Cihazlar karşılaştığında dizinleri karşılaştırır, eksik ya da değişen dosyaları gönderir.
-- **Silme:** Bir cihazda silinen dosya, öbüründe kalıcı silinmez, eşitleme çöp klasörüne alınır.
-- **Çakışma:** Aynı dosya iki tarafta da değiştiyse ikisi de saklanır. Biri "(Dizüstü kopyası)" adıyla durur; hiçbiri ezilmez.
-- **Süzgeç:** Türe göre süzgeç konabilir, örneğin yalnız UDF ve PDF.
+- **Nasıl:** Her cihaz klasörün bir dizinini tutar: göreli yol, boyut, değişiklik zamanı, SHA-256. Ayrıca her dosyanın son eşit hâlinin özetini saklar. Cihazlar karşılaştığında dizinleri karşılaştırır; her cihaz öbüründe olmayanı ve kendisinde değişeni gönderir. Alan, dosyayı yerine koyunca "yerleştirdim" der; gönderen ancak o zaman eşit sayar.
+- **Katılma:** Bir cihazda seçilen ya da Senkron sayfasına bırakılan klasör, öbür cihazlarda "paylaşılıyor" diye görünür. Bilgisayarda mevcut dosyaların hepsi gelir; telefonda mevcut dosyaların da gelip gelmeyeceği sorulur. Katılınan klasör Senkron klasörüne (UYAP klasörünün yanına) açılır ve arşive eklenir.
+- **Silme:** Bir cihazda silinen dosya, öbüründe kalıcı silinmez; Senkron çöpüne alınır ve 30 gün sonra temizlenir. Karar saatlere değil, dosyanın son eşit hâlinden beri değişip değişmediğine göre verilir.
+- **Çakışma:** Aynı dosya iki tarafta da değiştiyse ikisi de saklanır. Cihaz kimliği küçük olanın hâli adını korur; öbürü "ad (cihaz adı).uzantı" olarak durur; hiçbiri ezilmez.
+- **Süzgeç:** Yalnız Folio'nun açtığı türler eşitlenir; nokta ile başlayan dosya ve klasörler alınmaz. Klasör dışına çıkan yollar ve sembolik bağlantılar reddedilir; iç içe klasörler eşitlenmez.
 
 ### Oturum aktarımı (kendi cihazlar)
 
 - **Ne aktarılır:** UYAP Mobil'in jetonları, UETS oturumu ve UYAP Web oturumu, saklandıkları biçimde, şifreli bağlantıyla kendi başka cihaza geçer ve oranın güvenli deposuna yazılır.
 - **Kime:** Yalnız kullanıcı anahtarıyla doğrulanmış kendi cihazlarınıza. Başka bir kullanıcıya oturum gönderilemez.
   - Gerekçe: Oturum e-imzayla açılmış kişisel bir giriştir. Başkası o oturumla sizin adınıza evrak gönderebilirdi.
-- **UYAP Mobil'de iki cihaz:** Jeton aktarılınca iki cihaz aynı oturumu kullanır.
-  - Yenilemeden önce saklanan en yeni jeton okunur. Bugünkü `keptTokens` düzeni bunu yapıyor; böylece biri yenileyince öbürünün oturumu düşmez.
-  - Bu, iki cihaz arasında da aynı biçimde çalışmalı. Gerekirse jetonu aktaran cihaz kendi kopyasını bırakır.
+- **Oturum taşınır, kopyalanmaz:** UYAP Mobil'in yenileme jetonu her yenilemede değişir; iki cihaz aynı oturumu kullanırsa birbirini düşürür. Bu yüzden "Bu cihaza al" ve "Öbür cihaza ver" oturumu taşır. Alan cihaz oturumu güvenli deposuna yazıp "aldım" der; veren cihaz oturumu yalnız o zaman, yalnız kendinde kapatır. UETS ve UYAP Web için de aynı kural geçerlidir.
 
 ### Telefon
 
@@ -146,7 +147,9 @@ UYAP oturum kimlikleri (dosyaId gibi) pakete girmez. Bunlar oturumluktur ve kar�
 - **Anahtarlar:** Cihaz ve kullanıcı anahtarları güvenli depoda tutulur; hiçbir yere yazılmaz.
 - **Oturumlar:** Yalnız kişinin kendi cihazları arasında taşınır.
 - **İz:** Her aktarım kayda geçer; kim neyi kime gönderdi görülebilir.
-- **İptal:** Bir cihaz kaybolursa diğer cihazlardan "bu cihazı kaldır" denir. Kullanıcı anahtarı yenilenir, kalan cihazlar yeniden imzalanır.
+- **İptal:** Bir cihaz kaybolursa yönetici onu bürodan çıkarır; kişinin ilk cihazı çıkarılırsa kişi bütün cihazlarıyla çıkar. Çıkarılan cihaz görev, sohbet ve paket alamaz; gönderdiği dosyalar sorulmadan kabul edilmez. Büronun ortak bir anahtarı olmadığı için yenilenecek anahtar yoktur.
+- **İmzalı kayıtlar:** Defterin her kaydı, her görev adımı ve her mesaj yazan cihazın anahtarıyla imzalıdır ve defterdeki üye anahtarıyla doğrulanır. "Görev verildi" adımının imzası görevin başlığını, son gününü, dosyalarını ve kime verildiğini de kapsar.
+- **Disk:** Folio dosyaları diskte şifrelemez; uygulama kilidi yalnız Folio'nun açılmasını önler. Disk şifrelemesi (BitLocker, FileVault) önerilir.
 
 ## Platform notları
 
@@ -217,6 +220,14 @@ Taslak: [docs/design/buro-yonetim-taslak.html](design/buro-yonetim-taslak.html).
    - TC yalnız ipucudur: bağlantı kurulduktan sonra ağa açılmadan karşılaştırılır; aynıysa pencere "Bu sizin cihazınız" diye açılır.
 4. **Senkron sayfası:** Büro ağından ayrı bir sayfa; yalnız kişinin kendi cihazları arasında klasör ve dosya, ajandadaki işler ve notlar, UYAP Mobil, UETS ve UYAP Web oturumları eşitlenir.
 5. **Katılma:** Folio, kullanıcı Büro ağı sayfasında "Bu ağa katıl" demedikçe ağda duyurulmaz; duyuruda avukatın adı bulunduğu için ortak ağlarda (kafe, otel) kendiliğinden görünmesi istenmez. Katıldıktan sonra her açılışta yeniden katılır, "Ağdan ayrıl" diyene kadar.
+
+## Kişi, cihazları ve kurtarma (yapıldı, 8 Ekim 2026)
+
+- **Kişi:** Büroda görev ve sohbet cihaza değil kişiye verilir. Kişinin büroya alındığı ilk cihaz kişinin kimliğidir.
+- **Kendi cihazını ekleme:** Kişinin kanıtlı kendi cihazı büronun bir cihazıyla karşılaşınca deftere kendiliğinden eklenir ("kendi" kaydı). Yönetici onayı gerekmez, ama kayıt üç kanıt ister: yeni cihazın kendi anahtarıyla verdiği katılma onayı, iki cihazın aynı kişi anahtarına bağlı olduğunu gösteren sertifikalar ve kişi anahtarı. Yeni cihaz kişinin adını ve rolünü alır.
+- **Kurallar:** Rol kişinin bütün cihazlarına uygulanır. "En az bir yönetici" kuralı cihazları değil kişileri sayar. Kişinin sonradan eklenen cihazına verilmiş görevlerin dava paketleri de gider.
+- **Kurucu kurtarma kodu:** Kurucu, Büro ağı'nda 32 harf ve rakamlık bir kod oluşturup kâğıda yazar. Defter yalnız kodun açık anahtarını tutar; yeni kod eskisini geçersiz kılar. Kurucu bütün cihazlarını kaybederse yeni cihaz önce bir meslektaşının cihazıyla tanışır, sonra kodu girer ve kurucu olarak, aynı kişi olarak devam eder. Kod hiçbir veriyi çözmez; görevler ve mesajlar meslektaşların cihazlarından yeniden gelir.
+- **İmza sürümü:** Görev ve mesaj imzaları bu sürümde değişti. Yayından önceki deneme cihazlarındaki eski görev ve mesajlar yeni cihazlara eşitlenmez.
 
 ## Yapım sırası (1. aşama)
 
