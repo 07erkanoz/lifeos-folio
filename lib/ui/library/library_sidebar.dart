@@ -257,6 +257,14 @@ class LibrarySidebar extends StatelessWidget {
                     key: const ValueKey('inbox-nav'),
                     badge: n > 0 ? _badge(context, '$n', danger: true) : null,
                   ),
+                _nav(
+                  context,
+                  Icons.people_alt_outlined,
+                  'Müvekkiller',
+                  'muvekkiller',
+                  null,
+                  key: const ValueKey('clients-nav'),
+                ),
                 if (office) ...[
                   _nav(
                     context,

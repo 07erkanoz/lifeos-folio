@@ -255,6 +255,14 @@ class MobileDrawer extends StatelessWidget {
                                 : null,
                             onTap: () => onGroup('gelenler'),
                           ),
+                        _item(
+                          context,
+                          key: const ValueKey('drawer-clients'),
+                          icon: const Icon(Icons.people_alt_outlined),
+                          label: 'Müvekkiller',
+                          selected: !home && group == 'muvekkiller',
+                          onTap: () => onGroup('muvekkiller'),
+                        ),
                         if (office) ...[
                           _item(
                             context,

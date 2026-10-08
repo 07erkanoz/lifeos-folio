@@ -16,7 +16,10 @@ import '../uets/uets_api.dart';
 import 'portal_hearing.dart';
 import 'uyap_notice.dart';
 import '../legal/deadlines/aidiyet.dart' show vekilOlarakGeciyor;
-import '../uyap/uyap_web_service.dart' show UyapParty;
+import '../uyap/uyap_web_service.dart' show UyapParty, UyapWebService;
+import '../clients/client.dart';
+
+part 'portal_clients.dart';
 
 /// A UETS notification as kept, with the case it is tied to.
 class KeptNotice {
@@ -224,6 +227,7 @@ class PortalDatabase {
       CREATE TABLE IF NOT EXISTS agenda_removed (
         id TEXT PRIMARY KEY, at TEXT NOT NULL);
     ''');
+    _db.execute(PortalClients._tables);
     // When the lawyer last decided on a deadline: for the newer to win
     // between their own devices.
     final columns = {
@@ -1001,6 +1005,8 @@ class PortalDatabase {
       for (final r in _db.select('SELECT * FROM case_representation'))
         {for (final c in r.keys) c: r[c]},
     ],
+    // The clients' cards, minutes and powers of attorney.
+    ...clientsExport(),
   };
 
   /// The notices whose deadlines the last [agendaMerge] gave other grounds
@@ -1196,6 +1202,11 @@ class PortalDatabase {
       _db.execute('ROLLBACK');
       return false;
     }
+    // In a transaction of its own: what the agenda took stands if a client
+    // does not.
+    try {
+      if (clientsMerge(theirs.cast<String, Object?>())) changedHere = true;
+    } catch (_) {}
     return changedHere;
   }
 

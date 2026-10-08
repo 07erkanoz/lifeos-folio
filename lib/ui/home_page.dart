@@ -70,6 +70,7 @@ import 'office/office_network_page.dart';
 import 'office/office_offer_dialog.dart';
 import 'office/office_pairing_dialog.dart';
 import 'office/messages_page.dart';
+import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
 import 'widgets/share_document_dialog.dart';
@@ -1210,6 +1211,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'senkron' ||
         value == 'gelenler' ||
         value == 'gorevler' ||
+        value == 'muvekkiller' ||
         value == 'mesajlar' ||
         value == 'ayarlar' ||
         _isUyapGroup(value)) {
@@ -1237,6 +1239,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'senkron' ||
       group == 'gelenler' ||
       group == 'gorevler' ||
+      group == 'muvekkiller' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
 
@@ -1250,6 +1253,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'senkron' ||
       group == 'gelenler' ||
       group == 'gorevler' ||
+      group == 'muvekkiller' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
 
@@ -1964,6 +1968,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                             _group != 'senkron' &&
                                             _group != 'gelenler' &&
                                             _group != 'gorevler' &&
+                                            _group != 'muvekkiller' &&
                                             _group != 'mesajlar' &&
                                             !_isUyapGroup(_group)
                                       : !_isFullPage(_group)))
@@ -2201,6 +2206,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                 )
                                               : _group == 'gorevler'
                                               ? const TasksPage()
+                                              : _group == 'muvekkiller'
+                                              ? ClientsPage(
+                                                  lawyer: _lawyerName,
+                                                  onOpenCase: (key) =>
+                                                      unawaited(
+                                                        _selectGroup(
+                                                          'uyap:$key',
+                                                        ),
+                                                      ),
+                                                )
                                               : _group == 'mesajlar'
                                               ? const MessagesPage()
                                               : _group == 'ayarlar'
