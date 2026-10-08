@@ -29,7 +29,11 @@ class TaskGiveDialog extends StatefulWidget {
     required this.network,
     this.rows,
     this.initialCaseKey,
+    this.initialDocKey,
   });
+
+  /// A document of that case to send with it: the one it was given from.
+  final String? initialDocKey;
 
   /// A case to start with: the one whose page it was given from.
   final String? initialCaseKey;
@@ -55,6 +59,9 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
   final _to = <String>{};
   final _cases = <_Draft>[];
   DateTime? _due;
+
+  /// The rest of a task, asked for only when wanted.
+  bool _more = false;
   TaskPriority _priority = TaskPriority.normal;
   List<PortfolioRow> _rows = const [];
   String? _error;
@@ -66,6 +73,13 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
   void initState() {
     super.initState();
     unawaited(_loadTemplates());
+    // One to give to: already chosen.
+    final others = [
+      for (final m in _net.ledger.members)
+        if (m.deviceId != _net.self?.deviceId && _net.mayGive(m.deviceId))
+          m.deviceId,
+    ];
+    if (others.length == 1) _to.add(others.single);
     final given = widget.rows;
     if (given != null) {
       _rows = given;
@@ -106,9 +120,14 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
 
   void _startWith() {
     final key = widget.initialCaseKey;
+    final doc = widget.initialDocKey;
     final row = _rows.where((r) => r.key == key).firstOrNull;
     if (row != null && !_cases.any((c) => c.row.key == key)) {
-      _cases.add(_Draft(row)..items.add((TextEditingController(), '')));
+      _cases.add(
+        _Draft(row)
+          ..items.add((TextEditingController(), ''))
+          ..chosen.addAll([?doc]),
+      );
     }
   }
 
@@ -274,40 +293,9 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                 controller: _title,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  labelText: 'Görev',
+                  labelText: 'Ne yapılacak?',
                   hintText: 'ör. Ekim duruşmalarına hazırlık',
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('task-due'),
-                      onPressed: _pickDue,
-                      icon: const Icon(Icons.event_rounded, size: 17),
-                      label: Text(
-                        _due == null
-                            ? 'Son gün seçin'
-                            : 'Son gün: ${dayText(_due!)}',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  DropdownButton<TaskPriority>(
-                    key: const ValueKey('task-priority'),
-                    value: _priority,
-                    onChanged: (v) =>
-                        setState(() => _priority = v ?? _priority),
-                    items: [
-                      for (final p in TaskPriority.values)
-                        DropdownMenuItem(
-                          value: p,
-                          child: Text('Öncelik: ${p.label}'),
-                        ),
-                    ],
-                  ),
-                ],
               ),
               label('KİME'),
               if (people.isEmpty)
@@ -335,35 +323,85 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                     ),
                 ],
               ),
-              label('DOSYALAR VE İŞLER'),
-              for (final c in _cases) _caseCard(context, c),
-              OutlinedButton.icon(
-                key: const ValueKey('task-add-case'),
-                onPressed: _rows.isEmpty ? null : _pickCase,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(
-                  _rows.isEmpty
-                      ? 'UYAP Dosyalarım’da dosya yok'
-                      : 'UYAP Dosyalarım’dan dosya ekle',
+              label('NE ZAMANA'),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final (days, text) in _quickDays)
+                    ChoiceChip(
+                      key: ValueKey('task-due-$days'),
+                      label: Text(text),
+                      selected: _due == _dayAfter(days),
+                      onSelected: (on) =>
+                          setState(() => _due = on ? _dayAfter(days) : null),
+                    ),
+                  ActionChip(
+                    key: const ValueKey('task-due'),
+                    avatar: const Icon(Icons.event_rounded, size: 16),
+                    label: Text(
+                      _due == null ||
+                              _quickDays.any((q) => _dayAfter(q.$1) == _due)
+                          ? 'Tarih seç'
+                          : dayText(_due!),
+                    ),
+                    onPressed: _pickDue,
+                  ),
+                ],
+              ),
+              if (_cases.isNotEmpty) ...[
+                label('DOSYALAR VE İŞLER'),
+                for (final c in _cases) _caseCard(context, c),
+              ],
+              if (_cases.isNotEmpty || _more) _addCase(),
+              if (_more) ...[
+                label('ÖNCELİK'),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final p in TaskPriority.values)
+                      ChoiceChip(
+                        key: ValueKey('task-priority-${p.name}'),
+                        label: Text(p.label),
+                        selected: _priority == p,
+                        onSelected: (_) => setState(() => _priority = p),
+                      ),
+                  ],
                 ),
-              ),
-              label('AÇIKLAMA'),
-              TextField(
-                key: const ValueKey('task-note'),
-                controller: _note,
-                minLines: 2,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  hintText: 'İşi alanın bilmesi gerekenler',
+                label('AÇIKLAMA'),
+                TextField(
+                  key: const ValueKey('task-note'),
+                  controller: _note,
+                  minLines: 2,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    hintText: 'İşi alanın bilmesi gerekenler',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Seçilen evrak, dosyanın künyesi ve taraflarıyla şifreli gider; '
-                'alan kişi o dosyada UYAP yetkisi olmasa da dosyayı "görevle '
-                'gelen" olarak görür.',
-                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
-              ),
+              ] else
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const ValueKey('task-more'),
+                    onPressed: () => setState(() => _more = true),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: Text(
+                      _cases.isEmpty
+                          ? 'Ayrıntı ekle (dosya, öncelik, açıklama)'
+                          : 'Ayrıntı ekle (öncelik, açıklama)',
+                    ),
+                  ),
+                ),
+              if (_cases.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Seçilen evrak, dosyanın künyesi ve taraflarıyla şifreli '
+                    'gider; alan kişi o dosyada UYAP yetkisi olmasa da dosyayı '
+                    '"görevle gelen" olarak görür.',
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                  ),
+                ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -385,6 +423,32 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
         ),
       ],
     );
+  }
+
+  Widget _addCase() => Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: OutlinedButton.icon(
+      key: const ValueKey('task-add-case'),
+      onPressed: _rows.isEmpty ? null : _pickCase,
+      icon: const Icon(Icons.add_rounded, size: 18),
+      label: Text(
+        _rows.isEmpty
+            ? 'UYAP Dosyalarım’da dosya yok'
+            : 'UYAP Dosyalarım’dan dosya ekle',
+      ),
+    ),
+  );
+
+  static const _quickDays = [
+    (0, 'Bugün'),
+    (1, 'Yarın'),
+    (3, '3 gün'),
+    (7, '1 hafta'),
+  ];
+
+  static DateTime _dayAfter(int days) {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day + days);
   }
 
   Widget _caseCard(BuildContext context, _Draft c) {

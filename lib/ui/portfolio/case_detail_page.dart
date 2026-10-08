@@ -21,6 +21,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
+import '../office/send_to_office.dart';
 import '../office/task_give_dialog.dart';
 import '../office/tasks_page.dart' show TaskDetail, dueOf;
 import '../widgets/file_preview.dart';
@@ -720,6 +721,18 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                     : null,
                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
               ),
+              if (file != null)
+                SendToOfficeButton(
+                  paths: () => [file.path],
+                  text: _sentWith(_c, d),
+                ),
+              if (_mayGiveTask)
+                IconButton(
+                  key: const ValueKey('case-preview-task'),
+                  tooltip: 'Bu evrakla görev ver',
+                  onPressed: () => unawaited(_giveTaskWith(d)),
+                  icon: const Icon(Icons.add_task_rounded, size: 19),
+                ),
               if (file != null && EditorWindow.available)
                 IconButton(
                   tooltip: 'Ayrı pencerede aç',
@@ -839,6 +852,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           initial: at,
           fetch: _fetchShown,
           open: _open,
+          giveTask: _mayGiveTask ? _giveTaskWith : null,
         ),
       ),
     );
@@ -1086,6 +1100,21 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             ),
     );
   }
+
+  bool get _mayGiveTask {
+    final net = OfficeNetwork.instance;
+    return net.ledger.members.any((m) => net.mayGive(m.deviceId));
+  }
+
+  /// Görev ver from a document: its case and it, already chosen.
+  Future<void> _giveTaskWith(UyapCaseDocument d) => showDialog<void>(
+    context: context,
+    builder: (_) => TaskGiveDialog(
+      network: OfficeNetwork.instance,
+      initialCaseKey: widget.caseKey,
+      initialDocKey: d.key,
+    ),
+  );
 
   /// The sides in the heading when the page has no room for their cards:
   /// whom the lawyer stands for and against whom, with their roles and
@@ -2483,6 +2512,15 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 }
 
 /// A case's documents one to a page, on a phone or a narrow window.
+/// Said with a document sent from its case: which case and what it is.
+String _sentWith(UyapCasePanelController c, UyapCaseDocument d) {
+  final r = c.record;
+  return [
+    if (r != null) '${r.number} · ${r.court}',
+    if (d.type.isNotEmpty) d.type else d.title,
+  ].join('\n');
+}
+
 class _CasePreviewPage extends StatefulWidget {
   const _CasePreviewPage({
     required this.controller,
@@ -2490,9 +2528,13 @@ class _CasePreviewPage extends StatefulWidget {
     required this.initial,
     required this.fetch,
     required this.open,
+    this.giveTask,
   });
 
   final UyapCasePanelController controller;
+
+  /// Görev ver with the document shown; null when there is no one to give to.
+  final Future<void> Function(UyapCaseDocument d)? giveTask;
   final List<UyapCaseDocument> documents;
   final int initial;
   final Future<void> Function(UyapCaseDocument d) fetch;
@@ -2687,6 +2729,10 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
                 icon: const Icon(Icons.download_rounded),
               )
             else ...[
+              SendToOfficeButton(
+                paths: () => [file.path],
+                text: _sentWith(widget.controller, d),
+              ),
               IconButton(
                 key: const ValueKey('case-preview-share'),
                 tooltip: 'Paylaş',
@@ -2701,9 +2747,19 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
               ),
               PopupMenuButton<String>(
                 tooltip: 'Diğer',
-                onSelected: (_) => _openInFolio(d),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'folio', child: Text('Folio’da aç')),
+                onSelected: (v) => v == 'gorev'
+                    ? unawaited(widget.giveTask!(d))
+                    : _openInFolio(d),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'folio',
+                    child: Text('Folio’da aç'),
+                  ),
+                  if (widget.giveTask != null)
+                    const PopupMenuItem(
+                      value: 'gorev',
+                      child: Text('Bu evrakla görev ver'),
+                    ),
                 ],
               ),
             ],

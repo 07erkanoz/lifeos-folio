@@ -98,6 +98,67 @@ class OfficeNetwork extends ChangeNotifier {
     return dir;
   }
 
+  /// Whom a document can go to from its page: the office's members, then
+  /// this person's own devices that are not members; empty when there is
+  /// no one, and the page shows no "Gönder".
+  List<SendTarget> get sendTargets {
+    final me = _self?.deviceId;
+    if (me == null) return const [];
+    final out = <SendTarget>[
+      for (final m in ledger.members)
+        if (m.deviceId != me)
+          SendTarget(
+            deviceId: m.deviceId,
+            name: m.name,
+            detail: m.role.label,
+            member: true,
+            online: _peers[m.deviceId]?.online ?? false,
+          ),
+    ];
+    final taken = {me, for (final t in out) t.deviceId};
+    final mine = _identity?.userId;
+    final own = <String, String>{
+      for (final d in _knownDevices.values)
+        if (d.userId == mine) d.deviceId: d.device,
+      for (final peer in _peers.values)
+        if (peer.online && peer.userId == mine) peer.deviceId: peer.device,
+    };
+    for (final e in own.entries) {
+      if (!taken.add(e.key)) continue;
+      out.add(
+        SendTarget(
+          deviceId: e.key,
+          name: 'Kendi cihazım',
+          detail: e.value,
+          member: false,
+          online: _peers[e.key]?.online ?? false,
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Sends a document from its page: to a member in their private talk,
+  /// so it waits for them when they are away; to an own device directly,
+  /// which must be on the network. Why not, when it cannot be.
+  Future<String?> sendTo(
+    SendTarget to,
+    List<String> paths, {
+    String text = '',
+  }) async {
+    if (to.member) {
+      final chat = await privateChat(to.deviceId);
+      if (chat == null) return 'Bu kişiyle konuşma açılamadı.';
+      return post(chat, text: text, files: paths);
+    }
+    final peer = _peers[to.deviceId];
+    if (peer == null || !peer.online) {
+      return 'Bu cihaz şu an ağda değil. Açık olduğunda yeniden deneyin.';
+    }
+    final t = await send(peer, paths, note: text);
+    return t == null ? 'Cihaza ulaşılamadı.' : null;
+  }
+
   /// Sends [paths] to a known device on the network; null when it is not
   /// both known and on the network now.
   Future<OfficeTransfer?> send(
@@ -359,6 +420,11 @@ class OfficeNetwork extends ChangeNotifier {
       final task = tasks.of('${t.meta['gorev'] ?? ''}');
       if (task != null && task.by == ch.peer.deviceId) {
         // A case of a task given to this device, from its giver.
+        await t.accept();
+        return;
+      }
+      if (ch.peer.userId == _identity?.userId) {
+        // From one of this person's own devices: theirs already.
         await t.accept();
         return;
       }
@@ -1266,4 +1332,20 @@ class OfficeNetwork extends ChangeNotifier {
     _peers[peer.deviceId] = peer;
     notifyListeners();
   }
+}
+
+/// One whom a document can be sent to (see [OfficeNetwork.sendTargets]).
+class SendTarget {
+  const SendTarget({
+    required this.deviceId,
+    required this.name,
+    required this.detail,
+    required this.member,
+    required this.online,
+  });
+  final String deviceId, name, detail;
+
+  /// A member of the office, whose files wait for them; else an own device.
+  final bool member;
+  final bool online;
 }

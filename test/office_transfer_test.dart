@@ -294,6 +294,11 @@ void main() {
     expect(got.text, 'Şuna bakar mısın?');
     expect(got.attachments.single.name, 'Ara Karar.pdf');
     await until(() => b.chats.fileOf(got.id, 'Ara Karar.pdf') != null);
+    // "Gönder" on a document: the same talk, the members listed.
+    expect(
+      a.sendTargets.map((t) => (t.name, t.member)),
+      containsAll([('Av. Selin Aksoy', true)]),
+    );
     expect(
       File(b.chats.fileOf(got.id, 'Ara Karar.pdf')!).readAsBytesSync(),
       doc.readAsBytesSync(),
@@ -449,10 +454,17 @@ void main() {
       expect(phone.isKnown(tablet.self!.deviceId), isFalse);
       phone.seenForTesting(tablet.self!);
       tablet.seenForTesting(phone.self!);
-      final t = (await phone.send(tablet.self!, [file('Not.txt', 2000).path]))!;
-      await until(() => tablet.incomingOffer.value != null);
-      await tablet.acceptOffer(tablet.incomingOffer.value!);
-      await until(() => t.state == TransferState.done);
+      // "Gönder" on a document lists it as an own device.
+      final to = phone.sendTargets.singleWhere(
+        (x) => x.deviceId == tablet.self!.deviceId,
+      );
+      expect((to.member, to.online, to.name), (false, true, 'Kendi cihazım'));
+      expect(await phone.sendTo(to, [file('Not.txt', 2000).path]), isNull);
+      // Taken unasked: it is the same person's.
+      await until(
+        () => tablet.transfers.any((x) => x.state == TransferState.done),
+      );
+      expect(tablet.incomingOffer.value, isNull);
       // Known to each other now, as their own.
       await until(
         () =>

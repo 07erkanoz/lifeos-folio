@@ -56,6 +56,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../services/platform/file_actions.dart';
+import 'office/send_to_office.dart';
 import 'office/office_network_page.dart';
 import 'office/office_offer_dialog.dart';
 import 'office/office_pairing_dialog.dart';
@@ -3418,6 +3419,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             if (mounted) await _previewAction('share', target);
                           },
                         ),
+                      if (!_isEditorMode)
+                        SendToOfficeButton(paths: () => [file.path]),
                       IconButton(
                         tooltip: 'Belge işlemleri',
                         icon: const Icon(Icons.more_horiz_rounded, size: 23),

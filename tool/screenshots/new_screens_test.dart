@@ -13,6 +13,7 @@ import 'package:evrak_convert/services/office/office_chat.dart';
 import 'package:evrak_convert/ui/office/messages_page.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/ui/office/tasks_page.dart';
+import 'package:evrak_convert/ui/office/task_give_dialog.dart';
 import 'package:evrak_convert/services/security/app_lock.dart';
 import 'package:evrak_convert/ui/security/app_lock_gate.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
@@ -26,6 +27,7 @@ import 'package:evrak_convert/ui/office/office_pairing_dialog.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/ui/office/office_network_page.dart';
+import 'package:evrak_convert/ui/office/send_to_office.dart';
 import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -557,6 +559,26 @@ void main() {
     );
     await tester.pump();
     await _shot(tester, 'gorev-sayfasi');
+    for (final (size, name) in [
+      (logical, 'gorev-ver'),
+      (const Size(390, 844), 'gorev-ver-telefon'),
+    ]) {
+      tester.view.physicalSize = size * pixelRatio;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: TaskGiveDialog(network: a, rows: const []),
+          ),
+        ),
+      );
+      await tester.pump();
+      await _shot(tester, name);
+    }
+    await tester.tap(find.byKey(const ValueKey('task-more')));
+    await tester.pump();
+    await _shot(tester, 'gorev-ver-ayrinti');
+    tester.view.physicalSize = logical * pixelRatio;
     late String chatId;
     await tester.runAsync(() async {
       final chat = (await a.privateChat(b.self!.deviceId))!;
@@ -637,6 +659,34 @@ void main() {
     lock.dispose();
     tester.view.reset();
   });
+
+  testWidgets('send to office', (tester) async {
+    final net = _Targets();
+    for (final (size, name) in [
+      (logical, 'gonder'),
+      (const Size(390, 844), 'gonder-telefon'),
+    ]) {
+      tester.view.physicalSize = size * pixelRatio;
+      tester.view.devicePixelRatio = pixelRatio;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            appBar: AppBar(
+              title: const Text('Bilirkişi raporu'),
+              actions: [
+                SendToOfficeButton(paths: () => const [], network: net),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('send-to-office')));
+      await tester.pump();
+      await _shot(tester, name);
+    }
+    tester.view.reset();
+  });
 }
 
 class _MemoryStore extends SecretStore {
@@ -649,4 +699,31 @@ class _MemoryStore extends SecretStore {
 
   @override
   Future<Map<String, Object?>?> read(String name) async => _kept[name];
+}
+
+class _Targets extends OfficeNetwork {
+  @override
+  List<SendTarget> get sendTargets => const [
+    SendTarget(
+      deviceId: 'a',
+      name: 'Av. Deniz Yılmaz',
+      detail: 'Stajyer',
+      member: true,
+      online: true,
+    ),
+    SendTarget(
+      deviceId: 'b',
+      name: 'Ayşe Kara',
+      detail: 'Sekreter',
+      member: true,
+      online: false,
+    ),
+    SendTarget(
+      deviceId: 'c',
+      name: 'Kendi cihazım',
+      detail: 'Telefon',
+      member: false,
+      online: true,
+    ),
+  ];
 }
