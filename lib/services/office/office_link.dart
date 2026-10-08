@@ -38,6 +38,7 @@ class OfficeLink {
       return null;
     }
   }
+
   late final StreamSubscription<String> _lines;
   // Broadcast so that the one who reads the first line can hand the rest
   // to whoever answers it; nothing is said between the two.

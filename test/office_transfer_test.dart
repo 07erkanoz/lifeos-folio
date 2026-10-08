@@ -151,6 +151,33 @@ void main() {
     expect(t.moved, t.total);
   });
 
+  test(
+    'cut after the first of two files: the first is not written twice',
+    () async {
+      final one = file('Bir.pdf', 90 * 1024, seed: 3);
+      final two = file('İki.pdf', 120 * 1024, seed: 4);
+      final id = OfficeTransfer.newId();
+      final inbox = Directory('${dir.path}/mert-pc/gelen');
+      final parts = Directory('${inbox.path}/.folio-parca')
+        ..createSync(recursive: true);
+      // The first came whole before the cut, the second half.
+      final came = File('${inbox.path}/Bir.pdf')
+        ..writeAsBytesSync(one.readAsBytesSync());
+      File('${parts.path}/$id-0.done').writeAsStringSync(came.path);
+      File('${parts.path}/$id-1.part')
+          .writeAsBytesSync(two.readAsBytesSync().sublist(0, 60 * 1024));
+      final t = (await a.send(b.self!, [one.path, two.path], id: id))!;
+      await until(() => b.incomingOffer.value != null);
+      final offer = b.incomingOffer.value!;
+      await b.acceptOffer(offer);
+      await until(() => offer.state == TransferState.done);
+      await until(() => t.state == TransferState.done);
+      expect(offer.saved.length, 2);
+      expect(File('${inbox.path}/Bir (2).pdf').existsSync(), isFalse);
+      expect(File(offer.saved.last).readAsBytesSync(), two.readAsBytesSync());
+    },
+  );
+
   test('a device not known cannot even open a talk', () async {
     final stranger = await OfficeIdentity.load(store: _Store());
     final link = await OfficeLink.connect('127.0.0.1', b.self!.port);
@@ -237,6 +264,29 @@ void main() {
       await b.act(mine, TaskEventKind.message, text: 'Taslak hazır.');
       await b.act(mine, TaskEventKind.delivered, text: 'Dilekçe imzaya hazır.');
       await until(() => theirs().stage == TaskStage.review);
+      // An approval made up on the trainee's side, in the giver's name, is
+      // not taken: it is not the giver's signature.
+      await b.tasks.add(
+        b.tasks.all.single,
+        TaskEvent.create(
+          TaskEventKind.approved,
+          a.self!.deviceId,
+          'Av. Deniz Kaya',
+        ),
+      );
+      await b.act(
+        b.tasks.all.single,
+        TaskEventKind.message,
+        text: 'Bakar mısınız?',
+      );
+      await until(
+        () => theirs().timeline.any((e) => e.text == 'Bakar mısınız?'),
+      );
+      expect(theirs().stage, TaskStage.review);
+      // It undid only the trainee's own copy.
+      b.tasks.all.single.events.removeWhere(
+        (e) => e.kind == TaskEventKind.approved,
+      );
       // Sent back needs a reason; then it is running again.
       expect(await a.act(theirs(), TaskEventKind.returned), isNotNull);
       await a.act(
@@ -259,8 +309,8 @@ void main() {
       await a.act(theirs(), TaskEventKind.approved);
       await until(() => b.tasks.all.single.stage == TaskStage.done);
       expect(
-        b.tasks.all.single.timeline.where((e) => e.isTalk).single.text,
-        'Taslak hazır.',
+        b.tasks.all.single.timeline.where((e) => e.isTalk).map((e) => e.text),
+        ['Taslak hazır.', 'Bakar mısınız?'],
       );
     },
   );
@@ -341,6 +391,20 @@ void main() {
         mayBroadcast: c.ledger.isManager,
       ),
       isFalse,
+    );
+    // One taken off the office hears no more of a talk it was in.
+    expect(await a.removeMember(c.self!.deviceId), isNull);
+    await a.post(a.chats.of(group.id)!, text: 'Yalnız ikimiz biliyoruz.');
+    await until(() => (b.chats.of(group.id)?.messages.length ?? 0) == 2);
+    await c.post(c.chats.of(group.id)!, text: 'Ben hâlâ buradayım');
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(
+      c.chats.of(group.id)!.messages.map((m) => m.text),
+      isNot(contains('Yalnız ikimiz biliyoruz.')),
+    );
+    expect(
+      a.chats.of(group.id)!.messages.map((m) => m.text),
+      isNot(contains('Ben hâlâ buradayım')),
     );
   });
 

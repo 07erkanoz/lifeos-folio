@@ -283,12 +283,31 @@ class OfficeTransfer extends ChangeNotifier {
   Directory get _parts => Directory(p.join(_folder!.path, '.folio-parca'));
   File _partOf(int i) => File(p.join(_parts.path, '$id-$i.part'));
 
+  /// Where a file that came whole was put: so that, offered again after a
+  /// cut, it is neither asked for nor written twice.
+  File _doneOf(int i) => File(p.join(_parts.path, '$id-$i.done'));
+
+  Future<String?> _cameTo(int i) async {
+    try {
+      final path = await _doneOf(i).readAsString();
+      return await File(path).exists() ? path : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The user takes the files: what came of them before is not asked again.
   Future<void> accept() async {
     if (_state != TransferState.offered || outgoing) return;
     await _parts.create(recursive: true);
     final have = <int>[];
     for (var i = 0; i < files.length; i++) {
+      final came = await _cameTo(i);
+      if (came != null) {
+        have.add(files[i].size);
+        if (!saved.contains(came)) saved.add(came);
+        continue;
+      }
       final part = _partOf(i);
       have.add(await part.exists() ? await part.length() : 0);
     }
@@ -307,58 +326,65 @@ class OfficeTransfer extends ChangeNotifier {
   // Written one message at a time, in order.
   Future<void> _writing = Future.value();
 
-  void _heardByReceiver(Map<String, Object?> m) =>
-      _writing = _writing.then((_) async {
-        if (finished || _state != TransferState.sending) return;
-        final f = m['f'];
-        if (f is! int || f < 0 || f >= files.length) {
-          return _fail('Karşı cihaz anlaşılamadı.');
+  void _heardByReceiver(Map<String, Object?> m) => _writing = _writing.then((
+    _,
+  ) async {
+    if (finished || _state != TransferState.sending) return;
+    final f = m['f'];
+    if (f is! int || f < 0 || f >= files.length) {
+      return _fail('Karşı cihaz anlaşılamadı.');
+    }
+    switch (m['t']) {
+      case 'chunk':
+        final at = m['at'], d = m['d'];
+        if (_part == null || _file != f) {
+          await _part?.close();
+          final part = _partOf(f);
+          _partLength = await part.exists() ? await part.length() : 0;
+          _part = part.openWrite(mode: FileMode.append);
+          _file = f;
         }
-        switch (m['t']) {
-          case 'chunk':
-            final at = m['at'], d = m['d'];
-            if (_part == null || _file != f) {
-              await _part?.close();
-              final part = _partOf(f);
-              _partLength = await part.exists() ? await part.length() : 0;
-              _part = part.openWrite(mode: FileMode.append);
-              _file = f;
-            }
-            if (at != _partLength || d is! String) {
-              return _fail('Parçalar sırasız geldi.');
-            }
-            final bytes = base64Decode(d);
-            if (_partLength + bytes.length > files[f].size) {
-              return _fail('Dosya söylenenden büyük geldi.');
-            }
-            _part!.add(bytes);
-            _partLength += bytes.length;
-            _moved += bytes.length;
-            notifyListeners();
-            await _channel?.send({'t': 'ack', 'f': f});
-          case 'end':
-            await _part?.close();
-            _part = null;
-            final part = _partOf(f);
-            // An empty file has no pieces, and so no part yet.
-            if (!await part.exists()) await part.create(recursive: true);
-            final ok =
-                await part.length() == files[f].size &&
-                await sha256Of(part) == files[f].sha256;
-            if (!ok) {
-              if (await part.exists()) await part.delete();
-              await _channel?.send({'t': 'got', 'f': f, 'ok': false});
-              return _fail('${files[f].name} bozuk geldi ve silindi.');
-            }
-            final target = _unique(files[f].name);
-            await part.rename(target.path);
-            saved.add(target.path);
-            await _channel?.send({'t': 'got', 'f': f, 'ok': true});
-            if (saved.length == files.length) _end(TransferState.done, null);
-          default:
-            _fail('Karşı cihaz anlaşılamadı.');
+        if (at != _partLength || d is! String) {
+          return _fail('Parçalar sırasız geldi.');
         }
-      });
+        final bytes = base64Decode(d);
+        if (_partLength + bytes.length > files[f].size) {
+          return _fail('Dosya söylenenden büyük geldi.');
+        }
+        _part!.add(bytes);
+        _partLength += bytes.length;
+        _moved += bytes.length;
+        notifyListeners();
+        await _channel?.send({'t': 'ack', 'f': f});
+      case 'end':
+        await _part?.close();
+        _part = null;
+        if (await _cameTo(f) != null) {
+          await _channel?.send({'t': 'got', 'f': f, 'ok': true});
+          if (f == files.length - 1 && saved.length == files.length) _done();
+          return;
+        }
+        final part = _partOf(f);
+        // An empty file has no pieces, and so no part yet.
+        if (!await part.exists()) await part.create(recursive: true);
+        final ok =
+            await part.length() == files[f].size &&
+            await sha256Of(part) == files[f].sha256;
+        if (!ok) {
+          if (await part.exists()) await part.delete();
+          await _channel?.send({'t': 'got', 'f': f, 'ok': false});
+          return _fail('${files[f].name} bozuk geldi ve silindi.');
+        }
+        final target = _unique(files[f].name);
+        await part.rename(target.path);
+        await _doneOf(f).writeAsString(target.path, flush: true);
+        saved.add(target.path);
+        await _channel?.send({'t': 'got', 'f': f, 'ok': true});
+        if (f == files.length - 1 && saved.length == files.length) _done();
+      default:
+        _fail('Karşı cihaz anlaşılamadı.');
+    }
+  });
 
   File _unique(String name) {
     final base = p.basenameWithoutExtension(name), ext = p.extension(name);
@@ -370,6 +396,16 @@ class OfficeTransfer extends ChangeNotifier {
   }
 
   void _fail(String reason) => _end(TransferState.failed, reason);
+
+  /// All came: the marks of what came are no longer needed.
+  void _done() {
+    for (var i = 0; i < files.length; i++) {
+      try {
+        _doneOf(i).deleteSync();
+      } catch (_) {}
+    }
+    _end(TransferState.done, null);
+  }
 
   void _end(TransferState state, String? reason) {
     if (finished) return;

@@ -411,33 +411,46 @@ class OfficeNetwork extends ChangeNotifier {
       }
       if (m['t'] == 'sohbet') {
         final theirs = Chat.fromJson(m['sohbet']);
+        final from = ch.peer.deviceId;
         if (theirs != null &&
+            ledger.member(from) != null &&
             await chats.merge(
               theirs,
               from: ch.peer.deviceId,
               mayBroadcast: ledger.isManager,
               added: (msg) => _messageCame(theirs.id, msg),
+              authentic: _messageAuthentic,
             )) {
           notifyListeners();
         }
         final mine = theirs == null ? null : chats.of(theirs.id);
-        await ch.send({'t': 'sohbet', 'sohbet': mine?.toJson()});
+        // A talk's words only to who is in it: its id is no secret.
+        await ch.send({
+          't': 'sohbet',
+          'sohbet': mine != null && _mayHear(mine, from) ? mine.toJson() : null,
+        });
         await Future<void>.delayed(const Duration(milliseconds: 200));
         await ch.close();
         return;
       }
       if (m['t'] == 'gorev') {
         final theirs = OfficeTask.fromJson(m['gorev']);
+        final from = ch.peer.deviceId;
         if (theirs != null &&
+            ledger.member(from) != null &&
             await tasks.merge(
               theirs,
               from: ch.peer.deviceId,
               added: (e) => _taskMoved(theirs.id, e),
+              authentic: _taskAuthentic,
             )) {
           notifyListeners();
         }
         final mine = theirs == null ? null : tasks.of(theirs.id);
-        await ch.send({'t': 'gorev', 'gorev': mine?.toJson()});
+        await ch.send({
+          't': 'gorev',
+          'gorev': mine != null && _maySee(mine, from) ? mine.toJson() : null,
+        });
         await Future<void>.delayed(const Duration(milliseconds: 200));
         await ch.close();
         return;
@@ -458,7 +471,10 @@ class OfficeNetwork extends ChangeNotifier {
           ? p.join(
               folder.path,
               'Görevler',
-              '${meta['gorev']}-${'${meta['dosya']}'.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}',
+              // Only letters and digits: the sender's words name no
+              // folder outside the inbox.
+              '${'${meta['gorev']}'.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}-'
+                  '${'${meta['dosya']}'.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}',
             )
           : null;
       final t = m['t'] == 'offer'
@@ -761,7 +777,10 @@ class OfficeNetwork extends ChangeNotifier {
       supervisor: trainee ? self.name : '',
     );
     task.events.add(
-      TaskEvent.create(TaskEventKind.given, self.deviceId, self.name),
+      await _sign(
+        task.id,
+        TaskEvent.create(TaskEventKind.given, self.deviceId, self.name),
+      ),
     );
     await tasks.put(task);
     for (final c in cases) {
@@ -815,14 +834,17 @@ class OfficeNetwork extends ChangeNotifier {
     }
     final ok = await tasks.add(
       task,
-      TaskEvent.create(
-        kind,
-        self.deviceId,
-        self.name,
-        text: text.trim(),
-        percent: percent,
-        itemId: itemId,
-        files: files,
+      await _sign(
+        task.id,
+        TaskEvent.create(
+          kind,
+          self.deviceId,
+          self.name,
+          text: text.trim(),
+          percent: percent,
+          itemId: itemId,
+          files: files,
+        ),
       ),
     );
     if (!ok) return 'Bunu bu görevde yapamazsınız.';
@@ -831,10 +853,39 @@ class OfficeNetwork extends ChangeNotifier {
     return null;
   }
 
+  Future<TaskEvent> _sign(String taskId, TaskEvent e) async =>
+      e.signed(await _identity!.signAsDevice(e.signedOf(taskId)));
+
+  /// The member's device key, from the office's ledger: what a step or a
+  /// message is checked against.
+  Future<bool> _byMember(String by, List<int> data, String signature) async {
+    final key = ledger.member(by)?.publicKey;
+    if (key == null) return false;
+    return OfficeIdentity.signedBy(key, data, signature);
+  }
+
+  Future<bool> _taskAuthentic(String taskId, TaskEvent e) =>
+      _byMember(e.by, e.signedOf(taskId), e.signature);
+
+  Future<bool> _messageAuthentic(String chatId, ChatMessage m) =>
+      _byMember(m.by, m.signedOf(chatId), m.signature);
+
+  /// Who may see [task]: those in it and the managers, while members.
+  bool _maySee(OfficeTask task, String deviceId) =>
+      ledger.member(deviceId) != null &&
+      (task.people.contains(deviceId) || ledger.isManager(deviceId));
+
+  /// Who may read [chat]: its members, or all for a broadcast, while
+  /// members of the office; one taken off it hears no more.
+  bool _mayHear(Chat chat, String deviceId) =>
+      ledger.member(deviceId) != null &&
+      (chat.kind == ChatKind.broadcast || chat.members.containsKey(deviceId));
+
   Future<void> _shareTask(OfficeTask task) async {
     // Those in it, and the office's managers, who see all of its work.
     final to = {
-      ...task.people,
+      for (final id in task.people)
+        if (_maySee(task, id)) id,
       for (final m in ledger.members)
         if (m.role == OfficeRole.manager) m.deviceId,
     };
@@ -868,6 +919,7 @@ class OfficeNetwork extends ChangeNotifier {
             theirs,
             from: peer.deviceId,
             added: (e) => _taskMoved(theirs.id, e),
+            authentic: _taskAuthentic,
           )) {
         notifyListeners();
       }
@@ -988,13 +1040,16 @@ class OfficeNetwork extends ChangeNotifier {
           seconds: voiceSeconds,
         ),
     ];
-    final m = ChatMessage(
+    final unsigned = ChatMessage(
       id: Chat.newId(),
       by: self.deviceId,
       byName: self.name,
       at: DateTime.now(),
       text: text.trim(),
       attachments: attachments,
+    );
+    final m = unsigned.signed(
+      await _identity!.signAsDevice(unsigned.signedOf(chat.id)),
     );
     final to = _audience(chat);
     await chats.add(chat, m, waiting: files.isEmpty ? const {} : to);
@@ -1009,7 +1064,7 @@ class OfficeNetwork extends ChangeNotifier {
   Set<String> _audience(Chat chat) => {
     ...(chat.kind == ChatKind.broadcast
         ? {for (final m in ledger.members) m.deviceId}
-        : chat.members.keys),
+        : chat.members.keys.where((id) => _mayHear(chat, id))),
   }..remove(_self?.deviceId);
 
   Future<void> _shareChat(Chat chat) async {
@@ -1042,6 +1097,7 @@ class OfficeNetwork extends ChangeNotifier {
             from: peer.deviceId,
             mayBroadcast: ledger.isManager,
             added: (msg) => _messageCame(theirs.id, msg),
+            authentic: _messageAuthentic,
           )) {
         notifyListeners();
       }
@@ -1071,9 +1127,8 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// Every task shared with [peer], when it comes on the network.
   Future<void> _syncTasks(OfficePeer peer) async {
-    final manager = ledger.isManager(peer.deviceId);
     for (final t in tasks.all) {
-      if (manager || t.people.contains(peer.deviceId)) {
+      if (_maySee(t, peer.deviceId)) {
         await _syncTask(peer, t);
       }
       if (t.by == _self?.deviceId) await _sendPackages(t, only: peer.deviceId);
@@ -1132,47 +1187,76 @@ class OfficeNetwork extends ChangeNotifier {
     _knownDevices = {for (final d in await _known.all()) d.deviceId: d};
   }
 
+  int _silent = 0;
+
   /// A talk another Folio opened: knowing by a code, for now; what is
   /// sent to a known device comes in the next step (docs/buro.md, Aktarım).
   void _opened(Socket socket) {
+    // Talks not yet begun are few and short: one that says nothing is let
+    // go, and a crowd of them is not let in.
+    if (_silent >= 32) {
+      socket.destroy();
+      return;
+    }
+    _silent++;
     final link = OfficeLink(socket);
     late final StreamSubscription<Map<String, Object?>> first;
-    first = link.messages.listen((m) {
+    var heard = false;
+    final quiet = Timer(const Duration(seconds: 20), () {
+      if (heard) return;
+      heard = true;
+      _silent--;
       unawaited(first.cancel());
-      final identity = _identity, self = _self;
-      if (m['t'] == 'hello' && identity != null) {
-        unawaited(_talk(link, m, identity));
-        return;
-      }
-      if (m['t'] != 'pair' || identity == null || self == null) {
-        unawaited(link.close());
-        return;
-      }
-      if (_pairing != null && !_pairing!.finished) {
-        link.send({'t': 'busy'});
-        unawaited(link.close());
-        return;
-      }
-      final invite = m['davet'] != null ? _invite : null;
-      final pairing = OfficePairing.answer(
-        link: link,
-        first: m,
-        identity: identity,
-        self: self,
-        onKnown: _knownNow,
-        invite: invite,
-      );
-      _pairing = pairing;
-      _watchPairing(pairing);
-      if (pairing.finished) return;
-      if (pairing.byQr) {
-        // A QR is good for one phone.
-        _invite = null;
-        qrPairing.value = pairing;
-      } else {
-        incoming.value = pairing;
-      }
+      unawaited(link.close());
     });
+    first = link.messages.listen(
+      (m) {
+        if (heard) return;
+        heard = true;
+        _silent--;
+        quiet.cancel();
+        unawaited(first.cancel());
+        final identity = _identity, self = _self;
+        if (m['t'] == 'hello' && identity != null) {
+          unawaited(_talk(link, m, identity));
+          return;
+        }
+        if (m['t'] != 'pair' || identity == null || self == null) {
+          unawaited(link.close());
+          return;
+        }
+        if (_pairing != null && !_pairing!.finished) {
+          link.send({'t': 'busy'});
+          unawaited(link.close());
+          return;
+        }
+        final invite = m['davet'] != null ? _invite : null;
+        final pairing = OfficePairing.answer(
+          link: link,
+          first: m,
+          identity: identity,
+          self: self,
+          onKnown: _knownNow,
+          invite: invite,
+        );
+        _pairing = pairing;
+        _watchPairing(pairing);
+        if (pairing.finished) return;
+        if (pairing.byQr) {
+          // A QR is good for one phone.
+          _invite = null;
+          qrPairing.value = pairing;
+        } else {
+          incoming.value = pairing;
+        }
+      },
+      onDone: () {
+        if (heard) return;
+        heard = true;
+        _silent--;
+        quiet.cancel();
+      },
+    );
   }
 
   /// Joins again if the user had joined before; at Folio's start.

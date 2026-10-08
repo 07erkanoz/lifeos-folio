@@ -136,6 +136,7 @@ class TaskEvent {
     this.percent,
     this.itemId,
     this.files = const [],
+    this.signature = '',
   });
 
   final String id;
@@ -147,6 +148,40 @@ class TaskEvent {
 
   /// The names of files sent with it.
   final List<String> files;
+
+  /// Its maker's device's signature on [signedOf] (docs/buro.md, Güvenlik).
+  final String signature;
+
+  /// What its maker signs: the step and the task it is in, so that it
+  /// can be neither changed nor moved to another.
+  List<int> signedOf(String taskId) => utf8.encode(
+    [
+      'folio-gorev-olayi-1',
+      taskId,
+      id,
+      kind.name,
+      by,
+      byName,
+      '${at.millisecondsSinceEpoch}',
+      text,
+      '${percent ?? ''}',
+      itemId ?? '',
+      ...files,
+    ].join('\u0000'),
+  );
+
+  TaskEvent signed(String signature) => TaskEvent(
+    id: id,
+    kind: kind,
+    by: by,
+    byName: byName,
+    at: at,
+    text: text,
+    percent: percent,
+    itemId: itemId,
+    files: files,
+    signature: signature,
+  );
 
   /// Words of the talk, not a change of the task's state.
   bool get isTalk => kind == TaskEventKind.message;
@@ -161,6 +196,7 @@ class TaskEvent {
     'yuzde': ?percent,
     'is': ?itemId,
     if (files.isNotEmpty) 'dosyalar': files,
+    if (signature.isNotEmpty) 'imza': signature,
   };
 
   static TaskEvent? fromJson(Object? j) {
@@ -179,6 +215,7 @@ class TaskEvent {
       percent: percent is int ? percent.clamp(0, 100) : null,
       itemId: j['is'] is String ? j['is'] as String : null,
       files: [for (final f in (j['dosyalar'] as List? ?? const [])) '$f'],
+      signature: j['imza'] is String ? j['imza'] as String : '',
     );
   }
 
@@ -444,7 +481,12 @@ class OfficeTasks {
     OfficeTask theirs, {
     required String from,
     void Function(TaskEvent event)? added,
+    Future<bool> Function(String taskId, TaskEvent event)? authentic,
   }) async {
+    // Each step only as its maker signed it: one in the task cannot put
+    // words in another's mouth.
+    Future<bool> real(TaskEvent e) async =>
+        authentic == null || await authentic(theirs.id, e);
     if (!theirs.people.contains(from)) return false;
     final mine = _tasks[theirs.id];
     if (mine == null) {
@@ -452,7 +494,7 @@ class OfficeTasks {
       if (from != theirs.by) return false;
       final kept = OfficeTask.fromJson(theirs.toJson())!..events.clear();
       for (final e in theirs.events) {
-        if (mayDo(kept, e.kind, e.by)) kept.events.add(e);
+        if (mayDo(kept, e.kind, e.by) && await real(e)) kept.events.add(e);
       }
       await put(kept);
       kept.events.forEach(added ?? (_) {});
@@ -462,6 +504,7 @@ class OfficeTasks {
     var changed = false;
     for (final e in theirs.events) {
       if (seen.contains(e.id) || !mayDo(mine, e.kind, e.by)) continue;
+      if (!await real(e)) continue;
       mine.events.add(e);
       added?.call(e);
       changed = true;

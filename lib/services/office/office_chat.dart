@@ -79,10 +79,39 @@ class ChatMessage {
     required this.at,
     this.text = '',
     this.attachments = const [],
+    this.signature = '',
   });
   final String id, by, byName, text;
   final DateTime at;
   final List<ChatAttachment> attachments;
+
+  /// Its writer's device's signature on [signedOf].
+  final String signature;
+
+  /// What its writer signs: the words, the files and the talk they are in.
+  List<int> signedOf(String chatId) => utf8.encode(
+    [
+      'folio-mesaj-1',
+      chatId,
+      id,
+      by,
+      byName,
+      '${at.millisecondsSinceEpoch}',
+      text,
+      for (final a in attachments)
+        '${a.name}/${a.size}/${a.kind.name}/${a.seconds ?? ''}',
+    ].join('\u0000'),
+  );
+
+  ChatMessage signed(String signature) => ChatMessage(
+    id: id,
+    by: by,
+    byName: byName,
+    at: at,
+    text: text,
+    attachments: attachments,
+    signature: signature,
+  );
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -92,6 +121,7 @@ class ChatMessage {
     if (text.isNotEmpty) 'metin': text,
     if (attachments.isNotEmpty)
       'ekler': [for (final a in attachments) a.toJson()],
+    if (signature.isNotEmpty) 'imza': signature,
   };
   static ChatMessage? fromJson(Object? j) {
     if (j is! Map || j['id'] is! String || j['kim'] is! String) return null;
@@ -107,6 +137,7 @@ class ChatMessage {
         for (final a in (j['ekler'] as List? ?? const []))
           ?ChatAttachment.fromJson(a),
       ],
+      signature: j['imza'] is String ? j['imza'] as String : '',
     );
   }
 }
@@ -312,7 +343,10 @@ class OfficeChats {
     required String from,
     required bool Function(String deviceId) mayBroadcast,
     void Function(ChatMessage message)? added,
+    Future<bool> Function(String chatId, ChatMessage message)? authentic,
   }) async {
+    Future<bool> real(ChatMessage m) async =>
+        authentic == null || await authentic(theirs.id, m);
     final mine = _chats[theirs.id];
     final members = mine?.members ?? theirs.members;
     if (theirs.kind != ChatKind.broadcast && !members.containsKey(from)) {
@@ -326,7 +360,9 @@ class OfficeChats {
         return false;
       }
       final kept = Chat.fromJson(theirs.toJson())!..messages.clear();
-      kept.messages.addAll(theirs.messages.where(allowed));
+      for (final m in theirs.messages.where(allowed)) {
+        if (await real(m)) kept.messages.add(m);
+      }
       await put(kept);
       kept.messages.forEach(added ?? (_) {});
       return true;
@@ -334,7 +370,7 @@ class OfficeChats {
     final seen = {for (final m in mine.messages) m.id};
     var changed = false;
     for (final m in theirs.messages) {
-      if (seen.contains(m.id) || !allowed(m)) continue;
+      if (seen.contains(m.id) || !allowed(m) || !await real(m)) continue;
       mine.messages.add(m);
       added?.call(m);
       changed = true;

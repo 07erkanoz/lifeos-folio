@@ -46,6 +46,35 @@ class OfficeIdentity {
     ], keyPair: user)).bytes,
   );
 
+  /// This device's signature on [data]: a task's step or a message, so
+  /// that no one else can say it said it.
+  Future<String> signAsDevice(List<int> data) async =>
+      base64Encode((await Ed25519().sign(data, keyPair: device)).bytes);
+
+  /// Whether [signature] is the device whose key is [publicKey] (base64)
+  /// on [data].
+  static Future<bool> signedBy(
+    String publicKey,
+    List<int> data,
+    String signature,
+  ) async {
+    if (signature.isEmpty) return false;
+    try {
+      return await Ed25519().verify(
+        data,
+        signature: Signature(
+          base64Decode(signature),
+          publicKey: SimplePublicKey(
+            base64Decode(publicKey),
+            type: KeyPairType.ed25519,
+          ),
+        ),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Whether [certificate] is the person's key's word for [devicePublic].
   Future<bool> vouches(List<int> devicePublic, String? certificate) async {
     if (certificate == null) return false;
