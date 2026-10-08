@@ -15,6 +15,7 @@ import '../portal/portal_deadline.dart';
 import 'deadline_choice.dart';
 import 'envelope_directives.dart';
 import 'notice_documents.dart';
+import '../editor/suggestions/phrases.dart' show foldPhrase;
 import 'notice_matcher.dart';
 
 /// What the notices' deadlines are made with beyond the database: each
@@ -448,12 +449,17 @@ List<DeadlineRecord> noticeDeadlines(
     } else {
       final c = DeadlineService.computeFromUsuliTebligTarihi(
         usuliTebligTarihi: start.toLocal(),
-        okunmaTarihi: read?.toLocal(),
+        // A rule run from learning goes by the start chosen above (read,
+        // or served when earlier), not by the reading alone.
+        okunmaTarihi: rule.baslangic == SureBaslangici.ogrenme
+            ? start.toLocal()
+            : read?.toLocal(),
         kategori: kategori,
         belgeTuru: tur,
         now: at,
         kurallar: [rule],
       );
+      // Its own event given (above), the rule is always reckoned.
       final item = c.items.single;
       raw = LegalDay.of(item.hamSonGun).key;
       due = LegalDay.of(item.etkiliSonGun).key;
@@ -580,7 +586,7 @@ List<DeadlineRecord> noticeDeadlines(
       // (İİK m.16); an enforcement court's is not (the audit's finding 23).
       if (k.tur == BelgeTuru.tensipZapti &&
           rule == sIcraSikayet &&
-          !m.subject.toLowerCase().contains('cra dairesi')) {
+          !_enforcementOffice('${caseFile?.unitName ?? ''} ${m.subject}')) {
         continue;
       }
       final info = kuralBilgisi(rule);
@@ -1148,4 +1154,14 @@ DeadlineRecord _orphan(
 String _tr(String key) {
   final p = key.split('-');
   return p.length == 3 ? '${p[2]}.${p[1]}.${p[0]}' : key;
+}
+
+/// Whether [unit] names an enforcement office (İcra Dairesi, İcra
+/// Müdürlüğü), not an enforcement court: the package's own unit first.
+bool _enforcementOffice(String unit) {
+  final u = foldPhrase(unit);
+  if (u.contains('icra hukuk') || u.contains('icra ceza')) return false;
+  return u.contains('icra dairesi') ||
+      u.contains('icra mudurlugu') ||
+      u.contains('icra iflas');
 }

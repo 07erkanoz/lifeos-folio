@@ -80,6 +80,37 @@ class SystemNotices {
   }
 
   /// Leave to show them, asked once a run, where the system asks for it.
+  /// Whether this app may show a notification now, as the system says.
+  Future<bool> _allowed() async {
+    try {
+      if (Platform.isAndroid) {
+        return await _plugin
+                .resolvePlatformSpecificImplementation<
+                  AndroidFlutterLocalNotificationsPlugin
+                >()
+                ?.areNotificationsEnabled() ??
+            true;
+      }
+      if (Platform.isIOS) {
+        final o = await _plugin
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >()
+            ?.checkPermissions();
+        return o?.isEnabled ?? true;
+      }
+      if (Platform.isMacOS) {
+        final o = await _plugin
+            .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin
+            >()
+            ?.checkPermissions();
+        return o?.isEnabled ?? true;
+      }
+    } catch (_) {}
+    return true;
+  }
+
   Future<void> askLeave() async {
     if (!await _start()) return;
     if (_asked) return;
@@ -128,6 +159,9 @@ class SystemNotices {
   }) async {
     if (!await _start()) return false;
     if (ask) await askLeave();
+    // Not let show: not shown, whatever the call says (what is told once
+    // is told again later).
+    if (!await _allowed()) return false;
     try {
       await _plugin.show(
         id: id,

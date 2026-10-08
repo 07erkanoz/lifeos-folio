@@ -68,7 +68,7 @@ class ClientFileSync {
       if (may != null && !may(r)) continue;
       if (!ClientFiles.safeId(r.clientId)) continue;
       for (final f in clientFilesOf(r)) {
-        if (!seen.add('${r.clientId}|${f.sha256}')) continue;
+        if (!seen.add('${r.clientId}|${f.sha256}|${f.name}')) continue;
         if (await files.locate(r.clientId, f) != null) continue;
         final bytes = BytesBuilder(copy: false);
         var ok = false;
@@ -92,6 +92,12 @@ class ClientFileSync {
         final target = await files.placeFor(r.clientId, f);
         await target.parent.create(recursive: true);
         await File(target.path).writeAsBytes(all, flush: true);
+        // Taken off, or no longer to be had, while it was written: gone.
+        final after = db.clientRecord(r.id);
+        if (after == null || after.removed || (may != null && !may(after))) {
+          await files.forget(r.clientId, f);
+          continue;
+        }
         brought++;
       }
     }

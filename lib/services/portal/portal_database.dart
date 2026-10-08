@@ -241,6 +241,7 @@ class PortalDatabase {
     if (!columns.contains('confirmed_day')) {
       _db.execute('ALTER TABLE deadline_user ADD COLUMN confirmed_day TEXT');
     }
+    _fillConfirmedDays();
   }
 
   /// Told after the lawyer changed the agenda here, for their other
@@ -615,6 +616,17 @@ class PortalDatabase {
           );
         }
       });
+
+  /// The confirmed day of a confirmation made before it was kept, or come
+  /// from a device that did not send it: read from this one's history.
+  void _fillConfirmedDays() => _db.execute('''
+    UPDATE deadline_user SET confirmed_day = (
+      SELECT h.due_day FROM deadline_history h
+      WHERE h.deadline_id = deadline_user.deadline_id
+        AND h.inputs = deadline_user.confirmed_inputs
+      ORDER BY h.seq DESC LIMIT 1)
+    WHERE confirmed_day IS NULL AND confirmed_inputs IS NOT NULL
+  ''');
 
   /// Merges one channel's answer for the window [from]–[to] (UYGULAMAPLANI
   /// §9.7). Only the web's [complete] answer, without errors and not empty,
@@ -1031,7 +1043,13 @@ class PortalDatabase {
   /// The agenda as the lawyer's other devices take it (docs/buro.md,
   /// Senkron): their own rows, those taken off, and their word on the
   /// notices' deadlines. Notices' old rows stay on each device.
-  Map<String, Object?> agendaExport() => {
+  Map<String, Object?> agendaExport() {
+    // A confirmation of before its day was kept goes with its day.
+    _fillConfirmedDays();
+    return _agendaExport();
+  }
+
+  Map<String, Object?> _agendaExport() => {
     'satirlar': [
       for (final r in _db.select(
         'SELECT * FROM agenda WHERE id NOT IN '
@@ -1253,6 +1271,7 @@ class PortalDatabase {
         changedHere = true;
       }
       mergedNotices = touched;
+      _fillConfirmedDays();
       _db.execute('COMMIT');
     } catch (_) {
       _db.execute('ROLLBACK');

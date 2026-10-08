@@ -23,6 +23,10 @@ extension PortalClients on PortalDatabase {
     CREATE TRIGGER IF NOT EXISTS representation_written
       AFTER INSERT ON case_representation
       BEGIN UPDATE clients_revision SET n = n + 1; END;
+    CREATE TRIGGER IF NOT EXISTS party_written AFTER INSERT ON case_party
+      BEGIN UPDATE clients_revision SET n = n + 1; END;
+    CREATE TRIGGER IF NOT EXISTS party_removed AFTER DELETE ON case_party
+      BEGIN UPDATE clients_revision SET n = n + 1; END;
   ''';
 
   /// Counted up at every client card written or removed, and every word
@@ -350,15 +354,24 @@ extension PortalClients on PortalDatabase {
         final c = Client.fromJson(j);
         if (c == null || c.person != from) continue;
         final kept = clientCard(c.id);
-        if (kept != null && kept.person.isNotEmpty && kept.person != from) {
-          continue;
-        }
+        // Only its owner's word changes a card here; one with no owner
+        // named is this device's own, no one else's to take.
+        if (kept != null && kept.person != from) continue;
         if (kept != null && !c.updated.isAfter(kept.updated)) continue;
         if (!c.office) {
-          if (kept == null) continue;
-          // Unshared by its owner: gone from here, but what this person
-          // wrote of the client.
-          _db.execute('DELETE FROM client WHERE id=?', [c.id]);
+          // Unshared by its owner: nothing of the person kept, but its id,
+          // owner and day, so that an older word of it shared is refused;
+          // what this person wrote of the client stays.
+          _putClient(
+            Client(
+              id: c.id,
+              name: '',
+              updated: c.updated,
+              removed: true,
+              sharedOnce: true,
+              person: from,
+            ),
+          );
           for (final r in _db.select(
             'SELECT id, json FROM client_record WHERE client_id=?',
             [c.id],
@@ -379,13 +392,17 @@ extension PortalClients on PortalDatabase {
       for (final c in clientCards())
         if (c.office && !c.removed) c.id,
     };
-    if (clientsMerge({
-      'muvekkilKayitlari': [
-        for (final j in theirs['muvekkilKayitlari'] as List? ?? const [])
-          if (j is Map && shared.contains(j['muvekkil']) && j['kisi'] == from)
-            j,
-      ],
-    }, money: money)) {
+    if (clientsMerge(
+      {
+        'muvekkilKayitlari': [
+          for (final j in theirs['muvekkilKayitlari'] as List? ?? const [])
+            if (j is Map && shared.contains(j['muvekkil']) && j['kisi'] == from)
+              j,
+        ],
+      },
+      money: money,
+      author: from,
+    )) {
       changed = true;
     }
     return changed;
@@ -394,7 +411,11 @@ extension PortalClients on PortalDatabase {
   /// What another device keeps, merged in: the newer of each card and
   /// record wins; a record locked here stays as it is. True when anything
   /// changed here.
-  bool clientsMerge(Map<String, Object?> theirs, {bool money = true}) {
+  bool clientsMerge(
+    Map<String, Object?> theirs, {
+    bool money = true,
+    String? author,
+  }) {
     var changed = false;
     _transaction(() {
       for (final j in theirs['muvekkiller'] as List? ?? const []) {
@@ -409,6 +430,18 @@ extension PortalClients on PortalDatabase {
         final r = ClientRecord.fromJson(j);
         // Money from, or for, one who may not see it is not taken.
         if (r == null || (!money && r.kind.money)) continue;
+        // From the office, only its writer's own: a record kept here is
+        // changed by no one else, nor moved to another client or kind.
+        if (author != null) {
+          final there = clientRecord(r.id);
+          if (r.person != author) continue;
+          if (there != null &&
+              (there.person != author ||
+                  there.clientId != r.clientId ||
+                  there.kind != r.kind)) {
+            continue;
+          }
+        }
         final kept = clientRecord(r.id);
         if (kept != null && (kept.locked || !r.updated.isAfter(kept.updated))) {
           continue;

@@ -195,7 +195,9 @@ void main() {
         ),
         isTrue,
       );
-      expect(theirs.clientCard('k1'), isNull);
+      // Kept as a mark of its unsharing, nothing of the person in it.
+      expect(theirs.clientCard('k1')!.removed, isTrue);
+      expect(theirs.clientCard('k1')!.name, '');
       // Unshared, nothing of the person goes: its id alone.
       final gone =
           (mine.clientsOfficeExport(money: true, me: 'deniz')['muvekkiller']

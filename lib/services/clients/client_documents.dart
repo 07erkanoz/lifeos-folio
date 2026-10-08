@@ -474,6 +474,10 @@ Future<String> writeClientDocument(
   String name,
   DocModel model,
 ) async {
+  // A client's id from another device names no path.
+  if (!RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(clientId)) {
+    throw ArgumentError('müvekkil kimliği: $clientId');
+  }
   final folder = Directory(p.join(clientsRoot.path, clientId, 'belgeler'));
   await folder.create(recursive: true);
   final safe = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-');

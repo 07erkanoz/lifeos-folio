@@ -57,7 +57,27 @@ class ClientFiles {
     final root = (await _root()).absolute;
     final folder = Directory(p.join(root.path, clientId));
     if (!p.isWithin(root.path, folder.path)) throw ArgumentError(clientId);
+    // A link in place of the client's folder would lead out of the root.
+    if (FileSystemEntity.isLinkSync(folder.path)) throw ArgumentError(clientId);
+    if (await root.exists() && await folder.exists()) {
+      final realRoot = await root.resolveSymbolicLinks();
+      final real = await folder.resolveSymbolicLinks();
+      if (!p.isWithin(realRoot, real)) throw ArgumentError(clientId);
+    }
     return folder;
+  }
+
+  /// Where an earlier Folio kept [f] (its own name, no digest), when it is
+  /// inside the client's folder.
+  Future<File?> _legacy(String clientId, ClientFile f) async {
+    try {
+      final folder = await _folderOf(clientId);
+      final file = File(p.join(folder.path, p.basename(f.path)));
+      if (!p.isWithin(folder.path, file.path)) return null;
+      return file;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// [source] copied into [clientId]'s folder, under its digest's name.
@@ -74,10 +94,23 @@ class ClientFiles {
     } catch (_) {
       return null;
     }
-    if (!await here.exists()) return null;
-    if (FileSystemEntity.isLinkSync(here.path)) return null;
-    final digest = sha256.convert(await here.readAsBytes()).toString();
-    return digest == f.sha256 ? here : null;
+    for (final file in [here, ?await _legacy(clientId, f)]) {
+      if (!await file.exists() || FileSystemEntity.isLinkSync(file.path)) {
+        continue;
+      }
+      final digest = sha256.convert(await file.readAsBytes()).toString();
+      if (digest != f.sha256) continue;
+      // An earlier Folio's file, moved to where it is kept now.
+      if (file.path != here.path) {
+        try {
+          return await file.rename(here.path);
+        } catch (_) {
+          return file;
+        }
+      }
+      return file;
+    }
+    return null;
   }
 
   /// Where [f] is put when brought from another device.
@@ -112,8 +145,12 @@ class ClientFiles {
   /// [f] taken off this device, its folder's file alone.
   Future<void> forget(String clientId, ClientFile f) async {
     try {
-      final file = await placeFor(clientId, f);
-      if (await file.exists()) await file.delete();
+      for (final file in [
+        await placeFor(clientId, f),
+        ?await _legacy(clientId, f),
+      ]) {
+        if (await file.exists()) await file.delete();
+      }
     } catch (_) {}
   }
 }
