@@ -49,13 +49,22 @@ Future<void> showSendToOffice(
   final net = network ?? OfficeNetwork.instance;
   final messenger = ScaffoldMessenger.maybeOf(context);
   final narrow = MediaQuery.sizeOf(context).width < 600;
+  // A short word of what it is, for the one it goes to.
+  final note = TextEditingController();
   Widget list(BuildContext context) =>
-      _Targets(net: net, onPick: (t) => Navigator.pop(context, t));
+      _Targets(net: net, note: note, onPick: (t) => Navigator.pop(context, t));
   final SendTarget? to = narrow
       ? await showModalBottomSheet<SendTarget>(
           context: context,
           showDragHandle: true,
-          builder: (context) => SafeArea(child: list(context)),
+          isScrollControlled: true,
+          builder: (context) => Padding(
+            // Above the keyboard while the note is written.
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: SafeArea(child: list(context)),
+          ),
         )
       : await showDialog<SendTarget>(
           context: context,
@@ -70,8 +79,14 @@ Future<void> showSendToOffice(
             ],
           ),
         );
+  final words = note.text.trim();
+  note.dispose();
   if (to == null) return;
-  final error = await net.sendTo(to, paths, text: text);
+  final error = await net.sendTo(
+    to,
+    paths,
+    text: [words, text].where((s) => s.isNotEmpty).join('\n'),
+  );
   messenger?.showSnackBar(
     SnackBar(
       content: Text(
@@ -85,8 +100,9 @@ Future<void> showSendToOffice(
 }
 
 class _Targets extends StatelessWidget {
-  const _Targets({required this.net, required this.onPick});
+  const _Targets({required this.net, required this.note, required this.onPick});
   final OfficeNetwork net;
+  final TextEditingController note;
   final ValueChanged<SendTarget> onPick;
 
   @override
@@ -96,6 +112,23 @@ class _Targets extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+          child: TextField(
+            key: const ValueKey('send-note'),
+            controller: note,
+            maxLength: 200,
+            maxLines: 2,
+            minLines: 1,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Not (isteğe bağlı)',
+              hintText: 'ör. 2024/318 bilirkişi raporu, yarın bakılacak',
+              counterText: '',
+              isDense: true,
+            ),
+          ),
+        ),
         const Padding(
           padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
           child: Text(

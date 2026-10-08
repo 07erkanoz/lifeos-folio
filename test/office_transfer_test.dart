@@ -7,6 +7,7 @@ import 'package:evrak_convert/services/office/office_identity.dart';
 import 'package:evrak_convert/services/office/office_known.dart';
 import 'package:evrak_convert/services/office/office_ledger.dart';
 import 'package:evrak_convert/services/office/office_link.dart';
+import 'package:evrak_convert/services/office/office_inbox.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_pairing.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -576,6 +577,25 @@ void main() {
       expect(tablet.incomingOffer.value, isNull);
       // Told where it went: it came on its own, to the inbox.
       expect(tablet.arrived.value?.saved.single, endsWith('Not.txt'));
+      // In Gelenler: new, opened, new again, and off with its file.
+      final inbox = OfficeInbox(
+        network: tablet,
+        file: () async => File('${dir.path}/gelenler.json'),
+      );
+      await inbox.start();
+      await until(() => inbox.items.isNotEmpty);
+      final came = inbox.items.single;
+      expect(came.names, ['Not.txt']);
+      expect(inbox.unread, 1);
+      expect(inbox.searchable, isFalse);
+      await inbox.markRead(came);
+      expect(inbox.unread, 0);
+      await inbox.markUnread(came);
+      expect(inbox.unread, 1);
+      await inbox.remove(came);
+      expect(File(came.paths.single).existsSync(), isFalse);
+      await inbox.reload();
+      expect(inbox.items, isEmpty);
       // Known to each other now, as their own.
       await until(
         () =>

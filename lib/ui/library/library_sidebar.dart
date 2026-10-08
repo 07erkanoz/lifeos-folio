@@ -55,6 +55,9 @@ class LibrarySidebar extends StatelessWidget {
   /// messages to go to.
   final bool office;
 
+  /// Gelenler's unopened count; null while nothing has come.
+  final int? inbox;
+
   /// Widens the panel folded on the UYAP pages, or folds it again; null
   /// where the window's width decides alone.
   final VoidCallback? onTogglePanel;
@@ -80,6 +83,7 @@ class LibrarySidebar extends StatelessWidget {
     this.uyapNotices = 0,
     this.messagesUnread = 0,
     this.office = false,
+    this.inbox,
     this.tasksOpen = 0,
     this.onTogglePanel,
   });
@@ -243,6 +247,16 @@ class LibrarySidebar extends StatelessWidget {
                   null,
                   key: const ValueKey('sync-nav'),
                 ),
+                if (inbox case final n?)
+                  _nav(
+                    context,
+                    Icons.inbox_outlined,
+                    'Gelenler',
+                    'gelenler',
+                    null,
+                    key: const ValueKey('inbox-nav'),
+                    badge: n > 0 ? _badge(context, '$n', danger: true) : null,
+                  ),
                 if (office) ...[
                   _nav(
                     context,

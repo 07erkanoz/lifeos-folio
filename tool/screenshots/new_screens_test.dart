@@ -28,6 +28,8 @@ import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/ui/office/office_network_page.dart';
 import 'package:evrak_convert/ui/office/send_to_office.dart';
+import 'package:evrak_convert/ui/office/inbox_page.dart';
+import 'package:evrak_convert/services/office/office_inbox.dart';
 import 'package:evrak_convert/ui/sync/sync_page.dart';
 import 'package:evrak_convert/services/sync/own_sync.dart';
 import 'package:evrak_convert/services/sync/folder_sync.dart';
@@ -794,6 +796,28 @@ void main() {
     tester.view.reset();
   });
 
+  testWidgets('gelenler', (tester) async {
+    final inbox = _ShotInbox();
+    for (final (size, name) in [
+      (logical, 'gelenler'),
+      (const Size(390, 844), 'gelenler-telefon'),
+    ]) {
+      tester.view.physicalSize = size * pixelRatio;
+      tester.view.devicePixelRatio = pixelRatio;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: InboxPage(inbox: inbox, onOpen: (_) {}),
+          ),
+        ),
+      );
+      await tester.pump();
+      await _shot(tester, name);
+    }
+    tester.view.reset();
+  });
+
   testWidgets('send to office', (tester) async {
     final net = _Targets();
     for (final (size, name) in [
@@ -881,4 +905,47 @@ class _ShotSessions implements SessionHolder {
   void renewMobileThrough(Future<Map<String, Object?>?> Function()? ask) {}
   @override
   void listenMobileTokens(VoidCallback changed) {}
+}
+
+class _ShotInbox extends OfficeInbox {
+  _ShotInbox() : super(network: OfficeNetwork());
+  final _now = DateTime.now();
+  @override
+  List<InboxItem> get items => [
+    InboxItem(
+      id: '1',
+      from: 'Av. Deniz Kaya',
+      device: 'Telefon',
+      names: const ['2024-12-31 Reddiyat Makbuzu.pdf'],
+      paths: const ['/yok/a.pdf'],
+      size: 453025,
+      note: '2024/318 bilirkişi raporu, yarın bakılacak',
+      at: _now.subtract(const Duration(minutes: 5)),
+    ),
+    InboxItem(
+      id: '2',
+      from: 'Av. Murat Er',
+      device: 'murat-pc',
+      names: const ['Bilirkişi Raporuna İtiraz.udf'],
+      paths: const ['/yok/b.udf'],
+      size: 48000,
+      note: 'Yarın öğlene kadar bakabilir misin?',
+      at: _now.subtract(const Duration(hours: 2)),
+      withMessage: true,
+    ),
+    InboxItem(
+      id: '3',
+      from: 'Av. Deniz Kaya',
+      device: 'Telefon',
+      names: const ['Keşif 1.jpg', 'Keşif 2.jpg', 'Keşif 3.jpg'],
+      paths: const ['/yok/c.jpg'],
+      size: 6200000,
+      note: '',
+      at: _now.subtract(const Duration(days: 1)),
+    ),
+  ];
+  @override
+  bool isNew(InboxItem i) => i.id != '3';
+  @override
+  Future<void> reload() async {}
 }

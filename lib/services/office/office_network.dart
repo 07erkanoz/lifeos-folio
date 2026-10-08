@@ -271,10 +271,38 @@ class OfficeNetwork extends ChangeNotifier {
         final old = jsonDecode(await file.readAsString());
         if (old is List) list = old;
       }
-      list.insert(0, t.toJson());
+      list.insert(0, recordOf(t));
       if (list.length > 500) list = list.sublist(0, 500);
       await file.writeAsString(jsonEncode(list));
     } catch (_) {}
+  }
+
+  /// [t] as the transfers' record keeps it; a file with a message has the
+  /// message's words for its note.
+  Map<String, Object?> recordOf(OfficeTransfer t) {
+    final j = t.toJson();
+    final chat = chats.of('${t.meta['sohbet'] ?? ''}');
+    if (t.note.isEmpty && chat != null) {
+      final m = chat.messages.where((m) => m.id == t.meta['mesaj']).firstOrNull;
+      if (m != null && m.text.isNotEmpty) j['not'] = m.text;
+    }
+    return j;
+  }
+
+  /// The transfers' record, the newest first (see [recordOf]).
+  Future<List<Map<String, Object?>>> transferLog() async {
+    try {
+      final file = await _logFile();
+      if (!await file.exists()) return const [];
+      final list = jsonDecode(await file.readAsString());
+      return [
+        if (list is List)
+          for (final e in list)
+            if (e is Map) e.cast<String, Object?>(),
+      ];
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// A device that asked to know this one: shown wherever the user is.

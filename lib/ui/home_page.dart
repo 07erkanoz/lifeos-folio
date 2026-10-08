@@ -4,6 +4,7 @@ import 'agenda/mobile_connect.dart';
 import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import 'agenda/uyap_notices_page.dart';
+import '../services/office/office_inbox.dart';
 import '../services/sync/folder_sync.dart';
 import '../services/sync/own_sync.dart';
 import '../services/office/office_network.dart';
@@ -58,6 +59,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../services/platform/file_actions.dart';
+import 'office/inbox_page.dart';
 import 'sync/sync_page.dart';
 import 'office/send_to_office.dart';
 import 'office/office_network_page.dart';
@@ -736,6 +738,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       FolderSync.instance.onAdded = (path) =>
           unawaited(_library.addPaths([path]));
       unawaited(FolderSync.instance.start());
+      OfficeInbox.instance.addListener(_inboxChanged);
+      unawaited(OfficeInbox.instance.start());
       // New UYAP notifications, told on the computer's or phone's own.
       PortalSync.instance.onNewNotices = (n) => unawaited(
         PortalDatabase.shared().then((db) => tellUyapNotices(db, n)),
@@ -883,6 +887,24 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  /// Gelenler's folder into the archive's search, or out of it.
+  Future<void> _inboxSearchable(bool on) async {
+    try {
+      final inbox = (await OfficeNetwork.instance.inbox()).path;
+      final kept = _library.sources.where((s) => p.equals(s.path, inbox));
+      if (on && kept.isEmpty) await _library.addPaths([inbox]);
+      if (!on) {
+        for (final s in kept.toList()) {
+          await _library.removeSource(s.id);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _inboxChanged() {
+    if (mounted) setState(() {});
+  }
+
   /// Files came on their own: the inbox is searched in the archive, and
   /// the user is told where, with the first a tap away.
   Future<void> _filesArrived() async {
@@ -890,12 +912,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final t = net.arrived.value;
     if (t == null || !mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
-    try {
-      final inbox = (await net.inbox()).path;
-      if (!_library.sources.any((s) => p.equals(s.path, inbox))) {
-        await _library.addPaths([inbox]);
-      }
-    } catch (_) {}
+    // Searched in the archive only when the user said so in Gelenler:
+    // what comes may be confidential.
+    if (OfficeInbox.instance.searchable) {
+      await _inboxSearchable(true);
+    }
     if (!mounted) return;
     final from = t.peer.device.isNotEmpty ? t.peer.device : t.peer.name;
     final first = t.saved.first;
@@ -905,7 +926,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         duration: const Duration(seconds: 8),
         content: Text(
           '${t.saved.length == 1 ? p.basename(first) : '${t.saved.length} dosya'}'
-          ' geldi · Gönderen: $from. Folio Gelenler klasöründe.',
+          ' geldi · Gönderen: $from'
+          '${t.note.isNotEmpty ? ' · “${t.note}”' : ''}. Gelenler’de.',
         ),
         action: FileLibrary.supports(first)
             ? SnackBarAction(
@@ -945,6 +967,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     OfficeNetwork.instance.removeListener(_officeCounted);
     OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
     OfficeNetwork.instance.arrived.removeListener(_filesArrived);
+    OfficeInbox.instance.removeListener(_inboxChanged);
     _stopPreviewSpeech();
     UpdateCheck.instance.available.removeListener(_updateAvailable);
     DocumentHistory.recoveryChanges.removeListener(_checkRecovery);
@@ -1167,6 +1190,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'bildirim' ||
         value == 'buro' ||
         value == 'senkron' ||
+        value == 'gelenler' ||
         value == 'gorevler' ||
         value == 'mesajlar' ||
         value == 'ayarlar' ||
@@ -1193,6 +1217,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'bildirim' ||
       group == 'buro' ||
       group == 'senkron' ||
+      group == 'gelenler' ||
       group == 'gorevler' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
@@ -1205,6 +1230,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'bildirim' ||
       group == 'buro' ||
       group == 'senkron' ||
+      group == 'gelenler' ||
       group == 'gorevler' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
@@ -1809,6 +1835,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       ? _group != 'images' &&
                                             _group != 'buro' &&
                                             _group != 'senkron' &&
+                                            _group != 'gelenler' &&
                                             _group != 'gorevler' &&
                                             _group != 'mesajlar' &&
                                             !_isUyapGroup(_group)
@@ -2027,6 +2054,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ? _noticesPage()
                                               : _group == 'buro'
                                               ? const OfficeNetworkPage()
+                                              : _group == 'gelenler'
+                                              ? InboxPage(
+                                                  onSearchable:
+                                                      _inboxSearchable,
+                                                  onOpen: (path) => unawaited(
+                                                    _openRecent(
+                                                      EvrakFile.fromPath(path),
+                                                    ),
+                                                  ),
+                                                )
                                               : _group == 'senkron'
                                               ? SyncPage(
                                                   archiveFolders: () => [
@@ -2289,6 +2326,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uyapNotices: _uyapNoticesUnread,
     messagesUnread: _officeUnread,
     office: _officeFounded,
+    inbox: OfficeInbox.instance.items.isEmpty
+        ? null
+        : OfficeInbox.instance.unread,
     tasksOpen: _officeTasks,
     uyapAvailable: true,
     showHome: !(Platform.isAndroid || Platform.isIOS),
@@ -2313,6 +2353,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uyapNotices: _uyapNoticesUnread,
     messagesUnread: _officeUnread,
     office: _officeFounded,
+    inbox: OfficeInbox.instance.items.isEmpty
+        ? null
+        : OfficeInbox.instance.unread,
     tasksOpen: _officeTasks,
     uyapCases: _portfolioOpen ?? _uyapCases.length,
     onHome: () {

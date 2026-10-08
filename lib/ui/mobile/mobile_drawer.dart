@@ -24,6 +24,7 @@ class MobileDrawer extends StatelessWidget {
     this.uyapNotices = 0,
     this.messagesUnread = 0,
     this.office = false,
+    this.inbox,
     this.tasksOpen = 0,
     this.uyapCases = 0,
     this.sync,
@@ -42,6 +43,9 @@ class MobileDrawer extends StatelessWidget {
   /// Whether an office is founded; without one there are no tasks or
   /// messages to go to.
   final bool office;
+
+  /// Gelenler's unopened count; null while nothing has come.
+  final int? inbox;
   final PortalSync? sync;
 
   Widget _section(String text) => Padding(
@@ -234,6 +238,22 @@ class MobileDrawer extends StatelessWidget {
                           selected: !home && group == 'senkron',
                           onTap: () => onGroup('senkron'),
                         ),
+                        if (inbox case final n?)
+                          _item(
+                            context,
+                            key: const ValueKey('drawer-inbox'),
+                            icon: const Icon(Icons.inbox_outlined),
+                            label: 'Gelenler',
+                            selected: !home && group == 'gelenler',
+                            trailing: n > 0
+                                ? _pill(
+                                    '$n',
+                                    AgendaColors.deadline,
+                                    Colors.white,
+                                  )
+                                : null,
+                            onTap: () => onGroup('gelenler'),
+                          ),
                         if (office) ...[
                           _item(
                             context,

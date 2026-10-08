@@ -468,5 +468,12 @@ class OfficeTransfer extends ChangeNotifier {
     'durum': _state.name,
     'yollar': saved,
     if (_reason != null) 'neden': _reason,
+    // What it came with: a message, a task's case, a folder kept alike.
+    if (meta.containsKey('senkron'))
+      'tur': 'senkron'
+    else if (meta.containsKey('gorev'))
+      'tur': 'gorev'
+    else if (meta.containsKey('sohbet'))
+      'tur': 'sohbet',
   };
 }
