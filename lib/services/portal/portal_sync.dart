@@ -384,6 +384,7 @@ class PortalSync extends ChangeNotifier {
     await _loadDeadlineContext();
     await matchNoticesGently(db);
     notifyListeners();
+    await _fetchMissingParties(db);
     final root = await _packageRoot();
     if (root != null) {
       await fetchNoticePackages(
@@ -408,6 +409,7 @@ class PortalSync extends ChangeNotifier {
         db,
         onRead: (id) {
           tieByCaseFile(db, id);
+          _keepPackageParties(db, id);
           refreshNoticeDeadlines(
             db,
             parties: NoticeDeadlineContext.parties,
@@ -487,10 +489,13 @@ class PortalSync extends ChangeNotifier {
   /// whose a notice's deadline is.
   Future<void> _loadDeadlineContext() async {
     final parties = <String, List<TarafKaydi>>{};
+    final fetched = <String, List<UyapParty>>{};
     try {
       for (final (record, _) in await UyapCaseStore.instance.cases()) {
         if (record.parties.isEmpty) continue;
-        parties[caseKey(record.number, record.court)] = [
+        final key = caseKey(record.number, record.court);
+        fetched[key] = record.parties;
+        parties[key] = [
           for (final t in record.parties) (rol: t.role, vekil: t.lawyer),
         ];
       }
@@ -504,8 +509,117 @@ class PortalSync extends ChangeNotifier {
         lawyer = (await LawyerProfile.load()).lawyer?.name ?? '';
       } catch (_) {}
     }
+    // Every fetched case's parties kept in the database too, for the
+    // clients' accounts to come; and the parties read on their own for a
+    // notice's case (see [_fetchMissingParties]), where the case itself was
+    // not fetched.
+    try {
+      final db = await _database();
+      for (final e in fetched.entries) {
+        db.saveCaseParties(e.key, e.value, source: 'uyap');
+      }
+      for (final e in db.caseParties().entries) {
+        parties.putIfAbsent(
+          e.key,
+          () => [for (final t in e.value) (rol: t.role, vekil: t.lawyer)],
+        );
+      }
+    } catch (_) {}
     NoticeDeadlineContext.parties = parties;
     NoticeDeadlineContext.lawyer = lawyer.isEmpty ? null : lawyer;
+  }
+
+  /// The parties of every case a notice is tied to that Folio knows none
+  /// of, read from UYAP on their own (not the whole case, nor its
+  /// documents), a few seconds apart: for whose its deadlines are. A case
+  /// UYAP would not tell is asked again a day later. The notices of the
+  /// cases read have their deadlines made again.
+  Future<void> _fetchMissingParties(PortalDatabase db) async {
+    if (!_mobile.connected && !_web.connected) return;
+    final known = NoticeDeadlineContext.parties.keys.toSet();
+    final now = DateTime.now();
+    final keys = <String>{
+      for (final n in db.notices())
+        if (n.caseKey case final key? when !known.contains(key))
+          if (DateTime.tryParse(db.meta('taraflar_denendi:$key') ?? '')
+              case final tried
+              when tried == null ||
+                  now.difference(tried) > const Duration(days: 1))
+            key,
+    };
+    final read = <String>{};
+    for (final key in keys.take(30)) {
+      final kase = db.caseOf(key);
+      if (kase == null) continue;
+      db.setMeta('taraflar_denendi:$key', now.toIso8601String());
+      final parties = await _partiesFromUyap(kase);
+      if (parties != null && parties.isNotEmpty) {
+        db.saveCaseParties(key, parties, source: 'taraflar');
+        read.add(key);
+      }
+      if (_packageGap > Duration.zero) await Future<void>.delayed(_packageGap);
+    }
+    if (read.isEmpty) return;
+    await _loadDeadlineContext();
+    refreshNoticeDeadlines(
+      db,
+      parties: NoticeDeadlineContext.parties,
+      lawyer: NoticeDeadlineContext.lawyer,
+      only: {
+        for (final n in db.notices())
+          if (read.contains(n.caseKey)) n.message.id,
+      },
+    );
+    notifyListeners();
+  }
+
+  /// The parties a notice's package lists (dosyaBilgileri), kept for its
+  /// case where UYAP gave none: names and roles, without lawyers.
+  void _keepPackageParties(PortalDatabase db, String id) {
+    final key = db.notice(id)?.caseKey;
+    if (key == null) return;
+    final file = db
+        .noticeDocuments(id)
+        .map((d) => d.caseFile)
+        .whereType<NoticeCaseFile>()
+        .firstOrNull;
+    if (file == null || file.parties.isEmpty) return;
+    db.saveCaseParties(key, [
+      for (final t in file.parties)
+        UyapParty(t.name, t.role, '', t.institution ? 'Kurum' : 'Kişi'),
+    ], source: 'paket');
+  }
+
+  /// A case's parties from UYAP Mobil, else from the web portal; null when
+  /// neither would tell.
+  Future<List<UyapParty>?> _partiesFromUyap(PortalCase kase) async {
+    final details = kase.details?.value ?? const <String, Object?>{};
+    final mobileId = kase.ids[PortalChannel.uyapMobile];
+    if (_mobile.connected && mobileId != null && mobileId.isNotEmpty) {
+      try {
+        return [
+          for (final p in await _mobile.parties(
+            mobileId,
+            caseType: '${details['dosyaTurKod'] ?? ''}',
+          ))
+            UyapParty.fromMap(p),
+        ];
+      } catch (_) {}
+    }
+    final webId = kase.ids[PortalChannel.uyapWeb];
+    if (_web.connected && webId != null && webId.isNotEmpty) {
+      try {
+        return await _web.parties(
+          UyapCase(
+            webId,
+            kase.number,
+            '${details['birimId'] ?? ''}',
+            kase.court,
+          ),
+        );
+      } catch (_) {}
+    }
+    return null;
   }
 
   static const _uetsAccountKey = 'uets-account-key';

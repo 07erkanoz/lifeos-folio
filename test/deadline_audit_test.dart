@@ -14,6 +14,7 @@ import 'package:evrak_convert/services/uets/envelope_directives.dart';
 import 'package:evrak_convert/services/uets/notice_deadlines.dart';
 import 'package:evrak_convert/services/uets/notice_matcher.dart';
 import 'package:evrak_convert/services/uets/uets_api.dart';
+import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // What the audit of 8 October 2026 found wrong in the deadline engine
@@ -485,6 +486,50 @@ void main() {
       ).single;
       expect(r.ownership, AidiyetSinyali.olasiBizim.name);
       expect(r.reasons.map((x) => x.text).join(), contains('siz belirttiniz'));
+    });
+  });
+
+  group('the cases’ parties, kept in the database', () {
+    test('a row a party; a better source replaces a poorer one, never the '
+        'other way; the same parties are not written again', () {
+      const k = 'k';
+      db.saveCaseParties(k, const [
+        UyapParty('AYŞE ÖRNEK', 'Davacı', '', 'Kişi'),
+      ], source: 'paket');
+      db.saveCaseParties(k, const [
+        UyapParty('AYŞE ÖRNEK', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+        UyapParty('ÖRNEK A.Ş.', 'Davalı', 'Av. Murat Er', 'Kurum'),
+      ], source: 'uyap');
+      db.saveCaseParties(k, const [
+        UyapParty('YANLIŞ', 'Davacı', '', 'Kişi'),
+      ], source: 'paket');
+      final kept = db.caseParties(caseKey: k)[k]!;
+      expect(kept.map((t) => (t.name, t.lawyer)), [
+        ('AYŞE ÖRNEK', 'Av. Deniz Kaya'),
+        ('ÖRNEK A.Ş.', 'Av. Murat Er'),
+      ]);
+    });
+
+    test('the lawyer’s clients: their word, else UYAP’s lawyers', () {
+      const k = 'k';
+      db.saveCaseParties(k, const [
+        UyapParty('AYŞE ÖRNEK', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+        UyapParty('ÖRNEK A.Ş.', 'Davalı', 'Av. Murat Er', 'Kurum'),
+      ], source: 'uyap');
+      expect(db.clientsOf(k, lawyer: 'Av. Deniz Kaya'), [
+        (ad: 'AYŞE ÖRNEK', rol: 'Davacı'),
+      ]);
+      db.setRepresentation(k, const [(ad: 'ÖRNEK A.Ş.', rol: 'Davalı')]);
+      expect(db.clientsOf(k, lawyer: 'Av. Deniz Kaya'), [
+        (ad: 'ÖRNEK A.Ş.', rol: 'Davalı'),
+      ]);
+    });
+
+    test('heirs, a guardian and a child pushed into crime stand on their '
+        'sides', () {
+      expect(tekYanda(['Mirasçı', 'Vasi Adayı']), isTrue);
+      expect(tekYanda(['Suça Sürüklenen Çocuk']), isTrue);
+      expect(tekYanda(['Davacı-Karşı Davalı']), isFalse);
     });
   });
 }

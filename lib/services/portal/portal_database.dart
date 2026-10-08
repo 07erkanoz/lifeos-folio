@@ -15,6 +15,8 @@ import '../uets/notice_matcher.dart';
 import '../uets/uets_api.dart';
 import 'portal_hearing.dart';
 import 'uyap_notice.dart';
+import '../legal/deadlines/aidiyet.dart' show vekilOlarakGeciyor;
+import '../uyap/uyap_web_service.dart' show UyapParty;
 
 /// A UETS notification as kept, with the case it is tied to.
 class KeptNotice {
@@ -164,6 +166,12 @@ class PortalDatabase {
         state TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', note TEXT,
         reader INTEGER NOT NULL, read_at TEXT NOT NULL,
         PRIMARY KEY(notice_id, seq));
+      CREATE TABLE IF NOT EXISTS case_party (
+        case_key TEXT NOT NULL, seq INTEGER NOT NULL, ad TEXT NOT NULL,
+        rol TEXT NOT NULL, vekil TEXT NOT NULL DEFAULT '',
+        tur TEXT NOT NULL DEFAULT '', kaynak TEXT NOT NULL,
+        alindi TEXT NOT NULL, PRIMARY KEY(case_key, seq));
+      CREATE INDEX IF NOT EXISTS case_party_ad ON case_party(ad);
       CREATE TABLE IF NOT EXISTS case_representation (
         case_key TEXT PRIMARY KEY, json TEXT NOT NULL, updated TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS deadline_choice (
@@ -1259,6 +1267,94 @@ class PortalDatabase {
       _db.execute('ROLLBACK');
       rethrow;
     }
+  }
+
+  /// A case's parties as UYAP gave them, one row each: name, role, its
+  /// lawyers, person or institution, and where they came from ('uyap', a
+  /// case fetched; 'taraflar', the parties read on their own; 'paket', a
+  /// notice's package). All of a case's at once, in place of those kept
+  /// before; a source no better than the one kept does not replace it.
+  /// Kept for whose a deadline is, and for the clients' own accounts to
+  /// come.
+  void saveCaseParties(
+    String caseKey,
+    List<UyapParty> parties, {
+    required String source,
+  }) {
+    if (parties.isEmpty) return;
+    const rank = {'paket': 0, 'taraflar': 1, 'uyap': 2};
+    final kept = _db.select(
+      'SELECT kaynak FROM case_party WHERE case_key=? LIMIT 1',
+      [caseKey],
+    );
+    if (kept.isNotEmpty &&
+        (rank[kept.first['kaynak']] ?? 0) > (rank[source] ?? 0)) {
+      return;
+    }
+    // The same parties from the same source: kept as they are, with the
+    // day they came.
+    final same = caseParties(caseKey: caseKey)[caseKey];
+    if (kept.isNotEmpty &&
+        kept.first['kaynak'] == source &&
+        same != null &&
+        same.length == parties.length &&
+        [
+          for (var i = 0; i < same.length; i++)
+            same[i].name == parties[i].name &&
+                same[i].role == parties[i].role &&
+                same[i].lawyer == parties[i].lawyer &&
+                same[i].kind == parties[i].kind,
+        ].every((x) => x)) {
+      return;
+    }
+    final at = DateTime.now().toIso8601String();
+    _db.execute('BEGIN');
+    try {
+      _db.execute('DELETE FROM case_party WHERE case_key=?', [caseKey]);
+      for (var i = 0; i < parties.length; i++) {
+        final t = parties[i];
+        _db.execute(
+          'INSERT INTO case_party(case_key, seq, ad, rol, vekil, tur, kaynak, '
+          'alindi) VALUES(?,?,?,?,?,?,?,?)',
+          [caseKey, i, t.name, t.role, t.lawyer, t.kind, source, at],
+        );
+      }
+      _db.execute('COMMIT');
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  /// Every case's parties kept, by case key; of [caseKey] alone when given.
+  Map<String, List<UyapParty>> caseParties({String? caseKey}) {
+    final out = <String, List<UyapParty>>{};
+    for (final r in _db.select(
+      'SELECT * FROM case_party'
+      '${caseKey == null ? '' : ' WHERE case_key=?'} ORDER BY case_key, seq',
+      [?caseKey],
+    )) {
+      (out[r['case_key'] as String] ??= []).add(
+        UyapParty(
+          r['ad'] as String,
+          r['rol'] as String,
+          r['vekil'] as String,
+          r['tur'] as String,
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// The lawyer's clients in [caseKey]: the parties they said they act for,
+  /// else those whose lawyers name [lawyer] in UYAP.
+  List<({String ad, String rol})> clientsOf(String caseKey, {String? lawyer}) {
+    final said = representation(caseKey);
+    if (said.isNotEmpty) return said;
+    return [
+      for (final t in caseParties(caseKey: caseKey)[caseKey] ?? const [])
+        if (vekilOlarakGeciyor(t.lawyer, lawyer)) (ad: t.name, rol: t.role),
+    ];
   }
 
   /// Whom the lawyer said they act for in the case [caseKey]: each party's

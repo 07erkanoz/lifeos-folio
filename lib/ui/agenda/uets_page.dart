@@ -1214,8 +1214,17 @@ class _UetsPageState extends State<UetsPage> {
 
   void _askParties(String key, KeptNotice n) {
     if (!_partiesAsked.add(key)) return;
-    // The package's own list of the case's parties, at once; UYAP's, with
-    // the lawyers, in its place once read.
+    // The parties kept for the case, with their lawyers, at once; else the
+    // package's own list of them; UYAP's record, once read, in their place.
+    final kept = _db?.caseParties(caseKey: key)[key] ?? const <UyapParty>[];
+    if (kept.isNotEmpty) {
+      _partiesOf[key] = [
+        for (final t in kept)
+          if (t.name.trim().isNotEmpty)
+            (ad: t.name, rol: t.role, vekil: t.lawyer),
+      ];
+      return;
+    }
     final file = (_db?.noticeDocuments(n.message.id) ?? const [])
         .map((d) => d.caseFile)
         .whereType<NoticeCaseFile>()

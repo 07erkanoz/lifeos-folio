@@ -161,13 +161,17 @@ _Yan _yan(String rol) {
       has('katilan') ||
       has('magdur') ||
       has('basvuran') ||
-      // The one who asks in a non-contentious case.
-      has('talep eden')) {
+      // The ones who ask in a non-contentious case: the applicant, the
+      // heirs asking for a certificate, the guardian proposed.
+      has('talep eden') ||
+      has('mirasci') ||
+      has('vasi')) {
     return _Yan.aktif;
   }
   if (has('davali') ||
       has('borclu') ||
       has('sanik') ||
+      has('suca suruklenen') ||
       has('supheli') ||
       has('karsi taraf')) {
     return _Yan.pasif;
