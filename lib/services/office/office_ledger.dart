@@ -336,6 +336,7 @@ class OfficeLedger {
     OfficeIdentity identity,
     KnownDevice device, {
     required String consent,
+    required String certificate,
   }) async {
     if (!exists) return 'Önce bir büro kurun.';
     if (member(identity.deviceId) == null) return 'Bu cihaz büroda değil.';
@@ -345,6 +346,11 @@ class OfficeLedger {
       'cihaz': device.deviceId,
       'dk': device.publicKey,
       'onay': consent,
+      // Both devices under one person's key: the member's and the new one's
+      // certificates by it, and the key.
+      'up': base64Encode(identity.userPublic.bytes),
+      'uc': certificate,
+      'mc': await identity.userCertificate(),
       'c': device.device,
       'p': device.platform.name,
       'buro': officeId,
@@ -524,6 +530,22 @@ class OfficeLedger {
               key,
               consentOf(office, signer.person, subject),
               consent,
+            )) {
+          continue;
+        }
+        // And proof that it is: one person's key vouches for both.
+        final up = r['up'], uc = r['uc'], mc = r['mc'];
+        if (up is! String || uc is! String || mc is! String) continue;
+        final userKey = base64Decode(up);
+        if (!await OfficeIdentity.vouchedBy(
+              userKey,
+              base64Decode(key),
+              uc,
+            ) ||
+            !await OfficeIdentity.vouchedBy(
+              userKey,
+              base64Decode(signer.publicKey),
+              mc,
             )) {
           continue;
         }

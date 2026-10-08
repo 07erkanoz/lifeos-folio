@@ -453,7 +453,8 @@ class _SyncPageState extends State<SyncPage> {
         ],
       ),
     );
-    if (path != null) await _folders.share(path);
+    if (path == null || !mounted) return;
+    await _share(path);
   }
 
   Future<void> _join(OfferedFolder o) async {
@@ -591,5 +592,16 @@ class _SyncPageState extends State<SyncPage> {
         ),
       ),
     );
+  }
+
+  /// A folder to keep alike: chosen, or dropped on the page.
+  Future<void> _share(String path) async {
+    final why = _folders.whyNot(path);
+    if (why != null) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(why)));
+      return;
+    }
+    await _folders.share(path);
   }
 }

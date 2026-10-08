@@ -139,14 +139,24 @@ void main() {
   test('a member adds a device of theirs only with its own word', () async {
     final (deniz, denizPeer, _) = await device('Av. Deniz Kaya');
     final (mert, _, mertKnown) = await device('Stj. Av. Mert Yıldız');
-    final (phone, _, phoneKnown) = await device('Av. Deniz Kaya');
-    final (_, _, strangerKnown) = await device('Yabancı');
+    final (phoneAlone, _, phoneKnown) = await device('Av. Deniz Kaya');
+    // Paired as the same person's, the phone holds the founder's key.
+    final phone = await phoneAlone.adoptUser(
+      await deniz.userSeed(),
+      store: _Store(),
+    );
+    final (stranger, _, strangerKnown) = await device('Yabancı');
     final l = ledger('kendi');
     await l.found(deniz, denizPeer, 'Kaya Hukuk Bürosu');
     await l.admit(deniz, mertKnown, OfficeRole.trainee);
     // A device that did not say so is not taken in as anyone's.
     expect(
-      await l.addOwnDevice(mert, strangerKnown, consent: 'uydurma'),
+      await l.addOwnDevice(
+        mert,
+        strangerKnown,
+        consent: 'uydurma',
+        certificate: await stranger.userCertificate(),
+      ),
       isNotNull,
     );
     expect(l.member(strangerKnown.deviceId), isNull);
@@ -154,7 +164,25 @@ void main() {
     final consent = await phone.signAsDevice(
       OfficeLedger.consentOf(l.officeId!, deniz.deviceId, phone.deviceId),
     );
-    expect(await l.addOwnDevice(deniz, phoneKnown, consent: consent), isNull);
+    // Its own word alone, under another person's key, is not enough.
+    expect(
+      await l.addOwnDevice(
+        deniz,
+        phoneKnown,
+        consent: consent,
+        certificate: await phoneAlone.userCertificate(),
+      ),
+      isNotNull,
+    );
+    expect(
+      await l.addOwnDevice(
+        deniz,
+        phoneKnown,
+        consent: consent,
+        certificate: await phone.userCertificate(),
+      ),
+      isNull,
+    );
     final m = l.member(phone.deviceId)!;
     expect(
       (m.person, m.role, m.name),
@@ -167,7 +195,12 @@ void main() {
       OfficeLedger.consentOf(l.officeId!, deniz.deviceId, other.deviceId),
     );
     expect(
-      await l.addOwnDevice(mert, otherKnown, consent: forDeniz),
+      await l.addOwnDevice(
+        mert,
+        otherKnown,
+        consent: forDeniz,
+        certificate: await other.userCertificate(),
+      ),
       isNotNull,
     );
     // The founder's phone is no second manager: the last stays.

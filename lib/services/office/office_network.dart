@@ -413,6 +413,7 @@ class OfficeNetwork extends ChangeNotifier {
         'onay': await identity.signAsDevice(
           OfficeLedger.consentOf(office, person, identity.deviceId),
         ),
+        'uc': await identity.userCertificate(),
       },
       null,
     );
@@ -946,9 +947,15 @@ class OfficeNetwork extends ChangeNotifier {
       'buro-katil',
       body: {'buro': office, 'kisi': me},
     );
-    final consent = answer?['onay'];
-    if (consent is! String) return;
-    if (await ledger.addOwnDevice(identity, d, consent: consent) == null) {
+    final consent = answer?['onay'], certificate = answer?['uc'];
+    if (consent is! String || certificate is! String) return;
+    if (await ledger.addOwnDevice(
+          identity,
+          d,
+          consent: consent,
+          certificate: certificate,
+        ) ==
+        null) {
       notifyListeners();
       unawaited(_shareLedger());
       await _queueForNewDevices();

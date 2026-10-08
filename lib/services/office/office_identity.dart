@@ -75,6 +75,30 @@ class OfficeIdentity {
     }
   }
 
+  /// Whether [certificate] is [userPublic]'s word for [devicePublic]:
+  /// another person's key than this device's, as the ledger checks it.
+  static Future<bool> vouchedBy(
+    List<int> userPublic,
+    List<int> devicePublic,
+    String certificate,
+  ) async {
+    try {
+      return await Ed25519().verify(
+        [
+          ...utf8.encode(_cert),
+          ...utf8.encode(idOf(devicePublic)),
+          ...devicePublic,
+        ],
+        signature: Signature(
+          base64Decode(certificate),
+          publicKey: SimplePublicKey(userPublic, type: KeyPairType.ed25519),
+        ),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Whether [certificate] is the person's key's word for [devicePublic].
   Future<bool> vouches(List<int> devicePublic, String? certificate) async {
     if (certificate == null) return false;

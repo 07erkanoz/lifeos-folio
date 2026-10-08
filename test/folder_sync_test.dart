@@ -79,7 +79,9 @@ void main() {
       Directory('${shared.path}/2026').createSync();
       File('${shared.path}/2026/Cevap.udf').writeAsStringSync('cevap');
       File('${shared.path}/notlar.tmp').writeAsStringSync('alınmaz');
-      final f = await onPc.share(shared.path);
+      final f = (await onPc.share(shared.path))!;
+      // One inside another is not kept alike.
+      expect(onPc.whyNot('${shared.path}/2026'), isNotNull);
       await pc.syncOwn();
       await until(() => onPhone.offered.containsKey(f.id));
       await onPhone.join(f.id);

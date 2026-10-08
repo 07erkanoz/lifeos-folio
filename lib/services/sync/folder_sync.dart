@@ -133,6 +133,22 @@ class FolderSync extends ChangeNotifier {
     } catch (_) {}
     _net.ownParts[part] = OwnPart(export: _export, merge: _merge);
     _net.onOwnFiles = (t) => unawaited(_came(t));
+    // The other put what this one sent in place: alike now, so that a
+    // change made there next is not taken here for one made on both.
+    _net.ownAnswers['klasor-yerlesti'] = (asked) async {
+      final f = folders['${asked['klasor']}'];
+      final placed = asked['dosyalar'];
+      if (f != null && placed is Map) {
+        final base = _base[f.id] ??= {};
+        final index = await _index(f);
+        placed.forEach((rel, sum) {
+          if (index['$rel']?.$3 == sum) base['$rel'] = '$sum';
+        });
+        await _save();
+      }
+      return (<String, Object?>{'tamam': true}, null);
+    };
+    unawaited(_clearStaging());
     unawaited(_emptyBin());
     // Files changed on disk are looked for now and then.
     _look = Timer.periodic(const Duration(minutes: 2), (_) {
@@ -172,10 +188,24 @@ class FolderSync extends ChangeNotifier {
     ].join();
   }
 
-  /// Starts keeping [path] alike on the person's other devices.
-  Future<SyncedFolder> share(String path) async {
+  /// Why [path] cannot be kept alike, or null: one folder kept alike is
+  /// never inside another, or its files would be counted twice.
+  String? whyNot(String path) {
+    for (final f in folders.values) {
+      if (p.equals(f.path, path)) return null;
+      if (p.isWithin(f.path, path) || p.isWithin(path, f.path)) {
+        return '“${f.name}” ile iç içe; iç içe klasörler eşitlenmez.';
+      }
+    }
+    return null;
+  }
+
+  /// Starts keeping [path] alike on the person's other devices; null when
+  /// it is inside or around one already (see [whyNot]).
+  Future<SyncedFolder?> share(String path) async {
     final kept = folders.values.where((f) => p.equals(f.path, path));
     if (kept.isNotEmpty) return kept.first;
+    if (whyNot(path) != null) return null;
     final f = SyncedFolder(id: _newId(), name: p.basename(path), path: path);
     folders[f.id] = f;
     await _save();
@@ -366,8 +396,8 @@ class FolderSync extends ChangeNotifier {
     // to the bin here.
     for (final MapEntry(key: rel, value: at) in theirRemoved.entries) {
       final mineNow = index[rel];
-      if (at is! int || mineNow == null) continue;
-      if (base[rel] != mineNow.$3 || mineNow.$2 > at) continue;
+      // Unchanged here since alike: by contents, not by the two clocks.
+      if (at is! int || mineNow == null || base[rel] != mineNow.$3) continue;
       await _toBin(f, rel);
       index.remove(rel);
       base.remove(rel);
@@ -378,8 +408,8 @@ class FolderSync extends ChangeNotifier {
     for (final MapEntry(key: rel, value: mine) in index.entries) {
       final there = theirIndex[rel];
       if (there == null) {
-        final gone = theirRemoved[rel];
-        if (gone is int && gone >= mine.$2) continue;
+        // Taken off there and not changed here since: going to the bin.
+        if (theirRemoved.containsKey(rel) && base[rel] == mine.$3) continue;
         if (theirSince != null && mine.$2 < theirSince) continue;
         push.add(rel);
       } else if (there.$3 == mine.$3) {
@@ -402,24 +432,13 @@ class FolderSync extends ChangeNotifier {
     // In batches: one offer of hundreds of files would be one long wait.
     for (var i = 0; i < push.length; i += 50) {
       final batch = push.sublist(i, min(i + 50, push.length));
-      final sums = {for (final rel in batch) rel: index[rel]!.$3};
-      final t = await _net.send(
+      // Taken as alike only when the other says it put them in place
+      // (see 'klasor-yerlesti').
+      await _net.send(
         peer,
         [for (final rel in batch) _inside(f.path, rel)!],
         meta: {'senkron': f.id, 'yollar': jsonEncode(batch)},
       );
-      // Come whole there: what was sent is now alike, so that a change
-      // made there next is not taken here for one made on both.
-      void sent() {
-        if (t == null || !t.finished) return;
-        t.removeListener(sent);
-        if (t.state != TransferState.done) return;
-        sums.forEach((rel, sum) => base[rel] = sum);
-        unawaited(_save());
-      }
-
-      t?.addListener(sent);
-      sent();
     }
   }
 
@@ -431,15 +450,22 @@ class FolderSync extends ChangeNotifier {
     try {
       rels = jsonDecode('${t.meta['yollar'] ?? '[]'}') as List<Object?>;
     } catch (_) {
+      rels = const [];
+    }
+    if (f == null || rels.length != t.files.length) {
+      // No place for them: not left lying in the staging folder.
+      for (final path in t.saved) {
+        await File(path).delete().catchError((Object _) => File(path));
+      }
       return;
     }
-    if (f == null || rels.length != t.files.length) return;
+    final placed = <String, String>{};
     final base = _base[f.id] ??= {};
     for (var i = 0; i < t.files.length && i < t.saved.length; i++) {
       final rel = '${rels[i]}';
       final target = _inside(f.path, rel);
       final came = File(t.saved[i]);
-      if (target == null) {
+      if (target == null || await _throughLink(f.path, target)) {
         await came.delete().catchError((Object _) => came);
         continue;
       }
@@ -449,6 +475,7 @@ class FolderSync extends ChangeNotifier {
         if (sum == t.files[i].sha256) {
           await came.delete().catchError((Object _) => came);
           base[rel] = sum;
+          placed[rel] = sum;
           continue;
         }
         if (sum != base[rel]) {
@@ -456,18 +483,68 @@ class FolderSync extends ChangeNotifier {
           await here.rename(_copyName(target, _net.self?.device ?? 'bu cihaz'));
         }
       }
-      await here.parent.create(recursive: true);
       try {
-        await came.rename(target);
-      } on FileSystemException {
-        await came.copy(target);
-        await came.delete();
+        await here.parent.create(recursive: true);
+        await _place(came, target);
+      } catch (_) {
+        // Not put in place: not said so, and sent again next time.
+        continue;
       }
       base[rel] = t.files[i].sha256;
+      placed[rel] = t.files[i].sha256;
       _removed[f.id]?.remove(rel);
     }
     await _save();
     notifyListeners();
+    if (placed.isNotEmpty) {
+      await _net.askOwn(
+        t.peer.deviceId,
+        'klasor-yerlesti',
+        body: {'klasor': f.id, 'dosyalar': placed},
+      );
+    }
+  }
+
+  /// Moved in at once; from another disk, copied beside it first and then
+  /// moved, so that a cut copy never stands for the file.
+  static Future<void> _place(File came, String target) async {
+    try {
+      await came.rename(target);
+      return;
+    } on FileSystemException {
+      // Another disk.
+    }
+    final part = File('$target.folio-parca');
+    await came.copy(part.path);
+    await part.rename(target);
+    await came.delete();
+  }
+
+  /// Whether a folder between [folder] and [target] is a link: one that
+  /// leads out of it would take a file elsewhere.
+  static Future<bool> _throughLink(String folder, String target) async {
+    var dir = p.dirname(target);
+    while (p.isWithin(folder, dir)) {
+      if (await FileSystemEntity.isLink(dir)) return true;
+      dir = p.dirname(dir);
+    }
+    return FileSystemEntity.isLink(target);
+  }
+
+  /// What came and was never put in place, a day on.
+  Future<void> _clearStaging() async {
+    try {
+      final staging = Directory(
+        p.join((await _net.inbox()).path, '.folio-senkron'),
+      );
+      if (!await staging.exists()) return;
+      final old = DateTime.now().subtract(const Duration(days: 1));
+      await for (final e in staging.list()) {
+        if (e is File && (await e.lastModified()).isBefore(old)) {
+          await e.delete();
+        }
+      }
+    } catch (_) {}
   }
 
   static String _copyName(String path, String device) {
