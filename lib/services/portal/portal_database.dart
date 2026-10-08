@@ -243,6 +243,16 @@ class PortalDatabase {
   /// devices to hear of it; not after what came from those.
   static void Function()? changed;
 
+  /// Whether this device's person sees the clients' money, and who they
+  /// are in the office (OwnSync tells): their own devices bring the money
+  /// others wrote only while they may.
+  static bool Function()? clientMoneyAllowed;
+  static String Function()? clientPerson;
+
+  /// The clients' records taken off here since last asked (unshared, the
+  /// money no longer let), for their files to go too.
+  final removedClientRecords = <ClientRecord>[];
+
   final Database _db;
 
   static PortalDatabase memory() => PortalDatabase._(sqlite3.openInMemory());
@@ -1244,7 +1254,13 @@ class PortalDatabase {
     // In a transaction of its own: what the agenda took stands if a client
     // does not.
     try {
-      if (clientsMerge(theirs.cast<String, Object?>())) changedHere = true;
+      final allowed = clientMoneyAllowed?.call() ?? true;
+      if (clientsMerge(theirs.cast<String, Object?>(), money: allowed)) {
+        changedHere = true;
+      }
+      if (!allowed) {
+        forgetClientMoney(keepPerson: clientPerson?.call() ?? '');
+      }
     } catch (_) {}
     return changedHere;
   }

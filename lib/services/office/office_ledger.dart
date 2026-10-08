@@ -126,7 +126,8 @@ class OfficeLedger {
   /// Whether [deviceId]'s person sees the clients' fees, advances and
   /// costs: a manager, or one a manager let see them.
   bool seesMoney(String deviceId) =>
-      isManager(deviceId) || _state.money.contains(personOf(deviceId));
+      _state.members.containsKey(deviceId) &&
+      (isManager(deviceId) || _state.money.contains(personOf(deviceId)));
 
   /// The people a manager let see the money, by their first device.
   Set<String> get moneyPeople => Set.unmodifiable(_state.money);
@@ -666,8 +667,10 @@ class OfficeLedger {
           if (m == null) continue;
           final whole = subject == person;
           if (whole && m.role == OfficeRole.manager && managers < 2) continue;
-          // Let go of, a person goes with all their devices; one device of
-          // theirs, lost or sold, goes alone.
+          // Let go of, a person goes with all their devices, and what
+          // they were let see; one device of theirs, lost or sold, goes
+          // alone.
+          if (whole && person != null) money.remove(person);
           members.removeWhere(
             (id, d) => id == subject || (whole && d.person == person),
           );

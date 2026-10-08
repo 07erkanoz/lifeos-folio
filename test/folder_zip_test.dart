@@ -24,4 +24,18 @@ void main() {
     final there = await unzipFolder(zip);
     expect(File('$there/Ekler/rapor.pdf').readAsStringSync(), 'b');
   });
+
+  test('a zip that would write outside its folder writes nothing there', () async {
+    final root = Directory.systemTemp.createTempSync('folio_kotu_zip_');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final archive = Archive()
+      ..add(ArchiveFile.bytes('../disari.txt', [1, 2]))
+      ..add(ArchiveFile.bytes('ic/dogru.txt', [3]));
+    final zip = File('${root.path}/gelen/Kötü.zip')
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(ZipEncoder().encode(archive));
+    final out = await unzipFolder(zip.path);
+    expect(File('${root.path}/gelen/disari.txt').existsSync(), isFalse);
+    expect(File('$out/ic/dogru.txt').existsSync(), isTrue);
+  });
 }

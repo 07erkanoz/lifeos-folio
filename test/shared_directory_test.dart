@@ -39,22 +39,14 @@ void main() {
     expect(Directory('${editor.path}/uyap/dosyalar').listSync(), isEmpty);
   });
 
-  test('the Mac folder of the old name moves to the new one while the new '
-      'is empty, and stays when the new one holds anything', () async {
+  test('the Mac keeps the folder of the old name where there is one: '
+      'its records name their files by full path', () async {
     final root = await Directory.systemTemp.createTemp('folio-mac-');
     addTearDown(() => root.delete(recursive: true));
-    final old = Directory('${root.path}/com.erkanoz.evrakConvert');
-    final now = Directory('${root.path}/com.lifeos.folio');
-    await File('${old.path}/uyap/dosyalar/a.json').create(recursive: true);
-    await now.create();
-
-    await bringOverMacData(now);
-    expect(old.existsSync(), isFalse);
-    expect(File('${now.path}/uyap/dosyalar/a.json').existsSync(), isTrue);
-
-    await File('${old.path}/eski.json').create(recursive: true);
-    await bringOverMacData(now);
-    expect(File('${old.path}/eski.json').existsSync(), isTrue);
-    expect(File('${now.path}/eski.json').existsSync(), isFalse);
+    final now = Directory('${root.path}/com.lifeos.folio')..createSync();
+    expect((await macDataFolder(now)).path, now.path);
+    final old = Directory('${root.path}/com.erkanoz.evrakConvert')
+      ..createSync();
+    expect((await macDataFolder(now)).path, old.path);
   });
 }

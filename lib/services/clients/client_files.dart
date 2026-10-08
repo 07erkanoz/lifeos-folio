@@ -40,40 +40,56 @@ class ClientFiles {
   /// The clients' folder, each client's files in a folder of its id.
   Future<Directory> root() => _root();
 
-  /// [source] copied into [clientId]'s folder, under a name of its own.
-  Future<ClientFile> keep(String clientId, String source) async {
-    final folder = Directory(p.join((await _root()).path, clientId));
-    await folder.create(recursive: true);
-    final name = p.basename(source);
-    var target = File(p.join(folder.path, name));
-    for (var i = 2; await target.exists(); i++) {
-      target = File(
-        p.join(
-          folder.path,
-          '${p.basenameWithoutExtension(name)} ($i)${p.extension(name)}',
-        ),
-      );
-    }
-    await File(source).copy(target.path);
-    final digest = sha256.convert(await target.readAsBytes()).toString();
-    // Under the clients' folder, as every device has it.
-    return (
-      name: name,
-      path: p.join(clientId, p.basename(target.path)),
-      sha256: digest,
-    );
+  /// A client's id as a folder's name: what another device sends is not
+  /// let name a path (no separators, no "..").
+  static bool safeId(String id) =>
+      RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(id);
+
+  /// A file's name as kept: the start of its digest, then its own name, so
+  /// that two files of one name are two (content-addressed).
+  static String storedName(String sha, String name) {
+    final clean = p.basename(name).replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    return '${sha.substring(0, 16)}-$clean';
   }
 
-  /// Where [f] is on this device, in the client's folder; null when it is
-  /// not here (yet: it comes from the device it was kept on).
+  Future<Directory> _folderOf(String clientId) async {
+    if (!safeId(clientId)) throw ArgumentError('müvekkil kimliği: $clientId');
+    final root = (await _root()).absolute;
+    final folder = Directory(p.join(root.path, clientId));
+    if (!p.isWithin(root.path, folder.path)) throw ArgumentError(clientId);
+    return folder;
+  }
+
+  /// [source] copied into [clientId]'s folder, under its digest's name.
+  Future<ClientFile> keep(String clientId, String source) async =>
+      keepBytes(clientId, p.basename(source), await File(source).readAsBytes());
+
+  /// Where [f] is on this device, in the client's folder, its content its
+  /// digest's; null when it is not here (yet: it comes from the device it
+  /// was kept on).
   Future<File?> locate(String clientId, ClientFile f) async {
-    final here = await placeFor(clientId, f);
-    return await here.exists() ? here : null;
+    final File here;
+    try {
+      here = await placeFor(clientId, f);
+    } catch (_) {
+      return null;
+    }
+    if (!await here.exists()) return null;
+    if (FileSystemEntity.isLinkSync(here.path)) return null;
+    final digest = sha256.convert(await here.readAsBytes()).toString();
+    return digest == f.sha256 ? here : null;
   }
 
   /// Where [f] is put when brought from another device.
-  Future<File> placeFor(String clientId, ClientFile f) async =>
-      File(p.join((await _root()).path, clientId, p.basename(f.path)));
+  Future<File> placeFor(String clientId, ClientFile f) async {
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(f.sha256)) {
+      throw ArgumentError('özet: ${f.sha256}');
+    }
+    final folder = await _folderOf(clientId);
+    final file = File(p.join(folder.path, storedName(f.sha256, f.name)));
+    if (!p.isWithin(folder.path, file.path)) throw ArgumentError(f.name);
+    return file;
+  }
 
   /// [bytes] kept as [name] in [clientId]'s folder.
   Future<ClientFile> keepBytes(
@@ -81,15 +97,24 @@ class ClientFiles {
     String name,
     Uint8List bytes,
   ) async {
-    final folder = Directory(p.join((await _root()).path, clientId));
-    await folder.create(recursive: true);
-    final target = File(p.join(folder.path, name));
-    await target.writeAsBytes(bytes, flush: true);
+    final digest = sha256.convert(bytes).toString();
+    final f = (name: p.basename(name), path: '', sha256: digest);
+    final target = await placeFor(clientId, f);
+    await target.parent.create(recursive: true);
+    if (!await target.exists()) await target.writeAsBytes(bytes, flush: true);
     return (
-      name: name,
-      path: p.join(clientId, name),
-      sha256: sha256.convert(bytes).toString(),
+      name: f.name,
+      path: p.join(clientId, p.basename(target.path)),
+      sha256: digest,
     );
+  }
+
+  /// [f] taken off this device, its folder's file alone.
+  Future<void> forget(String clientId, ClientFile f) async {
+    try {
+      final file = await placeFor(clientId, f);
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
   }
 }
 

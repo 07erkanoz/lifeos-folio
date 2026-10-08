@@ -282,5 +282,11 @@ void main() {
     expect(other.seesMoney(selin.deviceId), isTrue);
     await l.setMoney(deniz, selin.deviceId, false);
     expect(l.seesMoney(selin.deviceId), isFalse);
+    // Let go of, and taken in again, one comes back without it.
+    await l.setMoney(deniz, selin.deviceId, true);
+    await l.remove(deniz, selin.deviceId);
+    expect(l.seesMoney(selin.deviceId), isFalse);
+    await l.admit(deniz, selinKnown, OfficeRole.lawyer);
+    expect(l.seesMoney(selin.deviceId), isFalse);
   });
 }

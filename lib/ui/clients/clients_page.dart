@@ -183,10 +183,13 @@ class _ClientsPageState extends State<ClientsPage> {
     );
   }
 
-  // Keyed by its name, not its key: the card made at its first record
-  // is the same client, its tab kept.
+  /// The key a card's made under, by the key it had before: a client only
+  /// seen in the cases keeps its page (and its tab) when its card is made.
+  final _madeFrom = <String, String>{};
+
+  // Keyed by the client, not its name: two of one name are two clients.
   Widget _detail(ClientEntry e) => ClientCard(
-    key: ValueKey(UyapWebService.fold(e.name)),
+    key: ValueKey(_madeFrom[e.key] ?? e.key),
     entry: e,
     database: _db!,
     lawyer: widget.lawyer,
@@ -199,7 +202,10 @@ class _ClientsPageState extends State<ClientsPage> {
     onOpenCase: widget.onOpenCase,
     onChanged: (key) {
       // A card made for a client only seen in the cases: it is the one
-      // chosen now, under its id.
+      // chosen now, under its id, on the page it had.
+      if (key.isNotEmpty && key != e.key && e.client == null) {
+        _madeFrom[key] = e.key;
+      }
       if (_selected != null) _selected = key.isEmpty ? null : key;
       unawaited(_load());
     },

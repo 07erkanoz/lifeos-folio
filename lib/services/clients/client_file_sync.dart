@@ -34,6 +34,7 @@ class ClientFileSync {
       if (r.removed || !may(r)) continue;
       for (final f in clientFilesOf(r)) {
         if (f.sha256 != sha) continue;
+        // Its content checked against its digest before it goes.
         final file = await files.locate(r.clientId, f);
         if (file == null) continue;
         final size = await file.length();
@@ -57,14 +58,17 @@ class ClientFileSync {
   /// The files the records name and this device has not, asked of [ask]:
   /// how many were brought.
   Future<int> fetchMissing(
-    Future<Map<String, Object?>?> Function(Map<String, Object?> body) ask,
-  ) async {
+    Future<Map<String, Object?>?> Function(Map<String, Object?> body) ask, {
+    bool Function(ClientRecord record)? may,
+  }) async {
     var brought = 0;
     final seen = <String>{};
     for (final r in db.allClientRecords()) {
       if (r.removed) continue;
+      if (may != null && !may(r)) continue;
+      if (!ClientFiles.safeId(r.clientId)) continue;
       for (final f in clientFilesOf(r)) {
-        if (!seen.add(f.sha256)) continue;
+        if (!seen.add('${r.clientId}|${f.sha256}')) continue;
         if (await files.locate(r.clientId, f) != null) continue;
         final bytes = BytesBuilder(copy: false);
         var ok = false;
@@ -80,6 +84,11 @@ class ClientFileSync {
         if (!ok) continue;
         final all = bytes.takeBytes();
         if (sha256.convert(all).toString() != f.sha256) continue;
+        // Still kept, and still to be had, when it came.
+        final still = db.clientRecord(r.id);
+        if (still == null || still.removed || (may != null && !may(still))) {
+          continue;
+        }
         final target = await files.placeFor(r.clientId, f);
         await target.parent.create(recursive: true);
         await File(target.path).writeAsBytes(all, flush: true);

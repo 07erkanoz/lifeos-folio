@@ -5,7 +5,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../clients/client.dart';
 import '../clients/client_file_sync.dart';
+import '../clients/client_files.dart';
 import '../office/office_network.dart';
 import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
@@ -229,6 +231,7 @@ class OwnSync extends ChangeNotifier {
         export: () async => db.agendaExport(),
         merge: (theirs) async {
           final changed = db.agendaMerge(theirs);
+          unawaited(_forgetRemovedFiles(db));
           // The clients' files the records name, from whichever own
           // device has them.
           if (changed) unawaited(_fetchOwnFiles(db));
@@ -256,20 +259,31 @@ class OwnSync extends ChangeNotifier {
         // Money only between two who may both see it.
         export: (to) async => db.clientsOfficeExport(
           money: _net.seesMoney && _net.seesMoneyOf(to),
+          me: _net.me,
         ),
         merge: (theirs, from) async {
           if (theirs is! Map) return false;
+          final money = _net.seesMoney && _net.seesMoneyOf(from);
           final changed = db.clientsOfficeMerge(
             theirs.cast<String, Object?>(),
-            money: _net.seesMoney && _net.seesMoneyOf(from),
+            money: money,
             me: _net.me,
+            // Who the sender is, by the office's ledger: its person, not
+            // what the message says of itself.
+            from: _net.ledger.member(from) == null
+                ? ''
+                : _net.ledger.personOf(from),
           );
+          unawaited(_forgetRemovedFiles(db));
           if (changed) {
             unawaited(
               ClientFileSync(db: db)
                   .fetchMissing(
                     (body) =>
                         _net.askOffice(from, ClientFileSync.kind, body: body),
+                    may: (r) =>
+                        (db.clientCard(r.clientId)?.office ?? false) &&
+                        (!r.kind.money || money),
                   )
                   .catchError((Object _) => 0),
             );
@@ -296,11 +310,14 @@ class OwnSync extends ChangeNotifier {
     _net.ownAnswers[ClientFileSync.kind] = (asked) async {
       final db = await _database();
       return (
-        await ClientFileSync(db: db).answer(asked, may: (_) => true) ??
+        await ClientFileSync(db: db).answer(asked, may: _ownMay) ??
             <String, Object?>{'bos': true},
         null,
       );
     };
+    // The money others wrote comes from own devices only while it may.
+    PortalDatabase.clientMoneyAllowed = () => _net.seesMoney;
+    PortalDatabase.clientPerson = () => _net.me;
     final own = isOn(agenda), office = isOn(officeClients);
     PortalDatabase.changed = !own && !office
         ? null
@@ -316,8 +333,33 @@ class OwnSync extends ChangeNotifier {
       try {
         await ClientFileSync(db: db).fetchMissing(
           (body) => _net.askOwn(peer.deviceId, ClientFileSync.kind, body: body),
+          may: _ownMay,
         );
       } catch (_) {}
+    }
+  }
+
+  /// What an own device has of a record's files: the money others wrote
+  /// only while this person may see it.
+  bool _ownMay(ClientRecord r) =>
+      !r.kind.money || _net.seesMoney || r.person == _net.me;
+
+  /// The files of the records taken off here (unshared, the money no
+  /// longer let), gone too where no other record names them.
+  Future<void> _forgetRemovedFiles(PortalDatabase db) async {
+    if (db.removedClientRecords.isEmpty) return;
+    final gone = [...db.removedClientRecords];
+    db.removedClientRecords.clear();
+    final still = {
+      for (final r in db.allClientRecords())
+        for (final f in clientFilesOf(r)) '${r.clientId}|${f.sha256}',
+    };
+    final files = ClientFiles();
+    for (final r in gone) {
+      for (final f in clientFilesOf(r)) {
+        if (still.contains('${r.clientId}|${f.sha256}')) continue;
+        await files.forget(r.clientId, f);
+      }
     }
   }
 
@@ -335,7 +377,10 @@ class OwnSync extends ChangeNotifier {
       _sawMoney = sees;
       if (sees) return;
       unawaited(
-        _database().then((db) => db.forgetClientMoney(keepPerson: _net.me)),
+        _database().then((db) async {
+          db.forgetClientMoney(keepPerson: _net.me);
+          await _forgetRemovedFiles(db);
+        }),
       );
     }
 

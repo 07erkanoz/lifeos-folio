@@ -15,10 +15,43 @@ Future<String> unzipFolder(String zip) => compute(_unzip, zip);
 
 Future<String> _unzip(String zip) async {
   final target = p.join(p.dirname(zip), p.basenameWithoutExtension(zip));
-  if (!await Directory(target).exists()) {
-    await extractFileToDisk(zip, target);
+  if (await Directory(target).exists()) return target;
+  // Opened in a folder of its own first, put in place once whole: one
+  // that failed halfway is not taken for the folder.
+  final work = await Directory(p.dirname(zip)).createTemp('.acilis-');
+  try {
+    final input = InputFileStream(zip);
+    try {
+      final archive = ZipDecoder().decodeStream(input);
+      final root = p.normalize(p.absolute(work.path));
+      for (final entry in archive) {
+        // No links: a link to "../" lets the next entry be written outside.
+        if (entry.isSymbolicLink) continue;
+        final name = entry.name.replaceAll('\\', '/');
+        if (name.startsWith('/') || p.isAbsolute(name)) continue;
+        final out = p.normalize(p.join(root, name));
+        if (!p.isWithin(root, out)) continue;
+        if (!entry.isFile) {
+          await Directory(out).create(recursive: true);
+          continue;
+        }
+        await Directory(p.dirname(out)).create(recursive: true);
+        final sink = OutputFileStream(out);
+        try {
+          entry.writeContent(sink);
+        } finally {
+          await sink.close();
+        }
+      }
+    } finally {
+      await input.close();
+    }
+    await work.rename(target);
+    return target;
+  } catch (_) {
+    if (await work.exists()) await work.delete(recursive: true);
+    rethrow;
   }
-  return target;
 }
 
 Future<String> _zip(String folder) async {

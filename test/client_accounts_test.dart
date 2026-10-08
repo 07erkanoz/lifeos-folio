@@ -147,7 +147,7 @@ void main() {
         move('m2', 'a', MovementKind.feePaid, 100, client: 'k2'),
       );
 
-      final none = mine.clientsOfficeExport(money: false);
+      final none = mine.clientsOfficeExport(money: false, me: 'deniz');
       expect((none['muvekkiller'] as List).length, 1);
       expect(
         [for (final r in none['muvekkilKayitlari'] as List) (r as Map)['id']],
@@ -155,18 +155,20 @@ void main() {
       );
       // A forged money record, from one who may not see it, is not taken.
       theirs.clientsOfficeMerge(
-        mine.clientsOfficeExport(money: true),
+        mine.clientsOfficeExport(money: true, me: 'deniz'),
         money: false,
         me: 'selin',
+        from: 'deniz',
       );
       expect(theirs.clientRecord('g1'), isNotNull);
       expect(theirs.clientRecord('m1'), isNull);
       expect(theirs.clientCard('k2'), isNull);
 
       theirs.clientsOfficeMerge(
-        mine.clientsOfficeExport(money: true),
+        mine.clientsOfficeExport(money: true, me: 'deniz'),
         money: true,
         me: 'selin',
+        from: 'deniz',
       );
       expect(theirs.clientRecord('m1'), isNotNull);
       theirs.saveClientRecord(
@@ -186,13 +188,28 @@ void main() {
       mine.saveClient(mine.clientCard('k1')!.copyWith(office: false));
       expect(
         theirs.clientsOfficeMerge(
-          mine.clientsOfficeExport(money: true),
+          mine.clientsOfficeExport(money: true, me: 'deniz'),
           money: true,
           me: 'selin',
+          from: 'deniz',
         ),
         isTrue,
       );
       expect(theirs.clientCard('k1'), isNull);
+      // Unshared, nothing of the person goes: its id alone.
+      final gone =
+          (mine.clientsOfficeExport(money: true, me: 'deniz')['muvekkiller']
+                  as List)
+              .cast<Map>()
+              .firstWhere((c) => c['id'] == 'k1');
+      expect(gone['ad'], '');
+      expect(gone.containsKey('telefon'), isFalse);
+      // No one changes another's card: Selin's word for Deniz's is not taken.
+      final forged = mine.clientsOfficeExport(money: true, me: 'deniz');
+      expect(
+        theirs.clientsOfficeMerge(forged, money: true, me: 'x', from: 'selin'),
+        isFalse,
+      );
       expect(theirs.clientRecord('g1'), isNull);
       expect(theirs.clientRecord('m1'), isNull);
       expect(theirs.clientRecord('g2'), isNotNull);

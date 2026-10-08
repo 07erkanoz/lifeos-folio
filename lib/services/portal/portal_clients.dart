@@ -107,6 +107,7 @@ extension PortalClients on PortalDatabase {
       final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
       if (rec == null || rec.person == keepPerson) continue;
       _db.execute('DELETE FROM client_record WHERE id=?', [r['id']]);
+      removedClientRecords.add(rec);
     }
   }
 
@@ -253,65 +254,94 @@ extension PortalClients on PortalDatabase {
     return merged;
   }
 
-  Map<String, Object?> clientsExport() => {
-    'muvekkiller': [
-      for (final r in _db.select('SELECT json FROM client'))
-        jsonDecode(r['json'] as String),
-    ],
-    'muvekkilKayitlari': [
-      for (final r in _db.select('SELECT json FROM client_record'))
-        jsonDecode(r['json'] as String),
-    ],
-  };
-
-  /// For the office's members: only the clients shared with the office,
-  /// a client at a time (KVKK); the money among their records only when
-  /// it goes to one who may see it ([money]). A client no longer shared
-  /// goes as a card alone, for them to forget it.
-  Map<String, Object?> clientsOfficeExport({required bool money}) {
-    final cards = [
-      for (final c in clientCards())
-        if (c.sharedOnce) c,
-    ];
-    final shared = {
-      for (final c in cards)
-        if (c.office && !c.removed) c.id,
-    };
+  /// The cards and records, for one of the person's own devices: all of
+  /// them; but the money others wrote while this person may not see it.
+  Map<String, Object?> clientsExport() {
+    final allowed = PortalDatabase.clientMoneyAllowed?.call() ?? true;
+    final me = PortalDatabase.clientPerson?.call() ?? '';
     return {
-      'muvekkiller': [for (final c in cards) c.toJson()],
+      'muvekkiller': [
+        for (final r in _db.select('SELECT json FROM client'))
+          jsonDecode(r['json'] as String),
+      ],
       'muvekkilKayitlari': [
         for (final r in _db.select('SELECT json FROM client_record'))
           if (ClientRecord.fromJson(jsonDecode(r['json'] as String))
               case final rec?
-              when shared.contains(rec.clientId) && (money || !rec.kind.money))
+              when allowed || !rec.kind.money || rec.person == me)
             rec.toJson(),
       ],
     };
   }
 
-  /// What an office member sent ([clientsOfficeExport]): the clients they
-  /// share, and those they shared no longer, forgotten here but for what
-  /// [me] wrote of them. Money only when [money].
+  /// For the office's members: only the clients [me] shares, a client at
+  /// a time (KVKK), and the records [me] wrote of the clients shared; the
+  /// money among them only when it goes to one who may see it ([money]).
+  /// A client no longer shared goes as its id alone, nothing of the person
+  /// with it, for the others to forget it.
+  Map<String, Object?> clientsOfficeExport({
+    required bool money,
+    required String me,
+  }) {
+    bool mine(String person) => person == me || person.isEmpty;
+    final cards = clientCards();
+    final shared = {
+      for (final c in cards)
+        if (c.office && !c.removed) c.id,
+    };
+    return {
+      'muvekkiller': [
+        for (final c in cards)
+          if (c.sharedOnce && mine(c.person))
+            c.office && !c.removed
+                ? {...c.toJson(), 'kisi': me}
+                : {
+                    'id': c.id,
+                    'ad': '',
+                    'kisi': me,
+                    'buro': false,
+                    'paylasildi': true,
+                    'guncelleme': c.updated.toIso8601String(),
+                  },
+      ],
+      'muvekkilKayitlari': [
+        for (final r in _db.select('SELECT json FROM client_record'))
+          if (ClientRecord.fromJson(jsonDecode(r['json'] as String))
+              case final rec?
+              when shared.contains(rec.clientId) &&
+                  mine(rec.person) &&
+                  (money || !rec.kind.money))
+            {...rec.toJson(), 'kisi': me},
+      ],
+    };
+  }
+
+  /// What the office member [from] sent ([clientsOfficeExport]): the cards
+  /// they own and share, their records of the clients shared; a card they
+  /// shared no longer forgotten here, but for what [me] wrote of it. No
+  /// one's card is changed by another, nor a record by one who did not
+  /// write it. Money only when [money].
   bool clientsOfficeMerge(
     Map<String, Object?> theirs, {
     required bool money,
     required String me,
+    required String from,
   }) {
+    if (from.isEmpty) return false;
     var changed = false;
-    final shared = <String>{};
     _transaction(() {
       for (final j in theirs['muvekkiller'] as List? ?? const []) {
         final c = Client.fromJson(j);
-        if (c == null) continue;
+        if (c == null || c.person != from) continue;
         final kept = clientCard(c.id);
-        if (kept != null && !c.updated.isAfter(kept.updated)) {
-          if (kept.office) shared.add(kept.id);
+        if (kept != null && kept.person.isNotEmpty && kept.person != from) {
           continue;
         }
-        if (!c.office && c.person != me) {
+        if (kept != null && !c.updated.isAfter(kept.updated)) continue;
+        if (!c.office) {
+          if (kept == null) continue;
           // Unshared by its owner: gone from here, but what this person
           // wrote of the client.
-          final hadAny = kept != null;
           _db.execute('DELETE FROM client WHERE id=?', [c.id]);
           for (final r in _db.select(
             'SELECT id, json FROM client_record WHERE client_id=?',
@@ -320,20 +350,24 @@ extension PortalClients on PortalDatabase {
             final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
             if (rec != null && rec.person == me && me.isNotEmpty) continue;
             _db.execute('DELETE FROM client_record WHERE id=?', [r['id']]);
-            changed = true;
+            if (rec != null) removedClientRecords.add(rec);
           }
-          if (hadAny) changed = true;
+          changed = true;
           continue;
         }
         _putClient(c);
         changed = true;
-        if (c.office) shared.add(c.id);
       }
     });
+    final shared = {
+      for (final c in clientCards())
+        if (c.office && !c.removed) c.id,
+    };
     if (clientsMerge({
       'muvekkilKayitlari': [
         for (final j in theirs['muvekkilKayitlari'] as List? ?? const [])
-          if (j is Map && shared.contains(j['muvekkil'])) j,
+          if (j is Map && shared.contains(j['muvekkil']) && j['kisi'] == from)
+            j,
       ],
     }, money: money)) {
       changed = true;

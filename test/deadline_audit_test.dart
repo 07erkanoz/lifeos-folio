@@ -4,7 +4,6 @@ import 'package:evrak_convert/services/legal/deadlines/deadline_service.dart';
 import 'package:evrak_convert/services/legal/deadlines/kural_bilgisi.dart';
 import 'package:evrak_convert/services/legal/deadlines/legal_day.dart';
 import 'package:evrak_convert/services/legal/deadlines/mahkeme_kategori.dart';
-import 'package:evrak_convert/services/legal/deadlines/sure_katalogu.dart';
 import 'package:evrak_convert/services/legal/deadlines/tebligat_parser.dart';
 import 'package:evrak_convert/services/legal/deadlines/turkish_legal_calendar.dart';
 import 'package:evrak_convert/services/legal/deadlines/yasal_sure.dart';
