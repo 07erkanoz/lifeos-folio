@@ -214,6 +214,21 @@ const sIkinciCevap = YasalSure(
       'dosyanın usulüne bakın.',
 );
 
+/// İİK m.134/7: the auction set aside, by complaint, in seven days from
+/// the auction itself, not from the result's service; the lawyer tells the
+/// day it was held.
+const sIhaleninFeshi = YasalSure(
+  ad: 'İhalenin feshi',
+  miktar: 7,
+  birim: SureBirimi.gun,
+  kanunMaddesi: 'İİK m.134/7',
+  baslangic: SureBaslangici.kararTarihi,
+  guven: SureGuveni.orta,
+  guvenNotu:
+      'Süre ihale gününden başlar; ihaleden haberi olmayan ilgili için '
+      'öğrenmeden. Tutanaktaki ihale gününü girin.',
+);
+
 /// CMK m.297/3: the chief prosecutor's opinion, served to the one it goes
 /// against, answered in two weeks.
 const sTeblignameCevap = YasalSure(

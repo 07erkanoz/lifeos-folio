@@ -14,6 +14,7 @@ import '../platform/app_directories.dart';
 import '../legal/deadlines/aidiyet.dart';
 import '../security/secret_store.dart';
 import '../uets/notice_deadlines.dart';
+import '../uets/notice_events.dart';
 import '../uets/notice_documents.dart';
 import '../uets/notice_packages.dart';
 import '../uets/notice_matcher.dart';
@@ -418,6 +419,8 @@ class PortalSync extends ChangeNotifier {
           );
         },
       );
+      // The hearings and inspections the papers set, where UYAP has none.
+      refreshNoticeEvents(db);
     }
     return whole
         ? null
@@ -449,6 +452,7 @@ class PortalSync extends ChangeNotifier {
       lawyer: NoticeDeadlineContext.lawyer,
       only: {id},
     );
+    refreshNoticeEvents(db);
     notifyListeners();
     final e = db.envelope(id);
     return e?.state == 'hata' ? e?.error ?? 'Paket alınamadı.' : null;

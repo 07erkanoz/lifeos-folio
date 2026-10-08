@@ -2,6 +2,7 @@ import '../editor/suggestions/phrases.dart' show foldPhrase;
 import '../portal/portal_case.dart';
 import '../portal/portal_database.dart';
 import 'notice_deadlines.dart';
+import 'notice_events.dart';
 import 'notice_documents.dart';
 import 'uets_api.dart';
 
@@ -75,6 +76,8 @@ void matchNotices(PortalDatabase db, {DateTime? now}) {
     lawyer: NoticeDeadlineContext.lawyer,
     now: now,
   );
+  // The hearings and inspections the papers set, where UYAP has none.
+  refreshNoticeEvents(db, now: now);
 }
 
 /// What the subject's later brackets say the document is: "Gerekçeli

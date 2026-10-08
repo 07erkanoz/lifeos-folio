@@ -4,6 +4,7 @@ import 'package:evrak_convert/services/legal/deadlines/deadline_service.dart';
 import 'package:evrak_convert/services/legal/deadlines/kural_bilgisi.dart';
 import 'package:evrak_convert/services/legal/deadlines/legal_day.dart';
 import 'package:evrak_convert/services/legal/deadlines/mahkeme_kategori.dart';
+import 'package:evrak_convert/services/legal/deadlines/sure_katalogu.dart';
 import 'package:evrak_convert/services/legal/deadlines/tebligat_parser.dart';
 import 'package:evrak_convert/services/legal/deadlines/turkish_legal_calendar.dart';
 import 'package:evrak_convert/services/legal/deadlines/yasal_sure.dart';
@@ -676,5 +677,13 @@ void main() {
     expect(rules(BelgeTuru.satisIlani, MahkemeKategorisi.icra), ['iik16']);
     expect(rules(BelgeTuru.tebligname, MahkemeKategorisi.ceza), ['cmk297-3']);
     expect(rules(BelgeTuru.tebligname, MahkemeKategorisi.hukuk), isEmpty);
+    // An enforcement office's decision and an auction's result.
+    expect(kind('(1)_(1)_Artirma_Sonuc_Tutanagi.pdf'), BelgeTuru.artirmaSonucu);
+    expect(rules(BelgeTuru.artirmaSonucu, MahkemeKategorisi.icra), [
+      'iik134-7',
+    ]);
+    expect(sIhaleninFeshi.baslangic, SureBaslangici.kararTarihi);
+    expect(rules(BelgeTuru.tensipZapti, MahkemeKategorisi.icra), ['iik16']);
+    expect(rules(BelgeTuru.tensipZapti, MahkemeKategorisi.hukuk), isEmpty);
   });
 }

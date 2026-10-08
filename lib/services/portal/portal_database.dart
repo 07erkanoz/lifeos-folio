@@ -568,6 +568,40 @@ class PortalDatabase {
     ];
   }
 
+  /// The hearings and inspections the notices' papers set, for [cases]:
+  /// those the papers set before and no longer are taken off, but a day
+  /// a portal listed too; [found] kept where no portal lists that minute.
+  void replacePaperHearings(Set<String> cases, List<PortalHearing> found) =>
+      _transaction(() {
+        final keep = {for (final h in found) h.key};
+        for (final key in cases) {
+          for (final r in _db.select(
+            'SELECT key, json FROM hearings WHERE case_key=?',
+            [key],
+          )) {
+            final h = PortalHearing.fromJson(
+              Map<String, Object?>.from(jsonDecode(r['json'] as String) as Map),
+            );
+            final paperOnly =
+                h.ids.keys.every((c) => c == PortalChannel.uets) &&
+                h.ids.isNotEmpty;
+            if (paperOnly && !keep.contains(h.key)) {
+              _db.execute('DELETE FROM hearings WHERE key=?', [h.key]);
+            }
+          }
+        }
+        for (final h in found) {
+          final there = _db.select('SELECT 1 FROM hearings WHERE key=?', [
+            h.key,
+          ]);
+          if (there.isNotEmpty) continue;
+          _db.execute(
+            'INSERT INTO hearings(key, case_key, at, json) VALUES(?,?,?,?)',
+            [h.key, h.caseKey, h.at.toIso8601String(), jsonEncode(h.toJson())],
+          );
+        }
+      });
+
   /// Merges one channel's answer for the window [from]–[to] (UYGULAMAPLANI
   /// §9.7). Only the web's [complete] answer, without errors and not empty,
   /// removes a hearing in the window it no longer lists: a moved hearing is
@@ -609,7 +643,12 @@ class PortalDatabase {
     if (channel == PortalChannel.uyapWeb && complete && incoming.isNotEmpty) {
       final keep = {for (final h in incoming) h.key};
       for (final old in hearings(from: from, to: to)) {
-        if (!keep.contains(old.key)) {
+        // A day only a notice's papers set (an inspection) is not UYAP's
+        // to take off (refreshNoticeEvents keeps those).
+        final paperOnly =
+            old.ids.isNotEmpty &&
+            old.ids.keys.every((c) => c == PortalChannel.uets);
+        if (!keep.contains(old.key) && !paperOnly) {
           _db.execute('DELETE FROM hearings WHERE key=?', [old.key]);
         }
       }

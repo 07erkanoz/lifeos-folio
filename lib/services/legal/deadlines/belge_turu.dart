@@ -30,6 +30,9 @@ enum BelgeTuru {
   // A sale's notice served to the parties (İİK m.127): complained of in
   // seven days (m.16).
   satisIlani,
+  // The auction's result (İİK m.115): the sale set aside in seven days
+  // from the auction (m.134/7).
+  artirmaSonucu,
   // The Court of Cassation's chief prosecutor's opinion served (CMK
   // m.297/3): answered in two weeks.
   tebligname,
@@ -63,6 +66,7 @@ const belgeTuruEtiket = <BelgeTuru, String>{
   BelgeTuru.cevabaCevapDilekcesi: 'Cevaba Cevap Dilekçesi',
   BelgeTuru.kanunYoluDilekcesi: 'İstinaf / Temyiz Dilekçesi',
   BelgeTuru.satisIlani: 'Satış İlanı',
+  BelgeTuru.artirmaSonucu: 'Artırma Sonuç Tutanağı',
   BelgeTuru.tebligname: 'Tebliğname',
   BelgeTuru.tensipZapti: 'Tensip Zaptı',
   BelgeTuru.araKarar: 'Ara Karar',
@@ -295,6 +299,7 @@ class BelgeTuruTespit {
     }
     if (h('tensip')) return BelgeTuru.tensipZapti;
     if (h('satis ilan')) return BelgeTuru.satisIlani;
+    if (h('artirma sonuc')) return BelgeTuru.artirmaSonucu;
     if (h('tebligname')) return BelgeTuru.tebligname;
     if (h('odeme emri') || h('odemeemri')) return _odemeEmri(s);
     if (h('icra emri')) return BelgeTuru.icraEmri;
@@ -432,7 +437,9 @@ class BelgeTuruTespit {
     BelgeTuru.hacizIhbarnamesiIkinci ||
     BelgeTuru.hacizIhbarnamesiUcuncu => 90,
     BelgeTuru.kanunYoluDilekcesi => 75,
-    BelgeTuru.satisIlani || BelgeTuru.tebligname => 72,
+    BelgeTuru.satisIlani ||
+    BelgeTuru.artirmaSonucu ||
+    BelgeTuru.tebligname => 72,
     BelgeTuru.davaDilekcesi ||
     BelgeTuru.cevapDilekcesi ||
     BelgeTuru.cevabaCevapDilekcesi => 70,
