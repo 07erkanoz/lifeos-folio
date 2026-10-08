@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../clients/client_file_sync.dart';
 import '../office/office_network.dart';
 import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
@@ -37,6 +38,13 @@ class OwnSync extends ChangeNotifier {
   static const agenda = 'ajanda';
   static const sessionsPart = 'oturumlar';
 
+  /// The clients' cards, minutes and powers with the office's members,
+  /// their money with those who may see it. Off until the user turns it
+  /// on: what goes to the office is theirs to choose.
+  static const officeClients = 'muvekkil-buro';
+  static const _optIn = {officeClients};
+  final _on = <String>{};
+
   final SessionHolder? _sessionsGiven;
   late final SessionHolder _sessions = _sessionsGiven ?? _PortalSessions();
 
@@ -53,7 +61,8 @@ class OwnSync extends ChangeNotifier {
   final _off = <String>{};
   bool _started = false;
 
-  bool isOn(String part) => !_off.contains(part);
+  bool isOn(String part) =>
+      _optIn.contains(part) ? _on.contains(part) : !_off.contains(part);
 
   Future<void> start() async {
     if (_started) return;
@@ -66,6 +75,7 @@ class OwnSync extends ChangeNotifier {
           _off.addAll([
             for (final s in (j['kapali'] as List? ?? const [])) '$s',
           ]);
+          _on.addAll([for (final s in (j['acik'] as List? ?? const [])) '$s']);
         }
       }
     } catch (_) {}
@@ -195,11 +205,17 @@ class OwnSync extends ChangeNotifier {
   }
 
   Future<void> turn(String part, bool on) async {
-    on ? _off.remove(part) : _off.add(part);
+    if (_optIn.contains(part)) {
+      on ? _on.add(part) : _on.remove(part);
+    } else {
+      on ? _off.remove(part) : _off.add(part);
+    }
     try {
       final file = await _file();
       await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode({'kapali': _off.toList()}));
+      await file.writeAsString(
+        jsonEncode({'kapali': _off.toList(), 'acik': _on.toList()}),
+      );
     } catch (_) {}
     await _apply();
     notifyListeners();
@@ -213,6 +229,9 @@ class OwnSync extends ChangeNotifier {
         export: () async => db.agendaExport(),
         merge: (theirs) async {
           final changed = db.agendaMerge(theirs);
+          // The clients' files the records name, from whichever own
+          // device has them.
+          if (changed) unawaited(_fetchOwnFiles(db));
           // A deadline chosen, or whom the lawyer acts for, on another
           // device: those notices' deadlines made again here.
           if (db.mergedNotices.isNotEmpty) {
@@ -228,11 +247,100 @@ class OwnSync extends ChangeNotifier {
           return changed;
         },
       );
-      PortalDatabase.changed = _net.ownChanged;
     } else {
       _net.ownParts.remove(agenda);
-      PortalDatabase.changed = null;
     }
+    if (isOn(officeClients)) {
+      final db = await _database();
+      _net.officeParts[officeClients] = OfficePart(
+        // Money only between two who may both see it.
+        export: (to) async => db.clientsOfficeExport(
+          money: _net.seesMoney && _net.seesMoneyOf(to),
+        ),
+        merge: (theirs, from) async {
+          if (theirs is! Map) return false;
+          final changed = db.clientsOfficeMerge(
+            theirs.cast<String, Object?>(),
+            money: _net.seesMoney && _net.seesMoneyOf(from),
+            me: _net.me,
+          );
+          if (changed) {
+            unawaited(
+              ClientFileSync(db: db)
+                  .fetchMissing(
+                    (body) =>
+                        _net.askOffice(from, ClientFileSync.kind, body: body),
+                  )
+                  .catchError((Object _) => 0),
+            );
+          }
+          return changed;
+        },
+      );
+      // A file asked by a member: only of a client shared, its money's
+      // only to one who may see it.
+      _net.officeAnswers[ClientFileSync.kind] = (asked, from) async {
+        final db = await _database();
+        return ClientFileSync(db: db).answer(
+          asked,
+          may: (r) =>
+              (db.clientCard(r.clientId)?.office ?? false) &&
+              (!r.kind.money || (_net.seesMoney && _net.seesMoneyOf(from))),
+        );
+      };
+    } else {
+      _net.officeParts.remove(officeClients);
+      _net.officeAnswers.remove(ClientFileSync.kind);
+    }
+    // An own device asks for a file: the same person's, all of them.
+    _net.ownAnswers[ClientFileSync.kind] = (asked) async {
+      final db = await _database();
+      return (
+        await ClientFileSync(db: db).answer(asked, may: (_) => true) ??
+            <String, Object?>{'bos': true},
+        null,
+      );
+    };
+    final own = isOn(agenda), office = isOn(officeClients);
+    PortalDatabase.changed = !own && !office
+        ? null
+        : () {
+            if (own) _net.ownChanged();
+            if (office) _net.officeChanged();
+          };
+    _watchMoney();
+  }
+
+  Future<void> _fetchOwnFiles(PortalDatabase db) async {
+    for (final peer in _net.ownOnline.toList()) {
+      try {
+        await ClientFileSync(db: db).fetchMissing(
+          (body) => _net.askOwn(peer.deviceId, ClientFileSync.kind, body: body),
+        );
+      } catch (_) {}
+    }
+  }
+
+  bool _watching = false;
+  bool? _sawMoney;
+
+  /// Let no longer see the money, the money others wrote is forgotten
+  /// here; what this person wrote stays.
+  void _watchMoney() {
+    if (_watching) return;
+    _watching = true;
+    void check() {
+      final sees = _net.seesMoney;
+      if (_sawMoney == sees) return;
+      _sawMoney = sees;
+      if (sees) return;
+      unawaited(
+        _database().then((db) => db.forgetClientMoney(keepPerson: _net.me)),
+      );
+    }
+
+    _net.addListener(check);
+    check();
   }
 }
 

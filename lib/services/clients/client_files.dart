@@ -53,8 +53,24 @@ class ClientFiles {
     }
     await File(source).copy(target.path);
     final digest = sha256.convert(await target.readAsBytes()).toString();
-    return (name: name, path: target.path, sha256: digest);
+    // Under the clients' folder, as every device has it.
+    return (
+      name: name,
+      path: p.join(clientId, p.basename(target.path)),
+      sha256: digest,
+    );
   }
+
+  /// Where [f] is on this device, in the client's folder; null when it is
+  /// not here (yet: it comes from the device it was kept on).
+  Future<File?> locate(String clientId, ClientFile f) async {
+    final here = await placeFor(clientId, f);
+    return await here.exists() ? here : null;
+  }
+
+  /// Where [f] is put when brought from another device.
+  Future<File> placeFor(String clientId, ClientFile f) async =>
+      File(p.join((await _root()).path, clientId, p.basename(f.path)));
 
   /// [bytes] kept as [name] in [clientId]'s folder.
   Future<ClientFile> keepBytes(
@@ -68,7 +84,7 @@ class ClientFiles {
     await target.writeAsBytes(bytes, flush: true);
     return (
       name: name,
-      path: target.path,
+      path: p.join(clientId, name),
       sha256: sha256.convert(bytes).toString(),
     );
   }

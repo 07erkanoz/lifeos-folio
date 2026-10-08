@@ -123,6 +123,14 @@ class OfficeLedger {
   bool isManager(String deviceId) =>
       _state.members[deviceId]?.role == OfficeRole.manager;
 
+  /// Whether [deviceId]'s person sees the clients' fees, advances and
+  /// costs: a manager, or one a manager let see them.
+  bool seesMoney(String deviceId) =>
+      isManager(deviceId) || _state.money.contains(personOf(deviceId));
+
+  /// The people a manager let see the money, by their first device.
+  Set<String> get moneyPeople => Set.unmodifiable(_state.money);
+
   /// The records, for sending to another member.
   List<Map<String, Object?>> get records => List.unmodifiable(_records);
 
@@ -228,6 +236,13 @@ class OfficeLedger {
     String deviceId,
     OfficeRole role,
   ) => _change(identity, {'k': 'rol', 'cihaz': deviceId, 'rol': role.name});
+
+  /// Lets [deviceId]'s person see the clients' money, or no longer.
+  Future<String?> setMoney(
+    OfficeIdentity identity,
+    String deviceId,
+    bool open,
+  ) => _change(identity, {'k': 'ucret', 'cihaz': deviceId, 'acik': open});
 
   Future<String?> remove(OfficeIdentity identity, String deviceId) =>
       _change(identity, {'k': 'cikar', 'cihaz': deviceId});
@@ -495,6 +510,7 @@ class OfficeLedger {
     String? office, recovery, recoveryId;
     var name = '';
     final members = <String, OfficeMember>{};
+    final money = <String>{};
     final kept = <Map<String, Object?>>[];
     for (final r in sorted) {
       final kind = r['k'];
@@ -642,6 +658,9 @@ class OfficeLedger {
               members[d.deviceId] = d.copyWith(role: role);
             }
           }
+        case 'ucret':
+          if (person == null) continue;
+          r['acik'] == true ? money.add(person) : money.remove(person);
         case 'cikar':
           final m = members[subject];
           if (m == null) continue;
@@ -657,7 +676,7 @@ class OfficeLedger {
       }
       kept.add(r);
     }
-    return _State(office, name, members, kept, recovery, recoveryId);
+    return _State(office, name, members, kept, recovery, recoveryId, money);
   }
 
   static OfficeMember? _member(
@@ -708,6 +727,7 @@ class _State {
     this.kept, [
     this.recovery,
     this.recoveryId,
+    this.money = const {},
   ]);
   const _State.empty()
     : officeId = null,
@@ -715,7 +735,8 @@ class _State {
       members = const {},
       kept = const [],
       recovery = null,
-      recoveryId = null;
+      recoveryId = null,
+      money = const {};
   final String? officeId;
 
   /// The founder's recovery code's public key, the latest, and its record.
@@ -723,4 +744,7 @@ class _State {
   final String officeName;
   final Map<String, OfficeMember> members;
   final List<Map<String, Object?>> kept;
+
+  /// The people let see the clients' money (besides the managers).
+  final Set<String> money;
 }

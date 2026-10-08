@@ -429,6 +429,49 @@ class OfficeNetwork extends ChangeNotifier {
   /// person's key vouched for.
   final ownParts = <String, OwnPart>{};
 
+  /// What the office's members keep alike, by name, each part on only
+  /// where its user turned it on (the clients). What goes is made for the
+  /// member it goes to; what comes is told who sent it.
+  final officeParts = <String, OfficePart>{};
+
+  /// Whether this device's person sees the clients' money: alone, with no
+  /// office, always; in one, a manager or one a manager let.
+  bool get seesMoney => ledger.officeId == null || ledger.seesMoney(me);
+
+  /// Whether [deviceId]'s person sees it.
+  bool seesMoneyOf(String deviceId) => ledger.seesMoney(deviceId);
+
+  /// The office parts made alike with [peer], both ways.
+  Future<void> _syncOfficeParts(OfficePeer peer) async {
+    if (officeParts.isEmpty || ledger.member(peer.deviceId) == null) return;
+    final identity = _identity, host = peer.host;
+    final trusted = await _trustedFor(peer);
+    if (identity == null || host == null || trusted == null) return;
+    for (final e in officeParts.entries.toList()) {
+      try {
+        final ch = await OfficeChannel.open(
+          identity: identity,
+          peer: trusted,
+          host: host,
+          port: peer.port,
+        );
+        unawaited(_metOwn(ch));
+        final reply = ch.messages.first.timeout(const Duration(seconds: 20));
+        await ch.send({
+          't': 'buro-parca',
+          'ad': e.key,
+          'veri': await e.value.export(peer.deviceId),
+        });
+        final m = await reply;
+        await ch.close();
+        if (m['veri'] != null &&
+            await e.value.merge(m['veri'], peer.deviceId)) {
+          notifyListeners();
+        }
+      } catch (_) {}
+    }
+  }
+
   /// What this device answers one of the person's own devices asking, by
   /// kind: its answer, and what to do with the asker's last word, null when
   /// it says none.
@@ -470,6 +513,47 @@ class OfficeNetwork extends ChangeNotifier {
   /// Asks one of the person's own devices [kind]; [then] says the last
   /// word from its answer. Null when it is not on the network, not proved
   /// the person's own, or did not answer.
+  /// What this device answers an office member asking, by kind: the
+  /// answer for the member whose device is given; null for none.
+  final officeAnswers =
+      <
+        String,
+        Future<Map<String, Object?>?> Function(
+          Map<String, Object?> asked,
+          String fromDevice,
+        )
+      >{};
+
+  /// Asks [deviceId], an office member's, a question of [kind]; its
+  /// answer, null when it has none or cannot be reached.
+  Future<Map<String, Object?>?> askOffice(
+    String deviceId,
+    String kind, {
+    Map<String, Object?> body = const {},
+  }) async {
+    final identity = _identity, peer = _peers[deviceId];
+    final host = peer?.host;
+    if (identity == null || peer == null || host == null) return null;
+    if (ledger.member(deviceId) == null) return null;
+    final trusted = await _trustedFor(peer);
+    if (trusted == null) return null;
+    try {
+      final ch = await OfficeChannel.open(
+        identity: identity,
+        peer: trusted,
+        host: host,
+        port: peer.port,
+      );
+      final reply = ch.messages.first.timeout(const Duration(seconds: 30));
+      await ch.send({...body, 't': 'buro-sor', 'tur': kind});
+      final answer = await reply;
+      await ch.close();
+      return answer['yok'] == true ? null : answer;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, Object?>?> askOwn(
     String deviceId,
     String kind, {
@@ -543,6 +627,27 @@ class OfficeNetwork extends ChangeNotifier {
   void ownChanged() {
     _ownSoon?.cancel();
     _ownSoon = Timer(const Duration(seconds: 3), () => unawaited(syncOwn()));
+  }
+
+  Timer? _officeSoon;
+
+  /// Something an office part holds changed here: sent to the office's
+  /// members on the network a moment later.
+  void officeChanged() {
+    if (officeParts.isEmpty) return;
+    _officeSoon?.cancel();
+    _officeSoon = Timer(
+      const Duration(seconds: 3),
+      () => unawaited(syncOffice()),
+    );
+  }
+
+  /// The office parts made alike with each member on the network.
+  Future<void> syncOffice() async {
+    for (final peer in _peers.values.toList()) {
+      if (peer.host == null || !isTrusted(peer.deviceId)) continue;
+      await _syncOfficeParts(peer);
+    }
   }
 
   /// "Şimdi eşitle": with each of the person's own devices on the network.
@@ -706,6 +811,38 @@ class OfficeNetwork extends ChangeNotifier {
           't': 'gorev',
           'gorev': mine != null && _maySee(mine, from) ? mine.toJson() : null,
         });
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await ch.close();
+        return;
+      }
+      if (m['t'] == 'buro-sor') {
+        final from = ch.peer.deviceId;
+        final answer = officeAnswers['${m['tur']}'];
+        final said = answer == null || ledger.member(from) == null
+            ? null
+            : await answer(m, from);
+        await ch.send({
+          ...?said,
+          't': 'buro-sor',
+          if (said == null) 'yok': true,
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await ch.close();
+        return;
+      }
+      if (m['t'] == 'buro-parca') {
+        // An office part another member sends: taken where it is on here,
+        // and this one's sent back, made for them.
+        final from = ch.peer.deviceId;
+        final part = officeParts['${m['ad']}'];
+        Object? mine;
+        if (part != null && ledger.member(from) != null) {
+          if (m['veri'] != null && await part.merge(m['veri'], from)) {
+            notifyListeners();
+          }
+          mine = await part.export(from);
+        }
+        await ch.send({'t': 'buro-parca', 'veri': mine});
         await Future<void>.delayed(const Duration(milliseconds: 200));
         await ch.close();
         return;
@@ -1624,6 +1761,13 @@ class OfficeNetwork extends ChangeNotifier {
     return _after(await ledger.setRole(identity, deviceId, role));
   }
 
+  /// Lets [deviceId]'s person see the clients' money, or no longer.
+  Future<String?> setMoney(String deviceId, bool open) async {
+    final identity = _identity;
+    if (identity == null) return 'Önce büro ağına katılın.';
+    return _after(await ledger.setMoney(identity, deviceId, open));
+  }
+
   /// The founder's recovery code, new; null when this is not the founder.
   Future<String?> makeRecovery() async {
     final identity = _identity;
@@ -1998,7 +2142,8 @@ class OfficeNetwork extends ChangeNotifier {
           unawaited(
             _syncLedger(peer)
                 .then((_) => _syncTasks(peer))
-                .then((_) => _syncChats(peer)),
+                .then((_) => _syncChats(peer))
+                .then((_) => _syncOfficeParts(peer)),
           );
         }
         if (peer.host != null && peer.userId == _identity?.userId) {
@@ -2091,6 +2236,17 @@ class SendTarget {
 
 /// One thing a person's own devices keep alike: what this device has of
 /// it, and taking what another has.
+class OfficePart {
+  const OfficePart({required this.export, required this.merge});
+
+  /// What goes to the member whose device is given.
+  final Future<Object?> Function(String toDevice) export;
+
+  /// What came from the member whose device is given; true when anything
+  /// here changed.
+  final Future<bool> Function(Object? theirs, String fromDevice) merge;
+}
+
 class OwnPart {
   const OwnPart({required this.export, required this.merge});
   final Future<Object?> Function() export;

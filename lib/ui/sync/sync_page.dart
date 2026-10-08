@@ -346,6 +346,22 @@ class _SyncPageState extends State<SyncPage> {
           value: _sync.isOn(OwnSync.agenda),
           onChanged: (on) => unawaited(_sync.turn(OwnSync.agenda, on)),
         ),
+        SwitchListTile(
+          key: const ValueKey('sync-office-clients'),
+          title: const Text(
+            'Müvekkilleri büroyla eşitle',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: const Text(
+            'Müvekkil kartları, görüşme tutanakları ve vekâletnameler '
+            'bürodaki avukatlara gider. Ücret, avans ve masraflar yalnız '
+            'yöneticilere ve yöneticinin yetki verdiği kişilere gider; '
+            'başkasının cihazına hiç gönderilmez.',
+            style: TextStyle(fontSize: 12),
+          ),
+          value: _sync.isOn(OwnSync.officeClients),
+          onChanged: (on) => unawaited(_sync.turn(OwnSync.officeClients, on)),
+        ),
       ],
     ),
   );

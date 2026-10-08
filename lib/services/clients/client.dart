@@ -19,9 +19,23 @@ class Client {
     this.names = const [],
     required this.updated,
     this.removed = false,
+    this.office = false,
+    this.sharedOnce = false,
+    this.person = '',
   });
 
   final String id, name;
+
+  /// Shared with the office (KVKK: a client at a time, by the lawyer's
+  /// choice): its card and records go to the office's members.
+  final bool office;
+
+  /// Shared before: its card still goes, unshared, for the members to
+  /// forget what they were given of it.
+  final bool sharedOnce;
+
+  /// The office person who made the card; empty where there is no office.
+  final String person;
 
   /// A company or an office, not a person.
   final bool body;
@@ -58,6 +72,7 @@ class Client {
     List<String>? names,
     DateTime? updated,
     bool? removed,
+    bool? office,
   }) => Client(
     id: id,
     name: name ?? this.name,
@@ -70,6 +85,9 @@ class Client {
     names: names ?? this.names,
     updated: updated ?? DateTime.now(),
     removed: removed ?? this.removed,
+    office: office ?? this.office,
+    sharedOnce: sharedOnce || (office ?? this.office),
+    person: person,
   );
 
   Map<String, Object?> toJson() => {
@@ -84,6 +102,9 @@ class Client {
     'adlar': names,
     'guncelleme': updated.toIso8601String(),
     'silindi': removed,
+    'buro': office,
+    'paylasildi': sharedOnce,
+    'kisi': person,
   };
 
   static Client? fromJson(Object? j) {
@@ -104,6 +125,9 @@ class Client {
       ],
       updated: DateTime.tryParse(s('guncelleme')) ?? DateTime(2000),
       removed: j['silindi'] == true,
+      office: j['buro'] == true,
+      sharedOnce: j['paylasildi'] == true || j['buro'] == true,
+      person: s('kisi'),
     );
   }
 
@@ -114,10 +138,22 @@ class Client {
 /// of attorney; later its accounts' movements.
 enum ClientRecordKind {
   meeting('gorusme'),
-  attorney('vekalet');
+  attorney('vekalet'),
+
+  /// A case's fee agreed: fixed, a share of what is won, or both, and its
+  /// instalments.
+  fee('ucret'),
+
+  /// Money in or out of a case's account: a fee paid, an advance taken, a
+  /// cost met from it or by the lawyer. Never changed once written; a
+  /// wrong one is taken back by another that names it.
+  movement('hareket');
 
   const ClientRecordKind(this.code);
   final String code;
+
+  /// Seen only by those who see the money (a manager, or one let).
+  bool get money => this == fee || this == movement;
 
   static ClientRecordKind? of(Object? code) {
     for (final k in values) {
@@ -142,9 +178,14 @@ class ClientRecord {
     required this.updated,
     this.locked = false,
     this.removed = false,
+    this.person = '',
   });
 
   final String id, clientId;
+
+  /// The office person who wrote it (their first device's id); empty
+  /// where there is no office.
+  final String person;
   final ClientRecordKind kind;
   final Map<String, Object?> data;
   final DateTime created, updated;
@@ -161,6 +202,7 @@ class ClientRecord {
     Map<String, Object?>? data,
     bool? locked,
     bool? removed,
+    String? person,
   }) => ClientRecord(
     id: id,
     clientId: clientId,
@@ -171,6 +213,7 @@ class ClientRecord {
     updated: DateTime.now(),
     locked: locked ?? this.locked,
     removed: removed ?? this.removed,
+    person: person ?? this.person,
   );
 
   Map<String, Object?> toJson() => {
@@ -180,6 +223,7 @@ class ClientRecord {
     'veri': data,
     'olusturma': created.toIso8601String(),
     'yazan': by,
+    'kisi': person,
     'guncelleme': updated.toIso8601String(),
     'kilitli': locked,
     'silindi': removed,
@@ -204,6 +248,7 @@ class ClientRecord {
       updated: DateTime.tryParse('${j['guncelleme']}') ?? created,
       locked: j['kilitli'] == true,
       removed: j['silindi'] == true,
+      person: j['kisi'] is String ? j['kisi'] as String : '',
     );
   }
 }
@@ -216,7 +261,12 @@ class ClientEntry {
     required this.name,
     this.client,
     this.cases = const [],
+    this.ids = const [],
   });
+
+  /// Every card it is: the same client a colleague made a card for too
+  /// (the same TCKN/VKN, else the same name) is one.
+  final List<String> ids;
 
   /// Its card's id, else its folded name.
   final String key;

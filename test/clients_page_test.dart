@@ -67,6 +67,59 @@ void main() {
     );
   });
 
+  Future<void> open(WidgetTester tester, {bool money = true}) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClientsPage(
+            lawyer: 'Av. Deniz Kaya',
+            database: db,
+            files: ClientFiles(root: () async => root),
+            seesMoney: money,
+            inOffice: true,
+            person: 'deniz',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ayşe Karaca'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a fee paid is written to its case\'s account with its time; '
+      'one who may not see the money has no accounts at all', (tester) async {
+    await open(tester);
+    await tester.tap(find.text('Hesaplar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('movement-k1')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('movement-amount')),
+      '15.000',
+    );
+    await tester.tap(find.byKey(const ValueKey('movement-save')));
+    await tester.pumpAndSettle();
+    final m = db
+        .clientRecords(db.clientCards().single.id)
+        .singleWhere((r) => r.kind == ClientRecordKind.movement);
+    expect(m.data['tutar'], 1500000);
+    expect(m.text('dosya'), 'k1');
+    expect(m.locked, isTrue);
+    expect(m.person, 'deniz');
+    expect(find.textContaining('+15.000 TL'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await open(tester, money: false);
+    expect(find.text('Hesaplar'), findsNothing);
+    expect(find.text('Ücret alacağı'), findsNothing);
+    // Shared one client at a time, off until chosen.
+    expect(find.text('Yalnız bende'), findsOneWidget);
+  });
+
   test('the minutes print with both signatures and their code', () async {
     ByteData font(String style) => ByteData.sublistView(
       File('fonts/pdf/LiberationSerif-$style.ttf').readAsBytesSync(),

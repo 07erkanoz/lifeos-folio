@@ -11,6 +11,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:evrak_convert/services/clients/client.dart';
+import 'package:evrak_convert/services/clients/client_accounts.dart';
 import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -158,6 +159,69 @@ void main() {
         updated: DateTime(2024, 3, 12),
       ),
     );
+    final key = caseKey('2024/318', 'Antalya 3. Asliye Hukuk Mahkemesi');
+    db.saveClientRecord(
+      ClientRecord(
+        id: 'f1',
+        clientId: 'k1',
+        kind: ClientRecordKind.fee,
+        data: {
+          'dosya': key,
+          'tutar': 4500000,
+          'yuzde': 0,
+          'taksitler': [
+            for (final (d, t) in [
+              (DateTime(2026, 3, 12), 1500000),
+              (DateTime(2026, 6, 12), 1500000),
+              (DateTime(2026, 10, 3), 1500000),
+            ])
+              {'tarih': d.toIso8601String(), 'tutar': t},
+          ],
+        },
+        created: DateTime(2026, 3, 12),
+        by: 'Av. Deniz Kaya',
+        updated: DateTime(2026, 3, 12),
+      ),
+    );
+    var n = 0;
+    for (final (kind, lira, at, what) in [
+      (MovementKind.feePaid, 15000, DateTime(2026, 3, 12, 16, 38), '1. taksit'),
+      (MovementKind.advanceIn, 5000, DateTime(2026, 3, 12, 16, 40), ''),
+      (
+        MovementKind.costFromAdvance,
+        2500,
+        DateTime(2026, 5, 21, 10, 5),
+        'Bilirkişi ücreti',
+      ),
+      (MovementKind.feePaid, 15000, DateTime(2026, 6, 14, 14, 22), '2. taksit'),
+      (
+        MovementKind.costByLawyer,
+        1250,
+        DateTime(2026, 10, 2, 9, 12),
+        'Keşif gideri',
+      ),
+    ]) {
+      db.saveClientRecord(
+        ClientRecord(
+          id: 'h${n++}',
+          clientId: 'k1',
+          kind: ClientRecordKind.movement,
+          data: {
+            'dosya': key,
+            'hesap': kind.code,
+            'tutar': lira * 100,
+            'zaman': at.toIso8601String(),
+            'aciklama': what,
+            if (kind.sign > 0) 'odeme': 'Havale / EFT',
+            'makbuz': kind == MovementKind.feePaid ? '01${n}2' : '',
+          },
+          created: at,
+          by: 'Av. Deniz Kaya',
+          updated: at,
+          locked: true,
+        ),
+      );
+    }
     return db;
   }
 
@@ -174,7 +238,11 @@ void main() {
       await tester.pumpWidget(
         _app(
           Scaffold(
-            body: ClientsPage(lawyer: 'Av. Deniz Kaya', database: db),
+            body: ClientsPage(
+              lawyer: 'Av. Deniz Kaya',
+              database: db,
+              inOffice: true,
+            ),
           ),
         ),
       );
@@ -182,6 +250,9 @@ void main() {
       await tester.tap(find.text('Ayşe Karaca').first);
       await tester.pumpAndSettle();
       await _shot(tester, name);
+      await tester.tap(find.text('Hesaplar'));
+      await tester.pumpAndSettle();
+      await _shot(tester, '$name-hesap');
     });
   }
 }

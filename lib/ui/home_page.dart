@@ -2209,6 +2209,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               : _group == 'muvekkiller'
                                               ? ClientsPage(
                                                   lawyer: _lawyerName,
+                                                  person:
+                                                      OfficeNetwork.instance.me,
+                                                  seesMoney: OfficeNetwork
+                                                      .instance
+                                                      .seesMoney,
+                                                  inOffice:
+                                                      OfficeNetwork
+                                                          .instance
+                                                          .ledger
+                                                          .officeId !=
+                                                      null,
                                                   onOpenCase: (key) =>
                                                       unawaited(
                                                         _selectGroup(

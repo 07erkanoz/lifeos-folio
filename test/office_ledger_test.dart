@@ -262,4 +262,25 @@ void main() {
     expect(await again.recover(late, latePeer, code), isNotNull);
     expect(await again.recover(late, latePeer, newer), isNull);
   });
+
+  test('a manager lets one see the clients\' money, and takes it back; a '
+      'lawyer cannot let themself', () async {
+    final (deniz, denizPeer, _) = await device('Av. Deniz Kaya');
+    final (selin, _, selinKnown) = await device('Av. Selin Aksoy');
+    final l = ledger('para');
+    await l.found(deniz, denizPeer, 'Kaya Hukuk Bürosu');
+    await l.admit(deniz, selinKnown, OfficeRole.lawyer);
+    expect(l.seesMoney(deniz.deviceId), isTrue);
+    expect(l.seesMoney(selin.deviceId), isFalse);
+    expect(await l.setMoney(selin, selin.deviceId, true), isNotNull);
+    expect(l.seesMoney(selin.deviceId), isFalse);
+    expect(await l.setMoney(deniz, selin.deviceId, true), isNull);
+    expect(l.seesMoney(selin.deviceId), isTrue);
+    // Its records, read on another device, say the same.
+    final other = ledger('para2');
+    await other.merge(l.records);
+    expect(other.seesMoney(selin.deviceId), isTrue);
+    await l.setMoney(deniz, selin.deviceId, false);
+    expect(l.seesMoney(selin.deviceId), isFalse);
+  });
 }

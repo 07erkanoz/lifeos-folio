@@ -2,16 +2,54 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
 
 import '../../services/clients/client.dart';
+import '../../services/clients/client_accounts.dart';
 import '../../services/clients/client_files.dart';
 import '../../services/portal/portal_database.dart';
+import '../../services/platform/document_scan.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
+import 'attachment_preview.dart';
+import 'client_accounts_view.dart';
+
+/// A scan to keep: from the camera where there is one (Android, iPhone),
+/// or a file (a PDF or a picture) chosen; null when backed out.
+Future<String?> pickScan(BuildContext context, String title) async {
+  if (DocumentScan.available) {
+    final camera = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.document_scanner_outlined),
+              title: const Text('Kameradan tara'),
+              onTap: () => Navigator.pop(context, true),
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_open_outlined),
+              title: const Text('Dosyadan seç (PDF ya da resim)'),
+              onTap: () => Navigator.pop(context, false),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (camera == null) return null;
+    if (camera) return DocumentScan.toPdf();
+  }
+  final picked = await FilePicker.pickFiles(
+    dialogTitle: title,
+    type: FileType.custom,
+    allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'tif', 'tiff'],
+  );
+  return picked?.files.single.path;
+}
 
 String _two(int v) => v.toString().padLeft(2, '0');
 String _day(DateTime t) => '${_two(t.day)}.${_two(t.month)}.${t.year}';
@@ -26,10 +64,21 @@ class ClientsPage extends StatefulWidget {
     this.database,
     this.files,
     this.onOpenCase,
+    this.person = '',
+    this.seesMoney = true,
+    this.inOffice = false,
   });
 
   /// "Av. Deniz Kaya": whose clients, and who writes their records.
   final String lawyer;
+
+  /// This person in the office ([ClientRecord.person]); empty for none.
+  final String person;
+
+  /// Whether the fees, advances and costs are shown: alone always; in an
+  /// office to a manager, or one a manager let.
+  final bool seesMoney;
+  final bool inOffice;
   final PortalDatabase? database;
   final ClientFiles? files;
   final ValueChanged<String>? onOpenCase;
@@ -89,12 +138,17 @@ class _ClientsPageState extends State<ClientsPage> {
     );
   }
 
+  // Keyed by its name, not its key: the card made at its first record
+  // is the same client, its tab kept.
   Widget _detail(ClientEntry e) => ClientCard(
-    key: ValueKey(e.key),
+    key: ValueKey(UyapWebService.fold(e.name)),
     entry: e,
     database: _db!,
     lawyer: widget.lawyer,
     files: widget.files ?? ClientFiles(),
+    person: widget.person,
+    seesMoney: widget.seesMoney,
+    inOffice: widget.inOffice,
     onOpenCase: widget.onOpenCase,
     onChanged: (key) {
       // A card made for a client only seen in the cases: it is the one
@@ -231,9 +285,14 @@ class ClientCard extends StatefulWidget {
     required this.files,
     this.onOpenCase,
     this.onChanged,
+    this.person = '',
+    this.seesMoney = true,
+    this.inOffice = false,
   });
 
   final ClientEntry entry;
+  final String person;
+  final bool seesMoney, inOffice;
   final PortalDatabase database;
   final String lawyer;
   final ClientFiles files;
@@ -259,15 +318,125 @@ class _ClientCardState extends State<ClientCard> {
       id: Client.newId(),
       name: widget.entry.name,
       updated: DateTime.now(),
+      person: widget.person,
     );
     _db.saveClient(made);
     _client = made;
     return made;
   }
 
-  List<ClientRecord> _records(ClientRecordKind kind) {
+  List<ClientRecord> _records([ClientRecordKind? kind]) {
     final c = _client;
-    return c == null ? const [] : _db.clientRecords(c.id, kind: kind);
+    return c == null
+        ? const []
+        : _db.clientRecords(c.id, kind: kind, also: widget.entry.ids);
+  }
+
+  /// [r] written by this person, kept.
+  void _keep(ClientRecord r) {
+    _db.saveClientRecord(
+      r.person.isEmpty && widget.person.isNotEmpty
+          ? r.copyWith(person: widget.person)
+          : r,
+    );
+  }
+
+  List<({String key, String title})> get _caseList => [
+    for (final c in widget.entry.cases)
+      (key: c.caseKey, title: _caseTitle(c.caseKey)),
+  ];
+
+  Future<void> _movement(String caseKey) async {
+    final card = _card();
+    final saved = await showDialog<ClientRecord>(
+      context: context,
+      builder: (_) => MovementDialog(
+        client: card,
+        caseKey: caseKey,
+        lawyer: widget.lawyer,
+        person: widget.person,
+        files: widget.files,
+      ),
+    );
+    if (saved == null) return;
+    _keep(saved);
+    if (mounted) setState(() {});
+    widget.onChanged?.call(card.id);
+  }
+
+  Future<void> _fee(String caseKey, ClientRecord? kept) async {
+    final card = _card();
+    final saved = await showDialog<ClientRecord>(
+      context: context,
+      builder: (_) => FeeDialog(
+        client: card,
+        caseKey: caseKey,
+        lawyer: widget.lawyer,
+        person: widget.person,
+        kept: kept,
+      ),
+    );
+    if (saved == null) return;
+    _keep(saved);
+    if (mounted) setState(() {});
+    widget.onChanged?.call(card.id);
+  }
+
+  /// [m] taken back by a movement that names it: both stay, struck out.
+  Future<void> _reverse(ClientRecord m) async {
+    final why = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ters kayıtla düzelt'),
+        content: TextField(
+          controller: why,
+          decoration: const InputDecoration(labelText: 'Neden'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Düzelt'),
+          ),
+        ],
+      ),
+    );
+    final reason = why.text.trim();
+    why.dispose();
+    if (ok != true) return;
+    final now = DateTime.now();
+    _keep(
+      ClientRecord(
+        id: Client.newId(),
+        clientId: m.clientId,
+        kind: ClientRecordKind.movement,
+        data: {
+          ...m.data,
+          'ters': m.id,
+          'zaman': now.toIso8601String(),
+          'aciklama': reason.isEmpty ? m.text('aciklama') : reason,
+          'ekler': const [],
+        },
+        created: now,
+        by: widget.lawyer,
+        updated: now,
+        locked: true,
+      ),
+    );
+    if (mounted) setState(() {});
+    widget.onChanged?.call(m.clientId);
+  }
+
+  /// Shared with the office, or no longer (KVKK: a client at a time).
+  void _share(bool on) {
+    final card = _card().copyWith(office: on);
+    _db.saveClient(card);
+    setState(() => _client = card);
+    widget.onChanged?.call(card.id);
   }
 
   String _caseTitle(String key) {
@@ -315,7 +484,7 @@ class _ClientCardState extends State<ClientCard> {
       ),
     );
     if (saved == null) return;
-    _db.saveClientRecord(saved);
+    _keep(saved);
     if (mounted) setState(() {});
     widget.onChanged?.call(card.id);
   }
@@ -329,9 +498,12 @@ class _ClientCardState extends State<ClientCard> {
         lawyer: m.by.isEmpty ? widget.lawyer : m.by,
         caseTitle: m.text('dosya').isEmpty ? '' : _caseTitle(m.text('dosya')),
       );
-      await Printing.layoutPdf(
-        name: 'Görüşme tutanağı ${_day(m.created)}.pdf',
-        onLayout: (_) async => bytes,
+      if (!mounted) return;
+      await showClientAttachment(
+        context,
+        title: 'Görüşme tutanağı',
+        fileName: 'Görüşme tutanağı ${_day(m.created)}.pdf',
+        pdf: () async => bytes,
       );
     } catch (e) {
       if (mounted) {
@@ -346,12 +518,7 @@ class _ClientCardState extends State<ClientCard> {
 
   /// The minutes signed: their scan kept with them, and they locked.
   Future<void> _signed(ClientRecord m) async {
-    final picked = await FilePicker.pickFiles(
-      dialogTitle: 'İmzalı tutanağın taranmış hâli',
-      type: FileType.custom,
-      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
-    );
-    final path = picked?.files.single.path;
+    final path = await pickScan(context, 'İmzalı tutanağın taranmış hâli');
     if (path == null) return;
     final card = _card();
     final kept = await widget.files.keep(card.id, path);
@@ -370,6 +537,28 @@ class _ClientCardState extends State<ClientCard> {
     if (mounted) setState(() {});
   }
 
+  /// [r]'s first file seen, to be printed or shared.
+  Future<void> _preview(ClientRecord r, String title) async {
+    final f = clientFilesOf(r).firstOrNull;
+    if (f == null) return;
+    final file = await widget.files.locate(r.clientId, f);
+    if (!mounted) return;
+    if (file == null) {
+      showNotice(
+        context,
+        'Bu dosya bu cihazda yok.',
+        detail: 'Eklendiği cihaz ağdayken eşitlemeyle gelir.',
+      );
+      return;
+    }
+    await showClientAttachment(
+      context,
+      title: title,
+      fileName: '${f.name.replaceAll(RegExp(r'\.[^.]+$'), '')}.pdf',
+      pdf: () => attachmentPdf(file),
+    );
+  }
+
   Future<void> _attorney() async {
     final card = _card();
     final saved = await Navigator.of(context).push<ClientRecord>(
@@ -386,7 +575,7 @@ class _ClientCardState extends State<ClientCard> {
       ),
     );
     if (saved == null) return;
-    _db.saveClientRecord(saved);
+    _keep(saved);
     if (mounted) setState(() {});
     widget.onChanged?.call(card.id);
   }
@@ -403,8 +592,14 @@ class _ClientCardState extends State<ClientCard> {
       if ((c?.phone ?? '').isNotEmpty) c!.phone,
       if ((c?.email ?? '').isNotEmpty) c!.email,
     ].join(' · ');
+    final money = widget.seesMoney
+        ? [
+            for (final r in _records())
+              if (r.kind.money) r,
+          ]
+        : const <ClientRecord>[];
     return DefaultTabController(
-      length: 4,
+      length: widget.seesMoney ? 5 : 4,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -456,6 +651,27 @@ class _ClientCardState extends State<ClientCard> {
                   icon: const Icon(Icons.assignment_ind_outlined, size: 18),
                   label: const Text('Vekâletname'),
                 ),
+                if (widget.inOffice)
+                  FilterChip(
+                    key: const ValueKey('client-share'),
+                    avatar: Icon(
+                      c?.office ?? false
+                          ? Icons.groups_rounded
+                          : Icons.lock_outline_rounded,
+                      size: 18,
+                    ),
+                    label: Text(
+                      c?.office ?? false
+                          ? 'Büroyla paylaşılıyor'
+                          : 'Yalnız bende',
+                    ),
+                    selected: c?.office ?? false,
+                    onSelected: _share,
+                    tooltip:
+                        'Paylaşılırsa kartı, tutanakları ve vekâletnameleri '
+                        'bürodaki avukatlara gider; ücret ve hesaplar '
+                        'yalnız yöneticilere ve yetki verilenlere.',
+                  ),
               ],
             ),
           ),
@@ -465,6 +681,7 @@ class _ClientCardState extends State<ClientCard> {
             tabs: [
               const Tab(text: 'Özet'),
               Tab(text: 'Dosyalar ${e.cases.length}'),
+              if (widget.seesMoney) const Tab(text: 'Hesaplar'),
               Tab(text: 'Görüşmeler ${meetings.length}'),
               Tab(text: 'Vekâletnameler ${attorneys.length}'),
             ],
@@ -472,8 +689,20 @@ class _ClientCardState extends State<ClientCard> {
           Expanded(
             child: TabBarView(
               children: [
-                _summary(meetings, attorneys),
+                _summary(meetings, attorneys, money),
                 _cases(),
+                if (widget.seesMoney)
+                  ClientAccountsView(
+                    client:
+                        c ??
+                        Client(id: '', name: e.name, updated: DateTime(2000)),
+                    records: money,
+                    cases: _caseList,
+                    onMovement: _movement,
+                    onFee: _fee,
+                    onReverse: _reverse,
+                    onOpen: (m) => _preview(m, 'Belge'),
+                  ),
                 _meetings(meetings),
                 _attorneys(attorneys),
               ],
@@ -514,11 +743,62 @@ class _ClientCardState extends State<ClientCard> {
     ),
   );
 
-  Widget _summary(List<ClientRecord> meetings, List<ClientRecord> attorneys) {
+  Widget _summary(
+    List<ClientRecord> meetings,
+    List<ClientRecord> attorneys,
+    List<ClientRecord> money,
+  ) {
     final hearings = _hearings;
+    final accounts = caseAccounts(money).values;
+    int sum(int Function(CaseAccount a) f) =>
+        accounts.fold(0, (n, a) => n + f(a));
+    final owed = sum((a) => a.feeOwed > 0 ? a.feeOwed : 0);
+    final lawyer = sum((a) => a.lawyerOwed);
+    final advance = sum((a) => a.advanceLeft);
+    Widget box(String label, int v, Color color) => Expanded(
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AgendaColors.line),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                lira(v),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: v == 0 ? AgendaColors.muted : color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
     return ListView(
       padding: const EdgeInsets.only(bottom: 16),
       children: [
+        if (widget.seesMoney)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: Row(
+              children: [
+                box('Ücret alacağı', owed, AgendaColors.deadlineText),
+                box('Avukatın masrafı', lawyer, AgendaColors.deadlineText),
+                box('Avans bakiyesi', advance, const Color(0xFF1B6B3A)),
+              ],
+            ),
+          ),
         _section('YAKLAŞAN DURUŞMALAR', [
           if (hearings.isEmpty)
             const ListTile(dense: true, title: Text('Yaklaşan duruşma yok.')),
@@ -592,6 +872,7 @@ class _ClientCardState extends State<ClientCard> {
         onSelected: (v) => switch (v) {
           'yaz' => _printMinutes(m),
           'imza' => _signed(m),
+          'goster' => _preview(m, 'İmzalı tutanak'),
           _ => _meeting(m),
         },
         itemBuilder: (_) => [
@@ -599,6 +880,11 @@ class _ClientCardState extends State<ClientCard> {
             value: 'yaz',
             child: Text('Tutanağı yazdır / PDF'),
           ),
+          if (clientFilesOf(m).isNotEmpty)
+            const PopupMenuItem(
+              value: 'goster',
+              child: Text('İmzalı sureti göster'),
+            ),
           if (!m.locked) ...[
             const PopupMenuItem(value: 'duzenle', child: Text('Düzenle')),
             const PopupMenuItem(
@@ -648,7 +934,8 @@ class _ClientCardState extends State<ClientCard> {
       ),
       trailing: clientFilesOf(a).isEmpty
           ? null
-          : const Icon(Icons.attach_file_rounded, size: 18),
+          : const Icon(Icons.visibility_outlined, size: 18),
+      onTap: clientFilesOf(a).isEmpty ? null : () => _preview(a, 'Vekâletname'),
     );
   }
 
@@ -1039,12 +1326,7 @@ class _AttorneyFormState extends State<AttorneyForm> {
   }
 
   Future<void> _pick() async {
-    final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Vekâletnamenin taranmış sureti',
-      type: FileType.custom,
-      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'tif', 'tiff'],
-    );
-    final path = picked?.files.single.path;
+    final path = await pickScan(context, 'Vekâletnamenin taranmış sureti');
     if (path == null) return;
     final kept = await widget.files.keep(widget.client.id, path);
     if (mounted) setState(() => _scan = kept);

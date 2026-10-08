@@ -675,6 +675,11 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                         _say(
                           v is OfficeRole
                               ? _net.setRole(m.deviceId, v)
+                              : v == 'ucret'
+                              ? _net.setMoney(
+                                  m.deviceId,
+                                  !l.seesMoney(m.deviceId),
+                                )
                               : _net.removeMember(m.deviceId),
                         ),
                       ),
@@ -685,6 +690,14 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                             checked: m.role == r,
                             child: Text(r.label),
                           ),
+                        if (m.role != OfficeRole.manager) ...[
+                          const PopupMenuDivider(),
+                          CheckedPopupMenuItem(
+                            value: 'ucret',
+                            checked: l.seesMoney(m.deviceId),
+                            child: const Text('Ücret ve hesapları görebilir'),
+                          ),
+                        ],
                         const PopupMenuDivider(),
                         const PopupMenuItem(
                           value: 'cikar',
