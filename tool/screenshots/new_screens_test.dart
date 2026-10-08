@@ -28,6 +28,7 @@ import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/ui/office/office_network_page.dart';
 import 'package:evrak_convert/ui/office/send_to_office.dart';
+import 'package:evrak_convert/ui/office/qr_pairing.dart';
 import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -479,6 +480,14 @@ void main() {
     );
     await tester.pump();
     await _shot(tester, 'buro-uyeler');
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: Center(child: QrInviteDialog(network: a)),
+        ),
+      ),
+    );
+    await _shot(tester, 'buro-qr');
     late OfficeTask shown;
     await tester.runAsync(() async {
       b.seenForTesting(a.self!);

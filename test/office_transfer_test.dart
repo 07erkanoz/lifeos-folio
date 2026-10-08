@@ -9,6 +9,7 @@ import 'package:evrak_convert/services/office/office_known.dart';
 import 'package:evrak_convert/services/office/office_ledger.dart';
 import 'package:evrak_convert/services/office/office_link.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
+import 'package:evrak_convert/services/office/office_pairing.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
@@ -471,6 +472,39 @@ void main() {
             phone.isKnown(tablet.self!.deviceId) &&
             tablet.isKnown(phone.self!.deviceId),
       );
+    },
+  );
+
+  test(
+    'a phone reads the computer’s QR: known, as one’s own, unasked',
+    () async {
+      final pc = await folio('Av. Erkan Öz', 'masaustu');
+      final phone = await folio('Erkan', 'telefon');
+      final invite = (await pc.inviteByQr(at: ['127.0.0.1']))!;
+      // A QR with another secret is turned away, and the real one still holds.
+      final forged = QrInvite.parse(invite.text)!;
+      final fake = QrInvite(
+        hosts: forged.hosts,
+        port: forged.port,
+        deviceId: forged.deviceId,
+        secret: List.filled(32, 1),
+      );
+      final bad = (await phone.pairByQr(fake))!;
+      await until(() => bad.finished);
+      expect(bad.state, PairingState.failed);
+      expect(pc.isKnown(phone.self!.deviceId), isFalse);
+      final read = QrInvite.parse(invite.text)!;
+      final pairing = (await phone.pairByQr(read))!;
+      await until(() => pairing.state == PairingState.done);
+      await until(() => pc.self!.userId == phone.self!.userId);
+      expect(pc.isKnown(phone.self!.deviceId), isTrue);
+      expect(pc.incoming.value, isNull);
+      expect(pc.qrPairing.value?.state, PairingState.done);
+      // Used once.
+      final again = (await folio('Başka', 'tablet')).pairByQr(read);
+      final second = (await again)!;
+      await until(() => second.finished);
+      expect(second.state, PairingState.failed);
     },
   );
 }

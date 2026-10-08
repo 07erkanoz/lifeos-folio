@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/office/office_ledger.dart';
@@ -12,6 +13,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'office_offer_dialog.dart' show sizeText;
 import 'office_pairing_dialog.dart';
+import 'qr_pairing.dart';
 
 /// Büro ağı (docs/buro.md, docs/design/buro-paylasim-taslak.png): the
 /// Folios on the office's network under their people. Sending, knowing a
@@ -130,9 +132,29 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
             ],
           ),
         ),
+        if (_net.joined)
+          _phone
+              ? FilledButton.tonalIcon(
+                  key: const ValueKey('office-qr-scan'),
+                  onPressed: () => unawaited(scanAndPair(context, _net)),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                  label: const Text('QR okut'),
+                )
+              : FilledButton.tonalIcon(
+                  key: const ValueKey('office-qr-invite'),
+                  onPressed: () =>
+                      unawaited(QrInviteDialog.show(context, _net)),
+                  icon: const Icon(Icons.qr_code_2_rounded, size: 18),
+                  label: const Text('Telefonumu ekle'),
+                ),
       ],
     );
   }
+
+  /// A phone reads a QR; a computer shows one.
+  static bool get _phone =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   Widget _card(BuildContext context, {required Widget child}) {
     final scheme = Theme.of(context).colorScheme;
@@ -841,9 +863,15 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
             ),
             const SizedBox(height: 4),
             if (_net.known.isEmpty)
-              const Text(
-                'Henüz tanınan bir cihaz yok. Listedeki bir cihazın yanındaki '
-                '“Tanı”ya basın; iki ekranda aynı kod çıkınca onaylayın.',
+              Text(
+                _phone
+                    ? 'Henüz tanınan bir cihaz yok. Bilgisayarınızda Büro ağı’nda '
+                          '“Telefonumu ekle”ye basın, çıkan QR’ı burada “QR '
+                          'okut” ile okutun.'
+                    : 'Henüz tanınan bir cihaz yok. Telefonunuzu “Telefonumu '
+                          'ekle” ile QR okutarak ekleyin. Başka bir bilgisayarı '
+                          'tanımak için listede yanındaki “Tanı”ya basın; iki '
+                          'ekranda aynı kod çıkınca onaylayın.',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               )
             else

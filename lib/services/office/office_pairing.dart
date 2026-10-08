@@ -44,6 +44,7 @@ class OfficePairing extends ChangeNotifier {
     this._self, {
     required this.incoming,
     required this.onKnown,
+    this.invite,
   }) {
     _timeout = Timer(limit, () => _fail('Süre doldu.'));
     _listen = _link?.messages.listen(_heard, onDone: _ended);
@@ -61,6 +62,14 @@ class OfficePairing extends ChangeNotifier {
 
   /// Whether the other device started it.
   final bool incoming;
+
+  /// The QR this pairing came by: read by the starter, shown by the other.
+  final QrInvite? invite;
+
+  /// Known by a QR read off this person's own screen: no code to compare,
+  /// and the other device is theirs.
+  bool get byQr => _byQr;
+  bool _byQr = false;
 
   PairingState _state = PairingState.connecting;
   PairingState get state => _state;
@@ -115,6 +124,9 @@ class OfficePairing extends ChangeNotifier {
     'n': _self.name,
     'c': _self.device,
     'p': _self.platform.name,
+    // Where it listens, for the other to come back to when it has only
+    // met this device here, by a QR, and not on the network.
+    'pt': _self.port,
   };
 
   /// Starts knowing [peer], reached at its address.
@@ -123,6 +135,7 @@ class OfficePairing extends ChangeNotifier {
     required OfficePeer self,
     required OfficePeer peer,
     required Future<void> Function(KnownDevice device) onKnown,
+    QrInvite? invite,
   }) {
     final pairing = OfficePairing._(
       null,
@@ -130,6 +143,7 @@ class OfficePairing extends ChangeNotifier {
       self,
       incoming: false,
       onKnown: onKnown,
+      invite: invite,
     );
     pairing._other = peer;
     unawaited(pairing._connect(peer));
@@ -150,12 +164,12 @@ class OfficePairing extends ChangeNotifier {
       }
       _link = link;
       _listen = link.messages.listen(_heard, onDone: _ended);
+      final commit = hash.sha256.convert([..._myKey, ..._mineNonce]).bytes;
       link.send({
         't': 'pair',
         ..._about,
-        'commit': base64Encode(
-          hash.sha256.convert([..._myKey, ..._mineNonce]).bytes,
-        ),
+        'commit': base64Encode(commit),
+        if (invite case final qr?) 'davet': qr.proof(_myKey, commit),
       });
       _set(PairingState.waiting);
     } catch (_) {
@@ -171,6 +185,7 @@ class OfficePairing extends ChangeNotifier {
     required OfficeIdentity identity,
     required OfficePeer self,
     required Future<void> Function(KnownDevice device) onKnown,
+    QrInvite? invite,
   }) {
     final pairing = OfficePairing._(
       link,
@@ -178,6 +193,7 @@ class OfficePairing extends ChangeNotifier {
       self,
       incoming: true,
       onKnown: onKnown,
+      invite: invite,
     );
     pairing._opened(first);
     return pairing;
@@ -190,6 +206,19 @@ class OfficePairing extends ChangeNotifier {
       return;
     }
     _theirCommit = commit;
+    final proof = first['davet'];
+    if (proof != null) {
+      // Only who read this screen's QR knows its secret.
+      final qr = invite;
+      if (qr == null ||
+          !qr.valid ||
+          proof != qr.proof(base64Decode(_otherKey!), commit)) {
+        _fail('QR geçersiz ya da süresi dolmuş.');
+        return;
+      }
+      _byQr = true;
+      mine = true;
+    }
     _link?.send({'t': 'pair-ok', ..._about, 'nonce': base64Encode(_mineNonce)});
     _set(PairingState.waiting);
   }
@@ -207,8 +236,8 @@ class OfficePairing extends ChangeNotifier {
         for (final e in about.entries)
           if (e.value is String || e.value is int) e.key: '${e.value}',
       },
-      host: _other?.host,
-      port: _other?.port ?? 0,
+      host: _other?.host ?? _link?.remoteHost,
+      port: _other?.port ?? (about['pt'] is int ? about['pt'] as int : 0),
     );
     if (peer == null) return false;
     _other = peer;
@@ -236,6 +265,15 @@ class OfficePairing extends ChangeNotifier {
         if (!_learn(m) || nonce == null || nonce.length != 32) {
           _fail('Karşı cihaz anlaşılamadı.');
           return;
+        }
+        if (invite case final qr? when qr.deviceId != _other?.deviceId) {
+          // Not the device whose QR was read: someone between.
+          _fail('QR’daki cihaz bu değil; tanıma durduruldu.');
+          return;
+        }
+        if (invite != null) {
+          _byQr = true;
+          mine = true;
         }
         _theirNonce = nonce;
         _link?.send({'t': 'reveal', 'nonce': base64Encode(_mineNonce)});
@@ -287,6 +325,8 @@ class OfficePairing extends ChangeNotifier {
   }) {
     _code = codeOf(starter, answerer, starterNonce, answererNonce);
     _set(PairingState.code);
+    // The QR did what comparing the code would.
+    if (_byQr) confirm();
   }
 
   /// The six digits both screens show.
@@ -372,5 +412,75 @@ class OfficePairing extends ChangeNotifier {
     if (!finished) reject();
     _timeout.cancel();
     super.dispose();
+  }
+}
+
+/// What a desktop's "Telefonumu ekle" shows as a QR: where it is, which
+/// device it is and a secret for five minutes. The phone that reads it
+/// proves it saw it; the desktop proves it is the device named in it.
+class QrInvite {
+  QrInvite({
+    required this.hosts,
+    required this.port,
+    required this.deviceId,
+    required this.secret,
+    DateTime? until,
+  }) : until = until ?? DateTime.now().add(life);
+
+  static const life = Duration(minutes: 5);
+
+  final List<String> hosts;
+  final int port;
+  final String deviceId;
+  final List<int> secret;
+  final DateTime until;
+
+  bool get valid => DateTime.now().isBefore(until);
+
+  static QrInvite create({
+    required List<String> hosts,
+    required int port,
+    required String deviceId,
+  }) => QrInvite(
+    hosts: hosts,
+    port: port,
+    deviceId: deviceId,
+    secret: OfficePairing._random(32),
+  );
+
+  /// The secret bound to the reader's key and commitment.
+  String proof(List<int> readerKey, List<int> commit) => base64Encode(
+    hash.Hmac(
+      hash.sha256,
+      secret,
+    ).convert([...utf8.encode('folio-qr-1'), ...readerKey, ...commit]).bytes,
+  );
+
+  String get text => jsonEncode({
+    'folio': 1,
+    'h': hosts,
+    'p': port,
+    'd': deviceId,
+    's': base64Encode(secret),
+  });
+
+  /// A QR's text, if it is one of these.
+  static QrInvite? parse(String text) {
+    try {
+      final j = jsonDecode(text);
+      if (j is! Map || j['folio'] != 1) return null;
+      final hosts = j['h'], port = j['p'], id = j['d'];
+      final secret = base64Decode('${j['s']}');
+      if (hosts is! List || port is! int || id is! String) return null;
+      if (secret.length != 32 || hosts.isEmpty) return null;
+      return QrInvite(
+        hosts: [for (final h in hosts) '$h'],
+        port: port,
+        deviceId: id,
+        secret: secret,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }

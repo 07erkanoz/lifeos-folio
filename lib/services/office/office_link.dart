@@ -29,6 +29,15 @@ class OfficeLink {
   static const maxLine = 256 * 1024;
 
   final Socket _socket;
+
+  /// Where the other end is, as this end sees it.
+  String? get remoteHost {
+    try {
+      return _socket.remoteAddress.address;
+    } catch (_) {
+      return null;
+    }
+  }
   late final StreamSubscription<String> _lines;
   // Broadcast so that the one who reads the first line can hand the rest
   // to whoever answers it; nothing is said between the two.

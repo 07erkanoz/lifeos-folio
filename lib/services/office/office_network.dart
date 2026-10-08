@@ -292,6 +292,78 @@ class OfficeNetwork extends ChangeNotifier {
 
   bool isKnown(String deviceId) => _knownDevices.containsKey(deviceId);
 
+  QrInvite? _invite;
+
+  /// The pairing a phone began by reading this screen's QR.
+  final qrPairing = ValueNotifier<OfficePairing?>(null);
+
+  /// "Telefonumu ekle": a new QR for this device, the last one void.
+  Future<QrInvite?> inviteByQr({@visibleForTesting List<String>? at}) async {
+    final self = _self, server = _server;
+    if (self == null || server == null) return null;
+    final hosts = at ?? await _addresses();
+    if (hosts.isEmpty) return null;
+    qrPairing.value = null;
+    return _invite = QrInvite.create(
+      hosts: hosts,
+      port: server.port,
+      deviceId: self.deviceId,
+    );
+  }
+
+  static Future<List<String>> _addresses() async {
+    try {
+      return [
+        for (final i in await NetworkInterface.list(
+          type: InternetAddressType.IPv4,
+        ))
+          for (final a in i.addresses)
+            if (!a.isLoopback && !a.isLinkLocal) a.address,
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// "QR okut": knows the computer whose QR the phone read, at the first of
+  /// its addresses that answers; null when none does.
+  Future<OfficePairing?> pairByQr(QrInvite invite) async {
+    final identity = _identity, self = _self;
+    if (identity == null || self == null) return null;
+    if (_pairing != null && !_pairing!.finished) return null;
+    String? host;
+    for (final h in invite.hosts) {
+      try {
+        final probe = await Socket.connect(
+          h,
+          invite.port,
+          timeout: const Duration(seconds: 3),
+        );
+        probe.destroy();
+        host = h;
+        break;
+      } catch (_) {}
+    }
+    if (host == null) return null;
+    final pairing = _pairing = OfficePairing.start(
+      identity: identity,
+      self: self,
+      peer: OfficePeer(
+        deviceId: invite.deviceId,
+        userId: '',
+        name: '',
+        device: '',
+        platform: OfficePlatform.other,
+        host: host,
+        port: invite.port,
+      ),
+      onKnown: _knownNow,
+      invite: invite,
+    );
+    _watchPairing(pairing);
+    return pairing;
+  }
+
   /// Starts knowing [peer] by a code; null while another is being known.
   OfficePairing? pair(OfficePeer peer) {
     final identity = _identity, self = _self;
@@ -516,7 +588,8 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: seen.port,
       );
-      // It is to hold this person's key: counted, before it is sent, so that a next pairing finds it: counted as one of their devices.
+      // Counted as one of this person's devices before the key is sent,
+      // so that a next pairing finds it so.
       await _knownNow(
         KnownDevice(
           deviceId: trusted.deviceId,
@@ -1080,16 +1153,25 @@ class OfficeNetwork extends ChangeNotifier {
         unawaited(link.close());
         return;
       }
+      final invite = m['davet'] != null ? _invite : null;
       final pairing = OfficePairing.answer(
         link: link,
         first: m,
         identity: identity,
         self: self,
         onKnown: _knownNow,
+        invite: invite,
       );
       _pairing = pairing;
       _watchPairing(pairing);
-      if (!pairing.finished) incoming.value = pairing;
+      if (pairing.finished) return;
+      if (pairing.byQr) {
+        // A QR is good for one phone.
+        _invite = null;
+        qrPairing.value = pairing;
+      } else {
+        incoming.value = pairing;
+      }
     });
   }
 
