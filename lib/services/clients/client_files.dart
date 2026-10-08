@@ -49,7 +49,8 @@ class ClientFiles {
   /// that two files of one name are two (content-addressed).
   static String storedName(String sha, String name) {
     final clean = p.basename(name).replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    return '${sha.substring(0, 16)}-$clean';
+    // The whole digest: a part of one could be another file's.
+    return '$sha-$clean';
   }
 
   Future<Directory> _folderOf(String clientId) async {
@@ -145,8 +146,13 @@ class ClientFiles {
   /// [f] taken off this device, its folder's file alone.
   Future<void> forget(String clientId, ClientFile f) async {
     try {
+      // Only a file of this content goes, wherever it lies.
+      Future<bool> mine(File file) async =>
+          await file.exists() &&
+          !FileSystemEntity.isLinkSync(file.path) &&
+          sha256.convert(await file.readAsBytes()).toString() == f.sha256;
       final here = await placeFor(clientId, f);
-      if (await here.exists()) await here.delete();
+      if (await mine(here)) await here.delete();
       // An earlier Folio's file goes only when it is this one's content: a
       // name another device sent cannot take another record's file.
       final old = await _legacy(clientId, f);

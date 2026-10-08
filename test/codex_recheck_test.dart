@@ -84,6 +84,17 @@ class BarrierFiles extends ClientFiles {
   }
 }
 
+void asSelin() {
+  final oldPerson = PortalDatabase.clientPerson,
+      oldMoney = PortalDatabase.clientMoneyAllowed;
+  PortalDatabase.clientPerson = () => 'selin';
+  PortalDatabase.clientMoneyAllowed = () => true;
+  addTearDown(() {
+    PortalDatabase.clientPerson = oldPerson;
+    PortalDatabase.clientMoneyAllowed = oldMoney;
+  });
+}
+
 void registerTests() {
   test('an authenticated member cannot overwrite another author record', () {
     final db = PortalDatabase.memory();
@@ -478,6 +489,159 @@ void registerTests() {
         }
       expect(db.clientRecord('own')!.locked, isTrue);
       expect(await files.locate('k1', ownFile), isNotNull);
+    },
+  );
+
+  // The fourth review's.
+  test(
+    'canonical cleanup rejects a false digest with the victim prefix',
+    () async {
+      asSelin();
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      final root = await Directory.systemTemp.createTemp(
+        'folio-prefix-collateral-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final files = ClientFiles(root: () async => root);
+      final ownFile = await files.keepBytes(
+        'k1',
+        'signed.pdf',
+        Uint8List.fromList([1, 2, 3]),
+      );
+      db.saveClient(card());
+      db.saveClientRecord(
+        record(
+          'own',
+          'selin',
+          data: {
+            'ekler': [clientFileJson(ownFile)],
+          },
+        ).copyWith(locked: true),
+      );
+      final falseSha =
+          ownFile.sha256.substring(0, 63) +
+          (ownFile.sha256.endsWith('0') ? '1' : '0');
+      final malicious = (
+        name: ownFile.name,
+        path: 'k1/none.pdf',
+        sha256: falseSha,
+      );
+      db.clientsOfficeMerge(
+        {
+          'muvekkilKayitlari': [
+            record(
+              'foreign',
+              'deniz',
+              data: {
+                'ekler': [clientFileJson(malicious)],
+              },
+            ).toJson(),
+          ],
+        },
+        money: false,
+        me: 'selin',
+        from: 'deniz',
+      );
+      db.clientsOfficeMerge(
+        {
+          'muvekkiller': [card(office: false, year: 2026).toJson()],
+        },
+        money: false,
+        me: 'selin',
+        from: 'deniz',
+      );
+      final still = {
+        for (final r in db.allClientRecords())
+          for (final f in clientFilesOf(r)) '${r.clientId}|${f.sha256}',
+      };
+      for (final r in db.removedClientRecords)
+        for (final f in clientFilesOf(r)) {
+          if (!still.contains('${r.clientId}|${f.sha256}'))
+            await files.forget(r.clientId, f);
+        }
+      expect(db.clientRecord('own')!.locked, isTrue);
+      expect(await files.locate('k1', ownFile), isNotNull);
+    },
+  );
+
+  test(
+    'own sync keeps records of a colleague card absorbed into another client',
+    () {
+      asSelin();
+      final source = PortalDatabase.memory(), target = PortalDatabase.memory();
+      addTearDown(source.dispose);
+      addTearDown(target.dispose);
+      final primary = Client(
+        id: 'mine',
+        name: 'Ayşe Karaca',
+        person: 'selin',
+        updated: DateTime(2025),
+      );
+      final colleague = Client(
+        id: 'k1',
+        name: 'A. Karaca',
+        person: 'deniz',
+        office: true,
+        updated: DateTime(2025),
+      );
+      final fee = record(
+        'fee',
+        'deniz',
+        kind: ClientRecordKind.fee,
+        data: {'tutar': 100000},
+      );
+      for (final db in [source, target]) {
+        db.saveClient(primary);
+        db.saveClient(colleague);
+        db.saveClientRecord(fee);
+      }
+      source.mergeClients(
+        primary,
+        ClientEntry(
+          key: 'k1',
+          name: colleague.name,
+          client: colleague,
+          ids: ['k1'],
+        ),
+      );
+      expect(source.clientCard('k1')!.removed, isTrue);
+      expect(source.clientCard('k1')!.office, isTrue);
+      expect(source.clientRecord('fee'), isNotNull);
+      target.agendaMerge(source.agendaExport());
+      expect(target.clientCard('mine')!.absorbed, ['k1']);
+      expect(target.clientRecord('fee'), isNotNull);
+      expect(
+        target
+            .clientRecords('mine', also: target.clientCard('mine')!.absorbed)
+            .length,
+        1,
+      );
+    },
+  );
+
+  test(
+    'an existing revocation marker still cleans residual foreign records',
+    () {
+      asSelin();
+      final source = PortalDatabase.memory(), target = PortalDatabase.memory();
+      addTearDown(source.dispose);
+      addTearDown(target.dispose);
+      source.saveClient(card());
+      source.clientsOfficeMerge(
+        {
+          'muvekkiller': [card(office: false, year: 2026).toJson()],
+        },
+        money: false,
+        me: 'selin',
+        from: 'deniz',
+      );
+      target.saveClient(source.clientCard('k1')!);
+      // This state was produced by bd07218's own-device merge before the fix.
+      target.saveClientRecord(record('foreign', 'deniz'));
+      target.agendaMerge(source.agendaExport());
+      expect(target.clientCard('k1')!.removed, isTrue);
+      expect(target.clientRecord('foreign'), isNull);
     },
   );
 }

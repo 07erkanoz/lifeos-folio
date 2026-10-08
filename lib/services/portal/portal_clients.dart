@@ -417,6 +417,7 @@ extension PortalClients on PortalDatabase {
       },
       money: money,
       author: from,
+      person: me,
     )) {
       changed = true;
     }
@@ -430,8 +431,9 @@ extension PortalClients on PortalDatabase {
     Map<String, Object?> theirs, {
     bool money = true,
     String? author,
+    String? person,
   }) {
-    final me = PortalDatabase.clientPerson?.call() ?? '';
+    final me = person ?? PortalDatabase.clientPerson?.call() ?? '';
     var changed = false;
     _transaction(() {
       for (final j in theirs['muvekkiller'] as List? ?? const []) {
@@ -441,11 +443,6 @@ extension PortalClients on PortalDatabase {
         if (kept != null && !c.updated.isAfter(kept.updated)) continue;
         _putClient(c);
         changed = true;
-        // A colleague's client unshared, come from an own device: what
-        // others wrote of it goes here too, this person's stays.
-        if (c.removed && c.person.isNotEmpty && c.person != me) {
-          _forgetOthersOf(c.id, me);
-        }
       }
       for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {
         final r = ClientRecord.fromJson(j);
@@ -453,13 +450,7 @@ extension PortalClients on PortalDatabase {
         if (r == null || (!money && r.kind.money)) continue;
         // Of a colleague's client unshared, only this person's own.
         final card = clientCard(r.clientId);
-        if (card != null &&
-            card.removed &&
-            card.person.isNotEmpty &&
-            card.person != me &&
-            r.person != me) {
-          continue;
-        }
+        if (card != null && _unshared(card, me) && r.person != me) continue;
         // From the office, only its writer's own: a record kept here is
         // changed by no one else, nor moved to another client or kind.
         if (author != null) {
@@ -479,7 +470,24 @@ extension PortalClients on PortalDatabase {
         _putRecord(r);
         changed = true;
       }
+      // Every colleague's client unshared, come now or before: what
+      // others wrote of it goes here, this person's stays.
+      // Not knowing who this is, nothing is taken for another's.
+      if (me.isNotEmpty) {
+        for (final c in clientCards()) {
+          if (_unshared(c, me)) _forgetOthersOf(c.id, me);
+        }
+      }
     });
     return changed;
   }
+
+  /// A colleague's client unshared: the mark of it, nothing of the person
+  /// in it (a card merged into another keeps its name and its records).
+  static bool _unshared(Client c, String me) =>
+      c.removed &&
+      c.name.isEmpty &&
+      !c.office &&
+      c.person.isNotEmpty &&
+      c.person != me;
 }
