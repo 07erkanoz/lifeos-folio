@@ -670,6 +670,24 @@ void main() {
       await tester.pump();
       await _shot(tester, name);
     }
+    // Forgotten, with e-Devlet at hand.
+    await tester.runAsync(() => lock.bindIdentity('12345678901'));
+    tester.view.physicalSize = const Size(390, 844) * pixelRatio;
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      _app(
+        AppLockGate(
+          lock: lock,
+          office: 'Kaya Hukuk Bürosu',
+          identify: (_) async => null,
+          child: const Scaffold(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Şifremi unuttum'));
+    await tester.pump();
+    await _shot(tester, 'kilit-unuttum-telefon');
     lock.dispose();
     tester.view.reset();
   });

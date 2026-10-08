@@ -25,10 +25,20 @@ const _days = [
 /// time, the office's name, and the password; or the recovery code, for a
 /// new one. Any touch or key while open starts the idle time again.
 class AppLockGate extends StatefulWidget {
-  const AppLockGate({super.key, required this.child, this.lock, this.office});
+  const AppLockGate({
+    super.key,
+    required this.child,
+    this.lock,
+    this.office,
+    this.identify,
+  });
 
   final Widget child;
   final AppLock? lock;
+
+  /// Who signs in to e-Devlet, by TC number: a forgotten password renewed
+  /// with e-imza or mobil imza. Null where it cannot be asked.
+  final Future<String?> Function(BuildContext context)? identify;
 
   /// The office's name, when this device belongs to one; read from the
   /// office's ledger when not given.
@@ -116,8 +126,18 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
             Positioned.fill(
               child: Overlay(
                 initialEntries: [
+                  // A navigator of its own: e-Devlet's dialog opens over
+                  // the lock, never over what it keeps hidden.
                   OverlayEntry(
-                    builder: (_) => _LockScreen(lock: _lock, office: _office),
+                    builder: (_) => Navigator(
+                      onGenerateRoute: (_) => PageRouteBuilder<void>(
+                        pageBuilder: (_, _, _) => _LockScreen(
+                          lock: _lock,
+                          office: _office,
+                          identify: widget.identify,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -129,9 +149,10 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
 }
 
 class _LockScreen extends StatefulWidget {
-  const _LockScreen({required this.lock, required this.office});
+  const _LockScreen({required this.lock, required this.office, this.identify});
   final AppLock lock;
   final String office;
+  final Future<String?> Function(BuildContext context)? identify;
 
   @override
   State<_LockScreen> createState() => _LockScreenState();
@@ -185,6 +206,40 @@ class _LockScreenState extends State<_LockScreen> {
       _busy = false;
       if (!ok) _error = _waiting() ?? 'Şifre yanlış.';
       _password.clear();
+    });
+  }
+
+  /// The new password, by e-Devlet: the TC number who signs in gives must
+  /// be the lawyer's.
+  Future<void> _recoverByEdevlet() async {
+    if (_busy) return;
+    final weak = AppLock.weakness(_new.text);
+    if (weak != null) return setState(() => _error = weak);
+    if (_new.text != _again.text) {
+      return setState(() => _error = 'İki şifre aynı değil.');
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final tc = await widget.identify!(context);
+    if (!mounted) return;
+    final code = tc == null
+        ? null
+        : await widget.lock.recoverByIdentity(tc, _new.text);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (tc == null) {
+        _error = 'e-Devlet girişi tamamlanmadı.';
+      } else if (code == null) {
+        _error =
+            _waiting() ??
+            'e-Devlet’e giren bu Folio’nun avukatı değil; şifre '
+                'yenilenmedi.';
+      } else {
+        _newCode = code;
+      }
     });
   }
 
@@ -298,6 +353,28 @@ class _LockScreenState extends State<_LockScreen> {
                 onPressed: _busy ? null : () => unawaited(_recover()),
                 child: const Text('Şifreyi yenile'),
               ),
+              if (widget.identify != null && widget.lock.knowsWhose) ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'Kurtarma kodu elinizde değilse yeni şifreyi yazın ve '
+                  'e-Devlet’e e-imza ya da mobil imzayla girin:',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  key: const ValueKey('lock-recover-edevlet'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Color(0xFF8FB8F2)),
+                  ),
+                  onPressed: _busy
+                      ? null
+                      : () => unawaited(_recoverByEdevlet()),
+                  icon: const Icon(Icons.verified_user_outlined, size: 18),
+                  label: const Text('e-Devlet ile doğrula'),
+                ),
+              ],
               TextButton(
                 onPressed: () => setState(() {
                   _recovering = false;

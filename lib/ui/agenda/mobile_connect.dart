@@ -15,10 +15,39 @@ Future<bool> connectUyapMobile(
 }) async {
   final mobile = api ?? UyapMobileApi.instance;
   final messenger = ScaffoldMessenger.maybeOf(context);
-  // A Mac and Linux show e-Devlet in a window of their own.
+  final code = await _edevletCode(context, messenger);
+  if (code == null) return false;
+  return _login(mobile, code, messenger);
+}
+
+/// "Şifremi unuttum" by e-Devlet: the TC number of who signed in, with
+/// e-imza or mobil imza; UYAP Mobil is connected on the way. Null when it
+/// was given up or did not go.
+Future<String?> edevletIdentity(
+  BuildContext context, {
+  UyapMobileApi? api,
+}) async {
+  final mobile = api ?? UyapMobileApi.instance;
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final code = await _edevletCode(context, messenger);
+  if (code == null) return null;
+  try {
+    final session = await mobile.login(code);
+    return session.tckn.isEmpty ? null : session.tckn;
+  } catch (e) {
+    messenger?.showSnackBar(SnackBar(content: Text('e-Devlet girişi: $e')));
+    return null;
+  }
+}
+
+/// e-Devlet's code for UYAP Mobil: in a window of its own on a Mac and
+/// Linux, in a dialog elsewhere.
+Future<String?> _edevletCode(
+  BuildContext context,
+  ScaffoldMessengerState? messenger,
+) async {
   if ((Platform.isMacOS || Platform.isLinux) && EdevletWindow.available) {
     final state = UyapMobileApi.newState();
-    String? code;
     try {
       final window = await EdevletWindow.open(
         UyapMobileApi.loginPage(state),
@@ -26,15 +55,13 @@ Future<bool> connectUyapMobile(
             'UYAP Mobil için e-Devlet girişi: e-imza ya da mobil imzayı seçin.',
         redirect: '${UyapMobileApi.edevletReturn}',
       );
-      code = await window.code;
+      return await window.code;
     } catch (e) {
       messenger?.showSnackBar(
         SnackBar(content: Text('UYAP Mobil girişi açılamadı: $e')),
       );
-      return false;
+      return null;
     }
-    if (code == null) return false;
-    return _login(mobile, code, messenger);
   }
   if (!await EdevletWebDialog.available()) {
     messenger?.showSnackBar(
@@ -47,19 +74,17 @@ Future<bool> connectUyapMobile(
         ),
       ),
     );
-    return false;
+    return null;
   }
-  if (!context.mounted) return false;
+  if (!context.mounted) return null;
   final state = UyapMobileApi.newState();
-  final code = await EdevletWebDialog.show(
+  return EdevletWebDialog.show(
     context,
     page: UyapMobileApi.loginPage(state),
     hint: 'UYAP Mobil için e-Devlet girişi: e-imza ya da mobil imzayı seçin.',
     isReturn: UyapMobileApi.isReturn,
     state: state,
   );
-  if (code == null) return false;
-  return _login(mobile, code, messenger);
 }
 
 Future<bool> _login(

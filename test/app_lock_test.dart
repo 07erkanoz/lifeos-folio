@@ -60,6 +60,30 @@ void main() {
     expect(File('${dir.path}/kilit.json').existsSync(), isFalse);
   });
 
+  test('four letters are enough; three are not', () {
+    expect(AppLock.weakness('123'), isNotNull);
+    expect(AppLock.weakness('1234'), isNull);
+  });
+
+  test('a forgotten password is renewed by the lawyer’s e-Devlet', () async {
+    final l = lock();
+    await l.setPassword('1234');
+    expect(l.knowsWhose, isFalse);
+    await l.bindIdentity('12345678901');
+    expect(l.knowsWhose, isTrue);
+    final kept = File('${dir.path}/kilit.json').readAsStringSync();
+    expect(kept, isNot(contains('12345678901')));
+    // Bound once: a later session's number does not replace it.
+    await l.bindIdentity('10987654321');
+    l.lockNow();
+    expect(await l.recoverByIdentity('10987654321', '5678'), isNull);
+    final code = await l.recoverByIdentity('12345678901', '5678');
+    expect(code, isNotNull);
+    expect(await l.checkPassword('5678'), isTrue);
+    // Still whose it is, after the new password.
+    expect(l.knowsWhose, isTrue);
+  });
+
   testWidgets('the lock covers Folio with the time and the office name', (
     tester,
   ) async {

@@ -109,14 +109,20 @@ class AppLock extends ChangeNotifier {
   }
 
   static String? weakness(String password) =>
-      password.length < 8 ? 'Şifre en az 8 karakter olmalı.' : null;
+      password.length < 4 ? 'Şifre en az 4 karakter olmalı.' : null;
 
   /// Sets the password (and turns the lock on); the recovery code it
   /// returns is shown once and kept only as its hash.
   Future<String> setPassword(String password, {int? idleMinutes}) async {
     final code = newRecoveryCode();
     final salt = _random(16), recoverySalt = _random(16);
+    // Whose Folio it is stays across a new password.
+    final whose = {
+      for (final k in const ['ttuz', 'thash'])
+        if (_kept?[k] case final String v) k: v,
+    };
     _kept = {
+      ...whose,
       'v': 1,
       'tuz': base64Encode(salt),
       'hash': await _hash(password, salt),
@@ -181,6 +187,32 @@ class AppLock extends ChangeNotifier {
   /// the old one has been seen.
   Future<String?> recover(String code, String newPassword) async {
     final ok = await _try(() => _matches(_plainCode(code), 'ktuz', 'khash'));
+    if (!ok) return null;
+    return setPassword(newPassword);
+  }
+
+  /// Whether Folio knows whose it is: the lawyer's TC number, kept only as
+  /// a slowed hash, for the password to be renewed by e-Devlet.
+  bool get knowsWhose => _kept?['thash'] is String;
+
+  /// The lawyer's TC number, from a portal session they opened: kept once,
+  /// as a hash, while the lock is on.
+  Future<void> bindIdentity(String tckn) async {
+    final kept = _kept;
+    final tc = tckn.replaceAll(RegExp(r'\D'), '');
+    if (kept == null || knowsWhose || tc.length != 11) return;
+    final salt = _random(16);
+    kept['ttuz'] = base64Encode(salt);
+    kept['thash'] = await _hash(tc, salt);
+    await _save();
+    notifyListeners();
+  }
+
+  /// "Şifremi unuttum", by e-Devlet (e-imza, mobil imza): the TC number it
+  /// gave is the lawyer's; a new password, and a new recovery code.
+  Future<String?> recoverByIdentity(String tckn, String newPassword) async {
+    final tc = tckn.replaceAll(RegExp(r'\D'), '');
+    final ok = await _try(() => _matches(tc, 'ttuz', 'thash'));
     if (!ok) return null;
     return setPassword(newPassword);
   }

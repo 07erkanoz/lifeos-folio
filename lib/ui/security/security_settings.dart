@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../services/uyap/uyap_mobile_api.dart';
+
 import 'package:flutter/services.dart';
 
 import '../../services/security/app_lock.dart';
@@ -95,6 +98,13 @@ class SecuritySettings extends StatelessWidget {
     },
   );
 
+  /// Whose Folio it is, from UYAP Mobil's session when one is open: for
+  /// a forgotten password to be renewed by e-Devlet.
+  void _bindWhose() {
+    final tc = UyapMobileApi.instance.session.value?.tckn ?? '';
+    if (tc.isNotEmpty) unawaited(_lock.bindIdentity(tc));
+  }
+
   Future<void> _turnOn(BuildContext context) async {
     final words = await _ask(
       context,
@@ -106,6 +116,7 @@ class SecuritySettings extends StatelessWidget {
     );
     if (words == null || !context.mounted) return;
     final code = await _lock.setPassword(words[0]);
+    _bindWhose();
     if (context.mounted) await _showCode(context, code);
   }
 
@@ -132,6 +143,7 @@ class SecuritySettings extends StatelessWidget {
       return;
     }
     final code = await _lock.setPassword(words[1]);
+    _bindWhose();
     if (context.mounted) await _showCode(context, code);
   }
 
@@ -143,6 +155,7 @@ class SecuritySettings extends StatelessWidget {
       return;
     }
     final code = await _lock.setPassword(words[0]);
+    _bindWhose();
     if (context.mounted) await _showCode(context, code);
   }
 

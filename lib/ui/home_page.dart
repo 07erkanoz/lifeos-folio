@@ -5,6 +5,7 @@ import 'agenda/uets_connect.dart';
 import 'agenda/uets_page.dart';
 import 'agenda/uyap_notices_page.dart';
 import '../services/office/office_inbox.dart';
+import '../services/security/app_lock.dart';
 import '../services/sync/folder_sync.dart';
 import '../services/sync/own_sync.dart';
 import '../services/office/office_network.dart';
@@ -739,6 +740,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           unawaited(_library.addPaths([path]));
       unawaited(FolderSync.instance.start());
       OfficeInbox.instance.addListener(_inboxChanged);
+      // Whose Folio it is, for a forgotten lock password and e-Devlet.
+      UyapMobileApi.instance.session.addListener(_bindWhose);
+      _bindWhose();
       unawaited(OfficeInbox.instance.start());
       // New UYAP notifications, told on the computer's or phone's own.
       PortalSync.instance.onNewNotices = (n) => unawaited(
@@ -901,6 +905,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  void _bindWhose() {
+    final tc = UyapMobileApi.instance.session.value?.tckn ?? '';
+    if (tc.isNotEmpty) unawaited(AppLock.instance.bindIdentity(tc));
+  }
+
   void _inboxChanged() {
     if (mounted) setState(() {});
   }
@@ -968,6 +977,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
     OfficeNetwork.instance.arrived.removeListener(_filesArrived);
     OfficeInbox.instance.removeListener(_inboxChanged);
+    UyapMobileApi.instance.session.removeListener(_bindWhose);
     _stopPreviewSpeech();
     UpdateCheck.instance.available.removeListener(_updateAvailable);
     DocumentHistory.recoveryChanges.removeListener(_checkRecovery);
