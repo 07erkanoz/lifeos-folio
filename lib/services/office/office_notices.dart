@@ -113,6 +113,19 @@ void tellOffice(OfficeNetwork net, {SystemNotices? notices, AppLock? lock}) {
     );
   });
 
+  net.arrived.addListener(() {
+    final t = net.arrived.value;
+    if (t == null) return;
+    final from = t.peer.name.isEmpty ? t.peer.device : t.peer.name;
+    show(
+      'a${t.id}',
+      'Dosya geldi · Gönderen: $from',
+      t.files.length == 1 ? t.files.single.name : '${t.files.length} dosya',
+      'buro:',
+      'Size dosya geldi',
+    );
+  });
+
   net.incomingOffer.addListener(() {
     final t = net.incomingOffer.value;
     if (t == null) return;

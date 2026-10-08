@@ -1449,6 +1449,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         if (i.kind == 'deadline' && !i.done && i.at != null) i,
     ]..sort((a, b) => a.at!.compareTo(b.at!));
     final deadline = deadlines.firstOrNull;
+    // On a phone, smaller and on two lines: a case's newest document's
+    // name is read whole, with the phone's own larger letters too.
+    final phone = MediaQuery.sizeOf(context).width < 600;
     Widget box(
       String title,
       String value,
@@ -1456,7 +1459,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       Color? valueColor,
       bool warn = false,
     }) => _card(
-      padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+      padding: phone
+          ? const EdgeInsets.fromLTRB(12, 9, 12, 9)
+          : const EdgeInsets.fromLTRB(14, 11, 14, 11),
       border: Border.all(
         color: warn
             ? const Color(0xFFF0B4AF)
@@ -1467,20 +1472,23 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         children: [
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: .8,
-              color: AgendaColors.muted,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: phone ? 9.5 : 10.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: phone ? .5 : .8,
+              color: AgendaColors.muted,
+            ),
+          ),
+          SizedBox(height: phone ? 3 : 4),
+          Text(
+            value,
+            maxLines: phone ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: phone ? 13.5 : 15,
+              height: phone ? 1.2 : null,
               fontWeight: FontWeight.w700,
               color: valueColor,
             ),
@@ -1488,9 +1496,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           const SizedBox(height: 2),
           Text(
             sub,
-            maxLines: 1,
+            maxLines: phone ? 2 : 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+            style: TextStyle(
+              fontSize: phone ? 11 : 12,
+              height: phone ? 1.2 : null,
+              color: AgendaColors.muted,
+            ),
           ),
         ],
       ),
@@ -1569,14 +1581,27 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               ],
             ],
           )
-        : GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 2.1,
-            children: boxes,
+        // Two by two, as tall as their words: a set height cut them.
+        : Column(
+            children: [
+              for (var i = 0; i < boxes.length; i += 2) ...[
+                if (i > 0) const SizedBox(height: 10),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: boxes[i]),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: i + 1 < boxes.length
+                            ? boxes[i + 1]
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           );
   }
 

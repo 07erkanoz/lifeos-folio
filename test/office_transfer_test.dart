@@ -574,6 +574,8 @@ void main() {
         () => tablet.transfers.any((x) => x.state == TransferState.done),
       );
       expect(tablet.incomingOffer.value, isNull);
+      // Told where it went: it came on its own, to the inbox.
+      expect(tablet.arrived.value?.saved.single, endsWith('Not.txt'));
       // Known to each other now, as their own.
       await until(
         () =>

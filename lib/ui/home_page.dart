@@ -724,6 +724,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(OfficeNetwork.instance.resume());
       OfficeNetwork.instance.incoming.addListener(_pairingAsked);
       OfficeNetwork.instance.incomingOffer.addListener(_offerCame);
+      OfficeNetwork.instance.arrived.addListener(_filesArrived);
       tellOffice(OfficeNetwork.instance);
       OfficeNetwork.instance.addListener(_officeCounted);
       // Each UYAP channel syncs when it connects, the agenda open or not.
@@ -882,6 +883,41 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  /// Files came on their own: the inbox is searched in the archive, and
+  /// the user is told where, with the first a tap away.
+  Future<void> _filesArrived() async {
+    final net = OfficeNetwork.instance;
+    final t = net.arrived.value;
+    if (t == null || !mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final inbox = (await net.inbox()).path;
+      if (!_library.sources.any((s) => p.equals(s.path, inbox))) {
+        await _library.addPaths([inbox]);
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    final from = t.peer.device.isNotEmpty ? t.peer.device : t.peer.name;
+    final first = t.saved.first;
+    messenger?.showSnackBar(
+      SnackBar(
+        key: const ValueKey('files-arrived'),
+        duration: const Duration(seconds: 8),
+        content: Text(
+          '${t.saved.length == 1 ? p.basename(first) : '${t.saved.length} dosya'}'
+          ' geldi · Gönderen: $from. Folio Gelenler klasöründe.',
+        ),
+        action: FileLibrary.supports(first)
+            ? SnackBarAction(
+                label: 'Aç',
+                onPressed: () =>
+                    unawaited(_openRecent(EvrakFile.fromPath(first))),
+              )
+            : null,
+      ),
+    );
+  }
+
   /// A known device offers files: asked wherever the user is.
   void _offerCame() {
     final net = OfficeNetwork.instance;
@@ -908,6 +944,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
     OfficeNetwork.instance.removeListener(_officeCounted);
     OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
+    OfficeNetwork.instance.arrived.removeListener(_filesArrived);
     _stopPreviewSpeech();
     UpdateCheck.instance.available.removeListener(_updateAvailable);
     DocumentHistory.recoveryChanges.removeListener(_checkRecovery);
@@ -1653,11 +1690,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             autofocus: true,
             child: DropZoneOverlay(
               // Pages that take what is dropped themselves.
-              enabled: !const {
-                'senkron',
-                'buro',
-                'mesajlar',
-              }.contains(_group),
+              enabled: !const {'senkron', 'buro', 'mesajlar'}.contains(_group),
               onFilesDropped: _addFiles,
               child: Scaffold(
                 drawer: mobile ? _mobileDrawer(mobileHome) : null,

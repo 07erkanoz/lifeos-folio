@@ -210,6 +210,10 @@ class OfficeNetwork extends ChangeNotifier {
   /// A folder's files another own device sent came whole (see FolderSync).
   void Function(OfficeTransfer t)? onOwnFiles;
 
+  /// Files that came whole on their own, not with a message, a task or a
+  /// folder kept alike: in the inbox, for the user to be told where.
+  final arrived = ValueNotifier<OfficeTransfer?>(null);
+
   void _ended(OfficeTransfer t) {
     unawaited(_log(t));
     if (!t.outgoing &&
@@ -218,6 +222,14 @@ class OfficeNetwork extends ChangeNotifier {
       onOwnFiles?.call(t);
     }
     if (t.state == TransferState.done) unawaited(_metOwnDevice(t.talkedTo));
+    if (!t.outgoing &&
+        t.state == TransferState.done &&
+        t.saved.isNotEmpty &&
+        !t.meta.containsKey('sohbet') &&
+        !t.meta.containsKey('gorev') &&
+        !t.meta.containsKey('senkron')) {
+      arrived.value = t;
+    }
     final taskId = t.meta['gorev'], caseKey = t.meta['dosya'];
     if (taskId is String &&
         caseKey is String &&
