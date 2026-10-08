@@ -1,4 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+
+import '../platform/app_directories.dart';
 
 import '../platform/system_notices.dart';
 import '../security/app_lock.dart';
@@ -79,6 +86,21 @@ void tellOffice(OfficeNetwork net, {SystemNotices? notices, AppLock? lock}) {
     show('g${e.id}', title, body, 'gorev:${t.id}', 'Görevde yeni bir hareket');
   };
 
+  TaskReminders.instance.start(net, (t, d) {
+    final when = d < 0
+        ? '${-d} gün gecikti'
+        : d == 0
+        ? 'bugün son gün'
+        : '$d gün kaldı';
+    show(
+      'h${t.id}$d${DateTime.now().day}',
+      'Görev: $when',
+      t.title,
+      'gorev:${t.id}',
+      'Görevin son günü yaklaşıyor',
+    );
+  });
+
   net.incoming.addListener(() {
     final p = net.incoming.value;
     if (p == null) return;
@@ -102,4 +124,110 @@ void tellOffice(OfficeNetwork net, {SystemNotices? notices, AppLock? lock}) {
       'Size dosya gönderiliyor',
     );
   });
+}
+
+/// Staged reminders of tasks' due days (docs/buro.md, from Mühlet and
+/// Dosya360): 7, 3 and 1 days before, on the day, and every day late.
+/// "Gördüm" on a task stops all but the day's own; kept on this device.
+class TaskReminders {
+  TaskReminders({Future<File> Function()? file}) : _file = file ?? _default;
+
+  static Future<File> _default() async => File(
+    p.join((await folioSupportDirectory()).path, 'buro_hatirlatma.json'),
+  );
+
+  final Future<File> Function() _file;
+  final _sent = <String>{};
+  final _seen = <String>{};
+  bool _loaded = false;
+  Timer? _timer;
+
+  static const stages = [7, 3, 1];
+
+  bool seen(String taskId) => _seen.contains(taskId);
+
+  Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+    try {
+      final file = await _file();
+      if (!await file.exists()) return;
+      final j = jsonDecode(await file.readAsString());
+      if (j is! Map) return;
+      _sent.addAll([
+        for (final s in (j['gonderilen'] as List? ?? const [])) '$s',
+      ]);
+      _seen.addAll([for (final s in (j['goruldu'] as List? ?? const [])) '$s']);
+    } catch (_) {}
+  }
+
+  Future<void> _save() async {
+    try {
+      final file = await _file();
+      await file.parent.create(recursive: true);
+      await file.writeAsString(
+        jsonEncode({'gonderilen': _sent.toList(), 'goruldu': _seen.toList()}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> markSeen(String taskId) async {
+    _seen.add(taskId);
+    await _save();
+  }
+
+  /// What is due to be told now: (task, days left), each told once.
+  @visibleForTesting
+  List<(OfficeTask, int)> due(
+    Iterable<OfficeTask> tasks,
+    String me,
+    DateTime now,
+  ) {
+    final out = <(OfficeTask, int)>[];
+    final today = '${now.year}-${now.month}-${now.day}';
+    for (final t in tasks) {
+      final d = t.daysLeft(now);
+      if (d == null || !t.open || !t.assignees.containsKey(me)) continue;
+      final String key;
+      if (d < 0) {
+        key = '${t.id}|gec|$today';
+      } else if (d == 0) {
+        key = '${t.id}|0';
+      } else if (stages.contains(d) && !_seen.contains(t.id)) {
+        key = '${t.id}|$d';
+      } else {
+        continue;
+      }
+      if (d < 0 && _seen.contains(t.id)) continue;
+      if (_sent.add(key)) out.add((t, d));
+    }
+    return out;
+  }
+
+  /// Checks now and every hour while Folio runs.
+  void start(
+    OfficeNetwork net,
+    void Function(OfficeTask t, int daysLeft) tell,
+  ) {
+    _timer?.cancel();
+    Future<void> check() async {
+      await load();
+      final me = net.self?.deviceId;
+      if (me == null) return;
+      final todo = due(net.tasks.all, me, DateTime.now());
+      if (todo.isEmpty) return;
+      await _save();
+      for (final (t, d) in todo) {
+        tell(t, d);
+      }
+    }
+
+    unawaited(check());
+    _timer = Timer.periodic(
+      const Duration(hours: 1),
+      (_) => unawaited(check()),
+    );
+  }
+
+  static final instance = TaskReminders();
 }

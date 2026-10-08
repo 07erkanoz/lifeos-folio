@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:evrak_convert/services/office/office_notices.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -117,4 +120,25 @@ void main() {
       expect(store.of('t2'), isNull);
     },
   );
+
+  test('reminders come 7, 3 and 1 days before, on the day and late; Gördüm stops the early ones', () async {
+    final dir = Directory.systemTemp.createTempSync('folio_remind_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final r = TaskReminders(file: () async => File('${dir.path}/h.json'));
+    final t = task(due: DateTime(2026, 10, 20));
+    List<int> on(DateTime day) => [
+      for (final (_, d) in r.due([t], 'doer', day)) d,
+    ];
+    expect(on(DateTime(2026, 10, 12)), isEmpty);
+    expect(on(DateTime(2026, 10, 13, 9)), [7]);
+    expect(on(DateTime(2026, 10, 13, 15)), isEmpty);
+    expect(on(DateTime(2026, 10, 17)), [3]);
+    await r.markSeen(t.id);
+    expect(on(DateTime(2026, 10, 19)), isEmpty);
+    // The day itself is told even when seen.
+    expect(on(DateTime(2026, 10, 20)), [0]);
+    expect(on(DateTime(2026, 10, 22)), isEmpty);
+    // Not given to them: nothing.
+    expect(r.due([t], 'giver', DateTime(2026, 10, 20)), isEmpty);
+  });
 }

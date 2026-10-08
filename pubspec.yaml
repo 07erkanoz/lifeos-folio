@@ -94,6 +94,7 @@ flutter:
     - assets/mevzuat/courts.json
     - assets/sozluk/terms.json
     - assets/ses/okuma.json
+    - assets/buro/gorev_sablonlari.json
     - assets/mevzuat/mevzuat-chain.pem
     - fonts/pdf/
     - assets/branding/

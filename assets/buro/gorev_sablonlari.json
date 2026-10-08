@@ -1,0 +1,42 @@
+{
+  "surum": 1,
+  "aciklama": "Görev ver penceresinde dava türüne göre önerilen işler. Folio'nun kendi verisidir; büro kendine göre değiştirebilir.",
+  "sablonlar": {
+    "hukuk": [
+      "Dava dilekçesini hazırla",
+      "Cevap dilekçesini hazırla",
+      "Cevaba cevap dilekçesini hazırla",
+      "Delil ve tanık listesini hazırla",
+      "Bilirkişi raporunu incele, itiraz dilekçesini hazırla",
+      "Gider ve delil avansını yatır",
+      "Duruşmaya katıl, zaptı kontrol et",
+      "Gerekçeli kararı incele, istinaf dilekçesini hazırla"
+    ],
+    "icra": [
+      "Takip talebini hazırla",
+      "Ödeme emrinin tebliğini kontrol et",
+      "Ödeme emrine itirazı incele",
+      "Haciz talebini hazırla",
+      "Banka ve maaş haczi müzekkerelerini gönder",
+      "Tahsilat ve reddiyatı kontrol et"
+    ],
+    "ceza": [
+      "Dosyayı ve iddianameyi incele",
+      "Savunma ya da beyan dilekçesini hazırla",
+      "Delil listesini hazırla",
+      "Duruşmaya katıl, zaptı kontrol et",
+      "Kararı incele, istinaf ya da temyiz dilekçesini hazırla"
+    ],
+    "idari": [
+      "Dava dilekçesini hazırla",
+      "Yürütmeyi durdurma talebini hazırla",
+      "Savunmayı incele, cevap dilekçesini hazırla",
+      "Kararı incele, istinaf ya da temyiz dilekçesini hazırla"
+    ],
+    "diger": [
+      "Dosyayı incele",
+      "Dilekçeyi hazırla",
+      "Duruşmaya katıl"
+    ]
+  }
+}

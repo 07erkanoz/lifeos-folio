@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../services/office/office_network.dart';
 import '../../services/office/office_task.dart';
@@ -63,6 +65,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
   @override
   void initState() {
     super.initState();
+    unawaited(_loadTemplates());
     final given = widget.rows;
     if (given != null) {
       _rows = given;
@@ -80,6 +83,25 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
             .catchError((Object _) {}),
       );
     }
+  }
+
+  /// The things to do the template file suggests for each kind of case.
+  static Map<String, List<String>>? _templateCache;
+  Map<String, List<String>> get _templates => _templateCache ?? const {};
+
+  Future<void> _loadTemplates() async {
+    if (_templateCache != null) return;
+    try {
+      final j = jsonDecode(
+        await rootBundle.loadString('assets/buro/gorev_sablonlari.json'),
+      );
+      final all = (j as Map)['sablonlar'] as Map;
+      _templateCache = {
+        for (final e in all.entries)
+          '${e.key}': [for (final t in e.value as List) '$t'],
+      };
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   void _startWith() {
@@ -427,11 +449,45 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                 ),
               ],
             ),
-          TextButton.icon(
-            onPressed: () =>
-                setState(() => c.items.add((TextEditingController(), ''))),
-            icon: const Icon(Icons.add_rounded, size: 16),
-            label: const Text('İş ekle'),
+          Wrap(
+            children: [
+              TextButton.icon(
+                onPressed: () =>
+                    setState(() => c.items.add((TextEditingController(), ''))),
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('İş ekle'),
+              ),
+              PopupMenuButton<String>(
+                key: ValueKey('task-template-${c.row.key}'),
+                tooltip: 'Bu dava türünün işleri',
+                onSelected: (text) => setState(() {
+                  // An empty row is filled rather than left.
+                  final empty = c.items.indexWhere(
+                    (i) => i.$1.text.trim().isEmpty,
+                  );
+                  if (empty >= 0) {
+                    c.items[empty].$1.text = text;
+                  } else {
+                    c.items.add((TextEditingController(text: text), ''));
+                  }
+                }),
+                itemBuilder: (_) => [
+                  for (final t
+                      in _templates[c.row.kind.name] ?? const <String>[])
+                    PopupMenuItem(value: t, child: Text(t)),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  child: Text(
+                    '${c.row.kind.label} şablonundan ekle ▾',
+                    style: TextStyle(fontSize: 13, color: scheme.primary),
+                  ),
+                ),
+              ),
+            ],
           ),
           Wrap(
             spacing: 6,

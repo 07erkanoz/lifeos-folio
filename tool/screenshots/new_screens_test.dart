@@ -537,6 +537,9 @@ void main() {
     await tester.pumpWidget(_app(Scaffold(body: TasksPage(network: a))));
     await tester.pump();
     await _shot(tester, 'gorevler');
+    await tester.tap(find.byKey(const ValueKey('tasks-view-load')));
+    await tester.pump();
+    await _shot(tester, 'gorevler-is-yuku');
     await tester.pumpWidget(
       _app(
         Scaffold(

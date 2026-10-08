@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../services/office/office_network.dart';
+import '../../services/office/office_notices.dart' show TaskReminders;
 import '../../services/office/office_task.dart';
 import '../../services/platform/file_actions.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'task_give_dialog.dart';
 
-enum _View { all, given, mine }
+enum _View { all, given, mine, load }
 
 /// How a task's due day reads, and its colour: late red, near amber.
 (String, Color) dueOf(OfficeTask t, DateTime now) {
@@ -79,6 +80,7 @@ class _TasksPageState extends State<TasksPage> {
                 _View.all => true,
                 _View.given => t.by == me,
                 _View.mine => t.assignees.containsKey(me),
+                _View.load => true,
               })
                 t,
           ];
@@ -118,6 +120,7 @@ class _TasksPageState extends State<TasksPage> {
                           if (manager) (_View.all, 'Bütün büro'),
                           (_View.given, 'Verdiğim'),
                           (_View.mine, 'Bana verilen'),
+                          if (manager) (_View.load, 'İş yükü'),
                         ])
                           ChoiceChip(
                             key: ValueKey('tasks-view-${v.name}'),
@@ -150,6 +153,8 @@ class _TasksPageState extends State<TasksPage> {
                               ),
                             ),
                           )
+                        : view == _View.load
+                        ? _workload(context, tasks, now)
                         : wide
                         ? _board(context, tasks, now)
                         : _list(context, tasks, now),
@@ -235,6 +240,90 @@ class _TasksPageState extends State<TasksPage> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  /// Each member's open work, by stage, and what is late or due this week.
+  Widget _workload(BuildContext context, List<OfficeTask> tasks, DateTime now) {
+    final scheme = Theme.of(context).colorScheme;
+    final rows = [
+      for (final m in _net.ledger.members)
+        () {
+          final mine = [
+            for (final t in tasks)
+              if (t.open && t.assignees.containsKey(m.deviceId)) t,
+          ];
+          int at(TaskStage s) => mine.where((t) => t.stage == s).length;
+          final late = mine.where((t) => t.late(now)).length;
+          final week = mine.where((t) {
+            final d = t.daysLeft(now);
+            return d != null && d >= 0 && d <= 7;
+          }).length;
+          return (
+            m,
+            mine.length,
+            at(TaskStage.given),
+            at(TaskStage.running),
+            at(TaskStage.review),
+            late,
+            week,
+          );
+        }(),
+    ]..sort((a, b) => b.$2.compareTo(a.$2));
+    Widget cell(String text, {bool head = false, Color? ink}) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: head ? FontWeight.w700 : FontWeight.w400,
+          color: ink,
+        ),
+      ),
+    );
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Table(
+          key: const ValueKey('tasks-workload'),
+          columnWidths: const {0: FlexColumnWidth(2.4)},
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: [
+            TableRow(
+              decoration: BoxDecoration(color: scheme.surfaceContainerHighest),
+              children: [
+                for (final h in [
+                  'Üye',
+                  'Açık',
+                  'Verildi',
+                  'Sürüyor',
+                  'İncelemede',
+                  'Geciken',
+                  'Bu hafta',
+                ])
+                  cell(h, head: true),
+              ],
+            ),
+            for (final (m, open, given, running, review, late, week) in rows)
+              TableRow(
+                children: [
+                  cell('${m.name} · ${m.role.label}'),
+                  cell('$open', head: true),
+                  cell('$given'),
+                  cell('$running'),
+                  cell('$review'),
+                  cell('$late', ink: late > 0 ? AgendaColors.deadline : null),
+                  cell('$week', ink: week > 0 ? AgendaColors.task : null),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -595,6 +684,18 @@ class _TaskDetailState extends State<TaskDetail> {
             child: const Text('Onayla'),
           ),
         ],
+        if (doer &&
+            t.open &&
+            t.due != null &&
+            !TaskReminders.instance.seen(t.id))
+          TextButton(
+            key: const ValueKey('task-seen'),
+            onPressed: () async {
+              await TaskReminders.instance.markSeen(t.id);
+              if (mounted) setState(() {});
+            },
+            child: const Text('Gördüm'),
+          ),
         if (giver && t.open)
           TextButton(
             key: const ValueKey('task-cancel'),
