@@ -17,12 +17,24 @@ import 'office_peer.dart';
 /// ChaCha20-Poly1305 under a counter that only goes up: a message changed,
 /// replayed or put out of order is not opened.
 class OfficeChannel {
-  OfficeChannel._(this._link, this.peer, this._send, this._receive);
+  OfficeChannel._(
+    this._link,
+    this.peer,
+    this._send,
+    this._receive, {
+    this.vouched = false,
+  });
 
   final OfficeLink _link;
 
   /// The known device on the other side.
   final KnownDevice peer;
+
+  /// Whether the person's own key vouched for the other side's device key
+  /// in this talk: one of the person's own devices, by proof, not by the
+  /// person it says it is. What only their own devices get is given on
+  /// this alone.
+  final bool vouched;
   final SecretKey _send, _receive;
   int _sent = 0, _received = 0;
   final _aead = Chacha20.poly1305Aead();
@@ -102,7 +114,12 @@ class OfficeChannel {
         throw const OfficeChannelException('Karşı cihaz doğrulanamadı.');
       }
       final (send, receive) = await _keys(mine, theirs, minePublic, theirs);
-      return OfficeChannel._(link, peer, send, receive).._start();
+      final vouched = await identity.vouches(
+        base64Decode(peer.publicKey),
+        m['uc'] is String ? m['uc'] as String : null,
+      );
+      return OfficeChannel._(link, peer, send, receive, vouched: vouched)
+        .._start();
     } catch (e) {
       await link.close();
       if (e is OfficeChannelException) rethrow;
@@ -162,7 +179,12 @@ class OfficeChannel {
         ),
       });
       final (receive, send) = await _keys(mine, theirs, theirs, minePublic);
-      return OfficeChannel._(link, peer, send, receive).._start();
+      final vouched = await identity.vouches(
+        base64Decode(peer.publicKey),
+        hello['uc'] is String ? hello['uc'] as String : null,
+      );
+      return OfficeChannel._(link, peer, send, receive, vouched: vouched)
+        .._start();
     } catch (_) {
       await link.close();
       return null;

@@ -363,6 +363,11 @@ class OfficeChats {
       // A talk new here must be one this device is in, and a private one
       // the very talk of its two: else one could set up another's private
       // talk with themself in it, and hear what is said there.
+      // A private talk's id is only ever a private talk's.
+      if ((theirs.id.startsWith('ozel-')) !=
+          (theirs.kind == ChatKind.private)) {
+        return false;
+      }
       if (me != null && theirs.kind != ChatKind.broadcast) {
         final ids = theirs.members.keys.toList();
         if (!theirs.members.containsKey(me)) return false;

@@ -418,6 +418,25 @@ void main() {
       ),
       isFalse,
     );
+    // Nor under a private talk's id as a group.
+    final groupTrap = Chat(
+      id: Chat.privateId(a.self!.deviceId, c.self!.deviceId),
+      kind: ChatKind.group,
+      by: b.self!.deviceId,
+      members: {
+        a.self!.deviceId: 'Av. Deniz Kaya',
+        b.self!.deviceId: 'Mert',
+      },
+    );
+    expect(
+      await a.chats.merge(
+        groupTrap,
+        from: b.self!.deviceId,
+        mayBroadcast: a.ledger.isManager,
+        me: a.self!.deviceId,
+      ),
+      isFalse,
+    );
     // One taken off the office hears no more of a talk it was in.
     expect(await a.removeMember(c.self!.deviceId), isNull);
     await a.post(a.chats.of(group.id)!, text: 'Yalnız ikimiz biliyoruz.');

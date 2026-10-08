@@ -311,6 +311,7 @@ class OfficeTransfer extends ChangeNotifier {
   Future<void> accept() async {
     if (_state != TransferState.offered || outgoing) return;
     await _parts.create(recursive: true);
+    await _forgetOldMarks();
     final have = <int>[];
     for (var i = 0; i < files.length; i++) {
       final came = await _cameTo(i);
@@ -415,14 +416,23 @@ class OfficeTransfer extends ChangeNotifier {
 
   void _fail(String reason) => _end(TransferState.failed, reason);
 
-  /// All came: the marks of what came are no longer needed.
-  void _done() {
-    for (var i = 0; i < files.length; i++) {
-      try {
-        _doneOf(i).deleteSync();
-      } catch (_) {}
-    }
-    _end(TransferState.done, null);
+  /// All came. The marks of what came are kept a week: if the last word
+  /// did not reach the sender, it offers the same again and is told so.
+  void _done() => _end(TransferState.done, null);
+
+  static const _markLife = Duration(days: 7);
+
+  Future<void> _forgetOldMarks() async {
+    try {
+      final old = DateTime.now().subtract(_markLife);
+      await for (final e in _parts.list()) {
+        if (e is File &&
+            e.path.endsWith('.done') &&
+            (await e.lastModified()).isBefore(old)) {
+          await e.delete();
+        }
+      }
+    } catch (_) {}
   }
 
   void _end(TransferState state, String? reason) {

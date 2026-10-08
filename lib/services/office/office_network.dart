@@ -513,8 +513,9 @@ class OfficeNetwork extends ChangeNotifier {
         await t.accept();
         return;
       }
-      if (ch.peer.userId == _identity?.userId) {
-        // From one of this person's own devices: theirs already.
+      if (ch.vouched) {
+        // From one of this person's own devices, by its key's proof:
+        // theirs already.
         await t.accept();
         return;
       }
@@ -975,7 +976,15 @@ class OfficeNetwork extends ChangeNotifier {
     if (me == null || them == null) return null;
     final id = Chat.privateId(me.deviceId, them.deviceId);
     final kept = chats.of(id);
-    if (kept != null) return kept;
+    if (kept != null) {
+      // Only the very talk of the two, never one set up under its id.
+      final pair = kept.members.keys.toSet();
+      return kept.kind == ChatKind.private &&
+              pair.length == 2 &&
+              pair.containsAll([me.deviceId, them.deviceId])
+          ? kept
+          : null;
+    }
     final chat = Chat(
       id: id,
       kind: ChatKind.private,
@@ -1179,10 +1188,13 @@ class OfficeNetwork extends ChangeNotifier {
   Future<String?> removeMember(String deviceId) async {
     final identity = _identity;
     if (identity == null) return 'Önce büro ağına katılın.';
-    // What was still to go to them does not.
-    packages.pending.removeWhere((key, _) => key.endsWith('|$deviceId'));
-    await packages.save();
-    return _after(await ledger.remove(identity, deviceId));
+    final error = await ledger.remove(identity, deviceId);
+    if (error == null) {
+      // What was still to go to them does not.
+      packages.pending.removeWhere((key, _) => key.endsWith('|$deviceId'));
+      await packages.save();
+    }
+    return _after(error);
   }
 
   Future<String?> _after(String? error) async {
