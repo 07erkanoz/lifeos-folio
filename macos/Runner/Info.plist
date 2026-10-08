@@ -38,5 +38,63 @@
 	<array>
 		<string>_folio._tcp</string>
 	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>UYAP belgesi</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.erkanoz.folio.udf</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Belge</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.adobe.pdf</string>
+				<string>org.openxmlformats.wordprocessingml.document</string>
+				<string>com.microsoft.word.doc</string>
+				<string>public.rtf</string>
+				<string>org.oasis-open.opendocument.text</string>
+				<string>public.plain-text</string>
+				<string>public.html</string>
+				<string>org.openxmlformats.spreadsheetml.sheet</string>
+				<string>public.image</string>
+			</array>
+		</dict>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.erkanoz.folio.udf</string>
+			<key>UTTypeDescription</key>
+			<string>UYAP Doküman Editörü belgesi</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.zip-archive</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>udf</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-uyap-udf</string>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

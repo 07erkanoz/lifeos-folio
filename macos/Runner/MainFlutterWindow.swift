@@ -14,6 +14,7 @@ class MainFlutterWindow: NSWindow {
     RichClipboard.register(messenger)
     SpellCheck.register(messenger)
     FileActions.register(messenger, view: flutterViewController.view)
+    OpenedDocuments.register(messenger)
 
     super.awakeFromNib()
   }

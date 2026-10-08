@@ -12,10 +12,11 @@ class DocumentIntents {
   final _changes = StreamController<void>.broadcast();
   Stream<void> get changes => _changes.stream;
 
-  /// Android's intents, and on iOS the documents another app opens in
-  /// Folio (ios/Runner/AppDelegate.swift, FolioDocuments).
+  /// Android's intents; on iOS the documents another app opens in Folio
+  /// (ios/Runner/AppDelegate.swift, FolioDocuments); on a Mac those Finder
+  /// opens in it (macos/Runner/AppDelegate.swift, OpenedDocuments).
   Future<void> start() async {
-    if (!Platform.isAndroid && !Platform.isIOS) return;
+    if (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS) return;
     channel.setMethodCallHandler((call) async {
       if (call.method == 'openFiles') {
         _paths.add(List<String>.from(call.arguments as List));
