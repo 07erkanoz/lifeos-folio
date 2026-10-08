@@ -2210,6 +2210,14 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               : _group == 'muvekkiller'
                                               ? ClientsPage(
                                                   lawyer: _lawyerName,
+                                                  onEdit: (path) => unawaited(
+                                                    _addFiles(
+                                                      [path],
+                                                      index: false,
+                                                      external: true,
+                                                      edit: true,
+                                                    ),
+                                                  ),
                                                   person:
                                                       OfficeNetwork.instance.me,
                                                   seesMoney: OfficeNetwork

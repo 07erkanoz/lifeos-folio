@@ -37,6 +37,9 @@ class ClientFiles {
 
   final Future<Directory> Function() _root;
 
+  /// The clients' folder, each client's files in a folder of its id.
+  Future<Directory> root() => _root();
+
   /// [source] copied into [clientId]'s folder, under a name of its own.
   Future<ClientFile> keep(String clientId, String source) async {
     final folder = Directory(p.join((await _root()).path, clientId));

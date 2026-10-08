@@ -23,7 +23,13 @@ class ClientAccountsView extends StatelessWidget {
     required this.onReverse,
     this.onOpen,
     this.onStatement,
+    this.onPaper,
   });
+
+  /// A paper made for a case and opened in the editor: 'sozlesme' (the
+  /// fee agreement), 'ibra' (its release); for a movement, 'tahsilat'.
+  final void Function(String paper, String caseKey, ClientRecord? movement)?
+  onPaper;
 
   /// A case's statement, to give the client.
   final void Function(String caseKey)? onStatement;
@@ -123,6 +129,20 @@ class ClientAccountsView extends StatelessWidget {
                 : null,
             trailing: Wrap(
               children: [
+                if (onPaper != null)
+                  PopupMenuButton<String>(
+                    key: ValueKey('papers-$key'),
+                    tooltip: 'Belge hazırla',
+                    icon: const Icon(Icons.description_outlined, size: 20),
+                    onSelected: (v) => onPaper!(v, key, null),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'sozlesme',
+                        child: Text('Avukatlık ücret sözleşmesi'),
+                      ),
+                      PopupMenuItem(value: 'ibra', child: Text('İbraname')),
+                    ],
+                  ),
                 if (onStatement != null && a.movements.isNotEmpty)
                   TextButton(
                     key: ValueKey('statement-$key'),
@@ -243,9 +263,16 @@ class ClientAccountsView extends StatelessWidget {
           ),
           if (!gone)
             PopupMenuButton<String>(
-              onSelected: (_) => onReverse(m),
-              itemBuilder: (_) => const [
-                PopupMenuItem(
+              onSelected: (v) => v == 'tahsilat'
+                  ? onPaper?.call('tahsilat', m.text('dosya'), m)
+                  : onReverse(m),
+              itemBuilder: (_) => [
+                if (onPaper != null && (kind?.sign ?? 0) > 0)
+                  const PopupMenuItem(
+                    value: 'tahsilat',
+                    child: Text('Tahsilat belgesi'),
+                  ),
+                const PopupMenuItem(
                   value: 'ters',
                   child: Text('Ters kayıtla düzelt'),
                 ),

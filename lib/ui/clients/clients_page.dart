@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
+import '../../services/clients/client_documents.dart';
+import '../../services/editor/lawyer_profile.dart';
 import '../../services/clients/client_files.dart';
 import '../../services/clients/client_statement_pdf.dart';
 import '../../services/clients/fee_reminders.dart';
@@ -69,7 +71,12 @@ class ClientsPage extends StatefulWidget {
     this.person = '',
     this.seesMoney = true,
     this.inOffice = false,
+    this.onEdit,
   });
+
+  /// A paper made for a client (a fee agreement, a receipt, a release),
+  /// opened in the editor to be read over.
+  final ValueChanged<String>? onEdit;
 
   /// "Av. Deniz Kaya": whose clients, and who writes their records.
   final String lawyer;
@@ -173,6 +180,7 @@ class _ClientsPageState extends State<ClientsPage> {
     person: widget.person,
     seesMoney: widget.seesMoney,
     inOffice: widget.inOffice,
+    onEdit: widget.onEdit,
     onOpenCase: widget.onOpenCase,
     onChanged: (key) {
       // A card made for a client only seen in the cases: it is the one
@@ -333,9 +341,11 @@ class ClientCard extends StatefulWidget {
     this.person = '',
     this.seesMoney = true,
     this.inOffice = false,
+    this.onEdit,
   });
 
   final ClientEntry entry;
+  final ValueChanged<String>? onEdit;
   final String person;
   final bool seesMoney, inOffice;
   final PortalDatabase database;
@@ -498,6 +508,72 @@ class _ClientCardState extends State<ClientCard> {
         only: only,
       ),
     );
+  }
+
+  /// A paper for [caseKey] made from what is kept, written among the
+  /// client's papers and opened in the editor.
+  Future<void> _paper(
+    String paper,
+    String caseKey,
+    ClientRecord? movement,
+  ) async {
+    final card = _card();
+    final title = caseKey.isEmpty ? '' : _caseTitle(caseKey);
+    final money = [
+      for (final r in _records())
+        if (r.kind.money) r,
+    ];
+    final account =
+        caseAccounts(money)[caseKey] ?? CaseAccount(caseKey, null, const []);
+    final profile = await LawyerProfile.load().catchError(
+      (Object _) => const LawyerProfile(),
+    );
+    final lawyer = profile.lawyer?.titled.isNotEmpty ?? false
+        ? profile.lawyer!.titled
+        : widget.lawyer;
+    final (name, model) = switch (paper) {
+      'sozlesme' => (
+        'Avukatlık ücret sözleşmesi',
+        feeAgreementDocument(
+          client: card,
+          profile: profile,
+          lawyer: lawyer,
+          work: title,
+          fee: account.fee,
+        ),
+      ),
+      'ibra' => (
+        'İbraname',
+        releaseDocument(
+          client: card,
+          account: account,
+          lawyer: lawyer,
+          caseTitle: title,
+        ),
+      ),
+      _ => (
+        'Tahsilat belgesi ${_day(movement!.at)}',
+        receiptDocument(
+          client: card,
+          movement: movement,
+          lawyer: lawyer,
+          caseTitle: title,
+        ),
+      ),
+    };
+    final path = await writeClientDocument(
+      await widget.files.root(),
+      card.id,
+      '$name - ${titleName(card.name)}',
+      model,
+    );
+    if (!mounted) return;
+    final edit = widget.onEdit;
+    if (edit != null) {
+      edit(path);
+    } else {
+      showNotice(context, '$name hazırlandı.', detail: path);
+    }
   }
 
   /// Shared with the office, or no longer (KVKK: a client at a time).
@@ -779,6 +855,7 @@ class _ClientCardState extends State<ClientCard> {
                     onReverse: _reverse,
                     onOpen: (m) => _preview(m, 'Belge'),
                     onStatement: _statement,
+                    onPaper: _paper,
                   ),
                 _meetings(meetings),
                 _attorneys(attorneys),
