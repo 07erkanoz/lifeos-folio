@@ -51,7 +51,7 @@ void tellOffice(OfficeNetwork net, {SystemNotices? notices, AppLock? lock}) {
           };
     final where = chat.kind == ChatKind.private
         ? m.byName
-        : '${m.byName} · ${chat.titleFor(net.self?.deviceId ?? '')}';
+        : '${m.byName} · ${chat.titleFor(net.me)}';
     show('m${m.id}', where, what, 'mesaj:${chat.id}', 'Yeni mesaj');
   };
 
@@ -212,7 +212,7 @@ class TaskReminders {
     _timer?.cancel();
     Future<void> check() async {
       await load();
-      final me = net.self?.deviceId;
+      final me = net.self == null ? null : net.me;
       if (me == null) return;
       final todo = due(net.tasks.all, me, DateTime.now());
       if (todo.isEmpty) return;

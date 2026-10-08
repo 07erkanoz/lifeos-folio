@@ -70,7 +70,7 @@ class _TasksPageState extends State<TasksPage> {
       child: ListenableBuilder(
         listenable: _net,
         builder: (context, _) {
-          final me = _net.self?.deviceId ?? '';
+          final me = _net.me;
           final manager = _net.ledger.isManager(me);
           final view = _view ?? (manager ? _View.all : _View.mine);
           final now = (widget.now ?? DateTime.now)();
@@ -248,7 +248,7 @@ class _TasksPageState extends State<TasksPage> {
   Widget _workload(BuildContext context, List<OfficeTask> tasks, DateTime now) {
     final scheme = Theme.of(context).colorScheme;
     final rows = [
-      for (final m in _net.ledger.members)
+      for (final m in _net.ledger.people)
         () {
           final mine = [
             for (final t in tasks)
@@ -635,7 +635,7 @@ class _TaskDetailState extends State<TaskDetail> {
     listenable: _net,
     builder: (context, _) {
       final t = _net.tasks.of(widget.task.id) ?? widget.task;
-      final me = _net.self?.deviceId ?? '';
+      final me = _net.me;
       final giver = t.by == me;
       final doer = t.assignees.containsKey(me);
       final now = (widget.now ?? DateTime.now)();

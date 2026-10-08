@@ -860,7 +860,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// network speaks often, a transfer's progress at every piece.
   void _officeCounted() {
     final net = OfficeNetwork.instance;
-    final me = net.self?.deviceId ?? '';
+    final me = net.me;
     final unread = net.chats.unreadAll(me);
     final open = net.tasks.all
         .where((t) => t.open && t.assignees.containsKey(me))

@@ -39,9 +39,28 @@ class OfficeMember {
     required this.role,
     required this.since,
     this.founder = false,
-  });
+    String? person,
+  }) : person = person ?? deviceId;
 
   final String deviceId, userId, publicKey, name, device;
+
+  /// The person it is a device of, by the device they were taken in with:
+  /// what a task is given to and a talk is had with. A person's later
+  /// devices, which they add themself, share it.
+  final String person;
+
+  OfficeMember copyWith({OfficeRole? role}) => OfficeMember(
+    deviceId: deviceId,
+    userId: userId,
+    publicKey: publicKey,
+    name: name,
+    device: device,
+    platform: platform,
+    role: role ?? this.role,
+    since: since,
+    founder: founder,
+    person: person,
+  );
   final OfficePlatform platform;
   final OfficeRole role;
   final DateTime since;
@@ -84,6 +103,22 @@ class OfficeLedger {
         return a.name.compareTo(b.name);
       });
   OfficeMember? member(String deviceId) => _state.members[deviceId];
+
+  /// The person [deviceId] is a device of; itself when it is no member.
+  String personOf(String deviceId) =>
+      _state.members[deviceId]?.person ?? deviceId;
+
+  /// The office's people, each by the device they were taken in with.
+  List<OfficeMember> get people => [
+    for (final m in members)
+      if (m.person == m.deviceId) m,
+  ];
+
+  /// Every device of [person] in the office.
+  List<String> devicesOf(String person) => [
+    for (final m in _state.members.values)
+      if (m.person == person) m.deviceId,
+  ];
   bool isManager(String deviceId) =>
       _state.members[deviceId]?.role == OfficeRole.manager;
 
@@ -195,6 +230,30 @@ class OfficeLedger {
 
   Future<String?> remove(OfficeIdentity identity, String deviceId) =>
       _change(identity, {'k': 'cikar', 'cihaz': deviceId});
+
+  /// One of this member's own devices, added by the member: the same
+  /// person, role and name. Asks no manager; the device must be the
+  /// member's own, which the member's Folio has proved (see vouched).
+  Future<String?> addOwnDevice(
+    OfficeIdentity identity,
+    KnownDevice device,
+  ) async {
+    if (!exists) return 'Önce bir büro kurun.';
+    if (member(identity.deviceId) == null) return 'Bu cihaz büroda değil.';
+    if (member(device.deviceId) != null) return null;
+    final r = await _sign(identity, {
+      'k': 'kendi',
+      'cihaz': device.deviceId,
+      'dk': device.publicKey,
+      'c': device.device,
+      'p': device.platform.name,
+      'buro': officeId,
+      'onceki': idOf(_records.last),
+    });
+    final before = _records.length;
+    await _apply([r]);
+    return _records.length == before ? 'Kayıt büroya eklenemedi.' : null;
+  }
 
   /// Signs and keeps a change; why not, in the user's words, when it
   /// cannot be made.
@@ -308,19 +367,45 @@ class OfficeLedger {
       }
       if (office == null || r['buro'] != office) continue;
       final signer = members[r['imzalayan']];
-      if (signer == null || signer.role != OfficeRole.manager) continue;
-      if (!await _holds(r, signer.publicKey)) continue;
+      if (signer == null) continue;
       final subject = '${r['cihaz']}';
+      if (kind == 'kendi') {
+        // A member's own device, by the member: theirs in all but its key.
+        final key = r['dk'];
+        if (key is! String || members.containsKey(subject)) continue;
+        if (OfficeIdentity.idOf(base64Decode(key)) != subject) continue;
+        if (!await _holds(r, signer.publicKey)) continue;
+        members[subject] = OfficeMember(
+          deviceId: subject,
+          userId: signer.userId,
+          publicKey: key,
+          name: signer.name,
+          device: '${r['c'] ?? ''}',
+          platform: OfficePlatform.of('${r['p']}'),
+          role: signer.role,
+          since: DateTime.tryParse('${r['at']}')?.toLocal() ?? DateTime(2026),
+          founder: signer.founder,
+          person: signer.person,
+        );
+        kept.add(r);
+        continue;
+      }
+      if (signer.role != OfficeRole.manager) continue;
+      if (!await _holds(r, signer.publicKey)) continue;
       final role = OfficeRole.of(r['rol']);
       // The founder is changed by no one but the founder.
       if ((members[subject]?.founder ?? false) && !signer.founder) continue;
-      final managers = members.values
-          .where((m) => m.role == OfficeRole.manager)
-          .length;
+      // People, not devices: a manager's phone is no second manager.
+      final managers = {
+        for (final m in members.values)
+          if (m.role == OfficeRole.manager) m.person,
+      }.length;
+      final person = members[subject]?.person;
       switch (kind) {
         case 'uye':
           final key = r['dk'];
           if (role == null || key is! String) continue;
+          if (members.containsKey(subject)) continue;
           if (OfficeIdentity.idOf(base64Decode(key)) != subject) continue;
           final m = _member(r, role);
           if (m == null) continue;
@@ -333,22 +418,22 @@ class OfficeLedger {
               managers < 2) {
             continue;
           }
-          members[subject] = OfficeMember(
-            deviceId: m.deviceId,
-            userId: m.userId,
-            publicKey: m.publicKey,
-            name: m.name,
-            device: m.device,
-            platform: m.platform,
-            role: role,
-            since: m.since,
-            founder: m.founder,
-          );
+          // A person's role is theirs on every device.
+          for (final d in members.values.toList()) {
+            if (d.person == person) {
+              members[d.deviceId] = d.copyWith(role: role);
+            }
+          }
         case 'cikar':
           final m = members[subject];
           if (m == null) continue;
-          if (m.role == OfficeRole.manager && managers < 2) continue;
-          members.remove(subject);
+          final whole = subject == person;
+          if (whole && m.role == OfficeRole.manager && managers < 2) continue;
+          // Let go of, a person goes with all their devices; one device of
+          // theirs, lost or sold, goes alone.
+          members.removeWhere(
+            (id, d) => id == subject || (whole && d.person == person),
+          );
         default:
           continue;
       }

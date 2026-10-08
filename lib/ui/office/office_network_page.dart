@@ -522,7 +522,9 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
         ),
       );
     }
-    final members = l.members;
+    // People, each with how many devices they are on.
+    final members = l.people;
+    final mine = _net.me;
     return _card(
       context,
       child: Column(
@@ -560,7 +562,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                       children: [
                         Text(
                           '${m.name.isEmpty ? 'Adsız' : m.name}'
-                          '${m.deviceId == me ? '  (siz)' : ''}',
+                          '${m.deviceId == mine ? '  (siz)' : ''}',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -568,6 +570,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                         ),
                         Text(
                           '${m.device} · ${m.platform.label}'
+                          '${l.devicesOf(m.person).length > 1 ? ' · ${l.devicesOf(m.person).length} cihaz' : ''}'
                           '${m.founder ? ' · kurucu' : ''}',
                           style: const TextStyle(
                             fontSize: 11.5,

@@ -1743,7 +1743,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
   Widget _taskedNow(BuildContext context) {
     final net = OfficeNetwork.instance;
-    final me = net.self?.deviceId ?? '';
+    final me = net.me;
     final rows = [
       for (final t in net.tasks.all)
         if (t.open && t.assignees.containsKey(me))

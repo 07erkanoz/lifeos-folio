@@ -339,7 +339,7 @@ class _AgendaPageState extends State<AgendaPage> {
   /// them, on that day; a tap opens the task, not a tick.
   List<AgendaItem> _officeItems() {
     final net = OfficeNetwork.instance;
-    final me = net.self?.deviceId ?? '';
+    final me = net.me;
     if (me.isEmpty) return const [];
     return [
       for (final t in net.tasks.all)

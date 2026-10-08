@@ -102,10 +102,9 @@ class OfficeNetwork extends ChangeNotifier {
   /// this person's own devices that are not members; empty when there is
   /// no one, and the page shows no "Gönder".
   List<SendTarget> get sendTargets {
-    final me = _self?.deviceId;
-    if (me == null) return const [];
+    if (_self == null) return const [];
     final out = <SendTarget>[
-      for (final m in ledger.members)
+      for (final m in ledger.people)
         if (m.deviceId != me)
           SendTarget(
             deviceId: m.deviceId,
@@ -115,7 +114,11 @@ class OfficeNetwork extends ChangeNotifier {
             online: _peers[m.deviceId]?.online ?? false,
           ),
     ];
-    final taken = {me, for (final t in out) t.deviceId};
+    final taken = {
+      _self!.deviceId,
+      ...ledger.devicesOf(me),
+      for (final t in out) t.deviceId,
+    };
     final mine = _identity?.userId;
     final own = <String, String>{
       for (final d in _knownDevices.values)
@@ -585,11 +588,11 @@ class OfficeNetwork extends ChangeNotifier {
             ledger.member(from) != null &&
             await chats.merge(
               theirs,
-              from: ch.peer.deviceId,
+              from: ledger.personOf(from),
               mayBroadcast: ledger.isManager,
               added: (msg) => _messageCame(theirs.id, msg),
               authentic: _messageAuthentic,
-              me: _self?.deviceId,
+              me: me,
             )) {
           notifyListeners();
         }
@@ -610,10 +613,11 @@ class OfficeNetwork extends ChangeNotifier {
             ledger.member(from) != null &&
             await tasks.merge(
               theirs,
-              from: ch.peer.deviceId,
+              from: ledger.personOf(from),
               added: (e) => _taskMoved(theirs.id, e),
               authentic: _taskAuthentic,
               mayCreate: _mayCreate,
+              own: ch.vouched && ledger.personOf(from) == me,
             )) {
           notifyListeners();
         }
@@ -714,8 +718,8 @@ class OfficeNetwork extends ChangeNotifier {
       }
       final task = tasks.of('${t.meta['gorev'] ?? ''}');
       if (task != null &&
-          task.by == ch.peer.deviceId &&
-          ledger.member(task.by) != null) {
+          task.by == ledger.personOf(ch.peer.deviceId) &&
+          ledger.member(ch.peer.deviceId) != null) {
         // A case of a task given to this device, from its giver.
         await t.accept();
         return;
@@ -880,7 +884,24 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// One of the person's own devices, met over a vouched channel: known
   /// from now on, with no code asked.
-  Future<void> _metOwn(OfficeChannel ch) => _metOwnDevice(ch.peer);
+  Future<void> _metOwn(OfficeChannel ch) async {
+    await _metOwnDevice(ch.peer);
+    if (ch.vouched) await _takeInOwn(ch.peer);
+  }
+
+  /// One of this person's own devices, by its key's proof, not yet of the
+  /// office this device is in: added as theirs, so that their tasks and
+  /// talks are on it too (docs/buro.md, Senkron).
+  Future<void> _takeInOwn(KnownDevice d) async {
+    final identity = _identity;
+    if (identity == null || d.publicKey.isEmpty || !ledger.exists) return;
+    if (ledger.member(identity.deviceId) == null) return;
+    if (ledger.member(d.deviceId) != null) return;
+    if (await ledger.addOwnDevice(identity, d) == null) {
+      notifyListeners();
+      unawaited(_shareLedger());
+    }
+  }
 
   Future<void> _metOwnDevice(KnownDevice p) async {
     if (p.userId != _identity?.userId || p.publicKey.isEmpty) return;
@@ -935,7 +956,16 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// Whether this device may give a task to [to]: a manager to anyone, a
   /// lawyer to themself, a trainee or a secretary; no one else.
-  bool mayGive(String to) => _mayGiveFrom(_self?.deviceId ?? '', to);
+  bool mayGive(String to) => _mayGiveFrom(me, to);
+
+  /// This device's person in the office (see [OfficeMember.person]): whom
+  /// its tasks are given to and its talks are had with.
+  String get me => ledger.personOf(_self?.deviceId ?? '');
+
+  /// Every device of [people] in the office, but this one.
+  Set<String> _devicesOf(Iterable<String> people) => {
+    for (final p in people) ...ledger.devicesOf(p),
+  }..remove(_self?.deviceId);
 
   /// The same rule for any member: what a task that came is checked by.
   bool _mayGiveFrom(String giver, String to) {
@@ -945,7 +975,7 @@ class OfficeNetwork extends ChangeNotifier {
     return switch (me.role) {
       OfficeRole.manager => true,
       OfficeRole.lawyer =>
-        them.deviceId == me.deviceId ||
+        them.person == me.person ||
             them.role == OfficeRole.trainee ||
             them.role == OfficeRole.secretary,
       _ => false,
@@ -979,7 +1009,7 @@ class OfficeNetwork extends ChangeNotifier {
     final task = OfficeTask(
       id: OfficeTask.newId(),
       title: title.trim(),
-      by: self.deviceId,
+      by: me,
       byName: self.name,
       assignees: {for (final id in to) id: ledger.member(id)?.name ?? ''},
       createdAt: DateTime.now(),
@@ -992,15 +1022,20 @@ class OfficeNetwork extends ChangeNotifier {
     task.events.add(
       await _sign(
         task.id,
-        TaskEvent.create(TaskEventKind.given, self.deviceId, self.name),
+        TaskEvent.create(
+          TaskEventKind.given,
+          me,
+          self.name,
+          device: self.deviceId,
+        ),
       ),
     );
     await tasks.put(task);
     for (final c in cases) {
       final pack = packed[c.caseKey];
       if (pack == null || pack.paths.isEmpty) continue;
-      for (final id in to) {
-        if (id == self.deviceId) continue;
+      // To each device of each it is given to, this person's others too.
+      for (final id in _devicesOf(to)) {
         packages.pending['${task.id}|${c.caseKey}|$id'] = pack.paths;
       }
     }
@@ -1017,7 +1052,7 @@ class OfficeNetwork extends ChangeNotifier {
       if (parts.length != 3) continue;
       if (parts[0] != task.id || (only != null && parts[2] != only)) continue;
       // A case only to one it is still given to, still of the office.
-      if (!task.assignees.containsKey(parts[2]) ||
+      if (!task.assignees.containsKey(ledger.personOf(parts[2])) ||
           ledger.member(parts[2]) == null) {
         packages.pending.remove(key);
         await packages.save();
@@ -1058,8 +1093,9 @@ class OfficeNetwork extends ChangeNotifier {
         task.id,
         TaskEvent.create(
           kind,
-          self.deviceId,
+          me,
           self.name,
+          device: self.deviceId,
           text: text.trim(),
           percent: percent,
           itemId: itemId,
@@ -1078,43 +1114,51 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// The member's device key, from the office's ledger: what a step or a
   /// message is checked against.
-  Future<bool> _byMember(String by, List<int> data, String signature) async {
-    final key = ledger.member(by)?.publicKey;
-    if (key == null) return false;
-    return OfficeIdentity.signedBy(key, data, signature);
+  /// [device] wrote it, a device of the person [by], by its signature.
+  Future<bool> _byMember(
+    String by,
+    String device,
+    List<int> data,
+    String signature,
+  ) async {
+    final writer = ledger.member(device);
+    if (writer == null || writer.person != by) return false;
+    return OfficeIdentity.signedBy(writer.publicKey, data, signature);
   }
 
   bool _mayCreate(OfficeTask t) =>
       t.assignees.keys.every((to) => _mayGiveFrom(t.by, to));
 
   Future<bool> _taskAuthentic(String taskId, TaskEvent e) =>
-      _byMember(e.by, e.signedOf(taskId), e.signature);
+      _byMember(e.by, e.device, e.signedOf(taskId), e.signature);
 
   Future<bool> _messageAuthentic(String chatId, ChatMessage m) =>
-      _byMember(m.by, m.signedOf(chatId), m.signature);
+      _byMember(m.by, m.device, m.signedOf(chatId), m.signature);
 
   /// Who may see [task]: those in it and the managers, while members.
   bool _maySee(OfficeTask task, String deviceId) =>
       ledger.member(deviceId) != null &&
-      (task.people.contains(deviceId) || ledger.isManager(deviceId));
+      (task.people.contains(ledger.personOf(deviceId)) ||
+          ledger.isManager(deviceId));
 
   /// Who may read [chat]: its members, or all for a broadcast, while
   /// members of the office; one taken off it hears no more.
   bool _mayHear(Chat chat, String deviceId) =>
       ledger.member(deviceId) != null &&
-      (chat.kind == ChatKind.broadcast || chat.members.containsKey(deviceId));
+      (chat.kind == ChatKind.broadcast ||
+          chat.members.containsKey(ledger.personOf(deviceId)));
 
   Future<void> _shareTask(OfficeTask task) async {
     // Those in it, and the office's managers, who see all of its work.
     final to = {
-      for (final id in task.people)
+      for (final id in _devicesOf(task.people))
         if (_maySee(task, id)) id,
       for (final m in ledger.members)
         if (m.role == OfficeRole.manager) m.deviceId,
-    };
+    }..remove(_self?.deviceId);
     for (final id in to) {
       final peer = _peers[id];
-      if (id != _self?.deviceId && peer != null && peer.online) {
+      if (peer != null && peer.online) {
         await _syncTask(peer, task);
       }
     }
@@ -1140,10 +1184,11 @@ class OfficeNetwork extends ChangeNotifier {
       if (theirs != null &&
           await tasks.merge(
             theirs,
-            from: peer.deviceId,
+            from: ledger.personOf(peer.deviceId),
             added: (e) => _taskMoved(theirs.id, e),
             authentic: _taskAuthentic,
             mayCreate: _mayCreate,
+            own: ch.vouched && ledger.personOf(peer.deviceId) == me,
           )) {
         notifyListeners();
       }
@@ -1158,14 +1203,14 @@ class OfficeNetwork extends ChangeNotifier {
 
   void _messageCame(String chatId, ChatMessage m) {
     final c = chats.of(chatId);
-    if (c != null && m.by != _self?.deviceId) onMessage?.call(c, m);
+    if (c != null && m.by != me) onMessage?.call(c, m);
   }
 
   void _taskMoved(String taskId, TaskEvent e) {
     // Read after it is kept: the callback comes while it is being added.
     scheduleMicrotask(() {
       final t = tasks.of(taskId);
-      if (t != null && e.by != _self?.deviceId) onTaskEvent?.call(t, e);
+      if (t != null && e.by != me) onTaskEvent?.call(t, e);
     });
   }
 
@@ -1175,11 +1220,12 @@ class OfficeNetwork extends ChangeNotifier {
     notifyListeners();
   }
 
-  OfficeMember? get _me => ledger.member(_self?.deviceId ?? '');
+  /// This device's person, as the device they were taken in with.
+  OfficeMember? get _me => ledger.member(me);
 
-  /// The private talk with [deviceId], made if there is none yet.
+  /// The private talk with [deviceId]'s person, made if there is none yet.
   Future<Chat?> privateChat(String deviceId) async {
-    final me = _me, them = ledger.member(deviceId);
+    final me = _me, them = ledger.member(ledger.personOf(deviceId));
     if (me == null || them == null) return null;
     final id = Chat.privateId(me.deviceId, them.deviceId);
     final kept = chats.of(id);
@@ -1235,19 +1281,16 @@ class OfficeNetwork extends ChangeNotifier {
       kind: ChatKind.broadcast,
       by: me.deviceId,
       name: '${ledger.officeName} · duyurular',
-      members: {for (final m in ledger.members) m.deviceId: m.name},
+      members: {for (final m in ledger.people) m.deviceId: m.name},
     );
     await chats.put(chat);
     notifyListeners();
     return chat;
   }
 
-  bool mayWrite(Chat chat) {
-    final me = _self?.deviceId ?? '';
-    return chat.kind == ChatKind.broadcast
-        ? ledger.isManager(me)
-        : chat.members.containsKey(me);
-  }
+  bool mayWrite(Chat chat) => chat.kind == ChatKind.broadcast
+      ? ledger.isManager(_self?.deviceId ?? '')
+      : chat.members.containsKey(me);
 
   /// Sends words and files in a talk; the files go to each member on the
   /// network now, and to the others when they come on it.
@@ -1274,7 +1317,8 @@ class OfficeNetwork extends ChangeNotifier {
     ];
     final unsigned = ChatMessage(
       id: Chat.newId(),
-      by: self.deviceId,
+      by: me,
+      device: self.deviceId,
       byName: self.name,
       at: DateTime.now(),
       text: text.trim(),
@@ -1293,10 +1337,12 @@ class OfficeNetwork extends ChangeNotifier {
     return null;
   }
 
+  /// The devices a talk goes to: every device of its people, this
+  /// person's others too, while they are of the office.
   Set<String> _audience(Chat chat) => {
     ...(chat.kind == ChatKind.broadcast
         ? {for (final m in ledger.members) m.deviceId}
-        : chat.members.keys.where((id) => _mayHear(chat, id))),
+        : _devicesOf(chat.members.keys).where((id) => _mayHear(chat, id))),
   }..remove(_self?.deviceId);
 
   Future<void> _shareChat(Chat chat) async {
@@ -1326,11 +1372,11 @@ class OfficeNetwork extends ChangeNotifier {
       if (theirs != null &&
           await chats.merge(
             theirs,
-            from: peer.deviceId,
+            from: ledger.personOf(peer.deviceId),
             mayBroadcast: ledger.isManager,
             added: (msg) => _messageCame(theirs.id, msg),
             authentic: _messageAuthentic,
-            me: _self?.deviceId,
+            me: me,
           )) {
         notifyListeners();
       }
@@ -1338,7 +1384,7 @@ class OfficeNetwork extends ChangeNotifier {
     // This device's files that have not yet reached it.
     for (final msg in chat.messages) {
       final left = chats.pending[msg.id];
-      if (msg.by != _self?.deviceId ||
+      if (msg.device != _self?.deviceId ||
           left == null ||
           !left.contains(peer.deviceId)) {
         continue;
@@ -1364,7 +1410,7 @@ class OfficeNetwork extends ChangeNotifier {
       if (_maySee(t, peer.deviceId)) {
         await _syncTask(peer, t);
       }
-      if (t.by == _self?.deviceId) await _sendPackages(t, only: peer.deviceId);
+      if (t.by == me) await _sendPackages(t, only: peer.deviceId);
     }
   }
 

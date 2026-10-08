@@ -80,8 +80,12 @@ class ChatMessage {
     this.text = '',
     this.attachments = const [],
     this.signature = '',
-  });
+    String? device,
+  }) : device = device ?? by;
   final String id, by, byName, text;
+
+  /// The device that wrote and signed it: one of [by]'s, the person's.
+  final String device;
   final DateTime at;
   final List<ChatAttachment> attachments;
 
@@ -91,10 +95,11 @@ class ChatMessage {
   /// What its writer signs: the words, the files and the talk they are in.
   List<int> signedOf(String chatId) => utf8.encode(
     [
-      'folio-mesaj-1',
+      'folio-mesaj-2',
       chatId,
       id,
       by,
+      device,
       byName,
       '${at.millisecondsSinceEpoch}',
       text,
@@ -111,6 +116,7 @@ class ChatMessage {
     text: text,
     attachments: attachments,
     signature: signature,
+    device: device,
   );
 
   Map<String, Object?> toJson() => {
@@ -122,6 +128,7 @@ class ChatMessage {
     if (attachments.isNotEmpty)
       'ekler': [for (final a in attachments) a.toJson()],
     if (signature.isNotEmpty) 'imza': signature,
+    if (device != by) 'cihaz': device,
   };
   static ChatMessage? fromJson(Object? j) {
     if (j is! Map || j['id'] is! String || j['kim'] is! String) return null;
@@ -138,6 +145,7 @@ class ChatMessage {
           ?ChatAttachment.fromJson(a),
       ],
       signature: j['imza'] is String ? j['imza'] as String : '',
+      device: j['cihaz'] is String ? j['cihaz'] as String : null,
     );
   }
 }

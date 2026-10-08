@@ -137,10 +137,14 @@ class TaskEvent {
     this.itemId,
     this.files = const [],
     this.signature = '',
-  });
+    String? device,
+  }) : device = device ?? by;
 
   final String id;
   final TaskEventKind kind;
+
+  /// The device that wrote and signed it: one of [by]'s, the person's.
+  final String device;
   final String by, byName, text;
   final DateTime at;
   final int? percent;
@@ -156,11 +160,12 @@ class TaskEvent {
   /// can be neither changed nor moved to another.
   List<int> signedOf(String taskId) => utf8.encode(
     [
-      'folio-gorev-olayi-1',
+      'folio-gorev-olayi-2',
       taskId,
       id,
       kind.name,
       by,
+      device,
       byName,
       '${at.millisecondsSinceEpoch}',
       text,
@@ -181,6 +186,7 @@ class TaskEvent {
     itemId: itemId,
     files: files,
     signature: signature,
+    device: device,
   );
 
   /// Words of the talk, not a change of the task's state.
@@ -197,6 +203,7 @@ class TaskEvent {
     'is': ?itemId,
     if (files.isNotEmpty) 'dosyalar': files,
     if (signature.isNotEmpty) 'imza': signature,
+    if (device != by) 'cihaz': device,
   };
 
   static TaskEvent? fromJson(Object? j) {
@@ -216,6 +223,7 @@ class TaskEvent {
       itemId: j['is'] is String ? j['is'] as String : null,
       files: [for (final f in (j['dosyalar'] as List? ?? const [])) '$f'],
       signature: j['imza'] is String ? j['imza'] as String : '',
+      device: j['cihaz'] is String ? j['cihaz'] as String : null,
     );
   }
 
@@ -227,8 +235,10 @@ class TaskEvent {
     int? percent,
     String? itemId,
     List<String> files = const [],
+    String? device,
   }) => TaskEvent(
     id: _newId(),
+    device: device,
     kind: kind,
     by: by,
     byName: byName,
@@ -483,6 +493,10 @@ class OfficeTasks {
     void Function(TaskEvent event)? added,
     Future<bool> Function(String taskId, TaskEvent event)? authentic,
     bool Function(OfficeTask task)? mayCreate,
+
+    /// From another of this person's own devices, by its key's proof: it
+    /// may bring a task given to this person, not only its giver.
+    bool own = false,
   }) async {
     // Each step only as its maker signed it: one in the task cannot put
     // words in another's mouth.
@@ -492,7 +506,7 @@ class OfficeTasks {
     final mine = _tasks[theirs.id];
     if (mine == null) {
       // Only its giver brings a task into being here.
-      if (from != theirs.by) return false;
+      if (from != theirs.by && !own) return false;
       // And only one who may give it to each it is given to, in its own
       // signed word.
       if (mayCreate != null && !mayCreate(theirs)) return false;

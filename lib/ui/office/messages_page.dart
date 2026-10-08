@@ -32,7 +32,7 @@ class _MessagesPageState extends State<MessagesPage> {
   String? _open;
 
   Future<void> _new() async {
-    final me = _net.self?.deviceId ?? '';
+    final me = _net.me;
     final manager = _net.ledger.isManager(me);
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -80,9 +80,9 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   Future<(String, List<String>)?> _pickMembers({required bool group}) {
-    final me = _net.self?.deviceId ?? '';
+    final me = _net.me;
     final members = [
-      for (final m in _net.ledger.members)
+      for (final m in _net.ledger.people)
         if (m.deviceId != me) m,
     ];
     final chosen = <String>{};
@@ -156,7 +156,7 @@ class _MessagesPageState extends State<MessagesPage> {
           MaterialPageRoute<void>(
             builder: (_) => Scaffold(
               appBar: AppBar(
-                title: Text(chat.titleFor(_net.self?.deviceId ?? '')),
+                title: Text(chat.titleFor(_net.me)),
               ),
               body: ChatThread(network: _net, chatId: chat.id),
             ),
@@ -178,7 +178,7 @@ class _MessagesPageState extends State<MessagesPage> {
       child: ListenableBuilder(
         listenable: _net,
         builder: (context, _) {
-          final me = _net.self?.deviceId ?? '';
+          final me = _net.me;
           final chats = _net.chats.all;
           return LayoutBuilder(
             builder: (context, box) {
@@ -426,7 +426,7 @@ class _ChatThreadState extends State<ChatThread> {
     builder: (context, _) {
       final chat = _net.chats.of(widget.chatId);
       if (chat == null) return const SizedBox.shrink();
-      final me = _net.self?.deviceId ?? '';
+      final me = _net.me;
       final messages = chat.ordered.reversed.toList();
       final writes = _net.mayWrite(chat);
       final scheme = Theme.of(context).colorScheme;

@@ -75,8 +75,8 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
     unawaited(_loadTemplates());
     // One to give to: already chosen.
     final others = [
-      for (final m in _net.ledger.members)
-        if (m.deviceId != _net.self?.deviceId && _net.mayGive(m.deviceId))
+      for (final m in _net.ledger.people)
+        if (m.deviceId != _net.me && _net.mayGive(m.deviceId))
           m.deviceId,
     ];
     if (others.length == 1) _to.add(others.single);
@@ -264,7 +264,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final people = [
-      for (final m in _net.ledger.members)
+      for (final m in _net.ledger.people)
         if (_net.mayGive(m.deviceId)) m,
     ];
     Widget label(String text) => Padding(
@@ -312,7 +312,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                     FilterChip(
                       key: ValueKey('task-to-${m.deviceId}'),
                       label: Text(
-                        m.deviceId == _net.self?.deviceId
+                        m.deviceId == _net.me
                             ? '${m.name} (kendim)'
                             : '${m.name} · ${m.role.label}',
                       ),

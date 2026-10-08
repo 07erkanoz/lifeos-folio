@@ -743,6 +743,87 @@ void main() {
     // Nothing to take: said so.
     expect(await onPc.take(phone.self!.deviceId, 'uets'), isNotNull);
   });
+
+  test('a person’s tasks and talks are on all their devices', () async {
+    final boss = await folio('Av. Selin Aksoy', 'selin4');
+    final laptop = await folio('Av. Erkan Öz', 'dizustu4');
+    final phone = await folio('Av. Erkan Öz', 'telefon4');
+    void see(OfficeNetwork x, OfficeNetwork y) {
+      x.seenForTesting(y.self!);
+      y.seenForTesting(x.self!);
+    }
+
+    Future<void> meet(
+      OfficeNetwork x,
+      OfficeNetwork y, {
+      bool mine = false,
+    }) async {
+      see(x, y);
+      final asking = x.pair(y.self!)!;
+      await until(() => y.incoming.value?.code != null && asking.code != null);
+      asking.mine = mine;
+      y.incoming.value!.mine = mine;
+      y.incoming.value!.confirm();
+      asking.confirm();
+      await until(
+        () => x.isKnown(y.self!.deviceId) && y.isKnown(x.self!.deviceId),
+      );
+    }
+
+    await meet(boss, laptop);
+    await boss.foundOffice('Aksoy Hukuk');
+    await boss.admit(laptop.self!.deviceId, OfficeRole.lawyer);
+    await until(() => laptop.ledger.members.length == 2);
+    await meet(laptop, phone, mine: true);
+    await until(() => laptop.self!.userId == phone.self!.userId);
+    see(laptop, phone);
+    see(boss, phone);
+    for (final net in [laptop, phone]) {
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      net.ownParts['ajanda'] = OwnPart(
+        export: () async => db.agendaExport(),
+        merge: (theirs) async => db.agendaMerge(theirs),
+      );
+    }
+    // Met by proof, the phone is taken in as the same person.
+    await laptop.syncOwn();
+    await until(() => boss.ledger.member(phone.self!.deviceId) != null);
+    await until(() => phone.ledger.member(phone.self!.deviceId) != null);
+    final person = laptop.self!.deviceId;
+    expect(phone.me, person);
+    expect(boss.ledger.people.map((m) => m.name), [
+      'Av. Selin Aksoy',
+      'Av. Erkan Öz',
+    ]);
+    // A task given to the person comes to the phone too.
+    expect(
+      await boss.giveTask(title: 'Keşif notlarını yaz', to: [person]),
+      isNull,
+    );
+    await until(
+      () => phone.tasks.all.isNotEmpty && laptop.tasks.all.isNotEmpty,
+    );
+    await phone.act(phone.tasks.all.single, TaskEventKind.accepted);
+    await until(
+      () => boss.tasks.all.single.events.any(
+        (e) => e.kind == TaskEventKind.accepted && e.by == person,
+      ),
+    );
+    // A private talk with the person: the same talk on both devices.
+    final talk = (await boss.privateChat(person))!;
+    await boss.post(talk, text: 'Yarın 10:00 uygun mu?');
+    await until(() => phone.chats.of(talk.id)?.messages.isNotEmpty ?? false);
+    await until(() => laptop.chats.of(talk.id)?.messages.isNotEmpty ?? false);
+    await phone.post(phone.chats.of(talk.id)!, text: 'Uygun.');
+    await until(
+      () => boss.chats.of(talk.id)!.messages.any((m) => m.text == 'Uygun.'),
+    );
+    expect(
+      boss.chats.of(talk.id)!.messages.firstWhere((m) => m.text == 'Uygun.').by,
+      person,
+    );
+  });
 }
 
 class _Sessions implements SessionHolder {
