@@ -10,6 +10,7 @@ import '../../services/office/office_peer.dart';
 import '../../services/sync/folder_sync.dart';
 import '../../services/sync/own_sync.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../office/office_pairing_dialog.dart';
 import '../office/qr_pairing.dart';
 import '../widgets/drop_zone.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
@@ -215,34 +216,47 @@ class _SyncPageState extends State<SyncPage> {
                 const SizedBox(height: 6),
                 Text(
                   _phone
-                      ? 'Henüz başka cihazınız yok. Bilgisayarınızda Büro '
-                            'ağı’nda “Telefonumu ekle”ye basın ve çıkan QR’ı '
-                            'okutun.'
-                      : 'Henüz başka cihazınız yok. Telefonunuzu QR ile '
-                            'ekleyin; başka bir bilgisayarınızı Büro ağı’nda '
-                            '“Tanı” ile, “Bu cihaz da benim” işaretleyerek '
-                            'ekleyin.',
+                      ? 'Henüz başka cihazınız yok. Bilgisayarınızda Senkron’da '
+                            '“Telefonumu ekle”ye basın ve çıkan QR’ı burada '
+                            '“QR okut” ile okutun.'
+                      : 'Henüz başka cihazınız yok. Telefonunuzu QR ile, başka '
+                            'bir bilgisayarınızı ağda seçerek ekleyin.',
                   style: const TextStyle(
                     fontSize: 12.5,
                     color: AgendaColors.muted,
                   ),
                 ),
-                const SizedBox(height: 10),
-                _phone
-                    ? FilledButton.tonalIcon(
-                        key: const ValueKey('sync-qr-scan'),
-                        onPressed: () => unawaited(scanAndPair(context, _net)),
-                        icon: const Icon(Icons.qr_code_scanner_rounded),
-                        label: const Text('QR okut'),
-                      )
-                    : FilledButton.tonalIcon(
-                        key: const ValueKey('sync-qr-invite'),
-                        onPressed: () =>
-                            unawaited(QrInviteDialog.show(context, _net)),
-                        icon: const Icon(Icons.qr_code_2_rounded),
-                        label: const Text('Telefonumu ekle'),
-                      ),
               ],
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _phone
+                    ? [
+                        FilledButton.tonalIcon(
+                          key: const ValueKey('sync-qr-scan'),
+                          onPressed: () =>
+                              unawaited(scanAndPair(context, _net)),
+                          icon: const Icon(Icons.qr_code_scanner_rounded),
+                          label: const Text('QR okut'),
+                        ),
+                      ]
+                    : [
+                        FilledButton.tonalIcon(
+                          key: const ValueKey('sync-qr-invite'),
+                          onPressed: () =>
+                              unawaited(QrInviteDialog.show(context, _net)),
+                          icon: const Icon(Icons.qr_code_2_rounded),
+                          label: const Text('Telefonumu ekle'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('sync-add-computer'),
+                          onPressed: () => unawaited(_addComputer()),
+                          icon: const Icon(Icons.laptop_rounded),
+                          label: const Text('Bilgisayarımı ekle'),
+                        ),
+                      ],
+              ),
             ],
           ],
         ),
@@ -655,5 +669,56 @@ class _SyncPageState extends State<SyncPage> {
       return;
     }
     await _folders.share(path);
+  }
+
+  /// Another computer of the person's on the network, known by a code;
+  /// "Bu cihaz da benim" comes ticked here.
+  Future<void> _addComputer() async {
+    final nearby = [
+      for (final person in _net.people)
+        for (final d in person.devices)
+          if (d.online &&
+              d.deviceId != _net.self?.deviceId &&
+              !_net.isKnown(d.deviceId) &&
+              !d.platform.phone)
+            d,
+    ];
+    if (nearby.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ağda başka bir bilgisayar görünmüyor. Öbür bilgisayarda Folio’yu '
+            'açıp Senkron’da “Senkronu aç”a basın.',
+          ),
+        ),
+      );
+      return;
+    }
+    final peer = await showDialog<OfficePeer>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Hangi bilgisayar sizin?'),
+        children: [
+          for (final d in nearby)
+            SimpleDialogOption(
+              key: ValueKey('sync-add-${d.deviceId}'),
+              onPressed: () => Navigator.pop(context, d),
+              child: Text('${d.device} · ${d.platform.label}'),
+            ),
+        ],
+      ),
+    );
+    if (peer == null || !mounted) return;
+    final pairing = _net.pair(peer);
+    if (pairing == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Şu anda başka bir cihaz tanınıyor; bitince deneyin.'),
+        ),
+      );
+      return;
+    }
+    pairing.mine = true;
+    await OfficePairingDialog.show(context, pairing);
   }
 }
