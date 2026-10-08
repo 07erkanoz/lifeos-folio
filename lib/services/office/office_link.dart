@@ -26,7 +26,9 @@ class OfficeLink {
         );
   }
 
-  static const maxLine = 256 * 1024;
+  // A person's agenda, packed, comes in one line; a crowd of silent talks
+  // is let in no more than 32 at a time (see OfficeNetwork).
+  static const maxLine = 1024 * 1024;
 
   final Socket _socket;
 

@@ -38,6 +38,18 @@ void main() {
     expect((kept['deadline_id'], kept['done']), ('d1', 1));
   });
 
+  test('changed at the same moment on both: they end alike', () {
+    final pc = PortalDatabase.memory(), phone = PortalDatabase.memory();
+    addTearDown(pc.dispose);
+    addTearDown(phone.dispose);
+    final at = DateTime(2026, 10, 8, 10);
+    pc.saveAgenda(note('a', 'Duruşma notu', at));
+    phone.saveAgenda(note('a', 'Duruşma notları', at));
+    phone.agendaMerge(pc.agendaExport());
+    pc.agendaMerge(phone.agendaExport());
+    expect(pc.agenda().single.title, phone.agenda().single.title);
+  });
+
   test('the agenda tells of the lawyer’s changes, not of what came', () {
     final db = PortalDatabase.memory(), other = PortalDatabase.memory();
     addTearDown(db.dispose);

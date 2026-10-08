@@ -69,6 +69,8 @@ class OwnSync extends ChangeNotifier {
     } catch (_) {}
     await _apply();
     _startSessions();
+    // An own device found before these were set is made alike now.
+    unawaited(_net.syncOwn());
   }
 
   void _startSessions() {

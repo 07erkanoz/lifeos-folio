@@ -469,6 +469,20 @@ class OfficeNetwork extends ChangeNotifier {
     }
   }
 
+  /// What is kept alike, packed: an agenda's JSON is mostly the same words.
+  static String _pack(Map<String, Object?> parts) =>
+      base64Encode(gzip.encode(utf8.encode(jsonEncode(parts))));
+
+  static Object? _unpack(Object? packed) {
+    if (packed is! String) return null;
+    try {
+      // Only ever from the person's own devices, by proof (see vouched).
+      return jsonDecode(utf8.decode(gzip.decode(base64Decode(packed))));
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, Object?>> _ownParts() async => {
     for (final e in ownParts.entries)
       e.key: await e.value.export().catchError((Object _) => null),
@@ -510,10 +524,10 @@ class OfficeNetwork extends ChangeNotifier {
         return;
       }
       final reply = ch.messages.first.timeout(const Duration(seconds: 20));
-      await ch.send({'t': 'senkron', 'parcalar': await _ownParts()});
+      await ch.send({'t': 'senkron', 'parcalar': _pack(await _ownParts())});
       final m = await reply;
       await ch.close();
-      await _ownCame(m['parcalar']);
+      await _ownCame(_unpack(m['parcalar']));
       synced[peer.deviceId] = DateTime.now();
       notifyListeners();
     } catch (_) {}
@@ -640,8 +654,8 @@ class OfficeNetwork extends ChangeNotifier {
           await ch.close();
           return;
         }
-        await _ownCame(m['parcalar']);
-        await ch.send({'t': 'senkron', 'parcalar': await _ownParts()});
+        await _ownCame(_unpack(m['parcalar']));
+        await ch.send({'t': 'senkron', 'parcalar': _pack(await _ownParts())});
         synced[ch.peer.deviceId] = DateTime.now();
         notifyListeners();
         await Future<void>.delayed(const Duration(milliseconds: 200));

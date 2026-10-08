@@ -965,6 +965,46 @@ class PortalDatabase {
       for (final r in _db.select('SELECT id, updated FROM agenda'))
         r['id'] as String: when(r['updated']),
     };
+    // Two rows changed at the same moment, or decisions kept before their
+    // time was: the same one is taken on both devices, the larger by its
+    // words, so that they end alike.
+    String words(Map r, List<String> columns) =>
+        jsonEncode([for (final c in columns) r[c]]);
+    const agendaColumns = [
+      'kind',
+      'title',
+      'body',
+      'at',
+      'all_day',
+      'done',
+      'case_key',
+      'hearing_key',
+    ];
+    const decisionColumns = [
+      'done',
+      'manual_day',
+      'title_override',
+      'body_override',
+      'confirmed_inputs',
+      'confirmed_at',
+      'dismissed',
+    ];
+    bool newer(
+      DateTime theirs,
+      DateTime? kept,
+      Map r,
+      String table,
+      String key,
+      String id,
+      List<String> columns,
+    ) {
+      if (kept == null || theirs.isAfter(kept)) return true;
+      if (theirs.isBefore(kept)) return false;
+      final here = _db.select('SELECT * FROM $table WHERE $key=?', [id]);
+      return here.isNotEmpty &&
+          words(r, columns).compareTo(words(here.first, columns)) > 0;
+    }
+
     _db.execute('BEGIN');
     try {
       final gone = theirs['silinen'];
@@ -990,7 +1030,9 @@ class PortalDatabase {
         if (r is! Map || r['id'] is! String || r['kind'] is! String) continue;
         final id = r['id'] as String, updated = when(r['updated']);
         if (removed[id] != null && !updated.isAfter(removed[id]!)) continue;
-        if (mine[id] != null && !updated.isAfter(mine[id]!)) continue;
+        if (!newer(updated, mine[id], r, 'agenda', 'id', id, agendaColumns)) {
+          continue;
+        }
         _db.execute(
           '''INSERT OR REPLACE INTO agenda
              (id, kind, title, body, at, all_day, done, case_key, hearing_key,
@@ -1019,7 +1061,17 @@ class PortalDatabase {
       for (final r in (theirs['kararlar'] as List? ?? const [])) {
         if (r is! Map || r['deadline_id'] is! String) continue;
         final id = r['deadline_id'] as String, updated = when(r['updated']);
-        if (decided[id] != null && !updated.isAfter(decided[id]!)) continue;
+        if (!newer(
+          updated,
+          decided[id],
+          r,
+          'deadline_user',
+          'deadline_id',
+          id,
+          decisionColumns,
+        )) {
+          continue;
+        }
         String? text(String k) => r[k] is String ? r[k] as String : null;
         _db.execute(
           '''INSERT OR REPLACE INTO deadline_user(deadline_id, done,
