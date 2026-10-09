@@ -14,6 +14,8 @@ import 'package:evrak_convert/services/clients/client.dart';
 import 'package:evrak_convert/services/clients/client_accounts.dart';
 import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_case.dart';
+import 'package:evrak_convert/services/portal/portal_channel.dart';
+import 'package:evrak_convert/services/portal/portal_hearing.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:evrak_convert/ui/clients/clients_page.dart';
@@ -178,6 +180,58 @@ void main() {
       ),
     );
     final key = caseKey('2024/318', 'Antalya 3. Asliye Hukuk Mahkemesi');
+    final now = DateTime.now();
+    final day = DateTime(now.year, now.month, now.day);
+    Observed<String> seen(String v) => Observed(v, PortalChannel.uyapWeb, now);
+    db.mergeHearings(
+      PortalChannel.uyapWeb,
+      DateTime(2000),
+      day.add(const Duration(days: 400)),
+      [
+        for (final (at, kind, result) in [
+          (
+            day.add(const Duration(days: 13, hours: 10, minutes: 30)),
+            'Tahkikat',
+            '',
+          ),
+          (
+            day
+                .subtract(const Duration(days: 148))
+                .add(const Duration(hours: 9)),
+            'Ön inceleme',
+            'Tanık listesi için iki hafta süre verildi',
+          ),
+        ])
+          PortalHearing(
+            key: hearingKey(
+              '2024/318',
+              'Antalya 3. Asliye Hukuk Mahkemesi',
+              at,
+            ),
+            caseKey: key,
+            number: '2024/318',
+            court: 'Antalya 3. Asliye Hukuk Mahkemesi',
+            at: at,
+            kind: seen(kind),
+            result: result.isEmpty ? null : seen(result),
+          ),
+      ],
+      complete: true,
+    );
+    db.saveClient(
+      db
+          .clientCard('k1')!
+          .copyWith(
+            caseNotes: {
+              key: CaseNote(
+                'Tanıklar: Ali Kaya (komşu), Elif Su. Müvekkil sulhe açık; '
+                'alt sınır 250.000 TL.',
+                DateTime(2026, 10, 6, 15),
+                by: 'Av. Deniz Kaya',
+              ),
+            },
+          ),
+    );
     db.saveClientRecord(
       ClientRecord(
         id: 'f1',
@@ -280,6 +334,24 @@ void main() {
         await tester.pumpAndSettle();
       }
       await _shot(tester, name);
+      if (!fold) {
+        final row = find.byKey(
+          ValueKey(
+            'client-case-${caseKey('2024/318', 'Antalya 3. Asliye Hukuk Mahkemesi')}',
+          ),
+        );
+        await tester.tap(row);
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          row,
+          100,
+          scrollable: find.byType(Scrollable).last,
+        );
+        await tester.pumpAndSettle();
+        await _shot(tester, '$name-dosya');
+        await tester.tap(row);
+        await tester.pumpAndSettle();
+      }
       if (fold || size.width > 1500) {
         debugDefaultTargetPlatformOverride = null;
         return;

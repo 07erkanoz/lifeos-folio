@@ -155,6 +155,26 @@ void main() {
     );
   });
 
+  testWidgets('a case opens under its row, and its note is kept on the '
+      'card with who wrote it', (tester) async {
+    await open(tester);
+    await tester.tap(find.byKey(const ValueKey('client-case-k1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('case-detail-k1')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('case-note-k1')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('case-note-text')),
+      'Müvekkil sulhe açık.',
+    );
+    await tester.tap(find.byKey(const ValueKey('case-note-save')));
+    await tester.pumpAndSettle();
+    final note = db.clientCards().single.caseNotes['k1']!;
+    expect(note.text, 'Müvekkil sulhe açık.');
+    expect(note.by, 'Av. Deniz Kaya');
+    expect(find.text('Müvekkil sulhe açık.'), findsOneWidget);
+  });
+
   test('a case tied by hand is the client\'s; one taken off is not, nor '
       'brought back by its names', () {
     db.setRepresentation('k2', const [(ad: 'BORA YAPI', rol: 'Davalı')]);

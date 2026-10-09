@@ -26,7 +26,11 @@ class Client {
     this.absorbed = const [],
     this.stamps = const {},
     this.caseLinks = const {},
+    this.caseNotes = const {},
   });
+
+  /// The lawyer's note on each of the client's cases, by case key.
+  final Map<String, CaseNote> caseNotes;
 
   /// When each of [fields] was last set: two devices that changed
   /// different fields of a card keep both ([merge]). One not stamped was
@@ -106,6 +110,7 @@ class Client {
     bool? office,
     List<String>? absorbed,
     Map<String, CaseLink>? caseLinks,
+    Map<String, CaseNote>? caseNotes,
   }) {
     final now = updated ?? DateTime.now();
     final made = Client(
@@ -126,6 +131,7 @@ class Client {
       person: person,
       absorbed: absorbed ?? this.absorbed,
       caseLinks: caseLinks ?? this.caseLinks,
+      caseNotes: caseNotes ?? this.caseNotes,
     );
     // Only what changed is stamped now; the rest keeps the time it had.
     final was = _values, is_ = made._values;
@@ -153,6 +159,7 @@ class Client {
     absorbed: absorbed,
     stamps: stamps,
     caseLinks: caseLinks,
+    caseNotes: caseNotes,
   );
 
   /// When field [k] was last set.
@@ -200,6 +207,11 @@ class Client {
       final kept = links[k];
       if (kept == null || l.at.isAfter(kept.at)) links[k] = l;
     });
+    final notes = {...mine.caseNotes};
+    theirs.caseNotes.forEach((k, n) {
+      final kept = notes[k];
+      if (kept == null || n.at.isAfter(kept.at)) notes[k] = n;
+    });
     return Client(
       id: mine.id,
       name: pick['ad']! as String,
@@ -221,6 +233,7 @@ class Client {
       absorbed: {...mine.absorbed, ...theirs.absorbed}.toList(),
       stamps: stamps,
       caseLinks: links,
+      caseNotes: notes,
     );
   }
 
@@ -248,6 +261,10 @@ class Client {
     'dosyalar': {
       for (final k in caseLinks.keys.toList()..sort())
         k: caseLinks[k]!.toJson(),
+    },
+    'dosyaNotlari': {
+      for (final k in caseNotes.keys.toList()..sort())
+        k: caseNotes[k]!.toJson(),
     },
   };
 
@@ -288,6 +305,11 @@ class Client {
           for (final e in (j['dosyalar'] as Map).entries)
             '${e.key}': ?CaseLink.fromJson(e.value),
       },
+      caseNotes: {
+        if (j['dosyaNotlari'] is Map)
+          for (final e in (j['dosyaNotlari'] as Map).entries)
+            '${e.key}': ?CaseNote.fromJson(e.value),
+      },
     );
   }
 
@@ -319,6 +341,31 @@ class CaseLink {
       state,
       at,
       role: j['rol'] is String ? j['rol'] as String : '',
+    );
+  }
+}
+
+/// The lawyer's note on one of the client's cases: [by] wrote it at [at];
+/// the later note wins on every device.
+class CaseNote {
+  const CaseNote(this.text, this.at, {this.by = ''});
+  final String text, by;
+  final DateTime at;
+
+  Map<String, Object?> toJson() => {
+    'metin': text,
+    'yazan': by,
+    'zaman': at.toIso8601String(),
+  };
+
+  static CaseNote? fromJson(Object? j) {
+    if (j is! Map || j['metin'] is! String) return null;
+    final at = DateTime.tryParse('${j['zaman']}');
+    if (at == null) return null;
+    return CaseNote(
+      j['metin'] as String,
+      at,
+      by: j['yazan'] is String ? j['yazan'] as String : '',
     );
   }
 }

@@ -526,30 +526,17 @@ class _ClientCardState extends State<ClientCard> {
 
   /// [m] taken back by a movement that names it: both stay, struck out.
   Future<void> _reverse(ClientRecord m) async {
-    final why = TextEditingController();
-    final ok = await showDialog<bool>(
+    final why = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ters kayıtla düzelt'),
-        content: TextField(
-          controller: why,
-          decoration: const InputDecoration(labelText: 'Neden'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Düzelt'),
-          ),
-        ],
+      builder: (_) => const _NoteDialog(
+        title: 'Ters kayıtla düzelt',
+        label: 'Neden',
+        ok: 'Düzelt',
+        lines: 1,
       ),
     );
-    final reason = why.text.trim();
-    why.dispose();
-    if (ok != true) return;
+    if (why == null) return;
+    final reason = why.trim();
     final now = DateTime.now();
     _keep(
       ClientRecord(
@@ -1615,7 +1602,234 @@ class _ClientCardState extends State<ClientCard> {
   /// "15.000" from kuruş: TL is the column's.
   static String _plain(int kurus) => lira(kurus).replaceAll(' TL', '');
 
+  /// The cases opened to their detail.
+  final _opened = <String>{};
+
   Widget _caseRow(
+    ({String caseKey, String role}) x,
+    CaseAccount? a,
+    String? next,
+    bool wide,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _caseLine(x, a, next, wide),
+      if (_opened.contains(x.caseKey)) _caseDetail(x, wide),
+    ],
+  );
+
+  /// The latest note on case [key], of any of the client's cards.
+  CaseNote? _noteOf(String key) {
+    CaseNote? best = _client?.caseNotes[key];
+    for (final id in widget.entry.ids) {
+      final n = _db.clientCard(id)?.caseNotes[key];
+      if (n != null && (best == null || n.at.isAfter(best.at))) best = n;
+    }
+    return best;
+  }
+
+  Future<void> _editNote(String key) async {
+    final note = await showDialog<String>(
+      context: context,
+      builder: (_) => _NoteDialog(
+        title: 'Dosya notu · ${_number(key)}',
+        text: _noteOf(key)?.text ?? '',
+      ),
+    );
+    if (note == null || !mounted) return;
+    final card = _card();
+    final saved = card.copyWith(
+      caseNotes: {
+        ...card.caseNotes,
+        key: CaseNote(note.trim(), DateTime.now(), by: widget.lawyer),
+      },
+    );
+    _db.saveClient(saved);
+    setState(() => _client = saved);
+    widget.onChanged?.call(saved.id);
+  }
+
+  /// A case opened under its row: its hearings, its deadlines and the
+  /// other side, and the lawyer's note on it.
+  Widget _caseDetail(({String caseKey, String role}) x, bool wide) {
+    final key = x.caseKey;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final coming = [
+      for (final h in _hearings)
+        if (h.caseKey == key) h,
+    ];
+    final past = _db.hearings(caseKey: key, from: DateTime(2000), to: now)
+      ..sort((a, b) => b.at.compareTo(a.at));
+    final deadlines = [
+      for (final d in _deadlines)
+        if (d.caseKey == key && !d.day.isBefore(today)) d,
+    ]..sort((a, b) => a.day.compareTo(b.day));
+    final mine = {...?_client?.folded, UyapWebService.fold(widget.entry.name)};
+    final others = [
+      for (final t in _db.caseParties(caseKey: key)[key] ?? const <UyapParty>[])
+        if (!mine.contains(UyapWebService.fold(t.name)) &&
+            !isShortenedName(t.name))
+          t,
+    ];
+    final status = _db.caseOf(key)?.status?.value ?? '';
+    final note = _noteOf(key);
+    const muted = TextStyle(fontSize: 12.5, color: AgendaColors.muted);
+    Widget head(String t, {Widget? action}) => SizedBox(
+      height: 26,
+      child: Row(
+        children: [
+          Text(
+            t,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: .5,
+              color: AgendaColors.muted,
+            ),
+          ),
+          const Spacer(),
+          ?action,
+        ],
+      ),
+    );
+    Widget line(String t, {TextStyle? style}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Text(t, style: style ?? const TextStyle(fontSize: 12.5)),
+    );
+    String hearing(PortalHearing h) => [
+      '${_day(h.at)} ${_time(h.at)}',
+      if ((h.kind?.value ?? '').isNotEmpty) h.kind!.value,
+      if ((h.result?.value ?? '').isNotEmpty) h.result!.value,
+    ].join(' · ');
+    final hearings = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        head('DURUŞMALAR'),
+        if (coming.isEmpty && past.isEmpty) line('Duruşma yok.', style: muted),
+        for (final h in coming)
+          line(
+            '${hearing(h)} · ${h.at.difference(today).inDays} gün',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+          ),
+        for (final h in past.take(3)) line(hearing(h), style: muted),
+      ],
+    );
+    final state = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        head('SÜRELER VE DURUM'),
+        if (deadlines.isEmpty) line('Bekleyen süre yok.', style: muted),
+        for (final d in deadlines)
+          line(
+            '${_day(d.day).substring(0, 5)} ${d.title} · '
+            '${d.day.difference(today).inDays} gün',
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: AgendaColors.taskText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        if (status.isNotEmpty) line(titleName(status), style: muted),
+        for (final t in others.take(3))
+          line(
+            [
+              '${titleName(t.role)}: ${titleName(t.name)}',
+              if (t.lawyer.isNotEmpty) 'vekili ${titleName(t.lawyer)}',
+            ].join(' · '),
+            style: muted,
+          ),
+      ],
+    );
+    final notes = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        head(
+          'DOSYA NOTU',
+          action: TextButton(
+            key: ValueKey('case-note-$key'),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+            ),
+            onPressed: () => _editNote(key),
+            child: Text((note?.text ?? '').isEmpty ? '+ Not yaz' : 'Düzenle'),
+          ),
+        ),
+        if ((note?.text ?? '').isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBEA),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFF1E3B0)),
+            ),
+            child: SelectableText(
+              note!.text,
+              style: const TextStyle(fontSize: 12.5, height: 1.35),
+            ),
+          ),
+          line(
+            [_day(note.at), if (note.by.isNotEmpty) note.by].join(' · '),
+            style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
+          ),
+        ] else
+          line('Bu dosya için not yok.', style: muted),
+      ],
+    );
+    return Container(
+      key: ValueKey('case-detail-$key'),
+      color: const Color(0xFFF7F9FD),
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (wide)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 6, child: hearings),
+                const SizedBox(width: 14),
+                Expanded(flex: 5, child: state),
+                const SizedBox(width: 14),
+                Expanded(flex: 5, child: notes),
+              ],
+            )
+          else ...[
+            hearings,
+            const SizedBox(height: 6),
+            state,
+            const SizedBox(height: 6),
+            notes,
+          ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              if (widget.onOpenCase != null)
+                OutlinedButton(
+                  onPressed: () => widget.onOpenCase!(key),
+                  child: const Text('Dosyayı aç'),
+                ),
+              if (widget.seesMoney) ...[
+                OutlinedButton(
+                  onPressed: () => _accounts(key),
+                  child: const Text('Hesabını aç'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _movement(key),
+                  child: const Text('Hareket ekle'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _caseLine(
     ({String caseKey, String role}) x,
     CaseAccount? a,
     String? next,
@@ -1658,6 +1872,16 @@ class _ClientCardState extends State<ClientCard> {
     final title = Text.rich(
       TextSpan(
         children: [
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Icon(
+              _opened.contains(x.caseKey)
+                  ? Icons.expand_more_rounded
+                  : Icons.chevron_right_rounded,
+              size: 18,
+              color: AgendaColors.muted,
+            ),
+          ),
           TextSpan(
             text: kase?.number ?? x.caseKey,
             style: const TextStyle(fontWeight: FontWeight.w700),
@@ -1680,9 +1904,9 @@ class _ClientCardState extends State<ClientCard> {
       textAlign: TextAlign.right,
       style: TextStyle(fontSize: 13, color: color),
     );
-    final open = widget.onOpenCase == null
-        ? null
-        : () => widget.onOpenCase!(x.caseKey);
+    void open() => setState(() {
+      if (!_opened.remove(x.caseKey)) _opened.add(x.caseKey);
+    });
     if (wide) {
       return InkWell(
         key: ValueKey('client-case-${x.caseKey}'),
@@ -2009,6 +2233,65 @@ class _ClientCardState extends State<ClientCard> {
           ),
         ),
       for (final a in attorneys) _attorneyTile(a),
+    ],
+  );
+}
+
+/// A line or a note written: what it says, null when backed out.
+class _NoteDialog extends StatefulWidget {
+  const _NoteDialog({
+    required this.title,
+    this.text = '',
+    this.label,
+    this.ok = 'Kaydet',
+    this.lines = 4,
+  });
+  final String title, text, ok;
+  final String? label;
+  final int lines;
+
+  @override
+  State<_NoteDialog> createState() => _NoteDialogState();
+}
+
+class _NoteDialogState extends State<_NoteDialog> {
+  late final _text = TextEditingController(text: widget.text);
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: SizedBox(
+      width: 480,
+      child: TextField(
+        key: const ValueKey('case-note-text'),
+        controller: _text,
+        autofocus: true,
+        minLines: widget.lines,
+        maxLines: widget.lines == 1 ? 1 : 10,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          hintText: widget.label == null
+              ? 'Tanıklar, sulh sınırı, müvekkilin istekleri…'
+              : null,
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Vazgeç'),
+      ),
+      FilledButton(
+        key: const ValueKey('case-note-save'),
+        onPressed: () => Navigator.pop(context, _text.text),
+        child: Text(widget.ok),
+      ),
     ],
   );
 }
