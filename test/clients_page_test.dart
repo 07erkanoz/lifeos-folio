@@ -68,6 +68,43 @@ void main() {
     );
   });
 
+  testWidgets('on a phone, a case opened from a client\'s page comes in '
+      'front: the client\'s page closes first, and it is said whose it was', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    String? opened, from;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClientsPage(
+            lawyer: 'Av. Deniz Kaya',
+            database: db,
+            files: ClientFiles(root: () async => root),
+            onOpenCase: (kase, client) {
+              opened = kase;
+              from = client;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ayşe Karaca'));
+    await tester.pumpAndSettle();
+    expect(find.text('Müvekkil'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('case-menu-k1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dosyayı aç'));
+    await tester.pumpAndSettle();
+    expect(opened, 'k1');
+    expect(from, isNotEmpty);
+    // The client's page is gone: what opens is not behind it.
+    expect(find.text('Müvekkil'), findsNothing);
+  });
+
   Future<void> open(WidgetTester tester, {bool money = true}) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
@@ -220,10 +257,9 @@ void main() {
       expect(c.address, 'Muratpaşa');
     }
     other.saveClient(
-      other.clientCard('c1')!.copyWith(
-        phone: '0533 111 11 11',
-        updated: DateTime(2026, 5),
-      ),
+      other
+          .clientCard('c1')!
+          .copyWith(phone: '0533 111 11 11', updated: DateTime(2026, 5)),
     );
     db.clientsMerge(other.clientsExport());
     other.clientsMerge(db.clientsExport());

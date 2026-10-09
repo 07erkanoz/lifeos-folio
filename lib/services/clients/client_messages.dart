@@ -74,7 +74,8 @@ String longDay(DateTime t, {bool time = true}) =>
   final where = court.isEmpty ? 'davanızın' : "$court'ndeki davanızın";
   final body = switch (kind) {
     MessageKind.hearing =>
-      '$where duruşması ${at == null ? 'yakında' : longDay(at)}\'dadır. '
+      '$where duruşması '
+          '${at == null ? 'yaklaşmaktadır' : '${longDay(at)}\'dadır'}. '
           'Duruşmadan önce görüşmemiz gereken bir konu olursa bana '
           'ulaşabilirsiniz.',
     MessageKind.result =>
@@ -118,7 +119,9 @@ String phoneDigits(String phone) {
 
 /// The ways [text] may open, in the order to try them: WhatsApp's own
 /// program on a computer (WhatsApp on Windows, WhatSie on Linux), else
-/// its page; on a phone the link that opens the app where it is.
+/// its page; on a phone the link that opens the app where it is. With no
+/// number or address on the card, the message opens all the same and the
+/// lawyer picks who it goes to there.
 List<Uri> messageLinks(
   MessageChannel channel, {
   required String phone,
@@ -130,33 +133,30 @@ List<Uri> messageLinks(
   String enc(String s) => Uri.encodeComponent(s);
   return switch (channel) {
     MessageChannel.whatsapp =>
-      digits.isEmpty
-          ? const []
-          : Platform.isAndroid || Platform.isIOS
+      Platform.isAndroid || Platform.isIOS
           ? [Uri.parse('https://wa.me/$digits?text=${enc(text)}')]
           : [
-              Uri.parse('whatsapp://send?phone=$digits&text=${enc(text)}'),
               Uri.parse(
-                'https://web.whatsapp.com/send?phone=$digits&text=${enc(text)}',
+                'whatsapp://send?${digits.isEmpty ? '' : 'phone=$digits&'}'
+                'text=${enc(text)}',
+              ),
+              Uri.parse(
+                'https://web.whatsapp.com/send?'
+                '${digits.isEmpty ? '' : 'phone=$digits&'}text=${enc(text)}',
               ),
             ],
-    MessageChannel.sms =>
-      digits.isEmpty
-          ? const []
-          : [
-              Uri.parse(
-                'sms:+$digits${Platform.isIOS ? '&' : '?'}body=${enc(text)}',
-              ),
-            ],
-    MessageChannel.email =>
-      email.trim().isEmpty
-          ? const []
-          : [
-              Uri.parse(
-                'mailto:${email.trim()}?subject=${enc(subject)}'
-                '&body=${enc(text)}',
-              ),
-            ],
+    MessageChannel.sms => [
+      Uri.parse(
+        'sms:${digits.isEmpty ? '' : '+$digits'}'
+        '${Platform.isIOS ? '&' : '?'}body=${enc(text)}',
+      ),
+    ],
+    MessageChannel.email => [
+      Uri.parse(
+        'mailto:${email.trim()}?subject=${enc(subject)}'
+        '&body=${enc(text)}',
+      ),
+    ],
   };
 }
 

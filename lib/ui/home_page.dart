@@ -1542,6 +1542,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _forgetAsked() {
     _portfolioQuery = null;
     _caseAsked = null;
+    _caseFromClient = null;
     _agendaDay = null;
     _agendaHearing = null;
   }
@@ -1579,6 +1580,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// The client a search found, for the clients' page to open.
   String? _clientAsked;
+
+  /// The client whose card a case was opened from: going back from the
+  /// case goes back to that card.
+  String? _caseFromClient;
 
   /// A row the home page's search found: its one place.
   void _openFound(Found found) {
@@ -1770,9 +1775,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       showParties: asked?.parties ?? false,
       showDocument: asked?.document,
       onBack: () {
+        final client = _caseFromClient;
         setState(() {
           _caseAsked = null;
-          _group = 'uyap';
+          _caseFromClient = null;
+          if (client != null) {
+            // Back to the card it was opened from.
+            _clientAsked = client;
+            _group = 'muvekkiller';
+          } else {
+            _group = 'uyap';
+          }
         });
         unawaited(_countAgenda());
       },
@@ -2342,11 +2355,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                           .ledger
                                                           .officeId !=
                                                       null,
-                                                  onOpenCase: (key) =>
+                                                  onOpenCase: (key, client) =>
                                                       unawaited(
                                                         _selectGroup(
                                                           'uyap:$key',
-                                                        ),
+                                                        ).then((_) {
+                                                          if (_group ==
+                                                              'uyap:$key') {
+                                                            _caseFromClient =
+                                                                client;
+                                                          }
+                                                        }),
                                                       ),
                                                 )
                                               : _group == 'mesajlar'

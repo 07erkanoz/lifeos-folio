@@ -119,9 +119,9 @@ class ClientMessageDialog extends StatefulWidget {
 }
 
 class _ClientMessageDialogState extends State<ClientMessageDialog> {
-  late MessageChannel _channel = _hasPhone
-      ? MessageChannel.whatsapp
-      : MessageChannel.email;
+  late MessageChannel _channel = !_hasPhone && _hasEmail
+      ? MessageChannel.email
+      : MessageChannel.whatsapp;
   late MessageKind _kind = widget.due?.kind ?? MessageKind.hearing;
   late String _case =
       widget.due?.caseKey ??
@@ -138,7 +138,29 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
   @override
   void initState() {
     super.initState();
+    if (widget.due == null) _firstChoice();
     _write();
+  }
+
+  /// Opened by the lawyer, not for a message due: the case with the
+  /// nearest hearing, and a hearing's reminder for it; with none to come,
+  /// a message of their own.
+  void _firstChoice() {
+    final now = DateTime.now();
+    final next = [
+      for (final c in widget.cases)
+        ..._db.hearings(
+          caseKey: c.caseKey,
+          from: now,
+          to: now.add(const Duration(days: 400)),
+        ),
+    ]..sort((a, b) => a.at.compareTo(b.at));
+    final first = next.firstOrNull;
+    if (first == null) {
+      _kind = MessageKind.free;
+      return;
+    }
+    _case = first.caseKey;
   }
 
   @override
@@ -337,30 +359,29 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
                   ButtonSegment(
                     value: MessageChannel.whatsapp,
                     label: const Text('WhatsApp'),
-                    enabled: _hasPhone,
                   ),
                   ButtonSegment(
                     value: MessageChannel.sms,
                     label: const Text('SMS'),
-                    enabled: _hasPhone,
                   ),
                   ButtonSegment(
                     value: MessageChannel.email,
                     label: const Text('E-posta'),
-                    enabled: _hasEmail,
                   ),
                 ],
                 selected: {_channel},
                 onSelectionChanged: (v) => setState(() => _channel = v.first),
               ),
-              if (!_hasPhone || !_hasEmail)
+              if (_channel == MessageChannel.email ? !_hasEmail : !_hasPhone)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    !_hasPhone
-                        ? 'Kartta telefon yok: WhatsApp ve SMS için '
-                              '"Bilgileri düzenle"den ekleyin.'
-                        : 'Kartta e-posta adresi yok.',
+                    _channel == MessageChannel.email
+                        ? 'Kartta e-posta adresi yok: alıcıyı e-posta '
+                              'programında siz yazarsınız.'
+                        : 'Kartta telefon yok: kişiyi '
+                              '${_channel == MessageChannel.sms ? 'mesajlar uygulamasında' : 'WhatsApp\'ta'} '
+                              'siz seçersiniz.',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AgendaColors.muted,
@@ -472,7 +493,7 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
           style: _channel == MessageChannel.whatsapp
               ? FilledButton.styleFrom(backgroundColor: const Color(0xFF1FA855))
               : null,
-          onPressed: _busy || (!_hasPhone && !_hasEmail) ? null : _send,
+          onPressed: _busy ? null : _send,
           child: Text(verb),
         ),
       ],

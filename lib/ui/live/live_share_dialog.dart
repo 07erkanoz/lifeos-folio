@@ -376,14 +376,18 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     final ids = {for (final d in online) d.deviceId, ...peers.keys};
     return [
       for (final id in ids)
-        _row(
-          id: id,
-          name:
-              online.where((d) => d.deviceId == id).firstOrNull?.device ??
-              peers[id]?.name ??
-              'Cihaz',
-          peer: peers[id],
-        ),
+        _row(id: id, name: _ownName(id, peers[id]), peer: peers[id]),
     ];
+  }
+
+  /// One of the person's own devices by the name it was known under (its
+  /// announcement says none while the office is not open to it).
+  String _ownName(String id, LivePeer? peer) {
+    final known = _net.ownKnown.where((d) => d.deviceId == id).firstOrNull;
+    final seen = _net.ownOnline.where((d) => d.deviceId == id).firstOrNull;
+    for (final n in [known?.device, seen?.device, known?.name, peer?.name]) {
+      if (n != null && n.trim().isNotEmpty) return n.trim();
+    }
+    return (known?.platform ?? seen?.platform)?.label ?? 'Cihaz';
   }
 }

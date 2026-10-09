@@ -18,6 +18,7 @@ import 'package:flutter_quill/flutter_quill.dart'
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:evrak_convert/ui/live/live_document_page.dart';
 import 'package:evrak_convert/ui/live/live_guest_dialogs.dart';
+import 'package:evrak_convert/ui/live/live_share_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -1109,6 +1110,39 @@ void main() {
       );
     },
   );
+
+  testWidgets('one\'s own device is listed by the name it was known under, '
+      'though it says none on the network', (tester) async {
+    final (pc, tablet) = (await tester.runAsync(pair))!;
+    final t = tablet.self!;
+    // Not open to the office: its announcement names nothing.
+    pc.seenForTesting(
+      OfficePeer(
+        deviceId: t.deviceId,
+        userId: t.userId,
+        name: '',
+        device: '',
+        platform: t.platform,
+        host: t.host,
+        port: t.port,
+      ),
+    );
+    final host = LiveShareHost(
+      title: 'Dilekçe',
+      snapshot: () => (delta: (Delta()..insert('\n')).toJson(), blocks: []),
+      blockCount: () => 0,
+      network: pc,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveShareDialog(host: host, network: pc),
+        ),
+      ),
+    );
+    expect(find.text('tablet'), findsOneWidget);
+    await tester.runAsync(host.close);
+  });
 }
 
 class _Store extends SecretStore {

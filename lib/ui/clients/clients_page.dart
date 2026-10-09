@@ -103,7 +103,9 @@ class ClientsPage extends StatefulWidget {
   final bool inOffice;
   final PortalDatabase? database;
   final ClientFiles? files;
-  final ValueChanged<String>? onOpenCase;
+
+  /// A case opened from a client's card: the case's key, and the client's.
+  final void Function(String caseKey, String clientKey)? onOpenCase;
 
   @override
   State<ClientsPage> createState() => _ClientsPageState();
@@ -281,9 +283,11 @@ class _ClientsPageState extends State<ClientsPage> {
       Navigator.of(context)
           .push(
             MaterialPageRoute<void>(
-              builder: (_) => Scaffold(
+              builder: (page) => Scaffold(
                 appBar: AppBar(title: const Text('Müvekkil')),
-                body: _detail(e),
+                // A case opened from here comes in front: this page is
+                // closed first, not left over it.
+                body: _detail(e, closing: () => Navigator.of(page).pop()),
               ),
             ),
           )
@@ -296,7 +300,7 @@ class _ClientsPageState extends State<ClientsPage> {
   final _madeFrom = <String, String>{};
 
   // Keyed by the client, not its name: two of one name are two clients.
-  Widget _detail(ClientEntry e) => ClientCard(
+  Widget _detail(ClientEntry e, {VoidCallback? closing}) => ClientCard(
     key: ValueKey(_madeFrom[e.key] ?? e.key),
     entry: e,
     database: _db!,
@@ -307,7 +311,12 @@ class _ClientsPageState extends State<ClientsPage> {
     inOffice: widget.inOffice,
     onEdit: widget.onEdit,
     lookalikes: _db!.clientLookalikes(e, _entries),
-    onOpenCase: widget.onOpenCase,
+    onOpenCase: widget.onOpenCase == null
+        ? null
+        : (caseKey) {
+            closing?.call();
+            widget.onOpenCase!(caseKey, e.key);
+          },
     onChanged: (key) {
       // A card made for a client only seen in the cases: it is the one
       // chosen now, under its id, on the page it had.
@@ -1651,13 +1660,18 @@ class _ClientCardState extends State<ClientCard> {
           height: 34,
           child: Row(
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: .5,
-                  color: AgendaColors.muted,
+              // Narrow: the title gives way, not the action beside it.
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: .5,
+                    color: AgendaColors.muted,
+                  ),
                 ),
               ),
               if (count != null)

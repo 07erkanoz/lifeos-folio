@@ -1405,10 +1405,14 @@ class LiveShare {
             return;
           }
           final name = own
-              ? network.ownOnline
-                    .where((p) => p.deviceId == from)
-                    .map((p) => p.device)
-                    .firstOrNull
+              ? [
+                  ...network.ownKnown
+                      .where((d) => d.deviceId == from)
+                      .map((d) => d.device),
+                  ...network.ownOnline
+                      .where((p) => p.deviceId == from)
+                      .map((p) => p.device),
+                ].where((n) => n.trim().isNotEmpty).firstOrNull
               : member
               ? network.ledger.member(from)?.name
               : network.peerNamed(from);

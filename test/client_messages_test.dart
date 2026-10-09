@@ -43,16 +43,37 @@ void main() {
     ).single;
     expect(mail.scheme, 'mailto');
     expect(mail.toString(), contains('subject=Duru%C5%9Fma'));
+    // No number on the card: opened all the same, the person picked there.
+    final noOne = messageLinks(
+      MessageChannel.whatsapp,
+      phone: '',
+      email: '',
+      subject: '',
+      text: 'x',
+    );
+    expect(noOne, isNotEmpty);
+    expect(noOne.first.toString(), isNot(contains('phone=')));
     expect(
       messageLinks(
-        MessageChannel.sms,
+        MessageChannel.email,
         phone: '',
         email: '',
-        subject: '',
+        subject: 'Konu',
         text: 'x',
-      ),
-      isEmpty,
+      ).single.toString(),
+      startsWith('mailto:?subject='),
     );
+  });
+
+  test('a hearing\'s reminder with no day known reads as a sentence', () {
+    final m = messageText(
+      MessageKind.hearing,
+      client: 'Ayşe Karaca',
+      lawyer: 'Av. Deniz Kaya',
+      court: 'Antalya 3. Asliye Hukuk Mahkemesi',
+    );
+    expect(m.body, contains('davanızın duruşması yaklaşmaktadır.'));
+    expect(m.body, isNot(contains("'da")));
   });
 
   test('a hearing\'s reminder names the court and the day, not the case\'s '
