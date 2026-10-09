@@ -14,7 +14,7 @@ import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:flutter_quill/flutter_quill.dart'
-    show ChangeSource, Document, QuillEditor;
+    show Attribute, ChangeSource, Document, QuillController, QuillEditor;
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:evrak_convert/ui/live/live_document_page.dart';
 import 'package:evrak_convert/ui/live/live_guest_dialogs.dart';
@@ -892,6 +892,17 @@ void main() {
     expect(ok(Delta()..insert('x', {'nicht': null})), isFalse);
     // A word's mark never on a line's end.
     expect(ok(Delta()..insert('a\nb', {'bold': true})), isFalse);
+    // Marks taken off only from what is kept; none given empty.
+    expect(ok(Delta()..insert('X', {'bold': null})), isFalse);
+    expect(
+      ok(
+        Delta()
+          ..insert('X')
+          ..retain(2, {})
+          ..insert('Y'),
+      ),
+      isFalse,
+    );
   });
 
   test('a word\'s mark is not put over a line\'s end, and what was '
@@ -1032,6 +1043,71 @@ void main() {
     await settle(tester, () => session.ended);
     await tester.pumpWidget(const SizedBox());
   });
+
+  test(
+    'what a real editor makes when one types, presses Enter, marks '
+    'across lines and pastes lines all goes in, the two alike after',
+    () async {
+      final layout = {'left': 0, 'first': 36};
+      Delta start() => Delta()
+        ..insert('Birinci satır', {'size': '16.0', 'font': 'Times New Roman'})
+        ..insert('\n', {'doc-layout': layout})
+        ..insert('İkinci satır', {'size': '16.0'})
+        ..insert('\n', {'doc-layout': layout});
+      final sharer = Document.fromDelta(start());
+      final holder = QuillController(
+        document: Document.fromDelta(start()),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      final refused = <Delta>[];
+      holder.document.changes.listen((e) {
+        if (e.source != ChangeSource.local) return;
+        if (LiveShareHost.acceptable(e.change, sharer)) {
+          sharer.compose(e.change, ChangeSource.remote);
+        } else {
+          refused.add(e.change);
+        }
+      });
+      // Each change is told a moment after it is made.
+      Future<void> told() => Future<void>.delayed(Duration.zero);
+      // Typed at the end of the first line, then Enter, then more.
+      holder.replaceText(
+        13,
+        0,
+        ' ek',
+        const TextSelection.collapsed(offset: 16),
+      );
+      await told();
+      holder.replaceText(
+        16,
+        0,
+        '\n',
+        const TextSelection.collapsed(offset: 17),
+      );
+      await told();
+      holder.replaceText(
+        17,
+        0,
+        'yeni',
+        const TextSelection.collapsed(offset: 21),
+      );
+      await told();
+      // Bold across two lines.
+      holder.formatText(0, 25, Attribute.bold);
+      await told();
+      // Lines pasted.
+      holder.replaceText(3, 0, 'a\nb\nc', null);
+      await told();
+      // Two lines joined.
+      holder.replaceText(16, 1, '', null);
+      await told();
+      expect(refused, isEmpty);
+      expect(
+        jsonEncode(sharer.toDelta().toJson()),
+        jsonEncode(holder.document.toDelta().toJson()),
+      );
+    },
+  );
 }
 
 class _Store extends SecretStore {

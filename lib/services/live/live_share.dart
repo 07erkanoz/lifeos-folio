@@ -238,6 +238,13 @@ class LiveShareHost {
       final n = op.length;
       if (n == null || n <= 0) return false;
       final attributes = op.attributes;
+      // Marks given, none empty; taken off (null) only from what is kept.
+      if (attributes != null && attributes.isEmpty) return false;
+      if (attributes != null &&
+          !op.isRetain &&
+          attributes.values.any((v) => v == null)) {
+        return false;
+      }
       if (!_marksAllowed(attributes, layouts)) return false;
       final lineMarks =
           attributes != null && attributes.keys.any(_lineKeys.contains);
@@ -276,7 +283,38 @@ class LiveShareHost {
         return false;
       }
     }
-    return true;
+    // Typing (words put in or taken out at one place) goes in as it is;
+    // anything more is tried on a copy first, and must come out there as
+    // the delta says: not half put in here.
+    if (_typing(change)) return true;
+    try {
+      final expected = base.compose(change);
+      final probe = Document.fromDelta(base)
+        ..compose(change, ChangeSource.remote);
+      return jsonEncode(probe.toDelta().toJson()) ==
+          jsonEncode(expected.toJson());
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// A keystroke's change: kept up to one place, then words put in on one
+  /// line, or taken out.
+  static bool _typing(Delta change) {
+    final ops = change.operations;
+    var i = 0;
+    if (i < ops.length && ops[i].isRetain) {
+      if (ops[i].attributes != null) return false;
+      i++;
+    }
+    if (i >= ops.length) return true;
+    final op = ops[i];
+    if (i != ops.length - 1) return false;
+    if (op.isDelete) return true;
+    return op.isInsert &&
+        op.data is String &&
+        !(op.data as String).contains('\n') &&
+        (op.attributes?.values.every((v) => v != null) ?? true);
   }
 
   static bool _wordsOnly(Delta d) =>

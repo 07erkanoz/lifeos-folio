@@ -261,6 +261,8 @@ class _EditorWidgetState extends State<EditorWidget>
     for (final region in _regions.values) {
       region.readOnly = _penAway;
     }
+    // Each turn of the pen undone on its own, not with the one before.
+    _quillController.document.history.lastRecorded = 0;
     if (mounted) setState(() {});
   }
 
@@ -1192,6 +1194,9 @@ class _EditorWidgetState extends State<EditorWidget>
     controller.document = Document.fromDelta(mapped.delta);
     _regionChanges[key]?.cancel();
     _regionChanges[key] = controller.document.changes.listen((_) {
+      // Changed here while another held the pen (a shortcut gets past
+      // the lock): the pen is the sharer's again.
+      if (_penAway) _live?.takeBack();
       _recovery.changed();
       _checkEditedSoon();
       _measureRegionsSoon();
