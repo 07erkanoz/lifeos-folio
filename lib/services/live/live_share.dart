@@ -218,8 +218,13 @@ class LiveShareHost {
     ];
   }
 
-  /// [deviceId], one of the person's own, shown the document.
-  Future<bool> invite(String deviceId, String name) async {
+  /// [deviceId] shown the document: one of the person's own, or with
+  /// [office] a member of the office's (KVKK: only the one chosen).
+  Future<bool> invite(
+    String deviceId,
+    String name, {
+    bool office = false,
+  }) async {
     if (_closed || _viewers.containsKey(deviceId)) return false;
     final mine = (_invitations[deviceId] ?? 0) + 1;
     _invitations[deviceId] = mine;
@@ -232,6 +237,7 @@ class LiveShareHost {
       deviceId,
       liveKind,
       body: {'baslik': title, 'izin': LiveRight.view.name},
+      office: office,
     );
     if (_closed || _invitations[deviceId] != mine) {
       // Withdrawn, or made again, while it was being made.
@@ -707,23 +713,29 @@ class LiveShare {
   /// How often a viewer and the sharer tell each other they are there.
   Duration heartbeat = const Duration(seconds: 10);
 
-  /// Listened for on [network]: in this step, from the person's own
-  /// devices only.
+  /// Listened for on [network]: from the person's own devices, and from
+  /// the office's members; from no one else (the network lets no one
+  /// else open a channel at all).
   void listen(OfficeNetwork network) {
     network.streams[liveKind] =
         (ch, first, {required own, required member}) async {
-          if (!own) {
+          if (!own && !member) {
             await ch.close();
             return;
           }
-          final name = network.ownOnline
-              .where((p) => p.deviceId == ch.peer.deviceId)
-              .map((p) => p.device)
-              .firstOrNull;
+          final from = ch.peer.deviceId;
+          final name = own
+              ? network.ownOnline
+                    .where((p) => p.deviceId == from)
+                    .map((p) => p.device)
+                    .firstOrNull
+              : network.ledger.member(from)?.name;
           final session = LiveSession._(
             ch,
             '${first['baslik'] ?? 'Belge'}',
-            (name ?? '').isEmpty ? 'Öbür cihazınız' : name!,
+            (name ?? '').isEmpty
+                ? (own ? 'Öbür cihazınız' : 'Bir meslektaşınız')
+                : name!,
             LiveRight.view,
           );
           incoming.value = [...incoming.value, session];

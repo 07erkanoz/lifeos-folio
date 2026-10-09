@@ -20,7 +20,10 @@ void main() {
   setUp(() => dir = Directory.systemTemp.createTempSync('folio_live_'));
   tearDown(() => dir.deleteSync(recursive: true));
 
-  Future<OfficeNetwork> folio(String device) async {
+  Future<OfficeNetwork> folio(
+    String device, {
+    String name = 'Av. Erkan Öz',
+  }) async {
     final net = OfficeNetwork(
       settings: () async => File('${dir.path}/$device/buro.json'),
       known: KnownDevices(file: () async => File('${dir.path}/$device/k.json')),
@@ -36,7 +39,7 @@ void main() {
       OfficePeer(
         deviceId: identity.deviceId,
         userId: identity.userId,
-        name: 'Av. Erkan Öz',
+        name: name,
         device: device,
         platform: OfficePlatform.linux,
       ),
@@ -276,6 +279,59 @@ void main() {
       expect(LiveShare.instance.incoming.value, isEmpty);
     },
   );
+
+  test('a colleague of the office is shown it when chosen; a device only '
+      'paired, not the office\'s, is not even reached', () async {
+    final deniz = await folio('deniz-pc', name: 'Av. Deniz Kaya');
+    final mert = await folio('mert-pc', name: 'Av. Mert Yıldız');
+    final asking = deniz.pair(mert.self!)!;
+    await until(() => mert.incoming.value?.code != null);
+    mert.incoming.value!.confirm();
+    asking.confirm();
+    await until(
+      () =>
+          deniz.isKnown(mert.self!.deviceId) &&
+          mert.isKnown(deniz.self!.deviceId),
+    );
+    deniz.seenForTesting(mert.self!);
+    mert.seenForTesting(deniz.self!);
+    expect(deniz.self!.userId, isNot(mert.self!.userId));
+    LiveShare.instance.listen(mert);
+    final host = LiveShareHost(
+      title: 'Bilirkişi itirazı',
+      snapshot: () => (
+        delta: (Delta()..insert('Bilirkişi raporuna itirazlarımız\n')).toJson(),
+        blocks: <DocBlock>[],
+      ),
+      blockCount: () => 0,
+      network: deniz,
+    );
+    // Paired, but not taken into an office: no channel.
+    expect(
+      await host.invite(mert.self!.deviceId, 'Av. Mert Yıldız', office: true),
+      isFalse,
+    );
+    expect(LiveShare.instance.incoming.value, isEmpty);
+
+    expect(await deniz.foundOffice('Kaya Hukuk Bürosu'), isNull);
+    expect(await deniz.admit(mert.self!.deviceId, OfficeRole.lawyer), isNull);
+    await until(() => mert.ledger.members.length == 2);
+    expect(
+      await host.invite(mert.self!.deviceId, 'Av. Mert Yıldız', office: true),
+      isTrue,
+    );
+    await until(() => LiveShare.instance.incoming.value.isNotEmpty);
+    final session = LiveShare.instance.incoming.value.single;
+    expect(session.from, 'Av. Deniz Kaya');
+    await until(() => session.ready);
+    expect(
+      session.document!.toPlainText(),
+      'Bilirkişi raporuna itirazlarımız\n',
+    );
+    await host.remove(mert.self!.deviceId);
+    await until(() => session.ended);
+    expect(session.document, isNull);
+  });
 }
 
 class _Store extends SecretStore {

@@ -43,22 +43,24 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
               onSelectionChanged: (v) => setState(() => _tab = v.first),
             ),
             const SizedBox(height: 10),
-            if (_tab != 1)
+            if (_tab == 2)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'Büro meslektaşlarıyla ve kodla katılan misafirle canlı '
-                  'paylaşım sonraki adımda geliyor.',
+                  'Kodla katılan misafirle canlı paylaşım sonraki adımda '
+                  'geliyor.',
                   style: TextStyle(color: AgendaColors.muted),
                 ),
               )
+            else if (_tab == 0)
+              ..._office()
             else
               ..._devices(),
             const SizedBox(height: 8),
             const Text(
-              'Belge bu cihazda kalır; seçilen cihazların ekranına canlı '
-              'yansır, yalnız görebilirler. Paylaşım bitince orada belge '
-              'kalmaz.',
+              'Belge bu cihazda kalır; yalnız seçtiklerinizin ekranına canlı '
+              'yansır, yalnız görebilirler, kopyalayamazlar. Paylaşım bitince '
+              'onlarda belge kalmaz.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
           ],
@@ -80,6 +82,91 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
         child: const Text('Tamam'),
       ),
     ],
+  );
+
+  /// The office's members on the network now, each a device: not the
+  /// person's own, which are under Cihazlarım.
+  List<Widget> _office() {
+    final ledger = _net.ledger;
+    if (_net.self == null || ledger.officeId == null) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'Bir büro ağına bağlı değilsiniz. Büro ağı Büro sayfasından '
+            'kurulur ya da büroya katılınır.',
+            style: TextStyle(color: AgendaColors.muted),
+          ),
+        ),
+      ];
+    }
+    final me = _net.self!.userId;
+    final peers = {for (final p in widget.host.peers.value) p.deviceId: p};
+    final members = [
+      for (final m in ledger.members)
+        if (m.userId != me &&
+            (_net.isOnline(m.deviceId) || peers.containsKey(m.deviceId)))
+          m,
+    ];
+    if (members.isEmpty) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'Şu an büro ağında açık bir meslektaşınız yok.',
+            style: TextStyle(color: AgendaColors.muted),
+          ),
+        ),
+      ];
+    }
+    return [
+      for (final m in members)
+        _row(
+          id: m.deviceId,
+          name: m.name,
+          device: m.device,
+          peer: peers[m.deviceId],
+          office: true,
+        ),
+    ];
+  }
+
+  String _state(LivePeer? p) => switch (p?.state) {
+    LivePeerState.joining => 'bağlanıyor',
+    LivePeerState.watching => 'izliyor',
+    LivePeerState.gone => 'ayrıldı',
+    LivePeerState.unreachable => 'ulaşılamadı',
+    null => '',
+  };
+
+  Widget _row({
+    required String id,
+    required String name,
+    String device = '',
+    LivePeer? peer,
+    bool office = false,
+  }) => CheckboxListTile(
+    key: ValueKey('live-${office ? 'member' : 'device'}-$id'),
+    dense: true,
+    contentPadding: EdgeInsets.zero,
+    value:
+        peer?.state == LivePeerState.joining ||
+        peer?.state == LivePeerState.watching,
+    onChanged: (on) async {
+      if (on ?? false) {
+        await widget.host.invite(id, name, office: office);
+      } else {
+        await widget.host.remove(id);
+      }
+    },
+    title: Text(name),
+    subtitle: Text(
+      [
+        if (device.isNotEmpty) device,
+        'Yalnız görebilir',
+        if (_state(peer).isNotEmpty) _state(peer),
+      ].join(' · '),
+    ),
   );
 
   List<Widget> _devices() {
@@ -109,45 +196,16 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
         ),
       ];
     }
-    String state(LivePeer? p) => switch (p?.state) {
-      LivePeerState.joining => 'bağlanıyor',
-      LivePeerState.watching => 'izliyor',
-      LivePeerState.gone => 'ayrıldı',
-      LivePeerState.unreachable => 'ulaşılamadı',
-      null => '',
-    };
     final ids = {for (final d in online) d.deviceId, ...peers.keys};
     return [
       for (final id in ids)
-        CheckboxListTile(
-          key: ValueKey('live-device-$id'),
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          value:
-              peers[id]?.state == LivePeerState.joining ||
-              peers[id]?.state == LivePeerState.watching,
-          onChanged: (on) async {
-            final name =
-                online.where((d) => d.deviceId == id).firstOrNull?.device ??
-                peers[id]?.name ??
-                'Cihaz';
-            if (on ?? false) {
-              await widget.host.invite(id, name);
-            } else {
-              await widget.host.remove(id);
-            }
-          },
-          title: Text(
-            online.where((d) => d.deviceId == id).firstOrNull?.device ??
-                peers[id]?.name ??
-                'Cihaz',
-          ),
-          subtitle: Text(
-            [
-              'Yalnız görebilir',
-              if (state(peers[id]).isNotEmpty) state(peers[id]),
-            ].join(' · '),
-          ),
+        _row(
+          id: id,
+          name:
+              online.where((d) => d.deviceId == id).firstOrNull?.device ??
+              peers[id]?.name ??
+              'Cihaz',
+          peer: peers[id],
         ),
     ];
   }
