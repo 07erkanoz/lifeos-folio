@@ -490,6 +490,7 @@ class OfficeNetwork extends ChangeNotifier {
           Map<String, Object?> first, {
           required bool own,
           required bool member,
+          required bool guest,
         })
       >{};
 
@@ -501,13 +502,19 @@ class OfficeNetwork extends ChangeNotifier {
     String kind, {
     Map<String, Object?> body = const {},
     bool office = false,
+    bool guest = false,
   }) async {
     final identity = _identity, peer = _peers[deviceId];
     final host = peer?.host;
     if (identity == null || peer == null || host == null || !peer.online) {
       return null;
     }
-    final trusted = office ? await _trusted(deviceId) : await _trustedFor(peer);
+    // A guest only as a guest: the channel it may have and no other.
+    final trusted = guest
+        ? (isGuestOnly(deviceId) ? _guests[deviceId] : null)
+        : office
+        ? await _trusted(deviceId)
+        : await _trustedFor(peer);
     if (trusted == null) return null;
     if (office && ledger.member(deviceId) == null) return null;
     try {
@@ -517,10 +524,11 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
-      if (!office && !ch.vouched) {
+      if (!office && !guest && !ch.vouched) {
         await ch.close();
         return null;
       }
+      if (guest) _guestChannel(deviceId, ch);
       await ch.send({...body, 't': 'akis', 'tur': kind});
       return ch;
     } catch (_) {
@@ -810,13 +818,30 @@ class OfficeNetwork extends ChangeNotifier {
       link: link,
       hello: hello,
       identity: identity,
-      known: _trusted,
+      known: _trustedOrGuest,
     );
     if (ch == null) return;
-    unawaited(_metOwn(ch));
+    final id = ch.peer.deviceId;
+    // Let in as a guest, or not, fixed now: by the grant it came under,
+    // not by what it later says of itself.
+    final viaGuest =
+        !ch.vouched &&
+        await _trusted(id) == null &&
+        identical(_guests[id], ch.peer);
+    if (viaGuest) {
+      _guestChannel(id, ch);
+    } else {
+      unawaited(_metOwn(ch));
+    }
     late final StreamSubscription<Map<String, Object?>> first;
     first = ch.messages.listen((m) async {
       await first.cancel();
+      // A guest may ask for the live document's channel and nothing else,
+      // and only while its grant stands.
+      if (viaGuest && (m['t'] != 'akis' || !identical(_guests[id], ch.peer))) {
+        await ch.close();
+        return;
+      }
       if (m['t'] == 'kullanici') {
         await _adopt(ch, m['tohum']);
         await ch.close();
@@ -930,12 +955,13 @@ class OfficeNetwork extends ChangeNotifier {
       if (m['t'] == 'akis') {
         final handler = streams['${m['tur']}'];
         final own = ch.vouched;
-        final member = ledger.member(ch.peer.deviceId) != null;
-        if (handler == null || (!own && !member)) {
+        final member = !viaGuest && ledger.member(id) != null;
+        final guest = viaGuest;
+        if (handler == null || (!own && !member && !guest)) {
           await ch.close();
           return;
         }
-        await handler(ch, m, own: own, member: member);
+        await handler(ch, m, own: own, member: member, guest: guest);
         return;
       }
       if (m['t'] == 'senkron') {
@@ -1035,8 +1061,237 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   /// A device this one talks to: one it knows, or a member of its office.
+  /// Never a guest: a guest is let in by [_trustedOrGuest] alone, on a
+  /// channel it opens, and asked for by [openStream] with `guest`.
   Future<KnownDevice?> _trusted(String deviceId) async =>
       await _known.of(deviceId) ?? ledger.member(deviceId)?.asKnown;
+
+  /// Who may open a channel to this Folio: a device it trusts, or a guest
+  /// it took for a live document.
+  Future<KnownDevice?> _trustedOrGuest(String deviceId) async =>
+      await _trusted(deviceId) ?? _guests[deviceId];
+
+  /// Who is a guest only (lib/services/live/live_share.dart): known for
+  /// one live document, in memory, by a code both screens showed; not
+  /// the person's, not the office's, not a device known. What a device
+  /// says of itself on the network does not change it.
+  bool isGuestOnly(String deviceId) =>
+      _guests.containsKey(deviceId) &&
+      !_knownDevices.containsKey(deviceId) &&
+      ledger.member(deviceId) == null;
+
+  /// Guests, by the grant each pairing made: a grant is the very object,
+  /// so that one let go is not mistaken for one made since. Their person
+  /// is no one's ([_guestGrant]): never taken for this person's own.
+  final _guests = <String, KnownDevice>{};
+
+  /// The channels a guest has, closed when it is forgotten.
+  final _guestChannels = <String, Set<OfficeChannel>>{};
+
+  /// The grant [deviceId] has as a guest now, if any.
+  KnownDevice? guestGrant(String deviceId) => _guests[deviceId];
+
+  static KnownDevice _guestGrant(KnownDevice d) => KnownDevice(
+    deviceId: d.deviceId,
+    userId: '',
+    publicKey: d.publicKey,
+    name: d.name,
+    device: d.device,
+    platform: d.platform,
+    knownAt: d.knownAt,
+    code: d.code,
+  );
+
+  void _guestChannel(String deviceId, OfficeChannel ch) {
+    _guestChannels.putIfAbsent(deviceId, () => {}).add(ch);
+    unawaited(
+      ch.done.whenComplete(() {
+        final set = _guestChannels[deviceId];
+        set?.remove(ch);
+        if (set != null && set.isEmpty) _guestChannels.remove(deviceId);
+      }),
+    );
+  }
+
+  /// The guests' hosts this Folio joined: only from them is a document
+  /// taken, not from a guest that joined this one.
+  final _joinedAsGuest = <String>{};
+  bool joinedAsGuest(String deviceId) => _joinedAsGuest.contains(deviceId);
+
+  /// The name [deviceId] gave: its announcement's, else a guest's own.
+  String? peerNamed(String deviceId) {
+    final n = _peers[deviceId]?.name ?? _guests[deviceId]?.name;
+    return n == null || n.isEmpty ? null : n;
+  }
+
+  /// Taking guests: announced so, by the lawyer's name.
+  bool get guestsOpen => _guestsOpen;
+  bool _guestsOpen = false;
+
+  /// On the network for a live document alone, not by the user's choice:
+  /// gone from it, nothing remembered, when that ends.
+  bool _quiet = false;
+
+  /// Asked to remember being on the network while a join was under way.
+  bool _rememberWhenJoined = false;
+
+  /// A guest asking to be shown the document, its code on both screens.
+  final guestPairing = ValueNotifier<OfficePairing?>(null);
+
+  /// The document [guestPairing] asks for, by its title.
+  String get guestPairingFor => _guestPairingFor;
+  String _guestPairingFor = '';
+
+  /// The one sharing to guests now: one document at a time, the last to
+  /// ask; a guest accepted is told to it alone.
+  Object? get guestOwner => _guestOwner;
+  Object? _guestOwner;
+  String _guestTitle = '';
+  void Function(KnownDevice grant, String name, String office)? _onGuest;
+
+  void _turnAwayAsking() {
+    final asking = guestPairing.value;
+    guestPairing.value = null;
+    asking?.reject();
+  }
+
+  /// Takes guests for [owner], the document titled [title]: this Folio on
+  /// the network, by name, saying it shares a document; joined for it
+  /// alone if it was not. A guest the lawyer accepts is told to
+  /// [onGuest], by its grant. Another document taking guests before is
+  /// taken them from, its guest asking now turned away.
+  Future<void> openToGuests(
+    Object owner, {
+    required String title,
+    required void Function(KnownDevice grant, String name, String office)
+    onGuest,
+  }) async {
+    if (!identical(_guestOwner, owner)) _turnAwayAsking();
+    _guestOwner = owner;
+    _guestTitle = title;
+    _onGuest = onGuest;
+    _guestsOpen = true;
+    if (!_joined && !_starting) {
+      _quiet = true;
+      await join(remember: false);
+    } else {
+      await _serial(_announceAgain);
+    }
+    notifyListeners();
+  }
+
+  /// Takes guests no more, if [owner] is the one taking them.
+  Future<void> closeToGuests(Object owner) async {
+    if (!identical(_guestOwner, owner)) return;
+    _guestOwner = null;
+    _onGuest = null;
+    _guestsOpen = false;
+    _turnAwayAsking();
+    await _serial(_announceAgain);
+    await _maybeQuiet();
+    notifyListeners();
+  }
+
+  /// The Folios on the network taking guests now.
+  List<OfficePeer> get liveHosts => [
+    for (final p in _peers.values)
+      if (p.live && p.online && p.host != null && p.deviceId != _self?.deviceId)
+        p,
+  ];
+
+  /// Looked for as one who would join another's live document: on the
+  /// network for it alone if not already.
+  Future<void> lookForLive(bool look) async {
+    _lookingForLive = look;
+    if (look && !_joined && !_starting) {
+      _quiet = true;
+      await join(remember: false);
+    }
+    await _maybeQuiet();
+  }
+
+  bool _lookingForLive = false;
+
+  /// Asks [host] to be shown its document, as a guest named [name] of
+  /// [office]: both screens show a code, both users confirm it.
+  OfficePairing? joinAsGuest(
+    OfficePeer host, {
+    required String name,
+    String office = '',
+  }) {
+    final identity = _identity, self = _self;
+    if (identity == null || self == null) return null;
+    if (_pairing != null && !_pairing!.finished) return null;
+    final pairing = _pairing = OfficePairing.start(
+      identity: identity,
+      self: self,
+      peer: host,
+      onKnown: (d) async {
+        _guests[d.deviceId] = _guestGrant(d);
+        _joinedAsGuest.add(d.deviceId);
+      },
+      guest: (name: name, office: office),
+    );
+    return pairing;
+  }
+
+  /// [deviceId] a guest no more: forgotten, its channels closed, and this
+  /// Folio off the network again if it was on it for guests alone. With
+  /// [grant], only that grant: not one a later pairing made.
+  Future<void> forgetGuest(String deviceId, [KnownDevice? grant]) async {
+    final now = _guests[deviceId];
+    if (grant != null && !identical(now, grant)) return;
+    _guests.remove(deviceId);
+    _joinedAsGuest.remove(deviceId);
+    final channels = _guestChannels.remove(deviceId)?.toList() ?? const [];
+    for (final ch in channels) {
+      unawaited(ch.close().catchError((Object _) {}));
+    }
+    await _maybeQuiet();
+  }
+
+  /// Joining, leaving and announcing again, one after another: none
+  /// finding the network half made by another.
+  Future<void> _serial(Future<void> Function() step) {
+    final next = _steps.then((_) => step());
+    _steps = next.catchError((Object _) {});
+    return next;
+  }
+
+  Future<void> _steps = Future<void>.value();
+
+  Future<void> _maybeQuiet() => _serial(() async {
+    // A join under way is let finish: what it opens is closed after.
+    while (_starting) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    if (!_quiet ||
+        !_joined ||
+        _guestsOpen ||
+        _lookingForLive ||
+        _guests.isNotEmpty) {
+      return;
+    }
+    _quiet = false;
+    await _close();
+    _joined = false;
+    _peers.clear();
+    notifyListeners();
+  });
+
+  Future<void> _announceAgain() async {
+    final identity = _identity, server = _server;
+    if (!_joined || identity == null || server == null) return;
+    // Where it is reached stays what it was.
+    final next = (await _describe(identity, server.port)).keepingPlaceOf(_self);
+    if (_broadcast == null) {
+      _self = next;
+      return;
+    }
+    await _broadcast?.stop();
+    _self = next;
+    await _announce(next);
+  }
 
   bool isTrusted(String deviceId) =>
       _knownDevices.containsKey(deviceId) ||
@@ -2016,6 +2271,51 @@ class OfficeNetwork extends ChangeNotifier {
           unawaited(link.close());
           return;
         }
+        if (m['misafir'] == true) {
+          // A guest: only while taking guests, and known in memory alone.
+          if (!_guestsOpen) {
+            link.send({'t': 'reject'});
+            unawaited(link.close());
+            return;
+          }
+          // Asked of the document taking guests now, and told to it
+          // alone: if another takes them meanwhile, this one is not let in.
+          final owner = _guestOwner, told = _onGuest;
+          late final OfficePairing asking;
+          asking = OfficePairing.answer(
+            link: link,
+            first: m,
+            identity: identity,
+            self: self,
+            onKnown: (d) async {
+              if (!_guestsOpen || !identical(_guestOwner, owner)) {
+                asking.reject();
+                return;
+              }
+              final grant = _guestGrant(d);
+              _guests[d.deviceId] = grant;
+              // Reached where it paired from, if not yet seen announced.
+              final at = asking.other;
+              if (_peers[d.deviceId]?.host == null &&
+                  at?.host != null &&
+                  (at?.port ?? 0) > 0) {
+                _peers[d.deviceId] = at!;
+              }
+              told?.call(grant, asking.guestName, asking.guestOffice);
+            },
+          );
+          _pairing = asking;
+          if (!asking.finished) {
+            _guestPairingFor = _guestTitle;
+            guestPairing.value = asking;
+            asking.addListener(() {
+              if (asking.finished && identical(guestPairing.value, asking)) {
+                guestPairing.value = null;
+              }
+            });
+          }
+          return;
+        }
         final invite = m['davet'] != null ? _invite : null;
         final pairing = OfficePairing.answer(
           link: link,
@@ -2084,6 +2384,8 @@ class OfficeNetwork extends ChangeNotifier {
   /// by this person's own devices alone, with no name.
   Future<void> openToOffice(bool open) async {
     _officeOpen = open;
+    // The user's own choice: not let go when a live document's guests go.
+    _quiet = false;
     if (!_joined) {
       await join();
     } else {
@@ -2094,8 +2396,14 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   /// Announces this Folio and starts looking for the others.
-  Future<void> join() async {
-    if (_joined || _starting) return;
+  Future<void> join({bool remember = true}) async {
+    if (remember) _quiet = false;
+    if (_joined || _starting) {
+      // Joined, or joining, for a live document alone: kept from now on.
+      if (remember && _joined) await _remember(true);
+      if (remember && _starting) _rememberWhenJoined = true;
+      return;
+    }
     _starting = true;
     _error = null;
     if (kDebugMode) debugPrint('Büro ağı: katılıyor');
@@ -2117,7 +2425,10 @@ class OfficeNetwork extends ChangeNotifier {
       await _announce(_self!);
       await _look();
       _joined = true;
-      await _remember(true);
+      if (remember || _rememberWhenJoined) {
+        _quiet = false;
+        await _remember(true);
+      }
       if (kDebugMode) {
         debugPrint('Büro ağı: katıldı, ${_self!.device}:${_self!.port}');
       }
@@ -2127,6 +2438,7 @@ class OfficeNetwork extends ChangeNotifier {
       await _close();
     } finally {
       _starting = false;
+      _rememberWhenJoined = false;
       notifyListeners();
     }
   }
@@ -2134,6 +2446,7 @@ class OfficeNetwork extends ChangeNotifier {
   /// Stops announcing and looking; Folio will not join at its next start.
   Future<void> leave() async {
     _ownSoon?.cancel();
+    _quiet = false;
     await _close();
     _joined = false;
     _peers.clear();
@@ -2172,7 +2485,8 @@ class OfficeNetwork extends ChangeNotifier {
     }
     // Not open to the office: nothing of the person said to the network,
     // only what lets this person's own devices know it.
-    final open = officeOpen;
+    // Taking guests: named, that the guest knows whom it asks.
+    final open = officeOpen || _guestsOpen;
     return OfficePeer(
       deviceId: identity.deviceId,
       userId: identity.userId,
@@ -2180,6 +2494,7 @@ class OfficeNetwork extends ChangeNotifier {
       device: open ? device : '',
       platform: platform,
       port: port,
+      live: _guestsOpen,
     );
   }
 

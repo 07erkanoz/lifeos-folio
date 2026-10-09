@@ -10,6 +10,7 @@ import '../services/security/app_lock.dart';
 import '../services/sync/folder_sync.dart';
 import '../services/sync/own_sync.dart';
 import '../services/office/office_network.dart';
+import '../services/office/office_pairing.dart';
 import '../services/office/office_notices.dart';
 import '../services/platform/system_notices.dart';
 import '../services/portal/background_notices.dart';
@@ -75,6 +76,7 @@ import '../services/portal/agenda_reminders.dart';
 import '../services/platform/folder_zip.dart';
 import 'cash/cash_page.dart';
 import 'live/live_document_page.dart';
+import 'live/live_guest_dialogs.dart';
 import '../services/live/live_share.dart';
 import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
@@ -741,6 +743,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // Documents shared live with this device from the person's others.
       LiveShare.instance.listen(OfficeNetwork.instance);
       LiveShare.instance.incoming.addListener(_liveCame);
+      OfficeNetwork.instance.guestPairing.addListener(_guestAsked);
       tellOffice(OfficeNetwork.instance);
       // The agenda's alarms: deadlines' last days, hearings (B23).
       AgendaReminders.start(private: () => AppLock.instance.locked);
@@ -986,7 +989,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// to be opened with a tap.
   void _liveCame() {
     for (final session in LiveShare.instance.incoming.value) {
-      if (!_liveTold.add(session) || !mounted) continue;
+      // A guest's is opened by its asking, not told of.
+      if (session.asGuest || !_liveTold.add(session) || !mounted) continue;
       showNotice(
         context,
         '${session.from} "${session.title}" belgesini canlı paylaşıyor.',
@@ -997,6 +1001,23 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     _liveTold.removeWhere((s) => s.ended);
   }
+
+  /// A guest asking to see the document shared: its code, to accept.
+  void _guestAsked() {
+    final pairing = OfficeNetwork.instance.guestPairing.value;
+    if (pairing == null || pairing.finished || !mounted) return;
+    _guestsTold.removeWhere((p) => p.finished);
+    if (!_guestsTold.add(pairing)) return;
+    unawaited(
+      LiveGuestAskDialog.show(
+        context,
+        pairing,
+        title: OfficeNetwork.instance.guestPairingFor,
+      ),
+    );
+  }
+
+  final _guestsTold = <OfficePairing>{};
 
   void _pairingAsked() {
     final incoming = OfficeNetwork.instance.incoming;
@@ -1012,6 +1033,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _keptSearch?.dispose();
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
     LiveShare.instance.incoming.removeListener(_liveCame);
+    OfficeNetwork.instance.guestPairing.removeListener(_guestAsked);
     OfficeNetwork.instance.removeListener(_officeCounted);
     OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
     OfficeNetwork.instance.arrived.removeListener(_filesArrived);

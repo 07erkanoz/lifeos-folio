@@ -34,7 +34,12 @@ class OfficePeer {
     this.version = protocol,
     this.online = true,
     this.lastSeen,
+    this.live = false,
   });
+
+  /// Sharing a document live and taking guests now: a Folio that is no
+  /// office's nor the person's may ask to be shown it.
+  final bool live;
 
   /// The version of what Folios say to each other; the announcement's.
   static const protocol = 1;
@@ -61,6 +66,7 @@ class OfficePeer {
     'n': name,
     'c': device,
     'p': platform.name,
+    if (live) 'cl': '1',
   };
 
   /// Read back from an announcement; null when it is not a Folio's or is
@@ -85,6 +91,7 @@ class OfficePeer {
       port: port,
       version: version,
       lastSeen: now ?? DateTime.now(),
+      live: txt['cl'] == '1',
     );
   }
 
@@ -112,6 +119,7 @@ class OfficePeer {
           version: version,
           online: online,
           lastSeen: lastSeen,
+          live: live,
         );
 
   static bool _v6(String host) => host.contains(':');
@@ -127,6 +135,7 @@ class OfficePeer {
     version: version,
     online: false,
     lastSeen: at,
+    live: live,
   );
 }
 

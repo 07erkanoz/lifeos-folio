@@ -4,9 +4,10 @@ import '../../services/live/live_share.dart';
 import '../../services/office/office_network.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 
-/// Who a document is shared with live: the person's own devices in this
-/// step; the office and guests next. Each is shown it the moment it is
-/// ticked, and no more when it is unticked.
+/// Who a document is shared with live: the person's own devices, the
+/// office's members, and guests who join by a code. Each is shown it the
+/// moment it is ticked (a guest accepted), and no more when it is
+/// unticked.
 class LiveShareDialog extends StatefulWidget {
   const LiveShareDialog({super.key, required this.host, this.network});
 
@@ -44,14 +45,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
             ),
             const SizedBox(height: 10),
             if (_tab == 2)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  'Kodla katılan misafirle canlı paylaşım sonraki adımda '
-                  'geliyor.',
-                  style: TextStyle(color: AgendaColors.muted),
-                ),
-              )
+              ..._guests()
             else if (_tab == 0)
               ..._office()
             else
@@ -145,8 +139,11 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     String device = '',
     LivePeer? peer,
     bool office = false,
+    bool guest = false,
   }) => CheckboxListTile(
-    key: ValueKey('live-${office ? 'member' : 'device'}-$id'),
+    key: ValueKey(
+      'live-${guest ? 'guest' : (office ? 'member' : 'device')}-$id',
+    ),
     dense: true,
     contentPadding: EdgeInsets.zero,
     value:
@@ -154,6 +151,8 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
         peer?.state == LivePeerState.watching,
     onChanged: (on) async {
       if (on ?? false) {
+        // A guest gone is not shown it again: it asks anew, by a code.
+        if (guest) return;
         await widget.host.invite(id, name, office: office);
       } else {
         await widget.host.remove(id);
@@ -169,6 +168,43 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     ),
   );
 
+  /// Guests, who join by a code: taken while the switch is on, each
+  /// asking and the lawyer accepting; the ones shown it below.
+  List<Widget> _guests() {
+    final guests = [
+      for (final p in widget.host.peers.value)
+        if (widget.host.isGuest(p.deviceId)) p,
+    ];
+    return [
+      SwitchListTile(
+        key: const ValueKey('live-take-guests'),
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        value: widget.host.takingGuests,
+        onChanged: (on) async {
+          await widget.host.takeGuests(on);
+          if (mounted) setState(() {});
+        },
+        title: const Text('Misafirleri kabul et'),
+        subtitle: const Text(
+          'Büronuzda olmayan, Folio kullanan biri aynı ağda Dosya ▸ Canlı '
+          'belgeye katıl\'a basar ve sizi seçer. İki ekranda aynı kod çıkar; '
+          'siz kabul edince belgeyi görür.',
+        ),
+      ),
+      for (final g in guests)
+        _row(id: g.deviceId, name: g.name, peer: g, guest: true),
+      if (widget.host.takingGuests && guests.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Henüz katılan misafir yok.',
+            style: TextStyle(color: AgendaColors.muted),
+          ),
+        ),
+    ];
+  }
+
   List<Widget> _devices() {
     if (_net.self == null) {
       return const [
@@ -183,7 +219,16 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
       ];
     }
     final online = _net.ownOnline;
-    final peers = {for (final p in widget.host.peers.value) p.deviceId: p};
+    final me = _net.self!.userId;
+    // The person's own: not a guest, nor a colleague (under Büro).
+    final peers = {
+      for (final p in widget.host.peers.value)
+        if (!widget.host.isGuest(p.deviceId) &&
+            !_net.ledger.members.any(
+              (m) => m.deviceId == p.deviceId && m.userId != me,
+            ))
+          p.deviceId: p,
+    };
     if (online.isEmpty && peers.isEmpty) {
       return const [
         Padding(

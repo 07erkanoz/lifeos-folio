@@ -9,6 +9,7 @@ import '../../models/document_model.dart';
 import '../editor/doc_model_json.dart';
 import '../office/office_channel.dart';
 import '../office/office_network.dart';
+import '../office/office_known.dart';
 
 /// A document shared live (the editor's live sharing): the device it is
 /// open on streams it to the devices it chose, which see it change as it
@@ -149,9 +150,12 @@ typedef LiveSnapshot = ({List<Object?> delta, List<DocBlock> blocks});
 /// One viewer of the sharer's: its channel, and what is still to go on it,
 /// sent one word (all its pieces) after another.
 class _Viewer {
-  _Viewer(this.channel);
+  _Viewer(this.channel, [this.grant]);
 
   final OfficeChannel channel;
+
+  /// The guest's grant it was shown under, if a guest.
+  final KnownDevice? grant;
   Future<void> queue = Future.value();
   bool ready = false;
 
@@ -203,6 +207,41 @@ class LiveShareHost {
   bool _closed = false;
 
   bool get closed => _closed;
+
+  /// Guests shown it, by the grant each came with: that grant forgotten
+  /// by the network when they go, not one made since.
+  final _guestIds = <String, KnownDevice>{};
+
+  /// Every guest it was shown to, gone or not: listed as a guest still.
+  final _wereGuests = <String>{};
+
+  /// Whether [deviceId] is, or was, a guest shown it.
+  bool isGuest(String deviceId) => _wereGuests.contains(deviceId);
+
+  /// Whether guests may ask to be shown it now (Misafir): only one
+  /// document takes them at a time, the last to be set to.
+  bool get takingGuests => !_closed && identical(_net.guestOwner, this);
+
+  /// Guests taken (or no longer): one the lawyer accepts, its code seen
+  /// on both screens, is shown the document at once.
+  Future<void> takeGuests(bool take) async {
+    if (take && !_closed) {
+      await _net.openToGuests(
+        this,
+        title: title,
+        onGuest: (grant, name, office) {
+          final named = [
+            if (name.isNotEmpty) name else 'Misafir',
+            if (office.isNotEmpty) '($office)',
+          ].join(' ');
+          unawaited(invite(grant.deviceId, named, guest: grant));
+        },
+      );
+    } else {
+      await _net.closeToGuests(this);
+    }
+  }
+
   bool get sharing =>
       !_closed &&
       peers.value.any(
@@ -224,10 +263,23 @@ class LiveShareHost {
     String deviceId,
     String name, {
     bool office = false,
+    KnownDevice? guest,
   }) async {
-    if (_closed || _viewers.containsKey(deviceId)) return false;
+    if (_closed || _viewers.containsKey(deviceId)) {
+      // Not shown it: the guest's grant not kept for nothing.
+      if (guest != null) await _net.forgetGuest(deviceId, guest);
+      return false;
+    }
     final mine = (_invitations[deviceId] ?? 0) + 1;
     _invitations[deviceId] = mine;
+    if (guest != null) {
+      final before = _guestIds[deviceId];
+      if (before != null && !identical(before, guest)) {
+        await _net.forgetGuest(deviceId, before);
+      }
+      _guestIds[deviceId] = guest;
+      _wereGuests.add(deviceId);
+    }
     peers.value = [
       for (final p in peers.value)
         if (p.deviceId != deviceId) p,
@@ -238,17 +290,20 @@ class LiveShareHost {
       liveKind,
       body: {'baslik': title, 'izin': LiveRight.view.name},
       office: office,
+      guest: guest != null,
     );
     if (_closed || _invitations[deviceId] != mine) {
       // Withdrawn, or made again, while it was being made.
       if (ch != null) unawaited(_shut(ch));
+      if (guest != null) await _forgetGuest(deviceId, guest);
       return false;
     }
     if (ch == null) {
       _set(deviceId, LivePeerState.unreachable);
+      if (guest != null) await _forgetGuest(deviceId, guest);
       return false;
     }
-    final v = _Viewer(ch);
+    final v = _Viewer(ch, guest);
     _viewers[deviceId] = v;
     _pulse ??= Timer.periodic(heartbeat, (_) => _beat());
     final assembler = _Assembler();
@@ -294,6 +349,7 @@ class LiveShareHost {
     _viewers.remove(deviceId);
     _set(deviceId, state);
     await _shut(ch);
+    if (v.grant != null) await _forgetGuest(deviceId, v.grant);
   }
 
   static Future<void> _shut(OfficeChannel ch) async {
@@ -480,6 +536,14 @@ class LiveShareHost {
     }
   }
 
+  /// The guest's grant let go: [only] that one, if given.
+  Future<void> _forgetGuest(String deviceId, [KnownDevice? only]) async {
+    final grant = _guestIds[deviceId];
+    if (grant == null || (only != null && !identical(grant, only))) return;
+    _guestIds.remove(deviceId);
+    await _net.forgetGuest(deviceId, grant);
+  }
+
   /// [deviceId] shown it no more.
   Future<void> remove(String deviceId) async {
     _invitations[deviceId] = (_invitations[deviceId] ?? 0) + 1;
@@ -488,8 +552,12 @@ class LiveShareHost {
       for (final p in peers.value)
         if (p.deviceId != deviceId) p,
     ];
-    if (v == null) return;
+    if (v == null) {
+      await _forgetGuest(deviceId);
+      return;
+    }
     await _farewell(v.channel);
+    await _forgetGuest(deviceId);
   }
 
   static Future<void> _farewell(OfficeChannel ch) async {
@@ -506,6 +574,8 @@ class LiveShareHost {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    // No guest taken from here on, before anything is waited for.
+    unawaited(_net.closeToGuests(this));
     _selectionTimer?.cancel();
     _tableTimer?.cancel();
     _pulse?.cancel();
@@ -516,6 +586,9 @@ class LiveShareHost {
     _viewers.clear();
     peers.value = const [];
     await Future.wait([for (final v in viewers) _farewell(v.channel)]);
+    for (final id in _guestIds.keys.toList()) {
+      await _forgetGuest(id);
+    }
   }
 }
 
@@ -523,10 +596,23 @@ class LiveShareHost {
 /// kept up as its words come whether or not a page shows it, and let go
 /// the moment the sharing ends.
 class LiveSession extends ChangeNotifier {
-  LiveSession._(this._channel, this.title, this.from, this.right);
+  LiveSession._(
+    this._channel,
+    this.title,
+    this.from,
+    this.right, {
+    this.asGuest = false,
+  });
 
   final OfficeChannel _channel;
   final String title;
+
+  /// The device it comes from.
+  String get fromDevice => _channel.peer.deviceId;
+
+  /// Shown to this Folio as a guest, which asked for it by a code: opened
+  /// by the asking, not told of.
+  final bool asGuest;
 
   /// The device or person it comes from, as they are named here.
   final String from;
@@ -710,6 +796,10 @@ class LiveShare {
 
   final incoming = ValueNotifier<List<LiveSession>>(const []);
 
+  /// Whether [listen] was called: in Folio's main window alone, where the
+  /// network is.
+  bool listening = false;
+
   /// How often a viewer and the sharer tell each other they are there.
   Duration heartbeat = const Duration(seconds: 10);
 
@@ -717,19 +807,23 @@ class LiveShare {
   /// the office's members; from no one else (the network lets no one
   /// else open a channel at all).
   void listen(OfficeNetwork network) {
+    listening = true;
     network.streams[liveKind] =
-        (ch, first, {required own, required member}) async {
-          if (!own && !member) {
+        (ch, first, {required own, required member, required guest}) async {
+          final from = ch.peer.deviceId;
+          // A guest's host only when this Folio joined it, as a guest.
+          if (!own && !member && !(guest && network.joinedAsGuest(from))) {
             await ch.close();
             return;
           }
-          final from = ch.peer.deviceId;
           final name = own
               ? network.ownOnline
                     .where((p) => p.deviceId == from)
                     .map((p) => p.device)
                     .firstOrNull
-              : network.ledger.member(from)?.name;
+              : member
+              ? network.ledger.member(from)?.name
+              : network.peerNamed(from);
           final session = LiveSession._(
             ch,
             '${first['baslik'] ?? 'Belge'}',
@@ -737,8 +831,19 @@ class LiveShare {
                 ? (own ? 'Öbür cihazınız' : 'Bir meslektaşınız')
                 : name!,
             LiveRight.view,
+            asGuest: guest && !own && !member,
           );
           incoming.value = [...incoming.value, session];
+          if (guest && !own && !member) {
+            // Its host forgotten with it: nothing of the guest stays. Only
+            // the grant it came under, not one a later joining made.
+            final grant = network.guestGrant(from);
+            session.addListener(() {
+              if (session.ended && grant != null) {
+                unawaited(network.forgetGuest(from, grant));
+              }
+            });
+          }
           session._start(heartbeat);
         };
   }

@@ -116,6 +116,8 @@ import '../../services/editor/petition_templates.dart';
 import 'desktop_frame.dart' show windowFullScreen;
 import '../../services/live/live_share.dart';
 import '../live/live_share_dialog.dart';
+import '../live/live_document_page.dart';
+import '../live/live_guest_dialogs.dart';
 import '../../services/portal/observed.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_hearing.dart';
@@ -253,6 +255,14 @@ class _EditorWidgetState extends State<EditorWidget>
   void _liveSelection() {
     final s = _quillController.selection;
     _live?.selection(s.baseOffset, s.extentOffset);
+  }
+
+  /// Another's document shown here live, joined as a guest.
+  Future<void> _joinLive() async {
+    final session = await LiveJoinDialog.show(context);
+    if (session != null && mounted) {
+      await LiveDocumentPage.open(context, session);
+    }
   }
 
   Future<void> _openLive() async {
@@ -4612,6 +4622,9 @@ class _EditorWidgetState extends State<EditorWidget>
                         onLiveShare: Platform.isAndroid || Platform.isIOS
                             ? null
                             : () => unawaited(_openLive()),
+                        onLiveJoin: LiveShare.instance.listening
+                            ? () => unawaited(_joinLive())
+                            : null,
                         onPrint: () => unawaited(_print()),
                         onHistory: () => unawaited(_history()),
                         onSign: _canSignNew

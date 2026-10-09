@@ -45,6 +45,7 @@ class OfficePairing extends ChangeNotifier {
     required this.incoming,
     required this.onKnown,
     this.invite,
+    this.guest,
   }) {
     _timeout = Timer(limit, () => _fail('Süre doldu.'));
     _listen = _link?.messages.listen(_heard, onDone: _ended);
@@ -65,6 +66,17 @@ class OfficePairing extends ChangeNotifier {
 
   /// The QR this pairing came by: read by the starter, shown by the other.
   final QrInvite? invite;
+
+  /// A guest's: one who is shown a document live once, not a device known
+  /// (lib/services/live/live_share.dart). Never the person's own; its
+  /// code made apart from a device's, so that one cannot pass for the
+  /// other. The guest's name and office, as the guest gave them; empty
+  /// on the side that is joined.
+  final ({String name, String office})? guest;
+  bool get isGuest => guest != null;
+
+  /// What a guest said of itself, on the side it joined.
+  String guestName = '', guestOffice = '';
 
   /// Known by a QR read off this person's own screen: no code to compare,
   /// and the other device is theirs.
@@ -93,6 +105,7 @@ class OfficePairing extends ChangeNotifier {
   /// when both say the same name; the user changes it before confirming.
   bool get mine => _mineValue;
   set mine(bool value) {
+    if (isGuest) return;
     _mineValue = value;
     _mineChosen = true;
   }
@@ -138,6 +151,11 @@ class OfficePairing extends ChangeNotifier {
     // Where it listens, for the other to come back to when it has only
     // met this device here, by a QR, and not on the network.
     'pt': _self.port,
+    if (guest case final g?) ...{
+      'misafir': true,
+      if (g.name.isNotEmpty) 'mad': g.name,
+      if (g.office.isNotEmpty) 'mburo': g.office,
+    },
   };
 
   /// Starts knowing [peer], reached at its address.
@@ -147,6 +165,7 @@ class OfficePairing extends ChangeNotifier {
     required OfficePeer peer,
     required Future<void> Function(KnownDevice device) onKnown,
     QrInvite? invite,
+    ({String name, String office})? guest,
   }) {
     final pairing = OfficePairing._(
       null,
@@ -155,6 +174,7 @@ class OfficePairing extends ChangeNotifier {
       incoming: false,
       onKnown: onKnown,
       invite: invite,
+      guest: guest,
     );
     pairing._other = peer;
     unawaited(pairing._connect(peer));
@@ -205,6 +225,7 @@ class OfficePairing extends ChangeNotifier {
       incoming: true,
       onKnown: onKnown,
       invite: invite,
+      guest: first['misafir'] == true ? (name: '', office: '') : null,
     );
     pairing._opened(first);
     return pairing;
@@ -217,6 +238,19 @@ class OfficePairing extends ChangeNotifier {
       return;
     }
     _theirCommit = commit;
+    if (isGuest) {
+      if (first['davet'] != null) {
+        _fail('Karşı cihaz anlaşılamadı.');
+        return;
+      }
+      String said(String k, int most) {
+        final v = '${first[k] ?? ''}'.trim();
+        return v.length > most ? v.substring(0, most) : v;
+      }
+
+      guestName = said('mad', 80);
+      guestOffice = said('mburo', 80);
+    }
     final proof = first['davet'];
     if (proof != null) {
       // Only who read this screen's QR knows its secret.
@@ -254,7 +288,7 @@ class OfficePairing extends ChangeNotifier {
     _other = peer;
     _otherKey = base64Encode(key);
     // The same name ticks it at first; what the user chose stays.
-    if (!_mineChosen) {
+    if (!_mineChosen && !isGuest) {
       _mineValue =
           peer.name.trim().isNotEmpty &&
           UyapWebService.fold(peer.name) == UyapWebService.fold(_self.name);
@@ -283,6 +317,11 @@ class OfficePairing extends ChangeNotifier {
         if (invite case final qr? when qr.deviceId != _other?.deviceId) {
           // Not the device whose QR was read: someone between.
           _fail('QR’daki cihaz bu değil; tanıma durduruldu.');
+          return;
+        }
+        if ((m['misafir'] == true) != isGuest) {
+          // One side a guest's and the other not: not to be mixed.
+          _fail('Karşı cihaz anlaşılamadı.');
           return;
         }
         if (invite != null) {
@@ -319,7 +358,7 @@ class OfficePairing extends ChangeNotifier {
         );
       case 'confirm' when _code != null:
         _theirs = true;
-        _theirsMine = m['benim'] == true;
+        _theirsMine = m['benim'] == true && !isGuest;
         theirOwnCount = m['kendi'] is int ? m['kendi'] as int : 0;
         theirMember = m['uye'] == true;
         unawaited(_maybeDone());
@@ -338,7 +377,13 @@ class OfficePairing extends ChangeNotifier {
     required List<int> starterNonce,
     required List<int> answererNonce,
   }) {
-    _code = codeOf(starter, answerer, starterNonce, answererNonce);
+    _code = codeOf(
+      starter,
+      answerer,
+      starterNonce,
+      answererNonce,
+      guest: isGuest,
+    );
     _set(PairingState.code);
     // The QR did what comparing the code would.
     if (_byQr) confirm();
@@ -350,10 +395,11 @@ class OfficePairing extends ChangeNotifier {
     List<int> starterKey,
     List<int> answererKey,
     List<int> starterNonce,
-    List<int> answererNonce,
-  ) {
+    List<int> answererNonce, {
+    bool guest = false,
+  }) {
     final d = hash.sha256.convert([
-      ...utf8.encode('folio-buro-tanima-1'),
+      ...utf8.encode(guest ? 'folio-canli-misafir-1' : 'folio-buro-tanima-1'),
       ...starterKey,
       ...answererKey,
       ...starterNonce,
@@ -370,7 +416,7 @@ class OfficePairing extends ChangeNotifier {
     _mine = true;
     _link?.send({
       't': 'confirm',
-      'benim': mine,
+      'benim': mine && !isGuest,
       'kendi': ownCount,
       'uye': member,
     });
@@ -386,7 +432,9 @@ class OfficePairing extends ChangeNotifier {
   }
 
   Future<void> _maybeDone() async {
-    if (!_mine || !_theirs || finished) return;
+    if (!_mine || !_theirs || finished || _completing) return;
+    // Both words may come at once: the device is taken in once.
+    _completing = true;
     final other = _other!;
     await onKnown(
       KnownDevice(
@@ -403,8 +451,10 @@ class OfficePairing extends ChangeNotifier {
     _end(PairingState.done, null);
   }
 
+  bool _completing = false;
+
   void _ended() {
-    if (!finished) _fail('Bağlantı kesildi.');
+    if (!finished && !_completing) _fail('Bağlantı kesildi.');
   }
 
   void _fail(String reason) => _end(PairingState.failed, reason);

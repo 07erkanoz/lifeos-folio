@@ -315,7 +315,12 @@ class OfficeChannel {
     await _listen?.cancel();
     await _link.close();
     if (!_messages.isClosed) await _messages.close();
+    if (!_done.isCompleted) _done.complete();
   }
+
+  /// Done when the channel is closed, by either side.
+  Future<void> get done => _done.future;
+  final _done = Completer<void>();
 }
 
 class OfficeChannelException implements Exception {
