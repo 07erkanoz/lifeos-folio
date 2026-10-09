@@ -43,7 +43,7 @@ void main() {
     expect(find.text('Ayşe Karaca'), findsOneWidget);
     await tester.tap(find.text('Ayşe Karaca'));
     await tester.pumpAndSettle();
-    expect(find.text('DOSYALAR VE HESAPLARI'), findsOneWidget);
+    expect(find.textContaining('AÇIK DOSYALAR'), findsOneWidget);
     expect(find.byKey(const ValueKey('client-case-k1')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('client-meeting')));

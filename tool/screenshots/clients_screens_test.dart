@@ -369,6 +369,8 @@ void main() {
         -200,
         scrollable: find.byType(Scrollable).last,
       );
+      await tester.ensureVisible(find.byKey(const ValueKey('client-message')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('client-message')));
       await tester.pumpAndSettle();
       await _shot(tester, '$name-mesaj');
@@ -392,6 +394,7 @@ void main() {
         -200,
         scrollable: find.byType(Scrollable).last,
       );
+      await tester.ensureVisible(find.byKey(const ValueKey('client-accounts')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('client-accounts')));
       await tester.pumpAndSettle();

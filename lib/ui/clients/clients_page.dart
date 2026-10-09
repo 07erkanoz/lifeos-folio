@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../tools/interest_page.dart';
@@ -28,6 +29,7 @@ import 'attachment_preview.dart';
 import 'client_accounts_view.dart';
 import 'client_message_dialog.dart';
 import '../../services/clients/client_messages.dart';
+import '../../services/clients/client_overview.dart';
 
 /// A scan to keep: from the camera where there is one (Android, iPhone),
 /// or a file (a PDF or a picture) chosen; null when backed out.
@@ -118,8 +120,14 @@ class _ClientsPageState extends State<ClientsPage> {
 
   /// The clients whose instalments are late, by card id: how many.
   Map<String, int> _late = const {};
-  bool _onlyLate = false;
   String? _selected;
+
+  /// Each client at a glance, by key (the list's lines and filters).
+  Map<String, ClientGlance> _glance = const {};
+  _Filter _filter = _Filter.all;
+
+  /// By name alone, not by what is coming first.
+  bool _byName = false;
 
   /// The messages the day asks for (hearings and instalments of clients
   /// who wish to be told).
@@ -148,10 +156,17 @@ class _ClientsPageState extends State<ClientsPage> {
     _listOpen = db.meta(_listKey) != 'kapali';
     final entries = db.clientEntries(lawyer: widget.lawyer);
     final due = dueMessages(db, DateTime.now(), entries);
+    final glance = clientGlances(
+      db,
+      entries,
+      DateTime.now(),
+      money: widget.seesMoney,
+    );
     setState(() {
       _entries = entries;
       _late = late;
       _due = due;
+      _glance = glance;
     });
     if (first != null) {
       final e = _entries.where((x) => x.key == first).firstOrNull;
@@ -253,14 +268,27 @@ class _ClientsPageState extends State<ClientsPage> {
   int _lateOf(ClientEntry e) =>
       [for (final id in e.ids) _late[id] ?? 0].fold(0, (a, b) => a + b);
 
+  /// Whether [e] is one the filter [f] keeps.
+  bool _keeps(_Filter f, ClientEntry e) {
+    final g = _glance[e.key];
+    final week = DateTime.now().add(const Duration(days: 7));
+    return switch (f) {
+      _Filter.all => true,
+      _Filter.open => (g?.open ?? 0) > 0,
+      _Filter.week => g?.next != null && g!.next!.at.isBefore(week),
+      _Filter.owed => (g?.owed ?? 0) > 0,
+      _Filter.late => _lateOf(e) > 0,
+      _Filter.unreachable => !(g?.reachable ?? false),
+      _Filter.body => e.client?.body ?? false,
+    };
+  }
+
   List<ClientEntry> get _shown {
     final q = UyapWebService.fold(_query.trim());
-    final base = _onlyLate
-        ? [
-            for (final e in _entries)
-              if (_lateOf(e) > 0) e,
-          ]
-        : _entries;
+    final base = [
+      for (final e in _entries)
+        if (_keeps(_filter, e)) e,
+    ];
     if (q.isEmpty) return base;
     return [
       for (final e in base)
@@ -327,6 +355,157 @@ class _ClientsPageState extends State<ClientsPage> {
       unawaited(_load());
     },
   );
+
+  /// The filters, each with how many it keeps, and the order.
+  Widget _filters() {
+    final kinds = [
+      _Filter.all,
+      _Filter.open,
+      _Filter.week,
+      if (widget.seesMoney) _Filter.owed,
+      if (_late.isNotEmpty) _Filter.late,
+      _Filter.unreachable,
+      _Filter.body,
+    ];
+    Widget chip(_Filter f) {
+      final on = _filter == f;
+      final n = _entries.where((e) => _keeps(f, e)).length;
+      return InkWell(
+        key: ValueKey(
+          f == _Filter.late ? 'clients-late' : 'clients-filter-${f.name}',
+        ),
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => setState(() => _filter = on ? _Filter.all : f),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: on ? AgendaColors.hearing : null,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: on ? AgendaColors.hearing : AgendaColors.line,
+            ),
+          ),
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: f.label),
+                TextSpan(
+                  text: ' $n',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            style: TextStyle(
+              fontSize: 11.5,
+              color: on ? Colors.white : const Color(0xFF4A5466),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: [for (final f in kinds) chip(f)],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _byName ? 'Sıra: ada göre' : 'Sıra: yaklaşan işe göre',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AgendaColors.muted,
+                  ),
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('clients-order'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: () => setState(() => _byName = !_byName),
+                child: Text(
+                  _byName ? 'Yaklaşana göre' : 'Ada göre',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The clients shown, in groups (this week, still worked on, done with)
+  /// or by name alone.
+  Widget _listOf(List<ClientEntry> shown, bool wide) {
+    int byName(ClientEntry a, ClientEntry b) =>
+        UyapWebService.fold(a.name).compareTo(UyapWebService.fold(b.name));
+    final items = <Object>[];
+    if (_byName) {
+      items.addAll(List<ClientEntry>.of(shown)..sort(byName));
+    } else {
+      final week = DateTime.now().add(const Duration(days: 7));
+      final soon = <ClientEntry>[], open = <ClientEntry>[];
+      final done = <ClientEntry>[];
+      for (final e in shown) {
+        final g = _glance[e.key];
+        if (g?.next != null && g!.next!.at.isBefore(week)) {
+          soon.add(e);
+        } else if (g?.done ?? false) {
+          done.add(e);
+        } else {
+          open.add(e);
+        }
+      }
+      soon.sort(
+        (a, b) => _glance[a.key]!.next!.at.compareTo(_glance[b.key]!.next!.at),
+      );
+      open.sort(byName);
+      done.sort(byName);
+      if (soon.isNotEmpty) items.addAll(['BU HAFTA', ...soon]);
+      if (open.isNotEmpty) items.addAll(['AÇIK DOSYASI OLAN', ...open]);
+      if (done.isNotEmpty) items.addAll(['SONUÇLANMIŞ', ...done]);
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+      itemCount: items.length,
+      itemBuilder: (context, i) {
+        final item = items[i];
+        if (item is String) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 3),
+            child: Text(
+              item,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: .5,
+                color: AgendaColors.muted,
+              ),
+            ),
+          );
+        }
+        final e = item as ClientEntry;
+        return _ClientLine(
+          entry: e,
+          glance: _glance[e.key],
+          late: _lateOf(e),
+          selected: wide && e.key == _selected,
+          onTap: () => _open(e),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -399,62 +578,24 @@ class _ClientsPageState extends State<ClientsPage> {
               ),
             ),
           ),
-        if (_late.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FilterChip(
-                key: const ValueKey('clients-late'),
-                label: Text('Taksiti gecikmiş ${_late.length}'),
-                selected: _onlyLate,
-                onSelected: (v) => setState(() => _onlyLate = v),
-              ),
-            ),
-          ),
-        const SizedBox(height: 8),
+        _filters(),
         Expanded(
           child: shown.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(18),
+              ? Padding(
+                  padding: const EdgeInsets.all(18),
                   child: Text(
-                    'Müvekkil yok. Müvekkiller, UYAP dosyalarında vekili '
-                    'olduğunuz taraflardan ve "kimi temsil ediyorum" '
-                    'kayıtlarından kendiliğinden gelir.',
-                    style: TextStyle(color: AgendaColors.muted, fontSize: 13),
+                    _entries.isEmpty
+                        ? 'Müvekkil yok. Müvekkiller, UYAP dosyalarında vekili '
+                              'olduğunuz taraflardan ve "kimi temsil ediyorum" '
+                              'kayıtlarından kendiliğinden gelir.'
+                        : 'Bu süzgece uyan müvekkil yok.',
+                    style: const TextStyle(
+                      color: AgendaColors.muted,
+                      fontSize: 13,
+                    ),
                   ),
                 )
-              : ListView.builder(
-                  itemCount: shown.length,
-                  itemBuilder: (context, i) {
-                    final e = shown[i];
-                    return ListTile(
-                      key: ValueKey('client-${e.key}'),
-                      selected: wide && e.key == _selected,
-                      selectedTileColor: AgendaColors.hearingFill,
-                      leading: _Avatar(e.name, body: e.client?.body ?? false),
-                      title: Text(
-                        titleName(e.name),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(
-                        [
-                          '${e.cases.length} dosya',
-                          if (_lateOf(e) > 0) '${_lateOf(e)} taksit gecikti',
-                        ].join(' · '),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _lateOf(e) > 0
-                              ? AgendaColors.deadlineText
-                              : null,
-                        ),
-                      ),
-                      onTap: () => _open(e),
-                    );
-                  },
-                ),
+              : _listOf(shown, wide),
         ),
       ],
     );
@@ -512,11 +653,213 @@ class _ClientsPageState extends State<ClientsPage> {
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar(this.name, {this.body = false, this.size = 36});
+/// What the client list is narrowed to.
+enum _Filter {
+  all('Tümü'),
+  open('Açık dosyalı'),
+  week('Bu hafta'),
+  owed('Alacaklı'),
+  late('Taksiti gecikmiş'),
+  unreachable('İletişimi eksik'),
+  body('Kurum');
+
+  const _Filter(this.label);
+  final String label;
+}
+
+/// "14 Eki".
+String _shortDay(DateTime d) {
+  const months = [
+    'Oca',
+    'Şub',
+    'Mar',
+    'Nis',
+    'May',
+    'Haz',
+    'Tem',
+    'Ağu',
+    'Eyl',
+    'Eki',
+    'Kas',
+    'Ara',
+  ];
+  return '${d.day} ${months[d.month - 1]}';
+}
+
+/// A small coloured label: a hearing (blue), a deadline (red), money
+/// (amber), a year done (grey).
+class _Pill extends StatelessWidget {
+  const _Pill(this.text, this.fill, this.ink);
+  final String text;
+  final Color fill, ink;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+    decoration: BoxDecoration(
+      color: fill,
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: ink,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// One client in the list: initials, name, cases, and on the right what is
+/// nearest for them.
+class _ClientLine extends StatelessWidget {
+  const _ClientLine({
+    required this.entry,
+    required this.glance,
+    required this.late,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ClientEntry entry;
+  final ClientGlance? glance;
+  final int late;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final g = glance;
+    final done = g?.done ?? false;
+    final next = g?.next;
+    final soon =
+        next != null &&
+        next.at.isBefore(DateTime.now().add(const Duration(days: 30)));
+    final Widget? tag = late > 0
+        ? _Pill(
+            '$late taksit gecikti',
+            AgendaColors.deadlineFill,
+            AgendaColors.deadlineText,
+          )
+        : soon
+        ? _Pill(
+            '${next.hearing ? 'Duruşma' : 'Süre'} ${_shortDay(next.at)}',
+            next.hearing ? AgendaColors.hearingFill : AgendaColors.deadlineFill,
+            next.hearing ? AgendaColors.hearingText : AgendaColors.deadlineText,
+          )
+        : (g?.owed ?? 0) > 0
+        ? _Pill(lira(g!.owed), AgendaColors.taskFill, AgendaColors.taskText)
+        : done && g?.closedYear != null
+        ? _Pill('${g!.closedYear}', const Color(0xFFEEF1F5), AgendaColors.muted)
+        : null;
+    return Material(
+      color: selected ? AgendaColors.hearingFill : Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        key: ValueKey('client-${entry.key}'),
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          child: Row(
+            children: [
+              ClientInitials(
+                entry.name,
+                body: entry.client?.body ?? false,
+                faded: done,
+                size: 32,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      titleName(entry.name),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      [
+                        '${entry.cases.length} dosya',
+                        if (done)
+                          'sonuçlandı'
+                        else if ((g?.open ?? 0) > 0)
+                          '${g!.open} açık',
+                      ].join(' · '),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (tag != null) ...[
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: tag,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A client's initials on a colour of their own, the same on every
+/// device: an office square, a person round; grey once done with.
+class ClientInitials extends StatelessWidget {
+  const ClientInitials(
+    this.name, {
+    super.key,
+    this.body = false,
+    this.faded = false,
+    this.size = 36,
+  });
+
   final String name;
-  final bool body;
+  final bool body, faded;
   final double size;
+
+  static const _palette = [
+    Color(0xFF2D5AA8),
+    Color(0xFF16754F),
+    Color(0xFF7A4FC4),
+    Color(0xFFB5562C),
+    Color(0xFF0C6B5F),
+    Color(0xFF9C2550),
+    Color(0xFF3B6E8F),
+    Color(0xFF8A5A00),
+    Color(0xFF4E5BA6),
+    Color(0xFF2F7D32),
+  ];
+
+  /// [name]'s colour: from its letters, so it never changes.
+  static Color colorOf(String name) {
+    var h = 0;
+    for (final c in UyapWebService.fold(name).codeUnits) {
+      h = (h * 31 + c) & 0x7fffffff;
+    }
+    return _palette[h % _palette.length];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -524,15 +867,20 @@ class _Avatar extends StatelessWidget {
       for (final w in name.trim().split(RegExp(r'\s+')).take(2))
         if (w.isNotEmpty) w.characters.first.toUpperCase(),
     ].join();
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundColor: body ? const Color(0xFFF1E6D6) : const Color(0xFFDCE5F4),
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: faded ? const Color(0xFF8A93A3) : colorOf(name),
+        borderRadius: BorderRadius.circular(body ? size * .24 : size / 2),
+      ),
       child: Text(
         letters,
         style: TextStyle(
           fontSize: size * .36,
           fontWeight: FontWeight.w700,
-          color: body ? const Color(0xFF7A4B12) : AgendaColors.hearingText,
+          color: Colors.white,
         ),
       ),
     );
@@ -1221,7 +1569,7 @@ class _ClientCardState extends State<ClientCard> {
 
   /// What happened with the client and what is coming: what is coming
   /// first, soonest first; then what happened, latest first.
-  List<_Event> _events(
+  ({List<_Event> coming, List<_Event> past}) _events(
     List<ClientRecord> meetings,
     List<ClientRecord> attorneys,
     List<ClientRecord> money,
@@ -1278,6 +1626,29 @@ class _ClientCardState extends State<ClientCard> {
           m.text('dosya').isEmpty ? '' : _number(m.text('dosya')),
           AgendaColors.hearing,
         ),
+      // Notices of the client's cases, and the cases that closed.
+      for (final x in widget.entry.cases) ...[
+        for (final n in _db.notices(caseKey: x.caseKey).take(5))
+          if (n.message.sent case final sent?)
+            _Event(
+              sent,
+              'Tebligat: ${n.message.subject}',
+              _number(x.caseKey),
+              const Color(0xFF139C8B),
+              caseKey: x.caseKey,
+            ),
+        if (DateTime.tryParse(
+              '${_db.caseOf(x.caseKey)?.details?.value['kapanis'] ?? ''}',
+            )
+            case final closed?)
+          _Event(
+            closed,
+            stageLabel(_db.caseOf(x.caseKey)?.status?.value ?? 'Kapandı'),
+            _number(x.caseKey),
+            const Color(0xFF7A4FC4),
+            caseKey: x.caseKey,
+          ),
+      ],
       for (final a in attorneys)
         _Event(
           a.created,
@@ -1305,10 +1676,70 @@ class _ClientCardState extends State<ClientCard> {
       for (final e in out)
         if (e.at.isBefore(e.day ? today : now)) e,
     ]..sort((a, b) => b.at.compareTo(a.at));
-    return [...coming, ...past];
+    return (coming: coming, past: past);
   }
 
   bool _allEvents = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadPapers());
+  }
+
+  /// The papers made for the client (fee agreements, releases, receipts),
+  /// newest first, as they are kept among the client's files.
+  List<({String path, String name, DateTime at})> _papers = const [];
+
+  Future<void> _loadPapers() async {
+    final c = _client;
+    if (c == null || !ClientFiles.safeId(c.id)) return;
+    try {
+      final dir = Directory(
+        p.join((await widget.files.root()).path, c.id, 'belgeler'),
+      );
+      if (!await dir.exists()) return;
+      final found = <({String path, String name, DateTime at})>[];
+      await for (final f in dir.list()) {
+        if (f is! File) continue;
+        found.add((
+          path: f.path,
+          name: p.basenameWithoutExtension(f.path),
+          at: (await f.stat()).modified,
+        ));
+      }
+      found.sort((a, b) => b.at.compareTo(a.at));
+      if (mounted) setState(() => _papers = found);
+    } catch (_) {
+      // Papers that cannot be listed are not shown; the card stands.
+    }
+  }
+
+  /// A paper for one of the client's cases, the case asked when more
+  /// than one could be meant.
+  Future<void> _paperFor(String paper) async {
+    final cases = _caseList;
+    var key = cases.length == 1 ? cases.single.key : '';
+    if (cases.length > 1) {
+      final picked = await showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('Hangi dosya için?'),
+          children: [
+            for (final c in cases)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, c.key),
+                child: Text(c.title),
+              ),
+          ],
+        ),
+      );
+      if (picked == null || !mounted) return;
+      key = picked;
+    }
+    await _paper(paper, key, null);
+    await _loadPapers();
+  }
 
   @override
   Widget build(BuildContext context) =>
@@ -1318,6 +1749,7 @@ class _ClientCardState extends State<ClientCard> {
     final e = widget.entry;
     final c = _client;
     final wide = width >= 640;
+    final twoColumns = width >= 980;
     final meetings = _records(ClientRecordKind.meeting);
     final attorneys = _records(ClientRecordKind.attorney);
     final money = widget.seesMoney
@@ -1329,29 +1761,118 @@ class _ClientCardState extends State<ClientCard> {
     final hearings = _hearings;
     final deadlines = _deadlines;
     final accounts = caseAccounts(money);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     // Each case's next hearing or deadline.
-    final next = <String, ({DateTime at, String text})>{};
-    void soon(String key, DateTime at, String text) {
+    final next = <String, ({DateTime at, bool hearing})>{};
+    void soon(String key, DateTime at, bool hearing) {
       final kept = next[key];
       if (kept == null || at.isBefore(kept.at)) {
-        next[key] = (at: at, text: text);
+        next[key] = (at: at, hearing: hearing);
       }
     }
 
-    final today = DateTime.now();
     for (final h in hearings) {
-      soon(h.caseKey, h.at, 'Duruşma ${_day(h.at).substring(0, 5)}');
+      soon(h.caseKey, h.at, true);
     }
-    for (final d in deadlines) {
-      if (!d.day.isBefore(DateTime(today.year, today.month, today.day))) {
-        soon(d.caseKey, d.day, 'Süre ${_day(d.day).substring(0, 5)}');
-      }
+    final coming = [
+      for (final d in deadlines)
+        if (!d.day.isBefore(today)) d,
+    ]..sort((a, b) => a.day.compareTo(b.day));
+    for (final d in coming) {
+      soon(d.caseKey, d.day, false);
+    }
+    final open = <({String caseKey, String role})>[];
+    final closed = <({String caseKey, String role})>[];
+    for (final x in e.cases) {
+      final stage = stageOf(_db.caseOf(x.caseKey)?.status?.value ?? '');
+      (stage == CaseStage.closed ? closed : open).add(x);
     }
     final events = _events(meetings, attorneys, money, hearings, deadlines);
+    final cases = [
+      _section(
+        'AÇIK DOSYALAR',
+        count: open.length,
+        action: TextButton.icon(
+          key: const ValueKey('client-add-case'),
+          onPressed: _addCases,
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Dosya ekle'),
+        ),
+      ),
+      if (e.cases.isEmpty)
+        _frame(
+          const Text(
+            'Bu müvekkile bağlı dosya yok. "Dosya ekle" ile UYAP '
+            'dosyalarınızdan seçebilirsiniz.',
+            style: TextStyle(color: AgendaColors.muted),
+          ),
+        )
+      else if (open.isEmpty)
+        _frame(
+          const Text(
+            'Açık dosya yok; dosyalarının hepsi sonuçlanmış.',
+            style: TextStyle(color: AgendaColors.muted),
+          ),
+        ),
+      for (final x in open)
+        _caseCard(x, accounts[x.caseKey], next[x.caseKey], wide),
+      if (closed.isNotEmpty) ...[
+        _section(
+          'SONUÇLANAN DOSYALAR',
+          count: closed.length,
+          action: closed.length > 3
+              ? TextButton(
+                  key: const ValueKey('client-closed-all'),
+                  onPressed: () => setState(() => _allClosed = !_allClosed),
+                  child: Text(_allClosed ? 'daha az' : 'tümünü göster'),
+                )
+              : null,
+        ),
+        _frame(
+          Column(
+            children: [
+              for (final x in _allClosed ? closed : closed.take(3))
+                _closedLine(x, wide),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 2, 4, 2),
+        ),
+      ],
+      if (e.removedCases.isNotEmpty) ...[
+        _section('ÇIKARILAN DOSYALAR', count: e.removedCases.length),
+        _frame(
+          Column(
+            children: [
+              for (final x in e.removedCases)
+                ListTile(
+                  key: ValueKey('client-removed-${x.caseKey}'),
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  title: Text(_caseTitle(x.caseKey)),
+                  subtitle: x.role.isEmpty ? null : Text(titleName(x.role)),
+                  trailing: TextButton(
+                    key: ValueKey('case-restore-${x.caseKey}'),
+                    onPressed: () => _link(x.caseKey, CaseLink.added, x.role),
+                    child: const Text('Geri al'),
+                  ),
+                ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(8, 2, 4, 2),
+        ),
+      ],
+    ];
+    final side = [
+      _timeline(events),
+      _meetingBox(meetings),
+      _paperBox(attorneys),
+      _clientNoteBox(c),
+    ];
     return ListView(
-      padding: EdgeInsets.fromLTRB(wide ? 16 : 10, 12, wide ? 16 : 10, 24),
+      padding: EdgeInsets.fromLTRB(wide ? 18 : 10, 8, wide ? 18 : 10, 24),
       children: [
-        _head(c, wide),
+        _head(c, wide, open.length),
         for (final o in widget.lookalikes)
           Card(
             key: ValueKey('lookalike-${o.key}'),
@@ -1372,268 +1893,1056 @@ class _ClientCardState extends State<ClientCard> {
               ),
             ),
           ),
-        if (widget.seesMoney) _moneyStrip(accounts),
-        _box(
-          'DOSYALAR VE HESAPLARI',
-          count: e.cases.length,
-          action: TextButton.icon(
-            key: const ValueKey('client-add-case'),
-            onPressed: _addCases,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Dosya ekle'),
-          ),
-          children: [
-            if (e.cases.isEmpty)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(4, 4, 4, 10),
-                child: Text(
-                  'Bu müvekkile bağlı dosya yok. "Dosya ekle" ile UYAP '
-                  'dosyalarınızdan seçebilirsiniz.',
-                  style: TextStyle(color: AgendaColors.muted),
-                ),
-              ),
-            if (wide && e.cases.isNotEmpty) _caseHead(),
-            for (final x in e.cases)
-              _caseRow(x, accounts[x.caseKey], next[x.caseKey]?.text, wide),
-          ],
+        _figures(
+          width - (wide ? 36 : 20),
+          open: open,
+          all: e.cases.length,
+          hearing: hearings.firstOrNull,
+          deadline: coming.firstOrNull,
+          accounts: accounts,
         ),
-        if (wide)
+        if (twoColumns)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(flex: 3, child: _timeline(events)),
-              const SizedBox(width: 10),
               Expanded(
-                flex: 2,
                 child: Column(
-                  children: [_attorneyBox(attorneys), _meetingBox(meetings)],
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: cases,
+                ),
+              ),
+              const SizedBox(width: 14),
+              SizedBox(
+                width: 360,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: side,
                 ),
               ),
             ],
           )
         else ...[
-          _timeline(events),
-          _attorneyBox(attorneys),
-          _meetingBox(meetings),
+          ...cases,
+          ...side,
         ],
-        if (e.removedCases.isNotEmpty)
-          _box(
-            'ÇIKARILAN DOSYALAR',
-            count: e.removedCases.length,
-            children: [
-              for (final x in e.removedCases)
-                ListTile(
-                  key: ValueKey('client-removed-${x.caseKey}'),
-                  dense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  title: Text(_caseTitle(x.caseKey)),
-                  subtitle: x.role.isEmpty ? null : Text(titleName(x.role)),
-                  trailing: TextButton(
-                    key: ValueKey('case-restore-${x.caseKey}'),
-                    onPressed: () => _link(x.caseKey, CaseLink.added, x.role),
-                    child: const Text('Geri al'),
-                  ),
-                ),
-            ],
-          ),
       ],
     );
   }
 
-  /// Who the client is and how they are reached, and what is done for
-  /// them: the card's head.
-  Widget _head(Client? c, bool wide) {
-    final e = widget.entry;
-    final body = c?.body ?? false;
-    Widget pair(String label, String value) => Text.rich(
-      TextSpan(
+  bool _allClosed = false;
+
+  /// A section's title above its cards.
+  Widget _section(String title, {int? count, Widget? action}) => Padding(
+    padding: const EdgeInsets.fromLTRB(2, 14, 0, 0),
+    child: SizedBox(
+      height: 30,
+      child: Row(
         children: [
-          TextSpan(
-            text: '$label ',
-            style: const TextStyle(color: AgendaColors.muted),
+          Flexible(
+            child: Text(
+              count == null ? title : '$title · $count',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: .5,
+                color: AgendaColors.muted,
+              ),
+            ),
           ),
-          value.isEmpty
-              ? const TextSpan(
-                  text: '+ ekle',
-                  style: TextStyle(color: AgendaColors.taskText),
-                )
-              : TextSpan(text: value),
+          const Spacer(),
+          ?action,
         ],
       ),
-      style: const TextStyle(fontSize: 13),
+    ),
+  );
+
+  /// The four figures under the head: cases still worked on, the next
+  /// hearing, the nearest deadline, what is owed.
+  Widget _figures(
+    double width, {
+    required List<({String caseKey, String role})> open,
+    required int all,
+    required PortalHearing? hearing,
+    required ({DateTime day, String title, String caseKey})? deadline,
+    required Map<String, CaseAccount> accounts,
+  }) {
+    var stopped = 0, appeal = 0;
+    for (final x in open) {
+      switch (stageOf(_db.caseOf(x.caseKey)?.status?.value ?? '')) {
+        case CaseStage.stopped:
+          stopped++;
+        case CaseStage.appeal:
+          appeal++;
+        default:
+      }
+    }
+    int sum(int Function(CaseAccount a) f) =>
+        accounts.values.fold(0, (n, a) => n + f(a));
+    final owed = sum((a) => a.feeOwed > 0 ? a.feeOwed : 0);
+    Widget tile(String label, String value, String sub, {Color? color}) =>
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AgendaColors.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: .3,
+                  color: AgendaColors.muted,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+              Text(
+                sub,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+            ],
+          ),
+        );
+    final tiles = [
+      tile(
+        'AÇIK DOSYA',
+        '${open.length} / $all',
+        [
+          if (stopped > 0) '$stopped durdurulmuş',
+          if (appeal > 0) '$appeal üst mahkemede',
+          if (stopped == 0 && appeal == 0) 'hepsi görülüyor',
+        ].join(' · '),
+      ),
+      tile(
+        'SIRADAKİ DURUŞMA',
+        hearing == null ? '—' : '${_shortDay(hearing.at)} ${_time(hearing.at)}',
+        hearing == null ? 'yaklaşan duruşma yok' : _caseTitle(hearing.caseKey),
+        color: AgendaColors.hearingText,
+      ),
+      tile(
+        'YAKLAŞAN SÜRE',
+        deadline == null ? '—' : _shortDay(deadline.day),
+        deadline == null
+            ? 'bekleyen süre yok'
+            : '${deadline.title} · ${_number(deadline.caseKey)}',
+        color: AgendaColors.deadlineText,
+      ),
+      if (widget.seesMoney)
+        InkWell(
+          key: const ValueKey('client-accounts'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _accounts(),
+          child: tile(
+            'ALACAK',
+            lira(owed),
+            'Avans ${lira(sum((a) => a.advanceLeft))} · '
+                'Masraf ${lira(sum((a) => a.lawyerOwed))}',
+          ),
+        ),
+    ];
+    final across = width >= 760 ? tiles.length : 2;
+    const gap = 10.0;
+    final w = (width - gap * (across - 1)) / across;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [for (final t in tiles) SizedBox(width: w, child: t)],
+      ),
     );
-    Widget tap(Widget w, String value) => value.isEmpty
-        ? InkWell(onTap: _editContact, child: w)
-        : SelectionArea(child: w);
+  }
+
+  /// A stage's colours: its label's fill and ink, and the card's edge.
+  static ({Color fill, Color ink, Color edge}) _stageColors(CaseStage s) =>
+      switch (s) {
+        CaseStage.open => (
+          fill: const Color(0xFFE3F4EC),
+          ink: const Color(0xFF16754F),
+          edge: AgendaColors.hearing,
+        ),
+        CaseStage.stopped => (
+          fill: AgendaColors.taskFill,
+          ink: AgendaColors.taskText,
+          edge: AgendaColors.task,
+        ),
+        CaseStage.appeal => (
+          fill: const Color(0xFFEFE8FA),
+          ink: const Color(0xFF5B3A9A),
+          edge: const Color(0xFF7A4FC4),
+        ),
+        CaseStage.closed => (
+          fill: const Color(0xFFEEF1F5),
+          ink: AgendaColors.muted,
+          edge: AgendaColors.muted,
+        ),
+      };
+
+  /// "Sıfat Davacı": a label and its value, the label muted.
+  Widget _pair(String label, String value, {Color? color, bool bold = false}) =>
+      Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$label ',
+              style: const TextStyle(color: AgendaColors.muted),
+            ),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                color: color,
+                fontWeight: bold ? FontWeight.w700 : null,
+              ),
+            ),
+          ],
+        ),
+        style: const TextStyle(fontSize: 12.5),
+      );
+
+  /// The case's menu: open it, its account, its fee, the interest, or
+  /// take it off the client.
+  Widget _caseMenu(({String caseKey, String role}) x, CaseAccount? a) =>
+      PopupMenuButton<String>(
+        key: ValueKey('case-menu-${x.caseKey}'),
+        tooltip: 'Dosya işlemleri',
+        // Small: the case's lines sit close under its title.
+        padding: EdgeInsets.zero,
+        style: IconButton.styleFrom(
+          minimumSize: const Size(32, 30),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon: const Icon(Icons.more_horiz_rounded, size: 20),
+        onSelected: (v) => switch (v) {
+          'ac' => widget.onOpenCase?.call(x.caseKey),
+          'hesap' => _accounts(x.caseKey),
+          'hareket' => _movement(x.caseKey),
+          'ucret' => _fee(x.caseKey, a?.fee),
+          'not' => _editNote(x.caseKey),
+          'faiz' => InterestPage.open(
+            context,
+            title: '${_number(x.caseKey)} · ${titleName(widget.entry.name)}',
+          ),
+          _ => _takeOff(x),
+        },
+        itemBuilder: (_) => [
+          if (widget.onOpenCase != null)
+            const PopupMenuItem(value: 'ac', child: Text('Dosyayı aç')),
+          const PopupMenuItem(value: 'not', child: Text('Dosya notu')),
+          if (widget.seesMoney) ...[
+            const PopupMenuItem(value: 'hesap', child: Text('Hesabını aç')),
+            const PopupMenuItem(value: 'hareket', child: Text('Hareket ekle')),
+            const PopupMenuItem(value: 'ucret', child: Text('Ücret anlaşması')),
+          ],
+          PopupMenuItem(
+            key: ValueKey('case-interest-${x.caseKey}'),
+            value: 'faiz',
+            child: const Text('Faiz hesapla'),
+          ),
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            key: ValueKey('case-remove-${x.caseKey}'),
+            value: 'cikar',
+            child: const Text(
+              'Bu müvekkilden çıkar…',
+              style: TextStyle(color: AgendaColors.deadlineText),
+            ),
+          ),
+        ],
+      );
+
+  /// One case still worked on, as a card: its court and stage, what is
+  /// next in it, the other side, its last notice, its fee and the
+  /// lawyer's note on it; opened beneath for its hearings and deadlines.
+  Widget _caseCard(
+    ({String caseKey, String role}) x,
+    CaseAccount? a,
+    ({DateTime at, bool hearing})? next,
+    bool wide,
+  ) {
+    final key = x.caseKey;
+    final kase = _db.caseOf(key);
+    final status = kase?.status?.value ?? '';
+    final stage = stageOf(status);
+    final colors = _stageColors(stage);
+    final details = kase?.details?.value;
+    final kind = caseKindOf(details);
+    final opened = yearOf(details?['acilis']);
+    final mine = {...?_client?.folded, UyapWebService.fold(widget.entry.name)};
+    final other = otherSide(
+      _db.caseParties(caseKey: key)[key] ?? const <UyapParty>[],
+      x.role,
+      (p) =>
+          mine.contains(UyapWebService.fold(p.name)) || isShortenedName(p.name),
+    );
+    final notice = _db.notices(caseKey: key).firstOrNull?.message;
+    final note = _noteOf(key);
+    final hand = widget.entry.addedCases.contains(key);
+    final fee = _feeLeft(a);
+    final nextPill = next == null
+        ? null
+        : _Pill(
+            next.hearing
+                ? 'Duruşma ${_shortDay(next.at)} ${_time(next.at)}'
+                : 'Süre ${_shortDay(next.at)}',
+            next.hearing ? AgendaColors.hearingFill : AgendaColors.deadlineFill,
+            next.hearing ? AgendaColors.hearingText : AgendaColors.deadlineText,
+          );
+    final head = Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          kase?.number ?? key,
+          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+        ),
+        if (kase != null)
+          Text(
+            kase.court,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF4A5466)),
+          ),
+        _Pill(stageLabel(status), colors.fill, colors.ink),
+        if (hand) const _HandTag(),
+      ],
+    );
+    final facts = Wrap(
+      spacing: 16,
+      runSpacing: 3,
+      children: [
+        if (x.role.isNotEmpty) _pair('Sıfat', titleName(x.role)),
+        if (kind.isNotEmpty) _pair('Tür', kind),
+        if (other != null)
+          _pair(
+            titleName(other.role),
+            [
+              titleName(other.name),
+              if (other.lawyer.isNotEmpty) '(Av. ${titleName(other.lawyer)})',
+            ].join(' '),
+          ),
+        if (opened != null) _pair('Açıldı', '$opened'),
+        if (notice != null)
+          _pair(
+            'Son tebligat',
+            [
+              if (notice.sent != null) _shortDay(notice.sent!),
+              notice.subject,
+            ].where((s) => s.isNotEmpty).join(' · '),
+          ),
+        if (widget.seesMoney)
+          a?.fee == null
+              ? InkWell(
+                  key: ValueKey('case-fee-$key'),
+                  onTap: () => _fee(key, null),
+                  child: _pair(
+                    'Ücret anlaşması',
+                    'yok · ekle',
+                    color: AgendaColors.taskText,
+                    bold: true,
+                  ),
+                )
+              : _pair(
+                  'Ücret',
+                  [
+                    if (a!.feeAgreed > 0) lira(a.feeAgreed),
+                    if (a.feeShare > 0) '%${a.feeShare}',
+                    'kalan ${fee.text}',
+                  ].join(' · '),
+                ),
+        if (widget.seesMoney && a != null && a.fee != null)
+          _pair(
+            'Avans',
+            _plain(a.advanceLeft),
+            color: a.advanceLeft > 0 ? const Color(0xFF1B6B3A) : null,
+          ),
+        if (widget.seesMoney && (a?.lawyerOwed ?? 0) > 0)
+          _pair(
+            'Masraf',
+            _plain(a!.lawyerOwed),
+            color: AgendaColors.deadlineText,
+          ),
+      ],
+    );
+    final noteBox = InkWell(
+      key: ValueKey('case-note-$key'),
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => _editNote(key),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: (note?.text ?? '').isEmpty ? null : const Color(0xFFFFFBEA),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: (note?.text ?? '').isEmpty
+                ? AgendaColors.line
+                : const Color(0xFFF1E3B0),
+          ),
+        ),
+        child: (note?.text ?? '').isEmpty
+            ? const Text(
+                '+ Bu dosyaya not ekle',
+                style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.sticky_note_2_outlined,
+                    size: 15,
+                    color: Color(0xFF8A6A12),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      note!.text,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF5A4A12),
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _shortDay(note.at),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AgendaColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+    void toggle() => setState(() {
+      if (!_opened.remove(key)) _opened.add(key);
+    });
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AgendaColors.line),
+      ),
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              InkWell(
+                key: ValueKey('client-case-$key'),
+                onTap: toggle,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 4, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: head),
+                          if (wide && nextPill != null) ...[
+                            const SizedBox(width: 8),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: nextPill,
+                            ),
+                          ],
+                          _caseMenu(x, a),
+                        ],
+                      ),
+                      if (!wide && nextPill != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: nextPill,
+                          ),
+                        ),
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: facts,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // The note its own place to tap, not the card's.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: noteBox,
+              ),
+              if (_opened.contains(key)) _caseDetail(x, wide),
+            ],
+          ),
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 4,
+            child: ColoredBox(color: colors.edge),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A case done with, on one line: its number, court, how it ended.
+  Widget _closedLine(({String caseKey, String role}) x, bool wide) {
+    final kase = _db.caseOf(x.caseKey);
+    final status = kase?.status?.value ?? '';
+    final details = kase?.details?.value;
+    final year = yearOf(details?['kapanis']);
+    final kind = caseKindOf(details);
+    final colors = _stageColors(CaseStage.closed);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          key: ValueKey('client-case-${x.caseKey}'),
+          onTap: () => setState(() {
+            if (!_opened.remove(x.caseKey)) _opened.add(x.caseKey);
+          }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        kase?.number ?? x.caseKey,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (kase != null)
+                        Text(
+                          kase.court,
+                          style: const TextStyle(fontSize: 12.5),
+                        ),
+                      _Pill(
+                        [
+                          stageLabel(status),
+                          if (year != null) '$year',
+                        ].join(' · '),
+                        colors.fill,
+                        colors.ink,
+                      ),
+                      if (!wide)
+                        Text(
+                          [
+                            if (x.role.isNotEmpty) titleName(x.role),
+                            if (kind.isNotEmpty) kind,
+                          ].join(' · '),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AgendaColors.muted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (wide)
+                  Text(
+                    [
+                      if (x.role.isNotEmpty) titleName(x.role),
+                      if (kind.isNotEmpty) kind,
+                    ].join(' · '),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AgendaColors.muted,
+                    ),
+                  ),
+                _caseMenu(x, null),
+              ],
+            ),
+          ),
+        ),
+        if (_opened.contains(x.caseKey)) _caseDetail(x, wide),
+      ],
+    );
+  }
+
+  /// Who the client is, how they are reached, and what may be done for
+  /// them: the card's head.
+  Widget _head(Client? c, bool wide, int open) {
+    final e = widget.entry;
+    final body = c?.body ?? false;
+    final years = [
+      for (final x in e.cases)
+        ?yearOf(_db.caseOf(x.caseKey)?.details?.value['acilis']),
+    ]..sort();
     Future<void> launch(String uri) async {
       try {
         await launchUrl(Uri.parse(uri));
       } catch (_) {}
     }
 
-    return _frame(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    final contacts = <(String, String)>[
+      if ((c?.phone ?? '').isNotEmpty) ('Tel', c!.phone),
+      if ((c?.phone2 ?? '').isNotEmpty) ('2. tel', c!.phone2),
+      if ((c?.email ?? '').isNotEmpty) ('E-posta', c!.email),
+      if ((c?.address ?? '').isNotEmpty) ('Adres', c!.address),
+      if ((c?.idNo ?? '').isNotEmpty) (body ? 'VKN' : 'TCKN', c!.idNo),
+    ];
+    final missing = [
+      if ((c?.phone ?? '').isEmpty) 'telefon',
+      if ((c?.email ?? '').isEmpty) 'e-posta',
+      if ((c?.idNo ?? '').isEmpty) body ? 'VKN' : 'TCKN',
+    ];
+    const link = TextStyle(
+      fontSize: 12.5,
+      color: AgendaColors.hearing,
+      fontWeight: FontWeight.w700,
+    );
+    final papers = PopupMenuButton<String>(
+      key: const ValueKey('client-papers'),
+      tooltip: 'Belge hazırla',
+      onSelected: (v) => v == 'vekalet' ? _attorney() : _paperFor(v),
+      itemBuilder: (_) => [
+        if (widget.seesMoney) ...[
+          const PopupMenuItem(
+            value: 'sozlesme',
+            child: Text('Avukatlık ücret sözleşmesi'),
+          ),
+          const PopupMenuItem(value: 'ibra', child: Text('İbraname')),
+        ],
+        const PopupMenuItem(value: 'vekalet', child: Text('Vekâletname ekle')),
+      ],
+      child: IgnorePointer(
+        child: OutlinedButton.icon(
+          onPressed: () {},
+          icon: const Icon(Icons.description_outlined, size: 18),
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              if (!wide) ...[
-                _Avatar(e.name, body: body, size: 42),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      titleName(c?.name ?? e.name),
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    _tag(body ? 'Kurum' : 'Kişi'),
-                    if (widget.inOffice)
-                      FilterChip(
-                        key: const ValueKey('client-share'),
-                        visualDensity: VisualDensity.compact,
-                        avatar: Icon(
-                          c?.office ?? false
-                              ? Icons.groups_rounded
-                              : Icons.lock_outline_rounded,
-                          size: 16,
-                        ),
-                        label: Text(
-                          c?.office ?? false
-                              ? 'Büroyla paylaşılıyor'
-                              : 'Yalnız bende',
-                        ),
-                        selected: c?.office ?? false,
-                        onSelected: _share,
-                        tooltip:
-                            'Paylaşılırsa kartı, tutanakları ve vekâletnameleri '
-                            'bürodaki avukatlara gider; ücret ve hesaplar '
-                            'yalnız yöneticilere ve yetki verilenlere.',
-                      ),
-                  ],
-                ),
-              ),
-              PopupMenuButton<String>(
-                key: const ValueKey('client-more'),
-                onSelected: (_) => _remove(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'kaldir',
-                    child: Text('Müvekkili listeden kaldır'),
-                  ),
-                ],
-              ),
+              Text(wide ? 'Belge hazırla' : 'Belge'),
+              const Icon(Icons.arrow_drop_down_rounded, size: 20),
             ],
           ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 18,
-            runSpacing: 4,
-            children: [
-              tap(pair('Tel', c?.phone ?? ''), c?.phone ?? ''),
-              if ((c?.phone2 ?? '').isNotEmpty) pair('2. tel', c!.phone2),
-              tap(pair('E-posta', c?.email ?? ''), c?.email ?? ''),
-              tap(pair('Adres', c?.address ?? ''), c?.address ?? ''),
-              tap(pair(body ? 'VKN' : 'TCKN', c?.idNo ?? ''), c?.idNo ?? ''),
-              InkWell(
-                key: const ValueKey('client-edit'),
-                onTap: _editContact,
-                borderRadius: BorderRadius.circular(4),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.edit_outlined,
-                      size: 14,
-                      color: AgendaColors.hearing,
-                    ),
-                    SizedBox(width: 3),
-                    Text(
-                      'Düzenle',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AgendaColors.hearing,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+        ),
+      ),
+    );
+    final actions = [
+      FilledButton.icon(
+        key: const ValueKey('client-message'),
+        style: FilledButton.styleFrom(backgroundColor: const Color(0xFF1FA855)),
+        onPressed: _message,
+        icon: const Icon(Icons.chat_outlined, size: 18),
+        label: const Text('Mesaj'),
+      ),
+      if (!wide && (c?.phone ?? '').isNotEmpty)
+        OutlinedButton.icon(
+          onPressed: () => launch('tel:${c!.phone}'),
+          icon: const Icon(Icons.call_outlined, size: 18),
+          label: const Text('Ara'),
+        ),
+      OutlinedButton.icon(
+        key: const ValueKey('client-meeting'),
+        onPressed: () => _meeting(),
+        icon: const Icon(Icons.record_voice_over_outlined, size: 18),
+        label: Text(wide ? 'Görüşme tutanağı' : 'Görüşme'),
+      ),
+      if (widget.seesMoney)
+        OutlinedButton.icon(
+          key: const ValueKey('client-statement'),
+          onPressed: () => _statement(),
+          icon: const Icon(Icons.receipt_long_outlined, size: 18),
+          label: Text(wide ? 'Hesap dökümü' : 'Hesap'),
+        ),
+      papers,
+    ];
+    final more = PopupMenuButton<String>(
+      key: const ValueKey('client-more'),
+      onSelected: (v) => v == 'duzenle' ? _editContact() : _remove(),
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'duzenle', child: Text('Bilgileri düzenle')),
+        PopupMenuItem(
+          value: 'kaldir',
+          child: Text('Müvekkili listeden kaldır'),
+        ),
+      ],
+    );
+    final who = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              titleName(c?.name ?? e.name),
+              style: TextStyle(
+                fontSize: wide ? 22 : 18,
+                fontWeight: FontWeight.w700,
               ),
-            ],
-          ),
-          if ((c?.note ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
+            ),
+            _Pill(
+              body ? 'Kurum' : 'Kişi',
+              AgendaColors.hearingFill,
+              AgendaColors.hearingText,
+            ),
+            if (widget.inOffice)
+              FilterChip(
+                key: const ValueKey('client-share'),
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(
+                  c?.office ?? false
+                      ? Icons.groups_rounded
+                      : Icons.lock_outline_rounded,
+                  size: 16,
+                ),
+                label: Text(
+                  c?.office ?? false ? 'Büroyla paylaşılıyor' : 'Yalnız bende',
+                ),
+                selected: c?.office ?? false,
+                onSelected: _share,
+                tooltip:
+                    'Paylaşılırsa kartı, tutanakları ve vekâletnameleri '
+                    'bürodaki avukatlara gider; ücret ve hesaplar '
+                    'yalnız yöneticilere ve yetki verilenlere.',
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 14,
+          runSpacing: 3,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              [
+                '${e.cases.length} dosya',
+                '$open açık',
+                if (years.isNotEmpty) 'ilk dosya ${years.first}',
+              ].join(' · '),
+              style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+            ),
+            for (final (label, value) in contacts)
+              SelectionArea(child: _pair(label, value)),
+            InkWell(
+              key: const ValueKey('client-edit'),
+              onTap: _editContact,
+              borderRadius: BorderRadius.circular(4),
               child: Text(
-                'Not: ${c!.note}',
+                missing.isEmpty
+                    ? 'Düzenle'
+                    : '+ ${missing.join(', ').replaceFirst('telefon', 'Telefon')} ekle',
+                style: link,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+    return _frame(
+      wide
+          ? Row(
+              children: [
+                ClientInitials(e.name, body: body, size: 56),
+                const SizedBox(width: 14),
+                Expanded(child: who),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: actions,
+                  ),
+                ),
+                more,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClientInitials(e.name, body: body, size: 46),
+                    const SizedBox(width: 10),
+                    Expanded(child: who),
+                    more,
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(spacing: 6, runSpacing: 6, children: actions),
+              ],
+            ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 6, 14),
+    );
+  }
+
+  /// What is coming, soonest first, then what happened, latest first.
+  Widget _timeline(({List<_Event> coming, List<_Event> past}) events) {
+    final count = events.coming.length + events.past.length;
+    final pastShown = _allEvents
+        ? events.past.take(80)
+        : events.past.take(events.coming.isEmpty ? 6 : 4);
+    Widget label(String t, Color color) => Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
+      child: Text(
+        t,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: .5,
+          color: color,
+        ),
+      ),
+    );
+    Widget line(_Event ev) => InkWell(
+      onTap: ev.caseKey == null || widget.onOpenCase == null
+          ? null
+          : () => widget.onOpenCase!(ev.caseKey!),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 50,
+              child: Text(
+                _shortDay(ev.at),
                 style: const TextStyle(
-                  fontSize: 12.5,
+                  fontSize: 11.5,
                   color: AgendaColors.muted,
                 ),
               ),
             ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              if (!wide && (c?.phone ?? '').isNotEmpty)
-                OutlinedButton.icon(
-                  onPressed: () => launch('tel:${c!.phone}'),
-                  icon: const Icon(Icons.call_outlined, size: 18),
-                  label: const Text('Ara'),
-                ),
-              if (!wide && (c?.email ?? '').isNotEmpty)
-                OutlinedButton.icon(
-                  onPressed: () => launch('mailto:${c!.email}'),
-                  icon: const Icon(Icons.mail_outline_rounded, size: 18),
-                  label: const Text('E-posta'),
-                ),
-              OutlinedButton.icon(
-                key: const ValueKey('client-meeting'),
-                onPressed: () => _meeting(),
-                icon: const Icon(Icons.record_voice_over_outlined, size: 18),
-                label: const Text('Görüşme tutanağı'),
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 9),
+              child: Icon(Icons.circle, size: 9, color: ev.color),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ev.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                  if (ev.detail.isNotEmpty)
+                    Text(
+                      ev.detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                ],
               ),
-              OutlinedButton.icon(
-                key: const ValueKey('client-message'),
-                onPressed: _message,
-                icon: const Icon(Icons.chat_outlined, size: 18),
-                label: const Text('Mesaj'),
-              ),
-              if (widget.seesMoney)
-                OutlinedButton.icon(
-                  key: const ValueKey('client-statement'),
-                  onPressed: () => _statement(),
-                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                  label: const Text('Hesap dökümü'),
-                ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
+    );
+    return _box(
+      'ZAMAN ÇİZELGESİ',
+      action: events.past.length > pastShown.length || _allEvents
+          ? TextButton(
+              key: const ValueKey('client-timeline-all'),
+              onPressed: () => setState(() => _allEvents = !_allEvents),
+              child: Text(_allEvents ? 'Daha az' : 'Tümü $count'),
+            )
+          : null,
+      children: [
+        if (count == 0)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+            child: Text(
+              'Henüz bir şey yok.',
+              style: TextStyle(color: AgendaColors.muted),
+            ),
+          ),
+        if (events.coming.isNotEmpty) ...[
+          label('YAKLAŞAN', AgendaColors.deadlineText),
+          for (final ev in events.coming.take(_allEvents ? 80 : 5)) line(ev),
+        ],
+        if (events.past.isNotEmpty) ...[
+          label('GEÇMİŞ', AgendaColors.muted),
+          for (final ev in pastShown) line(ev),
+        ],
+      ],
     );
   }
 
-  Widget _tag(String text, {Color fill = AgendaColors.hearingFill}) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: fill,
-          borderRadius: BorderRadius.circular(6),
+  /// The papers made for the client and the powers of attorney, with a
+  /// way to make another.
+  Widget _paperBox(List<ClientRecord> attorneys) {
+    ({IconData icon, Color fill}) look(String name) => switch (name) {
+      _ when name.startsWith('Avukatlık ücret') => (
+        icon: Icons.handshake_outlined,
+        fill: AgendaColors.hearingFill,
+      ),
+      _ when name.startsWith('İbraname') => (
+        icon: Icons.draw_outlined,
+        fill: const Color(0xFFEEF1F5),
+      ),
+      _ => (icon: Icons.receipt_outlined, fill: const Color(0xFFE3F4EC)),
+    };
+    Widget tile({
+      required Key key,
+      required IconData icon,
+      required Color fill,
+      required String title,
+      required String sub,
+      VoidCallback? onTap,
+    }) => InkWell(
+      key: key,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Icon(icon, size: 16, color: const Color(0xFF4A5466)),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                  if (sub.isNotEmpty)
+                    Text(
+                      sub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+    final papers = widget.seesMoney ? _papers : const <Never>[];
+    final count = papers.length + attorneys.length;
+    return _box(
+      'BELGELER',
+      count: count,
+      action: TextButton(
+        key: const ValueKey('client-attorney'),
+        onPressed: _attorney,
+        child: const Text('+ Vekâletname'),
+      ),
+      children: [
+        if (count == 0)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+            child: Text(
+              'Belge yok. Ücret sözleşmesi ve ibraname "Belge hazırla"dan '
+              'hazırlanır.',
+              style: TextStyle(color: AgendaColors.muted),
+            ),
+          ),
+        for (final d in papers.take(_allPapers ? 50 : 4))
+          tile(
+            key: ValueKey('client-paper-${d.name}'),
+            icon: look(d.name).icon,
+            fill: look(d.name).fill,
+            title: d.name.split(' - ').first,
+            sub: _day(d.at),
+            onTap: widget.onEdit == null ? null : () => widget.onEdit!(d.path),
+          ),
+        for (final a in attorneys.take(_allPapers ? 20 : 2))
+          tile(
+            key: ValueKey('attorney-${a.id}'),
+            icon: Icons.assignment_ind_outlined,
+            fill: const Color(0xFFEFE8FA),
+            title: [
+              'Vekâletname',
+              if (a.text('noter').isNotEmpty) a.text('noter'),
+            ].join(' · '),
+            sub: [
+              a.text('tarih'),
+              if (a.list('yetkiler').isNotEmpty) a.list('yetkiler').join(', '),
+            ].where((s) => s.isNotEmpty).join(' · '),
+            onTap: clientFilesOf(a).isEmpty
+                ? null
+                : () => _preview(a, 'Vekâletname'),
+          ),
+        if (papers.length > 4 || attorneys.length > 2)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => _allPapers = !_allPapers),
+              child: Text(_allPapers ? 'Daha az' : 'Tümü $count'),
+            ),
+          ),
+      ],
+    );
+  }
+
+  bool _allPapers = false;
+
+  /// The lawyer's note on the client, apart from the cases' notes.
+  Widget _clientNoteBox(Client? c) => _box(
+    'MÜVEKKİL NOTU',
+    action: TextButton(
+      key: const ValueKey('client-note'),
+      onPressed: _editContact,
+      child: Text((c?.note ?? '').isEmpty ? '+ Not' : 'Düzenle'),
+    ),
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
         child: Text(
-          text,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          (c?.note ?? '').isEmpty ? 'Not yok.' : c!.note,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: (c?.note ?? '').isEmpty ? AgendaColors.muted : null,
+          ),
         ),
-      );
+      ),
+    ],
+  );
 
   Widget _frame(Widget child, {EdgeInsets? padding}) => Container(
     margin: const EdgeInsets.only(top: 10),
@@ -1693,90 +3002,6 @@ class _ClientCardState extends State<ClientCard> {
     padding: const EdgeInsets.fromLTRB(14, 4, 8, 8),
   );
 
-  /// What is owed and held, all cases together.
-  Widget _moneyStrip(Map<String, CaseAccount> accounts) {
-    int sum(int Function(CaseAccount a) f) =>
-        accounts.values.fold(0, (n, a) => n + f(a));
-    final owed = sum((a) => a.feeOwed > 0 ? a.feeOwed : 0);
-    final lawyer = sum((a) => a.lawyerOwed);
-    final advance = sum((a) => a.advanceLeft);
-    Widget chip(String label, int v, Color color) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AgendaColors.line),
-      ),
-      child: Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(text: '$label  '),
-            TextSpan(
-              text: lira(v),
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: v == 0 ? AgendaColors.muted : color,
-              ),
-            ),
-          ],
-        ),
-        style: const TextStyle(fontSize: 13),
-      ),
-    );
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          chip('Ücret alacağı', owed, AgendaColors.deadlineText),
-          chip('Avukat masrafı', lawyer, AgendaColors.deadlineText),
-          chip('Avans', advance, const Color(0xFF1B6B3A)),
-          TextButton(
-            key: const ValueKey('client-accounts'),
-            onPressed: _accounts,
-            child: const Text('Tüm hesaplar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static const _role = 100.0, _next = 120.0, _sum = 92.0, _menu = 40.0;
-
-  Widget _caseHead() {
-    Widget h(String t, double w, {bool right = false}) => SizedBox(
-      width: w,
-      child: Text(
-        t,
-        textAlign: right ? TextAlign.right : TextAlign.left,
-        style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
-      ),
-    );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 0, 4),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Text(
-              'Dosya',
-              style: TextStyle(fontSize: 11, color: AgendaColors.muted),
-            ),
-          ),
-          h('Sıfat', _role),
-          h('Sıradaki', _next),
-          if (widget.seesMoney) ...[
-            h('Ücret kalan', _sum, right: true),
-            h('Avans', _sum, right: true),
-            h('Masraf', _sum, right: true),
-          ],
-          const SizedBox(width: _menu),
-        ],
-      ),
-    );
-  }
-
   /// The fee still owed as the table shows it: none agreed, a share
   /// only, paid, or what is left.
   ({String text, Color? color}) _feeLeft(CaseAccount? a) {
@@ -1793,19 +3018,6 @@ class _ClientCardState extends State<ClientCard> {
 
   /// The cases opened to their detail.
   final _opened = <String>{};
-
-  Widget _caseRow(
-    ({String caseKey, String role}) x,
-    CaseAccount? a,
-    String? next,
-    bool wide,
-  ) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _caseLine(x, a, next, wide),
-      if (_opened.contains(x.caseKey)) _caseDetail(x, wide),
-    ],
-  );
 
   /// The latest note on case [key], of any of the client's cards.
   CaseNote? _noteOf(String key) {
@@ -1862,7 +3074,6 @@ class _ClientCardState extends State<ClientCard> {
           t,
     ];
     final status = _db.caseOf(key)?.status?.value ?? '';
-    final note = _noteOf(key);
     const muted = TextStyle(fontSize: 12.5, color: AgendaColors.muted);
     Widget head(String t, {Widget? action}) => SizedBox(
       height: 26,
@@ -1930,46 +3141,10 @@ class _ClientCardState extends State<ClientCard> {
           ),
       ],
     );
-    final notes = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        head(
-          'DOSYA NOTU',
-          action: TextButton(
-            key: ValueKey('case-note-$key'),
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-            ),
-            onPressed: () => _editNote(key),
-            child: Text((note?.text ?? '').isEmpty ? '+ Not yaz' : 'Düzenle'),
-          ),
-        ),
-        if ((note?.text ?? '').isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFFBEA),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFF1E3B0)),
-            ),
-            child: SelectableText(
-              note!.text,
-              style: const TextStyle(fontSize: 12.5, height: 1.35),
-            ),
-          ),
-          line(
-            [_day(note.at), if (note.by.isNotEmpty) note.by].join(' · '),
-            style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
-          ),
-        ] else
-          line('Bu dosya için not yok.', style: muted),
-      ],
-    );
     return Container(
       key: ValueKey('case-detail-$key'),
       color: const Color(0xFFF7F9FD),
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+      padding: const EdgeInsets.fromLTRB(16, 4, 10, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1980,16 +3155,12 @@ class _ClientCardState extends State<ClientCard> {
                 Expanded(flex: 6, child: hearings),
                 const SizedBox(width: 14),
                 Expanded(flex: 5, child: state),
-                const SizedBox(width: 14),
-                Expanded(flex: 5, child: notes),
               ],
             )
           else ...[
             hearings,
             const SizedBox(height: 6),
             state,
-            const SizedBox(height: 6),
-            notes,
           ],
           const SizedBox(height: 8),
           Wrap(
@@ -2011,309 +3182,34 @@ class _ClientCardState extends State<ClientCard> {
                   child: const Text('Hareket ekle'),
                 ),
               ],
-              OutlinedButton(
-                key: ValueKey('case-interest-$key'),
-                onPressed: () => InterestPage.open(
-                  context,
-                  title: '${_number(key)} · ${titleName(widget.entry.name)}',
-                ),
-                child: const Text('Faiz hesapla'),
-              ),
             ],
           ),
         ],
       ),
     );
   }
-
-  Widget _caseLine(
-    ({String caseKey, String role}) x,
-    CaseAccount? a,
-    String? next,
-    bool wide,
-  ) {
-    final kase = _db.caseOf(x.caseKey);
-    final hand = widget.entry.addedCases.contains(x.caseKey);
-    final fee = _feeLeft(a);
-    final advance = a?.advanceLeft ?? 0, cost = a?.lawyerOwed ?? 0;
-    final menu = PopupMenuButton<String>(
-      key: ValueKey('case-menu-${x.caseKey}'),
-      tooltip: 'Dosya işlemleri',
-      icon: const Icon(Icons.more_horiz_rounded, size: 20),
-      onSelected: (v) => switch (v) {
-        'ac' => widget.onOpenCase?.call(x.caseKey),
-        'hesap' => _accounts(x.caseKey),
-        'hareket' => _movement(x.caseKey),
-        'ucret' => _fee(x.caseKey, a?.fee),
-        _ => _takeOff(x),
-      },
-      itemBuilder: (_) => [
-        if (widget.onOpenCase != null)
-          const PopupMenuItem(value: 'ac', child: Text('Dosyayı aç')),
-        if (widget.seesMoney) ...[
-          const PopupMenuItem(value: 'hesap', child: Text('Hesabını aç')),
-          const PopupMenuItem(value: 'hareket', child: Text('Hareket ekle')),
-          const PopupMenuItem(value: 'ucret', child: Text('Ücret anlaşması')),
-        ],
-        const PopupMenuDivider(),
-        PopupMenuItem(
-          key: ValueKey('case-remove-${x.caseKey}'),
-          value: 'cikar',
-          child: const Text(
-            'Bu müvekkilden çıkar…',
-            style: TextStyle(color: AgendaColors.deadlineText),
-          ),
-        ),
-      ],
-    );
-    final title = Text.rich(
-      TextSpan(
-        children: [
-          WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: Icon(
-              _opened.contains(x.caseKey)
-                  ? Icons.expand_more_rounded
-                  : Icons.chevron_right_rounded,
-              size: 18,
-              color: AgendaColors.muted,
-            ),
-          ),
-          TextSpan(
-            text: kase?.number ?? x.caseKey,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          if (kase != null) TextSpan(text: ' ${kase.court}'),
-          if (hand)
-            const WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
-              child: Padding(
-                padding: EdgeInsets.only(left: 6),
-                child: _HandTag(),
-              ),
-            ),
-        ],
-      ),
-      style: const TextStyle(fontSize: 13),
-    );
-    Text amount(String t, {Color? color}) => Text(
-      t,
-      textAlign: TextAlign.right,
-      style: TextStyle(fontSize: 13, color: color),
-    );
-    void open() => setState(() {
-      if (!_opened.remove(x.caseKey)) _opened.add(x.caseKey);
-    });
-    if (wide) {
-      return InkWell(
-        key: ValueKey('client-case-${x.caseKey}'),
-        onTap: open,
-        child: Container(
-          padding: const EdgeInsets.only(left: 4),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AgendaColors.line)),
-          ),
-          constraints: const BoxConstraints(minHeight: 38),
-          child: Row(
-            children: [
-              Expanded(child: title),
-              SizedBox(
-                width: _role,
-                child: Text(
-                  titleName(x.role),
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ),
-              SizedBox(
-                width: _next,
-                child: Text(next ?? '—', style: const TextStyle(fontSize: 13)),
-              ),
-              if (widget.seesMoney) ...[
-                SizedBox(
-                  width: _sum,
-                  child: amount(fee.text, color: fee.color),
-                ),
-                SizedBox(
-                  width: _sum,
-                  child: amount(
-                    _plain(advance),
-                    color: advance > 0 ? const Color(0xFF1B6B3A) : null,
-                  ),
-                ),
-                SizedBox(
-                  width: _sum,
-                  child: amount(
-                    _plain(cost),
-                    color: cost > 0 ? AgendaColors.deadlineText : null,
-                  ),
-                ),
-              ],
-              SizedBox(width: _menu, child: menu),
-            ],
-          ),
-        ),
-      );
-    }
-    return InkWell(
-      key: ValueKey('client-case-${x.caseKey}'),
-      onTap: open,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(4, 6, 0, 6),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AgendaColors.line)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  title,
-                  Text(
-                    [
-                      if (x.role.isNotEmpty) titleName(x.role),
-                      ?next,
-                    ].join(' · '),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AgendaColors.muted,
-                    ),
-                  ),
-                  if (widget.seesMoney)
-                    Text(
-                      'Ücret ${fee.text} · Avans ${_plain(advance)} · '
-                      'Masraf ${_plain(cost)}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                ],
-              ),
-            ),
-            menu,
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _timeline(List<_Event> events) {
-    final shown = _allEvents ? events.take(80) : events.take(6);
-    return _box(
-      'ZAMAN ÇİZELGESİ',
-      action: events.length > 6
-          ? TextButton(
-              key: const ValueKey('client-timeline-all'),
-              onPressed: () => setState(() => _allEvents = !_allEvents),
-              child: Text(_allEvents ? 'Daha az' : 'Tümü ${events.length}'),
-            )
-          : null,
-      children: [
-        if (events.isEmpty)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
-            child: Text(
-              'Henüz bir şey yok.',
-              style: TextStyle(color: AgendaColors.muted),
-            ),
-          ),
-        for (final ev in shown)
-          InkWell(
-            onTap: ev.caseKey == null || widget.onOpenCase == null
-                ? null
-                : () => widget.onOpenCase!(ev.caseKey!),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 5, right: 8),
-                    child: Icon(Icons.circle, size: 8, color: ev.color),
-                  ),
-                  SizedBox(
-                    width: 74,
-                    child: Text(
-                      _day(ev.at),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AgendaColors.muted,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(text: ev.title),
-                          if (ev.detail.isNotEmpty)
-                            TextSpan(
-                              text: '  ${ev.detail}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AgendaColors.muted,
-                              ),
-                            ),
-                        ],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _attorneyBox(List<ClientRecord> attorneys) => _box(
-    'VEKÂLETNAME',
-    count: attorneys.length,
-    action: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (attorneys.length > 2)
-          TextButton(
-            onPressed: () => _page(
-              'Vekâletnameler',
-              (_) => _attorneys(_records(ClientRecordKind.attorney)),
-            ),
-            child: const Text('Tümü'),
-          ),
-        TextButton(
-          key: const ValueKey('client-attorney'),
-          onPressed: _attorney,
-          child: const Text('+ Ekle'),
-        ),
-      ],
-    ),
-    children: [
-      if (attorneys.isEmpty)
-        const Padding(
-          padding: EdgeInsets.fromLTRB(4, 0, 4, 6),
-          child: Text(
-            'Vekâletname eklenmedi.',
-            style: TextStyle(color: AgendaColors.muted),
-          ),
-        ),
-      for (final a in attorneys.take(2)) _attorneyTile(a),
-    ],
-  );
 
   Widget _meetingBox(List<ClientRecord> meetings) => _box(
     'GÖRÜŞMELER',
     count: meetings.length,
-    action: meetings.length > 2
-        ? TextButton(
+    action: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (meetings.length > 2)
+          TextButton(
             onPressed: () => _page(
               'Görüşmeler',
               (_) => _meetings(_records(ClientRecordKind.meeting)),
             ),
             child: const Text('Tümü'),
-          )
-        : null,
+          ),
+        TextButton(
+          key: const ValueKey('client-meeting-new'),
+          onPressed: () => _meeting(),
+          child: const Text('+ Yeni'),
+        ),
+      ],
+    ),
     children: [
       if (meetings.isEmpty)
         const Padding(
@@ -2389,47 +3285,6 @@ class _ClientCardState extends State<ClientCard> {
           ),
         ),
       for (final m in meetings) _meetingTile(m),
-    ],
-  );
-
-  Widget _attorneyTile(ClientRecord a) {
-    final powers = a.list('yetkiler');
-    return ListTile(
-      key: ValueKey('attorney-${a.id}'),
-      leading: const Icon(Icons.assignment_ind_outlined),
-      title: Text(
-        [
-          a.text('noter'),
-          a.text('tarih'),
-          if (a.text('yevmiye').isNotEmpty) 'Yevmiye ${a.text('yevmiye')}',
-        ].where((s) => s.isNotEmpty).join(' · '),
-      ),
-      subtitle: Text(
-        [
-          if (a.text('kapsam').isNotEmpty) a.text('kapsam'),
-          powers.isEmpty
-              ? 'özel yetki yok'
-              : 'özel yetkiler: ${powers.join(', ')}',
-        ].join(' · '),
-      ),
-      trailing: clientFilesOf(a).isEmpty
-          ? null
-          : const Icon(Icons.visibility_outlined, size: 18),
-      onTap: clientFilesOf(a).isEmpty ? null : () => _preview(a, 'Vekâletname'),
-    );
-  }
-
-  Widget _attorneys(List<ClientRecord> attorneys) => ListView(
-    children: [
-      if (attorneys.isEmpty)
-        const Padding(
-          padding: EdgeInsets.all(18),
-          child: Text(
-            'Vekâletname eklenmedi.',
-            style: TextStyle(color: AgendaColors.muted),
-          ),
-        ),
-      for (final a in attorneys) _attorneyTile(a),
     ],
   );
 }
