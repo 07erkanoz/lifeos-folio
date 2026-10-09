@@ -28,7 +28,16 @@ class Client {
     this.stamps = const {},
     this.caseLinks = const {},
     this.caseNotes = const {},
+    this.group = '',
+    this.hidden = false,
   });
+
+  /// The lawyer's own group for the client ("Bankalar", "Sigorta"), by
+  /// which the list is narrowed; empty for none.
+  final String group;
+
+  /// Kept, but not listed unless asked for: a client of once.
+  final bool hidden;
 
   /// The lawyer's note on each of the client's cases, by case key.
   final Map<String, CaseNote> caseNotes;
@@ -55,6 +64,8 @@ class Client {
     'silindi',
     'buro',
     'mesajIzni',
+    'grup',
+    'gizli',
   ];
 
   /// The cards told to be this client's too: their records are its.
@@ -118,6 +129,8 @@ class Client {
     List<String>? absorbed,
     Map<String, CaseLink>? caseLinks,
     Map<String, CaseNote>? caseNotes,
+    String? group,
+    bool? hidden,
   }) {
     final now = updated ?? DateTime.now();
     final made = Client(
@@ -140,6 +153,8 @@ class Client {
       absorbed: absorbed ?? this.absorbed,
       caseLinks: caseLinks ?? this.caseLinks,
       caseNotes: caseNotes ?? this.caseNotes,
+      group: group ?? this.group,
+      hidden: hidden ?? this.hidden,
     );
     // Only what changed is stamped now; the rest keeps the time it had.
     final was = _values, is_ = made._values;
@@ -169,6 +184,8 @@ class Client {
     stamps: stamps,
     caseLinks: caseLinks,
     caseNotes: caseNotes,
+    group: group,
+    hidden: hidden,
   );
 
   /// When field [k] was last set.
@@ -186,6 +203,8 @@ class Client {
     'silindi': removed,
     'buro': office,
     'mesajIzni': messages,
+    'grup': group,
+    'gizli': hidden,
   };
 
   /// The mark a colleague's client unshared leaves: nothing of the person.
@@ -245,6 +264,8 @@ class Client {
       stamps: stamps,
       caseLinks: links,
       caseNotes: notes,
+      group: pick['grup']! as String,
+      hidden: pick['gizli']! as bool,
     );
   }
 
@@ -266,6 +287,8 @@ class Client {
     'paylasildi': sharedOnce,
     'kisi': person,
     'katilan': absorbed,
+    if (group.isNotEmpty) 'grup': group,
+    if (hidden) 'gizli': true,
     'alanZamani': {
       for (final k in fields)
         if (stamps[k] case final t?) k: t.toIso8601String(),
@@ -303,6 +326,8 @@ class Client {
       office: j['buro'] == true,
       sharedOnce: j['paylasildi'] == true || j['buro'] == true,
       person: s('kisi'),
+      group: s('grup').trim(),
+      hidden: j['gizli'] == true,
       absorbed: [
         for (final n in j['katilan'] is List ? j['katilan'] as List : const [])
           if (n is String) n,

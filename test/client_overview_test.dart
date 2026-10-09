@@ -48,4 +48,19 @@ void main() {
     );
     expect(creditor?.name, 'DENİZ GIDA');
   });
+
+  test('a notice\'s subject without its court and case repeated', () {
+    expect(
+      noticeTopic(
+        'Antalya 9. Aile Mahkemesi [2020/801] '
+            '[Antalya 9. Aile Mahkemesi-5000892057132-0-2020/801]',
+        'Antalya 9. Aile Mahkemesi',
+      ),
+      '',
+    );
+    expect(
+      noticeTopic('Gerekçeli karar [2021/5]', 'Antalya 1. Asliye'),
+      'Gerekçeli karar',
+    );
+  });
 }

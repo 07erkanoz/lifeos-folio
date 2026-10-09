@@ -186,3 +186,28 @@ Map<String, ClientGlance> clientGlances(
       }(),
   };
 }
+
+/// The groups the lawyer has given clients, A to Z.
+List<String> clientGroups(PortalDatabase db) {
+  final groups = {
+    for (final c in db.clientCards())
+      if (!c.removed && c.group.trim().isNotEmpty) c.group.trim(),
+  }.toList();
+  groups.sort(
+    (a, b) => UyapWebService.fold(a).compareTo(UyapWebService.fold(b)),
+  );
+  return groups;
+}
+
+/// What a notice's subject says beyond its court and case, which UYAP
+/// repeats in it ("Antalya 9. Aile Mahkemesi [2020/801] [Antalya 9. Aile
+/// Mahkemesi-5000…-0-2020/801]"): empty when nothing more.
+String noticeTopic(String subject, String court) {
+  var s = subject.replaceAll(RegExp(r'\[[^\]]*\]'), ' ');
+  if (court.isNotEmpty) {
+    s = s.replaceAll(court, ' ');
+  }
+  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  s = s.replaceAll(RegExp(r'^[-–·:,\s]+|[-–·:,\s]+$'), '');
+  return s;
+}

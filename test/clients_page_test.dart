@@ -105,6 +105,73 @@ void main() {
     expect(find.text('Müvekkil'), findsNothing);
   });
 
+  testWidgets('a client is written in by hand with a group, listed and '
+      'narrowed to by it; hidden, they leave the list, are under "Gizli" and '
+      'found when searched for', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClientsPage(
+            lawyer: 'Av. Deniz Kaya',
+            database: db,
+            files: ClientFiles(root: () async => root),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('clients-new')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('contact-name')),
+      'Kemal Doğan',
+    );
+    await tester.enterText(find.byKey(const ValueKey('contact-group')), 'Kira');
+    await tester.tap(find.byKey(const ValueKey('contact-save')));
+    await tester.pumpAndSettle();
+    final card = db.clientCards().singleWhere((c) => c.name == 'Kemal Doğan');
+    expect(card.group, 'Kira');
+    expect(find.text('Kemal Doğan'), findsWidgets);
+
+    // Narrowed to the group: the other client goes.
+    await tester.tap(find.byKey(const ValueKey('clients-group')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kira').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('client-${card.id}')), findsOneWidget);
+    expect(find.text('Ayşe Karaca'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('clients-group')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tüm gruplar'));
+    await tester.pumpAndSettle();
+
+    // Hidden from its card's menu.
+    await tester.tap(find.byKey(ValueKey('client-${card.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('client-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('client-hide')));
+    await tester.pumpAndSettle();
+    expect(db.clientCards().singleWhere((c) => c.id == card.id).hidden, isTrue);
+    expect(find.byKey(ValueKey('client-${card.id}')), findsNothing);
+    // Found again: by search, and under "Gizli".
+    await tester.enterText(
+      find.byKey(const ValueKey('clients-search')),
+      'kemal',
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('client-${card.id}')), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('clients-search')), '');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('clients-filter-hidden')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('client-${card.id}')), findsOneWidget);
+    expect(find.text('Ayşe Karaca'), findsNothing);
+  });
+
   Future<void> open(WidgetTester tester, {bool money = true}) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;

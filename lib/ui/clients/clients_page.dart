@@ -126,6 +126,10 @@ class _ClientsPageState extends State<ClientsPage> {
   Map<String, ClientGlance> _glance = const {};
   _Filter _filter = _Filter.all;
 
+  /// The lawyer's group the list is narrowed to; null for all.
+  String? _group;
+  List<String> _groups = const [];
+
   /// By name alone, not by what is coming first.
   bool _byName = false;
 
@@ -162,11 +166,14 @@ class _ClientsPageState extends State<ClientsPage> {
       DateTime.now(),
       money: widget.seesMoney,
     );
+    final groups = clientGroups(db);
     setState(() {
       _entries = entries;
       _late = late;
       _due = due;
       _glance = glance;
+      _groups = groups;
+      if (_group != null && !groups.contains(_group)) _group = null;
     });
     if (first != null) {
       final e = _entries.where((x) => x.key == first).firstOrNull;
@@ -272,6 +279,12 @@ class _ClientsPageState extends State<ClientsPage> {
   bool _keeps(_Filter f, ClientEntry e) {
     final g = _glance[e.key];
     final week = DateTime.now().add(const Duration(days: 7));
+    // A hidden client is under "Gizli", and found when searched for by
+    // name, TCKN or case; a group narrows them all.
+    final hidden = e.client?.hidden ?? false;
+    if (f == _Filter.hidden) return hidden;
+    if (hidden && (_query.trim().isEmpty || f != _Filter.all)) return false;
+    if (_group != null && (e.client?.group ?? '') != _group) return false;
     return switch (f) {
       _Filter.all => true,
       _Filter.open => (g?.open ?? 0) > 0,
@@ -280,6 +293,7 @@ class _ClientsPageState extends State<ClientsPage> {
       _Filter.late => _lateOf(e) > 0,
       _Filter.unreachable => !(g?.reachable ?? false),
       _Filter.body => e.client?.body ?? false,
+      _Filter.hidden => hidden,
     };
   }
 
@@ -356,6 +370,33 @@ class _ClientsPageState extends State<ClientsPage> {
     },
   );
 
+  /// A client written in by hand, one with no case in UYAP yet: kept,
+  /// listed and opened at once.
+  Future<void> _newClient() async {
+    final db = _db;
+    if (db == null) return;
+    final made = await showDialog<Client>(
+      context: context,
+      builder: (_) => _ContactDialog(
+        Client(
+          id: Client.newId(),
+          name: '',
+          updated: DateTime.now(),
+          person: widget.person,
+          group: _group ?? '',
+        ),
+        groups: _groups,
+        fresh: true,
+      ),
+    );
+    if (made == null || made.name.trim().isEmpty || !mounted) return;
+    db.saveClient(made);
+    setState(() => _filter = _Filter.all);
+    await _load();
+    final e = _entries.where((x) => x.client?.id == made.id).firstOrNull;
+    if (e != null && mounted) _open(e);
+  }
+
   /// The filters, each with how many it keeps, and the order.
   Widget _filters() {
     final kinds = [
@@ -366,6 +407,7 @@ class _ClientsPageState extends State<ClientsPage> {
       if (_late.isNotEmpty) _Filter.late,
       _Filter.unreachable,
       _Filter.body,
+      if (_entries.any((e) => e.client?.hidden ?? false)) _Filter.hidden,
     ];
     Widget chip(_Filter f) {
       final on = _filter == f;
@@ -412,7 +454,52 @@ class _ClientsPageState extends State<ClientsPage> {
           Wrap(
             spacing: 5,
             runSpacing: 5,
-            children: [for (final f in kinds) chip(f)],
+            children: [
+              for (final f in kinds) chip(f),
+              if (_groups.isNotEmpty)
+                PopupMenuButton<String>(
+                  key: const ValueKey('clients-group'),
+                  tooltip: 'Gruba göre',
+                  onSelected: (g) =>
+                      setState(() => _group = g.isEmpty ? null : g),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: '', child: Text('Tüm gruplar')),
+                    for (final g in _groups)
+                      PopupMenuItem(value: g, child: Text(g)),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _group == null ? null : AgendaColors.hearingFill,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _group == null
+                            ? AgendaColors.line
+                            : AgendaColors.hearing,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _group == null ? 'Grup' : 'Grup: $_group',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: _group == null
+                                ? const Color(0xFF4A5466)
+                                : AgendaColors.hearingText,
+                            fontWeight: _group == null ? null : FontWeight.w700,
+                          ),
+                        ),
+                        const Icon(Icons.arrow_drop_down_rounded, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
           Row(
             children: [
@@ -528,13 +615,23 @@ class _ClientsPageState extends State<ClientsPage> {
                   onPressed: () => _fold(false),
                   icon: const Icon(Icons.keyboard_double_arrow_left_rounded),
                 ),
-              Flexible(
+              Expanded(
                 child: Text(
                   'Müvekkiller',
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('clients-new'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+                onPressed: _newClient,
+                icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                label: const Text('Yeni'),
               ),
             ],
           ),
@@ -605,7 +702,7 @@ class _ClientsPageState extends State<ClientsPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_listOpen)
-          SizedBox(width: 280, child: Material(child: list))
+          SizedBox(width: 300, child: Material(child: list))
         else
           Material(
             child: SizedBox(
@@ -661,11 +758,15 @@ enum _Filter {
   owed('Alacaklı'),
   late('Taksiti gecikmiş'),
   unreachable('İletişimi eksik'),
-  body('Kurum');
+  body('Kurum'),
+  hidden('Gizli');
 
   const _Filter(this.label);
   final String label;
 }
+
+/// A name as UYAP lists it, its brackets off ("[MUSTAFA KAYA]").
+String _bare(String name) => name.replaceAll(RegExp(r'[\[\]]'), '').trim();
 
 /// "14 Eki".
 String _shortDay(DateTime d) {
@@ -745,7 +846,10 @@ class _ClientLine extends StatelessWidget {
     final soon =
         next != null &&
         next.at.isBefore(DateTime.now().add(const Duration(days: 30)));
-    final Widget? tag = late > 0
+    final hidden = entry.client?.hidden ?? false;
+    final Widget? tag = hidden
+        ? const _Pill('gizli', Color(0xFFEEF1F5), AgendaColors.muted)
+        : late > 0
         ? _Pill(
             '$late taksit gecikti',
             AgendaColors.deadlineFill,
@@ -780,6 +884,8 @@ class _ClientLine extends StatelessWidget {
                 size: 32,
               ),
               const SizedBox(width: 9),
+              // The name alone on its line, the whole width: read in full;
+              // what is nearest beneath it.
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -790,32 +896,37 @@ class _ClientLine extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Text(
-                      [
-                        '${entry.cases.length} dosya',
-                        if (done)
-                          'sonuçlandı'
-                        else if ((g?.open ?? 0) > 0)
-                          '${g!.open} açık',
-                      ].join(' · '),
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: AgendaColors.muted,
-                      ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            [
+                              '${entry.cases.length} dosya',
+                              if (done)
+                                'sonuçlandı'
+                              else if ((g?.open ?? 0) > 0)
+                                '${g!.open} açık',
+                              if ((entry.client?.group ?? '').isNotEmpty)
+                                entry.client!.group,
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AgendaColors.muted,
+                            ),
+                          ),
+                        ),
+                        if (tag != null) ...[const SizedBox(width: 6), tag],
+                      ],
                     ),
                   ],
                 ),
               ),
-              if (tag != null) ...[
-                const SizedBox(width: 6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
-                  child: tag,
-                ),
-              ],
             ],
           ),
         ),
@@ -1220,12 +1331,26 @@ class _ClientCardState extends State<ClientCard> {
     final card = _card();
     final saved = await showDialog<Client>(
       context: context,
-      builder: (_) => _ContactDialog(card),
+      builder: (_) => _ContactDialog(card, groups: clientGroups(_db)),
     );
     if (saved == null) return;
     _db.saveClient(saved);
     if (mounted) setState(() => _client = saved);
     widget.onChanged?.call(saved.id);
+  }
+
+  /// The client kept but no more listed, or listed again.
+  void _hide(bool hide) {
+    final saved = _card().copyWith(hidden: hide);
+    _db.saveClient(saved);
+    setState(() => _client = saved);
+    widget.onChanged?.call(saved.id);
+    showNotice(
+      context,
+      hide
+          ? 'Müvekkil listede gizlendi; "Gizli" süzgecinde görünür.'
+          : 'Müvekkil yeniden listede.',
+    );
   }
 
   Future<void> _meeting([ClientRecord? kept]) async {
@@ -1632,7 +1757,13 @@ class _ClientCardState extends State<ClientCard> {
           if (n.message.sent case final sent?)
             _Event(
               sent,
-              'Tebligat: ${n.message.subject}',
+              [
+                'Tebligat',
+                noticeTopic(
+                  n.message.subject,
+                  _db.caseOf(x.caseKey)?.court ?? '',
+                ),
+              ].where((s) => s.isNotEmpty).join(': '),
               _number(x.caseKey),
               const Color(0xFF139C8B),
               caseKey: x.caseKey,
@@ -2234,7 +2365,8 @@ class _ClientCardState extends State<ClientCard> {
             titleName(other.role),
             [
               titleName(other.name),
-              if (other.lawyer.isNotEmpty) '(Av. ${titleName(other.lawyer)})',
+              if (_bare(other.lawyer).isNotEmpty)
+                '(Av. ${titleName(_bare(other.lawyer))})',
             ].join(' '),
           ),
         if (opened != null) _pair('Açıldı', '$opened'),
@@ -2243,7 +2375,7 @@ class _ClientCardState extends State<ClientCard> {
             'Son tebligat',
             [
               if (notice.sent != null) _shortDay(notice.sent!),
-              notice.subject,
+              noticeTopic(notice.subject, kase?.court ?? ''),
             ].where((s) => s.isNotEmpty).join(' · '),
           ),
         if (widget.seesMoney)
@@ -2578,10 +2710,19 @@ class _ClientCardState extends State<ClientCard> {
     ];
     final more = PopupMenuButton<String>(
       key: const ValueKey('client-more'),
-      onSelected: (v) => v == 'duzenle' ? _editContact() : _remove(),
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'duzenle', child: Text('Bilgileri düzenle')),
+      onSelected: (v) => switch (v) {
+        'duzenle' => _editContact(),
+        'gizle' => _hide(!(c?.hidden ?? false)),
+        _ => _remove(),
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: 'duzenle', child: Text('Bilgileri düzenle')),
         PopupMenuItem(
+          key: const ValueKey('client-hide'),
+          value: 'gizle',
+          child: Text(c?.hidden ?? false ? 'Listede göster' : 'Listede gizle'),
+        ),
+        const PopupMenuItem(
           value: 'kaldir',
           child: Text('Müvekkili listeden kaldır'),
         ),
@@ -3545,8 +3686,18 @@ class _CaseAddDialogState extends State<_CaseAddDialog> {
 }
 
 class _ContactDialog extends StatefulWidget {
-  const _ContactDialog(this.client);
+  const _ContactDialog(
+    this.client, {
+    this.groups = const [],
+    this.fresh = false,
+  });
   final Client client;
+
+  /// The groups the lawyer has given clients so far, to pick from.
+  final List<String> groups;
+
+  /// A client written in by hand, not yet kept.
+  final bool fresh;
 
   @override
   State<_ContactDialog> createState() => _ContactDialogState();
@@ -3560,12 +3711,22 @@ class _ContactDialogState extends State<_ContactDialog> {
   late final _email = TextEditingController(text: widget.client.email);
   late final _address = TextEditingController(text: widget.client.address);
   late final _note = TextEditingController(text: widget.client.note);
+  late final _group = TextEditingController(text: widget.client.group);
   late bool _body = widget.client.body;
   late bool _messages = widget.client.messages;
 
   @override
   void dispose() {
-    for (final c in [_name, _idNo, _phone, _phone2, _email, _address, _note]) {
+    for (final c in [
+      _name,
+      _idNo,
+      _phone,
+      _phone2,
+      _email,
+      _address,
+      _note,
+      _group,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -3583,7 +3744,7 @@ class _ContactDialogState extends State<_ContactDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Müvekkil bilgileri'),
+    title: Text(widget.fresh ? 'Yeni müvekkil' : 'Müvekkil bilgileri'),
     content: SizedBox(
       width: 420,
       child: SingleChildScrollView(
@@ -3599,13 +3760,53 @@ class _ContactDialogState extends State<_ContactDialog> {
               onSelectionChanged: (v) => setState(() => _body = v.first),
             ),
             const SizedBox(height: 12),
-            _field(_name, 'Ad'),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: TextField(
+                key: const ValueKey('contact-name'),
+                controller: _name,
+                autofocus: widget.fresh,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(labelText: 'Ad'),
+              ),
+            ),
             _field(_idNo, _body ? 'VKN' : 'TCKN'),
             _field(_phone, 'Telefon'),
             _field(_phone2, 'İkinci telefon'),
             _field(_email, 'E-posta'),
             _field(_address, 'Adres', lines: 2),
             _field(_note, 'Not', lines: 3),
+            TextField(
+              key: const ValueKey('contact-group'),
+              controller: _group,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Grup',
+                hintText: 'Örn. Bankalar, Sigorta, Kira',
+              ),
+            ),
+            if (widget.groups.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final g in widget.groups)
+                        ChoiceChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(g),
+                          selected: _group.text.trim() == g,
+                          onSelected: (on) =>
+                              setState(() => _group.text = on ? g : ''),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 6),
             SwitchListTile(
               key: const ValueKey('contact-messages'),
               contentPadding: EdgeInsets.zero,
@@ -3633,31 +3834,35 @@ class _ContactDialogState extends State<_ContactDialog> {
       ),
       FilledButton(
         key: const ValueKey('contact-save'),
-        onPressed: () {
-          final name = _name.text.trim();
-          final c = widget.client;
-          final names = {
-            ...c.names,
-            // The name it was found by stays one of its names.
-            if (UyapWebService.fold(name) != UyapWebService.fold(c.name))
-              UyapWebService.fold(c.name),
-          }.toList();
-          Navigator.pop(
-            context,
-            c.copyWith(
-              name: name.isEmpty ? c.name : name,
-              body: _body,
-              idNo: _idNo.text.trim(),
-              phone: _phone.text.trim(),
-              phone2: _phone2.text.trim(),
-              email: _email.text.trim(),
-              address: _address.text.trim(),
-              note: _note.text.trim(),
-              messages: _messages,
-              names: names,
-            ),
-          );
-        },
+        onPressed: widget.fresh && _name.text.trim().isEmpty
+            ? null
+            : () {
+                final name = _name.text.trim();
+                final c = widget.client;
+                final names = {
+                  ...c.names,
+                  // The name it was found by stays one of its names.
+                  if (c.name.isNotEmpty &&
+                      UyapWebService.fold(name) != UyapWebService.fold(c.name))
+                    UyapWebService.fold(c.name),
+                }.toList();
+                Navigator.pop(
+                  context,
+                  c.copyWith(
+                    name: name.isEmpty ? c.name : name,
+                    body: _body,
+                    idNo: _idNo.text.trim(),
+                    phone: _phone.text.trim(),
+                    phone2: _phone2.text.trim(),
+                    email: _email.text.trim(),
+                    address: _address.text.trim(),
+                    note: _note.text.trim(),
+                    messages: _messages,
+                    names: names,
+                    group: _group.text.trim(),
+                  ),
+                );
+              },
         child: const Text('Kaydet'),
       ),
     ],
