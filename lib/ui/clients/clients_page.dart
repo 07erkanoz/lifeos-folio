@@ -1532,6 +1532,30 @@ class _ClientCardState extends State<ClientCard> {
               tap(pair('E-posta', c?.email ?? ''), c?.email ?? ''),
               tap(pair('Adres', c?.address ?? ''), c?.address ?? ''),
               tap(pair(body ? 'VKN' : 'TCKN', c?.idNo ?? ''), c?.idNo ?? ''),
+              InkWell(
+                key: const ValueKey('client-edit'),
+                onTap: _editContact,
+                borderRadius: BorderRadius.circular(4),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 14,
+                      color: AgendaColors.hearing,
+                    ),
+                    SizedBox(width: 3),
+                    Text(
+                      'Düzenle',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AgendaColors.hearing,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           if ((c?.note ?? '').isNotEmpty)
@@ -1562,12 +1586,6 @@ class _ClientCardState extends State<ClientCard> {
                   icon: const Icon(Icons.mail_outline_rounded, size: 18),
                   label: const Text('E-posta'),
                 ),
-              FilledButton.icon(
-                key: const ValueKey('client-edit'),
-                onPressed: _editContact,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Bilgileri düzenle'),
-              ),
               OutlinedButton.icon(
                 key: const ValueKey('client-meeting'),
                 onPressed: () => _meeting(),
