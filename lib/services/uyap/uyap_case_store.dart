@@ -1,3 +1,5 @@
+import 'uyap_enforcement.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -92,8 +94,12 @@ class UyapCaseRecord {
     this.previews = const {},
     this.link,
     this.money,
+    this.enforcement,
     this.hidden = const {},
   });
+
+  /// An enforcement file's account and debtors, when UYAP gave them.
+  final UyapEnforcement? enforcement;
 
   final String court, number;
 
@@ -149,6 +155,7 @@ class UyapCaseRecord {
     previews: previews ?? this.previews,
     link: link ?? this.link,
     money: money,
+    enforcement: enforcement,
     hidden: hidden,
   );
 
@@ -171,6 +178,7 @@ class UyapCaseRecord {
     'onizlemeler': previews,
     'bag': link?.toJson(),
     'para': money?.toJson(),
+    'icra': enforcement?.toJson(),
     'gizli': hidden.toList(),
   };
 
@@ -208,6 +216,9 @@ class UyapCaseRecord {
     link: UyapCaseLink.fromJson(json['bag']),
     money: json['para'] is Map
         ? UyapCaseMoney.stored(json['para'] as Map)
+        : null,
+    enforcement: json['icra'] is Map
+        ? UyapEnforcement.stored(json['icra'] as Map)
         : null,
     hidden: {for (final k in (json['gizli'] as List? ?? const [])) '$k'},
   );
@@ -390,6 +401,7 @@ class UyapCaseStore {
     required UyapCaseDocuments documents,
     UyapCaseLink? link,
     UyapCaseMoney? money,
+    UyapEnforcement? enforcement,
     Set<String> hidden = const {},
     DateTime? now,
   }) async {
@@ -419,6 +431,7 @@ class UyapCaseStore {
       link: link ?? before?.link,
       // Money that could not be had this time is not money gone.
       money: money ?? before?.money,
+      enforcement: enforcement ?? before?.enforcement,
       hidden: hidden,
     );
     // The same answer as before is not written again: only a new document,

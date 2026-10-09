@@ -26,6 +26,7 @@ import '../office/task_give_dialog.dart';
 import '../office/tasks_page.dart' show TaskDetail, dueOf;
 import '../widgets/file_preview.dart';
 import '../widgets/share_as.dart';
+import 'enforcement_view.dart';
 import 'portfolio_rows.dart';
 
 /// A case's own page (docs/design/uyap-portfoy-taslak.png, the second
@@ -85,6 +86,7 @@ class CaseDetailPage extends StatefulWidget {
 }
 
 enum _Tab {
+  enforcement,
   documents,
   notices,
   hearings,
@@ -215,7 +217,14 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _uyapNotices = db.uyapNotices(caseKey: kase.key);
       _petitions = petitions;
       _shownKey = _lastShown[kase.key];
-      if (widget.showParties) _tab = _Tab.parties;
+      if (widget.showParties) {
+        _tab = _Tab.parties;
+      } else if (!_loaded &&
+          widget.showDocument == null &&
+          CaseKind.of(kase) == CaseKind.icra) {
+        // An enforcement file opens on its debt.
+        _tab = _Tab.enforcement;
+      }
       _loaded = true;
     });
     _openAsked();
@@ -1806,6 +1815,17 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     bool wide, {
     List<({String? bucket, UyapCaseDocument? doc, int? attachment})>? entries,
   }) => switch (_tab) {
+    _Tab.enforcement => EnforcementView(
+      key: ValueKey('enforcement-${widget.caseKey}'),
+      record: _c.record,
+      caseKey: widget.caseKey,
+      title: _kase == null
+          ? widget.caseKey
+          : '${_kase!.number} · ${_kase!.court}',
+      database: () => _db,
+      lawyer: widget.lawyer,
+      wide: wide,
+    ),
     _Tab.documents => _documentsTab(context, wide, entries: entries),
     _Tab.hearings => _hearingsTab(context),
     _Tab.deadlines => _deadlinesTab(context),
@@ -1948,6 +1968,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
+            if (_kase != null && CaseKind.of(_kase!) == CaseKind.icra)
+              tab(_Tab.enforcement, 'İcra', null),
             tab(_Tab.documents, 'Evraklar', docCount, fresh: _fresh.length),
             tab(
               _Tab.notices,

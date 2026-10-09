@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import '../signing/signed_data.dart';
 import '../udf/signature_parser.dart';
 import 'tray_recovery.dart';
+import 'uyap_enforcement.dart';
 import 'uyap_case_data.dart';
 
 export 'uyap_case_data.dart';
@@ -900,6 +901,23 @@ class UyapWebService {
           }),
         );
       });
+
+  /// An enforcement file's account, line by line as the portal's account
+  /// page shows it. Asks no quota.
+  Future<List<UyapAccountLine>> accountLines(UyapCase target) =>
+      _serial(() async {
+        return UyapEnforcement.linesFromJson(
+          await _post('/dosya_hesap_bilgileri.ajx', {'dosyaId': target.id}),
+        );
+      });
+
+  /// An enforcement file's debtors. Asks no quota: the queries on a debtor
+  /// (vehicle, land, bank…) are paid for and are not asked here.
+  Future<List<UyapDebtor>> debtors(UyapCase target) => _serial(() async {
+    return UyapEnforcement.debtorsFromJson(
+      await _post('/dosya_borclu_list.ajx', {'dosyaId': target.id}),
+    );
+  });
 
   /// The particulars of [target]: its kind, where it stands, and the days
   /// set for a hearing, an inspection or a preliminary examination.

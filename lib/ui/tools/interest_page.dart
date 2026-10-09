@@ -52,15 +52,19 @@ class InterestPage extends StatefulWidget {
   final String? title;
 
   /// The page on its own, with its bar.
-  static Future<void> open(BuildContext context, {String? title}) =>
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: const Text('Faiz hesabı')),
-            body: InterestPage(title: title),
-          ),
-        ),
-      );
+  static Future<void> open(
+    BuildContext context, {
+    String? title,
+    int? principal,
+    DateTime? from,
+  }) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('Faiz hesabı')),
+        body: InterestPage(title: title, principal: principal, from: from),
+      ),
+    ),
+  );
 
   @override
   State<InterestPage> createState() => _InterestPageState();

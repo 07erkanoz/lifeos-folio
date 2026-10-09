@@ -19,6 +19,10 @@ import 'package:evrak_convert/services/portal/portal_hearing.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:evrak_convert/ui/cash/cash_page.dart';
+import 'package:evrak_convert/ui/portfolio/enforcement_view.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_data.dart';
+import 'package:evrak_convert/services/uyap/uyap_enforcement.dart';
 import 'package:evrak_convert/ui/tools/interest_page.dart';
 import 'package:evrak_convert/services/legal/interest.dart';
 import 'package:evrak_convert/ui/clients/clients_page.dart';
@@ -505,6 +509,126 @@ void main() {
               principal: 25000000,
               from: DateTime(2024, 3, 15),
               to: DateTime(2026, 10, 9),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _shot(tester, name);
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
+
+  for (final (name, size) in const [
+    ('icra-1366', Size(1130, 700)),
+    ('icra-telefon', Size(390, 1300)),
+  ]) {
+    testWidgets(name, (tester) async {
+      tester.view.physicalSize = size * pixelRatio;
+      tester.view.devicePixelRatio = pixelRatio;
+      addTearDown(tester.view.reset);
+      if (size.width > 900) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      }
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      UyapCaseDocument doc(String type, String day) => UyapCaseDocument(
+        key: '$type$day',
+        documentId: '',
+        caseId: '',
+        type: type,
+        number: '',
+        approved: day,
+        sender: '',
+        description: '',
+        sentToSystem: day,
+      );
+      final record = UyapCaseRecord(
+        court: 'Antalya 6. İcra Dairesi',
+        number: '2025/1904',
+        fetchedAt: DateTime(2026, 10, 9),
+        documents: [
+          doc('Ödeme Emri', '28.03.2025'),
+          doc('Tebliğ Mazbatası', '04.04.2025'),
+          doc('Takibe İtiraz Dilekçesi', '02.06.2025'),
+          doc('Maaş Haczi Müzekkeresi', '14.05.2026'),
+        ],
+        enforcement: UyapEnforcement(
+          lines: UyapEnforcement.linesFromJson([
+            for (final (t, v) in const [
+              ('Takipte Kesinlesen Miktar', '250000.00'),
+              ('Toplam Faiz Miktari', '46387.58'),
+              ('Vekalet Ucreti', '17320'),
+              ('Masraf Miktari', '1640.40'),
+              ('Basvurma Harci', '427.60'),
+              ('Pesin Harc', '1355.24'),
+              ('Tahsil Harci', '1509.68'),
+              ('Toplam Alacak', '318640.50'),
+              ('Yatan Para', '50033.65'),
+              ('Bakiye Borc Miktari', '268606.85'),
+            ])
+              {'grupId': 1, 'textAlan': t, 'degerAlan': v},
+          ]),
+          debtors: const [
+            UyapDebtor(
+              id: '1',
+              name: 'MEHMET TUNÇ',
+              idNo: '1•••••••••4',
+              moved: true,
+              movedWhy: 'Adres değişikliği',
+            ),
+            UyapDebtor(
+              id: '2',
+              name: 'TUNÇ İNŞAAT LTD. ŞTİ.',
+              idNo: '8••••••••1',
+              body: true,
+            ),
+          ],
+        ),
+        money: const UyapCaseMoney(
+          collected: 50033.65,
+          paidOut: 8400,
+          collections: [
+            UyapMoneyItem(
+              kind: 'Maaş kesintisi',
+              date: '21.09.2026',
+              amount: 8750,
+              payer: 'SGK',
+            ),
+            UyapMoneyItem(
+              kind: 'Maaş kesintisi',
+              date: '22.08.2026',
+              amount: 8750,
+              payer: 'SGK',
+            ),
+            UyapMoneyItem(
+              kind: 'Haricen',
+              date: '04.05.2026',
+              amount: 32533.65,
+              payer: 'Borçlu',
+            ),
+          ],
+          payments: [
+            UyapMoneyItem(
+              kind: 'Vekile ödeme',
+              date: '25.09.2026',
+              amount: 8400,
+              receipt: 'R-77',
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: SingleChildScrollView(
+              child: EnforcementView(
+                record: record,
+                caseKey: 'k',
+                title: '2025/1904 · Antalya 6. İcra Dairesi',
+                database: () async => db,
+                wide: size.width > 900,
+              ),
             ),
           ),
         ),

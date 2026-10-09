@@ -1,3 +1,5 @@
+import 'uyap_enforcement.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -302,6 +304,27 @@ class UyapCasePanelController extends ChangeNotifier {
           // The rest of the case stands without it.
         }
       }
+      // An enforcement file's account and debtors: asked only where UYAP
+      // says it shows them, neither asks a quota.
+      UyapEnforcement? enforcement;
+      final account = permissions.allowed?.contains('hesap_bilgileri') ?? false;
+      final debtorsShown =
+          permissions.allowed?.contains('borclu_bilgileri') ?? false;
+      if (account || debtorsShown) {
+        busy = 'Borç hesabı ve borçlular çekiliyor';
+        _changed();
+        var lines = const <UyapAccountLine>[];
+        var debtors = const <UyapDebtor>[];
+        try {
+          if (account) lines = await web.accountLines(live);
+        } catch (_) {}
+        try {
+          if (debtorsShown) debtors = await web.debtors(live);
+        } catch (_) {}
+        if (lines.isNotEmpty || debtors.isNotEmpty) {
+          enforcement = UyapEnforcement(lines: lines, debtors: debtors);
+        }
+      }
       _liveDocuments = {
         for (final d in documents.documents) ...{
           d.key: d,
@@ -315,6 +338,7 @@ class UyapCasePanelController extends ChangeNotifier {
         documents: documents,
         link: _link,
         money: money,
+        enforcement: enforcement,
         hidden: hidden,
       );
     });
