@@ -85,6 +85,23 @@ class _EnforcementViewState extends State<EnforcementView> {
     if (mounted) setState(() => _booked = booked);
   }
 
+  /// Whether a payment out of [kind] passes the claim on (to the creditor
+  /// or their lawyer), not a cost of the file.
+  static bool _forTheClaim(String kind) {
+    final k = kind
+        .toLowerCase()
+        .replaceAll('ı', 'i')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ş', 's')
+        .replaceAll('ü', 'u')
+        .replaceAll('ö', 'o')
+        .replaceAll('ç', 'c');
+    if (k.isEmpty || k == 'diger') return false;
+    return !RegExp(
+      r'posta|masraf|harc|tebligat|bilirki|yediemin|gider|avans|ucret',
+    ).hasMatch(k);
+  }
+
   String _keyOf(UyapMoneyItem p) =>
       'uyap-reddiyat:${widget.caseKey}:${p.receipt.isNotEmpty ? p.receipt : '${p.date}|${p.amount}'}';
 
@@ -490,9 +507,15 @@ class _EnforcementViewState extends State<EnforcementView> {
         ]..sort(
           (a, b) => (b.at ?? DateTime(1900)).compareTo(a.at ?? DateTime(1900)),
         );
+    // A payment out for the file's costs (postage, an expert, a
+    // custodian) is no one's money to pass on; one of no named kind is
+    // booked by hand, from its row.
     final unbooked = [
       for (final i in items)
-        if (i.out && !_booked.contains(_keyOf(i.item))) i.item,
+        if (i.out &&
+            !_booked.contains(_keyOf(i.item)) &&
+            _forTheClaim(i.item.kind))
+          i.item,
     ];
     final collected = m?.collected, out = m?.paidOut;
     return _box('TAHSİLAT VE REDDİYAT', right: '${items.length}', [
@@ -502,63 +525,68 @@ class _EnforcementViewState extends State<EnforcementView> {
           style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
         ),
       for (final i in items.take(8))
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: Color(0xFFF0F1F5))),
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 82,
-                child: Text(
-                  i.at == null ? i.item.date : dayText(i.at!),
-                  style: const TextStyle(fontSize: 12.5),
-                ),
-              ),
-              Container(
-                width: 70,
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: i.out
-                        ? const Color(0xFFEFE9FA)
-                        : const Color(0xFFE6F4EC),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
+        InkWell(
+          onTap: i.out && !_booked.contains(_keyOf(i.item))
+              ? () => _book(i.item)
+              : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFF0F1F5))),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 82,
                   child: Text(
-                    i.out ? 'Reddiyat' : 'Tahsilat',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: i.out ? _purple : _green,
+                    i.at == null ? i.item.date : dayText(i.at!),
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                ),
+                Container(
+                  width: 70,
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: i.out
+                          ? const Color(0xFFEFE9FA)
+                          : const Color(0xFFE6F4EC),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      i.out ? 'Reddiyat' : 'Tahsilat',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: i.out ? _purple : _green,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: Text(
-                  [
-                    if (i.item.kind.isNotEmpty) i.item.kind,
-                    if (i.item.payer.isNotEmpty) i.item.payer,
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12.5),
+                Expanded(
+                  child: Text(
+                    [
+                      if (i.item.kind.isNotEmpty) i.item.kind,
+                      if (i.item.payer.isNotEmpty) i.item.payer,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
                 ),
-              ),
-              Text(
-                _tl(i.item.amount),
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: i.out ? _purple : _green,
+                Text(
+                  _tl(i.item.amount),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: i.out ? _purple : _green,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       if (items.length > 8)
@@ -566,10 +594,10 @@ class _EnforcementViewState extends State<EnforcementView> {
           've ${items.length - 8} kayıt daha',
           style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
-      if (collected != null && out != null)
+      if (m?.remaining != null || (collected != null && out != null))
         _row(
-          'Dosyada kalan (tahsilat − reddiyat)',
-          _tl(collected - out),
+          'Dosyada kalan',
+          _tl(m?.remaining ?? (collected! - out!)),
           bold: true,
         ),
       for (final p in unbooked.take(3))

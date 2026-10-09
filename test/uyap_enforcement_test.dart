@@ -63,6 +63,45 @@ void main() {
     expect(UyapEnforcement.linesFromJson([_account]).length, _account.length);
   });
 
+  test('the account as UYAP really lists it: empty taxes left out, the '
+      'deposits of a day summed, the balance in a group of its own', () {
+    // The labels, groups and value forms of real files (9 October 2026);
+    // the sums made up.
+    final a = UyapAccount.of(
+      UyapEnforcement.linesFromJson([
+        for (final (g, t, v) in const [
+          (1, 'Takipte Kesinlesen Miktar', '120000.5'),
+          (1, 'Basvurma Harci', ''),
+          (1, 'Toplam Faiz Miktari', '15000.25'),
+          (1, 'Vekalet Ücreti', '18000.1234'),
+          (1, 'Masraf Miktari', '850.4'),
+          (1, 'BSMV Miktari', ''),
+          (1, 'KKDF Miktari', ''),
+          (1, 'KDV Miktari', ''),
+          (1, 'Tahsil Harcı', '6400.75'),
+          (1, 'Özel Iletisim Vergisi', ''),
+          (1, 'Toplam Alacak', '160252.0234'),
+          (2, 'Yatan Para (10/08/2026-1.1)', '20000.0'),
+          (2, 'Yatan Para (12/09/2026-1.2)', '5000.0'),
+          (3, 'Bakiye Borç Miktari', '135252.0234'),
+        ])
+          {'grupId': g, 'textAlan': t, 'degerAlan': v},
+      ]),
+    );
+    expect(a.total, 160252.0234);
+    expect(a.paid, 25000);
+    expect(a.left, 135252.0234);
+    expect(a.items.map((l) => l.title), [
+      'Takipte kesinleşen miktar',
+      'Toplam faiz miktarı',
+      'Vekâlet ücreti',
+      'Masraf miktarı',
+    ]);
+    expect(a.fees.map((l) => l.title), ['Tahsil harcı']);
+    expect(readableLabel('Özel Iletisim Vergisi'), 'Özel iletişim vergisi');
+    expect(uyapDay('Sep 9, 2026 9:41:05 PM'), DateTime(2026, 9, 9));
+  });
+
   test('a debtor keeps who they are and what the register warns of, not '
       'their parents\' names', () {
     final d = UyapEnforcement.debtorsFromJson([
@@ -138,6 +177,12 @@ void main() {
         ],
         payments: [
           UyapMoneyItem(
+            kind: 'Posta Ücreti Reddiyatı',
+            date: 'Sep 9, 2026 9:41:05 AM',
+            amount: 12,
+            receipt: 'P-1',
+          ),
+          UyapMoneyItem(
             kind: 'Vekile ödeme',
             date: '25.09.2026',
             amount: 8400,
@@ -163,6 +208,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('268.606,85 TL'), findsOneWidget);
+    // Postage paid out of the file is a cost, not the client's money.
+    expect(find.textContaining('Posta Ücreti'), findsWidgets);
+    expect(find.textContaining('reddiyatı (12,00 TL)'), findsNothing);
     final book = find.byKey(const ValueKey('book-uyap-reddiyat:k1:R-77'));
     expect(book, findsOneWidget);
     await tester.tap(book);

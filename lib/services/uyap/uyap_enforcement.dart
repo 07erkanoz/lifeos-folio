@@ -162,6 +162,16 @@ const _words = {
   'vergi': 'vergi',
   'yatan': 'yatan',
   'yargilama': 'yargılama',
+  'avansi': 'avansı',
+  'diger': 'diğer',
+  'iletisim': 'iletişim',
+  'ozel': 'özel',
+  'para': 'para',
+  'posta': 'posta',
+  'reddiyati': 'reddiyatı',
+  'suret': 'suret',
+  'tahsilati': 'tahsilatı',
+  'vergisi': 'vergisi',
 };
 
 /// "Vekalet Ucreti" → "Vekâlet ücreti"; a word not known stays as it came.
@@ -195,7 +205,7 @@ class UyapAccount {
   });
 
   factory UyapAccount.of(List<UyapAccountLine> lines) {
-    double? total, paid, left;
+    double? total, left;
     final items = <UyapAccountLine>[];
     final fees = <UyapAccountLine>[];
     final paidIn = <UyapAccountLine>[];
@@ -208,23 +218,22 @@ class UyapAccount {
       } else if (l.group == 2 ||
           f.contains('yatan') ||
           (f.contains('tahsil') && !f.contains('harc'))) {
-        if (f.contains('toplam') || f.contains('yatan para')) {
-          paid = l.amount;
-        } else {
-          paidIn.add(l);
-        }
+        // "Yatan Para", or a deposit of a day ("Yatan Para (10/08/2026-…)"):
+        // each one paid in.
+        paidIn.add(l);
+      } else if ((l.amount ?? 0) == 0) {
+        // BSMV, KKDF and the like UYAP lists with nothing in them.
+        continue;
       } else if (RegExp(r'harc|vergi|bsmv|kkdf|kdv|oiv|damga').hasMatch(f)) {
         fees.add(l);
-      } else if (l.amount != null) {
+      } else {
         items.add(l);
       }
     }
-    if (paid == null && paidIn.isNotEmpty) {
-      paid = paidIn.fold<double>(0, (n, l) => n + (l.amount ?? 0));
-    }
+    final sums = [for (final l in paidIn) ?l.amount];
     return UyapAccount(
       total: total,
-      paid: paid,
+      paid: sums.isEmpty ? null : sums.fold<double>(0, (n, a) => n + a),
       left: left,
       items: items,
       fees: fees,
