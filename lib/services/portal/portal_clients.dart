@@ -191,6 +191,26 @@ extension PortalClients on PortalDatabase {
           if (!cases.any((y) => y.caseKey == x.caseKey)) cases.add(x);
         }
       }
+      // The lawyer's own word on a case outweighs the names in it: the
+      // latest said on any of the client's cards.
+      final links = <String, CaseLink>{};
+      for (final x in cards) {
+        x.caseLinks.forEach((k, l) {
+          if (links[k] == null || l.at.isAfter(links[k]!.at)) links[k] = l;
+        });
+      }
+      final removedCases = <({String caseKey, String role})>[];
+      final added = <String>{};
+      for (final MapEntry(:key, value: l) in links.entries) {
+        final found = cases.where((y) => y.caseKey == key).firstOrNull;
+        if (l.state == CaseLink.removed) {
+          cases.removeWhere((y) => y.caseKey == key);
+          removedCases.add((caseKey: key, role: found?.role ?? l.role));
+        } else if (l.state == CaseLink.added && found == null) {
+          cases.add((caseKey: key, role: l.role));
+          added.add(key);
+        }
+      }
       out.add(
         ClientEntry(
           key: c.id,
@@ -200,6 +220,8 @@ extension PortalClients on PortalDatabase {
           ids: [
             for (final x in cards) ...[x.id, ...x.absorbed],
           ],
+          removedCases: removedCases,
+          addedCases: added,
         ),
       );
     }
@@ -373,8 +395,8 @@ extension PortalClients on PortalDatabase {
         // Only its owner's word changes a card here; one with no owner
         // named is this device's own, no one else's to take.
         if (kept != null && kept.person != from) continue;
-        if (kept != null && !c.updated.isAfter(kept.updated)) continue;
         if (!c.office) {
+          if (kept != null && !c.updated.isAfter(kept.updated)) continue;
           // Unshared by its owner: nothing of the person kept, but its id,
           // owner and day, so that an older word of it shared is refused;
           // what this person wrote of the client stays.
@@ -400,7 +422,10 @@ extension PortalClients on PortalDatabase {
           changed = true;
           continue;
         }
-        _putClient(c);
+        // The owner's devices each say what they changed: field by field.
+        final merged = kept == null ? c : Client.merge(kept, c);
+        if (kept != null && merged.encode() == kept.encode()) continue;
+        _putClient(merged);
         changed = true;
       }
     });
@@ -425,8 +450,8 @@ extension PortalClients on PortalDatabase {
     return changed;
   }
 
-  /// What another device keeps, merged in: the newer of each card and
-  /// record wins; a record locked here stays as it is. True when anything
+  /// What another device keeps, merged in: of each card, each field the
+  /// one set later ([Client.merge]); of each record, the newer; a record locked here stays as it is. True when anything
   /// changed here.
   bool clientsMerge(
     Map<String, Object?> theirs, {
@@ -441,8 +466,9 @@ extension PortalClients on PortalDatabase {
         final c = Client.fromJson(j);
         if (c == null) continue;
         final kept = clientCard(c.id);
-        if (kept != null && !c.updated.isAfter(kept.updated)) continue;
-        _putClient(c);
+        final merged = kept == null ? c : Client.merge(kept, c);
+        if (kept != null && merged.encode() == kept.encode()) continue;
+        _putClient(merged);
         changed = true;
       }
       for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {

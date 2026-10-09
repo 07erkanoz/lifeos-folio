@@ -103,6 +103,8 @@ void main() {
         for (final (n, c) in const [
           ('2024/318', 'Antalya 3. Asliye Hukuk Mahkemesi'),
           ('2025/77', 'Antalya 2. İş Mahkemesi'),
+          ('2025/1904', 'Antalya 6. İcra Dairesi'),
+          ('2023/55', 'Antalya BAM 4. Hukuk Dairesi'),
         ])
           PortalCase(key: caseKey(n, c), number: n, court: c),
       ],
@@ -123,7 +125,22 @@ void main() {
       id: 'k1',
       name: 'AYŞE KARACA',
       phone: '0532 000 00 41',
+      email: 'ayse@ornek.com',
+      address: 'Muratpaşa / Antalya',
+      note: '18:00\'den sonra aranmak istemiyor.',
       updated: DateTime(2026, 10, 8),
+      caseLinks: {
+        caseKey('2025/1904', 'Antalya 6. İcra Dairesi'): CaseLink(
+          CaseLink.added,
+          DateTime(2026, 10, 8),
+          role: 'Alacaklı',
+        ),
+        caseKey('2023/55', 'Antalya BAM 4. Hukuk Dairesi'): CaseLink(
+          CaseLink.removed,
+          DateTime(2026, 10, 8),
+          role: 'Davacı',
+        ),
+      },
     );
     db.saveClient(card);
     db.saveClientRecord(
@@ -226,9 +243,13 @@ void main() {
     return db;
   }
 
-  for (final (name, size) in const [
-    ('muvekkil-masaustu', Size(1440, 900)),
-    ('muvekkil-telefon', Size(390, 844)),
+  // A 1366 screen's window, the sidebar folded (76) and the title and
+  // task bars off: what the page has.
+  for (final (name, size, fold) in const [
+    ('muvekkil-1366', Size(1290, 560), false),
+    ('muvekkil-1366-liste-kapali', Size(1290, 560), true),
+    ('muvekkil-genis', Size(1600, 860), false),
+    ('muvekkil-telefon', Size(390, 844), false),
   ]) {
     testWidgets(name, (tester) async {
       tester.view.physicalSize = size * pixelRatio;
@@ -254,8 +275,35 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Ayşe Karaca').first);
       await tester.pumpAndSettle();
+      if (fold) {
+        await tester.tap(find.byKey(const ValueKey('clients-fold')));
+        await tester.pumpAndSettle();
+      }
       await _shot(tester, name);
-      await tester.tap(find.text('Hesaplar'));
+      if (fold || size.width > 1500) {
+        debugDefaultTargetPlatformOverride = null;
+        return;
+      }
+      final menu = find.byKey(
+        ValueKey('case-menu-${caseKey('2025/77', 'Antalya 2. İş Mahkemesi')}'),
+      );
+      await tester.scrollUntilVisible(
+        menu,
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      await _shot(tester, '$name-menu');
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('client-accounts')),
+        -200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('client-accounts')));
       await tester.pumpAndSettle();
       await _shot(tester, '$name-hesap');
       debugDefaultTargetPlatformOverride = null;

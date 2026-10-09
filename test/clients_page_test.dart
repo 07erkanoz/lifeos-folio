@@ -43,7 +43,8 @@ void main() {
     expect(find.text('Ayşe Karaca'), findsOneWidget);
     await tester.tap(find.text('Ayşe Karaca'));
     await tester.pumpAndSettle();
-    expect(find.text('Dosyalar 1'), findsOneWidget);
+    expect(find.text('DOSYALAR VE HESAPLARI'), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-case-k1')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('client-meeting')));
     await tester.pumpAndSettle();
@@ -93,7 +94,7 @@ void main() {
   testWidgets('a fee paid is written to its case\'s account with its time; '
       'one who may not see the money has no accounts at all', (tester) async {
     await open(tester);
-    await tester.tap(find.text('Hesaplar'));
+    await tester.tap(find.byKey(const ValueKey('client-accounts')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('movement-k1')));
     await tester.pumpAndSettle();
@@ -114,10 +115,119 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     await open(tester, money: false);
-    expect(find.text('Hesaplar'), findsNothing);
+    expect(find.byKey(const ValueKey('client-accounts')), findsNothing);
     expect(find.text('Ücret alacağı'), findsNothing);
     // Shared one client at a time, off until chosen.
     expect(find.text('Yalnız bende'), findsOneWidget);
+  });
+
+  testWidgets('a case is taken off a client only when asked twice, and '
+      'given back from the cases taken off', (tester) async {
+    await open(tester);
+    expect(find.byKey(const ValueKey('client-case-k1')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('case-menu-k1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('case-remove-k1')));
+    await tester.pumpAndSettle();
+    // Asked first: backed out of, nothing changes.
+    await tester.tap(find.text('Vazgeç'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('client-case-k1')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('case-menu-k1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('case-remove-k1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('case-remove-ok')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('client-case-k1')), findsNothing);
+    expect(find.byKey(const ValueKey('client-removed-k1')), findsOneWidget);
+    final entry = db.clientEntries(lawyer: 'Av. Deniz Kaya').single;
+    expect(entry.cases, isEmpty);
+    expect(entry.removedCases.single.caseKey, 'k1');
+
+    await tester.tap(find.byKey(const ValueKey('case-restore-k1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('client-case-k1')), findsOneWidget);
+    expect(
+      db.clientEntries(lawyer: 'Av. Deniz Kaya').single.removedCases,
+      isEmpty,
+    );
+  });
+
+  test('a case tied by hand is the client\'s; one taken off is not, nor '
+      'brought back by its names', () {
+    db.setRepresentation('k2', const [(ad: 'BORA YAPI', rol: 'Davalı')]);
+    final card = Client(id: 'c1', name: 'Ayşe Karaca', updated: DateTime(2026));
+    db.saveClient(
+      card.copyWith(
+        caseLinks: {
+          'k2': CaseLink(CaseLink.added, DateTime(2026, 2), role: 'Davacı'),
+          'k1': CaseLink(CaseLink.removed, DateTime(2026, 2)),
+        },
+      ),
+    );
+    final e = db
+        .clientEntries(lawyer: 'Av. Deniz Kaya')
+        .singleWhere((x) => x.key == 'c1');
+    expect(e.cases.map((c) => c.caseKey), ['k2']);
+    expect(e.cases.single.role, 'Davacı');
+    expect(e.addedCases, {'k2'});
+    expect(e.removedCases.single.caseKey, 'k1');
+  });
+
+  test('two devices that changed different fields of a card keep both, '
+      'and the later word on one field wins on both', () {
+    final other = PortalDatabase.memory();
+    addTearDown(other.dispose);
+    final made = Client(id: 'c1', name: 'Ayşe Karaca', updated: DateTime(2026));
+    db.saveClient(made);
+    other.saveClient(made);
+    // Here the phone, there the address and later the phone too.
+    db.saveClient(
+      made.copyWith(phone: '0532 000 00 41', updated: DateTime(2026, 3)),
+    );
+    final there = made.copyWith(
+      address: 'Muratpaşa',
+      updated: DateTime(2026, 4),
+    );
+    other.saveClient(there);
+    expect(db.clientsMerge(other.clientsExport()), isTrue);
+    expect(other.clientsMerge(db.clientsExport()), isTrue);
+    for (final d in [db, other]) {
+      final c = d.clientCard('c1')!;
+      expect(c.phone, '0532 000 00 41');
+      expect(c.address, 'Muratpaşa');
+    }
+    other.saveClient(
+      other.clientCard('c1')!.copyWith(
+        phone: '0533 111 11 11',
+        updated: DateTime(2026, 5),
+      ),
+    );
+    db.clientsMerge(other.clientsExport());
+    other.clientsMerge(db.clientsExport());
+    expect(db.clientCard('c1')!.phone, '0533 111 11 11');
+    expect(db.clientCard('c1')!.encode(), other.clientCard('c1')!.encode());
+    // Merged again, nothing changes.
+    expect(db.clientsMerge(other.clientsExport()), isFalse);
+  });
+
+  test('the cases tied and taken off are merged case by case', () {
+    final a = Client(id: 'c1', name: 'A', updated: DateTime(2026));
+    final mine = a.copyWith(
+      caseLinks: {'k1': CaseLink(CaseLink.removed, DateTime(2026, 2))},
+    );
+    final theirs = a.copyWith(
+      caseLinks: {
+        'k1': CaseLink(CaseLink.none, DateTime(2026, 3)),
+        'k2': CaseLink(CaseLink.added, DateTime(2026, 1)),
+      },
+    );
+    final m = Client.merge(mine, theirs);
+    expect(m.caseLinks['k1']!.state, CaseLink.none);
+    expect(m.caseLinks['k2']!.state, CaseLink.added);
+    expect(Client.merge(theirs, mine).encode(), m.encode());
   });
 
   test('the minutes print with both signatures and their code', () async {

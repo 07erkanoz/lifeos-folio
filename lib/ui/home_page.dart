@@ -1268,6 +1268,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return size.width < 700 || (size.height < 500 && size.width < 1000);
   }
 
+  /// The pages the sidebar folds on, for their room: UYAP's (as the
+  /// lawyer chose) and the clients'; widened again by its button.
+  bool get _foldsPanel =>
+      _group == 'muvekkiller' ||
+      (_isUyapGroup(_group) && widget.appearance.foldPanelOnUyap);
+
   static bool _isUyapGroup(String group) =>
       group == 'uyap' || group.startsWith('uyap:');
 
@@ -1906,14 +1912,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             child: _sidebar(
                               compact ||
                                   !_showLibrary ||
-                                  (_isUyapGroup(_group) &&
-                                      widget.appearance.foldPanelOnUyap &&
-                                      !_uyapPanelOpen),
-                              toggle:
-                                  !compact &&
-                                  _showLibrary &&
-                                  _isUyapGroup(_group) &&
-                                  widget.appearance.foldPanelOnUyap,
+                                  (_foldsPanel && !_uyapPanelOpen),
+                              toggle: !compact && _showLibrary && _foldsPanel,
                             ),
                           ),
                         Expanded(

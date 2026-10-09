@@ -13,6 +13,7 @@ class Client {
     this.body = false,
     this.idNo = '',
     this.phone = '',
+    this.phone2 = '',
     this.email = '',
     this.address = '',
     this.note = '',
@@ -23,7 +24,32 @@ class Client {
     this.sharedOnce = false,
     this.person = '',
     this.absorbed = const [],
+    this.stamps = const {},
+    this.caseLinks = const {},
   });
+
+  /// When each of [fields] was last set: two devices that changed
+  /// different fields of a card keep both ([merge]). One not stamped was
+  /// set when the card was ([updated]).
+  final Map<String, DateTime> stamps;
+
+  /// The cases the lawyer tied to the client by hand, or took off it, by
+  /// case key: these overrule what the names in the cases say.
+  final Map<String, CaseLink> caseLinks;
+
+  /// The card's fields that are set one by one, by their names in JSON.
+  static const fields = [
+    'ad',
+    'kurum',
+    'kimlik',
+    'telefon',
+    'telefon2',
+    'eposta',
+    'adres',
+    'not',
+    'silindi',
+    'buro',
+  ];
 
   /// The cards told to be this client's too: their records are its.
   final List<String> absorbed;
@@ -46,7 +72,7 @@ class Client {
 
   /// TCKN for a person, VKN for a body; empty while not told.
   final String idNo;
-  final String phone, email, address, note;
+  final String phone, phone2, email, address, note;
 
   /// The other names its cases write it with, folded: "AYŞE KARACA" and
   /// "Ayşe Karaca" are one client, a name told to be the same is too.
@@ -70,6 +96,7 @@ class Client {
     bool? body,
     String? idNo,
     String? phone,
+    String? phone2,
     String? email,
     String? address,
     String? note,
@@ -78,23 +105,124 @@ class Client {
     bool? removed,
     bool? office,
     List<String>? absorbed,
-  }) => Client(
+    Map<String, CaseLink>? caseLinks,
+  }) {
+    final now = updated ?? DateTime.now();
+    final made = Client(
+      id: id,
+      name: name ?? this.name,
+      body: body ?? this.body,
+      idNo: idNo ?? this.idNo,
+      phone: phone ?? this.phone,
+      phone2: phone2 ?? this.phone2,
+      email: email ?? this.email,
+      address: address ?? this.address,
+      note: note ?? this.note,
+      names: names ?? this.names,
+      updated: now,
+      removed: removed ?? this.removed,
+      office: office ?? this.office,
+      sharedOnce: sharedOnce || (office ?? this.office),
+      person: person,
+      absorbed: absorbed ?? this.absorbed,
+      caseLinks: caseLinks ?? this.caseLinks,
+    );
+    // Only what changed is stamped now; the rest keeps the time it had.
+    final was = _values, is_ = made._values;
+    return made._stamped({
+      for (final k in fields) k: was[k] == is_[k] ? stampOf(k) : now,
+    });
+  }
+
+  Client _stamped(Map<String, DateTime> stamps) => Client(
     id: id,
-    name: name ?? this.name,
-    body: body ?? this.body,
-    idNo: idNo ?? this.idNo,
-    phone: phone ?? this.phone,
-    email: email ?? this.email,
-    address: address ?? this.address,
-    note: note ?? this.note,
-    names: names ?? this.names,
-    updated: updated ?? DateTime.now(),
-    removed: removed ?? this.removed,
-    office: office ?? this.office,
-    sharedOnce: sharedOnce || (office ?? this.office),
+    name: name,
+    body: body,
+    idNo: idNo,
+    phone: phone,
+    phone2: phone2,
+    email: email,
+    address: address,
+    note: note,
+    names: names,
+    updated: updated,
+    removed: removed,
+    office: office,
+    sharedOnce: sharedOnce,
     person: person,
-    absorbed: absorbed ?? this.absorbed,
+    absorbed: absorbed,
+    stamps: stamps,
+    caseLinks: caseLinks,
   );
+
+  /// When field [k] was last set.
+  DateTime stampOf(String k) => stamps[k] ?? updated;
+
+  Map<String, Object> get _values => {
+    'ad': name,
+    'kurum': body,
+    'kimlik': idNo,
+    'telefon': phone,
+    'telefon2': phone2,
+    'eposta': email,
+    'adres': address,
+    'not': note,
+    'silindi': removed,
+    'buro': office,
+  };
+
+  /// The mark a colleague's client unshared leaves: nothing of the person.
+  bool get _mark => removed && name.isEmpty;
+
+  /// [mine] and [theirs], two words of one card, made one: each field
+  /// the one set later, the names and the cases tied both sides'. A
+  /// device that changed the phone and another the address keep both.
+  /// The same on every device, whichever comes first.
+  static Client merge(Client mine, Client theirs) {
+    if (mine.id != theirs.id) return theirs;
+    // An unshared client's mark is a whole word: nothing of the person
+    // comes back with it, nor goes with a newer one.
+    if (mine._mark || theirs._mark) {
+      return theirs.updated.isAfter(mine.updated) ? theirs : mine;
+    }
+    final a = mine._values, b = theirs._values;
+    final pick = <String, Object>{};
+    final stamps = <String, DateTime>{};
+    for (final k in fields) {
+      final ta = mine.stampOf(k), tb = theirs.stampOf(k);
+      final later =
+          tb.isAfter(ta) || (tb == ta && '${b[k]}'.compareTo('${a[k]}') > 0);
+      pick[k] = later ? b[k]! : a[k]!;
+      stamps[k] = later ? tb : ta;
+    }
+    final links = {...mine.caseLinks};
+    theirs.caseLinks.forEach((k, l) {
+      final kept = links[k];
+      if (kept == null || l.at.isAfter(kept.at)) links[k] = l;
+    });
+    return Client(
+      id: mine.id,
+      name: pick['ad']! as String,
+      body: pick['kurum']! as bool,
+      idNo: pick['kimlik']! as String,
+      phone: pick['telefon']! as String,
+      phone2: pick['telefon2']! as String,
+      email: pick['eposta']! as String,
+      address: pick['adres']! as String,
+      note: pick['not']! as String,
+      names: {...mine.names, ...theirs.names}.toList(),
+      updated: theirs.updated.isAfter(mine.updated)
+          ? theirs.updated
+          : mine.updated,
+      removed: pick['silindi']! as bool,
+      office: pick['buro']! as bool,
+      sharedOnce: mine.sharedOnce || theirs.sharedOnce,
+      person: mine.person.isNotEmpty ? mine.person : theirs.person,
+      absorbed: {...mine.absorbed, ...theirs.absorbed}.toList(),
+      stamps: stamps,
+      caseLinks: links,
+    );
+  }
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -102,6 +230,7 @@ class Client {
     'kurum': body,
     'kimlik': idNo,
     'telefon': phone,
+    'telefon2': phone2,
     'eposta': email,
     'adres': address,
     'not': note,
@@ -112,6 +241,14 @@ class Client {
     'paylasildi': sharedOnce,
     'kisi': person,
     'katilan': absorbed,
+    'alanZamani': {
+      for (final k in fields)
+        if (stamps[k] case final t?) k: t.toIso8601String(),
+    },
+    'dosyalar': {
+      for (final k in caseLinks.keys.toList()..sort())
+        k: caseLinks[k]!.toJson(),
+    },
   };
 
   static Client? fromJson(Object? j) {
@@ -123,6 +260,7 @@ class Client {
       body: j['kurum'] == true,
       idNo: s('kimlik'),
       phone: s('telefon'),
+      phone2: s('telefon2'),
       email: s('eposta'),
       address: s('adres'),
       note: s('not'),
@@ -139,10 +277,50 @@ class Client {
         for (final n in j['katilan'] is List ? j['katilan'] as List : const [])
           if (n is String) n,
       ],
+      stamps: {
+        if (j['alanZamani'] is Map)
+          for (final e in (j['alanZamani'] as Map).entries)
+            if (fields.contains(e.key))
+              '${e.key}': ?DateTime.tryParse('${e.value}'),
+      },
+      caseLinks: {
+        if (j['dosyalar'] is Map)
+          for (final e in (j['dosyalar'] as Map).entries)
+            '${e.key}': ?CaseLink.fromJson(e.value),
+      },
     );
   }
 
   String encode() => jsonEncode(toJson());
+}
+
+/// A case tied to a client by the lawyer's hand ([added]), or taken off
+/// it ([removed]; the cases' names bring it back no more), or neither
+/// again; [at] is when this was said, the later word winning.
+class CaseLink {
+  const CaseLink(this.state, this.at, {this.role = ''});
+
+  static const added = 'ekli', removed = 'cikarildi', none = '';
+  final String state, role;
+  final DateTime at;
+
+  Map<String, Object?> toJson() => {
+    'durum': state,
+    'rol': role,
+    'zaman': at.toIso8601String(),
+  };
+
+  static CaseLink? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final at = DateTime.tryParse('${j['zaman']}');
+    final state = j['durum'];
+    if (at == null || state is! String) return null;
+    return CaseLink(
+      state,
+      at,
+      role: j['rol'] is String ? j['rol'] as String : '',
+    );
+  }
 }
 
 /// What is kept for a client beside its card: a meeting's minutes, a power
@@ -273,7 +451,15 @@ class ClientEntry {
     this.client,
     this.cases = const [],
     this.ids = const [],
+    this.removedCases = const [],
+    this.addedCases = const {},
   });
+
+  /// The cases the lawyer took off the client: kept to be given back.
+  final List<({String caseKey, String role})> removedCases;
+
+  /// The keys of the cases among [cases] the lawyer tied by hand.
+  final Set<String> addedCases;
 
   /// Every card it is: the same client a colleague made a card for too
   /// (the same TCKN/VKN, else the same name) is one.
