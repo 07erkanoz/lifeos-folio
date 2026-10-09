@@ -22,12 +22,14 @@ import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:evrak_convert/ui/live/live_document_page.dart';
 import 'package:evrak_convert/ui/live/live_share_dialog.dart';
+import 'package:evrak_convert/ui/widgets/flowing_document_view.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_quill/flutter_quill.dart' show ChangeSource, Document;
+import 'package:flutter_quill/flutter_quill.dart'
+    show ChangeSource, Document, QuillController;
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -178,12 +180,29 @@ void main() {
     }))!;
     final writer = Document.fromDelta(
       Delta()
+        ..insert('KİRA SÖZLEŞMESİ', {'bold': true})
+        ..insert('\n', {'align': 'center'})
         ..insert(
+          '1. Kiraya veren Deniz Yılmaz, Muratpaşa / Antalya’daki 3 numaralı '
+          'bağımsız bölümü, kiracı Örnek Lojistik A.Ş.’ye büro olarak '
+          'kullanılmak üzere kiraya vermiştir.\n'
+          '2. Kira süresi 1 Kasım 2026’dan başlamak üzere bir yıldır. Süre '
+          'bitiminden on beş gün önce yazılı bildirimde bulunulmadıkça '
+          'sözleşme aynı koşullarla bir yıl uzar.\n'
+          '3. Kiracı, kiralananı özenle kullanmak ve komşulara saygı göstermekle '
+          'yükümlüdür; kiralananı kiraya verenin yazılı izni olmadan başkasına '
+          'kullandıramaz.\n'
           '4. Kiracı, kira bedelini her ayın beşine kadar kiraya verenin '
           'banka hesabına öder.\n',
         )
         ..insert({'doc-table': 0})
-        ..insert('\n'),
+        ..insert('\n')
+        ..insert(
+          '5. Kira bedeli her kira yılının başında, bir önceki kira yılının '
+          'on iki aylık tüketici fiyat endeksi ortalamasına göre artırılır.\n'
+          '6. Kiracı, kiralananın olağan kullanımından doğan küçük onarımları '
+          'kendisi yaptırır; esaslı onarımlar kiraya verene aittir.\n',
+        ),
     );
     DocBlock cell(String text, {bool bold = false}) => DocBlock(
       plainText: text,
@@ -242,6 +261,206 @@ void main() {
       ),
     );
     await _shot(tester, 'canli-pencere-kalem');
+
+    // The scene for the site: the sharer's computer, its document only
+    // read while the other side's lawyer writes on her phone, both the
+    // same contract as it is written.
+    await tester.runAsync(() async {
+      final doc = session.document!;
+      session.write(
+        Delta()
+          ..retain(doc.length - 1)
+          ..insert(
+            '\n7. Taraflar, bu sözleşmeden doğan uyuşmazlıklarda Antalya '
+            'mahkemelerinin ve icra dairelerinin yetkili olduğunu kabul eder.',
+          ),
+      );
+      for (var i = 0; i < 50; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        if (writer.toPlainText().contains('7. Taraflar')) break;
+      }
+    });
+    await tester.binding.setSurfaceSize(const Size(1600, 1000));
+    debugDisableShadows = false;
+    final sharerView = QuillController(
+      document: Document.fromDelta(writer.toDelta()),
+      selection: const TextSelection.collapsed(offset: 0),
+      readOnly: true,
+    );
+    Widget label(String who, String what, Color dot) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.circle, size: 10, color: dot),
+        const SizedBox(width: 8),
+        Text(
+          who,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+        Text(
+          '  ·  $what',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF5B6576)),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) {
+            final scheme = Theme.of(context).colorScheme;
+            return Material(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFE8EEF8), Color(0xFFF4F6F9)],
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    // The sharer's computer.
+                    Positioned(
+                      left: 40,
+                      top: 70,
+                      width: 1060,
+                      height: 860,
+                      child: Material(
+                        elevation: 24,
+                        borderRadius: BorderRadius.circular(14),
+                        clipBehavior: Clip.antiAlias,
+                        color: Colors.white,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Container(
+                              height: 44,
+                              color: const Color(0xFFF1F3F7),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.description_outlined, size: 18),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Kira sözleşmesi.udf',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Spacer(),
+                                  Icon(
+                                    Icons.cast_connected_rounded,
+                                    size: 18,
+                                    color: Color(0xFF2D5AA8),
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Canlı paylaşılıyor · 2 kişi',
+                                    style: TextStyle(
+                                      color: Color(0xFF2D5AA8),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // The editor's own strip while another holds the pen.
+                            Material(
+                              color: scheme.tertiaryContainer,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                      color: scheme.onTertiaryContainer,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Av. Selin Arı yazıyor · belgeniz şu an '
+                                        'yalnız okunur',
+                                        style: TextStyle(
+                                          color: scheme.onTertiaryContainer,
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {},
+                                      child: const Text('Kalemi geri al'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: FlowingDocumentView(
+                                model: DocModel(blocks: const []),
+                                scale: 1.45,
+                                live: (
+                                  controller: sharerView,
+                                  blocks: () => blocks,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // The other side's lawyer's phone, writing.
+                    Positioned(
+                      right: 60,
+                      top: 120,
+                      width: 400,
+                      height: 820,
+                      child: Material(
+                        elevation: 30,
+                        color: const Color(0xFF1D2330),
+                        borderRadius: BorderRadius.circular(52),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(40),
+                            child: MediaQuery(
+                              data: MediaQuery.of(context)
+                                  .copyWith(size: const Size(372, 792)),
+                              child: LiveDocumentPage(session: session),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 48,
+                      top: 26,
+                      child: label(
+                        'Av. Deniz Kaya',
+                        'paylaşan, bilgisayarında',
+                        const Color(0xFF2D5AA8),
+                      ),
+                    ),
+                    Positioned(
+                      right: 70,
+                      top: 76,
+                      child: label(
+                        'Av. Selin Arı',
+                        'karşı vekil, telefonunda',
+                        const Color(0xFF16754F),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await _shot(tester, 'canli-sahne');
+    debugDisableShadows = true;
 
     await tester.runAsync(host.close);
     await wait(() => session.ended);
