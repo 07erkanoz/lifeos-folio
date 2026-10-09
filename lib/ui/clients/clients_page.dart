@@ -419,7 +419,7 @@ class _ClientsPageState extends State<ClientsPage> {
         borderRadius: BorderRadius.circular(20),
         onTap: () => setState(() => _filter = on ? _Filter.all : f),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
             color: on ? AgendaColors.hearing : null,
             borderRadius: BorderRadius.circular(20),
@@ -438,7 +438,7 @@ class _ClientsPageState extends State<ClientsPage> {
               ],
             ),
             style: TextStyle(
-              fontSize: 11.5,
+              fontSize: 11,
               color: on ? Colors.white : const Color(0xFF4A5466),
             ),
           ),
@@ -619,8 +619,10 @@ class _ClientsPageState extends State<ClientsPage> {
                 child: Text(
                   'Müvekkiller',
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               OutlinedButton.icon(
@@ -641,9 +643,11 @@ class _ClientsPageState extends State<ClientsPage> {
           child: TextField(
             key: const ValueKey('clients-search'),
             onChanged: (v) => setState(() => _query = v),
+            style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search_rounded, size: 20),
-              hintText: 'Ad, TCKN, telefon ya da dosya no…',
+              prefixIcon: Icon(Icons.search_rounded, size: 18),
+              hintText: 'Ad, TCKN, telefon, dosya no',
+              hintStyle: TextStyle(fontSize: 12.5),
               isDense: true,
             ),
           ),
@@ -702,7 +706,7 @@ class _ClientsPageState extends State<ClientsPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_listOpen)
-          SizedBox(width: 300, child: Material(child: list))
+          SizedBox(width: 272, child: Material(child: list))
         else
           Material(
             child: SizedBox(
@@ -767,6 +771,11 @@ enum _Filter {
 
 /// A name as UYAP lists it, its brackets off ("[MUSTAFA KAYA]").
 String _bare(String name) => name.replaceAll(RegExp(r'[\[\]]'), '').trim();
+
+/// A file's name without its folder or extension, whichever system wrote
+/// the path (a paper's path comes from the device it was made on).
+String _baseName(String path) =>
+    path.split(RegExp(r'[\\/]')).last.replaceAll(RegExp(r'\.[^.]*$'), '');
 
 /// "14 Eki".
 String _shortDay(DateTime d) {
@@ -874,16 +883,16 @@ class _ClientLine extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           child: Row(
             children: [
               ClientInitials(
                 entry.name,
                 body: entry.client?.body ?? false,
                 faded: done,
-                size: 32,
+                size: 28,
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 8),
               // The name alone on its line, the whole width: read in full;
               // what is nearest beneath it.
               Expanded(
@@ -895,11 +904,11 @@ class _ClientLine extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Row(
                       children: [
                         Flexible(
@@ -916,7 +925,7 @@ class _ClientLine extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 11.5,
+                              fontSize: 11,
                               color: AgendaColors.muted,
                             ),
                           ),
@@ -1227,10 +1236,46 @@ class _ClientCardState extends State<ClientCard> {
     final path = await writeClientDocument(
       await widget.files.root(),
       card.id,
-      '$name - ${titleName(card.name)}',
+      [
+        name,
+        if (caseKey.isNotEmpty) _number(caseKey).replaceAll('/', '-'),
+        titleName(card.name),
+      ].join(' - '),
       model,
     );
+    // Kept among the client's records: what it is, its case and sum, and
+    // the draft itself, to every device of the person's and the office's
+    // that sees the money; signed later, its copy with it.
+    final draft = await widget.files.keep(card.id, path);
+    final now = DateTime.now();
+    final share = paper == 'sozlesme' ? account.feeShare : 0;
+    _keep(
+      ClientRecord(
+        id: Client.newId(),
+        clientId: card.id,
+        kind: ClientRecordKind.paper,
+        data: {
+          'tur': paper,
+          'ad': name,
+          'dosya': caseKey,
+          'tutar': switch (paper) {
+            'sozlesme' => account.feeAgreed,
+            'ibra' => account.feeAgreed - account.feeOwed,
+            _ => movement?.amount ?? 0,
+          },
+          if (share > 0) 'pay': share,
+          'yol': path,
+          'taslak': draft.sha256,
+          'ekler': [clientFileJson(draft)],
+        },
+        created: now,
+        by: widget.lawyer,
+        updated: now,
+        person: widget.person,
+      ),
+    );
     if (!mounted) return;
+    setState(() {});
     final edit = widget.onEdit;
     if (edit != null) {
       edit(path);
@@ -1337,6 +1382,62 @@ class _ClientCardState extends State<ClientCard> {
     _db.saveClient(saved);
     if (mounted) setState(() => _client = saved);
     widget.onChanged?.call(saved.id);
+  }
+
+  /// A paper made, opened in the editor: here where it was made, else a
+  /// copy of the draft brought from the device that made it.
+  Future<void> _openPaper(ClientRecord r) async {
+    final edit = widget.onEdit;
+    final here = r.text('yol');
+    if (here.isNotEmpty && await File(here).exists()) {
+      if (edit != null) edit(here);
+      return;
+    }
+    final draft = clientFilesOf(r)
+        .where((f) => f.sha256 == r.text('taslak'))
+        .firstOrNull;
+    final file = draft == null
+        ? null
+        : await widget.files.locate(r.clientId, draft);
+    if (!mounted) return;
+    if (file == null) {
+      showNotice(
+        context,
+        'Bu belge bu cihazda yok.',
+        detail: 'Hazırlandığı cihaz ağdayken eşitlemeyle gelir.',
+      );
+      return;
+    }
+    final name = _baseName(here);
+    final copy = await writeClientDocument(
+      await widget.files.root(),
+      r.clientId,
+      name.isNotEmpty ? name : (r.text('ad').isEmpty ? 'Belge' : r.text('ad')),
+      null,
+      bytes: await file.readAsBytes(),
+    );
+    if (edit != null) edit(copy);
+  }
+
+  /// A paper's signed copy, scanned, kept with it; the paper locked.
+  Future<void> _signedPaper(ClientRecord r) async {
+    final path = await pickScan(context, 'İmzalı belgenin taranmış hâli');
+    if (path == null) return;
+    final kept = await widget.files.keep(r.clientId, path);
+    _db.saveClientRecord(
+      r.copyWith(
+        data: {
+          ...r.data,
+          'ekler': [
+            ...clientFilesOf(r).map(clientFileJson),
+            clientFileJson(kept),
+          ],
+          'imzalandi': DateTime.now().toIso8601String(),
+        },
+        locked: true,
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   /// The client kept but no more listed, or listed again.
@@ -1463,8 +1564,12 @@ class _ClientCardState extends State<ClientCard> {
   }
 
   /// [r]'s first file seen, to be printed or shared.
-  Future<void> _preview(ClientRecord r, String title) async {
-    final f = clientFilesOf(r).firstOrNull;
+  Future<void> _preview(
+    ClientRecord r,
+    String title, [
+    ClientFile? which,
+  ]) async {
+    final f = which ?? clientFilesOf(r).firstOrNull;
     if (f == null) return;
     final file = await widget.files.locate(r.clientId, f);
     if (!mounted) return;
@@ -1780,6 +1885,22 @@ class _ClientCardState extends State<ClientCard> {
             caseKey: x.caseKey,
           ),
       ],
+      if (widget.seesMoney)
+        for (final r in _records(ClientRecordKind.paper))
+          _Event(
+            r.created,
+            '${switch (r.text('tur')) {
+              'sozlesme' => 'Ücret sözleşmesi',
+              'ibra' => 'İbraname',
+              _ => 'Tahsilat belgesi',
+            }} hazırlandı${r.locked ? ' · imzalı' : ''}',
+            [
+              if (r.text('dosya').isNotEmpty) _number(r.text('dosya')),
+              if (r.data['tutar'] case final int t when t > 0) lira(t),
+            ].join(' · '),
+            AgendaColors.hearing,
+            caseKey: r.text('dosya').isEmpty ? null : r.text('dosya'),
+          ),
       for (final a in attorneys)
         _Event(
           a.created,
@@ -2299,6 +2420,18 @@ class _ClientCardState extends State<ClientCard> {
         ],
       );
 
+  /// The latest fee agreement made for case [key]; null for none, or for
+  /// one who may not see the money.
+  ClientRecord? _agreementOf(String key) {
+    if (!widget.seesMoney) return null;
+    ClientRecord? latest;
+    for (final r in _records(ClientRecordKind.paper)) {
+      if (r.text('tur') != 'sozlesme' || r.text('dosya') != key) continue;
+      if (latest == null || r.created.isAfter(latest.created)) latest = r;
+    }
+    return latest;
+  }
+
   /// One case still worked on, as a card: its court and stage, what is
   /// next in it, the other side, its last notice, its fee and the
   /// lawyer's note on it; opened beneath for its hearings and deadlines.
@@ -2398,6 +2531,15 @@ class _ClientCardState extends State<ClientCard> {
                     'kalan ${fee.text}',
                   ].join(' · '),
                 ),
+        if (_agreementOf(key) case final paper?)
+          _pair(
+            'Sözleşme',
+            paper.locked ? 'imzalı' : 'imza bekliyor',
+            color: paper.locked
+                ? const Color(0xFF16754F)
+                : AgendaColors.taskText,
+            bold: true,
+          ),
         if (widget.seesMoney && a != null && a.fee != null)
           _pair(
             'Avans',
@@ -3003,8 +3145,85 @@ class _ClientCardState extends State<ClientCard> {
         ),
       ),
     );
-    final papers = widget.seesMoney ? _papers : const <Never>[];
-    final count = papers.length + attorneys.length;
+    final made = widget.seesMoney
+        ? (List.of(_records(ClientRecordKind.paper))
+            ..sort((a, b) => b.created.compareTo(a.created)))
+        : const <ClientRecord>[];
+    // Papers made before they were recorded: their files alone (a copy of
+    // a recorded one, opened here, is that one).
+    final recorded = {for (final r in made) _baseName(r.text('yol'))};
+    final papers = widget.seesMoney
+        ? [
+            for (final d in _papers)
+              if (!recorded.any(
+                (n) => d.name == n || d.name.startsWith('$n ('),
+              ))
+                d,
+          ]
+        : const <({String path, String name, DateTime at})>[];
+    final count = made.length + papers.length + attorneys.length;
+    String label(String kind) => switch (kind) {
+      'sozlesme' => 'Avukatlık ücret sözleşmesi',
+      'ibra' => 'İbraname',
+      _ => 'Tahsilat belgesi',
+    };
+    Widget paperTile(ClientRecord r) {
+      final kind = r.text('tur');
+      final amount = r.data['tutar'] is int ? r.data['tutar'] as int : 0;
+      final share = r.data['pay'] is int ? r.data['pay'] as int : 0;
+      final signed = [
+        for (final f in clientFilesOf(r))
+          if (f.sha256 != r.text('taslak')) f,
+      ].lastOrNull;
+      return Row(
+        children: [
+          Expanded(
+            child: tile(
+              key: ValueKey('client-paper-${r.id}'),
+              icon: look(label(kind)).icon,
+              fill: look(label(kind)).fill,
+              title: kind == 'sozlesme' ? 'Ücret sözleşmesi' : label(kind),
+              sub: [
+                if (r.text('dosya').isNotEmpty) _number(r.text('dosya')),
+                if (amount > 0) lira(amount),
+                if (share > 0) '%$share',
+                _day(r.created),
+              ].join(' · '),
+              onTap: () => _openPaper(r),
+            ),
+          ),
+          _Pill(
+            r.locked ? 'imzalı' : 'imza bekliyor',
+            r.locked ? const Color(0xFFE3F4EC) : AgendaColors.taskFill,
+            r.locked ? const Color(0xFF16754F) : AgendaColors.taskText,
+          ),
+          PopupMenuButton<String>(
+            key: ValueKey('paper-menu-${r.id}'),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.more_vert_rounded, size: 18),
+            onSelected: (v) => switch (v) {
+              'imza' => _signedPaper(r),
+              'goster' => _preview(r, 'İmzalı ${label(kind)}', signed),
+              _ => _openPaper(r),
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'ac', child: Text('Aç')),
+              if (!r.locked)
+                const PopupMenuItem(
+                  value: 'imza',
+                  child: Text('İmzalı sureti ekle'),
+                ),
+              if (signed != null)
+                const PopupMenuItem(
+                  value: 'goster',
+                  child: Text('İmzalı sureti göster'),
+                ),
+            ],
+          ),
+        ],
+      );
+    }
+
     return _box(
       'BELGELER',
       count: count,
@@ -3023,7 +3242,8 @@ class _ClientCardState extends State<ClientCard> {
               style: TextStyle(color: AgendaColors.muted),
             ),
           ),
-        for (final d in papers.take(_allPapers ? 50 : 4))
+        for (final r in made.take(_allPapers ? 100 : 4)) paperTile(r),
+        for (final d in papers.take(_allPapers ? 50 : (made.isEmpty ? 4 : 0)))
           tile(
             key: ValueKey('client-paper-${d.name}'),
             icon: look(d.name).icon,
@@ -3049,7 +3269,7 @@ class _ClientCardState extends State<ClientCard> {
                 ? null
                 : () => _preview(a, 'Vekâletname'),
           ),
-        if (papers.length > 4 || attorneys.length > 2)
+        if (made.length + papers.length > 4 || attorneys.length > 2)
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(

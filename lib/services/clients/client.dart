@@ -438,14 +438,23 @@ enum ClientRecordKind {
 
   /// A message written to the client (WhatsApp, SMS, e-mail) as the
   /// lawyer sent it: kept on their timeline.
-  message('mesaj');
+  message('mesaj'),
+
+  /// A paper made for the client (a fee agreement, a release, a receipt):
+  /// what it is, its case and sum, the draft as made (in `ekler`, named by
+  /// `taslak`) and, once signed, its signed copy; locked then.
+  paper('belge');
 
   const ClientRecordKind(this.code);
   final String code;
 
   /// Seen only by those who see the money (a manager, or one let).
   bool get money =>
-      this == fee || this == movement || this == cash || this == cashRepeat;
+      this == fee ||
+      this == movement ||
+      this == cash ||
+      this == cashRepeat ||
+      this == paper;
 
   static ClientRecordKind? of(Object? code) {
     for (final k in values) {

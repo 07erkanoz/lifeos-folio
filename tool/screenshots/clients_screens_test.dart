@@ -187,6 +187,42 @@ void main() {
         updated: DateTime(2024, 3, 12),
       ),
     );
+    db.saveClientRecord(
+      ClientRecord(
+        id: 'b1',
+        clientId: 'k1',
+        kind: ClientRecordKind.paper,
+        data: {
+          'tur': 'sozlesme',
+          'ad': 'Avukatlık ücret sözleşmesi',
+          'dosya': caseKey('2024/318', 'Antalya 3. Asliye Hukuk Mahkemesi'),
+          'tutar': 4500000,
+          'yol': '/yok/Avukatlık ücret sözleşmesi - 2024-318 - Ayşe Karaca.udf',
+        },
+        created: DateTime(2024, 3, 12, 10, 5),
+        by: 'Av. Deniz Kaya',
+        updated: DateTime(2024, 3, 12, 10, 5),
+        locked: true,
+      ),
+    );
+    db.saveClientRecord(
+      ClientRecord(
+        id: 'b2',
+        clientId: 'k1',
+        kind: ClientRecordKind.paper,
+        data: {
+          'tur': 'sozlesme',
+          'ad': 'Avukatlık ücret sözleşmesi',
+          'dosya': caseKey('2025/77', 'Antalya 2. İş Mahkemesi'),
+          'tutar': 2000000,
+          'pay': 15,
+          'yol': '/yok/Avukatlık ücret sözleşmesi - 2025-77 - Ayşe Karaca.udf',
+        },
+        created: DateTime(2026, 10, 8, 16, 20),
+        by: 'Av. Deniz Kaya',
+        updated: DateTime(2026, 10, 8, 16, 20),
+      ),
+    );
     final key = caseKey('2024/318', 'Antalya 3. Asliye Hukuk Mahkemesi');
     final now = DateTime.now();
     final day = DateTime(now.year, now.month, now.day);

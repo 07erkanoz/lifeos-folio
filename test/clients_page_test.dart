@@ -172,6 +172,63 @@ void main() {
     expect(find.text('Ayşe Karaca'), findsNothing);
   });
 
+  testWidgets('a fee agreement made is kept among the client\'s records '
+      'with its case, its draft and the day, listed as waiting to be '
+      'signed; one who may not see the money has no papers', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    String? edited;
+    Future<void> pump({required bool money}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ClientsPage(
+              key: ValueKey(money),
+              lawyer: 'Av. Deniz Kaya',
+              database: db,
+              files: ClientFiles(root: () async => root),
+              seesMoney: money,
+              onEdit: (path) => edited = path,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ayşe Karaca'));
+      await tester.pumpAndSettle();
+    }
+
+    await pump(money: true);
+    await tester.tap(find.byKey(const ValueKey('client-papers')));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Avukatlık ücret sözleşmesi'));
+      for (var i = 0; i < 40 && edited == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await tester.pump();
+      }
+    });
+    await tester.pumpAndSettle();
+    expect(edited, isNotNull);
+    final card = db.clientCards().single;
+    final paper = db
+        .clientRecords(card.id, kind: ClientRecordKind.paper)
+        .single;
+    expect(paper.text('tur'), 'sozlesme');
+    expect(paper.text('dosya'), 'k1');
+    expect(paper.text('yol'), edited);
+    expect(paper.locked, isFalse);
+    // The draft kept with it, by its digest: to every device it goes to.
+    expect(clientFilesOf(paper).single.sha256, paper.text('taslak'));
+    expect(find.byKey(ValueKey('client-paper-${paper.id}')), findsOneWidget);
+    expect(find.text('imza bekliyor'), findsOneWidget);
+
+    // One who may not see the money: no papers at all.
+    await pump(money: false);
+    expect(find.byKey(ValueKey('client-paper-${paper.id}')), findsNothing);
+  });
+
   Future<void> open(WidgetTester tester, {bool money = true}) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;

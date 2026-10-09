@@ -466,14 +466,16 @@ DocModel releaseDocument({
   ]);
 }
 
-/// [model] written as [name].udf among the client's papers; its path, for
-/// the editor to open.
+/// [model] written as [name].udf among the client's papers, or [bytes]
+/// as they are (a paper's draft brought from another device); its path,
+/// for the editor to open.
 Future<String> writeClientDocument(
   Directory clientsRoot,
   String clientId,
   String name,
-  DocModel model,
-) async {
+  DocModel? model, {
+  List<int>? bytes,
+}) async {
   // A client's id from another device names no path.
   if (!RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(clientId)) {
     throw ArgumentError('müvekkil kimliği: $clientId');
@@ -485,6 +487,6 @@ Future<String> writeClientDocument(
   for (var i = 2; await file.exists(); i++) {
     file = File(p.join(folder.path, '$safe ($i).udf'));
   }
-  await file.writeAsBytes(UdfWriter.writeBytes(model), flush: true);
+  await file.writeAsBytes(bytes ?? UdfWriter.writeBytes(model!), flush: true);
   return file.path;
 }
