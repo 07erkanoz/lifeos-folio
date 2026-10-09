@@ -20,7 +20,12 @@ class FlowingDocumentView extends StatefulWidget {
     required this.model,
     this.live,
     this.scale = zoom,
+    this.editable = false,
   });
+
+  /// A live document written here in turn: touched, given the keyboard,
+  /// its caret shown; the controller says whether it may be changed.
+  final bool editable;
 
   final DocModel model;
 
@@ -118,13 +123,13 @@ class _FlowingDocumentViewState extends State<FlowingDocumentView> {
                   // cannot select or copy it; the writer's selection, set
                   // from outside, still shows.
                   child: ExcludeFocus(
-                    excluding: widget.live != null,
+                    excluding: widget.live != null && !widget.editable,
                     child: IgnorePointer(
-                      ignoring: widget.live != null,
+                      ignoring: widget.live != null && !widget.editable,
                       child: QuillEditor.basic(
                         controller: _controller,
                         config: QuillEditorConfig(
-                          showCursor: false,
+                          showCursor: widget.editable,
                           textSpanBuilder: EditorTabSpans.builder(
                             pageWidth: lineWidth,
                           ),

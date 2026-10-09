@@ -252,6 +252,38 @@ class _EditorWidgetState extends State<EditorWidget>
     if (mounted) setState(() {});
   }
 
+  /// The pen with another: the document only read here meanwhile.
+  bool get _penAway => _live?.pen.value != null;
+
+  void _livePenChanged() {
+    _quillController.readOnly = _heldElsewhere || _penAway;
+    if (mounted) setState(() {});
+  }
+
+  /// A change written in turn on another device, put in here: false when
+  /// it may not go in, and it is turned down there.
+  bool _applyLiveWrite(Delta change) {
+    if (!LiveShareHost.acceptable(change, _quillController.document)) {
+      return false;
+    }
+    try {
+      _quillController.compose(
+        change,
+        _quillController.selection,
+        ChangeSource.remote,
+      );
+    } catch (_) {
+      return false;
+    }
+    return true;
+  }
+
+  void _unwatchLive() {
+    _live?.peers.removeListener(_livePeersChanged);
+    _live?.pen.removeListener(_livePenChanged);
+    _live?.asking.removeListener(_livePenChanged);
+  }
+
   void _liveSelection() {
     final s = _quillController.selection;
     _live?.selection(s.baseOffset, s.extentOffset);
@@ -269,9 +301,10 @@ class _EditorWidgetState extends State<EditorWidget>
     final path = _documentPath;
     // A sharing closed is not taken up again: a new one is made.
     if (_live?.closed ?? false) {
-      _live!.peers.removeListener(_livePeersChanged);
+      _unwatchLive();
       _live = null;
       _liveWatched = false;
+      _livePenChanged();
     }
     _live ??= LiveShareHost(
       title: path == null ? 'Yeni belge' : p.basenameWithoutExtension(path),
@@ -280,10 +313,13 @@ class _EditorWidgetState extends State<EditorWidget>
         blocks: List.of(_korunanBloklar),
       ),
       blockCount: () => _korunanBloklar.length,
+      apply: _applyLiveWrite,
     );
     if (!_liveWatched) {
       _liveWatched = true;
       _live!.peers.addListener(_livePeersChanged);
+      _live!.pen.addListener(_livePenChanged);
+      _live!.asking.addListener(_livePenChanged);
     }
     await showDialog<void>(
       context: context,
@@ -1959,7 +1995,7 @@ class _EditorWidgetState extends State<EditorWidget>
     _pathLock = lock;
     if (held != _heldElsewhere) {
       setState(() => _heldElsewhere = held);
-      _quillController.readOnly = held;
+      _quillController.readOnly = held || _penAway;
     }
   }
 
@@ -1981,6 +2017,79 @@ class _EditorWidgetState extends State<EditorWidget>
         'Belgeyi açık olduğu pencerede düzenleyin.',
     kind: NoticeKind.error,
   );
+
+  /// Written in turn: who holds the pen, and who asks for it.
+  Widget _livePenBanner(BuildContext context) {
+    final live = _live!;
+    final asker = live.asking.value.firstOrNull;
+    final scheme = Theme.of(context).colorScheme;
+    Widget bar({
+      required Key key,
+      required Color color,
+      required Color ink,
+      required IconData icon,
+      required String text,
+      required List<Widget> actions,
+    }) => Material(
+      key: key,
+      color: color,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: ink),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(text, style: TextStyle(color: ink)),
+            ),
+            ...actions,
+          ],
+        ),
+      ),
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_penAway)
+          bar(
+            key: const ValueKey('live-pen-away'),
+            color: scheme.tertiaryContainer,
+            ink: scheme.onTertiaryContainer,
+            icon: Icons.edit_outlined,
+            text: '${live.penName} yazıyor · belgeniz şu an yalnız okunur',
+            actions: [
+              TextButton(
+                key: const ValueKey('live-pen-back'),
+                onPressed: live.takeBack,
+                child: const Text('Kalemi geri al'),
+              ),
+            ],
+          ),
+        if (asker != null)
+          bar(
+            key: const ValueKey('live-pen-asked'),
+            color: scheme.primaryContainer,
+            ink: scheme.onPrimaryContainer,
+            icon: Icons.back_hand_outlined,
+            text: '${live.nameOf(asker)} düzenlemek istiyor',
+            actions: [
+              TextButton(
+                key: const ValueKey('live-pen-refuse'),
+                onPressed: () => live.turnDown(asker),
+                child: const Text('Reddet'),
+              ),
+              const SizedBox(width: 4),
+              FilledButton(
+                key: const ValueKey('live-pen-give'),
+                onPressed: () => live.give(asker),
+                child: const Text('Kalemi ver'),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
 
   Widget _heldElsewhereBanner(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -4016,6 +4125,7 @@ class _EditorWidgetState extends State<EditorWidget>
 
   @override
   void dispose() {
+    _unwatchLive();
     unawaited(_live?.close());
     // A draft written while there were edits, and outlived by an undo, would
     // otherwise be offered after the next start as work that was never saved.
@@ -4821,6 +4931,9 @@ class _EditorWidgetState extends State<EditorWidget>
                     child: Column(
                       children: [
                         if (_heldElsewhere) _heldElsewhereBanner(context),
+                        if (_penAway ||
+                            (_live?.asking.value.isNotEmpty ?? false))
+                          _livePenBanner(context),
                         Expanded(
                           child: Stack(
                             children: [

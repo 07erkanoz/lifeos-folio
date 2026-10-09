@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_quill/flutter_quill.dart' show ChangeSource, Document;
+import 'package:flutter_quill/flutter_quill.dart'
+    show ChangeSource, Document, Embed;
 import 'package:flutter_quill/quill_delta.dart';
 
 import '../../models/document_model.dart';
@@ -20,13 +21,24 @@ import '../office/office_known.dart';
 /// - from the sharer: `tam` the whole of it at a revision (the body's
 ///   delta and the blocks its embeds point at), `d` a change of the body
 ///   taking it to the next revision, `t` a table changed, `s` the writer's
-///   selection, `nabiz` still there, `son` the end;
+///   selection, `nabiz` still there, `son` the end; `hak` what the viewer
+///   may do now, `kalem` who holds the pen (`sende` the viewer itself),
+///   `onay` its written change went in at a revision, `red` it did not
+///   (the whole follows);
 /// - from a viewer: `hazir` ready, `tamiste` the whole again (a change it
-///   could not apply), `nabiz`, `ayrildi` gone.
+///   could not apply), `nabiz`, `ayrildi` gone; with the right to write in
+///   turn, `kalemiste` asking for the pen, `kalembirak` giving it back,
+///   and holding it `yaz` a change made on the revision `taban`, `s` its
+///   selection.
+///
+/// Written in turn: one holds the pen at a time, the sharer when no one
+/// else does. The document stays the sharer's: a change written elsewhere
+/// is checked and put in there, then goes to the others as the sharer's
+/// own would. The sharer touching it takes the pen back.
 /// A word too long for one line goes in `parca`s, its bytes in base64.
 const liveKind = 'canli';
 
-/// What a viewer may do: see it; later, write in turn.
+/// What a viewer may do: see it, or also write in it in turn.
 enum LiveRight { view, edit }
 
 enum LivePeerState { joining, watching, gone, unreachable }
@@ -44,10 +56,10 @@ class LivePeer {
   final LiveRight right;
   final LivePeerState state;
 
-  LivePeer copyWith({LivePeerState? state}) => LivePeer(
+  LivePeer copyWith({LivePeerState? state, LiveRight? right}) => LivePeer(
     deviceId: deviceId,
     name: name,
-    right: right,
+    right: right ?? this.right,
     state: state ?? this.state,
   );
 }
@@ -182,7 +194,212 @@ class LiveShareHost {
     required this.blockCount,
     OfficeNetwork? network,
     this.heartbeat = const Duration(seconds: 10),
+    this.apply,
   }) : _net = network ?? OfficeNetwork.instance;
+
+  /// Puts a change written by the one holding the pen in the document
+  /// where it is open; false when it may not go in (see [acceptable]).
+  /// No one is given the pen without it.
+  bool Function(Delta change)? apply;
+
+  /// Who holds the pen: null, the sharer.
+  final pen = ValueNotifier<String?>(null);
+
+  /// Who asked for the pen, the first first.
+  final asking = ValueNotifier<List<String>>(const []);
+
+  /// How long the pen stays with one who writes nothing.
+  Duration penIdle = const Duration(minutes: 2);
+  Timer? _idle;
+  final _rights = <String, LiveRight>{};
+
+  /// The most a change written elsewhere may be, put in one go.
+  static const _maxWrite = 2 * 1024 * 1024;
+
+  /// Whether [change], written by another, may go in [doc]: words and
+  /// their marks put in, kept or taken out; nothing but words put in (no
+  /// picture, no table), no table or picture taken out, nothing past the
+  /// end.
+  static bool acceptable(Delta change, Document doc) {
+    var index = 0;
+    final length = doc.length;
+    for (final op in change.operations) {
+      final n = op.length ?? 0;
+      if (!_plain(op.attributes)) return false;
+      if (op.isInsert) {
+        if (op.data is! String) return false;
+      } else if (op.isDelete) {
+        if (index + n > length) return false;
+        var at = index;
+        while (at < index + n) {
+          final leaf = doc.querySegmentLeafNode(at).leaf;
+          if (leaf == null) return false;
+          if (leaf is Embed) return false;
+          final next = leaf.documentOffset + leaf.length;
+          if (next <= at) return false;
+          at = next;
+        }
+        index += n;
+      } else {
+        index += n;
+        if (index > length) return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _plain(Map<String, dynamic>? attributes) {
+    if (attributes == null) return true;
+    if (attributes.length > 24) return false;
+    for (final e in attributes.entries) {
+      if (e.key.length > 64) return false;
+      final v = e.value;
+      if (v != null && v is! String && v is! num && v is! bool) return false;
+      if (v is String && v.length > 512) return false;
+    }
+    return true;
+  }
+
+  /// [deviceId] by the name it is shown it under.
+  String nameOf(String deviceId) => _nameOf(deviceId);
+
+  String _nameOf(String deviceId) =>
+      peers.value.where((p) => p.deviceId == deviceId).firstOrNull?.name ??
+      'Biri';
+
+  /// The name of who holds the pen; null while the sharer does.
+  String? get penName => pen.value == null ? null : _nameOf(pen.value!);
+
+  /// What [deviceId] may do: see it, or write in it in turn.
+  LiveRight rightOf(String deviceId) => _rights[deviceId] ?? LiveRight.view;
+
+  /// [deviceId] may now do [right]; told at once if it watches. One that
+  /// may only see it no more holds the pen or asks for it.
+  void setRight(String deviceId, LiveRight right) {
+    if (_closed) return;
+    _rights[deviceId] = right;
+    peers.value = [
+      for (final p in peers.value)
+        if (p.deviceId == deviceId) p.copyWith(right: right) else p,
+    ];
+    if (right == LiveRight.view) {
+      _unask(deviceId);
+      if (pen.value == deviceId) takeBack();
+    }
+    final v = _viewers[deviceId];
+    if (v != null && v.ready) _enqueue(v, {'tip': 'hak', 'hak': right.name});
+  }
+
+  void _unask(String deviceId) {
+    if (!asking.value.contains(deviceId)) return;
+    asking.value = [
+      for (final a in asking.value)
+        if (a != deviceId) a,
+    ];
+  }
+
+  /// The pen to [deviceId], if it may write and watches: the sharer's
+  /// document is only read here meanwhile.
+  bool give(String deviceId) {
+    final v = _viewers[deviceId];
+    if (_closed || apply == null || v == null || !v.ready) return false;
+    if (rightOf(deviceId) != LiveRight.edit) return false;
+    _unask(deviceId);
+    pen.value = deviceId;
+    _penTold();
+    _stillWriting();
+    return true;
+  }
+
+  /// [deviceId]'s asking for the pen turned down.
+  void turnDown(String deviceId) => _unask(deviceId);
+
+  /// The pen back with the sharer; a change still on its way from the one
+  /// who held it is not put in.
+  void takeBack() {
+    if (pen.value == null) return;
+    _idle?.cancel();
+    _idle = null;
+    pen.value = null;
+    if (!_closed) _penTold();
+  }
+
+  void _stillWriting() {
+    _idle?.cancel();
+    _idle = Timer(penIdle, takeBack);
+  }
+
+  Map<String, Object?> _penWord(String? deviceId) => {
+    'tip': 'kalem',
+    'sende': deviceId != null && pen.value == deviceId,
+    'kimde': penName ?? '',
+  };
+
+  void _penTold() {
+    for (final e in _viewers.entries) {
+      if (e.value.ready) _enqueue(e.value, _penWord(e.key));
+    }
+  }
+
+  /// A change [deviceId] wrote: put in if it holds the pen and wrote it on
+  /// the document as it stands here; else turned down, the whole sent.
+  void _written(String deviceId, _Viewer v, Map<String, Object?> m) {
+    final base = m['taban'], d = m['delta'];
+    void refuse() {
+      _enqueue(v, const {'tip': 'red'});
+      _sendWhole(v);
+    }
+
+    if (_closed ||
+        pen.value != deviceId ||
+        rightOf(deviceId) != LiveRight.edit ||
+        base is! int ||
+        d is! List ||
+        base != _rev) {
+      return refuse();
+    }
+    final Delta change;
+    try {
+      if (utf8.encode(jsonEncode(d)).length > _maxWrite) return refuse();
+      change = Delta.fromJson(d);
+    } catch (_) {
+      return refuse();
+    }
+    final put = apply;
+    var went = false;
+    try {
+      went = put != null && put(change);
+    } catch (_) {
+      went = false;
+    }
+    if (!went) return refuse();
+    _stillWriting();
+    _rev++;
+    for (final e in _viewers.entries) {
+      final o = e.value;
+      if (!o.ready) continue;
+      _enqueue(
+        o,
+        identical(o, v)
+            ? {'tip': 'onay', 'rev': _rev}
+            : {'tip': 'd', 'rev': _rev, 'delta': d},
+        change: true,
+      );
+    }
+  }
+
+  /// Where the one holding the pen is, to the others.
+  void _theirSelection(String deviceId, Object? s) {
+    if (pen.value != deviceId) return;
+    if (s is! List || s.length != 2 || s[0] is! int || s[1] is! int) return;
+    _selection = (base: s[0] as int, extent: s[1] as int);
+    final word = {'tip': 's', 's': s};
+    for (final e in _viewers.entries) {
+      if (e.key != deviceId && e.value.ready) {
+        _enqueue(e.value, word, change: true);
+      }
+    }
+  }
 
   final String title;
   final LiveSnapshot Function() snapshot;
@@ -283,12 +500,12 @@ class LiveShareHost {
     peers.value = [
       for (final p in peers.value)
         if (p.deviceId != deviceId) p,
-      LivePeer(deviceId: deviceId, name: name),
+      LivePeer(deviceId: deviceId, name: name, right: rightOf(deviceId)),
     ];
     var tried = await _net.openStream(
       deviceId,
       liveKind,
-      body: {'baslik': title, 'izin': LiveRight.view.name},
+      body: {'baslik': title, 'izin': rightOf(deviceId).name},
       office: office,
       guest: guest != null,
     );
@@ -302,7 +519,7 @@ class LiveShareHost {
       tried = await _net.openStream(
         deviceId,
         liveKind,
-        body: {'baslik': title, 'izin': LiveRight.view.name},
+        body: {'baslik': title, 'izin': rightOf(deviceId).name},
         guest: true,
       );
     }
@@ -336,6 +553,19 @@ class LiveShareHost {
               _sendWhole(v);
             case 'ayrildi':
               unawaited(_drop(deviceId, ch));
+            case 'kalemiste':
+              if (rightOf(deviceId) == LiveRight.edit &&
+                  apply != null &&
+                  pen.value != deviceId &&
+                  !asking.value.contains(deviceId)) {
+                asking.value = [...asking.value, deviceId];
+              }
+            case 'kalembirak':
+              if (pen.value == deviceId) takeBack();
+            case 'yaz':
+              if (identical(_viewers[deviceId], v)) _written(deviceId, v, m!);
+            case 's':
+              _theirSelection(deviceId, m!['s']);
           }
         } catch (_) {
           unawaited(_drop(deviceId, ch));
@@ -363,6 +593,8 @@ class LiveShareHost {
     if (v == null || !identical(v.channel, ch)) return;
     _viewers.remove(deviceId);
     _set(deviceId, state);
+    _unask(deviceId);
+    if (pen.value == deviceId) takeBack();
     await _shut(ch);
     if (v.grant != null) await _forgetGuest(deviceId, v.grant);
   }
@@ -447,6 +679,8 @@ class LiveShareHost {
           'delta': s.delta,
           'bloklar': DocModelJson.encode(DocModel(blocks: s.blocks)),
           if (_selection case final sel?) 's': [sel.base, sel.extent],
+          'hak': rightOf(_idOf(v) ?? '').name,
+          'kalem': _penWord(_idOf(v)),
         });
         v.queue = v.queue.then((_) {
           v.wholeOnWay = false;
@@ -467,6 +701,8 @@ class LiveShareHost {
   /// A change of the body, as the editor made it.
   void body(Delta change) {
     if (_closed || _viewers.isEmpty) return;
+    // The sharer wrote: the pen is theirs again.
+    takeBack();
     _rev++;
     if (blockCount() != _blocksSent) {
       // A table put in or taken out: its block goes with the whole.
@@ -505,6 +741,7 @@ class LiveShareHost {
   /// Something the body's changes do not carry: the whole again.
   void whole() {
     if (_closed || _viewers.isEmpty) return;
+    takeBack();
     _rev++;
     _wholeForAll();
   }
@@ -522,6 +759,8 @@ class LiveShareHost {
 
   /// Where the writer is; sent at most a few times a second.
   void selection(int base, int extent) {
+    // The one writing's selection is shown meanwhile, not the sharer's.
+    if (pen.value != null) return;
     _selection = (base: base, extent: extent);
     if (_closed || _viewers.isEmpty || _selectionTimer != null) return;
     _selectionTimer = Timer(const Duration(milliseconds: 120), () {
@@ -567,6 +806,8 @@ class LiveShareHost {
       for (final p in peers.value)
         if (p.deviceId != deviceId) p,
     ];
+    _unask(deviceId);
+    if (pen.value == deviceId) takeBack();
     // The grant it was shown under, taken now: one made while saying
     // goodbye is not this one.
     final grant = _guestIds[deviceId];
@@ -593,6 +834,9 @@ class LiveShareHost {
     _selectionTimer?.cancel();
     _tableTimer?.cancel();
     _pulse?.cancel();
+    _idle?.cancel();
+    pen.value = null;
+    asking.value = const [];
     for (final id in _invitations.keys.toList()) {
       _invitations[id] = _invitations[id]! + 1;
     }
@@ -630,7 +874,24 @@ class LiveSession extends ChangeNotifier {
 
   /// The device or person it comes from, as they are named here.
   final String from;
-  final LiveRight right;
+
+  /// What this side may do: the sharer may change it while it is shown.
+  LiveRight right;
+
+  /// Whether this side holds the pen: what is written here goes in the
+  /// sharer's document.
+  bool holding = false;
+
+  /// Who else holds the pen, by name; null while the sharer does.
+  String? penWith;
+
+  /// Asked for the pen and not yet given it, nor turned down.
+  bool askedPen = false;
+
+  /// Changes written here and sent, not yet said to have gone in.
+  int _pending = 0;
+  Timer? _selectionSoon;
+  ({int base, int extent})? _mySelection;
 
   /// The document as it stands here; null until shown whole, and after
   /// the end.
@@ -724,8 +985,9 @@ class LiveSession extends ChangeNotifier {
       case 'tam':
         final d = m['delta'], rev = m['rev'];
         if (d is! List || rev is! int) return;
-        // An older whole than what is here, overtaken: let go.
-        if (rev < _rev && !_waitingWhole) return;
+        // An older whole than what is here, overtaken: let go. Not while
+        // changes written here wait: the whole is what they went into.
+        if (rev < _rev && !_waitingWhole && _pending == 0) return;
         try {
           document = Document.fromDelta(Delta.fromJson(d));
         } catch (_) {
@@ -734,15 +996,20 @@ class LiveSession extends ChangeNotifier {
         }
         blocks = DocModelJson.decode(m['bloklar'])?.blocks ?? const [];
         _rev = rev;
+        _pending = 0;
         _waitingWhole = false;
         _selectionFrom(m['s']);
+        _rightFrom(m['hak']);
+        if (m['kalem'] case final Map<String, Object?> pen) _penFrom(pen);
         whole++;
         notifyListeners();
       case 'd':
         final rev = m['rev'], d = m['delta'], doc = document;
         if (rev is! int || d is! List || doc == null || _waitingWhole) return;
         if (rev <= _rev) return;
-        if (rev != _rev + 1) {
+        // Another's change while this side's are on their way: out of
+        // step, taken whole again.
+        if (rev != _rev + 1 || _pending > 0) {
           _askWhole();
           return;
         }
@@ -761,11 +1028,92 @@ class LiveSession extends ChangeNotifier {
         blocks = [...blocks]..[i] = block;
         notifyListeners();
       case 's':
+        if (holding) return;
         _selectionFrom(m['s']);
         notifyListeners();
+      case 'hak':
+        _rightFrom(m['hak']);
+        notifyListeners();
+      case 'kalem':
+        _penFrom(m);
+        notifyListeners();
+      case 'onay':
+        final rev = m['rev'];
+        if (rev is! int || _pending == 0) return;
+        _pending--;
+        _rev = rev;
+      case 'red':
+        // Not put in: the whole that follows is the document as it is.
+        _pending = 0;
+        _waitingWhole = true;
+        _askedAt = DateTime.now();
       case 'son':
         _end();
     }
+  }
+
+  void _rightFrom(Object? r) {
+    final right = LiveRight.values.where((x) => x.name == r).firstOrNull;
+    if (right == null) return;
+    this.right = right;
+    if (right == LiveRight.view) askedPen = false;
+  }
+
+  void _penFrom(Map<String, Object?> m) {
+    final mine = m['sende'] == true;
+    final who = m['kimde'];
+    holding = mine;
+    penWith = mine || who is! String || who.isEmpty ? null : who;
+    if (mine || penWith != null) askedPen = false;
+  }
+
+  /// The pen asked for, if this side may write in turn.
+  void askPen() {
+    if (ended || right != LiveRight.edit || holding || askedPen) return;
+    askedPen = true;
+    _say({'tip': 'kalemiste'});
+    notifyListeners();
+  }
+
+  /// The pen given back to the sharer.
+  void releasePen() {
+    if (ended || !holding) return;
+    holding = false;
+    _say({'tip': 'kalembirak'});
+    notifyListeners();
+  }
+
+  /// [change], written here on [document] while holding the pen: put in
+  /// it and sent to the sharer, on the revision it was written on. Not
+  /// told on [changes]: the page that wrote it has it.
+  void write(Delta change) {
+    final doc = document;
+    if (ended || !holding || doc == null || _waitingWhole) return;
+    try {
+      doc.compose(change, ChangeSource.local);
+    } catch (_) {
+      _askWhole();
+      return;
+    }
+    final base = _rev + _pending;
+    _pending++;
+    _say({'tip': 'yaz', 'taban': base, 'delta': change.toJson()});
+  }
+
+  /// Where this side is while it holds the pen, for the others to see;
+  /// sent at most a few times a second.
+  void selectionMoved(int base, int extent) {
+    if (!holding) return;
+    _mySelection = (base: base, extent: extent);
+    _selectionSoon ??= Timer(const Duration(milliseconds: 120), () {
+      _selectionSoon = null;
+      final sel = _mySelection;
+      if (sel == null || !holding) return;
+      _say({
+        'tip': 's',
+        's': [sel.base, sel.extent],
+      });
+    });
   }
 
   void _selectionFrom(Object? s) {
@@ -778,6 +1126,8 @@ class LiveSession extends ChangeNotifier {
   void _end() {
     if (ended) return;
     ended = true;
+    holding = false;
+    _selectionSoon?.cancel();
     _pulse?.cancel();
     unawaited(_listen?.cancel());
     if (!_channel.closed) unawaited(_channel.close());
@@ -844,7 +1194,10 @@ class LiveShare {
             (name ?? '').isEmpty
                 ? (own ? 'Öbür cihazınız' : 'Bir meslektaşınız')
                 : name!,
-            LiveRight.view,
+            LiveRight.values
+                    .where((r) => r.name == first['izin'])
+                    .firstOrNull ??
+                LiveRight.view,
             asGuest: guest && !own && !member,
           );
           incoming.value = [...incoming.value, session];

@@ -28,7 +28,11 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     content: SizedBox(
       width: 440,
       child: ListenableBuilder(
-        listenable: Listenable.merge([_net, widget.host.peers]),
+        listenable: Listenable.merge([
+          _net,
+          widget.host.peers,
+          widget.host.pen,
+        ]),
         builder: (context, _) => Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,11 +54,23 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
               ..._office()
             else
               ..._devices(),
+            if (widget.host.pen.value != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton(
+                  key: const ValueKey('live-take-back'),
+                  onPressed: widget.host.takeBack,
+                  child: const Text('Kalemi geri al'),
+                ),
+              ),
             const SizedBox(height: 8),
             const Text(
               'Belge bu cihazda kalır; yalnız seçtiklerinizin ekranına canlı '
-              'yansır, yalnız görebilirler, kopyalayamazlar. Paylaşım bitince '
-              'onlarda belge kalmaz.',
+              'yansır. "Yalnız görebilir" olanlar kopyalayamaz. "Sırayla '
+              'düzenleyebilir" olanlara kalemi verince yazdıkları belgenize '
+              'işlenir; o sırada belgeniz yalnız okunur, kalemi istediğiniz an '
+              'geri alırsınız, 2 dakika yazılmazsa kendiliğinden döner. '
+              'Paylaşım bitince onlarda belge kalmaz.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
           ],
@@ -140,33 +156,123 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     LivePeer? peer,
     bool office = false,
     bool guest = false,
-  }) => CheckboxListTile(
-    key: ValueKey(
-      'live-${guest ? 'guest' : (office ? 'member' : 'device')}-$id',
-    ),
-    dense: true,
-    contentPadding: EdgeInsets.zero,
-    value:
+  }) {
+    final host = widget.host;
+    final on =
         peer?.state == LivePeerState.joining ||
-        peer?.state == LivePeerState.watching,
-    onChanged: (on) async {
-      if (on ?? false) {
-        // A guest gone is not shown it again: it asks anew, by a code.
-        if (guest) return;
-        await widget.host.invite(id, name, office: office);
-      } else {
-        await widget.host.remove(id);
-      }
-    },
-    title: Text(name),
-    subtitle: Text(
-      [
-        if (device.isNotEmpty) device,
-        'Yalnız görebilir',
-        if (_state(peer).isNotEmpty) _state(peer),
-      ].join(' · '),
-    ),
-  );
+        peer?.state == LivePeerState.watching;
+    final right = host.rightOf(id);
+    final holds = host.pen.value == id;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Checkbox(
+            key: ValueKey(
+              'live-${guest ? 'guest' : (office ? 'member' : 'device')}-$id',
+            ),
+            value: on,
+            onChanged: (v) async {
+              if (v ?? false) {
+                // A guest gone is not shown it again: it asks anew, by a code.
+                if (guest) return;
+                await host.invite(id, name, office: office);
+              } else {
+                await host.remove(id);
+              }
+            },
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, overflow: TextOverflow.ellipsis),
+                Wrap(
+                  spacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      [
+                        if (device.isNotEmpty) device,
+                        if (_state(peer).isNotEmpty) _state(peer),
+                      ].join(' · '),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                    if (holds)
+                      Container(
+                        key: ValueKey('live-holds-$id'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AgendaColors.taskFill,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 12,
+                              color: AgendaColors.taskText,
+                            ),
+                            SizedBox(width: 3),
+                            Text(
+                              'kalem onda',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AgendaColors.taskText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (on && right == LiveRight.edit && !holds && host.apply != null)
+            TextButton(
+              key: ValueKey('live-give-$id'),
+              onPressed: peer?.state == LivePeerState.watching
+                  ? () => host.give(id)
+                  : null,
+              child: const Text('Kalemi ver'),
+            ),
+          DropdownButton<LiveRight>(
+            key: ValueKey('live-right-$id'),
+            value: right,
+            isDense: true,
+            underline: const SizedBox(),
+            style: Theme.of(context).textTheme.bodySmall,
+            onChanged: (r) {
+              if (r == null) return;
+              host.setRight(id, r);
+              setState(() {});
+            },
+            items: [
+              const DropdownMenuItem(
+                value: LiveRight.view,
+                child: Text('Yalnız görebilir'),
+              ),
+              if (host.apply != null)
+                const DropdownMenuItem(
+                  value: LiveRight.edit,
+                  child: Text('Sırayla düzenleyebilir'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   /// Guests, who join by a code: taken while the switch is on, each
   /// asking and the lawyer accepting; the ones shown it below.

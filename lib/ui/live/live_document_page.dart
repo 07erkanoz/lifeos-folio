@@ -40,6 +40,9 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
   int _whole = -1;
   StreamSubscription<Delta>? _changes;
 
+  /// What is written here while holding the pen, to the session.
+  StreamSubscription<DocChange>? _written;
+
   LiveSession get _s => widget.session;
 
   @override
@@ -55,15 +58,27 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
   void _copy() {
     final doc = _s.document;
     unawaited(_changes?.cancel());
+    unawaited(_written?.cancel());
     _changes = null;
+    _written = null;
     final old = _controller;
+    old?.removeListener(_moved);
     _controller = doc == null
         ? null
         : QuillController(
             document: Document.fromDelta(doc.toDelta()),
             selection: const TextSelection.collapsed(offset: 0),
-            readOnly: true,
+            readOnly: !_s.holding,
           );
+    final c = _controller;
+    if (c != null) {
+      // Written here: to the sharer, by the session. Only what the person
+      // here typed, not what came from there.
+      _written = c.document.changes.listen((e) {
+        if (e.source == ChangeSource.local) _s.write(e.change);
+      });
+      c.addListener(_moved);
+    }
     if (doc != null) {
       _changes = _s.changes.listen((d) {
         final c = _controller;
@@ -80,11 +95,21 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => old?.dispose());
   }
 
+  /// Where the caret is, for the others while the pen is here.
+  void _moved() {
+    final c = _controller;
+    if (c == null || !_s.holding) return;
+    _s.selectionMoved(c.selection.baseOffset, c.selection.extentOffset);
+  }
+
   /// The document let go here: the page's copy and the pictures it drew.
   void _forget() {
     unawaited(_changes?.cancel());
+    unawaited(_written?.cancel());
     _changes = null;
+    _written = null;
     final old = _controller;
+    old?.removeListener(_moved);
     _controller = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       old?.dispose();
@@ -106,7 +131,8 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
       _copy();
     }
     final sel = _s.selection, c = _controller;
-    if (sel != null && c != null) {
+    if (c != null && c.readOnly == _s.holding) c.readOnly = !_s.holding;
+    if (sel != null && c != null && !_s.holding) {
       final end = c.document.length - 1;
       int clamp(int v) => v < 0 ? 0 : (v > end ? end : v);
       c.updateSelection(
@@ -125,6 +151,64 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
     _s.removeListener(_changed);
     _forget();
     super.dispose();
+  }
+
+  /// What is going on, and what this side may do about it.
+  Widget _bar() {
+    final s = _s;
+    final (Color fill, Color ink, IconData icon, String text) = s.ended
+        ? (
+            AgendaColors.taskFill,
+            AgendaColors.taskText,
+            Icons.stop_circle_outlined,
+            'Paylaşım bitti; belge bu cihazda kalmadı.',
+          )
+        : s.holding
+        ? (
+            AgendaColors.eHearingFill,
+            AgendaColors.eHearingText,
+            Icons.edit_outlined,
+            'Kalem sizde · yazdıklarınız paylaşanın belgesine işlenir',
+          )
+        : (
+            AgendaColors.hearingFill,
+            AgendaColors.hearingText,
+            Icons.visibility_outlined,
+            [
+              '${s.from} paylaşıyor',
+              if (s.penWith != null)
+                '${s.penWith} yazıyor'
+              else if (s.right == LiveRight.edit)
+                'sırayla düzenleyebilirsiniz'
+              else
+                'yalnız görebilirsiniz',
+            ].join(' · '),
+          );
+    return Container(
+      color: fill,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: ink),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 13, color: ink)),
+          ),
+          if (!s.ended && s.holding)
+            TextButton(
+              key: const ValueKey('live-release'),
+              onPressed: s.releasePen,
+              child: const Text('Kalemi bırak'),
+            )
+          else if (!s.ended && s.right == LiveRight.edit)
+            FilledButton(
+              key: const ValueKey('live-ask'),
+              onPressed: s.askedPen ? null : s.askPen,
+              child: Text(s.askedPen ? 'İstendi' : 'Düzenlemek iste'),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -147,47 +231,20 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            color: _s.ended ? AgendaColors.taskFill : AgendaColors.hearingFill,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            child: Row(
-              children: [
-                Icon(
-                  _s.ended
-                      ? Icons.stop_circle_outlined
-                      : Icons.visibility_outlined,
-                  size: 18,
-                  color: _s.ended
-                      ? AgendaColors.taskText
-                      : AgendaColors.hearingText,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _s.ended
-                        ? 'Paylaşım bitti; belge bu cihazda kalmadı.'
-                        : '${_s.from} paylaşıyor · canlı izliyorsunuz · '
-                              'yalnız görebilirsiniz',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: _s.ended
-                          ? AgendaColors.taskText
-                          : AgendaColors.hearingText,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _bar(),
           Expanded(
             child: _s.ended
                 ? const SizedBox()
                 : c == null
                 ? const Center(child: CircularProgressIndicator())
                 : LayoutBuilder(
-                    builder: (context, box) => Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 820),
+                    // The page at the top, as tall as the window: written
+                    // on from its first line, scrolled within.
+                    builder: (context, box) => Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: box.maxWidth > 820 ? 820 : box.maxWidth,
+                        height: box.maxHeight,
                         child: FlowingDocumentView(
                           key: ValueKey('live-$_whole'),
                           model: DocModel(blocks: const []),
@@ -195,6 +252,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
                               ? 1.15
                               : FlowingDocumentView.zoom,
                           live: (controller: c, blocks: () => _s.blocks),
+                          editable: _s.holding,
                         ),
                       ),
                     ),

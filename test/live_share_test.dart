@@ -13,8 +13,10 @@ import 'package:evrak_convert/services/office/office_pairing.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
-import 'package:flutter_quill/flutter_quill.dart' show ChangeSource, Document;
+import 'package:flutter_quill/flutter_quill.dart'
+    show ChangeSource, Document, QuillEditor;
 import 'package:flutter_quill/quill_delta.dart';
+import 'package:evrak_convert/ui/live/live_document_page.dart';
 import 'package:evrak_convert/ui/live/live_guest_dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -692,6 +694,221 @@ void main() {
     await deniz.forgetGuest(selin.self!.deviceId, first);
     expect(identical(deniz.guestGrant(selin.self!.deviceId), second), isTrue);
     await host.close();
+  });
+
+  test('written in turn: the pen asked for and given, the holder\'s words '
+      'put in the sharer\'s document in order, a picture or table turned '
+      'down, and the pen back when the sharer writes, on leaving it idle, '
+      'on giving it back and when the right is taken', () async {
+    final (pc, tablet) = await pair();
+    final writer = Document.fromDelta(Delta()..insert('Kira sözleşmesi\n'));
+    final host = LiveShareHost(
+      title: 'Kira',
+      snapshot: () => (delta: writer.toDelta().toJson(), blocks: []),
+      blockCount: () => 0,
+      network: pc,
+      apply: (change) {
+        if (!LiveShareHost.acceptable(change, writer)) return false;
+        writer.compose(change, ChangeSource.remote);
+        return true;
+      },
+    );
+    writer.changes.listen((e) {
+      if (e.source == ChangeSource.local) host.body(e.change);
+    });
+    final id = tablet.self!.deviceId;
+    expect(await host.invite(id, 'tablet'), isTrue);
+    await until(() => LiveShare.instance.incoming.value.isNotEmpty);
+    final session = LiveShare.instance.incoming.value.single;
+    await until(() => session.ready);
+    bool alike() =>
+        session.document != null &&
+        jsonEncode(session.document!.toDelta().toJson()) ==
+            jsonEncode(writer.toDelta().toJson());
+
+    // Only seeing it: no pen to ask for, none to give.
+    session.askPen();
+    expect(session.askedPen, isFalse);
+    expect(host.give(id), isFalse);
+
+    host.setRight(id, LiveRight.edit);
+    await until(() => session.right == LiveRight.edit);
+    session.askPen();
+    await until(() => host.asking.value.contains(id));
+    expect(host.give(id), isTrue);
+    await until(() => session.holding);
+    expect(host.asking.value, isEmpty);
+    expect(host.penName, 'tablet');
+
+    // Written there, several in a row before any is said to have gone in.
+    void write(String t) => session.write(
+      Delta()
+        ..retain(session.document!.length - 1)
+        ..insert(t),
+    );
+    for (final w in [' madde', ' 1', ': kira', ' bedeli']) {
+      write(w);
+    }
+    await until(
+      () => writer.toPlainText() == 'Kira sözleşmesi madde 1: kira bedeli\n',
+    );
+    await until(alike);
+
+    // A table put in from there is not let in; it is shown the whole.
+    session.write(
+      Delta()
+        ..retain(session.document!.length - 1)
+        ..insert({'doc-table': 0}),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await until(alike);
+    expect(writer.toPlainText(), 'Kira sözleşmesi madde 1: kira bedeli\n');
+    expect(session.holding, isTrue);
+
+    // The sharer writes: the pen is theirs again.
+    writer.compose(
+      Delta()
+        ..retain(writer.length - 1)
+        ..insert('.'),
+      ChangeSource.local,
+    );
+    await until(() => !session.holding);
+    expect(host.pen.value, isNull);
+    await until(alike);
+
+    // Left idle: back with the sharer.
+    host.penIdle = const Duration(milliseconds: 300);
+    expect(host.give(id), isTrue);
+    await until(() => session.holding);
+    await until(() => !session.holding && host.pen.value == null);
+
+    // Given back.
+    expect(host.give(id), isTrue);
+    await until(() => session.holding);
+    session.releasePen();
+    await until(() => host.pen.value == null);
+
+    // The right taken while holding it.
+    host.penIdle = const Duration(minutes: 2);
+    expect(host.give(id), isTrue);
+    await until(() => session.holding);
+    host.setRight(id, LiveRight.view);
+    await until(() => !session.holding && session.right == LiveRight.view);
+    expect(host.pen.value, isNull);
+    await host.close();
+    await until(() => session.ended);
+  });
+
+  test('what another may write: words and marks, not a picture or a table '
+      'put in, not one taken out, nothing past the end', () {
+    final doc = Document.fromDelta(
+      Delta()
+        ..insert('Ab')
+        ..insert({'doc-table': 0})
+        ..insert('cd\n'),
+    );
+    bool ok(Delta d) => LiveShareHost.acceptable(d, doc);
+    expect(ok(Delta()..insert('x')), isTrue);
+    expect(
+      ok(
+        Delta()
+          ..retain(1)
+          ..retain(1, {'bold': true}),
+      ),
+      isTrue,
+    );
+    expect(ok(Delta()..delete(2)), isTrue);
+    expect(
+      ok(
+        Delta()
+          ..retain(3)
+          ..delete(2),
+      ),
+      isTrue,
+    );
+    expect(ok(Delta()..insert({'doc-table': 1})), isFalse);
+    expect(
+      ok(
+        Delta()
+          ..retain(1)
+          ..delete(2),
+      ),
+      isFalse,
+    );
+    expect(ok(Delta()..retain(99)), isFalse);
+    expect(
+      ok(
+        Delta()..insert('x', {
+          'link': {'a': 1},
+        }),
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('on the viewer\'s page: the pen asked for with one tap, and '
+      'once given, what is typed there goes in the sharer\'s document; '
+      'given back, the page is only read again', (tester) async {
+    final (pc, tablet) = (await tester.runAsync(pair))!;
+    final writer = Document.fromDelta(Delta()..insert('Vekâletname\n'));
+    final host = LiveShareHost(
+      title: 'Vekâletname',
+      snapshot: () => (delta: writer.toDelta().toJson(), blocks: []),
+      blockCount: () => 0,
+      network: pc,
+      apply: (change) {
+        if (!LiveShareHost.acceptable(change, writer)) return false;
+        writer.compose(change, ChangeSource.remote);
+        return true;
+      },
+    );
+    final id = tablet.self!.deviceId;
+    host.setRight(id, LiveRight.edit);
+    await tester.runAsync(() => host.invite(id, 'tablet'));
+    await settle(tester, () => LiveShare.instance.incoming.value.isNotEmpty);
+    final session = LiveShare.instance.incoming.value.single;
+    await settle(tester, () => session.ready);
+    await tester.pumpWidget(
+      MaterialApp(home: LiveDocumentPage(session: session)),
+    );
+    await tester.pump();
+    expect(find.textContaining('sırayla düzenleyebilirsiniz'), findsOneWidget);
+    await tester.runAsync(
+      () => tester.tap(find.byKey(const ValueKey('live-ask'))),
+    );
+    await settle(tester, () => host.asking.value.contains(id));
+    await tester.runAsync(() async => host.give(id));
+    await settle(tester, () => session.holding);
+    await tester.pump();
+    expect(find.textContaining('Kalem sizde'), findsOneWidget);
+    final controller = tester
+        .widget<QuillEditor>(find.byType(QuillEditor))
+        .controller;
+    expect(controller.readOnly, isFalse);
+    await tester.runAsync(
+      () async => controller.replaceText(
+        controller.document.length - 1,
+        0,
+        ' — Av. Deniz Kaya',
+        null,
+      ),
+    );
+    await settle(
+      tester,
+      () => writer.toPlainText() == 'Vekâletname — Av. Deniz Kaya\n',
+    );
+    await tester.runAsync(
+      () => tester.tap(find.byKey(const ValueKey('live-release'))),
+    );
+    await settle(tester, () => host.pen.value == null);
+    await tester.pump();
+    expect(
+      tester.widget<QuillEditor>(find.byType(QuillEditor)).controller.readOnly,
+      isTrue,
+    );
+    await tester.runAsync(host.close);
+    await settle(tester, () => session.ended);
+    await tester.pumpWidget(const SizedBox());
   });
 }
 
