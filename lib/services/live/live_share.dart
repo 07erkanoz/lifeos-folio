@@ -225,6 +225,8 @@ class LiveShareHost {
   /// line ends); no picture or table put in, taken out or marked, the
   /// last line's end never taken, every length a count.
   static bool acceptable(Delta change, Document doc) {
+    // Nothing written is nothing to put in.
+    if (change.isEmpty) return false;
     final base = doc.toDelta();
     final length = doc.length;
     // A line's layout only as some line here already has it.
@@ -291,8 +293,9 @@ class LiveShareHost {
       final expected = base.compose(change);
       final probe = Document.fromDelta(base)
         ..compose(change, ChangeSource.remote);
-      return jsonEncode(probe.toDelta().toJson()) ==
-          jsonEncode(expected.toJson());
+      // The tree itself, not the delta it keeps beside it: the two may
+      // part where Quill's own checks are off.
+      return probe.root.toDelta() == expected;
     } catch (_) {
       return false;
     }

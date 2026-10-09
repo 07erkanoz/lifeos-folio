@@ -892,6 +892,7 @@ void main() {
     expect(ok(Delta()..insert('x', {'nicht': null})), isFalse);
     // A word's mark never on a line's end.
     expect(ok(Delta()..insert('a\nb', {'bold': true})), isFalse);
+    expect(ok(Delta()), isFalse);
     // Marks taken off only from what is kept; none given empty.
     expect(ok(Delta()..insert('X', {'bold': null})), isFalse);
     expect(
