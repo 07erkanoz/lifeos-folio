@@ -285,13 +285,28 @@ class LiveShareHost {
         if (p.deviceId != deviceId) p,
       LivePeer(deviceId: deviceId, name: name),
     ];
-    final ch = await _net.openStream(
+    var tried = await _net.openStream(
       deviceId,
       liveKind,
       body: {'baslik': title, 'izin': LiveRight.view.name},
       office: office,
       guest: guest != null,
     );
+    // A guest may not yet have taken this Folio in when it is reached
+    // (its pairing's last word and this channel go apart): tried again a
+    // few times.
+    for (final wait in const [200, 600, 1500]) {
+      if (tried != null || guest == null || _closed) break;
+      if (_invitations[deviceId] != mine) break;
+      await Future<void>.delayed(Duration(milliseconds: wait));
+      tried = await _net.openStream(
+        deviceId,
+        liveKind,
+        body: {'baslik': title, 'izin': LiveRight.view.name},
+        guest: true,
+      );
+    }
+    final ch = tried;
     if (_closed || _invitations[deviceId] != mine) {
       // Withdrawn, or made again, while it was being made.
       if (ch != null) unawaited(_shut(ch));
@@ -552,12 +567,11 @@ class LiveShareHost {
       for (final p in peers.value)
         if (p.deviceId != deviceId) p,
     ];
-    if (v == null) {
-      await _forgetGuest(deviceId);
-      return;
-    }
-    await _farewell(v.channel);
-    await _forgetGuest(deviceId);
+    // The grant it was shown under, taken now: one made while saying
+    // goodbye is not this one.
+    final grant = _guestIds[deviceId];
+    if (v != null) await _farewell(v.channel);
+    if (grant != null) await _forgetGuest(deviceId, grant);
   }
 
   static Future<void> _farewell(OfficeChannel ch) async {

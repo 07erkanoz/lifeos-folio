@@ -624,7 +624,10 @@ void main() {
     expect(await asks('defter'), isEmpty);
     expect(deniz.isKnown(me.deviceId), isFalse);
 
-    // Forgotten: not even that, and its channels are closed.
+    // Forgotten: not even that, and its channels are closed. The sharer's
+    // real key kept, that the test is refused by the sharer, not by a key
+    // missing here.
+    final denizKey = selin.guestGrant(deniz.self!.deviceId)!.publicKey;
     await host.close();
     await until(() => !deniz.isGuestOnly(me.deviceId));
     await expectLater(
@@ -633,7 +636,7 @@ void main() {
         peer: KnownDevice(
           deviceId: deniz.self!.deviceId,
           userId: '',
-          publicKey: selin.guestGrant(deniz.self!.deviceId)?.publicKey ?? '',
+          publicKey: denizKey,
           name: '',
           device: '',
           platform: OfficePlatform.linux,

@@ -17,12 +17,19 @@ class LiveDocumentPage extends StatefulWidget {
   final LiveSession session;
 
   /// [session] on a page of its own.
-  static Future<void> open(BuildContext context, LiveSession session) =>
-      Navigator.of(context).push(
+  /// Left when the page is: what was shown is no more watched, and
+  /// nothing of it stays.
+  static Future<void> open(BuildContext context, LiveSession session) async {
+    try {
+      await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => LiveDocumentPage(session: session),
         ),
       );
+    } finally {
+      await session.leave();
+    }
+  }
 
   @override
   State<LiveDocumentPage> createState() => _LiveDocumentPageState();

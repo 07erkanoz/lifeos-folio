@@ -814,31 +814,46 @@ class OfficeNetwork extends ChangeNotifier {
     Map<String, Object?> hello,
     OfficeIdentity identity,
   ) async {
+    // The grant a guest is let in under, taken as it is let in.
+    KnownDevice? grant;
     final ch = await OfficeChannel.accept(
       link: link,
       hello: hello,
       identity: identity,
-      known: _trustedOrGuest,
+      known: (id) async {
+        final trusted = await _trusted(id);
+        if (trusted != null) return trusted;
+        return grant = _guests[id];
+      },
     );
     if (ch == null) return;
     final id = ch.peer.deviceId;
     // Let in as a guest, or not, fixed now: by the grant it came under,
     // not by what it later says of itself.
-    final viaGuest =
-        !ch.vouched &&
-        await _trusted(id) == null &&
-        identical(_guests[id], ch.peer);
+    final viaGuest = grant != null && !ch.vouched;
     if (viaGuest) {
+      // Its grant gone while it was let in, or too many channels open:
+      // shut, never taken another way.
+      if (!identical(_guests[id], grant) ||
+          (_guestChannels[id]?.length ?? 0) >= _guestChannelLimit) {
+        await ch.close();
+        return;
+      }
       _guestChannel(id, ch);
     } else {
       unawaited(_metOwn(ch));
     }
     late final StreamSubscription<Map<String, Object?>> first;
+    // A guest's first word is waited for a while, not for ever.
+    final waited = viaGuest
+        ? Timer(const Duration(seconds: 20), () => unawaited(ch.close()))
+        : null;
     first = ch.messages.listen((m) async {
+      waited?.cancel();
       await first.cancel();
       // A guest may ask for the live document's channel and nothing else,
       // and only while its grant stands.
-      if (viaGuest && (m['t'] != 'akis' || !identical(_guests[id], ch.peer))) {
+      if (viaGuest && (m['t'] != 'akis' || !identical(_guests[id], grant))) {
         await ch.close();
         return;
       }
@@ -1061,15 +1076,10 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   /// A device this one talks to: one it knows, or a member of its office.
-  /// Never a guest: a guest is let in by [_trustedOrGuest] alone, on a
-  /// channel it opens, and asked for by [openStream] with `guest`.
+  /// Never a guest: a guest is let in by its grant alone, on a channel it
+  /// opens ([_talk]), and asked for by [openStream] with `guest`.
   Future<KnownDevice?> _trusted(String deviceId) async =>
       await _known.of(deviceId) ?? ledger.member(deviceId)?.asKnown;
-
-  /// Who may open a channel to this Folio: a device it trusts, or a guest
-  /// it took for a live document.
-  Future<KnownDevice?> _trustedOrGuest(String deviceId) async =>
-      await _trusted(deviceId) ?? _guests[deviceId];
 
   /// Who is a guest only (lib/services/live/live_share.dart): known for
   /// one live document, in memory, by a code both screens showed; not
@@ -1087,6 +1097,9 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// The channels a guest has, closed when it is forgotten.
   final _guestChannels = <String, Set<OfficeChannel>>{};
+
+  /// How many channels a guest may have open at once.
+  static const _guestChannelLimit = 4;
 
   /// The grant [deviceId] has as a guest now, if any.
   KnownDevice? guestGrant(String deviceId) => _guests[deviceId];
@@ -1232,7 +1245,21 @@ class OfficeNetwork extends ChangeNotifier {
       },
       guest: (name: name, office: office),
     );
+    _letGo(pairing);
     return pairing;
+  }
+
+  /// A guest's pairing let go once it ended: what it holds (the sharing
+  /// it was for, and through it the document) is not kept by it.
+  void _letGo(OfficePairing pairing) {
+    void ended() {
+      if (!pairing.finished) return;
+      pairing.removeListener(ended);
+      if (identical(_pairing, pairing)) _pairing = null;
+    }
+
+    pairing.addListener(ended);
+    ended();
   }
 
   /// [deviceId] a guest no more: forgotten, its channels closed, and this
@@ -1261,10 +1288,6 @@ class OfficeNetwork extends ChangeNotifier {
   Future<void> _steps = Future<void>.value();
 
   Future<void> _maybeQuiet() => _serial(() async {
-    // A join under way is let finish: what it opens is closed after.
-    while (_starting) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
     if (!_quiet ||
         !_joined ||
         _guestsOpen ||
@@ -2305,6 +2328,7 @@ class OfficeNetwork extends ChangeNotifier {
             },
           );
           _pairing = asking;
+          _letGo(asking);
           if (!asking.finished) {
             _guestPairingFor = _guestTitle;
             guestPairing.value = asking;
@@ -2396,8 +2420,13 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   /// Announces this Folio and starts looking for the others.
-  Future<void> join({bool remember = true}) async {
+  Future<void> join({bool remember = true}) {
     if (remember) _quiet = false;
+    // After a leaving or a quiet closing under way, not beside it.
+    return _serial(() => _join(remember));
+  }
+
+  Future<void> _join(bool remember) async {
     if (_joined || _starting) {
       // Joined, or joining, for a live document alone: kept from now on.
       if (remember && _joined) await _remember(true);
@@ -2444,18 +2473,22 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   /// Stops announcing and looking; Folio will not join at its next start.
-  Future<void> leave() async {
+  Future<void> leave() {
     _ownSoon?.cancel();
     _quiet = false;
-    await _close();
-    _joined = false;
-    _peers.clear();
-    await _remember(false);
-    notifyListeners();
+    return _serial(() async {
+      await _close();
+      _joined = false;
+      _peers.clear();
+      await _remember(false);
+      notifyListeners();
+    });
   }
 
   /// Announces again with the profile's name, after it was changed.
-  Future<void> rename() async {
+  Future<void> rename() => _serial(_rename);
+
+  Future<void> _rename() async {
     final identity = _identity, server = _server;
     if (!_joined || identity == null || server == null) return;
     // Nothing was announced (a test's listening): nothing to say again.

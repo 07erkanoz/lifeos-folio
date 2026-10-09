@@ -1013,7 +1013,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         context,
         pairing,
         title: OfficeNetwork.instance.guestPairingFor,
-      ),
+      ).whenComplete(() => _guestsTold.remove(pairing)),
     );
   }
 
