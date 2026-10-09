@@ -35,7 +35,7 @@ class History {
   void handleDocChange(DocChange docChange) {
     if (ignoreChange) return;
     if (!userOnly || docChange.source == ChangeSource.local) {
-      record(docChange.change, docChange.before);
+      record(docChange.change, docChange.before, docChange.source);
     } else {
       transform(docChange.change);
     }
@@ -45,13 +45,21 @@ class History {
     stack.clear();
   }
 
-  void record(Delta change, Delta before) {
+  /// Where the last recorded change came from (Folio): a change from
+  /// elsewhere is not undone together with one made here.
+  ChangeSource? _lastSource;
+
+  void record(Delta change, Delta before, [ChangeSource? source]) {
     if (change.isEmpty) return;
     stack.redo.clear();
     var undoDelta = change.invert(before);
     final timeStamp = DateTime.now().millisecondsSinceEpoch;
+    final sameSource = source == _lastSource;
+    _lastSource = source;
 
-    if (lastRecorded + interval > timeStamp && stack.undo.isNotEmpty) {
+    if (lastRecorded + interval > timeStamp &&
+        stack.undo.isNotEmpty &&
+        sameSource) {
       final lastDelta = stack.undo.removeLast();
       undoDelta = undoDelta.compose(lastDelta);
     } else {
@@ -119,9 +127,7 @@ class History {
 }
 
 class HistoryStack {
-  HistoryStack.empty()
-      : undo = [],
-        redo = [];
+  HistoryStack.empty() : undo = [], redo = [];
 
   List<Delta> undo;
   List<Delta> redo;

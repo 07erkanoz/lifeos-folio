@@ -81,7 +81,7 @@ class EditorTableEmbed extends EmbedBuilder {
         ),
       );
     }
-    return EditorTableView(
+    final view = EditorTableView(
       table: table,
       onChanged: (updated) => onChanged(
         index as int,
@@ -96,9 +96,11 @@ class EditorTableEmbed extends EmbedBuilder {
       onDelete: () => onDelete(embedContext.node.documentOffset),
       onCellsGone: onCellsGone,
       onPointerInside: onPointerInside,
-      readOnly: readOnly(),
       word: word(),
     );
+    // Only shown: drawn as it is, its marks kept, neither touched nor
+    // given the keyboard.
+    return readOnly() ? ExcludeFocus(child: IgnorePointer(child: view)) : view;
   }
 }
 

@@ -10,6 +10,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:evrak_convert/models/document_model.dart';
 import 'package:evrak_convert/services/live/live_share.dart';
 import 'package:evrak_convert/services/office/office_chat.dart';
 import 'package:evrak_convert/services/office/office_identity.dart';
@@ -176,15 +177,40 @@ void main() {
       return (pc, tablet);
     }))!;
     final writer = Document.fromDelta(
-      Delta()..insert(
-        '4. Kiracı, kira bedelini her ayın beşine kadar kiraya verenin '
-        'banka hesabına öder.\n',
-      ),
+      Delta()
+        ..insert(
+          '4. Kiracı, kira bedelini her ayın beşine kadar kiraya verenin '
+          'banka hesabına öder.\n',
+        )
+        ..insert({'doc-table': 0})
+        ..insert('\n'),
     );
+    DocBlock cell(String text, {bool bold = false}) => DocBlock(
+      plainText: text,
+      spans: [
+        if (bold) DocSpan(startOffset: 0, length: text.length, bold: true),
+      ],
+    );
+    final blocks = [
+      DocBlock(
+        type: DocBlockType.table,
+        plainText: '',
+        table: DocTable(
+          rows: [
+            DocTableRow(
+              cells: [
+                DocTableCell(blocks: [cell('Kira bedeli', bold: true)]),
+                DocTableCell(blocks: [cell('25.000 TL')]),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ];
     final host = LiveShareHost(
       title: 'Kira sözleşmesi',
-      snapshot: () => (delta: writer.toDelta().toJson(), blocks: []),
-      blockCount: () => 0,
+      snapshot: () => (delta: writer.toDelta().toJson(), blocks: blocks),
+      blockCount: () => blocks.length,
       network: pc,
       apply: (change) {
         writer.compose(change, ChangeSource.remote);

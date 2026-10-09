@@ -241,11 +241,16 @@ class LiveShareHost {
       if (!_marksAllowed(attributes, layouts)) return false;
       final lineMarks =
           attributes != null && attributes.keys.any(_lineKeys.contains);
+      // A word's marks never on a line's end, as Quill keeps them.
+      final wordMarks =
+          attributes != null &&
+          attributes.keys.any((k) => !_lineKeys.contains(k));
       if (op.isInsert) {
         final data = op.data;
         if (data is! String || data.length != n) return false;
         if (index > length - 1) return false;
         if (lineMarks && data.replaceAll('\n', '').isNotEmpty) return false;
+        if (wordMarks && data.contains('\n')) return false;
       } else if (op.isDelete) {
         if (index + n > length - 1) return false;
         if (!_wordsOnly(base.slice(index, index + n))) return false;
@@ -259,6 +264,10 @@ class LiveShareHost {
               marked.operations.any(
                 (o) => (o.data as String).replaceAll('\n', '').isNotEmpty,
               )) {
+            return false;
+          }
+          if (wordMarks &&
+              marked.operations.any((o) => (o.data as String).contains('\n'))) {
             return false;
           }
         }
@@ -285,7 +294,30 @@ class LiveShareHost {
     'doc-layout',
   };
 
-  static final _hex = RegExp(r'^#?[0-9A-Fa-f]{3,8}$');
+  /// The marks Folio makes, the only ones taken from another.
+  static const _markKeys = {
+    'bold',
+    'italic',
+    'underline',
+    'strike',
+    'blockquote',
+    'script',
+    'font',
+    'size',
+    'color',
+    'background',
+    'link',
+    'header',
+    'align',
+    'list',
+    'indent',
+    'direction',
+    'line-height',
+    'doc-layout',
+  };
+
+  /// A colour as Quill reads it: six or eight hex digits after a hash.
+  static final _hex = RegExp(r'^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$');
   static final _scheme = RegExp(r'^(https?:|mailto:|tel:)');
   static final _control = RegExp(r'[\x00-\x1F<>]');
 
@@ -298,6 +330,7 @@ class LiveShareHost {
     if (attributes == null) return true;
     if (attributes.length > 16) return false;
     for (final MapEntry(:key, :value) in attributes.entries) {
+      if (!_markKeys.contains(key)) return false;
       final ok =
           value == null ||
           switch (key) {
@@ -1101,6 +1134,8 @@ class LiveSession extends ChangeNotifier {
     _waitingWhole = true;
     _askedAt = DateTime.now();
     _say({'tip': 'tamiste'});
+    // A page written on is locked meanwhile.
+    notifyListeners();
   }
 
   void _take(Map<String, Object?> m) {

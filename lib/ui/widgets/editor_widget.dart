@@ -252,19 +252,15 @@ class _EditorWidgetState extends State<EditorWidget>
     if (mounted) setState(() {});
   }
 
-  /// The last change was written elsewhere: the next one from there may
-  /// be undone with it, one from here may not.
-  bool _lastWriteRemote = false;
-
   /// The pen with another: the document only read here meanwhile.
   bool get _penAway => _live?.pen.value != null;
 
   void _livePenChanged() {
     _quillController.readOnly = _heldElsewhere || _penAway;
-    // What the sharer does next is an undo step of its own, not one with
-    // what was written there.
-    _quillController.document.history.lastRecorded = 0;
-    _lastWriteRemote = false;
+    // The header and footer too: the document is only read here meanwhile.
+    for (final region in _regions.values) {
+      region.readOnly = _penAway;
+    }
     if (mounted) setState(() {});
   }
 
@@ -274,9 +270,8 @@ class _EditorWidgetState extends State<EditorWidget>
     if (!LiveShareHost.acceptable(change, _quillController.document)) {
       return false;
     }
-    // Undone apart from what the sharer wrote before: a step of its own.
-    final history = _quillController.document.history;
-    if (!_lastWriteRemote) history.lastRecorded = 0;
+    // Undone apart from what the sharer writes (the history keeps changes
+    // from elsewhere in steps of their own).
     try {
       _quillController.compose(
         change,
@@ -286,7 +281,6 @@ class _EditorWidgetState extends State<EditorWidget>
     } catch (_) {
       return false;
     }
-    _lastWriteRemote = true;
     return true;
   }
 
@@ -1179,6 +1173,8 @@ class _EditorWidgetState extends State<EditorWidget>
         ..documentMetadata = (() => _sourceModel?.metadata ?? const {})
         ..onPasted = _pasted,
     );
+    // Opened while another holds the pen: only read, as the body is.
+    if (_penAway) controller.readOnly = true;
     _regionFocus.putIfAbsent(key, () {
       final node = FocusNode(debugLabel: 'document-$key');
       // The toolbar follows the cursor, so it has to know where the cursor is.

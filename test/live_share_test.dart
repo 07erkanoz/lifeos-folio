@@ -887,6 +887,45 @@ void main() {
     expect(ok(Delta()..insert('x', {'header': 1})), isFalse);
     expect(ok(Delta()..insert('\n', {'header': 1})), isTrue);
     expect(ok(Delta()..retain(2, {'align': 'center'})), isFalse);
+    // A colour only as Quill reads it; a key unknown not even taken off.
+    expect(ok(Delta()..insert('x', {'color': 'abcdef'})), isFalse);
+    expect(ok(Delta()..insert('x', {'nicht': null})), isFalse);
+    // A word's mark never on a line's end.
+    expect(ok(Delta()..insert('a\nb', {'bold': true})), isFalse);
+  });
+
+  test('a word\'s mark is not put over a line\'s end, and what was '
+      'written elsewhere is undone apart from what is written here', () {
+    final doc = Document.fromDelta(Delta()..insert('A\nB\n'));
+    expect(
+      LiveShareHost.acceptable(
+        Delta()
+          ..insert('X')
+          ..retain(4, {'bold': true}),
+        doc,
+      ),
+      isFalse,
+    );
+    expect(
+      LiveShareHost.acceptable(Delta()..retain(1, {'bold': true}), doc),
+      isTrue,
+    );
+    // Written there, then at once here: two steps, the last undone alone.
+    doc.compose(
+      Delta()
+        ..retain(1)
+        ..insert(' uzak'),
+      ChangeSource.remote,
+    );
+    doc.compose(
+      Delta()
+        ..retain(6)
+        ..insert(' yerel'),
+      ChangeSource.local,
+    );
+    expect(doc.toPlainText(), 'A uzak yerel\nB\n');
+    doc.undo();
+    expect(doc.toPlainText(), 'A uzak\nB\n');
   });
 
   test('lines joined and split as a holder of the pen would, a line\'s '
