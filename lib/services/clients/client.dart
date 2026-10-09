@@ -17,6 +17,7 @@ class Client {
     this.email = '',
     this.address = '',
     this.note = '',
+    this.messages = false,
     this.names = const [],
     required this.updated,
     this.removed = false,
@@ -53,6 +54,7 @@ class Client {
     'not',
     'silindi',
     'buro',
+    'mesajIzni',
   ];
 
   /// The cards told to be this client's too: their records are its.
@@ -77,6 +79,10 @@ class Client {
   /// TCKN for a person, VKN for a body; empty while not told.
   final String idNo;
   final String phone, phone2, email, address, note;
+
+  /// Wishes to be told by message (WhatsApp, SMS, e-mail) of their
+  /// hearings and instalments: the day's list asks for them only then.
+  final bool messages;
 
   /// The other names its cases write it with, folded: "AYŞE KARACA" and
   /// "Ayşe Karaca" are one client, a name told to be the same is too.
@@ -104,6 +110,7 @@ class Client {
     String? email,
     String? address,
     String? note,
+    bool? messages,
     List<String>? names,
     DateTime? updated,
     bool? removed,
@@ -123,6 +130,7 @@ class Client {
       email: email ?? this.email,
       address: address ?? this.address,
       note: note ?? this.note,
+      messages: messages ?? this.messages,
       names: names ?? this.names,
       updated: now,
       removed: removed ?? this.removed,
@@ -150,6 +158,7 @@ class Client {
     email: email,
     address: address,
     note: note,
+    messages: messages,
     names: names,
     updated: updated,
     removed: removed,
@@ -176,6 +185,7 @@ class Client {
     'not': note,
     'silindi': removed,
     'buro': office,
+    'mesajIzni': messages,
   };
 
   /// The mark a colleague's client unshared leaves: nothing of the person.
@@ -222,6 +232,7 @@ class Client {
       email: pick['eposta']! as String,
       address: pick['adres']! as String,
       note: pick['not']! as String,
+      messages: pick['mesajIzni']! as bool,
       names: {...mine.names, ...theirs.names}.toList(),
       updated: theirs.updated.isAfter(mine.updated)
           ? theirs.updated
@@ -247,6 +258,7 @@ class Client {
     'eposta': email,
     'adres': address,
     'not': note,
+    'mesajIzni': messages,
     'adlar': names,
     'guncelleme': updated.toIso8601String(),
     'silindi': removed,
@@ -281,6 +293,7 @@ class Client {
       email: s('eposta'),
       address: s('adres'),
       note: s('not'),
+      messages: j['mesajIzni'] == true,
       names: [
         for (final n in j['adlar'] is List ? j['adlar'] as List : const [])
           if (n is String) n,
@@ -396,7 +409,11 @@ enum ClientRecordKind {
   cash('kasa'),
 
   /// An expense the office pays every month, written for each month.
-  cashRepeat('kasaTekrar');
+  cashRepeat('kasaTekrar'),
+
+  /// A message written to the client (WhatsApp, SMS, e-mail) as the
+  /// lawyer sent it: kept on their timeline.
+  message('mesaj');
 
   const ClientRecordKind(this.code);
   final String code;

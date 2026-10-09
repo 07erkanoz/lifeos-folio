@@ -131,6 +131,7 @@ void main() {
       email: 'ayse@ornek.com',
       address: 'Muratpaşa / Antalya',
       note: '18:00\'den sonra aranmak istemiyor.',
+      messages: true,
       updated: DateTime(2026, 10, 8),
       caseLinks: {
         caseKey('2025/1904', 'Antalya 6. İcra Dairesi'): CaseLink(
@@ -357,6 +358,16 @@ void main() {
         debugDefaultTargetPlatformOverride = null;
         return;
       }
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('client-message')),
+        -200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.byKey(const ValueKey('client-message')));
+      await tester.pumpAndSettle();
+      await _shot(tester, '$name-mesaj');
+      await tester.tap(find.text('Vazgeç'));
+      await tester.pumpAndSettle();
       final menu = find.byKey(
         ValueKey('case-menu-${caseKey('2025/77', 'Antalya 2. İş Mahkemesi')}'),
       );

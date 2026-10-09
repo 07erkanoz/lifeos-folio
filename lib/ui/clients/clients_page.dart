@@ -25,6 +25,8 @@ import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
 import 'attachment_preview.dart';
 import 'client_accounts_view.dart';
+import 'client_message_dialog.dart';
+import '../../services/clients/client_messages.dart';
 
 /// A scan to keep: from the camera where there is one (Android, iPhone),
 /// or a file (a PDF or a picture) chosen; null when backed out.
@@ -116,6 +118,10 @@ class _ClientsPageState extends State<ClientsPage> {
   bool _onlyLate = false;
   String? _selected;
 
+  /// The messages the day asks for (hearings and instalments of clients
+  /// who wish to be told).
+  List<DueMessage> _due = const [];
+
   /// The list beside the card, folded by the lawyer for the card's room;
   /// remembered on this device.
   bool _listOpen = true;
@@ -137,9 +143,12 @@ class _ClientsPageState extends State<ClientsPage> {
     }
     final first = _entries.isEmpty ? widget.open : null;
     _listOpen = db.meta(_listKey) != 'kapali';
+    final entries = db.clientEntries(lawyer: widget.lawyer);
+    final due = dueMessages(db, DateTime.now(), entries);
     setState(() {
-      _entries = db.clientEntries(lawyer: widget.lawyer);
+      _entries = entries;
       _late = late;
+      _due = due;
     });
     if (first != null) {
       final e = _entries.where((x) => x.key == first).firstOrNull;
@@ -148,6 +157,90 @@ class _ClientsPageState extends State<ClientsPage> {
   }
 
   static const _listKey = 'muvekkil_listesi';
+
+  /// The day's messages, each opened in turn; the list kept up as they go.
+  Future<void> _dueList() async {
+    final db = _db!;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, again) {
+          final due = dueMessages(db, DateTime.now(), _entries);
+          return AlertDialog(
+            title: const Text('Bugün gönderilecek mesajlar'),
+            content: SizedBox(
+              width: 440,
+              child: due.isEmpty
+                  ? const Text(
+                      'Gönderilecek mesaj kalmadı.',
+                      style: TextStyle(color: AgendaColors.muted),
+                    )
+                  : ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final d in due)
+                          ListTile(
+                            key: ValueKey('due-${d.about}'),
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(titleName(d.client.name)),
+                            subtitle: Text(
+                              d.kind == MessageKind.hearing
+                                  ? 'Duruşma ${_day(d.at)} ${_time(d.at)}'
+                                        ' · ${d.daysLeft == 0 ? 'bugün' : '${d.daysLeft} gün sonra'}'
+                                  : 'Taksit ${lira(d.amount)} · '
+                                        '${d.daysLeft < 0
+                                            ? '${-d.daysLeft} gün gecikti'
+                                            : d.daysLeft == 0
+                                            ? 'bugün'
+                                            : '${d.daysLeft} gün sonra'}',
+                            ),
+                            trailing: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF1FA855),
+                              ),
+                              onPressed: () async {
+                                final e = _entries
+                                    .where(
+                                      (x) =>
+                                          x.client?.id == d.client.id ||
+                                          x.ids.contains(d.client.id),
+                                    )
+                                    .firstOrNull;
+                                final sent = await showDialog<ClientRecord>(
+                                  context: context,
+                                  builder: (_) => ClientMessageDialog(
+                                    client: d.client,
+                                    cases: e?.cases ?? const [],
+                                    ids: e?.ids ?? const [],
+                                    database: db,
+                                    lawyer: widget.lawyer,
+                                    person: widget.person,
+                                    seesMoney: widget.seesMoney,
+                                    due: d,
+                                  ),
+                                );
+                                if (sent == null) return;
+                                db.saveClientRecord(sent);
+                                again(() {});
+                              },
+                              child: const Text('Aç'),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Kapat'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    await _load();
+  }
 
   void _fold(bool open) {
     _db?.setMeta(_listKey, open ? 'acik' : 'kapali');
@@ -269,6 +362,33 @@ class _ClientsPageState extends State<ClientsPage> {
             ),
           ),
         ),
+        if (_due.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Material(
+              color: const Color(0xFFE7F6EC),
+              borderRadius: BorderRadius.circular(10),
+              child: ListTile(
+                key: const ValueKey('clients-due'),
+                dense: true,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                leading: const Icon(
+                  Icons.chat_outlined,
+                  color: Color(0xFF11663A),
+                ),
+                title: Text(
+                  'Bugün gönderilecek ${_due.length} mesaj',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF11663A),
+                  ),
+                ),
+                onTap: _dueList,
+              ),
+            ),
+          ),
         if (_late.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -837,6 +957,28 @@ class _ClientCardState extends State<ClientCard> {
     if (mounted) setState(() {});
   }
 
+  /// A message to the client, opened in the lawyer's own WhatsApp, SMS or
+  /// e-mail and kept on their timeline once opened.
+  Future<void> _message() async {
+    final card = _card();
+    final sent = await showDialog<ClientRecord>(
+      context: context,
+      builder: (_) => ClientMessageDialog(
+        client: card,
+        cases: widget.entry.cases,
+        ids: widget.entry.ids,
+        database: _db,
+        lawyer: widget.lawyer,
+        person: widget.person,
+        seesMoney: widget.seesMoney,
+      ),
+    );
+    if (sent == null) return;
+    _keep(sent);
+    if (mounted) setState(() {});
+    widget.onChanged?.call(card.id);
+  }
+
   /// [r]'s first file seen, to be printed or shared.
   Future<void> _preview(ClientRecord r, String title) async {
     final f = clientFilesOf(r).firstOrNull;
@@ -1117,6 +1259,14 @@ class _ClientCardState extends State<ClientCard> {
           '${m.text('kararlar').isEmpty ? m.text('konusulanlar') : m.text('kararlar')}',
           m.text('dosya').isEmpty ? '' : _number(m.text('dosya')),
           AgendaColors.ok,
+        ),
+      for (final m in _records(ClientRecordKind.message))
+        _Event(
+          m.created,
+          'Mesaj (${MessageChannel.values.where((c) => c.name == m.text('kanal')).firstOrNull?.label ?? ''}): '
+          '${MessageKind.values.where((k) => k.name == m.text('tur')).firstOrNull?.label ?? ''}',
+          m.text('dosya').isEmpty ? '' : _number(m.text('dosya')),
+          AgendaColors.hearing,
         ),
       for (final a in attorneys)
         _Event(
@@ -1423,6 +1573,12 @@ class _ClientCardState extends State<ClientCard> {
                 onPressed: () => _meeting(),
                 icon: const Icon(Icons.record_voice_over_outlined, size: 18),
                 label: const Text('Görüşme tutanağı'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('client-message'),
+                onPressed: _message,
+                icon: const Icon(Icons.chat_outlined, size: 18),
+                label: const Text('Mesaj'),
               ),
               if (widget.seesMoney)
                 OutlinedButton.icon(
@@ -2509,6 +2665,7 @@ class _ContactDialogState extends State<_ContactDialog> {
   late final _address = TextEditingController(text: widget.client.address);
   late final _note = TextEditingController(text: widget.client.note);
   late bool _body = widget.client.body;
+  late bool _messages = widget.client.messages;
 
   @override
   void dispose() {
@@ -2553,6 +2710,17 @@ class _ContactDialogState extends State<_ContactDialog> {
             _field(_email, 'E-posta'),
             _field(_address, 'Adres', lines: 2),
             _field(_note, 'Not', lines: 3),
+            SwitchListTile(
+              key: const ValueKey('contact-messages'),
+              contentPadding: EdgeInsets.zero,
+              value: _messages,
+              onChanged: (v) => setState(() => _messages = v),
+              title: const Text('Mesajla bilgilendirilmek istiyor'),
+              subtitle: const Text(
+                'Duruşma ve taksit hatırlatmaları günün listesine gelir; '
+                'WhatsApp, SMS ya da e-postayla siz gönderirsiniz.',
+              ),
+            ),
             const Text(
               'Bilgiler alan alan eşitlenir: bir cihazda telefonu, ötekinde '
               'adresi değiştirirseniz ikisi de korunur.',
@@ -2589,6 +2757,7 @@ class _ContactDialogState extends State<_ContactDialog> {
               email: _email.text.trim(),
               address: _address.text.trim(),
               note: _note.text.trim(),
+              messages: _messages,
               names: names,
             ),
           );
