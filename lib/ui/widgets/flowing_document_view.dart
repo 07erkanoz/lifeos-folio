@@ -15,9 +15,22 @@ import 'editor_units.dart';
 /// but read-only. The document is the preview's own; nothing is changed,
 /// and the page view is one tap away.
 class FlowingDocumentView extends StatefulWidget {
-  const FlowingDocumentView({super.key, required this.model});
+  const FlowingDocumentView({
+    super.key,
+    required this.model,
+    this.live,
+    this.scale = zoom,
+  });
 
   final DocModel model;
+
+  /// A document shown as another device writes it: its controller, kept
+  /// up from outside, and the blocks its embeds point at. [model] is not
+  /// read then.
+  final ({QuillController controller, List<DocBlock> Function() blocks})? live;
+
+  /// How much larger than the page the text is shown.
+  final double scale;
 
   /// The text larger, as a phone's reader expects; the editor's too.
   static const zoom = 1.3;
@@ -27,8 +40,10 @@ class FlowingDocumentView extends StatefulWidget {
 }
 
 class _FlowingDocumentViewState extends State<FlowingDocumentView> {
-  late QuillController _controller;
+  late QuillController _own;
   late List<DocBlock> _kept;
+  QuillController get _controller => widget.live?.controller ?? _own;
+  List<DocBlock> get _blocks => widget.live?.blocks() ?? _kept;
 
   @override
   void initState() {
@@ -39,16 +54,21 @@ class _FlowingDocumentViewState extends State<FlowingDocumentView> {
   @override
   void didUpdateWidget(FlowingDocumentView old) {
     super.didUpdateWidget(old);
-    if (!identical(old.model, widget.model)) {
-      _controller.dispose();
+    if (widget.live == null && !identical(old.model, widget.model)) {
+      _own.dispose();
       _open();
     }
   }
 
   void _open() {
+    if (widget.live != null) {
+      _kept = const [];
+      _own = QuillController.basic();
+      return;
+    }
     final mapped = DocDeltaMap.modeldenDelta(widget.model);
     _kept = mapped.korunanlar;
-    _controller = QuillController(
+    _own = QuillController(
       document: Document.fromDelta(mapped.delta),
       selection: const TextSelection.collapsed(offset: 0),
       readOnly: true,
@@ -57,7 +77,7 @@ class _FlowingDocumentViewState extends State<FlowingDocumentView> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    _own.dispose();
     super.dispose();
   }
 
@@ -75,7 +95,7 @@ class _FlowingDocumentViewState extends State<FlowingDocumentView> {
       builder: (context, box) {
         final lineWidth =
             (box.maxWidth - 2 * gutter) /
-            FlowingDocumentView.zoom /
+            widget.scale /
             EditorUnits.pixelsPerPoint;
         return ColoredBox(
           color: Colors.white,
@@ -83,9 +103,8 @@ class _FlowingDocumentViewState extends State<FlowingDocumentView> {
             key: const ValueKey('preview-flowing'),
             padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 96),
             child: MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: const TextScaler.linear(FlowingDocumentView.zoom),
-              ),
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(widget.scale)),
               child: Theme(
                 data: Theme.of(context).copyWith(
                   brightness: Brightness.light,
@@ -94,61 +113,72 @@ class _FlowingDocumentViewState extends State<FlowingDocumentView> {
                 ),
                 child: DefaultTextStyle(
                   style: const TextStyle(color: Colors.black),
-                  child: QuillEditor.basic(
-                    controller: _controller,
-                    config: QuillEditorConfig(
-                      showCursor: false,
-                      textSpanBuilder: EditorTabSpans.builder(
-                        pageWidth: lineWidth,
+                  // Shown, not to be taken: one watching a document shared
+                  // live can neither touch it nor give it the keyboard, so
+                  // cannot select or copy it; the writer's selection, set
+                  // from outside, still shows.
+                  child: ExcludeFocus(
+                    excluding: widget.live != null,
+                    child: IgnorePointer(
+                      ignoring: widget.live != null,
+                      child: QuillEditor.basic(
+                        controller: _controller,
+                        config: QuillEditorConfig(
+                          showCursor: false,
+                          textSpanBuilder: EditorTabSpans.builder(
+                            pageWidth: lineWidth,
+                          ),
+                          lineLayoutBuilder: EditorLineLayout.builder(
+                            pageWidth: lineWidth,
+                          ),
+                          embedBuilders: [
+                            EditorImageEmbed(),
+                            EditorTableEmbed(
+                              blocks: () => _blocks,
+                              onChanged: (_, _) {},
+                              onFocus: (_) {},
+                              onDelete: (_) {},
+                              onCellsGone: () {},
+                              onPointerInside: () {},
+                            ),
+                          ],
+                          customStyles: DefaultStyles(
+                            paragraph: DefaultTextBlockStyle(
+                              _text,
+                              const HorizontalSpacing(0, 0),
+                              const VerticalSpacing(0, 0),
+                              const VerticalSpacing(0, 0),
+                              null,
+                            ),
+                            lists: DefaultListBlockStyle(
+                              _text,
+                              const HorizontalSpacing(0, 0),
+                              const VerticalSpacing(0, 0),
+                              const VerticalSpacing(0, 0),
+                              null,
+                              null,
+                            ),
+                            indent: DefaultTextBlockStyle(
+                              _text,
+                              const HorizontalSpacing(0, 0),
+                              const VerticalSpacing(0, 0),
+                              const VerticalSpacing(0, 0),
+                              null,
+                            ),
+                          ),
+                          customStyleBuilder: (attribute) =>
+                              attribute.key == 'font'
+                              ? TextStyle(
+                                  fontFamily: DocumentFonts.family(
+                                    attribute.value as String?,
+                                  ),
+                                )
+                              : const TextStyle(),
+                          scrollable: false,
+                          expands: false,
+                          padding: EdgeInsets.zero,
+                        ),
                       ),
-                      lineLayoutBuilder: EditorLineLayout.builder(
-                        pageWidth: lineWidth,
-                      ),
-                      embedBuilders: [
-                        EditorImageEmbed(),
-                        EditorTableEmbed(
-                          blocks: () => _kept,
-                          onChanged: (_, _) {},
-                          onFocus: (_) {},
-                          onDelete: (_) {},
-                          onCellsGone: () {},
-                          onPointerInside: () {},
-                        ),
-                      ],
-                      customStyles: DefaultStyles(
-                        paragraph: DefaultTextBlockStyle(
-                          _text,
-                          const HorizontalSpacing(0, 0),
-                          const VerticalSpacing(0, 0),
-                          const VerticalSpacing(0, 0),
-                          null,
-                        ),
-                        lists: DefaultListBlockStyle(
-                          _text,
-                          const HorizontalSpacing(0, 0),
-                          const VerticalSpacing(0, 0),
-                          const VerticalSpacing(0, 0),
-                          null,
-                          null,
-                        ),
-                        indent: DefaultTextBlockStyle(
-                          _text,
-                          const HorizontalSpacing(0, 0),
-                          const VerticalSpacing(0, 0),
-                          const VerticalSpacing(0, 0),
-                          null,
-                        ),
-                      ),
-                      customStyleBuilder: (attribute) => attribute.key == 'font'
-                          ? TextStyle(
-                              fontFamily: DocumentFonts.family(
-                                attribute.value as String?,
-                              ),
-                            )
-                          : const TextStyle(),
-                      scrollable: false,
-                      expands: false,
-                      padding: EdgeInsets.zero,
                     ),
                   ),
                 ),

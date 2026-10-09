@@ -74,6 +74,8 @@ import '../services/uyap/uyap_web_service.dart' show UyapWebService;
 import '../services/portal/agenda_reminders.dart';
 import '../services/platform/folder_zip.dart';
 import 'cash/cash_page.dart';
+import 'live/live_document_page.dart';
+import '../services/live/live_share.dart';
 import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
@@ -736,6 +738,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       OfficeNetwork.instance.incoming.addListener(_pairingAsked);
       OfficeNetwork.instance.incomingOffer.addListener(_offerCame);
       OfficeNetwork.instance.arrived.addListener(_filesArrived);
+      // Documents shared live with this device from the person's others.
+      LiveShare.instance.listen(OfficeNetwork.instance);
+      LiveShare.instance.incoming.addListener(_liveCame);
       tellOffice(OfficeNetwork.instance);
       // The agenda's alarms: deadlines' last days, hearings (B23).
       AgendaReminders.start(private: () => AppLock.instance.locked);
@@ -974,6 +979,25 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// Another Folio asked to know this one: its code shown wherever the
   /// user is.
+  /// The live documents already told of.
+  final _liveTold = <LiveSession>{};
+
+  /// A document shared live from another of the person's devices: told,
+  /// to be opened with a tap.
+  void _liveCame() {
+    for (final session in LiveShare.instance.incoming.value) {
+      if (!_liveTold.add(session) || !mounted) continue;
+      showNotice(
+        context,
+        '${session.from} "${session.title}" belgesini canlı paylaşıyor.',
+        actionLabel: 'Aç',
+        onAction: () => unawaited(LiveDocumentPage.open(context, session)),
+        duration: const Duration(seconds: 20),
+      );
+    }
+    _liveTold.removeWhere((s) => s.ended);
+  }
+
   void _pairingAsked() {
     final incoming = OfficeNetwork.instance.incoming;
     final pairing = incoming.value;
@@ -987,6 +1011,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void dispose() {
     _keptSearch?.dispose();
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
+    LiveShare.instance.incoming.removeListener(_liveCame);
     OfficeNetwork.instance.removeListener(_officeCounted);
     OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
     OfficeNetwork.instance.arrived.removeListener(_filesArrived);

@@ -44,6 +44,7 @@ class EditorFileMenu extends StatelessWidget {
     this.onSendUyap,
     this.onUyapOperations,
     this.onNewWindow,
+    this.onLiveShare,
     this.compact = false,
   });
 
@@ -66,6 +67,9 @@ class EditorFileMenu extends StatelessWidget {
 
   /// A new document in an editor window of its own.
   final VoidCallback? onNewWindow;
+
+  /// The document shown live on other devices; null where it cannot be.
+  final VoidCallback? onLiveShare;
 
   /// An icon alone, for a narrow window.
   final bool compact;
@@ -178,6 +182,8 @@ class EditorFileMenu extends StatelessWidget {
             onNewWindow != null)
           const Divider(height: 8),
         _item('Kaydet', Icons.save_outlined, save, keys: _key('S')),
+        if (onLiveShare != null)
+          _item('Canlı paylaş…', Icons.cast_outlined, onLiveShare),
         _item('Farklı kaydet…', Icons.save_as_outlined, busy ? null : onSaveAs),
         _item(
           'UYAP UDF Olarak Kaydet',

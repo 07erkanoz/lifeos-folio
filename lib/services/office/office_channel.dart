@@ -305,6 +305,12 @@ class OfficeChannel {
         });
       });
 
+  /// What was sent has gone out on the wire (see [OfficeLink.drain]).
+  Future<void> drain() async {
+    await _sending;
+    await _link.drain();
+  }
+
   Future<void> close() async {
     await _listen?.cancel();
     await _link.close();

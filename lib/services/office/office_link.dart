@@ -78,12 +78,21 @@ class OfficeLink {
     }
   }
 
+  /// What was written has gone out: waited on between one word and the
+  /// next by a sender that must not run ahead of a slow reader. Nothing
+  /// may be written while it is waited on.
+  Future<void> drain() async {
+    if (_closed) return;
+    await _socket.flush();
+  }
+
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
     await _lines.cancel();
     try {
-      await _socket.flush();
+      // A reader that takes nothing more does not keep the socket open.
+      await _socket.flush().timeout(const Duration(seconds: 3));
     } catch (_) {}
     _socket.destroy();
     await _messages.close();

@@ -478,6 +478,56 @@ class OfficeNetwork extends ChangeNotifier {
     }
   }
 
+  /// Channels kept open for a kind ("canli": a document shared live): the
+  /// first word names the kind, and the channel is the handler's until
+  /// either side closes it. [own] whether the asker proved itself one of
+  /// this person's devices, [member] whether it is the office's.
+  final streams =
+      <
+        String,
+        Future<void> Function(
+          OfficeChannel channel,
+          Map<String, Object?> first, {
+          required bool own,
+          required bool member,
+        })
+      >{};
+
+  /// A channel to [deviceId] kept open for [kind], [body] its first word:
+  /// to one of the person's own devices, or with [office] to a member of
+  /// the office. Null when it cannot be reached or is not who it must be.
+  Future<OfficeChannel?> openStream(
+    String deviceId,
+    String kind, {
+    Map<String, Object?> body = const {},
+    bool office = false,
+  }) async {
+    final identity = _identity, peer = _peers[deviceId];
+    final host = peer?.host;
+    if (identity == null || peer == null || host == null || !peer.online) {
+      return null;
+    }
+    final trusted = office ? await _trusted(deviceId) : await _trustedFor(peer);
+    if (trusted == null) return null;
+    if (office && ledger.member(deviceId) == null) return null;
+    try {
+      final ch = await OfficeChannel.open(
+        identity: identity,
+        peer: trusted,
+        host: host,
+        port: peer.port,
+      );
+      if (!office && !ch.vouched) {
+        await ch.close();
+        return null;
+      }
+      await ch.send({...body, 't': 'akis', 'tur': kind});
+      return ch;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// What this device answers one of the person's own devices asking, by
   /// kind: its answer, and what to do with the asker's last word, null when
   /// it says none.
@@ -875,6 +925,17 @@ class OfficeNetwork extends ChangeNotifier {
         if (after != null) await after(await next);
         await Future<void>.delayed(const Duration(milliseconds: 200));
         await ch.close();
+        return;
+      }
+      if (m['t'] == 'akis') {
+        final handler = streams['${m['tur']}'];
+        final own = ch.vouched;
+        final member = ledger.member(ch.peer.deviceId) != null;
+        if (handler == null || (!own && !member)) {
+          await ch.close();
+          return;
+        }
+        await handler(ch, m, own: own, member: member);
         return;
       }
       if (m['t'] == 'senkron') {

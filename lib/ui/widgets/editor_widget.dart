@@ -114,6 +114,8 @@ import 'editor_units.dart';
 import 'editor_ribbon.dart';
 import '../../services/editor/petition_templates.dart';
 import 'desktop_frame.dart' show windowFullScreen;
+import '../../services/live/live_share.dart';
+import '../live/live_share_dialog.dart';
 import '../../services/portal/observed.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_hearing.dart';
@@ -238,9 +240,57 @@ class _EditorWidgetState extends State<EditorWidget>
     );
   }
 
+  /// The document shared live from here, while it is
+  /// (lib/services/live/live_share.dart).
+  LiveShareHost? _live;
+
+  bool _liveWatched = false;
+
+  void _livePeersChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _liveSelection() {
+    final s = _quillController.selection;
+    _live?.selection(s.baseOffset, s.extentOffset);
+  }
+
+  Future<void> _openLive() async {
+    final path = _documentPath;
+    // A sharing closed is not taken up again: a new one is made.
+    if (_live?.closed ?? false) {
+      _live!.peers.removeListener(_livePeersChanged);
+      _live = null;
+      _liveWatched = false;
+    }
+    _live ??= LiveShareHost(
+      title: path == null ? 'Yeni belge' : p.basenameWithoutExtension(path),
+      snapshot: () => (
+        delta: _quillController.document.toDelta().toJson(),
+        blocks: List.of(_korunanBloklar),
+      ),
+      blockCount: () => _korunanBloklar.length,
+    );
+    if (!_liveWatched) {
+      _liveWatched = true;
+      _live!.peers.addListener(_livePeersChanged);
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (_) => LiveShareDialog(host: _live!),
+    );
+    if (mounted) setState(() {});
+  }
+
   void _watchDocument() {
     _documentChanges?.cancel();
+    _quillController
+      ..removeListener(_liveSelection)
+      ..addListener(_liveSelection);
+    // A document put in its place: the whole of it to who watches.
+    _live?.whole();
     _documentChanges = _quillController.document.changes.listen((event) {
+      if (event.source == ChangeSource.local) _live?.body(event.change);
       _fillTypedBlank(event);
       _typed(event);
       _recovery.changed();
@@ -618,6 +668,7 @@ class _EditorWidgetState extends State<EditorWidget>
   void _tableChanged(int index, DocBlock updated) {
     if (index < 0 || index >= _korunanBloklar.length) return;
     _korunanBloklar[index] = updated;
+    _live?.table(index, updated);
     _recovery.changed();
     _checkEditedSoon();
     // Enough to light up the save button once; rebuilding on every keystroke
@@ -3955,6 +4006,7 @@ class _EditorWidgetState extends State<EditorWidget>
 
   @override
   void dispose() {
+    unawaited(_live?.close());
     // A draft written while there were edits, and outlived by an undo, would
     // otherwise be offered after the next start as work that was never saved.
     final clean = !_isLoading && _loadError == null && !_hasChanges;
@@ -4557,6 +4609,9 @@ class _EditorWidgetState extends State<EditorWidget>
                         onSave: () => unawaited(_save()),
                         onSaveAs: () => unawaited(_saveAs(_ownFormat)),
                         onSaveIn: (format) => unawaited(_saveAs(format)),
+                        onLiveShare: Platform.isAndroid || Platform.isIOS
+                            ? null
+                            : () => unawaited(_openLive()),
                         onPrint: () => unawaited(_print()),
                         onHistory: () => unawaited(_history()),
                         onSign: _canSignNew
@@ -4700,6 +4755,19 @@ class _EditorWidgetState extends State<EditorWidget>
                           child: SignatureBanner(
                             model: _sourceModel!,
                             compact: true,
+                          ),
+                        ),
+                      // Shown only while the document is shared: the menu
+                      // shares it, and the bar has no room to spare.
+                      if (_live?.sharing ?? false)
+                        IconButton(
+                          key: const ValueKey('editor-live'),
+                          tooltip: 'Canlı paylaşılıyor',
+                          onPressed: _openLive,
+                          color: Theme.of(context).colorScheme.primary,
+                          icon: const Icon(
+                            Icons.cast_connected_rounded,
+                            size: 19,
                           ),
                         ),
                       IconButton(
