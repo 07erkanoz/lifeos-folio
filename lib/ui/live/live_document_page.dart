@@ -68,7 +68,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
         : QuillController(
             document: Document.fromDelta(doc.toDelta()),
             selection: const TextSelection.collapsed(offset: 0),
-            readOnly: !_s.holding,
+            readOnly: !_s.canWrite,
           );
     final c = _controller;
     if (c != null) {
@@ -98,7 +98,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
   /// Where the caret is, for the others while the pen is here.
   void _moved() {
     final c = _controller;
-    if (c == null || !_s.holding) return;
+    if (c == null || !_s.canWrite) return;
     _s.selectionMoved(c.selection.baseOffset, c.selection.extentOffset);
   }
 
@@ -131,7 +131,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
       _copy();
     }
     final sel = _s.selection, c = _controller;
-    if (c != null && c.readOnly == _s.holding) c.readOnly = !_s.holding;
+    if (c != null && c.readOnly == _s.canWrite) c.readOnly = !_s.canWrite;
     if (sel != null && c != null && !_s.holding) {
       final end = c.document.length - 1;
       int clamp(int v) => v < 0 ? 0 : (v > end ? end : v);
@@ -168,7 +168,9 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
             AgendaColors.eHearingFill,
             AgendaColors.eHearingText,
             Icons.edit_outlined,
-            'Kalem sizde · yazdıklarınız paylaşanın belgesine işlenir',
+            s.syncing
+                ? 'Kalem sizde · belge paylaşanla eşitleniyor, bir an bekleyin'
+                : 'Kalem sizde · yazdıklarınız paylaşanın belgesine işlenir',
           )
         : (
             AgendaColors.hearingFill,
@@ -178,6 +180,8 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
               '${s.from} paylaşıyor',
               if (s.penWith != null)
                 '${s.penWith} yazıyor'
+              else if (s.refused)
+                'düzenleme isteğiniz geri çevrildi'
               else if (s.right == LiveRight.edit)
                 'sırayla düzenleyebilirsiniz'
               else
@@ -252,7 +256,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
                               ? 1.15
                               : FlowingDocumentView.zoom,
                           live: (controller: c, blocks: () => _s.blocks),
-                          editable: _s.holding,
+                          editable: _s.canWrite,
                         ),
                       ),
                     ),

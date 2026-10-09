@@ -733,7 +733,13 @@ void main() {
 
     host.setRight(id, LiveRight.edit);
     await until(() => session.right == LiveRight.edit);
+    // Asked and turned down: told so, and may ask again.
     session.askPen();
+    await until(() => host.asking.value.contains(id));
+    host.turnDown(id);
+    await until(() => session.refused && !session.askedPen);
+    session.askPen();
+    expect(session.refused, isFalse);
     await until(() => host.asking.value.contains(id));
     expect(host.give(id), isTrue);
     await until(() => session.holding);
@@ -841,6 +847,83 @@ void main() {
         Delta()..insert('x', {
           'link': {'a': 1},
         }),
+      ),
+      isFalse,
+    );
+    // Nothing after the last line's end, and that end never taken.
+    expect(
+      ok(
+        Delta()
+          ..retain(doc.length)
+          ..insert('X'),
+      ),
+      isFalse,
+    );
+    expect(
+      ok(
+        Delta()
+          ..retain(doc.length - 1)
+          ..delete(1),
+      ),
+      isFalse,
+    );
+    expect(
+      ok(
+        Delta.fromJson([
+          {'retain': -1},
+        ]),
+      ),
+      isFalse,
+    );
+    // Marks of their kind only.
+    expect(ok(Delta()..insert('x', {'font': 7})), isFalse);
+    expect(ok(Delta()..insert('x', {'size': true})), isFalse);
+    expect(ok(Delta()..insert('x', {'color': 'url(x)'})), isFalse);
+    expect(ok(Delta()..insert('x', {'color': '#9C2525'})), isTrue);
+    expect(ok(Delta()..insert('x', {'size': '16.0'})), isTrue);
+    expect(ok(Delta()..insert('x', {'link': 'javascript:x'})), isFalse);
+    expect(ok(Delta()..insert('x', {'nicht': true})), isFalse);
+    // A line's marks only on a line's end.
+    expect(ok(Delta()..insert('x', {'header': 1})), isFalse);
+    expect(ok(Delta()..insert('\n', {'header': 1})), isTrue);
+    expect(ok(Delta()..retain(2, {'align': 'center'})), isFalse);
+  });
+
+  test('lines joined and split as a holder of the pen would, a line\'s '
+      'layout only as one here has it', () {
+    final layout = {'left': 0, 'first': 36};
+    final doc = Document.fromDelta(
+      Delta()
+        ..insert('Bir')
+        ..insert('\n', {'doc-layout': layout})
+        ..insert('İki\n'),
+    );
+    bool ok(Delta d) => LiveShareHost.acceptable(d, doc);
+    // The first line's end taken: the two lines joined.
+    expect(
+      ok(
+        Delta()
+          ..retain(3)
+          ..delete(1),
+      ),
+      isTrue,
+    );
+    // A new line with the same layout, as Enter makes it.
+    expect(
+      ok(
+        Delta()
+          ..retain(2)
+          ..insert('\n', {'doc-layout': layout}),
+      ),
+      isTrue,
+    );
+    expect(
+      ok(
+        Delta()
+          ..retain(2)
+          ..insert('\n', {
+            'doc-layout': {'left': 999},
+          }),
       ),
       isFalse,
     );

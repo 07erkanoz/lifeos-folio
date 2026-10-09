@@ -163,114 +163,140 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
         peer?.state == LivePeerState.watching;
     final right = host.rightOf(id);
     final holds = host.pen.value == id;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Checkbox(
-            key: ValueKey(
-              'live-${guest ? 'guest' : (office ? 'member' : 'device')}-$id',
-            ),
-            value: on,
-            onChanged: (v) async {
-              if (v ?? false) {
-                // A guest gone is not shown it again: it asks anew, by a code.
-                if (guest) return;
-                await host.invite(id, name, office: office);
-              } else {
-                await host.remove(id);
-              }
-            },
+    final controls = <Widget>[
+      if (on && right == LiveRight.edit && !holds && host.apply != null)
+        TextButton(
+          key: ValueKey('live-give-$id'),
+          onPressed: peer?.state == LivePeerState.watching
+              ? () => host.give(id)
+              : null,
+          child: const Text('Kalemi ver'),
+        ),
+      DropdownButton<LiveRight>(
+        key: ValueKey('live-right-$id'),
+        value: right,
+        isDense: true,
+        underline: const SizedBox(),
+        style: Theme.of(context).textTheme.bodySmall,
+        onChanged: (r) {
+          if (r == null) return;
+          host.setRight(id, r);
+          setState(() {});
+        },
+        items: [
+          const DropdownMenuItem(
+            value: LiveRight.view,
+            child: Text('Yalnız görebilir'),
           ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, overflow: TextOverflow.ellipsis),
-                Wrap(
-                  spacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      [
-                        if (device.isNotEmpty) device,
-                        if (_state(peer).isNotEmpty) _state(peer),
-                      ].join(' · '),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AgendaColors.muted,
-                      ),
-                    ),
-                    if (holds)
-                      Container(
-                        key: ValueKey('live-holds-$id'),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AgendaColors.taskFill,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.edit_outlined,
-                              size: 12,
-                              color: AgendaColors.taskText,
-                            ),
-                            SizedBox(width: 3),
-                            Text(
-                              'kalem onda',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AgendaColors.taskText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ],
+          if (host.apply != null)
+            const DropdownMenuItem(
+              value: LiveRight.edit,
+              child: Text('Sırayla düzenleyebilir'),
             ),
-          ),
-          if (on && right == LiveRight.edit && !holds && host.apply != null)
-            TextButton(
-              key: ValueKey('live-give-$id'),
-              onPressed: peer?.state == LivePeerState.watching
-                  ? () => host.give(id)
-                  : null,
-              child: const Text('Kalemi ver'),
-            ),
-          DropdownButton<LiveRight>(
-            key: ValueKey('live-right-$id'),
-            value: right,
-            isDense: true,
-            underline: const SizedBox(),
-            style: Theme.of(context).textTheme.bodySmall,
-            onChanged: (r) {
-              if (r == null) return;
-              host.setRight(id, r);
-              setState(() {});
-            },
-            items: [
-              const DropdownMenuItem(
-                value: LiveRight.view,
-                child: Text('Yalnız görebilir'),
-              ),
-              if (host.apply != null)
-                const DropdownMenuItem(
-                  value: LiveRight.edit,
-                  child: Text('Sırayla düzenleyebilir'),
-                ),
-            ],
-          ),
         ],
       ),
+    ];
+    // A dialog's content is measured by what it holds: the window's width
+    // tells a narrow one instead.
+    final wide = MediaQuery.sizeOf(context).width >= 520;
+    return Builder(
+      builder: (context) {
+        final head = Row(
+          children: [
+            Checkbox(
+              key: ValueKey(
+                'live-${guest ? 'guest' : (office ? 'member' : 'device')}-$id',
+              ),
+              value: on,
+              onChanged: (v) async {
+                if (v ?? false) {
+                  // A guest gone is not shown it again: it asks anew, by a code.
+                  if (guest) return;
+                  await host.invite(id, name, office: office);
+                } else {
+                  await host.remove(id);
+                }
+              },
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, overflow: TextOverflow.ellipsis),
+                  Wrap(
+                    spacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        [
+                          if (device.isNotEmpty) device,
+                          if (_state(peer).isNotEmpty) _state(peer),
+                        ].join(' · '),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AgendaColors.muted,
+                        ),
+                      ),
+                      if (holds)
+                        Container(
+                          key: ValueKey('live-holds-$id'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AgendaColors.taskFill,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.edit_outlined,
+                                size: 12,
+                                color: AgendaColors.taskText,
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                'kalem onda',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AgendaColors.taskText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (wide) ...controls,
+          ],
+        );
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          // Narrow: what may be done under the name, not beside it.
+          child: wide
+              ? head
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    head,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 44),
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: controls,
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 

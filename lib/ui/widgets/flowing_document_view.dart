@@ -139,6 +139,9 @@ class _FlowingDocumentViewState extends State<FlowingDocumentView> {
                           embedBuilders: [
                             EditorImageEmbed(),
                             EditorTableEmbed(
+                              // Read here: a table is written where the
+                              // document is open.
+                              readOnly: () => true,
                               blocks: () => _blocks,
                               onChanged: (_, _) {},
                               onFocus: (_) {},

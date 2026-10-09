@@ -43,8 +43,12 @@ class EditorTableEmbed extends EmbedBuilder {
   /// exactly and pad their cells; a UYAP one's do neither.
   final bool Function() word;
 
+  /// Whether its cells are only shown, not typed in.
+  final bool Function() readOnly;
+
   EditorTableEmbed({
     this.word = _never,
+    this.readOnly = _never,
     required this.blocks,
     required this.onChanged,
     required this.onFocus,
@@ -92,6 +96,7 @@ class EditorTableEmbed extends EmbedBuilder {
       onDelete: () => onDelete(embedContext.node.documentOffset),
       onCellsGone: onCellsGone,
       onPointerInside: onPointerInside,
+      readOnly: readOnly(),
       word: word(),
     );
   }

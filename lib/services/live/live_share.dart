@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_quill/flutter_quill.dart'
-    show ChangeSource, Document, Embed;
+import 'package:flutter_quill/flutter_quill.dart' show ChangeSource, Document;
 import 'package:flutter_quill/quill_delta.dart';
 
 import '../../models/document_model.dart';
@@ -211,53 +210,146 @@ class LiveShareHost {
   /// How long the pen stays with one who writes nothing.
   Duration penIdle = const Duration(minutes: 2);
   Timer? _idle;
+
+  /// Counted up each time the pen is given: a word of an earlier turn,
+  /// still on its way, is not taken for one of this turn.
+  int _turn = 0;
   final _rights = <String, LiveRight>{};
 
   /// The most a change written elsewhere may be, put in one go.
   static const _maxWrite = 2 * 1024 * 1024;
 
-  /// Whether [change], written by another, may go in [doc]: words and
-  /// their marks put in, kept or taken out; nothing but words put in (no
-  /// picture, no table), no table or picture taken out, nothing past the
-  /// end.
+  /// Whether [change], written by another, may go in [doc]: words put
+  /// in before the last line's end, kept or taken out, with marks Folio
+  /// itself makes (each of its kind and in its bounds, a line's only on
+  /// line ends); no picture or table put in, taken out or marked, the
+  /// last line's end never taken, every length a count.
   static bool acceptable(Delta change, Document doc) {
-    var index = 0;
+    final base = doc.toDelta();
     final length = doc.length;
+    // A line's layout only as some line here already has it.
+    final layouts = <String>{
+      for (final op in base.operations)
+        if (op.attributes?['doc-layout'] case final Object layout)
+          jsonEncode(layout),
+    };
+    var index = 0;
     for (final op in change.operations) {
-      final n = op.length ?? 0;
-      if (!_plain(op.attributes)) return false;
+      final n = op.length;
+      if (n == null || n <= 0) return false;
+      final attributes = op.attributes;
+      if (!_marksAllowed(attributes, layouts)) return false;
+      final lineMarks =
+          attributes != null && attributes.keys.any(_lineKeys.contains);
       if (op.isInsert) {
-        if (op.data is! String) return false;
+        final data = op.data;
+        if (data is! String || data.length != n) return false;
+        if (index > length - 1) return false;
+        if (lineMarks && data.replaceAll('\n', '').isNotEmpty) return false;
       } else if (op.isDelete) {
+        if (index + n > length - 1) return false;
+        if (!_wordsOnly(base.slice(index, index + n))) return false;
+        index += n;
+      } else if (op.isRetain) {
         if (index + n > length) return false;
-        var at = index;
-        while (at < index + n) {
-          final leaf = doc.querySegmentLeafNode(at).leaf;
-          if (leaf == null) return false;
-          if (leaf is Embed) return false;
-          final next = leaf.documentOffset + leaf.length;
-          if (next <= at) return false;
-          at = next;
+        if (attributes != null) {
+          final marked = base.slice(index, index + n);
+          if (!_wordsOnly(marked)) return false;
+          if (lineMarks &&
+              marked.operations.any(
+                (o) => (o.data as String).replaceAll('\n', '').isNotEmpty,
+              )) {
+            return false;
+          }
         }
         index += n;
       } else {
-        index += n;
-        if (index > length) return false;
+        return false;
       }
     }
     return true;
   }
 
-  static bool _plain(Map<String, dynamic>? attributes) {
+  static bool _wordsOnly(Delta d) =>
+      d.operations.every((o) => o.isInsert && o.data is String);
+
+  /// Marks of a line, put on its end.
+  static const _lineKeys = {
+    'header',
+    'align',
+    'list',
+    'indent',
+    'direction',
+    'blockquote',
+    'line-height',
+    'doc-layout',
+  };
+
+  static final _hex = RegExp(r'^#?[0-9A-Fa-f]{3,8}$');
+  static final _scheme = RegExp(r'^(https?:|mailto:|tel:)');
+  static final _control = RegExp(r'[\x00-\x1F<>]');
+
+  /// Whether each mark is one Folio makes, of its kind and in its bounds;
+  /// any of them may be taken off.
+  static bool _marksAllowed(
+    Map<String, dynamic>? attributes,
+    Set<String> layouts,
+  ) {
     if (attributes == null) return true;
-    if (attributes.length > 24) return false;
-    for (final e in attributes.entries) {
-      if (e.key.length > 64) return false;
-      final v = e.value;
-      if (v != null && v is! String && v is! num && v is! bool) return false;
-      if (v is String && v.length > 512) return false;
+    if (attributes.length > 16) return false;
+    for (final MapEntry(:key, :value) in attributes.entries) {
+      final ok =
+          value == null ||
+          switch (key) {
+            'bold' ||
+            'italic' ||
+            'underline' ||
+            'strike' ||
+            'blockquote' => value == true,
+            'script' => value == 'sub' || value == 'super',
+            'font' =>
+              value is String &&
+                  value.isNotEmpty &&
+                  value.length <= 64 &&
+                  !_control.hasMatch(value),
+            'size' => _sizeOk(value),
+            'color' || 'background' => value is String && _hex.hasMatch(value),
+            'link' =>
+              value is String &&
+                  value.length <= 2048 &&
+                  _scheme.hasMatch(value),
+            'header' => value is int && value >= 1 && value <= 6,
+            'align' => const [
+              'left',
+              'center',
+              'right',
+              'justify',
+            ].contains(value),
+            'list' => const [
+              'ordered',
+              'bullet',
+              'checked',
+              'unchecked',
+            ].contains(value),
+            'indent' => value is int && value >= 1 && value <= 8,
+            'direction' => value == 'rtl',
+            'line-height' => value is num && value >= 0.5 && value <= 5,
+            'doc-layout' => value is Map && layouts.contains(jsonEncode(value)),
+            _ => false,
+          };
+      if (!ok) return false;
     }
     return true;
+  }
+
+  static bool _sizeOk(Object value) {
+    final n = value is num
+        ? value.toDouble()
+        : value is String
+        ? double.tryParse(value)
+        : null;
+    if (n != null) return n >= 1 && n <= 400;
+    return const ['small', 'large', 'huge'].contains(value);
   }
 
   /// [deviceId] by the name it is shown it under.
@@ -305,14 +397,20 @@ class LiveShareHost {
     if (_closed || apply == null || v == null || !v.ready) return false;
     if (rightOf(deviceId) != LiveRight.edit) return false;
     _unask(deviceId);
+    _turn++;
     pen.value = deviceId;
     _penTold();
     _stillWriting();
     return true;
   }
 
-  /// [deviceId]'s asking for the pen turned down.
-  void turnDown(String deviceId) => _unask(deviceId);
+  /// [deviceId]'s asking for the pen turned down; told so, that it may
+  /// ask again.
+  void turnDown(String deviceId) {
+    _unask(deviceId);
+    final v = _viewers[deviceId];
+    if (v != null && v.ready) _enqueue(v, const {'tip': 'istekred'});
+  }
 
   /// The pen back with the sharer; a change still on its way from the one
   /// who held it is not put in.
@@ -320,6 +418,7 @@ class LiveShareHost {
     if (pen.value == null) return;
     _idle?.cancel();
     _idle = null;
+    _turn++;
     pen.value = null;
     if (!_closed) _penTold();
   }
@@ -331,6 +430,7 @@ class LiveShareHost {
 
   Map<String, Object?> _penWord(String? deviceId) => {
     'tip': 'kalem',
+    'tur': _turn,
     'sende': deviceId != null && pen.value == deviceId,
     'kimde': penName ?? '',
   };
@@ -352,6 +452,7 @@ class LiveShareHost {
 
     if (_closed ||
         pen.value != deviceId ||
+        m['tur'] != _turn ||
         rightOf(deviceId) != LiveRight.edit ||
         base is! int ||
         d is! List ||
@@ -389,8 +490,9 @@ class LiveShareHost {
   }
 
   /// Where the one holding the pen is, to the others.
-  void _theirSelection(String deviceId, Object? s) {
-    if (pen.value != deviceId) return;
+  void _theirSelection(String deviceId, Map<String, Object?> m) {
+    final s = m['s'];
+    if (pen.value != deviceId || m['tur'] != _turn) return;
     if (s is! List || s.length != 2 || s[0] is! int || s[1] is! int) return;
     _selection = (base: s[0] as int, extent: s[1] as int);
     final word = {'tip': 's', 's': s};
@@ -561,11 +663,11 @@ class LiveShareHost {
                 asking.value = [...asking.value, deviceId];
               }
             case 'kalembirak':
-              if (pen.value == deviceId) takeBack();
+              if (pen.value == deviceId && m!['tur'] == _turn) takeBack();
             case 'yaz':
               if (identical(_viewers[deviceId], v)) _written(deviceId, v, m!);
             case 's':
-              _theirSelection(deviceId, m!['s']);
+              _theirSelection(deviceId, m!);
           }
         } catch (_) {
           unawaited(_drop(deviceId, ch));
@@ -720,6 +822,8 @@ class LiveShareHost {
   /// last of a burst of keystrokes in a cell.
   void table(int index, DocBlock block) {
     if (_closed || _viewers.isEmpty) return;
+    // The sharer changed a table: the pen is theirs again.
+    takeBack();
     _tables[index] = block;
     _tableTimer ??= Timer(const Duration(milliseconds: 150), () {
       _tableTimer = null;
@@ -890,6 +994,26 @@ class LiveSession extends ChangeNotifier {
 
   /// Changes written here and sent, not yet said to have gone in.
   int _pending = 0;
+
+  /// The pen's turn this side holds it in, as the sharer counts.
+  int _turn = 0;
+
+  /// The sharer turned the asking for the pen down.
+  bool refused = false;
+
+  /// Taken whole again after a change could not be put in: nothing is
+  /// written here meanwhile.
+  bool get syncing => _waitingWhole;
+
+  /// Whether what is typed here now goes to the sharer.
+  bool get canWrite => holding && !_waitingWhole && !ended;
+
+  /// The most a change written here may be; a larger one is not sent and
+  /// the document is taken whole again.
+  static const _maxWrite = 512 * 1024;
+
+  /// The most changes on their way at once.
+  static const _maxPending = 256;
   Timer? _selectionSoon;
   ({int base, int extent})? _mySelection;
 
@@ -1039,7 +1163,14 @@ class LiveSession extends ChangeNotifier {
         notifyListeners();
       case 'onay':
         final rev = m['rev'];
-        if (rev is! int || _pending == 0) return;
+        if (rev is! int) return;
+        if (_pending == 0 || rev != _rev + 1) {
+          // Said of a change this side no longer counts (a whole came
+          // between): out of step, taken whole again.
+          _askWhole();
+          notifyListeners();
+          return;
+        }
         _pending--;
         _rev = rev;
       case 'red':
@@ -1047,6 +1178,11 @@ class LiveSession extends ChangeNotifier {
         _pending = 0;
         _waitingWhole = true;
         _askedAt = DateTime.now();
+        notifyListeners();
+      case 'istekred':
+        askedPen = false;
+        refused = true;
+        notifyListeners();
       case 'son':
         _end();
     }
@@ -1061,7 +1197,8 @@ class LiveSession extends ChangeNotifier {
 
   void _penFrom(Map<String, Object?> m) {
     final mine = m['sende'] == true;
-    final who = m['kimde'];
+    final who = m['kimde'], turn = m['tur'];
+    if (turn is int) _turn = turn;
     holding = mine;
     penWith = mine || who is! String || who.isEmpty ? null : who;
     if (mine || penWith != null) askedPen = false;
@@ -1071,6 +1208,7 @@ class LiveSession extends ChangeNotifier {
   void askPen() {
     if (ended || right != LiveRight.edit || holding || askedPen) return;
     askedPen = true;
+    refused = false;
     _say({'tip': 'kalemiste'});
     notifyListeners();
   }
@@ -1079,7 +1217,7 @@ class LiveSession extends ChangeNotifier {
   void releasePen() {
     if (ended || !holding) return;
     holding = false;
-    _say({'tip': 'kalembirak'});
+    _say({'tip': 'kalembirak', 'tur': _turn});
     notifyListeners();
   }
 
@@ -1088,16 +1226,25 @@ class LiveSession extends ChangeNotifier {
   /// told on [changes]: the page that wrote it has it.
   void write(Delta change) {
     final doc = document;
-    if (ended || !holding || doc == null || _waitingWhole) return;
+    if (!canWrite || doc == null) return;
+    final json = change.toJson();
+    if (_pending >= _maxPending ||
+        utf8.encode(jsonEncode(json)).length > _maxWrite) {
+      // Too much at once: not sent, and what is here taken whole again.
+      _askWhole();
+      notifyListeners();
+      return;
+    }
     try {
       doc.compose(change, ChangeSource.local);
     } catch (_) {
       _askWhole();
+      notifyListeners();
       return;
     }
     final base = _rev + _pending;
     _pending++;
-    _say({'tip': 'yaz', 'taban': base, 'delta': change.toJson()});
+    _say({'tip': 'yaz', 'taban': base, 'tur': _turn, 'delta': json});
   }
 
   /// Where this side is while it holds the pen, for the others to see;
@@ -1111,6 +1258,7 @@ class LiveSession extends ChangeNotifier {
       if (sel == null || !holding) return;
       _say({
         'tip': 's',
+        'tur': _turn,
         's': [sel.base, sel.extent],
       });
     });
