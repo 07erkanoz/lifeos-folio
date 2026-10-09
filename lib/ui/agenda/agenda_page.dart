@@ -1,3 +1,6 @@
+import '../../services/portal/agenda_ics.dart';
+import 'calendar_export.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -328,6 +331,12 @@ class _AgendaPageState extends State<AgendaPage> {
 
   // Saving
 
+  /// The agenda written out for the lawyer's own calendar.
+  Future<void> _exportCalendar() => showDialog<void>(
+    context: context,
+    builder: (_) => CalendarExportDialog(database: _db!),
+  );
+
   Future<void> _addItem({String? caseKey, String? hearingKey}) async {
     final item = await showDialog<AgendaItem>(
       context: context,
@@ -583,7 +592,14 @@ class _AgendaPageState extends State<AgendaPage> {
               ],
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 8),
+          IconButton(
+            key: const ValueKey('agenda-calendar'),
+            tooltip: 'Takvime aktar (Google, Outlook, Apple)',
+            onPressed: _db == null ? null : _exportCalendar,
+            icon: const Icon(Icons.event_available_outlined, size: 20),
+          ),
+          const SizedBox(width: 6),
           FilledButton.icon(
             key: const ValueKey('agenda-add'),
             onPressed: _db == null ? null : () => _addItem(),
@@ -637,6 +653,12 @@ class _AgendaPageState extends State<AgendaPage> {
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
+              IconButton(
+                key: const ValueKey('agenda-calendar'),
+                tooltip: 'Takvime aktar',
+                onPressed: _db == null ? null : _exportCalendar,
+                icon: const Icon(Icons.event_available_outlined),
+              ),
               IconButton(
                 key: const ValueKey('agenda-add'),
                 tooltip: 'Not / iş ekle',
@@ -1639,6 +1661,24 @@ class _AgendaPageState extends State<AgendaPage> {
             ),
             icon: const Icon(Icons.add, size: 15),
             label: const Text('İş ekle'),
+          ),
+          TextButton.icon(
+            key: const ValueKey('agenda-hearing-calendar'),
+            onPressed: () => openInCalendar(
+              context,
+              calendarFile([hearingEvent(h)], alarms: const [1440, 120]),
+              'Duruşma ${h.number.replaceAll('/', '-')}',
+            ),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              textStyle: const TextStyle(
+                fontFamily: 'LiberationSans',
+                fontSize: 12,
+              ),
+            ),
+            icon: const Icon(Icons.event_available_outlined, size: 15),
+            label: const Text('Takvimime ekle'),
           ),
           const SizedBox(height: 8),
           Row(

@@ -31,6 +31,7 @@ class FileActions {
     '.bmp' => 'image/bmp',
     '.tif' || '.tiff' => 'image/tiff',
     '.txt' || '.log' => 'text/plain',
+    '.ics' => 'text/calendar',
     _ => 'application/octet-stream',
   };
 
