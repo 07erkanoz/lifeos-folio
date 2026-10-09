@@ -596,20 +596,10 @@ class PortalSync extends ChangeNotifier {
 
   /// A case's parties from UYAP Mobil, else from the web portal; null when
   /// neither would tell.
+  /// A case's parties from UYAP: the web portal's first, which writes
+  /// their names whole; UYAP Mobil's, which may shorten them, after.
   Future<List<UyapParty>?> _partiesFromUyap(PortalCase kase) async {
     final details = kase.details?.value ?? const <String, Object?>{};
-    final mobileId = kase.ids[PortalChannel.uyapMobile];
-    if (_mobile.connected && mobileId != null && mobileId.isNotEmpty) {
-      try {
-        return [
-          for (final p in await _mobile.parties(
-            mobileId,
-            caseType: '${details['dosyaTurKod'] ?? ''}',
-          ))
-            UyapParty.fromMap(p),
-        ];
-      } catch (_) {}
-    }
     final webId = kase.ids[PortalChannel.uyapWeb];
     if (_web.connected && webId != null && webId.isNotEmpty) {
       try {
@@ -621,6 +611,18 @@ class PortalSync extends ChangeNotifier {
             kase.court,
           ),
         );
+      } catch (_) {}
+    }
+    final mobileId = kase.ids[PortalChannel.uyapMobile];
+    if (_mobile.connected && mobileId != null && mobileId.isNotEmpty) {
+      try {
+        return [
+          for (final p in await _mobile.parties(
+            mobileId,
+            caseType: '${details['dosyaTurKod'] ?? ''}',
+          ))
+            UyapParty.fromMap(p),
+        ];
       } catch (_) {}
     }
     return null;

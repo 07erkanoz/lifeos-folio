@@ -1457,13 +1457,27 @@ class PortalDatabase {
       'SELECT kaynak FROM case_party WHERE case_key=? LIMIT 1',
       [caseKey],
     );
+    // Whole names come over shortened ones, from whatever source.
+    final keptShort = _db
+        .select('SELECT ad FROM case_party WHERE case_key=?', [caseKey])
+        .any((r) => isShortenedName('${r['ad']}'));
+    final comeWhole = !parties.any((t) => isShortenedName(t.name));
     if (kept.isNotEmpty &&
+        !(keptShort && comeWhole) &&
         (rank[kept.first['kaynak']] ?? 0) > (rank[source] ?? 0)) {
       return;
     }
     // The same parties from the same source: kept as they are, with the
     // day they came.
     final same = caseParties(caseKey: caseKey)[caseKey];
+    // Names shortened ("A** E**") never take the place of names whole,
+    // whatever their source.
+    if (same != null &&
+        same.isNotEmpty &&
+        parties.any((t) => isShortenedName(t.name)) &&
+        !same.any((t) => isShortenedName(t.name))) {
+      return;
+    }
     if (kept.isNotEmpty &&
         kept.first['kaynak'] == source &&
         same != null &&
@@ -1888,4 +1902,16 @@ class PortalDatabase {
     );
     return rows.isEmpty ? null : rows.first;
   }
+}
+
+/// Whether [name] is a party's name UYAP shortened ("A** E**", "A.. E..",
+/// "A. E."): known by its initials only, it names no client.
+bool isShortenedName(String name) {
+  final t = name.trim();
+  if (t.isEmpty) return false;
+  if (t.contains('*')) return true;
+  final words = t.split(RegExp(r'\s+'));
+  return words.every(
+    (w) => RegExp(r'^\p{L}{1,2}\.+$', unicode: true).hasMatch(w),
+  );
 }

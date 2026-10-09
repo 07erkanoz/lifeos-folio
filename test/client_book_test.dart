@@ -110,4 +110,29 @@ void main() {
       'b',
     ]);
   });
+
+  test('a name UYAP shortened names no client, nor takes a whole one\'s '
+      'place; a whole one takes its place from any source', () {
+    expect(isShortenedName('A** E**'), isTrue);
+    expect(isShortenedName('A.. E..'), isTrue);
+    expect(isShortenedName('Ayşe Karaca'), isFalse);
+    db.saveCaseParties('c', const [
+      UyapParty('A** K**', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+    ], source: 'taraflar');
+    expect(db.clientEntries(lawyer: 'Av. Deniz Kaya'), isEmpty);
+    db.saveCaseParties('c', const [
+      UyapParty('AYŞE KARACA', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+    ], source: 'paket');
+    expect(
+      db.clientEntries(lawyer: 'Av. Deniz Kaya').single.name,
+      'AYŞE KARACA',
+    );
+    db.saveCaseParties('c', const [
+      UyapParty('A** K**', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+    ], source: 'uyap');
+    expect(
+      db.clientEntries(lawyer: 'Av. Deniz Kaya').single.name,
+      'AYŞE KARACA',
+    );
+  });
 }

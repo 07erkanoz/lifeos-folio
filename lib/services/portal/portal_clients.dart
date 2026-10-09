@@ -159,7 +159,8 @@ extension PortalClients on PortalDatabase {
             ];
       for (final t in ours) {
         final folded = UyapWebService.fold(t.ad);
-        if (folded.isEmpty) continue;
+        // A name UYAP shortened names no client: its whole one comes later.
+        if (folded.isEmpty || isShortenedName(t.ad)) continue;
         final seen = byName.putIfAbsent(folded, () => (name: t.ad, cases: []));
         if (!seen.cases.any((c) => c.caseKey == key)) {
           seen.cases.add((caseKey: key, role: t.rol));
