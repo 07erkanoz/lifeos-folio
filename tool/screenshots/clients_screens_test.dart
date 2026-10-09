@@ -19,6 +19,8 @@ import 'package:evrak_convert/services/portal/portal_hearing.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
 import 'package:evrak_convert/ui/cash/cash_page.dart';
+import 'package:evrak_convert/ui/tools/interest_page.dart';
+import 'package:evrak_convert/services/legal/interest.dart';
 import 'package:evrak_convert/ui/clients/clients_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
@@ -475,6 +477,40 @@ void main() {
       await tester.tap(find.text('Raporlar'));
       await tester.pumpAndSettle();
       await _shot(tester, '$name-rapor');
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
+
+  for (final (name, size) in const [
+    ('faiz-1366', Size(1130, 560)),
+    ('faiz-telefon', Size(390, 844)),
+  ]) {
+    testWidgets(name, (tester) async {
+      tester.view.physicalSize = size * pixelRatio;
+      tester.view.devicePixelRatio = pixelRatio;
+      addTearDown(tester.view.reset);
+      if (size.width > 900) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      }
+      final rates = InterestRates.parse(
+        File('assets/mevzuat/faiz.json').readAsStringSync(),
+      );
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            appBar: AppBar(title: const Text('Faiz hesabı')),
+            body: InterestPage(
+              rates: rates,
+              title: '2024/318 · Ayşe Karaca',
+              principal: 25000000,
+              from: DateTime(2024, 3, 15),
+              to: DateTime(2026, 10, 9),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _shot(tester, name);
       debugDefaultTargetPlatformOverride = null;
     });
   }

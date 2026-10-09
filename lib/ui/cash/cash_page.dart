@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../tools/interest_page.dart';
 import '../../services/clients/cash_report.dart';
 import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
@@ -361,6 +362,7 @@ class _CashPageState extends State<CashPage> {
       onSelected: (v) => switch (v) {
         'gelir' => _expense(income: true),
         'tekrar' => _repeats(),
+        'faiz' => InterestPage.open(context),
         'pdf' => _pdf(),
         _ => _excel(),
       },
@@ -370,6 +372,7 @@ class _CashPageState extends State<CashPage> {
           value: 'tekrar',
           child: Text('Her ay tekrarlanan giderler'),
         ),
+        const PopupMenuItem(value: 'faiz', child: Text('Faiz hesabı')),
         const PopupMenuDivider(),
         const PopupMenuItem(value: 'excel', child: Text('Excel\'e aktar')),
         if (_reports)

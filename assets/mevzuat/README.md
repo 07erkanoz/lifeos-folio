@@ -32,3 +32,15 @@ Sertifikanın geçerlilik sonu dosyanın kendisinde yazılıdır; süresi
 dolduğunda yenisi `http://cacerts.geotrust.com/GeoTrustTLSRSACAG1.crt`
 adresinden alınır. Süre dolarsa madde getirme durur, uygulamanın kalanı
 etkilenmez.
+
+`faiz.json` — faiz hesabının oranları. `tcmb`, Merkez Bankasının reeskont
+ve avans oranlarının yürürlük tarihleriyle tam tablosudur (tcmb.gov.tr).
+`turler` her faiz türünün dönemlerini verir: bir dönem ya sabit `oran`
+taşır ya da `tcmb` serisine bağlıdır. Seriye bağlı dönemde motor 3095
+sayılı Kanunun kuralını uygular: yılın oranı önceki yılın 31 Aralık
+günündeki orandır; 30 Haziran günü oran bundan beş puan ya da daha çok
+farklıysa yılın ikinci yarısında 30 Haziran'daki oran geçer. `carpan`
+oranı çarpar (31.07.2026'dan beri kanuni faiz reeskontun %80'i). `enAz`
+türün o gün en az hangi türün oranı kadar olacağını söyler (ticari
+temerrüt faizi kanuni faizden az olamaz). TCMB yeni bir oran açıkladığında
+yalnız `tcmb` tablosuna satır eklenir ve `dogrulandi` güncellenir.

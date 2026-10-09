@@ -1,0 +1,326 @@
+{
+ "surum": 1,
+ "kaynak": "TCMB Reeskont ve Avans Faiz Oranları tablosu (tcmb.gov.tr); 3095 sayılı Kanun m.1 ve m.2 (7589 sayılı Kanun m.10 ile değişik, yürürlük 31.07.2026); 97/9807 ve 2005/9831 sayılı BKK; 5335 sayılı Kanun m.14; 8485 sayılı CBK.",
+ "dogrulandi": "2026-10-09: TCMB tablosu tcmb.gov.tr'den satır satır alındı; son değişiklik 20.12.2025. Kural (31 Aralık oranı, 30 Haziran'da 5 puan) 3095 m.1-2 konsolide metninden okundu ve 2000-2026 dönem tablosuyla (legalbank) her yarıyıl karşılaştırıldı.",
+ "tcmb": [
+  {
+   "tarih": "1990-01-01",
+   "reeskont": 40.0,
+   "avans": 45.0
+  },
+  {
+   "tarih": "1990-09-20",
+   "reeskont": 43.0,
+   "avans": 48.25
+  },
+  {
+   "tarih": "1990-11-23",
+   "reeskont": 45.0,
+   "avans": 50.75
+  },
+  {
+   "tarih": "1991-02-15",
+   "reeskont": 48.0,
+   "avans": 54.5
+  },
+  {
+   "tarih": "1994-01-27",
+   "reeskont": 56.0,
+   "avans": 65.0
+  },
+  {
+   "tarih": "1994-04-21",
+   "reeskont": 79.0,
+   "avans": 98.0
+  },
+  {
+   "tarih": "1994-07-12",
+   "reeskont": 70.0,
+   "avans": 85.0
+  },
+  {
+   "tarih": "1994-07-27",
+   "reeskont": 63.0,
+   "avans": 75.0
+  },
+  {
+   "tarih": "1994-10-01",
+   "reeskont": 55.0,
+   "avans": 64.0
+  },
+  {
+   "tarih": "1995-06-10",
+   "reeskont": 52.0,
+   "avans": 60.0
+  },
+  {
+   "tarih": "1995-08-01",
+   "reeskont": 50.0,
+   "avans": 57.0
+  },
+  {
+   "tarih": "1997-08-02",
+   "reeskont": 67.0,
+   "avans": 80.0
+  },
+  {
+   "tarih": "1999-12-30",
+   "reeskont": 60.0,
+   "avans": 70.0
+  },
+  {
+   "tarih": "2002-05-17",
+   "reeskont": 55.0,
+   "avans": 64.0
+  },
+  {
+   "tarih": "2003-06-14",
+   "reeskont": 50.0,
+   "avans": 57.0
+  },
+  {
+   "tarih": "2003-10-08",
+   "reeskont": 43.0,
+   "avans": 48.0
+  },
+  {
+   "tarih": "2004-06-15",
+   "reeskont": 38.0,
+   "avans": 42.0
+  },
+  {
+   "tarih": "2005-01-13",
+   "reeskont": 32.0,
+   "avans": 35.0
+  },
+  {
+   "tarih": "2005-05-25",
+   "reeskont": 28.0,
+   "avans": 30.0
+  },
+  {
+   "tarih": "2005-12-20",
+   "reeskont": 23.0,
+   "avans": 25.0
+  },
+  {
+   "tarih": "2006-12-20",
+   "reeskont": 27.0,
+   "avans": 29.0
+  },
+  {
+   "tarih": "2007-12-28",
+   "reeskont": 25.0,
+   "avans": 27.0
+  },
+  {
+   "tarih": "2009-04-09",
+   "reeskont": 19.0,
+   "avans": 20.0
+  },
+  {
+   "tarih": "2009-06-12",
+   "reeskont": 18.0,
+   "avans": 19.0
+  },
+  {
+   "tarih": "2009-12-22",
+   "reeskont": 15.0,
+   "avans": 16.0
+  },
+  {
+   "tarih": "2010-12-30",
+   "reeskont": 14.0,
+   "avans": 15.0
+  },
+  {
+   "tarih": "2011-12-29",
+   "reeskont": 17.0,
+   "avans": 17.75
+  },
+  {
+   "tarih": "2012-06-19",
+   "reeskont": 16.0,
+   "avans": 16.5
+  },
+  {
+   "tarih": "2012-12-20",
+   "reeskont": 13.5,
+   "avans": 13.75
+  },
+  {
+   "tarih": "2013-06-21",
+   "reeskont": 9.5,
+   "avans": 11.0
+  },
+  {
+   "tarih": "2013-12-27",
+   "reeskont": 10.25,
+   "avans": 11.75
+  },
+  {
+   "tarih": "2014-12-14",
+   "reeskont": 9.0,
+   "avans": 10.5
+  },
+  {
+   "tarih": "2016-12-31",
+   "reeskont": 8.75,
+   "avans": 9.75
+  },
+  {
+   "tarih": "2018-06-29",
+   "reeskont": 18.5,
+   "avans": 19.5
+  },
+  {
+   "tarih": "2019-10-11",
+   "reeskont": 17.25,
+   "avans": 18.25
+  },
+  {
+   "tarih": "2019-12-21",
+   "reeskont": 12.75,
+   "avans": 13.75
+  },
+  {
+   "tarih": "2020-06-13",
+   "reeskont": 9.0,
+   "avans": 10.0
+  },
+  {
+   "tarih": "2020-12-19",
+   "reeskont": 15.75,
+   "avans": 16.75
+  },
+  {
+   "tarih": "2021-12-31",
+   "reeskont": 14.75,
+   "avans": 15.75
+  },
+  {
+   "tarih": "2022-12-31",
+   "reeskont": 9.75,
+   "avans": 10.75
+  },
+  {
+   "tarih": "2023-06-24",
+   "reeskont": 15.75,
+   "avans": 16.75
+  },
+  {
+   "tarih": "2023-09-01",
+   "reeskont": 25.75,
+   "avans": 26.75
+  },
+  {
+   "tarih": "2023-09-28",
+   "reeskont": 30.75,
+   "avans": 31.75
+  },
+  {
+   "tarih": "2023-11-01",
+   "reeskont": 35.75,
+   "avans": 36.75
+  },
+  {
+   "tarih": "2023-12-01",
+   "reeskont": 40.75,
+   "avans": 41.75
+  },
+  {
+   "tarih": "2023-12-23",
+   "reeskont": 43.25,
+   "avans": 44.25
+  },
+  {
+   "tarih": "2024-04-01",
+   "reeskont": 50.75,
+   "avans": 51.75
+  },
+  {
+   "tarih": "2024-12-28",
+   "reeskont": 48.25,
+   "avans": 49.25
+  },
+  {
+   "tarih": "2025-03-08",
+   "reeskont": 43.25,
+   "avans": 44.25
+  },
+  {
+   "tarih": "2025-09-17",
+   "reeskont": 41.25,
+   "avans": 42.25
+  },
+  {
+   "tarih": "2025-12-20",
+   "reeskont": 38.75,
+   "avans": 39.75
+  }
+ ],
+ "turler": {
+  "yasal": {
+   "ad": "Kanuni (yasal) faiz",
+   "dayanak": "3095 s.K. m.1",
+   "donemler": [
+    {
+     "baslangic": "1984-12-19",
+     "bitis": "1997-12-31",
+     "oran": 30,
+     "not": "3095 s.K. m.1"
+    },
+    {
+     "baslangic": "1998-01-01",
+     "bitis": "1999-12-31",
+     "oran": 50,
+     "not": "97/9807 s. BKK"
+    },
+    {
+     "baslangic": "2000-01-01",
+     "bitis": "2005-04-30",
+     "tcmb": "reeskont",
+     "carpan": 1,
+     "not": "3095 m.1: TCMB reeskont oranı"
+    },
+    {
+     "baslangic": "2005-05-01",
+     "bitis": "2005-12-31",
+     "oran": 12,
+     "not": "5335 s.K. m.14"
+    },
+    {
+     "baslangic": "2006-01-01",
+     "bitis": "2024-05-31",
+     "oran": 9,
+     "not": "2005/9831 s. BKK"
+    },
+    {
+     "baslangic": "2024-06-01",
+     "bitis": "2026-07-30",
+     "oran": 24,
+     "not": "8485 s. CBK"
+    },
+    {
+     "baslangic": "2026-07-31",
+     "tcmb": "reeskont",
+     "carpan": 0.8,
+     "not": "7589 s.K. m.10: reeskont oranının %80'i"
+    }
+   ]
+  },
+  "ticari": {
+   "ad": "Ticari temerrüt (avans) faizi",
+   "dayanak": "3095 s.K. m.2/2",
+   "enAz": "yasal",
+   "donemler": [
+    {
+     "baslangic": "2000-01-01",
+     "tcmb": "avans",
+     "carpan": 1,
+     "not": "3095 m.2/2: TCMB avans oranı"
+    }
+   ]
+  }
+ }
+}

@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../tools/interest_page.dart';
 import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
 import '../../services/clients/client_documents.dart';
@@ -1996,6 +1997,14 @@ class _ClientCardState extends State<ClientCard> {
                   child: const Text('Hareket ekle'),
                 ),
               ],
+              OutlinedButton(
+                key: ValueKey('case-interest-$key'),
+                onPressed: () => InterestPage.open(
+                  context,
+                  title: '${_number(key)} · ${titleName(widget.entry.name)}',
+                ),
+                child: const Text('Faiz hesapla'),
+              ),
             ],
           ),
         ],
