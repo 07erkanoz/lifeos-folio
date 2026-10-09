@@ -482,11 +482,13 @@ void registerTests() {
         for (final r in db.allClientRecords())
           for (final f in clientFilesOf(r)) '${r.clientId}|${f.sha256}',
       };
-      for (final r in db.removedClientRecords)
+      for (final r in db.removedClientRecords) {
         for (final f in clientFilesOf(r)) {
-          if (!still.contains('${r.clientId}|${f.sha256}'))
+          if (!still.contains('${r.clientId}|${f.sha256}')) {
             await files.forget(r.clientId, f);
+          }
         }
+      }
       expect(db.clientRecord('own')!.locked, isTrue);
       expect(await files.locate('k1', ownFile), isNotNull);
     },
@@ -555,11 +557,13 @@ void registerTests() {
         for (final r in db.allClientRecords())
           for (final f in clientFilesOf(r)) '${r.clientId}|${f.sha256}',
       };
-      for (final r in db.removedClientRecords)
+      for (final r in db.removedClientRecords) {
         for (final f in clientFilesOf(r)) {
-          if (!still.contains('${r.clientId}|${f.sha256}'))
+          if (!still.contains('${r.clientId}|${f.sha256}')) {
             await files.forget(r.clientId, f);
+          }
         }
+      }
       expect(db.clientRecord('own')!.locked, isTrue);
       expect(await files.locate('k1', ownFile), isNotNull);
     },
@@ -875,8 +879,9 @@ void main() {
       if (zipBytes[i] == 0x50 &&
           zipBytes[i + 1] == 0x4b &&
           zipBytes[i + 2] == 0x01 &&
-          zipBytes[i + 3] == 0x02)
+          zipBytes[i + 3] == 0x02) {
         zipBytes[i + 5] = 3;
+      }
     }
     expect(
       ZipDecoder().decodeBytes(zipBytes).findFile('link')!.isSymbolicLink,
