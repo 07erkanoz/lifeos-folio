@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../editor/widgets/default_styles.dart';
 
-Color stringToColor(String? s,
-    [Color? originalColor, DefaultStyles? defaultStyles]) {
+Color stringToColor(
+  String? s, [
+  Color? originalColor,
+  DefaultStyles? defaultStyles,
+]) {
   final palette = defaultStyles?.palette;
   if (s != null && palette != null) {
     final maybeColor = palette[s];
@@ -119,8 +122,12 @@ Color stringToColor(String? s,
     s = s.substring(5); // trim left 'rgba('
     s = s.substring(0, s.length - 1); // trim right ')'
     final arr = s.split(',').map((e) => e.trim()).toList();
-    return Color.fromRGBO(int.parse(arr[0]), int.parse(arr[1]),
-        int.parse(arr[2]), double.parse(arr[3]));
+    return Color.fromRGBO(
+      int.parse(arr[0]),
+      int.parse(arr[1]),
+      int.parse(arr[2]),
+      double.parse(arr[3]),
+    );
   }
 
   // TODO: take care of "color": "inherit"
@@ -134,6 +141,9 @@ Color stringToColor(String? s,
 
   var hex = s.replaceFirst('#', '');
   hex = hex.length == 6 ? 'ff$hex' : hex;
-  final val = int.parse(hex, radix: 16);
+  // Folio: a colour that is no number ("#AUTO" from a Word file) leaves the
+  // text as it was rather than breaking the whole page.
+  final val = hex.length == 8 ? int.tryParse(hex, radix: 16) : null;
+  if (val == null) return originalColor ?? Colors.black;
   return Color(val);
 }

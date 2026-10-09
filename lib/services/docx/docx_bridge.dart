@@ -558,14 +558,8 @@ class DocxBridge {
               strikethrough: isStrike,
               fontFamily: child.fontFamily,
               fontSize: child.fontSize,
-              color: child.color?.hex == 'auto'
-                  ? null
-                  : child.color == null
-                  ? null
-                  : '#${child.color!.hex}',
-              background: child.shadingFill == null
-                  ? null
-                  : '#${child.shadingFill}',
+              color: _hexColor(child.color?.hex),
+              background: _hexColor(child.shadingFill),
               superscript: child.isSuperscript,
               subscript: child.isSubscript,
             ),
@@ -980,4 +974,13 @@ class _DocxField extends DocxInline {
       ),
     );
   }
+}
+
+/// A colour as the editor reads it ("#1F467F"), from a Word one: none for
+/// "auto" (LibreOffice writes it, in any case) or anything not six or eight
+/// hex digits, that one odd value does not keep a document from opening.
+String? _hexColor(String? value) {
+  final v = value?.trim().replaceFirst('#', '') ?? '';
+  if (!RegExp(r'^([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$').hasMatch(v)) return null;
+  return '#$v';
 }
