@@ -14,6 +14,18 @@ class ThemeController extends ChangeNotifier {
   /// Whether the library's panel folds to its icons on the UYAP pages,
   /// for the cases' and documents' room.
   bool foldPanelOnUyap = true;
+
+  /// How large Folio's own words are, against the system's: the documents'
+  /// pages keep their own size.
+  double textScale = 1;
+
+  /// The sizes offered, smallest first.
+  static const textScales = [
+    (0.85, 'Çok küçük'),
+    (0.92, 'Küçük'),
+    (1.0, 'Normal'),
+    (1.1, 'Büyük'),
+  ];
   bool _disposed = false;
   int _revision = 0;
   Future<void> _writing = Future.value();
@@ -33,6 +45,10 @@ class ThemeController extends ChangeNotifier {
         if (!_disposed && revision == _revision) {
           hoverPreview = settings['hoverPreview'] != false;
           foldPanelOnUyap = settings['foldPanelOnUyap'] != false;
+          final scale = settings['textScale'];
+          if (scale is num && scale >= 0.8 && scale <= 1.2) {
+            textScale = scale.toDouble();
+          }
           mode = ThemeMode.values.firstWhere(
             (m) => m.name == value,
             orElse: () => ThemeMode.system,
@@ -61,6 +77,14 @@ class ThemeController extends ChangeNotifier {
     _persist();
   }
 
+  void setTextScale(double scale) {
+    if (_disposed) return;
+    _revision++;
+    textScale = scale.clamp(0.8, 1.2).toDouble();
+    notifyListeners();
+    _persist();
+  }
+
   void setFoldPanelOnUyap(bool fold) {
     if (_disposed) return;
     _revision++;
@@ -74,6 +98,7 @@ class ThemeController extends ChangeNotifier {
       'theme': mode.name,
       'hoverPreview': hoverPreview,
       'foldPanelOnUyap': foldPanelOnUyap,
+      'textScale': textScale,
     };
     _writing = _writing
         .then((_) async {

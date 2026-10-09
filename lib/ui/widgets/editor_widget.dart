@@ -2515,7 +2515,16 @@ class _EditorWidgetState extends State<EditorWidget>
 
   /// The page's own light theme, whatever the app's: black text on white
   /// paper.
-  Widget _paperTheme(BuildContext context, Widget child) => Theme(
+  /// The paper's look: its text at the page's own size, whatever size the
+  /// lawyer chose for Folio's words around it ([scale] the flowing view's).
+  Widget _paperTheme(BuildContext context, Widget child, {double scale = 1}) =>
+      MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(scale)),
+        child: _paperLook(context, child),
+      );
+
+  Widget _paperLook(BuildContext context, Widget child) => Theme(
     data: Theme.of(context).copyWith(
       brightness: Brightness.light,
       textTheme: Theme.of(context).textTheme
@@ -2546,22 +2555,19 @@ class _EditorWidgetState extends State<EditorWidget>
       child: SingleChildScrollView(
         key: const ValueKey('editor-flowing'),
         padding: const EdgeInsets.fromLTRB(gutter, 16, gutter, 96),
-        child: MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: const TextScaler.linear(_flowZoom)),
-          child: _paperTheme(
-            context,
-            DefaultTextStyle(
-              style: const TextStyle(color: Colors.black),
-              child: Listener(
-                onPointerDown: _bodyClicked,
-                child: _bodyEditor(
-                  pages: null,
-                  lineWidth:
-                      (box.maxWidth - 2 * gutter) /
-                      _flowZoom /
-                      EditorUnits.pixelsPerPoint,
-                ),
+        child: _paperTheme(
+          scale: _flowZoom,
+          context,
+          DefaultTextStyle(
+            style: const TextStyle(color: Colors.black),
+            child: Listener(
+              onPointerDown: _bodyClicked,
+              child: _bodyEditor(
+                pages: null,
+                lineWidth:
+                    (box.maxWidth - 2 * gutter) /
+                    _flowZoom /
+                    EditorUnits.pixelsPerPoint,
               ),
             ),
           ),

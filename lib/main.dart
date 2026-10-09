@@ -379,8 +379,24 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
         // On a phone a dialog opens from below, the screen's width, its top
         // corners rounded, as a phone's own sheets do.
         final phone = constraints.maxWidth < 700;
-        final themed = !phone
+        // The size the lawyer chose for Folio's words (Görünüm).
+        final scaled = appearance.textScale == 1
             ? main
+            : Builder(
+                builder: (context) {
+                  final media = MediaQuery.of(context);
+                  return MediaQuery(
+                    data: media.copyWith(
+                      textScaler: TextScaler.linear(
+                        media.textScaler.scale(1) * appearance.textScale,
+                      ),
+                    ),
+                    child: main,
+                  );
+                },
+              );
+        final themed = !phone
+            ? scaled
             : Builder(
                 builder: (context) {
                   final theme = Theme.of(context);
@@ -396,7 +412,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                         ),
                       ),
                     ),
-                    child: main,
+                    child: scaled,
                   );
                 },
               );

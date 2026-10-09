@@ -1038,6 +1038,36 @@ class _SettingsPageState extends State<SettingsPage> {
             'tema açık koyu siyah beyaz sistem renk',
             _themes(context, wide),
           ),
+          _Entry(
+            'yazı boyutu büyük küçük font ölçek',
+            SettingsRow(
+              key: const ValueKey('settings-text-scale'),
+              icon: Icons.format_size_rounded,
+              title: 'Yazı boyutu',
+              subtitle:
+                  'Folio’nun yazıları; belgelerin sayfası kendi boyutunda '
+                  'kalır',
+              trailing: DropdownButton<double>(
+                value: ThemeController.textScales
+                    .map((e) => e.$1)
+                    .reduce(
+                      (a, b) =>
+                          (a - widget.appearance.textScale).abs() <=
+                              (b - widget.appearance.textScale).abs()
+                          ? a
+                          : b,
+                    ),
+                underline: const SizedBox(),
+                onChanged: (v) {
+                  if (v != null) widget.appearance.setTextScale(v);
+                },
+                items: [
+                  for (final (scale, label) in ThemeController.textScales)
+                    DropdownMenuItem(value: scale, child: Text(label)),
+                ],
+              ),
+            ),
+          ),
           if (_desktop)
             _Entry(
               'sol panel daralt uyap',
