@@ -73,6 +73,7 @@ import 'office/messages_page.dart';
 import '../services/uyap/uyap_web_service.dart' show UyapWebService;
 import '../services/portal/agenda_reminders.dart';
 import '../services/platform/folder_zip.dart';
+import 'cash/cash_page.dart';
 import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
@@ -1217,6 +1218,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'gelenler' ||
         value == 'gorevler' ||
         value == 'muvekkiller' ||
+        value == 'kasa' ||
         value == 'mesajlar' ||
         value == 'ayarlar' ||
         _isUyapGroup(value)) {
@@ -1245,6 +1247,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'gelenler' ||
       group == 'gorevler' ||
       group == 'muvekkiller' ||
+      group == 'kasa' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
 
@@ -1259,6 +1262,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'gelenler' ||
       group == 'gorevler' ||
       group == 'muvekkiller' ||
+      group == 'kasa' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
 
@@ -2241,6 +2245,30 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                 )
                                               : _group == 'gorevler'
                                               ? const TasksPage()
+                                              : _group == 'kasa' &&
+                                                    !OfficeNetwork
+                                                        .instance
+                                                        .seesMoney
+                                              ? const Center(
+                                                  child: Text(
+                                                    'Kasayı büroda yöneticiler '
+                                                    've yetki verilenler görür.',
+                                                  ),
+                                                )
+                                              : _group == 'kasa'
+                                              ? CashPage(
+                                                  lawyer: _lawyerName,
+                                                  person:
+                                                      OfficeNetwork.instance.me,
+                                                  onOpenClient: (key) {
+                                                    _clientAsked = key;
+                                                    unawaited(
+                                                      _selectGroup(
+                                                        'muvekkiller',
+                                                      ),
+                                                    );
+                                                  },
+                                                )
                                               : _group == 'muvekkiller'
                                               ? ClientsPage(
                                                   key: ValueKey(
@@ -2528,6 +2556,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uyapNotices: _uyapNoticesUnread,
     messagesUnread: _officeUnread,
     office: _officeFounded,
+    cash: OfficeNetwork.instance.seesMoney,
     inbox: OfficeInbox.instance.items.isEmpty
         ? null
         : OfficeInbox.instance.unread,
@@ -2555,6 +2584,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     uyapNotices: _uyapNoticesUnread,
     messagesUnread: _officeUnread,
     office: _officeFounded,
+    cash: OfficeNetwork.instance.seesMoney,
     inbox: OfficeInbox.instance.items.isEmpty
         ? null
         : OfficeInbox.instance.unread,

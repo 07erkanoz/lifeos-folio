@@ -282,7 +282,8 @@ class OwnSync extends ChangeNotifier {
                     (body) =>
                         _net.askOffice(from, ClientFileSync.kind, body: body),
                     may: (r) =>
-                        (db.clientCard(r.clientId)?.office ?? false) &&
+                        ((db.clientCard(r.clientId)?.office ?? false) ||
+                            r.clientId == officeCashId) &&
                         (!r.kind.money || money),
                   )
                   .catchError((Object _) => 0),
@@ -298,7 +299,8 @@ class OwnSync extends ChangeNotifier {
         return ClientFileSync(db: db).answer(
           asked,
           may: (r) =>
-              (db.clientCard(r.clientId)?.office ?? false) &&
+              ((db.clientCard(r.clientId)?.office ?? false) ||
+                  r.clientId == officeCashId) &&
               (!r.kind.money || (_net.seesMoney && _net.seesMoneyOf(from))),
         );
       };

@@ -24,11 +24,16 @@ class MobileDrawer extends StatelessWidget {
     this.uyapNotices = 0,
     this.messagesUnread = 0,
     this.office = false,
+    this.cash = true,
     this.inbox,
     this.tasksOpen = 0,
     this.uyapCases = 0,
     this.sync,
   });
+
+  /// Whether the Kasa is shown: alone always; in an office to those who
+  /// see the money.
+  final bool cash;
 
   /// The place shown; [home] when the first page is.
   final String group;
@@ -263,6 +268,17 @@ class MobileDrawer extends StatelessWidget {
                           selected: !home && group == 'muvekkiller',
                           onTap: () => onGroup('muvekkiller'),
                         ),
+                        if (cash)
+                          _item(
+                            context,
+                            key: const ValueKey('drawer-cash'),
+                            icon: const Icon(
+                              Icons.account_balance_wallet_outlined,
+                            ),
+                            label: 'Kasa',
+                            selected: !home && group == 'kasa',
+                            onTap: () => onGroup('kasa'),
+                          ),
                         if (office) ...[
                           _item(
                             context,

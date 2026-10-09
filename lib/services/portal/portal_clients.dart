@@ -64,7 +64,9 @@ extension PortalClients on PortalDatabase {
     final kept = clientRecord(r.id);
     if (kept != null && kept.locked) return false;
     // Money in or out is evidence: never changed once written.
-    if (r.kind == ClientRecordKind.movement && !r.locked) {
+    if ((r.kind == ClientRecordKind.movement ||
+            r.kind == ClientRecordKind.cash) &&
+        !r.locked) {
       r = r.copyWith(locked: true);
     }
     _putRecord(r);
@@ -364,7 +366,8 @@ extension PortalClients on PortalDatabase {
         for (final r in _db.select('SELECT json FROM client_record'))
           if (ClientRecord.fromJson(jsonDecode(r['json'] as String))
               case final rec?
-              when shared.contains(rec.clientId) &&
+              when (shared.contains(rec.clientId) ||
+                      (rec.clientId == officeCashId && money)) &&
                   mine(rec.person) &&
                   (money || !rec.kind.money))
             {...rec.toJson(), 'kisi': me},
@@ -437,7 +440,10 @@ extension PortalClients on PortalDatabase {
       {
         'muvekkilKayitlari': [
           for (final j in theirs['muvekkilKayitlari'] as List? ?? const [])
-            if (j is Map && shared.contains(j['muvekkil']) && j['kisi'] == from)
+            if (j is Map &&
+                (shared.contains(j['muvekkil']) ||
+                    (j['muvekkil'] == officeCashId && money)) &&
+                j['kisi'] == from)
               j,
         ],
       },

@@ -370,6 +370,12 @@ class CaseNote {
   }
 }
 
+/// The lawyer's own income and expenses (the Kasa) are kept beside the
+/// clients' records, under this id: alone, on one's own devices through
+/// Senkron, and in an office among those who see the money; never changed
+/// once written, as a client's movements are not.
+const officeCashId = 'buro';
+
 /// What is kept for a client beside its card: a meeting's minutes, a power
 /// of attorney; later its accounts' movements.
 enum ClientRecordKind {
@@ -383,13 +389,21 @@ enum ClientRecordKind {
   /// Money in or out of a case's account: a fee paid, an advance taken, a
   /// cost met from it or by the lawyer. Never changed once written; a
   /// wrong one is taken back by another that names it.
-  movement('hareket');
+  movement('hareket'),
+
+  /// The office's own income or expense (lib/services/clients/
+  /// office_cash.dart): never changed once written.
+  cash('kasa'),
+
+  /// An expense the office pays every month, written for each month.
+  cashRepeat('kasaTekrar');
 
   const ClientRecordKind(this.code);
   final String code;
 
   /// Seen only by those who see the money (a manager, or one let).
-  bool get money => this == fee || this == movement;
+  bool get money =>
+      this == fee || this == movement || this == cash || this == cashRepeat;
 
   static ClientRecordKind? of(Object? code) {
     for (final k in values) {

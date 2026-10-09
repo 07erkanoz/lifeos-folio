@@ -88,10 +88,15 @@ class LibrarySidebar extends StatelessWidget {
     this.uyapNotices = 0,
     this.messagesUnread = 0,
     this.office = false,
+    this.cash = true,
     this.inbox,
     this.tasksOpen = 0,
     this.onTogglePanel,
   });
+
+  /// Whether the Kasa is shown: alone always; in an office to those who
+  /// see the money.
+  final bool cash;
 
   bool get _showUyap => uyapAvailable || uyapCases.isNotEmpty;
 
@@ -298,6 +303,15 @@ class LibrarySidebar extends StatelessWidget {
                   null,
                   key: const ValueKey('clients-nav'),
                 ),
+                if (cash)
+                  _nav(
+                    context,
+                    Icons.account_balance_wallet_outlined,
+                    'Kasa',
+                    'kasa',
+                    null,
+                    key: const ValueKey('cash-nav'),
+                  ),
                 if (office) ...[
                   _nav(
                     context,

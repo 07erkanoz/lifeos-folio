@@ -18,6 +18,7 @@ import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_hearing.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
+import 'package:evrak_convert/ui/cash/cash_page.dart';
 import 'package:evrak_convert/ui/clients/clients_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
@@ -378,6 +379,91 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('client-accounts')));
       await tester.pumpAndSettle();
       await _shot(tester, '$name-hesap');
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
+
+  // The Kasa: a 1366 screen's window beside the sidebar, and a phone.
+  for (final (name, size) in const [
+    ('kasa-1366', Size(1130, 560)),
+    ('kasa-telefon', Size(390, 844)),
+  ]) {
+    testWidgets(name, (tester) async {
+      tester.view.physicalSize = size * pixelRatio;
+      tester.view.devicePixelRatio = pixelRatio;
+      addTearDown(tester.view.reset);
+      if (size.width > 900) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      }
+      final db = await data();
+      addTearDown(db.dispose);
+      final now = DateTime.now();
+      var n = 0;
+      for (var back = 0; back < 10; back++) {
+        final m = DateTime(now.year, now.month - back);
+        for (final (cat, what, lira, day) in [
+          ('Kira', 'Ofis kirası', 18000, 1),
+          ('Maaş ve SGK', 'Stajyer SGK primi', 7840, 3),
+          ('Ulaşım', 'Adliye otoparkı', 650 + back * 40, 6),
+          if (back.isEven) ('Kırtasiye', 'Toner ve kâğıt', 1450, 4),
+        ]) {
+          final at = DateTime(m.year, m.month, day, 9, 10);
+          if (at.isAfter(now)) continue;
+          db.saveClientRecord(
+            ClientRecord(
+              id: 'kasa${n++}',
+              clientId: officeCashId,
+              kind: ClientRecordKind.cash,
+              data: {
+                'tur': 'gider',
+                'kategori': cat,
+                'tutar': lira * 100,
+                'zaman': at.toIso8601String(),
+                'aciklama': what,
+                'odeme': cat == 'Ulaşım' ? 'Nakit' : 'Banka',
+              },
+              created: at,
+              by: 'Av. Deniz Kaya',
+              updated: at,
+              locked: true,
+            ),
+          );
+        }
+        final paid = DateTime(m.year, m.month, 5, 14, 22);
+        if (back > 0 || !paid.isAfter(now)) {
+          db.saveClientRecord(
+            ClientRecord(
+              id: 'tah$back',
+              clientId: 'k1',
+              kind: ClientRecordKind.movement,
+              data: {
+                'dosya': caseKey('2025/77', 'Antalya 2. İş Mahkemesi'),
+                'hesap': MovementKind.feePaid.code,
+                'tutar': (22000 + back * 3500) * 100,
+                'zaman': paid.toIso8601String(),
+                'aciklama': 'Danışmanlık ücreti',
+                'odeme': 'Havale / EFT',
+              },
+              created: paid,
+              by: 'Av. Deniz Kaya',
+              updated: paid,
+              locked: true,
+            ),
+          );
+        }
+      }
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: CashPage(lawyer: 'Av. Deniz Kaya', database: db),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _shot(tester, name);
+      await tester.tap(find.text('Raporlar'));
+      await tester.pumpAndSettle();
+      await _shot(tester, '$name-rapor');
       debugDefaultTargetPlatformOverride = null;
     });
   }
