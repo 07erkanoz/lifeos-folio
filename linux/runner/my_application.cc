@@ -8,6 +8,9 @@
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -34,6 +37,24 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// GTK asks a Wayland compositor to draw an undecorated window's frame
+// (org_kde_kwin_server_decoration's SERVER mode); KWin does, and a second
+// caption sat above Folio's own on KDE. Asked after GTK's own realize, the
+// window draws its frame itself: Folio's caption, nothing above it. GNOME
+// has no such protocol and is not changed. A window given its system
+// frame back (a plain title bar asked for) asks the compositor for it.
+static void own_decorations_cb(GtkWidget* window, gpointer) {
+#ifdef GDK_WINDOWING_WAYLAND
+  GdkWindow* gdk_window = gtk_widget_get_window(window);
+  if (gdk_window == nullptr || !GDK_IS_WAYLAND_WINDOW(gdk_window)) return;
+  if (gtk_window_get_decorated(GTK_WINDOW(window))) {
+    gdk_wayland_window_announce_ssd(gdk_window);
+  } else {
+    gdk_wayland_window_announce_csd(gdk_window);
+  }
+#endif
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -44,6 +65,10 @@ static void my_application_activate(GApplication* application) {
   // its CSD decoration/input regions can survive hiding on GNOME/Wayland.
   gtk_window_set_title(window, kTitle);
   gtk_window_set_decorated(window, FALSE);
+  g_signal_connect_after(window, "realize", G_CALLBACK(own_decorations_cb),
+                         nullptr);
+  g_signal_connect_after(window, "notify::decorated",
+                         G_CALLBACK(own_decorations_cb), nullptr);
 
   gtk_window_set_default_size(window, 1280, 720);
   g_autofree gchar* executable = g_file_read_link("/proc/self/exe", nullptr);
