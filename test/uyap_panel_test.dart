@@ -115,6 +115,11 @@ class _Portal {
               },
             ],
           };
+        case '/avukat_mahkemeleri_sorgula.ajx':
+          body = [
+            {'birimId': 'c4', 'birimAdi': 'İstanbul 4. Aile Mahkemesi'},
+            {'birimId': 'c5', 'birimAdi': 'İstanbul 5. Aile Mahkemesi'},
+          ];
         case '/dosya_islem_turleri_sorgula_brd.ajx':
           body = sent.contains('yargitay-')
               ? {'77': 'ayrinti_bilgileri,evrak_bilgileri,taraf_bilgileri'}
@@ -293,6 +298,42 @@ void main() {
     expect(later.link?.number, '2026/1204');
     expect(later.record?.documents.length, 2);
   });
+
+  test(
+    'a case the mobile API brought, its court known by name alone, is '
+    'placed on the web and fetched from there, and the place is kept',
+    () async {
+      await portal.login(web);
+      final c = panel();
+      await c.attach(
+        const UyapCaseLink(
+          jurisdiction: '1',
+          courtType: '0926',
+          courtId: '',
+          court: 'İstanbul 5. Aile Mahkemesi',
+          number: '2026/1204',
+        ),
+      );
+      expect(c.findable, isFalse);
+      await c.refresh();
+      expect(c.error, isNull);
+      expect(c.link?.courtId, 'c5');
+      expect(c.record?.details.kind, 'Boşanma');
+      expect(c.record?.link?.courtId, 'c5');
+      // Opened again from the mobile API's word of it: the kept place.
+      final again = panel();
+      await again.attach(
+        const UyapCaseLink(
+          jurisdiction: '1',
+          courtType: '0926',
+          courtId: '',
+          court: 'İstanbul 5. Aile Mahkemesi',
+          number: '2026/1204',
+        ),
+      );
+      expect(again.findable, isTrue);
+    },
+  );
 
   test('the case goes with the document under a new name, and not to '
       'another document opened in its place', () async {

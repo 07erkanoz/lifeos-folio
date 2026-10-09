@@ -1144,6 +1144,15 @@ class PortalSync extends ChangeNotifier {
     return problem;
   }
 
+  /// Every open case asked again from the web portal, one after another:
+  /// its particulars, documents, parties, money, and an enforcement file's
+  /// account and debtors. Long (some seconds a case), so asked for by hand.
+  Future<void> refreshAllOnWeb() => _run(PortalChannel.uyapWeb, (db) async {
+    if (!_web.connected) return 'UYAP Web bağlı değil.';
+    await refreshCases(db, channel: PortalChannel.uyapWeb);
+    return null;
+  });
+
   /// The web portal's hearings.
   Future<void> syncWeb() => _run(PortalChannel.uyapWeb, (db) async {
     if (!_web.connected) return null;
@@ -1248,6 +1257,7 @@ class PortalSync extends ChangeNotifier {
     PortalDatabase db, {
     Set<String>? changed,
     int? stale,
+    PortalChannel channel = PortalChannel.uyapMobile,
   }) async {
     final all = [
       for (final c in db.cases().values)
@@ -1296,7 +1306,12 @@ class PortalSync extends ChangeNotifier {
     }
     for (final (i, kase) in open.indexed) {
       if (!_mobile.connected && !_web.connected) break;
-      _progress(PortalChannel.uyapMobile, 'Evraklar ${i + 1}/${open.length}');
+      _progress(
+        channel,
+        channel == PortalChannel.uyapWeb
+            ? 'Dosyalar ${i + 1}/${open.length}'
+            : 'Evraklar ${i + 1}/${open.length}',
+      );
       final panel = UyapCasePanelController(pause: Duration.zero);
       try {
         await panel.attach(linkOf(kase));

@@ -210,6 +210,41 @@ class _PortfolioPageState extends State<PortfolioPage> {
     }
   }
 
+  /// Every open case fetched again from the web portal: the money, the
+  /// account and the debtors come only from there. Asked first: it takes
+  /// long.
+  Future<void> _refreshAllOnWeb() async {
+    final count = (_rows ?? const <PortfolioRow>[]).length;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tüm açık dosyalar UYAP Web\'den tazelensin mi?'),
+        content: Text(
+          'Dosyalar teker teker çekilir: evraklar, taraflar, harç, tahsilat '
+          've reddiyat; icra dosyalarında borç hesabı ve borçlular. '
+          '${count > 0 ? '$count dosya için ' : ''}uzun sürebilir; Folio '
+          'açık kaldıkça arka planda sürer. Borçlu sorguları (araç, tapu, '
+          'banka) yapılmaz.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('portfolio-web-all-ok'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Başlat'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    PortalSync.begin();
+    await PortalSync.instance.refreshAllOnWeb();
+    await _reload();
+  }
+
   Future<void> _setIncludeClosed(bool value) async {
     PortalSync.begin();
     await PortalSync.instance.setIncludeClosed(value);
@@ -595,13 +630,21 @@ class _PortfolioPageState extends State<PortfolioPage> {
           PopupMenuButton<String>(
             key: const ValueKey('portfolio-menu'),
             tooltip: 'Diğer',
-            onSelected: (_) => unawaited(_setIncludeClosed(!_includeClosed)),
+            onSelected: (v) => v == 'web'
+                ? unawaited(_refreshAllOnWeb())
+                : unawaited(_setIncludeClosed(!_includeClosed)),
             itemBuilder: (_) => [
               CheckedPopupMenuItem(
                 key: const ValueKey('portfolio-closed-switch'),
                 value: 'closed',
                 checked: _includeClosed,
                 child: const Text('Kapalı dosyaları da indir'),
+              ),
+              PopupMenuItem(
+                key: const ValueKey('portfolio-web-all'),
+                value: 'web',
+                enabled: PortalSync.instance.web.connected && !running,
+                child: const Text('Tüm açık dosyaları UYAP Web\'den tazele'),
               ),
             ],
           ),

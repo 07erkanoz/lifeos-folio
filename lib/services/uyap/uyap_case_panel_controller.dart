@@ -184,11 +184,19 @@ class UyapCasePanelController extends ChangeNotifier {
   Future<void> attach(UyapCaseLink link) async {
     _link = link;
     final kept = await store.load(link.court, link.number);
+    // The web's place of it, found once and kept with the record.
+    final known = kept?.link;
+    if (link.courtId.isEmpty &&
+        known != null &&
+        known.courtId.isNotEmpty &&
+        known.courtType.isNotEmpty) {
+      _link = known;
+    }
     _record = kept == null ? null : await store.dropSameContent(kept);
     _live = null;
     _liveDocuments = const {};
     selected.clear();
-    if (_path != null) await links.link(_path!, link);
+    if (_path != null) await links.link(_path!, _link);
     _changed();
   }
 
@@ -199,6 +207,65 @@ class UyapCasePanelController extends ChangeNotifier {
       _link!.courtId.isNotEmpty &&
       (_link!.courtType.isNotEmpty ||
           UyapWebService.isHighCourt(_link!.jurisdiction));
+
+  /// The courts the web portal lists, asked once a session for each kind:
+  /// a sync places many cases of one court kind one after another.
+  static final _courts = <String, List<UyapOption>>{};
+  static Object? _courtsSession;
+
+  Future<List<UyapOption>> _courtsOf(
+    String jurisdiction,
+    String type,
+    bool closed,
+  ) async {
+    final session = web.session.value;
+    if (!identical(session, _courtsSession)) {
+      _courts.clear();
+      _courtsSession = session;
+    }
+    return _courts['$jurisdiction|$type|$closed'] ??= await web.courts(
+      jurisdiction,
+      type,
+      closed: closed,
+    );
+  }
+
+  /// A case the mobile API brought knows its court by name, not by the web
+  /// portal's id; with the web connected, the id is looked up by the name
+  /// and kept, so that the case is fetched from the web: the account, the
+  /// money and the debtors are there, not in the mobile API.
+  Future<void> _placeOnWeb() async {
+    final link = _link;
+    if (link == null ||
+        findable ||
+        !web.connected ||
+        link.court.isEmpty ||
+        link.jurisdiction.isEmpty ||
+        UyapWebService.isHighCourt(link.jurisdiction)) {
+      return;
+    }
+    final name = UyapWebService.fold(link.court);
+    final types = link.courtType.isNotEmpty
+        ? [link.courtType]
+        : [for (final t in await web.courtTypes(link.jurisdiction)) t.id];
+    for (final type in types) {
+      for (final closed in [link.closed, !link.closed]) {
+        for (final c in await _courtsOf(link.jurisdiction, type, closed)) {
+          if (UyapWebService.fold(c.label) != name) continue;
+          _link = UyapCaseLink(
+            jurisdiction: link.jurisdiction,
+            courtType: type,
+            courtId: c.id,
+            court: link.court,
+            number: link.number,
+            closed: link.closed,
+          );
+          if (_path != null) await links.link(_path!, _link);
+          return;
+        }
+      }
+    }
+  }
 
   Future<void> unlink() async {
     if (_path != null) await links.link(_path!, null);
@@ -255,6 +322,11 @@ class UyapCasePanelController extends ChangeNotifier {
   /// asked for the parties and the documents.
   Future<void> refresh() async {
     if (_link == null || !connected) return;
+    try {
+      await _placeOnWeb();
+    } catch (_) {
+      // Not found on the web: the mobile API, as before.
+    }
     if (!_useWeb) return _refreshMobile();
     await _doing('Dosya UYAP’ta aranıyor', () async {
       final live = await _liveCase();
