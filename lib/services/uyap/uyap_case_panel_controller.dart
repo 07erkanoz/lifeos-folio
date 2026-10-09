@@ -27,7 +27,19 @@ class UyapCasePanelController extends ChangeNotifier {
     this._store,
     this._links,
     this.pause = const Duration(milliseconds: 300),
+    this.background = false,
   });
+
+  /// Fetching for the sync, not for a lawyer looking at the case: it gives
+  /// way to one who is ([lawyerWaiting]).
+  final bool background;
+
+  /// How many cases a lawyer has asked to be fetched and is waiting for.
+  static int _waiting = 0;
+
+  /// Whether a lawyer is waiting for a case: the sync's next case waits
+  /// for it, UYAP taking one request at a time.
+  static bool get lawyerWaiting => _waiting > 0;
 
   final UyapWebService? _web;
   final UyapMobileApi? _mobile;
@@ -322,6 +334,15 @@ class UyapCasePanelController extends ChangeNotifier {
   /// asked for the parties and the documents.
   Future<void> refresh() async {
     if (_link == null || !connected) return;
+    if (!background) _waiting++;
+    try {
+      await _refresh();
+    } finally {
+      if (!background) _waiting--;
+    }
+  }
+
+  Future<void> _refresh() async {
     try {
       await _placeOnWeb();
     } catch (_) {

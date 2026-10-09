@@ -1312,7 +1312,14 @@ class PortalSync extends ChangeNotifier {
             ? 'Dosyalar ${i + 1}/${open.length}'
             : 'Evraklar ${i + 1}/${open.length}',
       );
-      final panel = UyapCasePanelController(pause: Duration.zero);
+      // A lawyer waiting for a case of theirs goes first.
+      while (UyapCasePanelController.lawyerWaiting) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      final panel = UyapCasePanelController(
+        pause: Duration.zero,
+        background: true,
+      );
       try {
         await panel.attach(linkOf(kase));
         final before = panel.record;

@@ -236,9 +236,22 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     final record = _c.record;
     final reading =
         PortalSync.started?.state(PortalChannel.uyapMobile).running ?? false;
+    // Kept from the mobile API alone (no particulars, money or account,
+    // which only the web gives): fetched from the web at once when it is
+    // connected, however lately kept.
+    final mobileOnly =
+        record != null &&
+        record.details.kind.isEmpty &&
+        record.details.status.isEmpty &&
+        record.details.enforcement.isEmpty &&
+        record.money == null &&
+        record.enforcement == null &&
+        record.hidden.isEmpty;
+    final web = _c.web.connected;
     if (_c.connected &&
-        !reading &&
+        (!reading || web) &&
         (record == null ||
+            (web && mobileOnly) ||
             DateTime.now().difference(record.fetchedAt) >
                 const Duration(minutes: 30))) {
       unawaited(_c.refresh());
