@@ -163,6 +163,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a lawyer keeping only their own devices alike is no office: '
+      'the page asks to join it, and another\'s nameless device is on no '
+      'list', (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final dir = Directory.systemTemp.createTempSync('folio_office_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final net = OfficeNetwork(settings: () async => File('${dir.path}/b.json'));
+    net.seenForTesting(
+      peer('p3', ''),
+      self: peer('s', '', platform: OfficePlatform.linux),
+      office: false,
+    );
+    expect(net.officeOpen, isFalse);
+    expect(net.people.expand((p) => p.devices).map((d) => d.deviceId), ['s']);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: OfficeNetworkPage(network: net)),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('office-join')), findsOneWidget);
+  });
+
   testWidgets('the page fits a phone', (tester) async {
     tester.view.physicalSize = const Size(360, 760);
     tester.view.devicePixelRatio = 1;

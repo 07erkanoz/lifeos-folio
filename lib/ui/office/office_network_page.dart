@@ -63,7 +63,9 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                 children: [
                   _head(context),
                   const SizedBox(height: 14),
-                  if (!_net.joined)
+                  // Keeping one's own devices alike is no office: the page
+                  // asks to be seen by the office first.
+                  if (!_net.joined || !_net.officeOpen)
                     _join(context)
                   else if (wide)
                     Row(
@@ -248,7 +250,9 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
           const SizedBox(height: 16),
           FilledButton.icon(
             key: const ValueKey('office-join'),
-            onPressed: _net.starting ? null : () => unawaited(_net.join()),
+            onPressed: _net.starting
+                ? null
+                : () => unawaited(_net.openToOffice(true)),
             icon: _net.starting
                 ? const SizedBox.square(
                     dimension: 16,
@@ -1122,9 +1126,11 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
             const SizedBox(height: 12),
             OutlinedButton.icon(
               key: const ValueKey('office-leave'),
-              onPressed: () => unawaited(_net.leave()),
+              // Out of the office's sight; this person's own devices still
+              // keep alike (Eşitleme), with no name said.
+              onPressed: () => unawaited(_net.openToOffice(false)),
               icon: const Icon(Icons.wifi_tethering_off_rounded, size: 17),
-              label: const Text('Ağdan ayrıl'),
+              label: const Text('Büro ağından çık'),
             ),
           ],
         ),

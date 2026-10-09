@@ -339,7 +339,13 @@ class OfficeNetwork extends ChangeNotifier {
     final self = _self;
     if (self == null) return const [];
     return groupPeople([
-      ..._peers.values,
+      // Another's device that keeps only its own alike says no name: it is
+      // on no one's list but its owner's.
+      for (final p in _peers.values)
+        if (p.name.isNotEmpty ||
+            p.userId == _identity?.userId ||
+            _knownDevices.containsKey(p.deviceId))
+          p,
       for (final d in _knownDevices.values)
         if (!_peers.containsKey(d.deviceId)) d.asAbsent(null),
     ], self: self);
@@ -1741,7 +1747,9 @@ class OfficeNetwork extends ChangeNotifier {
     final identity = _identity, self = _self;
     if (identity == null || self == null) return 'Önce büro ağına katılın.';
     if (name.trim().isEmpty) return 'Büronun adını yazın.';
-    await ledger.found(identity, self, name);
+    // An office is seen by its name: open to it before it is founded.
+    if (!officeOpen) await openToOffice(true);
+    await ledger.found(identity, _self ?? self, name);
     notifyListeners();
     return null;
   }
@@ -1981,12 +1989,21 @@ class OfficeNetwork extends ChangeNotifier {
     if (await _wanted()) await join();
   }
 
+  /// Seen by the office (by name, on its list), not only by this person's
+  /// own devices: chosen on the office's page, or a member of one. Keeping
+  /// one's own devices alike is no office: a lawyer alone with two devices
+  /// is announced with no name, on no one else's list.
+  bool get officeOpen => _officeOpen || ledger.exists;
+  bool _officeOpen = false;
+
   Future<bool> _wanted() async {
     try {
       final file = await _settingsFile();
       if (!await file.exists()) return false;
       final json = jsonDecode(await file.readAsString());
-      return json is Map && json['gorun'] == true;
+      if (json is! Map) return false;
+      _officeOpen = json['buro'] == true;
+      return json['gorun'] == true;
     } catch (_) {
       return false;
     }
@@ -1996,8 +2013,23 @@ class OfficeNetwork extends ChangeNotifier {
     try {
       final file = await _settingsFile();
       await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode({'gorun': joined}));
+      await file.writeAsString(
+        jsonEncode({'gorun': joined, 'buro': _officeOpen}),
+      );
     } catch (_) {}
+  }
+
+  /// The office's page: seen by the office, by name; or, [open] false,
+  /// by this person's own devices alone, with no name.
+  Future<void> openToOffice(bool open) async {
+    _officeOpen = open;
+    if (!_joined) {
+      await join();
+    } else {
+      await _remember(true);
+      await rename();
+    }
+    notifyListeners();
   }
 
   /// Announces this Folio and starts looking for the others.
@@ -2055,7 +2087,7 @@ class OfficeNetwork extends ChangeNotifier {
     // Nothing was announced (a test's listening): nothing to say again.
     if (_broadcast == null) return;
     final next = await _describe(identity, server.port);
-    if (next.name == _self?.name) return;
+    if (next.name == _self?.name && next.device == _self?.device) return;
     await _broadcast?.stop();
     _self = next;
     await _announce(next);
@@ -2077,11 +2109,14 @@ class OfficeNetwork extends ChangeNotifier {
     if (device.isEmpty || device == 'localhost') {
       device = platform.phone ? '${platform.label} telefon' : platform.label;
     }
+    // Not open to the office: nothing of the person said to the network,
+    // only what lets this person's own devices know it.
+    final open = officeOpen;
     return OfficePeer(
       deviceId: identity.deviceId,
       userId: identity.userId,
-      name: name,
-      device: device,
+      name: open ? name : '',
+      device: open ? device : '',
       platform: platform,
       port: port,
     );
@@ -2200,6 +2235,8 @@ class OfficeNetwork extends ChangeNotifier {
     );
     OfficeChannel.me = _about(_self!);
     _joined = true;
+    // A test of the office: seen by it.
+    _officeOpen = true;
   }
 
   static Map<String, String> _about(OfficePeer self) => {
@@ -2210,9 +2247,10 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// For tests: a peer as if it had been found.
   @visibleForTesting
-  void seenForTesting(OfficePeer peer, {OfficePeer? self}) {
+  void seenForTesting(OfficePeer peer, {OfficePeer? self, bool office = true}) {
     if (self != null) _self = self;
     _joined = true;
+    _officeOpen = office;
     _peers[peer.deviceId] = peer;
     notifyListeners();
   }
