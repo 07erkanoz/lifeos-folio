@@ -57,6 +57,9 @@ abstract final class BackgroundNotices {
 
   static const _lastKey = 'background_check';
 
+  /// When the check last asked UYAP.
+  static const _askedKey = 'background_uyap_at';
+
   /// When the background check last ran, and what came of it; null when
   /// it never has. Shown in the settings, so that one can see it runs.
   static ({DateTime at, String result})? last(PortalDatabase db) {
@@ -93,6 +96,18 @@ abstract final class BackgroundNotices {
     if (seen != null && DateTime.now().difference(seen) < _quiet) {
       return 'Folio açıktı, ona bırakıldı';
     }
+    // The task wakes every quarter of an hour for the agenda's alarms;
+    // UYAP is asked only as often as the open app asks it, and not at
+    // night (PortalSync.noticeEvery).
+    final now = DateTime.now();
+    if (PortalSync.night(now)) return 'gece sorulmaz';
+    final asked = DateTime.tryParse(db.meta(_askedKey) ?? '');
+    if (asked != null &&
+        now.difference(asked) <
+            PortalSync.noticeEvery - const Duration(minutes: 5)) {
+      return 'son sorgudan bu yana bir saat geçmedi';
+    }
+    db.setMeta(_askedKey, now.toIso8601String());
     final secrets = SecretStore();
     const secret = 'uyap-mobile';
     final kept = MobileTokens.fromJson(await secrets.read(secret));

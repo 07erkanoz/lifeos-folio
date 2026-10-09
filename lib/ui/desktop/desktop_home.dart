@@ -506,7 +506,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                 connected: web.connected,
                 action: web.connected ? 'Senkronize et' : 'Bağlan',
                 onAction: () => web.connected
-                    ? unawaited(PortalSync.instance.syncWeb())
+                    ? unawaited(PortalSync.instance.syncWeb(force: true))
                     : unawaited(
                         connectUyapWeb(
                           context,

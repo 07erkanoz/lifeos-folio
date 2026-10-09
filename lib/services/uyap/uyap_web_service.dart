@@ -11,6 +11,7 @@ import '../signing/signed_data.dart';
 import '../udf/signature_parser.dart';
 import 'tray_recovery.dart';
 import 'uyap_enforcement.dart';
+import 'uyap_pace.dart';
 import 'uyap_case_data.dart';
 
 export 'uyap_case_data.dart';
@@ -596,8 +597,18 @@ class UyapWebService {
     return info is Map ? int.tryParse('${info['level'] ?? ''}') ?? 0 : 0;
   }
 
-  /// A GET the portal answers in JSON (as text/json).
-  Future<dynamic> _getJson(String path, Map<String, String> query) async {
+  /// A GET the portal answers in JSON (as text/json), in its turn
+  /// ([UyapPace]).
+  Future<dynamic> _getJson(String path, Map<String, String> query) => UyapPace
+      .instance
+      .run(() => _getJsonNow(path, query), isUyapFault: _fault);
+
+  /// Whether [e] is the portal not answering as it should, which slows the
+  /// syncs ([UyapPace]).
+  static bool _fault(Object e) =>
+      UyapPace.fault(e) || RegExp(r'HTTP (429|5\d\d)').hasMatch('$e');
+
+  Future<dynamic> _getJsonNow(String path, Map<String, String> query) async {
     final request = await _http
         .getUrl(_at(path, query))
         .timeout(const Duration(seconds: 30));
@@ -616,7 +627,10 @@ class UyapWebService {
         : jsonDecode(data);
   }
 
-  Future<dynamic> _post(String path, Map<String, Object?> body) async {
+  Future<dynamic> _post(String path, Map<String, Object?> body) =>
+      UyapPace.instance.run(() => _postNow(path, body), isUyapFault: _fault);
+
+  Future<dynamic> _postNow(String path, Map<String, Object?> body) async {
     if (!_hasCookie) throw StateError('UYAP web oturumu açık değil.');
     final request = await _http.postUrl(_at(path));
     request.followRedirects = false;
@@ -1042,6 +1056,15 @@ class UyapWebService {
     String documentId,
     String caseId, {
     String path = '/view_document_brd.uyap',
+  }) => UyapPace.instance.run(
+    () => _viewDocumentNow(documentId, caseId, path: path),
+    isUyapFault: _fault,
+  );
+
+  Future<Uint8List> _viewDocumentNow(
+    String documentId,
+    String caseId, {
+    required String path,
   }) async {
     final request = await _http.getUrl(
       _at(path, {'evrakId': documentId, 'dosyaId': caseId}),

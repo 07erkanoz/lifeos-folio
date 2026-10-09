@@ -65,8 +65,8 @@ Future<void> runEditorApp(List<String> arguments) async {
     }
   }
   // The portals' sessions kept from before: UYAP Mobil ties a petition to
-  // its case here too.
-  PortalSync.begin();
+  // its case here too. Quiet: Folio's own window syncs, not each editor's.
+  PortalSync.begin(quiet: true);
   runApp(EditorApp(path: path, desktopChrome: chrome));
   if (options != null) {
     await windowManager.waitUntilReadyToShow(options, () async {

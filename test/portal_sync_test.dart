@@ -165,4 +165,68 @@ void main() {
     expect(one.status!.value, 'Açık');
     expect(one.ids.keys, containsAll(PortalChannel.values.take(2)));
   });
+
+  test(
+    'UYAP is asked little of itself: hearings once a day, the portfolio '
+    'once a week, no case’s documents; by hand not within three hours',
+    () async {
+      await api.login('kod');
+      final sync = PortalSync(
+        web: UyapWebService.forTesting(),
+        mobile: api,
+        database: () async => db,
+      );
+      addTearDown(sync.dispose);
+      asked.clear();
+      await sync.syncMobile();
+      expect(asked.where((p) => p.contains('durusmalarim')), isNotEmpty);
+      expect(asked, contains('mobile/avukat/dosya'));
+      // The documents are asked for when a case's page opens, not now.
+      expect(asked, isNot(contains('mobile/avukat/dosya/o1/1')));
+      expect(db.cases().values.map((c) => c.number), ['2025/412']);
+
+      asked.clear();
+      await sync.syncMobile();
+      expect(asked, isEmpty, reason: 'read today and this week');
+
+      await sync.syncMobile(full: true);
+      expect(asked.where((p) => p.contains('durusmalarim')), isNotEmpty);
+      expect(asked, isNot(contains('mobile/avukat/dosya')));
+      expect(
+        sync.state(PortalChannel.uyapMobile).problem,
+        contains('yeniden okunmaz'),
+      );
+
+      // Read last week (or more than three hours ago): read again.
+      final before = PortalSync.weekStart(DateTime.now())
+          .subtract(const Duration(hours: 1));
+      db.setMeta('portfolio_at', before.toIso8601String());
+      asked.clear();
+      await sync.syncMobile();
+      expect(asked, contains('mobile/avukat/dosya'));
+      expect(asked.where((p) => p.contains('durusmalarim')), isEmpty);
+      db.setMeta('portfolio_at', before.toIso8601String());
+      asked.clear();
+      await sync.syncMobile(full: true);
+      expect(asked, contains('mobile/avukat/dosya'));
+    },
+  );
+
+  test('a week starts on Monday', () {
+    expect(
+      PortalSync.weekStart(DateTime(2026, 10, 10, 15)),
+      DateTime(2026, 10, 5),
+    );
+    expect(
+      PortalSync.weekStart(DateTime(2026, 10, 5, 0, 1)),
+      DateTime(2026, 10, 5),
+    );
+    expect(
+      PortalSync.weekStart(DateTime(2026, 10, 4, 23)),
+      DateTime(2026, 9, 28),
+    );
+    expect(PortalSync.night(DateTime(2026, 10, 10, 21)), isTrue);
+    expect(PortalSync.night(DateTime(2026, 10, 10, 6, 59)), isTrue);
+    expect(PortalSync.night(DateTime(2026, 10, 10, 7)), isFalse);
+  });
 }

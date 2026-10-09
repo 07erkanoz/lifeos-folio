@@ -6,6 +6,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 
+import 'uyap_pace.dart';
+
 /// The UYAP mobile API (mobilws.uyap.gov.tr), Folio's second UYAP channel
 /// beside the web portal (UYGULAMAPLANI §9.2, §9.3). Its own e-Devlet login,
 /// its own tokens: a session lasts a week and renews itself, but answers
@@ -305,7 +307,23 @@ class UyapMobileApi {
     }
   }
 
+  /// A request in its turn ([UyapPace]): what the lawyer's session asks.
+  /// Signing in and renewing are not held back.
   Future<dynamic> _send(
+    String method,
+    String path,
+    Map<String, Object?>? body, {
+    bool authorized = true,
+  }) => authorized
+      ? UyapPace.instance.run(
+          () => _sendNow(method, path, body),
+          isUyapFault: (e) =>
+              e is _Unreachable ||
+              UyapPace.fault(e, status: e is _HttpError ? e.status : null),
+        )
+      : _sendNow(method, path, body, authorized: false);
+
+  Future<dynamic> _sendNow(
     String method,
     String path,
     Map<String, Object?>? body, {

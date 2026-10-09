@@ -752,8 +752,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: 'Folio kapalıyken de denetle',
                 subtitle: Platform.isIOS
                     ? 'iOS’un izin verdiği aralıklarla, günde birkaç kez'
-                    : 'En sık 15 dakikada bir. Bazı telefonlarda Folio’yu pil '
-                          'kısıtlamasından çıkarmak gerekir.',
+                    : 'UYAP’a saatte bir sorulur, gece sorulmaz. Bazı '
+                          'telefonlarda Folio’yu pil kısıtlamasından çıkarmak '
+                          'gerekir.',
                 trailing: settingsSwitch(
                   _alerts.on && _alerts.background,
                   _alerts.on

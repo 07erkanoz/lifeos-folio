@@ -294,7 +294,7 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
         who: webSession?.user,
         validity: 'Oturum şu saate kadar açık:',
         connect: () => unawaited(_connectWeb()),
-        syncNow: _sync.syncWeb,
+        syncNow: () => _sync.syncWeb(force: true),
         disconnect: () {
           web.disconnect();
           _changed();
@@ -342,7 +342,7 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
       ),
     ];
     void syncAll() {
-      if (web.connected) unawaited(_sync.syncWeb());
+      if (web.connected) unawaited(_sync.syncWeb(force: true));
       if (mobile.connected) unawaited(_sync.syncMobile(full: true));
       if (uets.connected) unawaited(_sync.syncUets());
     }
@@ -384,7 +384,8 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
             onPressed: any ? syncAll : null,
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(fontFamily: 'LiberationSans', 
+              textStyle: const TextStyle(
+                fontFamily: 'LiberationSans',
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),

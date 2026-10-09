@@ -24,6 +24,7 @@ import '../uyap/uyap_case_links.dart';
 import '../uyap/uyap_case_panel_controller.dart';
 import '../uyap/uyap_case_store.dart';
 import '../uyap/uyap_mobile_api.dart';
+import '../uyap/uyap_pace.dart';
 import '../uyap/uyap_web_service.dart';
 import 'hearing_sync.dart';
 import 'observed.dart';
@@ -65,6 +66,7 @@ class PortalSync extends ChangeNotifier {
     SecretStore? secrets,
     Future<String?> Function()? packageRoot,
     this._packageGap = const Duration(seconds: 3),
+    this.quiet = false,
   }) : _packageRoot = packageRoot ?? _defaultPackageRoot,
        _secrets = secrets ?? SecretStore(),
        _web = web ?? UyapWebService.instance,
@@ -80,8 +82,16 @@ class PortalSync extends ChangeNotifier {
   static PortalSync? get started => _instance;
 
   /// Starts the one instance: the kept mobile session comes back with it.
-  /// Folio's window and an editor window of its own call this at start.
-  static void begin() => _instance ??= PortalSync()..start();
+  /// Folio's window and an editor window of its own call this at start;
+  /// the editor's is [quiet].
+  static void begin({bool quiet = false}) =>
+      _instance ??= PortalSync(quiet: quiet)..start();
+
+  /// An editor window's: it holds the sessions, to tie a petition to its
+  /// case, but syncs nothing of itself and asks for no notifications.
+  /// Folio's own window does that, once for the computer: UYAP is asked
+  /// no more because more windows are open.
+  final bool quiet;
 
   final UyapWebService _web;
   final UyapMobileApi _mobile;
@@ -142,10 +152,12 @@ class PortalSync extends ChangeNotifier {
     unawaited(_restoreKept());
     // UYAP's notifications are asked for now and then while a portal is
     // there to ask; not in tests, where nothing is.
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _noticeTimer = Timer.periodic(noticeEvery, (_) {
+    if (!quiet && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      _noticeTimer = Timer.periodic(const Duration(minutes: 5), (_) {
         // In sight: the phone's background check leaves it to this run.
         if (!paused) unawaited(_database().then(BackgroundNotices.seen));
+        if (night(DateTime.now())) return;
+        if (DateTime.now().difference(_noticesAt) < noticeEvery) return;
         unawaited(syncNotices());
       });
     }
@@ -324,9 +336,9 @@ class PortalSync extends ChangeNotifier {
     _keepWeb();
     notifyListeners();
     _rememberTc(_web.tckn);
-    if (_web.connected) {
+    if (_web.connected && !quiet) {
       unawaited(syncWeb());
-      unawaited(syncNotices(force: true));
+      unawaited(syncNotices());
     }
   }
 
@@ -334,7 +346,7 @@ class PortalSync extends ChangeNotifier {
     _keepUets();
     notifyListeners();
     _rememberTc(_uets.session.value?.tckn ?? '');
-    if (_uets.connected) unawaited(syncUets());
+    if (_uets.connected && !quiet) unawaited(syncUets());
   }
 
   /// The UETS inbox, from a day before the newest notice kept (or the last
@@ -729,9 +741,9 @@ class PortalSync extends ChangeNotifier {
         ),
       );
     }
-    if (_mobile.connected) {
+    if (_mobile.connected && !quiet) {
       unawaited(syncMobile());
-      unawaited(syncNotices(force: true));
+      unawaited(syncNotices());
     }
   }
 
@@ -751,8 +763,18 @@ class PortalSync extends ChangeNotifier {
 
   // UYAP's notifications.
 
-  /// How often they are asked for while a portal is connected.
-  static const noticeEvery = Duration(minutes: 5);
+  /// How often they are asked for while a portal is connected: once an
+  /// hour, UYAP having said that programs asking it often tire it. The
+  /// lawyer asks at once with Yenile.
+  static const noticeEvery = Duration(hours: 1);
+
+  /// Within this of the last reading, a page opened or Folio come back to
+  /// sight does not ask again.
+  static const noticeFresh = Duration(minutes: 30);
+
+  /// Night, when nothing is asked of UYAP of itself: from nine in the
+  /// evening to seven in the morning.
+  static bool night(DateTime at) => at.hour >= 21 || at.hour < 7;
 
   /// Told each time the notifications kept change.
   final noticesVersion = ValueNotifier<int>(0);
@@ -771,21 +793,21 @@ class PortalSync extends ChangeNotifier {
   bool paused = false;
   Future<void>? _noticeSync;
   DateTime _noticesAt = DateTime.fromMillisecondsSinceEpoch(0);
+  final _emptyBodies = <String>{};
 
   /// UYAP Mobil's and the portal's notifications kept, each channel in
-  /// its own rows. Not again within a minute unless [force]d (a page
-  /// opened asks; so does the timer); a second call while one runs waits
-  /// for it.
+  /// its own rows. Not again within [noticeFresh] unless [force]d (the
+  /// lawyer's Yenile); a second call while one runs waits for it.
   Future<void> syncNotices({bool force = false}) {
     if (_noticeSync != null) return _noticeSync!;
     // A phone with Folio out of sight leaves it to the background check.
     if (paused && !force) return Future.value();
     if (!_mobile.connected && !_web.connected) return Future.value();
-    if (!force &&
-        DateTime.now().difference(_noticesAt) < const Duration(minutes: 1)) {
+    if (!force && DateTime.now().difference(_noticesAt) < noticeFresh) {
       return Future.value();
     }
-    return _noticeSync = _syncNotices().whenComplete(() => _noticeSync = null);
+    return _noticeSync = UyapPace.background(_syncNotices)
+        .whenComplete(() => _noticeSync = null);
   }
 
   static const _mobileNoticesKey = 'uyap_notice_mobile';
@@ -822,12 +844,18 @@ class PortalSync extends ChangeNotifier {
         db.setMeta(_mobileNoticesKey, DateTime.now().toIso8601String());
         noticesVersion.value++;
         // Their bodies, which name the case: a few at a time, not to ask
-        // UYAP for hundreds at once.
+        // UYAP for hundreds at once. One UYAP gave empty is not asked for
+        // again while Folio runs.
         for (final r in db.uyapNoticesWithoutBody()) {
           if (!_mobile.connected || _disposed) break;
+          if (_emptyBodies.contains(r.id)) continue;
           try {
             final body = await _mobile.noticeBody(r.messageId);
-            if (body.isNotEmpty) db.setUyapNoticeBody(r.id, body);
+            if (body.isNotEmpty) {
+              db.setUyapNoticeBody(r.id, body);
+            } else {
+              _emptyBodies.add(r.id);
+            }
           } catch (_) {
             // Asked again next time.
           }
@@ -950,13 +978,18 @@ class PortalSync extends ChangeNotifier {
     notifyListeners();
     String? problem;
     try {
-      final db = await _database();
-      problem = await work(db);
-      // The portfolio may have grown: untied notices are tried again (§9.8).
-      if (channel != PortalChannel.uets) {
-        await _loadDeadlineContext();
-        await matchNoticesGently(db);
-      }
+      // A sync's requests keep UYAP's slow pace (UyapPace).
+      problem = await UyapPace.background(() async {
+        final db = await _database();
+        final problem = await work(db);
+        // The portfolio may have grown: untied notices are tried again
+        // (§9.8).
+        if (channel != PortalChannel.uets) {
+          await _loadDeadlineContext();
+          await matchNoticesGently(db);
+        }
+        return problem;
+      });
     } catch (e) {
       problem = '$e';
     }
@@ -1153,75 +1186,128 @@ class PortalSync extends ChangeNotifier {
     return null;
   });
 
-  /// The web portal's hearings.
-  Future<void> syncWeb() => _run(PortalChannel.uyapWeb, (db) async {
-    if (!_web.connected) return null;
-    final result = await syncHearings(
-      PortalChannel.uyapWeb,
-      db,
-      _web.hearingRows,
-    );
-    return result.complete ? null : 'Bazı tarihler alınamadı';
-  });
+  /// The web portal's hearings: once a day of itself, or when [force]d
+  /// (the lawyer's Senkronize et).
+  Future<void> syncWeb({bool force = false}) =>
+      _run(PortalChannel.uyapWeb, (db) async {
+        if (!_web.connected) return null;
+        if (!force && !_hearingsDue(db, PortalChannel.uyapWeb)) return null;
+        final result = await syncHearings(
+          PortalChannel.uyapWeb,
+          db,
+          _web.hearingRows,
+        );
+        if (result.complete) _hearingsRead(db, PortalChannel.uyapWeb);
+        return result.complete ? null : 'Bazı tarihler alınamadı';
+      });
 
-  /// The mobile API's hearings, then its cases. The whole portfolio is read
-  /// court by court, hundreds of requests: once a day, kept across runs,
-  /// or when [full] is asked (Portföyü yenile); otherwise only the
-  /// hearings. After it the open cases are asked what is new in them
-  /// ([refreshCases]). A second call while one runs waits for that one.
-  Future<void> syncMobile({bool full = false}) =>
-      _mobileSync ??= _run(PortalChannel.uyapMobile, (db) async {
-        if (!_mobile.connected) return null;
+  /// The mobile API's hearings, once a day, then its cases: the whole
+  /// portfolio, read court by court in a hundred requests and more, on
+  /// Mondays (the first time Folio runs in a week), or when [full] is
+  /// asked (Portföyü yenile), though not again within [portfolioRest].
+  /// The cases' documents are not asked for of themselves: a case's page
+  /// asks when it is opened. A second call while one runs waits for that
+  /// one.
+  Future<void> syncMobile({bool full = false}) => _mobileSync ??= _run(
+    PortalChannel.uyapMobile,
+    (db) async {
+      if (!_mobile.connected) return null;
+      var hearings = const HearingSyncResult(0, true, []);
+      if (full || _hearingsDue(db, PortalChannel.uyapMobile)) {
         _progress(PortalChannel.uyapMobile, 'Duruşmalar');
-        final hearings = await syncHearings(
+        hearings = await syncHearings(
           PortalChannel.uyapMobile,
           db,
           _mobile.hearingRows,
         );
-        final read = DateTime.tryParse(db.meta(_portfolioKey) ?? '');
-        final tried = DateTime.tryParse(db.meta('portfolio_try_at') ?? '');
-        var cases = const PortfolioResult(0, true);
-        if (full ||
-            ((read == null ||
-                    DateTime.now().difference(read) > portfolioInterval) &&
-                (tried == null ||
-                    DateTime.now().difference(tried) >
-                        const Duration(hours: 2)))) {
-          final session = _mobile.session.value;
-          final ids = <String, String>{};
-          cases = await syncMobilePortfolio(
-            _mobile,
-            db,
-            includeClosed: db.meta(_closedKey) == '1',
-            onChanged: () => portfolioVersion.value++,
-            onCaseId: (key, id) => ids[key] = id,
-            onProgress: (done, total) => _progress(
-              PortalChannel.uyapMobile,
-              total == 0 ? 'Portföy' : 'Portföy $done/$total',
-            ),
-          );
-          _sessionIds = ids;
-          _idsSession = session;
-          // Read whole, it is not read again for a day; read in part, it
-          // is tried again in two hours, the courts that failed with it.
-          db.setMeta(
-            cases.complete ? _portfolioKey : 'portfolio_try_at',
-            DateTime.now().toIso8601String(),
-          );
-          await refreshCases(db, changed: cases.changed);
+        if (hearings.complete) _hearingsRead(db, PortalChannel.uyapMobile);
+      }
+      final now = DateTime.now();
+      final read = DateTime.tryParse(db.meta(_portfolioKey) ?? '');
+      final tried = DateTime.tryParse(db.meta('portfolio_try_at') ?? '');
+      final last = [read, tried].nonNulls.fold<DateTime?>(
+        null,
+        (a, b) => a == null || b.isAfter(a) ? b : a,
+      );
+      String? rested;
+      final bool due;
+      if (full) {
+        due = last == null || now.difference(last) >= portfolioRest;
+        if (!due) {
+          final again = last.add(portfolioRest);
+          rested =
+              'Portföy ${_clock(last)}’de okundu; UYAP’ı yormamak için '
+              '${_clock(again)}’den önce yeniden okunmaz.';
         }
-        return hearings.complete && cases.complete
-            ? null
-            : 'Bazı kayıtlar alınamadı';
-      }).whenComplete(() => _mobileSync = null);
+      } else {
+        due =
+            (read == null || read.isBefore(weekStart(now))) &&
+            (tried == null || now.difference(tried) > const Duration(hours: 2));
+      }
+      var cases = const PortfolioResult(0, true);
+      if (due) {
+        final session = _mobile.session.value;
+        final ids = <String, String>{};
+        cases = await syncMobilePortfolio(
+          _mobile,
+          db,
+          includeClosed: db.meta(_closedKey) == '1',
+          onChanged: () => portfolioVersion.value++,
+          onCaseId: (key, id) => ids[key] = id,
+          onProgress: (done, total) => _progress(
+            PortalChannel.uyapMobile,
+            total == 0 ? 'Portföy' : 'Portföy $done/$total',
+          ),
+        );
+        _sessionIds = ids;
+        _idsSession = session;
+        // Read whole, it is not read again until next week; read in
+        // part, it is tried again in two hours, the courts that failed
+        // with it.
+        db.setMeta(
+          cases.complete ? _portfolioKey : 'portfolio_try_at',
+          DateTime.now().toIso8601String(),
+        );
+      }
+      if (!hearings.complete || !cases.complete) {
+        return 'Bazı kayıtlar alınamadı';
+      }
+      return rested;
+    },
+  ).whenComplete(() => _mobileSync = null);
+
+  /// Monday's start of the week [at] falls in.
+  static DateTime weekStart(DateTime at) =>
+      DateTime(at.year, at.month, at.day - (at.weekday - DateTime.monday));
+
+  /// Not read again by hand within this of the last reading.
+  static const portfolioRest = Duration(hours: 3);
+
+  static String _clock(DateTime at) =>
+      '${at.hour.toString().padLeft(2, '0')}:'
+      '${at.minute.toString().padLeft(2, '0')}';
+
+  /// Whether [channel]'s hearings have not been read whole today.
+  bool _hearingsDue(PortalDatabase db, PortalChannel channel) {
+    final at = DateTime.tryParse(db.meta('hearings_at:${channel.name}') ?? '');
+    final now = DateTime.now();
+    return at == null ||
+        at.year != now.year ||
+        at.month != now.month ||
+        at.day != now.day;
+  }
+
+  void _hearingsRead(PortalDatabase db, PortalChannel channel) => db.setMeta(
+    'hearings_at:${channel.name}',
+    DateTime.now().toIso8601String(),
+  );
+
   Future<void>? _mobileSync;
 
   /// Counted up whenever a sync writes a case anew or changes one, as it
   /// runs: what lists the portfolio shows it then, and only then.
   final portfolioVersion = ValueNotifier<int>(0);
 
-  /// How often the whole portfolio is read on its own.
-  static const portfolioInterval = Duration(hours: 20);
   static const _portfolioKey = 'portfolio_at';
   static const _closedKey = 'portfolio_closed';
   static const _checkedKey = 'cases_checked_at';
