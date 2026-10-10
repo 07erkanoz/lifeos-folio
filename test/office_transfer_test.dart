@@ -345,6 +345,9 @@ void main() {
       text: 'Tutanak ekte',
       files: [photo.path],
     );
+    final sentBytes = photo.readAsBytesSync();
+    // The picker's copy gone meanwhile: the message keeps its own.
+    photo.deleteSync();
     await Future<void>.delayed(const Duration(milliseconds: 300));
     expect(b.chats.of(talk.id)!.messages, hasLength(1));
     // Back on the network: it comes, the photograph with it.
@@ -355,9 +358,44 @@ void main() {
     await until(() => b.chats.fileOf(got.id, 'Tutanak.jpg') != null);
     expect(
       File(b.chats.fileOf(got.id, 'Tutanak.jpg')!).readAsBytesSync(),
-      photo.readAsBytesSync(),
+      sentBytes,
     );
     await until(() => a.chats.pending.isEmpty);
+  });
+
+  test('a file waiting is sent again though the device is never heard anew, '
+      'and to one that asks though it is not heard at all', () async {
+    b.seenForTesting(a.self!);
+    await a.foundOffice('Kaya Hukuk Bürosu');
+    await a.admit(b.self!.deviceId, OfficeRole.trainee);
+    await until(() => b.ledger.members.length == 2);
+    final talk = (await a.privateChat(b.self!.deviceId))!;
+    // Away when it was sent; back, as discovery never said.
+    a.lostForTesting(b.self!.deviceId);
+    await a.post(talk, text: 'Bir', files: [file('bir.pdf', 8 * 1024).path]);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(b.chats.of(talk.id), isNull);
+    a.seenForTesting(b.self!);
+    await a.retryPending();
+    await until(() => a.chats.pending.isEmpty);
+    await until(() => b.chats.of(talk.id)?.messages.length == 1);
+    final one = b.chats.of(talk.id)!.messages.single;
+    await until(() => b.chats.fileOf(one.id, 'bir.pdf') != null);
+    // Not heard at all now; the other writes, and its answer brings the file.
+    a.lostForTesting(b.self!.deviceId);
+    await a.post(
+      a.chats.of(talk.id)!,
+      text: 'İki',
+      files: [file('iki.pdf', 8 * 1024, seed: 2).path],
+    );
+    expect(a.chats.pending, isNotEmpty);
+    await b.post(b.chats.of(talk.id)!, text: 'Aldım');
+    await until(() => a.chats.pending.isEmpty);
+    final two = b.chats
+        .of(talk.id)!
+        .messages
+        .firstWhere((m) => m.text == 'İki');
+    await until(() => b.chats.fileOf(two.id, 'iki.pdf') != null);
   });
 
   test('private, group and broadcast talk, with a file, sealed', () async {

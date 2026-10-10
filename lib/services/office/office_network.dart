@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bonsoir/bonsoir.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -886,6 +887,12 @@ class OfficeNetwork extends ChangeNotifier {
         });
         await Future<void>.delayed(const Duration(milliseconds: 200));
         await ch.close();
+        // The one that asked is there: its files go to it now, though this
+        // device may not have heard it on the network itself.
+        final asker = _peers[from];
+        if (mine != null && _mayHear(mine, from) && asker?.host != null) {
+          unawaited(_sendPending(asker!, mine).catchError((Object _) {}));
+        }
         return;
       }
       if (m['t'] == 'gorev') {
@@ -1936,6 +1943,22 @@ class OfficeNetwork extends ChangeNotifier {
     if (self == null) return 'Önce büro ağına katılın.';
     if (!mayWrite(chat)) return 'Bu konuşmaya yalnız yöneticiler yazabilir.';
     if (text.trim().isEmpty && files.isEmpty) return null;
+    final id = Chat.newId();
+    // Kept, the message's own: what it sends to a device that is away
+    // may be long after the picker's copy is gone, or the file moved.
+    final kept = <String>[];
+    if (files.isNotEmpty) {
+      // Beside the office's own settings: Folio's data folder.
+      final dir = await Directory(
+        p.join((await _settingsFile()).parent.path, 'mesaj-ekleri', id),
+      ).create(recursive: true);
+      for (final f in files) {
+        final copy = p.join(dir.path, p.basename(f));
+        await File(f).copy(copy);
+        kept.add(copy);
+      }
+    }
+    files = kept;
     final attachments = <ChatAttachment>[
       for (final f in files)
         ChatAttachment(
@@ -1948,7 +1971,7 @@ class OfficeNetwork extends ChangeNotifier {
         ),
     ];
     final unsigned = ChatMessage(
-      id: Chat.newId(),
+      id: id,
       by: me,
       device: self.deviceId,
       byName: self.name,
@@ -2051,9 +2074,15 @@ class OfficeNetwork extends ChangeNotifier {
       // Not reached, though it seemed there: tried again when next heard.
       _ledgerSynced.remove(peer.deviceId);
     }
-    // This device's files that have not yet reached it. A copy is gone
-    // through: a message written while a file is on its way joins the
-    // talk meanwhile.
+    await _sendPending(peer, chat);
+  }
+
+  /// This device's files of [chat] that have not yet reached [peer]. A copy
+  /// is gone through: a message written while a file is on its way joins
+  /// the talk meanwhile. One on its way already is not sent twice; each
+  /// goes under the same transfer id every time, so that a cut-off one
+  /// goes on where it stopped.
+  Future<void> _sendPending(OfficePeer peer, Chat chat) async {
     for (final msg in [...chat.messages]) {
       final left = chats.pending[msg.id];
       if (msg.device != _self?.deviceId ||
@@ -2064,10 +2093,52 @@ class OfficeNetwork extends ChangeNotifier {
       final paths = [
         for (final a in msg.attachments) ?chats.fileOf(msg.id, a.name),
       ];
-      if (paths.isEmpty) continue;
-      await send(peer, paths, meta: {'sohbet': chat.id, 'mesaj': msg.id});
+      if (paths.isEmpty || paths.any((f) => !File(f).existsSync())) continue;
+      final id = sha256
+          .convert(utf8.encode('${msg.id}|${peer.deviceId}'))
+          .toString()
+          .substring(0, 32);
+      if (transfers.any((t) => t.id == id && !t.finished)) continue;
+      await send(
+        peer,
+        paths,
+        id: id,
+        meta: {'sohbet': chat.id, 'mesaj': msg.id},
+      );
     }
   }
+
+  /// Every file of this device's still waiting for a device on the
+  /// network, sent again: not only when a device is heard anew, which a
+  /// phone that never seemed to leave is not.
+  Future<void> _retryPending() async {
+    if (_retrying || chats.pending.isEmpty) return;
+    _retrying = true;
+    try {
+      final waiting = {for (final v in chats.pending.values) ...v};
+      for (final c in chats.all) {
+        if (!c.messages.any((m) => chats.pending.containsKey(m.id))) continue;
+        for (final id in waiting) {
+          final peer = _peers[id];
+          if (peer == null || !peer.online || peer.host == null) continue;
+          if (!_audience(c).contains(id)) continue;
+          // The talk first, then its files: a file is taken for a message
+          // only where the message is known.
+          await _syncChat(peer, c);
+        }
+      }
+    } catch (_) {
+    } finally {
+      _retrying = false;
+    }
+  }
+
+  bool _retrying = false;
+  Timer? _retryTimer;
+
+  /// What waits sent again now: Folio back in sight on a phone, whose
+  /// timers stood still while it was away.
+  Future<void> retryPending() => _retryPending();
 
   /// Every talk shared with [peer], when it comes on the network.
   Future<void> _syncChats(OfficePeer peer) async {
@@ -2458,6 +2529,11 @@ class OfficeNetwork extends ChangeNotifier {
       await _announce(_self!);
       await _look();
       _joined = true;
+      _retryTimer?.cancel();
+      _retryTimer = Timer.periodic(
+        const Duration(seconds: 45),
+        (_) => unawaited(_retryPending()),
+      );
       if (remember || _rememberWhenJoined) {
         _quiet = false;
         await _remember(true);
@@ -2630,6 +2706,8 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   Future<void> _close() async {
+    _retryTimer?.cancel();
+    _retryTimer = null;
     await _events?.cancel();
     _events = null;
     try {

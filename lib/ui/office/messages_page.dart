@@ -12,6 +12,7 @@ import '../../services/platform/app_directories.dart';
 import '../../services/platform/document_intents.dart';
 import '../../services/office/office_network.dart';
 import '../../services/platform/file_actions.dart';
+import '../../services/platform/phone_document_save.dart';
 import '../../services/speech/speech_session.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/drop_zone.dart';
@@ -761,26 +762,46 @@ class _ChatThreadState extends State<ChatThread> {
           child: const Text('Klasörde göster'),
         ),
         TextButton(
-          onPressed: () async {
-            final dir = await FilePicker.getDirectoryPath(
-              dialogTitle: 'Nereye kaydedilsin?',
-            );
-            if (dir != null) await FileActions.copyToDirectory(path!, dir);
-          },
+          onPressed: () => unawaited(_saveCopy(path!)),
           child: const Text('Kaydet'),
         ),
       ],
     );
     if (!here) {
+      // Where it is, rather than a "coming" that may never come: on its
+      // way, or waiting for the writer's device to be on the network.
+      final coming = _net.transfers
+          .where((t) => !t.outgoing && !t.finished && t.meta['mesaj'] == m.id)
+          .firstOrNull;
+      final state = coming != null
+          ? 'aktarılıyor${coming.total > 0 ? ' %${(coming.moved * 100 ~/ coming.total)}' : ''}'
+          : m.by == _net.me
+          ? 'bu cihaza, yazıldığı cihazdan gelecek'
+          : 'gönderenin cihazı ağda görününce gelecek';
       return Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Text(
-          '${a.name} · ${sizeText(a.size)} · geliyor…',
+          '${a.name} · ${sizeText(a.size)} · $state',
           style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
       );
     }
-    return switch (a.kind) {
+    final waiting = m.device == _net.self?.deviceId
+        ? _net.chats.pending[m.id]?.length ?? 0
+        : 0;
+    final pending = waiting == 0
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              waiting == 1
+                  ? 'Bir cihaza henüz ulaşmadı; ağda görününce gönderilecek.'
+                  : '$waiting cihaza henüz ulaşmadı; ağda görününce '
+                        'gönderilecek.',
+              style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
+            ),
+          );
+    final shown = switch (a.kind) {
       AttachmentKind.image => Padding(
         padding: const EdgeInsets.only(top: 6),
         child: Column(
@@ -809,12 +830,7 @@ class _ChatThreadState extends State<ChatThread> {
           Text('Sesli mesaj · ${a.seconds ?? 0} sn'),
           IconButton(
             tooltip: 'Kaydet',
-            onPressed: () async {
-              final dir = await FilePicker.getDirectoryPath(
-                dialogTitle: 'Nereye kaydedilsin?',
-              );
-              if (dir != null) await FileActions.copyToDirectory(path, dir);
-            },
+            onPressed: () => unawaited(_saveCopy(path)),
             icon: const Icon(Icons.download_rounded, size: 18),
           ),
         ],
@@ -837,6 +853,29 @@ class _ChatThreadState extends State<ChatThread> {
         ),
       ),
     };
+    return waiting == 0
+        ? shown
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [shown, pending],
+          );
+  }
+
+  /// A copy of a message's file where the lawyer chooses: on a phone
+  /// through its own save screen, which a chosen folder is not.
+  Future<void> _saveCopy(String path) async {
+    if (PhoneDocumentSave.here) {
+      await PhoneDocumentSave.save(
+        fileName: p.basename(path),
+        bytes: await File(path).readAsBytes(),
+      );
+      return;
+    }
+    final dir = await FilePicker.getDirectoryPath(
+      dialogTitle: 'Nereye kaydedilsin?',
+    );
+    if (dir != null) await FileActions.copyToDirectory(path, dir);
   }
 
   /// Plays [path], stopping what played before; the same one again stops.

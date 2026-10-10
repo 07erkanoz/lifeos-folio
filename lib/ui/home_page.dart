@@ -865,6 +865,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // it is looked again.
         unawaited(_countAgenda());
         unawaited(PortalSync.started?.syncNotices());
+        // The office's files waiting for another device go now.
+        unawaited(OfficeNetwork.instance.retryPending());
       }
     }
     if (!Platform.isAndroid) return;
