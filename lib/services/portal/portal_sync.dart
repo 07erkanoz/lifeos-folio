@@ -810,6 +810,7 @@ class PortalSync extends ChangeNotifier {
       // Asked lately, here or on another of the person's own devices
       // (Senkron brings the time with what it read): not again yet.
       if (await _askedLately(within ?? noticeFresh)) return;
+      if (_disposed) return;
       // A phone leaves it to a computer of the person's on the network.
       if (deferToComputer?.call() ?? false) return;
       await UyapPace.background(_syncNotices);
@@ -848,6 +849,8 @@ class PortalSync extends ChangeNotifier {
   Future<void> _syncNotices() async {
     _noticesAt = DateTime.now();
     await Future<void>.delayed(Duration.zero);
+    // Let go of meanwhile: nothing is asked or told.
+    if (_disposed) return;
     noticesVersion.value++;
     final db = await _database();
     final added = <UyapNoticeRow>[];
@@ -870,7 +873,7 @@ class PortalSync extends ChangeNotifier {
         final fresh = db.saveUyapNotices(rows);
         if (!first) added.addAll(fresh);
         db.setMeta(_mobileNoticesKey, DateTime.now().toIso8601String());
-        noticesVersion.value++;
+        if (!_disposed) noticesVersion.value++;
         // Their bodies, which name the case: a few at a time, not to ask
         // UYAP for hundreds at once. One UYAP gave empty is not asked for
         // again while Folio runs.
