@@ -135,6 +135,8 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
       scan(result)
     case "pickFolder", "pickPictureFolder":
       pickFolder(result)
+    case "exportDocument":
+      exportDocument(call.arguments as? String, result)
     case "forgetFolder":
       forgetFolder(call.arguments as? String)
       result(nil)
@@ -225,7 +227,32 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
     top.present(picker, animated: true)
   }
 
+  // A document saved: the copy Folio already wrote, put where the lawyer
+  // chooses in Files. Exported as a copy, Folio's own stays as it is.
+
+  var exporting: FlutterResult?
+
+  func exportDocument(_ path: String?, _ result: @escaping FlutterResult) {
+    guard let path = path, FileManager.default.fileExists(atPath: path),
+      let top = FileActions.topController()
+    else {
+      result(FlutterError(code: "SAVE", message: "Kaydedilecek belge bulunamadı.", details: nil))
+      return
+    }
+    exporting?(nil)
+    exporting = result
+    let picker = UIDocumentPickerViewController(
+      forExporting: [URL(fileURLWithPath: path)], asCopy: true)
+    picker.delegate = self
+    top.present(picker, animated: true)
+  }
+
   func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    if let done = exporting {
+      exporting = nil
+      done(urls.first?.path)
+      return
+    }
     guard let url = urls.first else {
       picking?(nil)
       picking = nil
@@ -247,6 +274,11 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
   }
 
   func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    if let done = exporting {
+      exporting = nil
+      done(nil)
+      return
+    }
     picking?(nil)
     picking = nil
   }

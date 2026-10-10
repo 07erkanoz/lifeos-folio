@@ -73,7 +73,14 @@ class _ArchiveFoldersPageState extends State<ArchiveFoldersPage> {
                 ),
         ),
         body: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 28),
+          // Clear of an iPhone's home bar: a padding given takes the place
+          // of the one a list keeps from it.
+          padding: EdgeInsets.fromLTRB(
+            14,
+            12,
+            14,
+            28 + MediaQuery.paddingOf(context).bottom,
+          ),
           children: [
             FilledButton.icon(
               key: const ValueKey('folders-add'),
@@ -169,7 +176,12 @@ class _LearningPageState extends State<LearningPage> {
     backgroundColor: settingsPage(context),
     appBar: settingsBar(context, 'Öğrenme'),
     body: ListView(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 28),
+      padding: EdgeInsets.fromLTRB(
+        14,
+        12,
+        14,
+        28 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         SettingsGroup(
           children: [

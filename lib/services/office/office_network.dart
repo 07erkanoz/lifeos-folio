@@ -198,7 +198,8 @@ class OfficeNetwork extends ChangeNotifier {
     final to = _peers[t.peer.deviceId];
     if (!t.outgoing || to == null) return null;
     transfers.remove(t);
-    return send(to, t.paths, note: t.note, id: t.id);
+    // With what it was for: a message's file is still that message's.
+    return send(to, t.paths, note: t.note, id: t.id, meta: t.meta);
   }
 
   void _added(OfficeTransfer t) {

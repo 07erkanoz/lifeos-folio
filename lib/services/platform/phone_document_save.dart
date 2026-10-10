@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -45,12 +44,11 @@ class PhoneDocumentSave {
           .firstOrNull;
       final String? uri;
       if (Platform.isIOS) {
-        // The Files screen, given the bytes: it writes them first and lets
-        // the lawyer choose where the copy goes.
-        uri = await FilePicker.saveFile(
-          fileName: p.basename(fileName),
-          bytes: bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
-        );
+        // The Files screen, given the copy written here: the lawyer chooses
+        // where it goes (ios/Runner/AppDelegate.swift, exportDocument).
+        // Not file_picker's, which writes over a document of the same name
+        // in Folio's own folder first.
+        uri = await channel.invokeMethod<String>('exportDocument', file.path);
       } else {
         uri = await channel.invokeMethod<String>('saveDocument', {
           'path': file.path,

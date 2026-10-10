@@ -241,7 +241,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return Positioned(
           right: 16,
           left: phone ? 16 : null,
-          bottom: 16 + MediaQuery.paddingOf(context).bottom,
+          // The SafeArea below keeps it clear of the home bar; adding it
+          // here too lifted the card twice as far.
+          bottom: 16,
           child: SafeArea(
             top: false,
             child: SizedBox(

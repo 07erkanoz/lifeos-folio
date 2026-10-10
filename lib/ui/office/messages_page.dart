@@ -6,9 +6,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../services/office/office_chat.dart';
+import '../../services/platform/app_directories.dart';
 import '../../services/platform/document_intents.dart';
 import '../../services/office/office_network.dart';
 import '../../services/platform/file_actions.dart';
@@ -334,6 +334,12 @@ class _ChatThreadState extends State<ChatThread> {
   final _samples = <Float32List>[];
   DateTime? _since;
 
+  /// The voice message playing, one at a time: another stops it.
+  AudioSource? _source;
+  SoundHandle? _handle;
+  String? _playing;
+  bool _starting = false;
+
   OfficeNetwork get _net => widget.network;
 
   @override
@@ -341,6 +347,7 @@ class _ChatThreadState extends State<ChatThread> {
     _text.dispose();
     unawaited(_heard?.cancel());
     unawaited(_mic?.close());
+    unawaited(_stopPlaying());
     super.dispose();
   }
 
@@ -369,6 +376,17 @@ class _ChatThreadState extends State<ChatThread> {
 
   Future<void> _voice() async {
     if (_mic != null) return _stopVoice();
+    // A second tap while the microphone opens opens no second one.
+    if (_starting) return;
+    _starting = true;
+    try {
+      await _startVoice();
+    } finally {
+      _starting = false;
+    }
+  }
+
+  Future<void> _startVoice() async {
     if (!await DocumentIntents.microphone()) {
       if (mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -385,6 +403,10 @@ class _ChatThreadState extends State<ChatThread> {
     final mic = RecorderMicrophone();
     try {
       final stream = await mic.open(16000);
+      if (!mounted) {
+        await mic.close();
+        return;
+      }
       _samples.clear();
       _heard = stream.listen(_samples.add);
       setState(() {
@@ -413,12 +435,20 @@ class _ChatThreadState extends State<ChatThread> {
       all.setAll(at, s);
       at += s.length;
     }
-    final dir = await getTemporaryDirectory();
+    // Kept, each in a folder of its own: the message plays from it, and
+    // sends it to a device that was away, long after a temporary folder
+    // would have been emptied; two in one minute write over neither.
     final now = DateTime.now();
+    final dir = await Directory(
+      p.join((await folioSupportDirectory()).path, 'sesli-mesajlar'),
+    ).create(recursive: true);
+    final own = await dir.createTemp('ses-');
+    final seconds = now.second.toString().padLeft(2, '0');
     final file = File(
       p.join(
-        dir.path,
-        'Sesli mesaj ${dayText(now)} ${clockText(now).replaceAll(':', '.')}.wav',
+        own.path,
+        'Sesli mesaj ${dayText(now)} '
+        '${clockText(now).replaceAll(':', '.')}.$seconds.wav',
       ),
     );
     await file.writeAsBytes(wav(all, 16000), flush: true);
@@ -770,7 +800,11 @@ class _ChatThreadState extends State<ChatThread> {
           IconButton(
             tooltip: 'Dinle',
             onPressed: () => unawaited(_play(path)),
-            icon: const Icon(Icons.play_circle_outline_rounded),
+            icon: Icon(
+              _playing == path
+                  ? Icons.stop_circle_outlined
+                  : Icons.play_circle_outline_rounded,
+            ),
           ),
           Text('Sesli mesaj · ${a.seconds ?? 0} sn'),
           IconButton(
@@ -805,18 +839,48 @@ class _ChatThreadState extends State<ChatThread> {
     };
   }
 
+  /// Plays [path], stopping what played before; the same one again stops.
   Future<void> _play(String path) async {
+    final again = _playing == path;
+    await _stopPlaying();
+    if (again) return;
     try {
       await DocumentIntents.readyToPlay();
       final soloud = SoLoud.instance;
       if (!soloud.isInitialized) await soloud.init(channels: Channels.mono);
-      final source = await soloud.loadFile(path);
-      soloud.play(source);
+      final source = _source = await soloud.loadFile(path);
+      _handle = soloud.play(source);
+      if (mounted) setState(() => _playing = path);
+      // Done playing: let go of it.
+      unawaited(
+        source.allInstancesFinished.first.then((_) {
+          if (identical(_source, source)) unawaited(_stopPlaying());
+        }),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.maybeOf(context)
             ?.showSnackBar(SnackBar(content: Text('Ses çalınamadı: $e')));
       }
     }
+  }
+
+  Future<void> _stopPlaying() async {
+    final source = _source, handle = _handle;
+    _source = null;
+    _handle = null;
+    if (_playing != null) {
+      if (mounted) {
+        setState(() => _playing = null);
+      } else {
+        _playing = null;
+      }
+    }
+    final soloud = SoLoud.instance;
+    if (!soloud.isInitialized) return;
+    try {
+      if (handle != null) await soloud.stop(handle);
+      if (source != null) await soloud.disposeSource(source);
+    } catch (_) {}
   }
 }

@@ -260,7 +260,12 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+              padding: EdgeInsets.fromLTRB(
+                14,
+                12,
+                14,
+                24 + MediaQuery.paddingOf(context).bottom,
+              ),
               children: [
                 UyapFillCard(
                   title: 'UYAP Mobil’den güncelle',
