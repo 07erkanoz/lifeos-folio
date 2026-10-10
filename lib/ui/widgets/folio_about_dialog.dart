@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../settings/uyap_auto.dart';
 import 'notice.dart';
 
 void showFolioAbout(BuildContext context) => showDialog<void>(
@@ -13,10 +17,23 @@ void showFolioAbout(BuildContext context) => showDialog<void>(
 class FolioAboutDialog extends StatelessWidget {
   const FolioAboutDialog({super.key});
 
-  Future<void> _open(BuildContext context, String domain) async {
+  /// Where else Folio runs, said for the device it is read on: a phone
+  /// names the computers only.
+  static String get _otherDevices => Platform.isIOS || Platform.isAndroid
+      ? 'Folio’nun Windows, macOS ve Linux sürümleri lifeos.com.tr '
+            'adresinden ücretsiz indirilir.'
+      : 'Folio’nun telefon ve öbür bilgisayar sürümleri lifeos.com.tr '
+            'adresinden ücretsiz indirilir.';
+
+  Future<void> _open(
+    BuildContext context,
+    String domain, [
+    String path = '/',
+    String? fragment,
+  ]) async {
     try {
       if (await launchUrl(
-        Uri.https(domain),
+        Uri(scheme: 'https', host: domain, path: path, fragment: fragment),
         mode: LaunchMode.externalApplication,
       )) {
         return;
@@ -127,7 +144,7 @@ class FolioAboutDialog extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Belgelerinize sakin bir alan.',
+                      'Avukatlar için dilekçe, dava ve büro uygulaması',
                       style: TextStyle(
                         fontSize: 14,
                         color: colors.onSurfaceVariant,
@@ -179,20 +196,50 @@ class FolioAboutDialog extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    // Folio on the person's other devices: from the site.
+                    // An iPhone names no other phone's (App Store 2.3.10).
+                    Text(
+                      _otherDevices,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.5,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Wrap(
                       spacing: 10,
                       runSpacing: 8,
                       alignment: WrapAlignment.center,
                       children: [
-                        for (final domain in ['lifeos.com.tr', 'erkanoz.com'])
-                          OutlinedButton.icon(
-                            onPressed: () => _open(context, domain),
-                            icon: const Icon(
-                              Icons.north_east_rounded,
-                              size: 15,
-                            ),
-                            label: Text(domain),
+                        FilledButton.icon(
+                          key: const ValueKey('about-download'),
+                          onPressed: () =>
+                              _open(context, 'lifeos.com.tr', '/', 'indir'),
+                          icon: const Icon(Icons.download_rounded, size: 16),
+                          label: const Text('Öbür cihazlara indir'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('about-privacy'),
+                          onPressed: () => _open(
+                            context,
+                            'lifeos.com.tr',
+                            '/privacy-policy',
                           ),
+                          icon: const Icon(Icons.shield_outlined, size: 16),
+                          label: const Text('Gizlilik ve KVKK'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('about-uyap-help'),
+                          onPressed: () =>
+                              unawaited(UyapHelpPage.open(context)),
+                          icon: const Icon(
+                            Icons.help_outline_rounded,
+                            size: 16,
+                          ),
+                          label: const Text('UYAP bağlantısı'),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 22),

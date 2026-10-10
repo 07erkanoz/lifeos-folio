@@ -92,15 +92,21 @@ void main() {
         find.text('Avukatlar için, bir tarayıcı gibi çalışan yerel bir uygulama.'),
         findsOneWidget,
       );
-      expect(find.text('lifeos.com.tr'), findsOneWidget);
-      expect(find.text('erkanoz.com'), findsOneWidget);
+      // Where to get Folio for the other devices, the privacy notice and
+      // how UYAP is reached; no person's own site.
+      expect(find.byKey(const ValueKey('about-download')), findsOneWidget);
+      expect(find.byKey(const ValueKey('about-privacy')), findsOneWidget);
+      expect(find.byKey(const ValueKey('about-uyap-help')), findsOneWidget);
+      expect(find.textContaining('erkanoz'), findsNothing);
+      await tester.ensureVisible(find.text('Kullanım lisansı'));
+      await tester.pump();
       await tester.tap(find.text('Kullanım lisansı'));
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
       await tester.pumpAndSettle();
       expect(find.text('Ücretsiz kullanım lisansı'), findsOneWidget);
-      expect(find.textContaining('kişisel ve iş amaçlı'), findsOneWidget);
+      expect(find.textContaining('kişisel ve mesleki amaçla'), findsOneWidget);
       await tester.tap(find.text('Kapat'));
       await tester.pumpAndSettle();
       tester.view.physicalSize = const Size(390, 600);
