@@ -38,6 +38,14 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
+      - name: Masaüstüne ait dosyaları çıkar
+        # The Windows and Linux context-menu scripts are Folio's assets on
+        # the desktop; in the iPhone app Apple takes a script for code left
+        # unsigned and turns the build away. This run's copy only.
+        run: |
+          sed -i '' -e '/packaging\/windows\/register-viewer.ps1/d' \
+            -e '/packaging\/linux\/context_menu.py/d' pubspec.yaml
+          ! grep -q 'packaging/linux/context_menu.py' pubspec.yaml
       - run: flutter pub get
       - name: App Store Connect anahtarı
         run: |
