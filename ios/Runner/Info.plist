@@ -113,6 +113,8 @@
 	<string>Galeride fotoğraflarınızı göstermek, PDF'e çevirmek ve düzenlemek için.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Düzenlediğiniz fotoğrafın kopyasını kaydetmek için.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Folio konumunuzu kullanmaz ve istemez. Bu açıklama, fotoğraf seçerken kullanılan sistem kitaplığı nedeniyle bulunur.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Büro mesajlarında sesli mesaj kaydetmek ve sesle yazdırmak için.</string>
 	<key>NSCameraUsageDescription</key>
