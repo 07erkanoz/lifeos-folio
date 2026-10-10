@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
 
-import 'android_document_save.dart';
+import 'phone_document_save.dart';
 
 /// Camera to PDF on Android, through Google's ML Kit document scanner: it
 /// finds the page's edges, straightens it, takes as many pages as wanted and
@@ -59,7 +59,7 @@ class DocumentScan {
           'Tarama ${now.year}-${two(now.month)}-${two(now.day)} '
           '${two(now.hour)}.${two(now.minute)}.pdf';
       try {
-        return await AndroidDocumentSave.save(
+        return await PhoneDocumentSave.save(
           fileName: name,
           bytes: await source.readAsBytes(),
         );

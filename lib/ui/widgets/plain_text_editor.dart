@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import '../../services/platform/android_document_save.dart';
+import '../../services/platform/phone_document_save.dart';
 
 import '../../services/editor/document_history.dart';
 import 'document_versions_window.dart';
@@ -258,8 +258,8 @@ class _PlainTextEditorState extends State<PlainTextEditor>
       final bytes = Uint8List.fromList(utf8.encode(savedText));
       final name =
           '${p.basenameWithoutExtension(widget.path)}_duzenlendi$extension';
-      final path = Platform.isAndroid
-          ? await AndroidDocumentSave.save(fileName: name, bytes: bytes)
+      final path = PhoneDocumentSave.here
+          ? await PhoneDocumentSave.save(fileName: name, bytes: bytes)
           : await FilePicker.saveFile(
               dialogTitle: 'Düzenlenen metni kaydet',
               fileName: name,
@@ -267,7 +267,7 @@ class _PlainTextEditorState extends State<PlainTextEditor>
               allowedExtensions: [extension.substring(1)],
             );
       if (path == null || !mounted) return false;
-      if (!Platform.isAndroid) {
+      if (!PhoneDocumentSave.here) {
         if (p.equals(p.absolute(path), p.absolute(widget.path)) ||
             (await File(path).exists() &&
                 await FileSystemEntity.identical(path, widget.path))) {
@@ -292,10 +292,10 @@ class _PlainTextEditorState extends State<PlainTextEditor>
         widget.onSaved?.call(path);
         showNotice(
           context,
-          Platform.isAndroid
+          PhoneDocumentSave.here
               ? 'Belge seçtiğiniz konuma kaydedildi.'
               : 'Kaydedildi: ${p.basename(path)}',
-          detail: Platform.isAndroid ? null : p.dirname(path),
+          detail: PhoneDocumentSave.here ? null : p.dirname(path),
           kind: NoticeKind.success,
         );
       }

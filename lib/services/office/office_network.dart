@@ -2046,7 +2046,10 @@ class OfficeNetwork extends ChangeNotifier {
           )) {
         notifyListeners();
       }
-    } catch (_) {}
+    } catch (_) {
+      // Not reached, though it seemed there: tried again when next heard.
+      _ledgerSynced.remove(peer.deviceId);
+    }
     // This device's files that have not yet reached it. A copy is gone
     // through: a message written while a file is on its way joins the
     // talk meanwhile.
@@ -2569,39 +2572,60 @@ class OfficeNetwork extends ChangeNotifier {
           host: service.hostAddresses.firstOrNull ?? service.hostname,
           port: service.port,
         );
-        if (heard == null || heard.deviceId == _self?.deviceId) return;
-        final before = _peers[heard.deviceId];
-        final peer = heard.keepingPlaceOf(before);
-        if (kDebugMode && peer.host != null && before?.host == null) {
-          debugPrint(
-            'Büro ağı: ${peer.name} · ${peer.device} '
-            '(${peer.host}:${peer.port}) bulundu',
-          );
-        }
-        _peers[peer.deviceId] = peer;
-        notifyListeners();
-        if (peer.host != null &&
-            isTrusted(peer.deviceId) &&
-            _ledgerSynced.add(peer.deviceId)) {
-          unawaited(
-            _syncLedger(peer)
-                .then((_) => _syncTasks(peer))
-                .then((_) => _syncChats(peer))
-                .then((_) => _syncOfficeParts(peer)),
-          );
-        }
-        if (peer.host != null && peer.userId == _identity?.userId) {
-          unawaited(_syncOwnWith(peer));
-        }
+        if (heard != null) _found(heard);
       case BonsoirDiscoveryServiceLostEvent(:final service):
-        final id =
-            service.attributes['id'] ?? service.name.replaceFirst('folio-', '');
-        final peer = _peers[id];
-        if (peer == null) return;
-        _peers[id] = peer.gone(DateTime.now());
-        notifyListeners();
+        _lost(
+          service.attributes['id'] ?? service.name.replaceFirst('folio-', ''),
+        );
       default:
     }
+  }
+
+  /// A device heard on the network. One heard for the first time, or back
+  /// after it was gone or at another address, is brought up to date: the
+  /// ledger, the tasks and the talks, with the files that wait for it. A
+  /// phone leaves the network whenever it sleeps; what was said meanwhile
+  /// reaches it when it comes back, not only once it answers.
+  void _found(OfficePeer heard) {
+    if (heard.deviceId == _self?.deviceId) return;
+    final before = _peers[heard.deviceId];
+    final peer = heard.keepingPlaceOf(before);
+    if (kDebugMode && peer.host != null && before?.host == null) {
+      debugPrint(
+        'Büro ağı: ${peer.name} · ${peer.device} '
+        '(${peer.host}:${peer.port}) bulundu',
+      );
+    }
+    _peers[peer.deviceId] = peer;
+    notifyListeners();
+    if (before == null ||
+        !before.online ||
+        before.host != peer.host ||
+        before.port != peer.port) {
+      _ledgerSynced.remove(peer.deviceId);
+    }
+    if (peer.host != null &&
+        isTrusted(peer.deviceId) &&
+        _ledgerSynced.add(peer.deviceId)) {
+      unawaited(
+        _syncLedger(peer)
+            .then((_) => _syncTasks(peer))
+            .then((_) => _syncChats(peer))
+            .then((_) => _syncOfficeParts(peer)),
+      );
+    }
+    if (peer.host != null && peer.userId == _identity?.userId) {
+      unawaited(_syncOwnWith(peer));
+    }
+  }
+
+  /// A device gone from the network: brought up to date again when back.
+  void _lost(String id) {
+    final peer = _peers[id];
+    if (peer == null) return;
+    _peers[id] = peer.gone(DateTime.now());
+    _ledgerSynced.remove(id);
+    notifyListeners();
   }
 
   Future<void> _close() async {
@@ -2655,6 +2679,14 @@ class OfficeNetwork extends ChangeNotifier {
   };
 
   /// For tests: a peer as if it had been found.
+  /// For tests: [peer] heard on the network, as discovery hears it.
+  @visibleForTesting
+  void foundForTesting(OfficePeer peer) => _found(peer);
+
+  /// For tests: the device [id] gone from the network.
+  @visibleForTesting
+  void lostForTesting(String id) => _lost(id);
+
   @visibleForTesting
   void seenForTesting(OfficePeer peer, {OfficePeer? self, bool office = true}) {
     if (self != null) _self = self;

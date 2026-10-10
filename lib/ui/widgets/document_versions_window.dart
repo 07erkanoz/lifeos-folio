@@ -11,7 +11,7 @@ import '../../services/convert/converter_service.dart';
 import '../../services/editor/document_history.dart';
 import '../../services/editor/text_diff.dart';
 import '../../services/pdf/pdf_service.dart';
-import '../../services/platform/android_document_save.dart';
+import '../../services/platform/phone_document_save.dart';
 import '../../services/search/text_extractor.dart';
 import '../../services/spreadsheet/workbook.dart';
 import 'draft_prompts.dart' show draftDate;
@@ -192,8 +192,8 @@ class _VersionsWindowState extends State<_VersionsWindow> {
       final stamp = draftDate(entry.created).replaceAll(':', '.');
       final name =
           '${p.basenameWithoutExtension(entry.name)} ($stamp).${entry.format}';
-      final path = Platform.isAndroid
-          ? await AndroidDocumentSave.save(fileName: name, bytes: bytes)
+      final path = PhoneDocumentSave.here
+          ? await PhoneDocumentSave.save(fileName: name, bytes: bytes)
           : await FilePicker.saveFile(
               dialogTitle: 'Sürümü kopya olarak kaydet',
               fileName: name,
@@ -201,7 +201,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
               allowedExtensions: [entry.format],
             );
       if (path == null) return;
-      if (!Platform.isAndroid) {
+      if (!PhoneDocumentSave.here) {
         final source = entry.sourcePath;
         if (source != null &&
             (p.equals(p.absolute(path), p.absolute(source)) ||
@@ -224,7 +224,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
       show(
         noticeBar(
           'Sürümün kopyası kaydedildi',
-          detail: Platform.isAndroid ? null : path,
+          detail: PhoneDocumentSave.here ? null : path,
           kind: NoticeKind.success,
         ),
       );

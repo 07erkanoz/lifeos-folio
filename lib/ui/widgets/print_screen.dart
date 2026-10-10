@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
 
-import '../../services/platform/android_document_save.dart';
+import '../../services/platform/phone_document_save.dart';
 import '../../services/print/print_job.dart';
 import '../../services/print/print_selection.dart';
 import 'notice.dart';
@@ -189,8 +189,8 @@ class _PrintScreenState extends State<PrintScreen> {
       final pdf = await _chosenPdf(pages);
       final base = widget.name.replaceAll(RegExp(r'\.[^.]+$'), '');
       final fileName = '$base.pdf';
-      final path = Platform.isAndroid
-          ? await AndroidDocumentSave.save(fileName: fileName, bytes: pdf)
+      final path = PhoneDocumentSave.here
+          ? await PhoneDocumentSave.save(fileName: fileName, bytes: pdf)
           : await FilePicker.saveFile(
               dialogTitle: 'PDF olarak kaydet',
               fileName: fileName,
@@ -198,7 +198,9 @@ class _PrintScreenState extends State<PrintScreen> {
               allowedExtensions: const ['pdf'],
             );
       if (path == null) return;
-      if (!Platform.isAndroid) await File(path).writeAsBytes(pdf, flush: true);
+      if (!PhoneDocumentSave.here) {
+        await File(path).writeAsBytes(pdf, flush: true);
+      }
       if (mounted) {
         showNotice(context, 'PDF kaydedildi', kind: NoticeKind.success);
       }

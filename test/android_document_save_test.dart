@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:evrak_convert/services/platform/android_document_save.dart';
+import 'package:evrak_convert/services/platform/phone_document_save.dart';
 import 'package:evrak_convert/ui/widgets/default_viewer_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,7 +15,7 @@ void main() {
     () async => root = await Directory.systemTemp.createTemp('folio-save-'),
   );
   tearDown(() async {
-    messenger.setMockMethodCallHandler(AndroidDocumentSave.channel, null);
+    messenger.setMockMethodCallHandler(PhoneDocumentSave.channel, null);
     await root.delete(recursive: true);
   });
 
@@ -29,7 +29,7 @@ void main() {
       'txt': 'text/plain',
     };
     for (final entry in expected.entries) {
-      messenger.setMockMethodCallHandler(AndroidDocumentSave.channel, (
+      messenger.setMockMethodCallHandler(PhoneDocumentSave.channel, (
         call,
       ) async {
         expect(call.method, 'saveDocument');
@@ -41,7 +41,7 @@ void main() {
         ]);
         return 'content://external.documents/document/primary%3ABelgeler%2Ftest.${entry.key}';
       });
-      final path = await AndroidDocumentSave.save(
+      final path = await PhoneDocumentSave.save(
         fileName: 'Türkçe belge.${entry.key}',
         bytes: [1, 2, 3],
         supportDirectory: root,
@@ -56,11 +56,11 @@ void main() {
     'cancel and provider errors leave no falsely saved preview copies',
     () async {
       messenger.setMockMethodCallHandler(
-        AndroidDocumentSave.channel,
+        PhoneDocumentSave.channel,
         (_) async => null,
       );
       expect(
-        await AndroidDocumentSave.save(
+        await PhoneDocumentSave.save(
           fileName: 'test.udf',
           bytes: [1],
           supportDirectory: root,
@@ -71,7 +71,7 @@ void main() {
         await Directory('${root.path}/saved-documents').list().toList(),
         isEmpty,
       );
-      messenger.setMockMethodCallHandler(AndroidDocumentSave.channel, (
+      messenger.setMockMethodCallHandler(PhoneDocumentSave.channel, (
         _,
       ) async {
         throw PlatformException(
@@ -80,7 +80,7 @@ void main() {
         );
       });
       await expectLater(
-        AndroidDocumentSave.save(
+        PhoneDocumentSave.save(
           fileName: 'test.udf',
           bytes: [1],
           supportDirectory: root,
@@ -102,7 +102,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     var opened = 0;
-    messenger.setMockMethodCallHandler(AndroidDocumentSave.channel, (
+    messenger.setMockMethodCallHandler(PhoneDocumentSave.channel, (
       call,
     ) async {
       expect(call.method, 'configureDefaultViewer');

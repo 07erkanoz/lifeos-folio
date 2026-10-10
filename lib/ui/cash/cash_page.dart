@@ -11,7 +11,7 @@ import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
 import '../../services/clients/client_files.dart';
 import '../../services/clients/office_cash.dart';
-import '../../services/platform/android_document_save.dart';
+import '../../services/platform/phone_document_save.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
@@ -234,8 +234,8 @@ class _CashPageState extends State<CashPage> {
 
   Future<void> _saveBytes(String name, String ext, Uint8List data) async {
     try {
-      final path = Platform.isAndroid
-          ? await AndroidDocumentSave.save(fileName: name, bytes: data)
+      final path = PhoneDocumentSave.here
+          ? await PhoneDocumentSave.save(fileName: name, bytes: data)
           : await FilePicker.saveFile(
               fileName: name,
               type: FileType.custom,
@@ -243,7 +243,7 @@ class _CashPageState extends State<CashPage> {
               bytes: data,
             );
       if (path == null) return;
-      if (!Platform.isAndroid && !Platform.isIOS) {
+      if (!PhoneDocumentSave.here) {
         await File(path).writeAsBytes(data, flush: true);
       }
       if (mounted) showNotice(context, '$name kaydedildi.', detail: path);

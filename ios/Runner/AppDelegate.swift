@@ -1,6 +1,7 @@
 import Flutter
 import PDFKit
 import UIKit
+import UniformTypeIdentifiers
 import UserNotifications
 import VisionKit
 import workmanager_apple
@@ -99,17 +100,23 @@ enum FileActions {
 /// camera (VisionKit's document camera, its edges found and straightened)
 /// is made a PDF in Documents/Taramalar, which the Files app shows.
 class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
-  VNDocumentCameraViewControllerDelegate
+  VNDocumentCameraViewControllerDelegate, UIDocumentPickerDelegate
 {
   static var shared: FolioDocuments?
   var channel: FlutterMethodChannel?
   var ready = false
   var waiting: [String] = []
   var scanning: FlutterResult?
+  var picking: FlutterResult?
+
+  /// The folders the lawyer chose, open for reading while Folio runs.
+  var opened: [URL] = []
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let instance = FolioDocuments()
     shared = instance
+    // Before Dart reads any of them: the folders chosen before, opened again.
+    instance.restoreFolders()
     let channel = FlutterMethodChannel(
       name: "lifeos_evrak/documents", binaryMessenger: registrar.messenger())
     instance.channel = channel
@@ -125,6 +132,11 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
       result(nil)
     case "scan":
       scan(result)
+    case "pickFolder", "pickPictureFolder":
+      pickFolder(result)
+    case "forgetFolder":
+      forgetFolder(call.arguments as? String)
+      result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -170,6 +182,89 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
     let paths = waiting
     waiting = []
     channel?.invokeMethod("openFiles", arguments: paths)
+  }
+
+  // A folder to index or to show in the gallery, read where it is.
+  //
+  // A path alone opens nothing on an iPhone: a folder outside Folio's own
+  // is read only while the access the picker granted is held, and only a
+  // bookmark of it, kept, gets that access back when Folio runs again.
+
+  static let bookmarksKey = "folio.folderBookmarks"
+
+  func pickFolder(_ result: @escaping FlutterResult) {
+    guard let top = FileActions.topController() else {
+      result(FlutterError(code: "FOLDER", message: "Klasör seçici açılamadı.", details: nil))
+      return
+    }
+    picking?(nil)
+    picking = result
+    let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.folder])
+    picker.delegate = self
+    picker.allowsMultipleSelection = false
+    top.present(picker, animated: true)
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    guard let url = urls.first else {
+      picking?(nil)
+      picking = nil
+      return
+    }
+    guard url.startAccessingSecurityScopedResource() else {
+      picking?(FlutterError(code: "FOLDER", message: "Bu klasörü okuma izni alınamadı.", details: nil))
+      picking = nil
+      return
+    }
+    opened.append(url)
+    var marks = Self.bookmarks()
+    if let data = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) {
+      marks[url.path] = data
+      UserDefaults.standard.set(marks, forKey: Self.bookmarksKey)
+    }
+    picking?(url.path)
+    picking = nil
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    picking?(nil)
+    picking = nil
+  }
+
+  func restoreFolders() {
+    var kept: [String: Data] = [:]
+    for (path, data) in Self.bookmarks() {
+      var stale = false
+      guard
+        let url = try? URL(
+          resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
+      else { continue }
+      if url.startAccessingSecurityScopedResource() { opened.append(url) }
+      let fresh = stale
+        ? (try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil))
+        : nil
+      // Kept under the path Dart knows it by.
+      kept[path] = fresh ?? data
+    }
+    UserDefaults.standard.set(kept, forKey: Self.bookmarksKey)
+  }
+
+  func forgetFolder(_ path: String?) {
+    guard let path = path else { return }
+    var marks = Self.bookmarks()
+    marks.removeValue(forKey: path)
+    UserDefaults.standard.set(marks, forKey: Self.bookmarksKey)
+    opened.removeAll { url in
+      if url.path == path {
+        url.stopAccessingSecurityScopedResource()
+        return true
+      }
+      return false
+    }
+  }
+
+  static func bookmarks() -> [String: Data] {
+    UserDefaults.standard.dictionary(forKey: bookmarksKey) as? [String: Data] ?? [:]
   }
 
   // The document camera.

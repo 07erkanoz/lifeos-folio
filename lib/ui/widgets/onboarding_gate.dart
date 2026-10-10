@@ -264,7 +264,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       final path =
           await (widget.pickFolder?.call() ??
-              (Platform.isAndroid
+              (DocumentIntents.picksFolders
                   ? DocumentIntents.pickFolder()
                   : FilePicker.getDirectoryPath(
                       dialogTitle: 'İndekslenecek klasörü seçin',

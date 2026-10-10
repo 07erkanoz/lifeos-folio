@@ -3,7 +3,7 @@ import 'dart:math' as math;
 
 import '../../services/speech/speech_models.dart';
 import '../../services/speech/speech_session.dart';
-import '../../services/platform/android_document_save.dart';
+import '../../services/platform/phone_document_save.dart';
 
 import 'dart:async';
 
@@ -1993,7 +1993,7 @@ class _EditorWidgetState extends State<EditorWidget>
     await previous?.release();
     DocumentLock? lock;
     var held = false;
-    if (path != null && !Platform.isAndroid) {
+    if (path != null && !PhoneDocumentSave.here) {
       try {
         lock = await DocumentLock.document(path);
         held = lock == null;
@@ -3978,7 +3978,7 @@ class _EditorWidgetState extends State<EditorWidget>
     if (_savedPath == null &&
         source != null &&
         _sourceSigned &&
-        !Platform.isAndroid &&
+        !PhoneDocumentSave.here &&
         desktopSigningAvailable) {
       if (_isSaving || _isLoading || _loadError != null) return false;
       final choice = await _askSignedSave();
@@ -3990,7 +3990,7 @@ class _EditorWidgetState extends State<EditorWidget>
           : _saveAs(target);
     }
     final path = _savedPath ?? (_sourceSigned ? null : source);
-    return _saveAs(target, destination: Platform.isAndroid ? null : path);
+    return _saveAs(target, destination: PhoneDocumentSave.here ? null : path);
   }
 
   Future<_SignedSave?> _askSignedSave() => showDialog<_SignedSave>(
@@ -4456,11 +4456,8 @@ class _EditorWidgetState extends State<EditorWidget>
         outBytes = utf8.encode(model.toPlainText());
       }
 
-      final savePath = Platform.isAndroid
-          ? await AndroidDocumentSave.save(
-              fileName: defaultName,
-              bytes: outBytes,
-            )
+      final savePath = PhoneDocumentSave.here
+          ? await PhoneDocumentSave.save(fileName: defaultName, bytes: outBytes)
           : destination ??
                 await FilePicker.saveFile(
                   dialogTitle: 'Evrakı Kaydet ($ext)',
@@ -4471,7 +4468,7 @@ class _EditorWidgetState extends State<EditorWidget>
 
       if (savePath == null || !mounted) return false;
       // Another window's document is not written over from this one.
-      if (!Platform.isAndroid &&
+      if (!PhoneDocumentSave.here &&
           savePath != _lockedPath &&
           await _heldByAnotherWindow(savePath)) {
         if (mounted) {
@@ -4488,7 +4485,7 @@ class _EditorWidgetState extends State<EditorWidget>
       }
       final source = widget.initialFilePath;
       final overSource =
-          !Platform.isAndroid &&
+          !PhoneDocumentSave.here &&
           source != null &&
           (p.equals(p.absolute(savePath), p.absolute(source)) ||
               (await File(savePath).exists() &&
@@ -4498,7 +4495,7 @@ class _EditorWidgetState extends State<EditorWidget>
       // original model's _sourceSigned flag is still false. Inspect the actual
       // destination before any overwrite, including a saved-as UDF path.
       var signedOnDisk = false;
-      if (!Platform.isAndroid &&
+      if (!PhoneDocumentSave.here &&
           p.extension(savePath).toLowerCase() == '.udf' &&
           await File(savePath).exists()) {
         signedOnDisk = UdfSigningService.isSigned(
@@ -4511,7 +4508,7 @@ class _EditorWidgetState extends State<EditorWidget>
       }
       if (!mounted) return false;
 
-      if (!Platform.isAndroid) {
+      if (!PhoneDocumentSave.here) {
         final file = File(savePath);
         if (targetFormat != EvrakFormat.pdf && await file.exists()) {
           final kept = await _captureVersion(
@@ -4597,10 +4594,10 @@ class _EditorWidgetState extends State<EditorWidget>
         widget.onSaved?.call(savePath);
         showNotice(
           context,
-          Platform.isAndroid
+          PhoneDocumentSave.here
               ? 'Belge seçtiğiniz konuma kaydedildi.'
               : 'Başarıyla kaydedildi: ${p.basename(savePath)}',
-          detail: Platform.isAndroid ? null : p.dirname(savePath),
+          detail: PhoneDocumentSave.here ? null : p.dirname(savePath),
           kind: NoticeKind.success,
         );
       }
@@ -4748,7 +4745,7 @@ class _EditorWidgetState extends State<EditorWidget>
                         onSave: () => unawaited(_save()),
                         onSaveAs: () => unawaited(_saveAs(_ownFormat)),
                         onSaveIn: (format) => unawaited(_saveAs(format)),
-                        onLiveShare: Platform.isAndroid || Platform.isIOS
+                        onLiveShare: PhoneDocumentSave.here || Platform.isIOS
                             ? null
                             : () => unawaited(_openLive()),
                         onLiveJoin: LiveShare.instance.listening

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import '../../services/platform/android_document_save.dart';
+import '../../services/platform/phone_document_save.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -88,7 +88,7 @@ class _ConvertDialogState extends State<ConvertDialog> {
       _skippedCount = 0;
     });
 
-    final mobileDirectory = Platform.isAndroid
+    final mobileDirectory = PhoneDocumentSave.here
         ? p.join((await getTemporaryDirectory()).path, 'conversions')
         : null;
     int count = 0;
@@ -108,9 +108,9 @@ class _ConvertDialogState extends State<ConvertDialog> {
 
       if (!mounted) return;
       if (res.success && res.outputPath != null) {
-        if (Platform.isAndroid) {
+        if (PhoneDocumentSave.here) {
           try {
-            final saved = await AndroidDocumentSave.save(
+            final saved = await PhoneDocumentSave.save(
               fileName: p.basename(res.outputPath!),
               bytes:
                   res.outputBytes ?? await File(res.outputPath!).readAsBytes(),
@@ -240,7 +240,7 @@ class _ConvertDialogState extends State<ConvertDialog> {
                 children: [
                   Expanded(
                     child: Text(
-                      Platform.isAndroid
+                      PhoneDocumentSave.here
                           ? 'Konum: Kaydederken seçilecek'
                           : _targetDirectory != null
                           ? 'Konum: $_targetDirectory'
@@ -253,7 +253,7 @@ class _ConvertDialogState extends State<ConvertDialog> {
                     ),
                   ),
                   TextButton.icon(
-                    onPressed: _isConverting || Platform.isAndroid
+                    onPressed: _isConverting || PhoneDocumentSave.here
                         ? null
                         : _selectDirectory,
                     icon: const Icon(Icons.folder_open_rounded, size: 16),

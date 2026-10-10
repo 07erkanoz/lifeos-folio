@@ -29,8 +29,14 @@ class DocumentIntents {
     await channel.invokeMethod<void>('ready');
   }
 
+  /// A folder to index, read where it is: on an iPhone kept open across
+  /// runs by a bookmark (ios/Runner/AppDelegate.swift, FolioDocuments).
   static Future<String?> pickFolder() =>
       channel.invokeMethod<String>('pickFolder');
+
+  /// Whether folders are chosen through this channel rather than the file
+  /// picker, whose iPhone folders cannot be read once chosen.
+  static bool get picksFolders => Platform.isAndroid || Platform.isIOS;
 
   /// Asks for a folder the gallery will read where it is, rather than copy.
   /// Falls back to a copied folder when the choice is somewhere the phone
@@ -64,7 +70,7 @@ class DocumentIntents {
   }
 
   static Future<void> forgetFolder(String path) async {
-    if (Platform.isAndroid) {
+    if (Platform.isAndroid || Platform.isIOS) {
       await channel.invokeMethod<void>('forgetFolder', path);
     }
   }

@@ -324,6 +324,42 @@ void main() {
     },
   );
 
+  test('what is said while a phone is away reaches it when it comes back, '
+      'its files too, not only once it answers', () async {
+    b.seenForTesting(a.self!);
+    await a.foundOffice('Kaya Hukuk Bürosu');
+    await a.admit(b.self!.deviceId, OfficeRole.trainee);
+    await until(() => b.ledger.members.length == 2);
+    // Heard once, and brought up to date then.
+    a.foundForTesting(b.self!);
+    final talk = (await a.privateChat(b.self!.deviceId))!;
+    await a.post(talk, text: 'Günaydın');
+    await until(() => b.chats.of(talk.id)?.messages.length == 1);
+    // Its bringing up to date done.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    // The phone sleeps: what is said meanwhile waits.
+    a.lostForTesting(b.self!.deviceId);
+    final photo = file('Tutanak.jpg', 40 * 1024);
+    await a.post(
+      a.chats.of(talk.id)!,
+      text: 'Tutanak ekte',
+      files: [photo.path],
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(b.chats.of(talk.id)!.messages, hasLength(1));
+    // Back on the network: it comes, the photograph with it.
+    a.foundForTesting(b.self!);
+    await until(() => b.chats.of(talk.id)!.messages.length == 2);
+    final got = b.chats.of(talk.id)!.messages.last;
+    expect(got.text, 'Tutanak ekte');
+    await until(() => b.chats.fileOf(got.id, 'Tutanak.jpg') != null);
+    expect(
+      File(b.chats.fileOf(got.id, 'Tutanak.jpg')!).readAsBytesSync(),
+      photo.readAsBytesSync(),
+    );
+    await until(() => a.chats.pending.isEmpty);
+  });
+
   test('private, group and broadcast talk, with a file, sealed', () async {
     final c = await folio('Av. Selin Aksoy', 'selin-pc');
     final asking = a.pair(c.self!)!;

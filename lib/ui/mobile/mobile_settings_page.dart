@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -28,7 +27,7 @@ class _ArchiveFoldersPageState extends State<ArchiveFoldersPage> {
   Future<void> _add() async {
     setState(() => _picking = true);
     try {
-      final path = Platform.isAndroid
+      final path = DocumentIntents.picksFolders
           ? await DocumentIntents.pickFolder()
           : await FilePicker.getDirectoryPath(
               dialogTitle: 'İndekslenecek klasörü seçin',

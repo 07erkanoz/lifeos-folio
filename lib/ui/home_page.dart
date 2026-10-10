@@ -2823,7 +2823,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     library: _library,
     hasMore: _library.hits.length < _library.matches,
     loadMore: () => _library.searchNow(more: true),
-    pickFolder: () => Platform.isAndroid
+    pickFolder: () => DocumentIntents.picksFolders
         ? DocumentIntents.pickPictureFolder()
         : FilePicker.getDirectoryPath(
             dialogTitle: 'Galeriye eklenecek klasörü seçin',
@@ -3313,7 +3313,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           hasMore: _library.hits.length < _library.matches,
           loadMore: () => _library.searchNow(more: true),
           onOpen: _selectFile,
-          pickFolder: () => Platform.isAndroid
+          pickFolder: () => DocumentIntents.picksFolders
               ? DocumentIntents.pickPictureFolder()
               : FilePicker.getDirectoryPath(
                   dialogTitle: 'Galeriye eklenecek klasörü seçin',

@@ -468,9 +468,8 @@ class UyapWebService {
   /// or e-signature there. The page to show is in what comes back; the code
   /// it ends with goes to [finishEdevlet].
   Future<EdevletLogin> beginEdevlet(EdevletMethod method) => _serial(() async {
-    if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
-      throw UnsupportedError('UYAP web bağlantısı masaüstünde kullanılabilir.');
-    }
+    // Everywhere: a phone shows e-Devlet in its own web view. Only the
+    // Adalet E-İmza login ([connect]) needs a computer's card reader.
     disconnect();
     try {
       final start = await _http

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../../services/platform/android_document_save.dart';
+import '../../services/platform/phone_document_save.dart';
 
 import 'dart:io';
 import 'dart:math' as math;
@@ -303,8 +303,8 @@ class _SpreadsheetViewerState extends State<SpreadsheetViewer>
     setState(() => _saving = true);
     try {
       final bytes = await _bytes();
-      final path = Platform.isAndroid
-          ? await AndroidDocumentSave.save(fileName: _name, bytes: bytes)
+      final path = PhoneDocumentSave.here
+          ? await PhoneDocumentSave.save(fileName: _name, bytes: bytes)
           : _savedPath ??
                 widget.path ??
                 await FilePicker.saveFile(
@@ -313,7 +313,7 @@ class _SpreadsheetViewerState extends State<SpreadsheetViewer>
                   allowedExtensions: ['xlsx'],
                 );
       if (path == null) return false;
-      if (!Platform.isAndroid) {
+      if (!PhoneDocumentSave.here) {
         final file = File(path);
         if (await file.exists()) {
           await DocumentHistory.instance.capture(

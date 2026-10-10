@@ -1,15 +1,23 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'app_directories.dart';
 import 'viewer_file_types.dart';
 
-/// Android returns content URIs, not filesystem paths. Keep a readable local
-/// copy for preview/history and publish it through the system document picker.
-class AndroidDocumentSave {
+/// A phone saves through the system's own save screen, which never writes
+/// over the file a document came from: Android returns content URIs, not
+/// filesystem paths, and an iPhone's Files screen copies a file Folio has
+/// already written (its export takes a file, not a place to write one).
+/// Either way a readable local copy is kept for preview and history, and
+/// published through the system's picker.
+class PhoneDocumentSave {
   static const channel = MethodChannel('lifeos_evrak/documents');
+
+  /// Whether documents are saved this way here: on a phone.
+  static bool get here => Platform.isAndroid || Platform.isIOS;
 
   static Future<String?> save({
     required String fileName,
@@ -35,10 +43,20 @@ class AndroidDocumentSave {
       final type = ViewerFileType.supported
           .where((type) => type.extensions.contains(extension))
           .firstOrNull;
-      final uri = await channel.invokeMethod<String>('saveDocument', {
-        'path': file.path,
-        'mimeType': type?.mimeTypes.first ?? 'application/octet-stream',
-      });
+      final String? uri;
+      if (Platform.isIOS) {
+        // The Files screen, given the bytes: it writes them first and lets
+        // the lawyer choose where the copy goes.
+        uri = await FilePicker.saveFile(
+          fileName: p.basename(fileName),
+          bytes: bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+        );
+      } else {
+        uri = await channel.invokeMethod<String>('saveDocument', {
+          'path': file.path,
+          'mimeType': type?.mimeTypes.first ?? 'application/octet-stream',
+        });
+      }
       if (uri == null) return null;
       published = true;
       return file.path;

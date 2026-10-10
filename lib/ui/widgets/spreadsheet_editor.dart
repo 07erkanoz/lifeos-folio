@@ -10,7 +10,7 @@ import 'package:worksheet/worksheet.dart';
 
 import '../../services/editor/document_history.dart';
 import '../../services/editor/editor_drafts.dart';
-import '../../services/platform/android_document_save.dart';
+import '../../services/platform/phone_document_save.dart';
 import '../../services/platform/atomic_file.dart';
 import '../../services/search/search_models.dart';
 import '../../services/spreadsheet/formula_locale.dart';
@@ -369,8 +369,8 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
     try {
       final edits = book.edits.value;
       final bytes = await book.write();
-      final path = Platform.isAndroid
-          ? await AndroidDocumentSave.save(fileName: _name, bytes: bytes)
+      final path = PhoneDocumentSave.here
+          ? await PhoneDocumentSave.save(fileName: _name, bytes: bytes)
           : _savedPath ??
                 widget.path ??
                 await FilePicker.saveFile(
@@ -380,7 +380,7 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
                   allowedExtensions: ['xlsx'],
                 );
       if (path == null || !mounted) return false;
-      if (!Platform.isAndroid) {
+      if (!PhoneDocumentSave.here) {
         final file = File(path);
         if (await file.exists()) {
           try {
@@ -409,10 +409,10 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
       if (mounted) {
         showNotice(
           context,
-          Platform.isAndroid
+          PhoneDocumentSave.here
               ? 'Excel belgesi kaydedildi.'
               : 'Kaydedildi: ${p.basename(path)}',
-          detail: Platform.isAndroid ? null : p.dirname(path),
+          detail: PhoneDocumentSave.here ? null : p.dirname(path),
           kind: NoticeKind.success,
         );
       }
