@@ -1,7 +1,7 @@
 name: Sürüm yayınla
 run-name: LifeOS Folio ${{ github.ref_name }}
 # Pushing a tag v<version> that matches pubspec.yaml builds Folio for Windows,
-# Linux and Android, signs one update manifest per platform and publishes
+# Linux and Android (and, once they are out, the Mac: macos.yml), signs one update manifest per platform and publishes
 # them all as a GitHub Release, then sends them to lifeos.com.tr, which
 # publishes them once it has checked their signatures (packaging/server).
 #
@@ -302,3 +302,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+
+  # The Mac, signed by Developer ID and notarized, put into the release once
+  # the others are out: slower, and no update manifest yet; a Mac that fails
+  # holds the others back in nothing.
+  macos:
+    needs: [version, publish]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/macos.yml
+    with:
+      release_tag: ${{ github.ref_name }}
+    secrets: inherit

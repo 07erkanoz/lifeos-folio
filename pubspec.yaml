@@ -2,7 +2,7 @@ name: evrak_convert
 description: "LifeOS Folio — belge ve görsel önizleme, dönüştürme ve arşivleme"
 publish_to: 'none'
 
-version: 1.6.0+8
+version: 1.6.5+9
 
 environment:
   sdk: ^3.13.2
