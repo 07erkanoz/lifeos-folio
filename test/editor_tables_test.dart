@@ -787,8 +787,8 @@ void main() {
                 cells: [
                   _cell('VEKİLİ'),
                   _cell(
-                    'Av. ERKAN ÖZ, Bahçelievler Mah. Çetin Emeç Bulvarı 5068 '
-                    'Sokak, Kemer / ANTALYA',
+                    'Av. DENİZ YILMAZ, Cumhuriyet Mah. Atatürk Bulvarı 1200 '
+                    'Sokak, Muratpaşa / ANTALYA',
                   ),
                 ],
               ),

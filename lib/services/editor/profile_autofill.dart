@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'lawyer_profile.dart';
 
-/// "ERKAN ÖZ" as "Erkan Öz", with Turkish's dotted and dotless i.
+/// "DENİZ YILMAZ" as "Deniz Yılmaz", with Turkish's dotted and dotless i.
 String titleCaseTr(String text) => text
     .split(RegExp(r'\s+'))
     .where((w) => w.isNotEmpty)

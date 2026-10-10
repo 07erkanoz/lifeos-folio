@@ -6,7 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../settings/uyap_auto.dart';
+import '../agenda/agenda_page.dart' show AgendaColors;
+import '../mobile/settings_parts.dart';
 import 'notice.dart';
 
 void showFolioAbout(BuildContext context) => showDialog<void>(
@@ -14,26 +15,51 @@ void showFolioAbout(BuildContext context) => showDialog<void>(
   builder: (_) => const FolioAboutDialog(),
 );
 
+/// The terms Folio is used under, read in the app.
+const folioTerms = (
+  title: 'Kullanım Koşulları',
+  asset: 'assets/legal/LICENSE.txt',
+);
+
+/// How Folio handles personal data, read in the app; the site carries the
+/// same notice.
+const folioPrivacy = (
+  title: 'Gizlilik ve KVKK Aydınlatma Metni',
+  asset: 'assets/legal/PRIVACY.txt',
+);
+
+/// Opens one of Folio's legal texts on a page of its own.
+Future<void> openFolioLegal(
+  BuildContext context,
+  ({String title, String asset}) text,
+) => Navigator.of(context).push(
+  MaterialPageRoute<void>(
+    builder: (_) => FolioLegalPage(title: text.title, asset: text.asset),
+  ),
+);
+
 class FolioAboutDialog extends StatelessWidget {
   const FolioAboutDialog({super.key});
 
   /// Where else Folio runs, said for the device it is read on: a phone
-  /// names the computers only.
+  /// names the computers only (App Store 2.3.10).
   static String get _otherDevices => Platform.isIOS || Platform.isAndroid
-      ? 'Folio’nun Windows, macOS ve Linux sürümleri lifeos.com.tr '
-            'adresinden ücretsiz indirilir.'
-      : 'Folio’nun telefon ve öbür bilgisayar sürümleri lifeos.com.tr '
-            'adresinden ücretsiz indirilir.';
+      ? 'Windows, macOS ve Linux'
+      : 'Telefon ve bilgisayar sürümleri';
 
   Future<void> _open(
     BuildContext context,
-    String domain, [
-    String path = '/',
+    String path, [
     String? fragment,
   ]) async {
     try {
       if (await launchUrl(
-        Uri(scheme: 'https', host: domain, path: path, fragment: fragment),
+        Uri(
+          scheme: 'https',
+          host: 'lifeos.com.tr',
+          path: path,
+          fragment: fragment,
+        ),
         mode: LaunchMode.externalApplication,
       )) {
         return;
@@ -43,247 +69,229 @@ class FolioAboutDialog extends StatelessWidget {
       showNotice(
         context,
         'Adres açılamadı',
-        detail: 'https://$domain',
+        detail: 'https://lifeos.com.tr$path',
         kind: NoticeKind.error,
       );
     }
   }
 
-  Future<void> _license(BuildContext context) async {
-    final text = await rootBundle.loadString('assets/legal/LICENSE.txt');
+  Future<void> _components(BuildContext context) async {
+    final info = await PackageInfo.fromPlatform();
     if (!context.mounted) return;
-    await showDialog<void>(
+    showLicensePage(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ücretsiz kullanım lisansı'),
-        content: SizedBox(
-          width: 560,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              text,
-              style: const TextStyle(fontSize: 13, height: 1.6),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Kapat'),
-          ),
-        ],
-      ),
+      applicationName: 'LifeOS Folio',
+      applicationVersion: info.version,
+      applicationLegalese: '© 2026 LifeOS',
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final muted = colors.onSurfaceVariant;
     return Dialog(
       clipBehavior: Clip.antiAlias,
+      backgroundColor: settingsPage(context),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 480),
         child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      colors.primary.withValues(alpha: .13),
-                      colors.secondary.withValues(alpha: .07),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.topRight,
-                      child: IconButton(
-                        tooltip: 'Kapat',
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close_rounded, size: 20),
-                      ),
-                    ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(22),
-                      child: Image.asset(
-                        'assets/branding/lifeos_folio.png',
-                        width: 88,
-                        height: 88,
-                        cacheWidth:
-                            (88 * MediaQuery.devicePixelRatioOf(context))
-                                .ceil(),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'LifeOS Folio',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.8,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    // The version the release was built as, from pubspec.
-                    FutureBuilder<PackageInfo>(
-                      future: PackageInfo.fromPlatform(),
-                      builder: (context, info) => Text(
-                        info.hasData
-                            ? 'Sürüm ${info.data!.version} (${info.data!.buildNumber})'
-                            : ' ',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Avukatlar için dilekçe, dava ve büro uygulaması',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors.surface.withValues(alpha: .8),
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: const Text(
-                        'Ücretsiz kullanım',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                  ],
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  tooltip: 'Kapat',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, size: 20),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Avukatlar için, bir tarayıcı gibi çalışan yerel bir '
-                      'uygulama.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'UYAP’a sizin imzanızla girer ve yalnız sizin '
-                      'dosyalarınızı gösterir. Verileriniz hiçbir sunucuya '
-                      'gitmez, yalnız cihazınızda kalır; Folio yapay zekâ '
-                      'hizmeti kullanmaz.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.6,
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // Folio on the person's other devices: from the site.
-                    // An iPhone names no other phone's (App Store 2.3.10).
-                    Text(
-                      _otherDevices,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.5,
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        FilledButton.icon(
-                          key: const ValueKey('about-download'),
-                          onPressed: () =>
-                              _open(context, 'lifeos.com.tr', '/', 'indir'),
-                          icon: const Icon(Icons.download_rounded, size: 16),
-                          label: const Text('Öbür cihazlara indir'),
-                        ),
-                        OutlinedButton.icon(
-                          key: const ValueKey('about-privacy'),
-                          onPressed: () => _open(
-                            context,
-                            'lifeos.com.tr',
-                            '/privacy-policy',
-                          ),
-                          icon: const Icon(Icons.shield_outlined, size: 16),
-                          label: const Text('Gizlilik ve KVKK'),
-                        ),
-                        OutlinedButton.icon(
-                          key: const ValueKey('about-uyap-help'),
-                          onPressed: () =>
-                              unawaited(UyapHelpPage.open(context)),
-                          icon: const Icon(
-                            Icons.help_outline_rounded,
-                            size: 16,
-                          ),
-                          label: const Text('UYAP bağlantısı'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    const Divider(),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Kişisel ve iş amaçlı kullanım ücretsizdir.\nTelif hakları saklıdır; kullanım lisans koşullarına tabidir.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.5,
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      children: [
-                        TextButton(
-                          onPressed: () => _license(context),
-                          child: const Text('Kullanım lisansı'),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            final info = await PackageInfo.fromPlatform();
-                            if (!context.mounted) return;
-                            showLicensePage(
-                              context: context,
-                              applicationName: 'LifeOS Folio',
-                              applicationVersion: info.version,
-                              applicationLegalese: '© 2026 LifeOS',
-                            );
-                          },
-                          child: const Text('Bileşen lisansları'),
-                        ),
-                      ],
-                    ),
-                  ],
+              Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.asset(
+                    'assets/branding/lifeos_folio.png',
+                    width: 72,
+                    height: 72,
+                    cacheWidth: (72 * MediaQuery.devicePixelRatioOf(context))
+                        .ceil(),
+                  ),
                 ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'LifeOS Folio',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.6,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // The version the release was built as, from pubspec.
+              FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, info) => Text(
+                  info.hasData
+                      ? 'Sürüm ${info.data!.version} (${info.data!.buildNumber})'
+                      : ' ',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: muted),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Avukatlar için dilekçe, dava ve büro uygulaması',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Folio ile UDF dilekçenizi yazar, e-imza ya da mobil imzayla '
+                'imzalar ve dava dosyanıza gönderirsiniz. Müvekkillerinizi, '
+                'duruşma ve süre takviminizi, büronuzun kasasını ve ekibinizi '
+                'aynı uygulamadan yönetirsiniz.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, height: 1.55, color: muted),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Verileriniz yalnız sizin cihazlarınızda tutulur. Folio’nun '
+                'bir sunucusu yoktur ve yapay zekâ hizmeti kullanmaz.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, height: 1.55, color: muted),
+              ),
+              const SettingsSection('SÖZLEŞMELER'),
+              SettingsGroup(
+                children: [
+                  SettingsRow(
+                    key: const ValueKey('about-terms'),
+                    icon: Icons.description_outlined,
+                    title: folioTerms.title,
+                    subtitle: 'Kullanım izni ve sorumluluklar',
+                    onTap: () => unawaited(openFolioLegal(context, folioTerms)),
+                  ),
+                  SettingsRow(
+                    key: const ValueKey('about-privacy'),
+                    icon: Icons.shield_outlined,
+                    fill: AgendaColors.eHearingFill,
+                    tint: AgendaColors.eHearing,
+                    title: folioPrivacy.title,
+                    subtitle: 'Kişisel verileriniz nasıl korunur',
+                    onTap: () =>
+                        unawaited(openFolioLegal(context, folioPrivacy)),
+                  ),
+                  SettingsRow(
+                    key: const ValueKey('about-components'),
+                    icon: Icons.layers_outlined,
+                    fill: AgendaColors.line,
+                    tint: AgendaColors.muted,
+                    title: 'Açık kaynak lisansları',
+                    subtitle: 'Folio’da kullanılan bileşenler',
+                    onTap: () => unawaited(_components(context)),
+                  ),
+                ],
+              ),
+              const SettingsSection('DESTEK'),
+              SettingsGroup(
+                children: [
+                  SettingsRow(
+                    key: const ValueKey('about-download'),
+                    icon: Icons.devices_outlined,
+                    fill: AgendaColors.taskFill,
+                    tint: AgendaColors.task,
+                    title: 'Diğer cihazlarınıza indirin',
+                    subtitle: _otherDevices,
+                    onTap: () => unawaited(_open(context, '/', 'indir')),
+                  ),
+                  SettingsRow(
+                    key: const ValueKey('about-contact'),
+                    icon: Icons.mail_outline_rounded,
+                    title: 'Destek ve iletişim',
+                    subtitle: 'İletişim formuyla bize yazın',
+                    onTap: () => unawaited(_open(context, '/iletisim')),
+                  ),
+                  SettingsRow(
+                    key: const ValueKey('about-site'),
+                    icon: Icons.language_rounded,
+                    fill: AgendaColors.line,
+                    tint: AgendaColors.muted,
+                    title: 'lifeos.com.tr',
+                    subtitle: 'Folio’nun web sitesi',
+                    onTap: () => unawaited(_open(context, '/')),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                '© 2026 LifeOS. Tüm hakları saklıdır.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: muted),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// One of Folio's legal texts, its numbered headings set apart.
+class FolioLegalPage extends StatelessWidget {
+  const FolioLegalPage({super.key, required this.title, required this.asset});
+
+  final String title;
+  final String asset;
+
+  static final _heading = RegExp(r'^\d+\. ');
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      backgroundColor: settingsPage(context),
+      appBar: settingsBar(context, title),
+      body: FutureBuilder<String>(
+        future: rootBundle.loadString(asset),
+        builder: (context, text) {
+          if (!text.hasData) return const SizedBox.shrink();
+          // The first line repeats the bar's title.
+          final lines = text.data!.trim().split('\n').skip(1);
+          return SelectionArea(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                16,
+                20,
+                28 + MediaQuery.paddingOf(context).bottom,
+              ),
+              children: [
+                for (final line in lines)
+                  if (line.trim().isEmpty)
+                    const SizedBox(height: 10)
+                  else if (_heading.hasMatch(line))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, bottom: 4),
+                      child: Text(
+                        line,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  else
+                    Text(
+                      line,
+                      style: theme.textTheme.bodyMedium?.copyWith(height: 1.55),
+                    ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

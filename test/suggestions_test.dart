@@ -43,7 +43,7 @@ void main() {
         'Davacı Ahmet YILMAZ vekili olarak',
         'AHMET YILMAZ TC 12345678901',
         'T.C. kimlik numarası belirtilmiştir',
-        'Bahçelievler Mah Çetin Emeç Cad',
+        'Cumhuriyet Mah Atatürk Cad',
         'Konyaaltı/ANTALYA adresinde oturan',
         'telefon numarası 0532 123 45 67 olan',
         'e-posta adresine avukat@example.com ile',
@@ -51,7 +51,7 @@ void main() {
         '2023/456 Esas sayılı dosyada',
         'görüşme 12.03.2024 tarihinde yapıldı',
         'Arabulucu 19275 sicil numaralı',
-        'ERKAN ÖZ görevlendirilmiştir',
+        'SELİN ARSLAN görevlendirilmiştir',
         'vekili Av. AHMET YILMAZ ile',
       ]) {
         expect(isPersonal(line), isTrue, reason: line);
@@ -123,15 +123,18 @@ void main() {
     test('the lawyer’s own name is found without its title', () {
       final engine = SuggestionEngine(
         profile: const LawyerProfile(
-          lawyers: [Lawyer(name: 'Erkan Öz', bar: 'Antalya')],
-          email: 'erkanoz07@gmail.com',
+          lawyers: [Lawyer(name: 'Selin Arslan', bar: 'Antalya')],
+          email: 'info@avukatos.com.tr',
         ),
       );
-      final found = engine.suggest('Saygılarımla erkan');
-      expect(found.first.text, 'Erkan Öz');
+      final found = engine.suggest('Saygılarımla selin');
+      expect(found.first.text, 'Selin Arslan');
       expect(found.first.source, SuggestionSource.profile);
-      expect(found.map((s) => s.text), contains('erkanoz07@gmail.com'));
-      expect(engine.suggest('Av. Er').first.text, 'Av. Erkan Öz');
+      expect(
+        engine.suggest('Bize info').map((s) => s.text),
+        contains('info@avukatos.com.tr'),
+      );
+      expect(engine.suggest('Av. Se').first.text, 'Av. Selin Arslan');
     });
 
     test('a name in capitals learned earlier is not offered', () {
@@ -140,7 +143,7 @@ void main() {
       final path = '${dir.path}/oneriler.sqlite';
       // Written as a memory from before names in capitals were kept out.
       PhraseMemory.open(path).dispose();
-      const text = 'ERKAN ÖZ görevlendirilmiştir';
+      const text = 'SELİN ARSLAN görevlendirilmiştir';
       final db = sqlite3.open(path);
       db.execute(
         'INSERT INTO phrases(key, text, archive, seen) VALUES(?, ?, 7, 0)',
@@ -150,7 +153,7 @@ void main() {
       final memory = PhraseMemory.open(path);
       addTearDown(memory.dispose);
       expect(memory.phrases.single.text, text);
-      expect(SuggestionEngine(memory: memory).suggest('erkan'), isEmpty);
+      expect(SuggestionEngine(memory: memory).suggest('selin'), isEmpty);
     });
 
     test('a phrase whose first word is in capitals keeps it', () {

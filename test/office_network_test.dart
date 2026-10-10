@@ -63,14 +63,14 @@ void main() {
   });
 
   test('an announcement carries who and what, and is read back', () {
-    final mine = peer('a1', 'Av. Erkan Öz', platform: OfficePlatform.linux);
+    final mine = peer('a1', 'Av. Deniz Yılmaz', platform: OfficePlatform.linux);
     final back = OfficePeer.fromAnnouncement(
       mine.attributes,
       host: '192.168.1.20',
       port: 4040,
     )!;
     expect(back.deviceId, 'a1');
-    expect(back.name, 'Av. Erkan Öz');
+    expect(back.name, 'Av. Deniz Yılmaz');
     expect(back.platform, OfficePlatform.linux);
     expect(back.host, '192.168.1.20');
     expect(back.port, 4040);
@@ -111,18 +111,18 @@ void main() {
   });
 
   test('devices are put under their people, the user first', () {
-    final self = peer('s', 'Av. Erkan Öz', platform: OfficePlatform.linux);
+    final self = peer('s', 'Av. Deniz Yılmaz', platform: OfficePlatform.linux);
     final people = groupPeople([
       peer('p1', 'Av. Mert Yıldız', online: false),
       // The same lawyer's phone, its key not yet shared: by the name.
-      peer('p2', 'AV. ERKAN ÖZ', platform: OfficePlatform.android),
+      peer('p2', 'AV. DENİZ YILMAZ', platform: OfficePlatform.android),
       peer('p3', 'Av. Deniz Kaya'),
       peer('p4', 'Av. Deniz Kaya', platform: OfficePlatform.ios),
       // This device's own announcement, heard back.
       self,
     ], self: self);
     expect(people.map((p) => p.name), [
-      'Av. Erkan Öz',
+      'Av. Deniz Yılmaz',
       'Av. Deniz Kaya',
       'Av. Mert Yıldız',
     ]);
@@ -151,7 +151,7 @@ void main() {
     expect(find.byKey(const ValueKey('office-join')), findsOneWidget);
     net.seenForTesting(
       peer('p3', 'Av. Deniz Kaya'),
-      self: peer('s', 'Av. Erkan Öz', platform: OfficePlatform.linux),
+      self: peer('s', 'Av. Deniz Yılmaz', platform: OfficePlatform.linux),
     );
     net.seenForTesting(peer('p1', 'Av. Mert Yıldız', online: false));
     await tester.pump();
@@ -197,7 +197,7 @@ void main() {
     final net = OfficeNetwork(settings: () async => File('${dir.path}/b.json'));
     net.seenForTesting(
       peer('p3', 'Av. Deniz Kaya Yılmazoğulları'),
-      self: peer('s', 'Av. Erkan Öz', platform: OfficePlatform.android),
+      self: peer('s', 'Av. Deniz Yılmaz', platform: OfficePlatform.android),
     );
     await tester.pumpWidget(
       MaterialApp(

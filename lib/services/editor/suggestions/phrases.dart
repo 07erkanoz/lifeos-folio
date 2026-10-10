@@ -135,7 +135,7 @@ bool isPersonal(String phrase) {
   for (final m in _name.allMatches(phrase)) {
     if (!_notSurname(m.group(1)!)) return true;
   }
-  // A name all in capitals inside a sentence: "ERKAN ÖZ
+  // A name all in capitals inside a sentence: "DENİZ YILMAZ
   // görevlendirilmiştir". A heading in capitals ("SONUÇ VE İSTEM",
   // "MANAVGAT 1. ASLİYE HUKUK MAHKEMESİNE") has no lower case at all.
   if (_lowerCase.hasMatch(phrase)) {

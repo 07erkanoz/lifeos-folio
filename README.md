@@ -74,7 +74,7 @@ Mobilde kart, PIN ve e-imza ayarı sunulmaz; UDF mobil imzayla imzalanabilir. İ
 
 ## İlk açılış ve hakkında
 
-İlk açılışta kısa tanıtım, Beyaz/Siyah/Sistem tema seçimi, ücretsiz kullanım lisansı ve isteğe bağlı indeks klasörü seçimi bulunur. Onay ve seçimler hatırlanır. Sonraki açılışlar doğrudan uygulamaya gider. **Hakkında** ekranında Erkan ÖZ, lifeos.com.tr, erkanoz.com, [ücretsiz kullanım lisansı](assets/legal/LICENSE.txt) ve bileşen lisansları yer alır.
+İlk açılışta kısa tanıtım, Beyaz/Siyah/Sistem tema seçimi, Kullanım Koşulları onayı ve isteğe bağlı indeks klasörü seçimi bulunur. Onay ve seçimler hatırlanır. Sonraki açılışlar doğrudan uygulamaya gider. **Hakkında** penceresinde [Kullanım Koşulları](assets/legal/LICENSE.txt), [Gizlilik ve KVKK Aydınlatma Metni](assets/legal/PRIVACY.txt), açık kaynak lisansları ve lifeos.com.tr bağlantıları yer alır.
 
 Linux ve Windows'ta ince uygulama başlığı; küçültme, büyütme, tam ekran (F11), kapatma ve hakkında düğmelerini taşır. [Masaüstü davranışı ve GNOME kayıt düzeltmesi](docs/folio-desktop.md).
 

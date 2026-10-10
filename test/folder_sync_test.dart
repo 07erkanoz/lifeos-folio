@@ -34,7 +34,7 @@ void main() {
       OfficePeer(
         deviceId: identity.deviceId,
         userId: identity.userId,
-        name: 'Av. Erkan Öz',
+        name: 'Av. Deniz Yılmaz',
         device: device,
         platform: OfficePlatform.linux,
       ),

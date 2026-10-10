@@ -14,7 +14,7 @@ void main() {
     final book = XlsxWorkbook.read(xlsxFixture());
     expect(book.sheets.map((s) => s.name), ['Hesaplar', 'Notlar']);
     final cells = book.sheets.first.cells;
-    expect(cells['A1']!.value, 'Erkan ÖZ');
+    expect(cells['A1']!.value, 'Deniz YILMAZ');
     expect(cells['A1']!.bold, true);
     expect(cells['A1']!.fill, 'FFE1F0E8');
     expect(cells['C1']!.input, '=B1*2');
@@ -96,7 +96,7 @@ void main() {
         1,
       );
       expect(
-        (await service.search(const SearchQuery(text: 'erkan oz'))).total,
+        (await service.search(const SearchQuery(text: 'deniz yilmaz'))).total,
         1,
       );
       await file.writeAsBytes(

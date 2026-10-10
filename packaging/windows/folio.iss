@@ -13,8 +13,8 @@
 AppId={{541D10B5-49E2-4F48-8F71-53D0177D348E}
 AppName=LifeOS Folio
 AppVersion={#AppVersion}
-AppPublisher=Erkan ÖZ
-AppPublisherURL=https://erkanoz.com
+AppPublisher=LifeOS
+AppPublisherURL=https://lifeos.com.tr
 AppSupportURL=https://lifeos.com.tr
 AppUpdatesURL=https://github.com/07erkanoz/lifeos-folio
 DefaultDirName={localappdata}\Programs\LifeOS Folio

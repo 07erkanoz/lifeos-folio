@@ -130,7 +130,7 @@ class SuggestionEngine {
 
   /// How a profile value can be written: as it is, and a lawyer's name
   /// without its title, which a sentence or a signature writes alone, so
-  /// "erkan" finds "Av. Erkan Öz" as "Erkan Öz".
+  /// "deniz" finds "Av. Deniz Yılmaz" as "Deniz Yılmaz".
   static Iterable<String> _profileForms(String value) sync* {
     yield value;
     if (value.startsWith('Av. ')) yield value.substring(4);

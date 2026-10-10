@@ -695,9 +695,9 @@ void main() {
   test(
     'one person’s devices share a key once and then know each other unasked',
     () async {
-      final laptop = await folio('Av. Erkan Öz', 'dizustu');
-      final phone = await folio('Av. Erkan Öz', 'telefon');
-      final tablet = await folio('Av. Erkan Öz', 'tablet');
+      final laptop = await folio('Av. Deniz Yılmaz', 'dizustu');
+      final phone = await folio('Av. Deniz Yılmaz', 'telefon');
+      final tablet = await folio('Av. Deniz Yılmaz', 'tablet');
       Future<void> meet(OfficeNetwork x, OfficeNetwork y) async {
         x.seenForTesting(y.self!);
         y.seenForTesting(x.self!);
@@ -763,7 +763,7 @@ void main() {
   test(
     'a phone reads the computer’s QR: known, as one’s own, unasked',
     () async {
-      final pc = await folio('Av. Erkan Öz', 'masaustu');
+      final pc = await folio('Av. Deniz Yılmaz', 'masaustu');
       final phone = await folio('Erkan', 'telefon');
       final invite = (await pc.inviteByQr(at: ['127.0.0.1']))!;
       // A QR with another secret is turned away, and the real one still holds.
@@ -794,8 +794,8 @@ void main() {
   );
 
   test('one person’s devices keep their agenda alike, by proof only', () async {
-    final laptop = await folio('Av. Erkan Öz', 'dizustu2');
-    final phone = await folio('Av. Erkan Öz', 'telefon2');
+    final laptop = await folio('Av. Deniz Yılmaz', 'dizustu2');
+    final phone = await folio('Av. Deniz Yılmaz', 'telefon2');
     laptop.seenForTesting(phone.self!);
     phone.seenForTesting(laptop.self!);
     final asking = laptop.pair(phone.self!)!;
@@ -880,8 +880,8 @@ void main() {
   test(
     'a session is shared with one’s own device, and renewed for both',
     () async {
-      final pc = await folio('Av. Erkan Öz', 'dizustu3');
-      final phone = await folio('Av. Erkan Öz', 'telefon3');
+      final pc = await folio('Av. Deniz Yılmaz', 'dizustu3');
+      final phone = await folio('Av. Deniz Yılmaz', 'telefon3');
       pc.seenForTesting(phone.self!);
       phone.seenForTesting(pc.self!);
       final asking = pc.pair(phone.self!)!;
@@ -936,8 +936,8 @@ void main() {
 
   test('what one of a person’s devices read of UYAP comes to the other, '
       'which then leaves UYAP to it', () async {
-    final pc = await folio('Av. Erkan Öz', 'dizustu5');
-    final phone = await folio('Av. Erkan Öz', 'telefon5');
+    final pc = await folio('Av. Deniz Yılmaz', 'dizustu5');
+    final phone = await folio('Av. Deniz Yılmaz', 'telefon5');
     pc.seenForTesting(phone.self!);
     phone.seenForTesting(pc.self!);
     final asking = pc.pair(phone.self!)!;
@@ -1049,8 +1049,8 @@ void main() {
 
   test('a person’s tasks and talks are on all their devices', () async {
     final boss = await folio('Av. Selin Aksoy', 'selin4');
-    final laptop = await folio('Av. Erkan Öz', 'dizustu4');
-    final phone = await folio('Av. Erkan Öz', 'telefon4');
+    final laptop = await folio('Av. Deniz Yılmaz', 'dizustu4');
+    final phone = await folio('Av. Deniz Yılmaz', 'telefon4');
     void see(OfficeNetwork x, OfficeNetwork y) {
       x.seenForTesting(y.self!);
       y.seenForTesting(x.self!);
@@ -1097,7 +1097,7 @@ void main() {
     expect(phone.me, person);
     expect(boss.ledger.people.map((m) => m.name), [
       'Av. Selin Aksoy',
-      'Av. Erkan Öz',
+      'Av. Deniz Yılmaz',
     ]);
     // A task given to the person comes to the phone too.
     expect(

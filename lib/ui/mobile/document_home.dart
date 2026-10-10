@@ -30,7 +30,7 @@ class MobileDocumentHome extends StatelessWidget {
   final ValueChanged<EvrakFile> onRecent, onShare;
   final int recoveryCount;
 
-  /// "Av. Erkan Öz", for the greeting; empty for none.
+  /// "Av. Deniz Yılmaz", for the greeting; empty for none.
   final String name;
 
   /// The portals' state, under the greeting.
@@ -465,7 +465,8 @@ class MobileDocumentHome extends StatelessWidget {
               onPressed: onArchive,
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
-                textStyle: const TextStyle(fontFamily: 'LiberationSans', 
+                textStyle: const TextStyle(
+                  fontFamily: 'LiberationSans',
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),

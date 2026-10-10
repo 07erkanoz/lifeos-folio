@@ -79,7 +79,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
   testWidgets(
-    'about page includes attribution, domains and readable free-use license',
+    'about page carries the terms, the privacy notice and where to get help, and names no person',
     (tester) async {
       tester.view.physicalSize = const Size(800, 900);
       tester.view.devicePixelRatio = 1;
@@ -89,26 +89,42 @@ void main() {
         const MaterialApp(home: Scaffold(body: FolioAboutDialog())),
       );
       expect(
-        find.text('Avukatlar için, bir tarayıcı gibi çalışan yerel bir uygulama.'),
+        find.text('Avukatlar için dilekçe, dava ve büro uygulaması'),
         findsOneWidget,
       );
-      // Where to get Folio for the other devices, the privacy notice and
-      // how UYAP is reached; no person's own site.
-      expect(find.byKey(const ValueKey('about-download')), findsOneWidget);
-      expect(find.byKey(const ValueKey('about-privacy')), findsOneWidget);
-      expect(find.byKey(const ValueKey('about-uyap-help')), findsOneWidget);
+      // The agreements and where to get help; no person's name or site,
+      // and nothing of UYAP, which Settings explains.
+      for (final key in [
+        'about-terms',
+        'about-privacy',
+        'about-components',
+        'about-download',
+        'about-contact',
+        'about-site',
+      ]) {
+        expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+      }
+      expect(find.byKey(const ValueKey('about-uyap-help')), findsNothing);
+      expect(find.textContaining('UYAP'), findsNothing);
       expect(find.textContaining('erkanoz'), findsNothing);
-      await tester.ensureVisible(find.text('Kullanım lisansı'));
-      await tester.pump();
-      await tester.tap(find.text('Kullanım lisansı'));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Ücretsiz kullanım lisansı'), findsOneWidget);
-      expect(find.textContaining('kişisel ve mesleki amaçla'), findsOneWidget);
-      await tester.tap(find.text('Kapat'));
-      await tester.pumpAndSettle();
+      expect(find.textContaining('Erkan'), findsNothing);
+      for (final (key, title, words) in [
+        ('about-terms', 'Kullanım Koşulları', 'kişisel ve mesleki amaçla'),
+        ('about-privacy', 'Gizlilik ve KVKK Aydınlatma Metni', '6698 sayılı'),
+      ]) {
+        await tester.ensureVisible(find.byKey(ValueKey(key)));
+        await tester.pump();
+        await tester.tap(find.byKey(ValueKey(key)));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(title), findsWidgets);
+        expect(find.textContaining(words), findsOneWidget);
+        expect(find.textContaining('Erkan'), findsNothing);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+      }
       tester.view.physicalSize = const Size(390, 600);
       await tester.pump();
       expect(tester.takeException(), isNull);

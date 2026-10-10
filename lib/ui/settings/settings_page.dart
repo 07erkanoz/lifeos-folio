@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../services/editor/editor_settings.dart';
@@ -1150,7 +1149,7 @@ class _SettingsPageState extends State<SettingsPage> {
           SettingsRow(
             icon: Icons.info_outline_rounded,
             title: 'LifeOS Folio hakkında',
-            subtitle: 'Sürüm, lisans, öbür cihazlar için indirme',
+            subtitle: 'Sürüm, sözleşmeler, destek ve indirme',
             onTap: () => showFolioAbout(context),
           ),
         ),
@@ -1161,12 +1160,7 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: Icons.shield_outlined,
             title: 'Gizlilik ve KVKK',
             subtitle: 'Verileriniz yalnız bu cihazda ve kendi cihazlarınızda',
-            onTap: () => unawaited(
-              launchUrl(
-                Uri.parse('https://lifeos.com.tr/privacy-policy'),
-                mode: LaunchMode.externalApplication,
-              ).catchError((Object _) => false),
-            ),
+            onTap: () => unawaited(openFolioLegal(context, folioPrivacy)),
           ),
         ),
       ]),

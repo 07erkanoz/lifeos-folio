@@ -1359,7 +1359,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// The office as the desktop's first page shows it.
   DesktopHomeOffice _office = const DesktopHomeOffice();
 
-  /// "Av. Erkan Öz": the profile's lawyer, else the UYAP Mobil user.
+  /// "Av. Deniz Yılmaz": the profile's lawyer, else the UYAP Mobil user.
   String _lawyerName = '';
 
   /// Told by the portals' syncs, often while one runs: counted again once

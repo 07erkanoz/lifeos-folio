@@ -42,7 +42,7 @@ void main() {
                 onRecent: (_) {},
                 onShare: (_) {},
                 recoveryCount: 0,
-                name: 'Av. Erkan Öz',
+                name: 'Av. Deniz Yılmaz',
                 agendaToday: 2,
                 deadlinesToday: 1,
                 uetsUnread: 3,
@@ -62,7 +62,7 @@ void main() {
         ),
       );
       expect(find.text('6 Ekim Salı'), findsOne);
-      expect(find.text('Günaydın, Av. Erkan Öz'), findsOne);
+      expect(find.text('Günaydın, Av. Deniz Yılmaz'), findsOne);
       expect(find.text('Bugün 2 duruşma · 1 süre dolacak'), findsOne);
       expect(find.text('3 okunmamış tebligat'), findsOne);
       expect(find.text('12 dosya · 4 yeni evrak'), findsOne);

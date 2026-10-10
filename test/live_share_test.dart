@@ -30,7 +30,7 @@ void main() {
 
   Future<OfficeNetwork> folio(
     String device, {
-    String name = 'Av. Erkan Öz',
+    String name = 'Av. Deniz Yılmaz',
   }) async {
     final net = OfficeNetwork(
       settings: () async => File('${dir.path}/$device/buro.json'),

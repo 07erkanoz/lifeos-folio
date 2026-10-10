@@ -82,7 +82,7 @@ class DesktopHome extends StatefulWidget {
     this.now,
   });
 
-  /// "Av. Erkan Öz"; empty for none.
+  /// "Av. Deniz Yılmaz"; empty for none.
   final String name;
   final List<EvrakFile> recent;
   final DesktopHomeOffice office;

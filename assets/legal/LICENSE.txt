@@ -1,13 +1,35 @@
-LifeOS Folio — Ücretsiz Kullanım Lisansı
-Telif hakkı © 2026 LifeOS. Tüm hakları saklıdır.
+LifeOS Folio Kullanım Koşulları
+Son güncelleme: 10 Ekim 2026
 
-LifeOS Folio, kişisel ve mesleki amaçla ücretsiz kullanılabilir. Bu kullanım için abonelik veya lisans ücreti talep edilmez.
+1. Kapsam
+Bu koşullar, LifeOS tarafından geliştirilen LifeOS Folio uygulamasının (Folio) kullanımını düzenler. Folio'yu kurduğunuzda ya da kullandığınızda bu koşulları kabul etmiş olursunuz.
 
-Ücretsiz kullanım izni; uygulamanın mülkiyetinin devri, kaynak kodunun açık kaynak olarak lisanslanması, uygulamanın yeniden markalanması veya satılması anlamına gelmez. Bu haklar için geliştiricinin yazılı izni gerekir.
+2. Ücretsiz kullanım izni
+Folio kişisel ve mesleki amaçla ücretsiz kullanılabilir; bu kullanım için abonelik ya da lisans ücreti alınmaz. LifeOS size Folio'yu kendi cihazlarınızda kullanmanız için devredilemeyen ve münhasır olmayan bir izin verir.
 
-Uygulama mevcut haliyle sunulur. Kullanıcı kendi belgelerinin ve yedeklerinin sorumluluğunu taşır. Yürürlükteki mevzuatın vazgeçilemeyen hakları saklıdır.
+3. Fikri mülkiyet
+Folio'nun yazılımı, adı, simgesi ve arayüzü üzerindeki bütün haklar LifeOS'a aittir. Kullanım izni; uygulamanın mülkiyetinin devri, kaynak kodunun açık kaynak olarak lisanslanması, uygulamanın yeniden markalanması, çoğaltılıp dağıtılması ya da satılması anlamına gelmez. Bunlar için LifeOS'un yazılı izni gerekir.
 
-Uygulamada kullanılan üçüncü taraf bileşenler ve yazı tipleri kendi lisanslarına tabidir. Bu bildirim onların lisans koşullarını değiştirmez veya onlar adına kullanım izni vermez.
+4. Mesleki sorumluluk
+Folio, avukatın işini kolaylaştıran bir araçtır ve hukuki görüş vermez. Uygulamanın hesapladığı süreler, gösterdiği kanun maddeleri ve kararlar ile kamu sistemlerinden alınan bilgiler yardımcı niteliktedir. Sürelerin, dilekçelerin ve gönderilen evrakın doğruluğunu denetlemek avukatın sorumluluğundadır.
 
-Geliştirici: LifeOS
-https://lifeos.com.tr
+5. Kamu hizmetleri
+Folio, UYAP ve e-Tebligat gibi kamu hizmetlerine yalnız sizin kendi girişinizle ve sizin yetkiniz ölçüsünde bağlanır. Bu hizmetler ilgili kurumlara aittir ve Folio'nun bu kurumlarla resmî bir bağı yoktur. LifeOS bu hizmetlerin kesintisiz çalışmasını sağlayamaz. Bu hizmetleri kullanırken onların kullanım koşullarına uymak size aittir.
+
+6. Verileriniz ve yedekleriniz
+Folio'nun bir sunucusu yoktur; belgeleriniz ve kayıtlarınız yalnız sizin cihazlarınızda tutulur. Bu nedenle verilerinizin yedeklenmesi ve korunması sizin sorumluluğunuzdadır. Kişisel verilerin nasıl işlendiği Gizlilik Politikası ve KVKK Aydınlatma Metni'nde anlatılır.
+
+7. Garanti ve sorumluluk
+Folio olduğu gibi sunulur. LifeOS, uygulamanın her durumda kesintisiz ve hatasız çalışacağını garanti etmez. Yürürlükteki mevzuatın izin verdiği ölçüde LifeOS, uygulamanın kullanımından doğan dolaylı zararlardan sorumlu değildir. Kanunun vazgeçilemeyen hakları saklıdır.
+
+8. Üçüncü taraf bileşenler
+Folio'da kullanılan açık kaynak bileşenler ve yazı tipleri kendi lisanslarına tabidir. Bu koşullar onların lisanslarını değiştirmez. Listeleri Hakkında penceresindeki Açık kaynak lisansları bölümündedir.
+
+9. Değişiklikler
+LifeOS bu koşulları güncelleyebilir. Güncel hâli uygulamada ve lifeos.com.tr adresinde yayımlanır.
+
+10. Uygulanacak hukuk
+Bu koşullara Türk hukuku uygulanır.
+
+İletişim: info@avukatos.com.tr · https://lifeos.com.tr/iletisim
+© 2026 LifeOS. Tüm hakları saklıdır.

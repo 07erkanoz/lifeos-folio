@@ -22,7 +22,7 @@ class Lawyer {
 
   bool get isEmpty => name.trim().isEmpty;
 
-  /// "Av. Erkan Öz", as a filing names its lawyer.
+  /// "Av. Deniz Yılmaz", as a filing names its lawyer.
   String get titled => isEmpty ? '' : 'Av. ${name.trim()}';
 
   /// "Antalya Barosu", whether "Antalya" or the whole name was typed.

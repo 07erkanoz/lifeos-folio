@@ -29,7 +29,7 @@ Taslaktaki beş görünüm:
 
 1. **Büro ağı sayfası** (sol menüde BÜRO altında "Büro ağı"; gelen aktarım sayısı rozet olarak görünür). Sekmeler: Gönder, Kendi cihazlarım, Görevler (2. aşamada). Sayfanın üç sütunu var:
    - **Kişiler ve cihazlar:**
-     - Kişiler gruplanır: "Av. Erkan Öz (siz)" altında masaüstü, telefon, dizüstü; diğer avukatlar ve büro çalışanları kendi cihazlarıyla.
+     - Kişiler gruplanır: "Av. Deniz Yılmaz (siz)" altında masaüstü, telefon, dizüstü; diğer avukatlar ve büro çalışanları kendi cihazlarıyla.
      - Her cihazın türü (Linux, Windows, macOS, Android, iOS) ve durumu görünür: çevrimiçi yeşil, kapalı gri ve son görülme saatiyle.
      - Varsayılan cihaz yıldızla işaretlenir.
      - Alıcı, kişinin ya da tek bir cihazın yanındaki kutuyla seçilir. "Herkesin varsayılan cihazına gönder" de seçilebilir.

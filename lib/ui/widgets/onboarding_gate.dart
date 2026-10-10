@@ -532,7 +532,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: FutureBuilder<String>(
                 future: _license,
                 builder: (context, snapshot) => snapshot.hasError
-                    ? const Text('Lisans metni yüklenemedi.')
+                    ? const Text('Kullanım Koşulları yüklenemedi.')
                     : snapshot.hasData
                     ? Scrollbar(
                         child: SingleChildScrollView(
@@ -554,8 +554,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ? null
                 : (value) => setState(() => _accepted = value ?? false),
             title: const Text(
-              'Kullanım lisansını okudum ve kabul ediyorum.',
+              'Kullanım Koşulları’nı okudum ve kabul ediyorum.',
               style: TextStyle(fontSize: 13),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('onboarding-privacy'),
+              onPressed: () => openFolioLegal(context, folioPrivacy),
+              icon: const Icon(Icons.shield_outlined, size: 16),
+              label: const Text('Gizlilik ve KVKK Aydınlatma Metni'),
             ),
           ),
         ],
