@@ -13,6 +13,8 @@ import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
 import '../uets/notice_deadlines.dart';
+import '../uyap/uyap_case_store.dart';
+import 'uyap_own_sync.dart';
 
 /// Senkron (docs/buro.md): what one person's own devices keep alike when
 /// they are on the same network, each part on or off on this device.
@@ -23,6 +25,7 @@ class OwnSync extends ChangeNotifier {
     Future<File> Function()? file,
     SessionHolder? sessions,
     this.phone,
+    this.uyapStore,
   }) : _net = network ?? OfficeNetwork.instance,
        _database = database ?? PortalDatabase.shared,
        _file = file ?? _default,
@@ -35,10 +38,17 @@ class OwnSync extends ChangeNotifier {
 
   final OfficeNetwork _net;
   final Future<PortalDatabase> Function() _database;
+
+  /// The cases' lists given and taken; the computer's own when null.
+  final UyapCaseStore? uyapStore;
   final Future<File> Function() _file;
 
   static const agenda = 'ajanda';
   static const sessionsPart = 'oturumlar';
+
+  /// What UYAP and UETS gave one own device, for the others: UYAP is
+  /// asked once for all of them (lib/services/sync/uyap_own_sync.dart).
+  static const uyapData = 'uyap';
 
   /// The clients' cards, minutes and powers with the office's members,
   /// their money with those who may see it. Off until the user turns it
@@ -83,6 +93,21 @@ class OwnSync extends ChangeNotifier {
     } catch (_) {}
     await _apply();
     _startSessions();
+    // A phone leaves UYAP to a computer of the person's on the network that
+    // holds a session and gives what it reads; the lawyer's own asking is
+    // done here all the same.
+    PortalSync.deferToComputer = () =>
+        _isPhone &&
+        isOn(uyapData) &&
+        _net.ownOnline.any(
+          (peer) =>
+              !_phones.contains(peer.deviceId) &&
+              (held[peer.deviceId]?.contains('mobil') ?? false),
+        );
+    // Read anew here: the others are given it a moment later.
+    PortalSync.uyapChanged = () {
+      if (isOn(uyapData)) _net.ownChanged();
+    };
     // An own device found before these were set is made alike now.
     unawaited(_net.syncOwn());
   }
@@ -225,6 +250,23 @@ class OwnSync extends ChangeNotifier {
   }
 
   Future<void> _apply() async {
+    if (isOn(uyapData)) {
+      final uyap = UyapOwnSync(
+        database: _database,
+        store: uyapStore,
+        ask: (deviceId, body) =>
+            _net.askOwn(deviceId, UyapOwnSync.kind, body: body),
+      );
+      _net.ownParts[uyapData] = OwnPart(
+        export: () async => uyap.summary(_net.self?.deviceId ?? ''),
+        merge: uyap.merge,
+      );
+      _net.ownAnswers[UyapOwnSync.kind] = (asked) async =>
+          (await uyap.answer(asked), null);
+    } else {
+      _net.ownParts.remove(uyapData);
+      _net.ownAnswers.remove(UyapOwnSync.kind);
+    }
     if (isOn(agenda)) {
       final db = await _database();
       _net.ownParts[agenda] = OwnPart(

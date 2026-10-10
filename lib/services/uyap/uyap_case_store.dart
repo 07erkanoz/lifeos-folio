@@ -292,6 +292,62 @@ class UyapCaseStore {
     changes.value++;
   }
 
+  /// When each kept case's list was fetched, by key: what another of the
+  /// person's own devices compares (Senkron's "UYAP verileri").
+  Future<Map<String, DateTime>> fetchedTimes() async => {
+    for (final (record, _) in await cases(counted: false))
+      record.key: record.fetchedAt,
+  };
+
+  /// The kept case of [key], as it is kept; null when there is none.
+  Future<Map<String, Object?>?> recordJson(String key) async {
+    try {
+      final json = jsonDecode(await (await _recordFile(key)).readAsString());
+      return json is Map ? json.cast<String, Object?>() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// A case's list another own device fetched, kept here when it is newer
+  /// than this one's. Its documents themselves are not: each is fetched
+  /// where it is opened. True when it was kept.
+  Future<bool> adopt(Map<String, Object?> json) async {
+    final UyapCaseRecord theirs;
+    try {
+      theirs = UyapCaseRecord.fromJson(json);
+    } catch (_) {
+      return false;
+    }
+    final mine = await recordJson(theirs.key);
+    if (mine != null) {
+      final at = DateTime.tryParse('${mine['cekildi']}');
+      if (at != null && !theirs.fetchedAt.isAfter(at)) return false;
+    }
+    // What is this device's own stays: where its documents and previews
+    // are on its disk, and the case's link in its own session.
+    final kept = {
+      ...theirs.toJson(),
+      'dosyalar': mine?['dosyalar'] ?? const {},
+      'onizlemeler': mine?['onizlemeler'] ?? const {},
+      'bag': mine?['bag'],
+    };
+    try {
+      await _write(UyapCaseRecord.fromJson(kept));
+    } catch (_) {
+      return false;
+    }
+    return true;
+  }
+
+  /// The kept case of [key] as another own device is given it: without
+  /// where this device keeps its documents, which name nothing there.
+  Future<Map<String, Object?>?> recordToShare(String key) async {
+    final json = await recordJson(key);
+    if (json == null) return null;
+    return {...json, 'dosyalar': const {}, 'onizlemeler': const {}, 'bag': null};
+  }
+
   /// The folder [record]'s documents are saved in, when they are saved.
   String folderOf(UyapCaseRecord record) =>
       p.join(settings.folder, caseFolderName(record));

@@ -11,6 +11,12 @@ import 'package:evrak_convert/services/office/office_inbox.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
 import 'package:evrak_convert/services/office/office_pairing.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
+import 'package:evrak_convert/services/portal/uyap_notice.dart';
+import 'package:evrak_convert/services/portal/observed.dart';
+import 'package:evrak_convert/services/portal/portal_sync.dart';
+import 'package:evrak_convert/services/portal/portal_hearing.dart';
+import 'package:evrak_convert/services/portal/portal_channel.dart';
+import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/sync/own_sync.dart';
 import 'package:flutter/foundation.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
@@ -880,6 +886,118 @@ void main() {
       expect(await onPc.take(phone.self!.deviceId, 'web'), isNotNull);
     },
   );
+
+  test('what one of a person’s devices read of UYAP comes to the other, '
+      'which then leaves UYAP to it', () async {
+    final pc = await folio('Av. Erkan Öz', 'dizustu5');
+    final phone = await folio('Av. Erkan Öz', 'telefon5');
+    pc.seenForTesting(phone.self!);
+    phone.seenForTesting(pc.self!);
+    final asking = pc.pair(phone.self!)!;
+    await until(
+      () => phone.incoming.value?.code != null && asking.code != null,
+    );
+    phone.incoming.value!.confirm();
+    asking.confirm();
+    await until(() => pc.self!.userId == phone.self!.userId);
+    pc.seenForTesting(phone.self!);
+    phone.seenForTesting(pc.self!);
+    const court = 'Antalya 3. Asliye Hukuk Mahkemesi';
+    final pcDb = PortalDatabase.memory(), phoneDb = PortalDatabase.memory();
+    addTearDown(pcDb.dispose);
+    addTearDown(phoneDb.dispose);
+    // What the computer read of UYAP.
+    pcDb.mergeCases([PortalCase.create(number: '2025/412', court: court)]);
+    final soon = DateTime.now().add(const Duration(days: 3));
+    pcDb.mergeHearings(
+      PortalChannel.uyapMobile,
+      DateTime.now().subtract(const Duration(days: 30)),
+      DateTime.now().add(const Duration(days: 90)),
+      [PortalHearing.create(number: '2025/412', court: court, at: soon)],
+      complete: false,
+    );
+    pcDb.saveUyapNotices([
+      const UyapNoticeRow(
+        source: UyapNoticeSource.mobile,
+        id: 'b1',
+        messageId: 'm1',
+        title: 'Yeni evrak',
+        body: '2025/412 sayılı dosyanıza evrak eklendi.',
+      ),
+    ]);
+    final read = DateTime.now().subtract(const Duration(minutes: 5));
+    pcDb.setMeta('portfolio_at', read.toIso8601String());
+    pcDb.setMeta(PortalSync.noticesAtKey, read.toIso8601String());
+    UyapCaseStore store(String name) => UyapCaseStore(
+      directory: Directory('${dir.path}/$name'),
+      settings: UyapSettings(
+        directory: Directory('${dir.path}/$name'),
+        home: '${dir.path}/$name-ev',
+      ),
+    );
+    final pcStore = store('pc'), phoneStore = store('tel');
+    await pcStore.keep(
+      target: const UyapCase('1', '2025/412', '', court),
+      details: const UyapCaseDetails(kind: 'Alacak', status: 'Açık'),
+      parties: const [],
+      documents: UyapCaseDocuments([
+        const UyapCaseDocument(
+          key: 'e1',
+          documentId: 'e1',
+          caseId: '1',
+          type: 'Bilirkişi Raporu',
+          number: 'e1',
+          approved: '03.10.2026 10:00',
+          sender: 'Mahkeme',
+          description: '',
+        ),
+      ]),
+    );
+    final dir2 = Directory.systemTemp.createTempSync('folio_own_');
+    addTearDown(() => dir2.deleteSync(recursive: true));
+    final onPc = OwnSync(
+      network: pc,
+      database: () async => pcDb,
+      file: () async => File('${dir2.path}/pc.json'),
+      sessions: _Sessions({
+        'mobil': {'access': 'a1', 'refresh': 'r1'},
+      }),
+      phone: false,
+      uyapStore: pcStore,
+    );
+    final onPhone = OwnSync(
+      network: phone,
+      database: () async => phoneDb,
+      file: () async => File('${dir2.path}/tel.json'),
+      sessions: _Sessions({}),
+      phone: true,
+      uyapStore: phoneStore,
+    );
+    await onPc.start();
+    await onPhone.start();
+    await phone.syncOwn();
+    await until(() => phoneDb.cases().isNotEmpty);
+    await until(() => phoneDb.uyapNoticeKeys().containsKey('mobile|b1'));
+    expect(phoneDb.cases().keys, [caseKey('2025/412', court)]);
+    expect(phoneDb.hearings(caseKey: caseKey('2025/412', court)), hasLength(1));
+    expect(
+      phoneDb.uyapNoticesOf(['mobile|b1']).single.body,
+      contains('evrak eklendi'),
+    );
+    final record = await phoneStore.recordJson(
+      UyapCaseStore.keyOf(court, '2025/412'),
+    );
+    expect(record?['evraklar'], hasLength(1));
+    expect(record?['dosyalar'], isEmpty);
+    // When the computer read is taken too: not read again here yet.
+    expect(phoneDb.meta('portfolio_at'), read.toIso8601String());
+    expect(phoneDb.meta(PortalSync.noticesAtKey), read.toIso8601String());
+    // The computer holds UYAP Mobil and is on the network: the phone
+    // leaves UYAP to it.
+    expect(PortalSync.deferToComputer?.call(), isTrue);
+    PortalSync.deferToComputer = null;
+    PortalSync.uyapChanged = null;
+  });
 
   test('a person’s tasks and talks are on all their devices', () async {
     final boss = await folio('Av. Selin Aksoy', 'selin4');

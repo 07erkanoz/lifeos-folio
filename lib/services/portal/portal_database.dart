@@ -361,6 +361,82 @@ class PortalDatabase {
 
   // What Folio remembers beside the portals' answers.
 
+  // What one of the person's own devices is given of UYAP's (Senkron's
+  // "UYAP verileri", lib/services/sync/uyap_own_sync.dart).
+
+  /// Each case kept, by key, with a short digest of what is kept of it:
+  /// what another own device compares, before it asks for any.
+  Map<String, String> caseDigests() => {
+    for (final r in _db.select('SELECT key, json FROM cases'))
+      r['key'] as String: _digest(r['json'] as String),
+  };
+
+  /// The kept cases of [keys], as they are kept.
+  List<Map<String, Object?>> casesOf(Iterable<String> keys) => [
+    for (final key in keys)
+      for (final r in _db.select('SELECT json FROM cases WHERE key=?', [key]))
+        Map<String, Object?>.from(jsonDecode(r['json'] as String) as Map),
+  ];
+
+  /// Cases another own device kept, taken in field by field as a portal's
+  /// answer is: the newer of each wins, nothing is marked new.
+  int adoptCases(Iterable<Map<String, Object?>> cases) {
+    final changed = <String>{};
+    mergeCases([
+      for (final c in cases) PortalCaseJson.fromJson(c),
+    ], changed: changed);
+    return changed.length;
+  }
+
+  /// The notifications kept, each as "source|id" with whether the lawyer
+  /// read it in Folio.
+  Map<String, bool?> uyapNoticeKeys() => {
+    for (final r in _db.select(
+      'SELECT source, id, local_read FROM uyap_notice',
+    ))
+      '${r['source']}|${r['id']}': r['local_read'] == null
+          ? null
+          : r['local_read'] == 1,
+  };
+
+  /// The notifications of [keys] ("source|id"), with their bodies.
+  List<UyapNoticeRow> uyapNoticesOf(Iterable<String> keys) => [
+    for (final key in keys)
+      if (key.split('|') case [final source, ...final rest])
+        for (final r in _db.select(
+          'SELECT * FROM uyap_notice WHERE source=? AND id=?',
+          [source, rest.join('|')],
+        ))
+          _noticeRow(r),
+  ];
+
+  /// Notifications another own device kept: the new ones added with their
+  /// bodies, and the lawyer's read or unread taken where it said one.
+  int adoptUyapNotices(Iterable<UyapNoticeRow> rows) {
+    final list = rows.toList();
+    final added = saveUyapNotices(list);
+    for (final r in list) {
+      if (r.body.isNotEmpty && r.source == UyapNoticeSource.mobile) {
+        setUyapNoticeBody(r.id, r.body);
+      }
+      if (r.localRead != null) setUyapNoticeRead([r], r.localRead!);
+    }
+    return added.length;
+  }
+
+  static String _digest(String text) {
+    // FNV-1a, 64 bits: enough to tell two kept forms apart.
+    var h = 0xcbf29ce484222325;
+    for (final c in utf8.encode(text)) {
+      h ^= c;
+      h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
+    }
+    return h.toRadixString(16);
+  }
+
+  /// A short digest of [text], as [caseDigests] makes.
+  static String digestOf(String text) => _digest(text);
+
   String? meta(String key) {
     final rows = _db.select('SELECT value FROM meta WHERE key=?', [key]);
     return rows.isEmpty ? null : rows.first['value'] as String;

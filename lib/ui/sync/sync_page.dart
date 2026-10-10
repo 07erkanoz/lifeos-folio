@@ -347,6 +347,24 @@ class _SyncPageState extends State<SyncPage> {
           onChanged: (on) => unawaited(_sync.turn(OwnSync.agenda, on)),
         ),
         SwitchListTile(
+          key: const ValueKey('sync-uyap'),
+          secondary: const Icon(Icons.gavel_rounded),
+          title: const Text(
+            'UYAP verileri',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: const Text(
+            'Dosyalarınız, evrak listeleri, duruşmalarınız ve UYAP '
+            'bildirimleriniz. Bir cihazınızın UYAP’tan aldığını öbürleri de '
+            'alır; UYAP’a iki kez sorulmaz. Telefon, aynı ağdaki '
+            'bilgisayarınız sorarken kendisi sormaz. Evrakın kendisi açıldığı '
+            'cihaza indirilir.',
+            style: TextStyle(fontSize: 12),
+          ),
+          value: _sync.isOn(OwnSync.uyapData),
+          onChanged: (on) => unawaited(_sync.turn(OwnSync.uyapData, on)),
+        ),
+        SwitchListTile(
           key: const ValueKey('sync-office-clients'),
           title: const Text(
             'Müvekkilleri büroyla eşitle',

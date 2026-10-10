@@ -739,7 +739,13 @@ class OfficeNetwork extends ChangeNotifier {
 
   Future<Map<String, Object?>> _ownParts() async => {
     for (final e in ownParts.entries)
-      e.key: await e.value.export().catchError((Object _) => null),
+      e.key: await e.value.export().then<Object?>(
+        (v) => v,
+        onError: (Object e) {
+          if (kDebugMode) debugPrint('Senkron: ${e.runtimeType}: $e');
+          return null;
+        },
+      ),
   };
 
   Future<void> _ownCame(Object? theirs) async {

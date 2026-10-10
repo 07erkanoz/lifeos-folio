@@ -157,8 +157,7 @@ class PortalSync extends ChangeNotifier {
         // In sight: the phone's background check leaves it to this run.
         if (!paused) unawaited(_database().then(BackgroundNotices.seen));
         if (night(DateTime.now())) return;
-        if (DateTime.now().difference(_noticesAt) < noticeEvery) return;
-        unawaited(syncNotices());
+        unawaited(syncNotices(within: noticeEvery));
       });
     }
   }
@@ -798,17 +797,46 @@ class PortalSync extends ChangeNotifier {
   /// UYAP Mobil's and the portal's notifications kept, each channel in
   /// its own rows. Not again within [noticeFresh] unless [force]d (the
   /// lawyer's Yenile); a second call while one runs waits for it.
-  Future<void> syncNotices({bool force = false}) {
+  Future<void> syncNotices({bool force = false, Duration? within}) {
     if (_noticeSync != null) return _noticeSync!;
     // A phone with Folio out of sight leaves it to the background check.
     if (paused && !force) return Future.value();
     if (!_mobile.connected && !_web.connected) return Future.value();
-    if (!force && DateTime.now().difference(_noticesAt) < noticeFresh) {
-      return Future.value();
+    if (force) {
+      return _noticeSync = UyapPace.background(_syncNotices)
+          .whenComplete(() => _noticeSync = null);
     }
-    return _noticeSync = UyapPace.background(_syncNotices)
-        .whenComplete(() => _noticeSync = null);
+    return _noticeSync = () async {
+      // Asked lately, here or on another of the person's own devices
+      // (Senkron brings the time with what it read): not again yet.
+      if (await _askedLately(within ?? noticeFresh)) return;
+      // A phone leaves it to a computer of the person's on the network.
+      if (deferToComputer?.call() ?? false) return;
+      await UyapPace.background(_syncNotices);
+    }().whenComplete(() => _noticeSync = null);
   }
+
+  /// The last whole reading of the notifications, on any of the person's
+  /// own devices: kept, not only in memory.
+  static const noticesAtKey = 'notices_at';
+
+  Future<bool> _askedLately(Duration within) async {
+    final kept = DateTime.tryParse(
+      (await _database()).meta(noticesAtKey) ?? '',
+    );
+    final last = kept != null && kept.isAfter(_noticesAt) ? kept : _noticesAt;
+    return DateTime.now().difference(last) < within;
+  }
+
+  /// Whether this device leaves what UYAP is asked of itself to another of
+  /// the person's own: a phone, while a computer of theirs that holds the
+  /// session is on the network (set by Senkron). What the lawyer asks for
+  /// by hand is asked here all the same.
+  static bool Function()? deferToComputer;
+
+  /// Told when a reading of UYAP or UETS here is done: Senkron gives it to
+  /// the person's other devices.
+  static VoidCallback? uyapChanged;
 
   static const _mobileNoticesKey = 'uyap_notice_mobile';
   static const _webNoticesKey = 'uyap_notice_web';
@@ -884,6 +912,10 @@ class PortalSync extends ChangeNotifier {
     if (_disposed) return;
     noticeProblem = problems.isEmpty ? null : problems.join(' · ');
     noticesCheckedAt = DateTime.now();
+    if (problems.isEmpty) {
+      db.setMeta(noticesAtKey, noticesCheckedAt!.toIso8601String());
+    }
+    uyapChanged?.call();
     noticesVersion.value++;
     if (added.isNotEmpty) _tellNew(db, added);
   }
@@ -995,6 +1027,7 @@ class PortalSync extends ChangeNotifier {
     }
     _state[channel] = ChannelSync(finished: DateTime.now(), problem: problem);
     notifyListeners();
+    uyapChanged?.call();
   }
 
   /// One case's details and documents, asked of the channels the table
@@ -1192,6 +1225,7 @@ class PortalSync extends ChangeNotifier {
       _run(PortalChannel.uyapWeb, (db) async {
         if (!_web.connected) return null;
         if (!force && !_hearingsDue(db, PortalChannel.uyapWeb)) return null;
+        if (!force && (deferToComputer?.call() ?? false)) return null;
         final result = await syncHearings(
           PortalChannel.uyapWeb,
           db,
@@ -1212,6 +1246,7 @@ class PortalSync extends ChangeNotifier {
     PortalChannel.uyapMobile,
     (db) async {
       if (!_mobile.connected) return null;
+      if (!full && (deferToComputer?.call() ?? false)) return null;
       var hearings = const HearingSyncResult(0, true, []);
       if (full || _hearingsDue(db, PortalChannel.uyapMobile)) {
         _progress(PortalChannel.uyapMobile, 'Duruşmalar');
