@@ -9,6 +9,17 @@ run-name: LifeOS Folio · iOS · ${{ github.sha }}
 # IOS_APPSTORE_PROFILE (the .mobileprovision, base64).
 on:
   workflow_dispatch:
+    inputs:
+      submit:
+        description: Derlemeyi App Store incelemesine gönder
+        type: boolean
+        default: false
+  # A release tag builds the phone too and sends it to App Review.
+  workflow_call:
+    inputs:
+      submit:
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
@@ -18,6 +29,9 @@ jobs:
   testflight:
     runs-on: macos-latest
     timeout-minutes: 90
+    outputs:
+      build: ${{ steps.number.outputs.build }}
+      version: ${{ steps.number.outputs.version }}
     env:
       TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -52,9 +66,18 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           echo "$ASC_KEY_P8" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
           echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8" >> "$GITHUB_ENV"
+      # Each upload needs a build number of its own: one above the highest
+      # Apple has seen, whichever workflow uploaded it.
+      - id: number
+        name: Derleme numarası
+        run: |
+          build="$(python3 tool/appstore/asc_release.py next-build)"
+          version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+[[:space:]]*$/\1/p' pubspec.yaml)"
+          echo "Folio $version ($build)"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Flutter'ı hazırla
-        # Each upload needs a build number of its own: this run's.
-        run: flutter build ios --release --no-codesign --build-number "$GITHUB_RUN_NUMBER"
+        run: flutter build ios --release --no-codesign --build-number "${{ steps.number.outputs.build }}"
       - name: Dağıtım sertifikası ve profili
         # Apple Distribution and the App Store profile "Folio App Store CI",
         # made once through the App Store Connect API (kept in
@@ -125,3 +148,25 @@ jobs:
           rm -rf "$RUNNER_TEMP/asc"
           rm -f "$RUNNER_TEMP/dist.p12" "$RUNNER_TEMP/folio.mobileprovision"
           [ -n "${KEYCHAIN:-}" ] && security delete-keychain "$KEYCHAIN" || true
+
+  # Waiting for Apple to process the build costs nothing on Linux.
+  review:
+    needs: testflight
+    if: inputs.submit
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: İncelemeye gönder
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          VERSION: ${{ needs.testflight.outputs.version }}
+          BUILD: ${{ needs.testflight.outputs.build }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey.p8"
+          trap 'rm -f "$key"' EXIT
+          echo "$ASC_KEY_P8" | base64 --decode > "$key"
+          ASC_KEY_PATH="$key" python3 tool/appstore/asc_release.py submit \
+            "$VERSION" "$BUILD" "packaging/release/notes/$VERSION.json"

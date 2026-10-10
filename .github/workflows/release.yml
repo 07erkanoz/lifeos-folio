@@ -303,6 +303,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
 
+  # The phone, once the tests pass: to TestFlight, then to App Review.
+  ios:
+    needs: [version, tests]
+    uses: ./.github/workflows/ios.yml
+    with:
+      submit: true
+    secrets: inherit
+
   # The Mac, signed by Developer ID and notarized, put into the release once
   # the others are out: slower, and no update manifest yet; a Mac that fails
   # holds the others back in nothing.
