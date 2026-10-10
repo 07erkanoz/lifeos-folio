@@ -26,7 +26,7 @@ class RecentDocuments {
       final rows = jsonDecode(await file.readAsString()) as List;
       final openedDuringLoad = files.map((f) => f.path).toSet();
       for (final row in rows.take(30)) {
-        final path = row['path'] as String;
+        final path = ownPath(row['path'] as String);
         if (!openedDuringLoad.add(path)) continue;
         files.add(
           EvrakFile(

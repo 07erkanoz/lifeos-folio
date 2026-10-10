@@ -41,6 +41,11 @@ class UyapSettings extends ChangeNotifier {
         _home ??
         Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'] ??
         Directory.systemTemp.path;
+    // On an iPhone, in Folio's Documents: the one folder of an app's that
+    // the Files app shows ("Bu iPhone'da › LifeOS Folio").
+    if (Platform.isIOS && _home == null) {
+      return p.join(home, 'Documents', 'UYAP');
+    }
     return p.join(home, 'Folio', 'UYAP');
   }
 
@@ -56,7 +61,9 @@ class UyapSettings extends ChangeNotifier {
       if (json is Map) {
         _saveDocuments = json['kaydet'] != false;
         final folder = json['klasor'];
-        _folder = folder is String && folder.isNotEmpty ? folder : null;
+        _folder = folder is String && folder.isNotEmpty
+            ? ownPath(folder)
+            : null;
       }
     } catch (_) {
       // None yet, or unreadable: the defaults.

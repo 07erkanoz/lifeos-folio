@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
+import '../platform/app_directories.dart';
 import 'search_models.dart';
 
 /// Owned exclusively by the background library isolate. Search can run between
@@ -170,6 +173,42 @@ class IndexDatabase {
         db.execute('PRAGMA user_version=10');
       });
     }
+    _followMovedFolder();
+  }
+
+  /// On an iPhone the app's folder moves when Folio is updated: the paths
+  /// kept here under the old one are taken to the new ([ownPath]), once,
+  /// so that the archive finds its documents and folders again.
+  void _followMovedFolder() {
+    if (!Platform.isIOS) return;
+    const tables = [
+      'sources',
+      'documents',
+      'pending_paths',
+      'annotations',
+      'ocr_paths',
+    ];
+    transaction(() {
+      for (final table in tables) {
+        final exists = db.select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+          [table],
+        );
+        if (exists.isEmpty) continue;
+        for (final row in db.select(
+          "SELECT rowid AS r, path FROM $table "
+          "WHERE path LIKE '%/Containers/Data/Application/%'",
+        )) {
+          final kept = row['path'] as String;
+          final now = ownPath(kept);
+          if (now == kept) continue;
+          db.execute('UPDATE OR IGNORE $table SET path=? WHERE rowid=?', [
+            now,
+            row['r'],
+          ]);
+        }
+      }
+    });
   }
 
   /// Passages the archive repeats, for the snippet library to offer.

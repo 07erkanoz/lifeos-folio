@@ -348,7 +348,7 @@ class OfficeChats {
         if (chat != null) _chats[chat.id] = chat;
       }
       (j['dosyalar'] as Map? ?? const {}).forEach(
-        (k, v) => _files['$k'] = '$v',
+        (k, v) => _files['$k'] = ownPath('$v'),
       );
       (j['bekleyen'] as Map? ?? const {}).forEach(
         (k, v) => _pending['$k'] = {for (final d in (v as List)) '$d'},

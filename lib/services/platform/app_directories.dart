@@ -108,3 +108,25 @@ Future<void> bringOverEditorData(Directory from, Directory to) async {
     // What cannot be moved stays where it was; nothing is lost.
   }
 }
+
+/// An iPhone's own folder, as a path kept from an earlier run names it.
+final _iosContainer = RegExp(
+  r'^(?:/private)?/var/mobile/Containers/Data/Application/[0-9A-Fa-f-]{36}(?=/|$)',
+);
+
+/// [kept], a path Folio wrote down earlier, as it is now. An iPhone moves
+/// an app's folder when the app is updated (its id in the path changes),
+/// so a path kept whole would name nothing after an update; it is taken
+/// to the folder Folio has now. Elsewhere, and for a path outside Folio's
+/// own folder, it is [kept] as it is.
+String ownPath(String kept) {
+  if (!Platform.isIOS) return kept;
+  final home = Platform.environment['HOME'];
+  if (home == null || home.isEmpty) return kept;
+  return movedPath(kept, home);
+}
+
+/// [kept] under the iPhone app folder [home] is now.
+@visibleForTesting
+String movedPath(String kept, String home) =>
+    kept.replaceFirst(_iosContainer, home);

@@ -40,7 +40,7 @@ class SyncedFolder {
     return SyncedFolder(
       id: j['id'] as String,
       name: '${j['ad'] ?? ''}',
-      path: j['yol'] as String,
+      path: ownPath(j['yol'] as String),
       since: j['since'] is int
           ? DateTime.fromMillisecondsSinceEpoch(j['since'] as int)
           : null,
