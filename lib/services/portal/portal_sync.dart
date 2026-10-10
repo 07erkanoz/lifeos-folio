@@ -1007,6 +1007,21 @@ class PortalSync extends ChangeNotifier {
       }
     }
     if (_disposed) return;
+    // Made counsel in a case not yet in the portfolio: the portfolio is
+    // read again, at most once in its rest, and the case comes in new.
+    if (added.isNotEmpty && _mobile.connected && !quiet) {
+      final keys = db.cases().keys.toSet();
+      final rows = db.uyapNoticesOf([
+        for (final r in added) '${r.source.name}|${r.id}',
+      ]);
+      if (rows.any((r) => uyapNoticeNamesNewCase(r, keys))) {
+        final now = DateTime.now();
+        final rested = [db.meta(_portfolioKey), db.meta('portfolio_try_at')]
+            .map((v) => DateTime.tryParse(v ?? ''))
+            .every((at) => at == null || now.difference(at) >= portfolioRest);
+        if (rested) unawaited(syncMobile(full: true));
+      }
+    }
     noticeProblem = problems.isEmpty ? null : problems.join(' · ');
     noticesCheckedAt = DateTime.now();
     if (problems.isEmpty) {

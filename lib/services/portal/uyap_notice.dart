@@ -171,6 +171,18 @@ DateTime? parseUyapNoticeTime(String raw) {
   return (number: number, court: before);
 }
 
+/// Whether [r] says the lawyer was made counsel in a case the portfolio
+/// does not hold yet ([keys]): a "Vekil Kaydı" naming a case not among
+/// them. Only that kind: the others name closed cases as often as not
+/// (measured on a lawyer's own notifications, 10 October 2026), and asking
+/// UYAP for each would read for nothing.
+bool uyapNoticeNamesNewCase(UyapNoticeRow r, Set<String> keys) {
+  final title = foldPhrase(r.title);
+  if (!title.contains('vekil kayd') || title.contains('silin')) return false;
+  final named = uyapNoticeCase(r.body);
+  return named != null && _caseIn(named, keys) == null;
+}
+
 /// What a notification is about, read from UYAP's title, for the list's
 /// filter and the choice of which kinds pop up on the desktop.
 enum UyapNoticeKind {
