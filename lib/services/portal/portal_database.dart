@@ -561,14 +561,17 @@ class PortalDatabase {
   );
 
   /// UYAP Mobil's notifications with no body yet, newest first.
-  List<UyapNoticeRow> uyapNoticesWithoutBody({int limit = 25}) => [
+  List<UyapNoticeRow> uyapNoticesWithoutBody({
+    int limit = 25,
+    Set<String> skip = const {},
+  }) => [
     for (final row in _db.select(
       "SELECT * FROM uyap_notice WHERE source='mobile' AND body='' "
       "AND message_id<>'' ORDER BY sent DESC LIMIT ?",
-      [limit],
+      [limit + skip.length],
     ))
-      _noticeRow(row),
-  ];
+      if (!skip.contains(row['id'])) _noticeRow(row),
+  ].take(limit).toList();
 
   /// Every channel's rows since [since] (all when null), newest first.
   List<UyapNoticeRow> uyapNoticeRows({DateTime? since}) => [

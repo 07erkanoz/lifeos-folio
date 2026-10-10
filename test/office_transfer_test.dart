@@ -404,6 +404,53 @@ void main() {
     await until(() => b.chats.fileOf(two.id, 'iki.pdf') != null);
   });
 
+  test(
+    'a message taken back sends its files to no one, two files of one '
+    'name are both kept, and one taken off the office waits for none',
+    () async {
+      b.seenForTesting(a.self!);
+      await a.foundOffice('Kaya Hukuk Bürosu');
+      await a.admit(b.self!.deviceId, OfficeRole.trainee);
+      await until(() => b.ledger.members.length == 2);
+      final talk = (await a.privateChat(b.self!.deviceId))!;
+      a.lostForTesting(b.self!.deviceId);
+      Directory('${dir.path}/bir').createSync();
+      Directory('${dir.path}/iki').createSync();
+      final one = File('${dir.path}/bir/dilekce.pdf')..writeAsStringSync('bir');
+      final two = File('${dir.path}/iki/dilekce.pdf')..writeAsStringSync('iki');
+      await a.post(talk, text: 'İkisi', files: [one.path, two.path]);
+      final sent = a.chats.of(talk.id)!.messages.last;
+      expect(sent.attachments.map((x) => x.name), [
+        'dilekce.pdf',
+        'dilekce (2).pdf',
+      ]);
+      expect(
+        File(a.chats.fileOf(sent.id, 'dilekce (2).pdf')!).readAsStringSync(),
+        'iki',
+      );
+      expect(a.chats.pending[sent.id], contains(b.self!.deviceId));
+      // Taken back while the other is away: when it comes back, nothing of
+      // it goes.
+      await a.correct(a.chats.of(talk.id)!, sent, delete: true);
+      expect(a.chats.pending[sent.id], isNull);
+      a.foundForTesting(b.self!);
+      await until(() => b.chats.of(talk.id) != null);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(b.chats.fileOf(sent.id, 'dilekce.pdf'), isNull);
+      expect(b.chats.of(talk.id)!.ordered.single.deleted, isTrue);
+      // Away again, a file waits; taken off the office, it waits no more.
+      a.lostForTesting(b.self!.deviceId);
+      await a.post(
+        a.chats.of(talk.id)!,
+        text: 'Son',
+        files: [file('son.pdf', 4 * 1024).path],
+      );
+      expect(a.chats.pending, isNotEmpty);
+      expect(await a.removeMember(b.self!.deviceId), isNull);
+      expect(a.chats.pending, isEmpty);
+    },
+  );
+
   test('private, group and broadcast talk, with a file, sealed', () async {
     final c = await folio('Av. Selin Aksoy', 'selin-pc');
     final asking = a.pair(c.self!)!;
@@ -927,6 +974,7 @@ void main() {
     ]);
     final read = DateTime.now().subtract(const Duration(minutes: 5));
     pcDb.setMeta('portfolio_at', read.toIso8601String());
+    pcDb.setMeta('hearings_at:uyapMobile', read.toIso8601String());
     pcDb.setMeta(PortalSync.noticesAtKey, read.toIso8601String());
     UyapCaseStore store(String name) => UyapCaseStore(
       directory: Directory('${dir.path}/$name'),
@@ -992,9 +1040,9 @@ void main() {
     // When the computer read is taken too: not read again here yet.
     expect(phoneDb.meta('portfolio_at'), read.toIso8601String());
     expect(phoneDb.meta(PortalSync.noticesAtKey), read.toIso8601String());
-    // The computer holds UYAP Mobil and is on the network: the phone
-    // leaves UYAP to it.
-    expect(PortalSync.deferToComputer?.call(), isTrue);
+    // The computer holds UYAP Mobil but does not read UYAP of itself: the
+    // phone does not leave UYAP to it.
+    expect(PortalSync.deferToComputer?.call(), isFalse);
     PortalSync.deferToComputer = null;
     PortalSync.uyapChanged = null;
   });

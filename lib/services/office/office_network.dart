@@ -198,6 +198,20 @@ class OfficeNetwork extends ChangeNotifier {
   Future<OfficeTransfer?> retry(OfficeTransfer t) async {
     final to = _peers[t.peer.deviceId];
     if (!t.outgoing || to == null) return null;
+    // A talk's file only to one still of the talk, of a message not taken
+    // back.
+    final chat = chats.of('${t.meta['sohbet'] ?? ''}');
+    if (t.meta['sohbet'] is String) {
+      final msg = chat?.messages
+          .where((m) => m.id == t.meta['mesaj'])
+          .firstOrNull;
+      if (chat == null ||
+          msg == null ||
+          chats.takenBack(chat, msg) ||
+          !_mayHear(chat, to.deviceId)) {
+        return null;
+      }
+    }
     transfers.remove(t);
     // With what it was for: a message's file is still that message's.
     return send(to, t.paths, note: t.note, id: t.id, meta: t.meta);
@@ -1958,8 +1972,15 @@ class OfficeNetwork extends ChangeNotifier {
       final dir = await Directory(
         p.join((await _settingsFile()).parent.path, 'mesaj-ekleri', id),
       ).create(recursive: true);
+      final names = <String>{};
       for (final f in files) {
-        final copy = p.join(dir.path, p.basename(f));
+        // Two files of one name from two folders: the second is named
+        // apart, not written over the first.
+        var name = p.basename(f);
+        for (var n = 2; !names.add(name.toLowerCase()); n++) {
+          name = '${p.basenameWithoutExtension(f)} ($n)${p.extension(f)}';
+        }
+        final copy = p.join(dir.path, name);
         await File(f).copy(copy);
         kept.add(copy);
       }
@@ -1989,10 +2010,14 @@ class OfficeNetwork extends ChangeNotifier {
       await _identity!.signAsDevice(unsigned.signedOf(chat.id)),
     );
     final to = _audience(chat);
-    await chats.add(chat, m, waiting: files.isEmpty ? const {} : to);
-    for (var i = 0; i < files.length; i++) {
-      await chats.fileCame(m.id, attachments[i].name, files[i]);
-    }
+    await chats.add(
+      chat,
+      m,
+      waiting: files.isEmpty ? const {} : to,
+      files: {
+        for (var i = 0; i < files.length; i++) attachments[i].name: files[i],
+      },
+    );
     notifyListeners();
     unawaited(_shareChat(chat));
     return null;
@@ -2028,6 +2053,15 @@ class OfficeNetwork extends ChangeNotifier {
       await _identity!.signAsDevice(unsigned.signedOf(chat.id)),
     );
     await chats.add(chat, m);
+    if (delete) {
+      // Taken back: its files go nowhere more, not even to one away now.
+      await chats.dropPending(original.id);
+      for (final t in [...transfers]) {
+        if (t.outgoing && !t.finished && t.meta['mesaj'] == original.id) {
+          t.stop('Mesaj silindi.');
+        }
+      }
+    }
     notifyListeners();
     unawaited(_shareChat(chat));
     return null;
@@ -2096,23 +2130,49 @@ class OfficeNetwork extends ChangeNotifier {
           !left.contains(peer.deviceId)) {
         continue;
       }
+      // Taken back meanwhile, or the device no longer of the talk: its
+      // files do not go, and it waits for them no more.
+      if (chats.takenBack(chat, msg)) {
+        await chats.dropPending(msg.id);
+        continue;
+      }
+      if (!_mayHear(chat, peer.deviceId)) {
+        await chats.delivered(msg.id, peer.deviceId);
+        continue;
+      }
       final paths = [
-        for (final a in msg.attachments) ?chats.fileOf(msg.id, a.name),
+        for (final a in msg.attachments) chats.fileOf(msg.id, a.name),
       ];
-      if (paths.isEmpty || paths.any((f) => !File(f).existsSync())) continue;
+      // Every file of it, or none: a message is not delivered in part.
+      if (paths.isEmpty ||
+          paths.any((f) => f == null || !File(f).existsSync())) {
+        continue;
+      }
       final id = sha256
           .convert(utf8.encode('${msg.id}|${peer.deviceId}'))
           .toString()
           .substring(0, 32);
-      if (transfers.any((t) => t.id == id && !t.finished)) continue;
-      await send(
-        peer,
-        paths,
-        id: id,
-        meta: {'sohbet': chat.id, 'mesaj': msg.id},
-      );
+      // Taken before the first wait: a second call meanwhile sends none.
+      if (!_sending.add(id)) continue;
+      if (transfers.any((t) => t.id == id && !t.finished)) {
+        _sending.remove(id);
+        continue;
+      }
+      try {
+        await send(
+          peer,
+          [for (final f in paths) f!],
+          id: id,
+          meta: {'sohbet': chat.id, 'mesaj': msg.id},
+        );
+      } finally {
+        _sending.remove(id);
+      }
     }
   }
+
+  /// The transfers of talks' files being set out now, by id.
+  final _sending = <String>{};
 
   /// Every file of this device's still waiting for a device on the
   /// network, sent again: not only when a device is heard anew, which a
@@ -2228,6 +2288,12 @@ class OfficeNetwork extends ChangeNotifier {
       // What was still to go to them does not.
       packages.pending.removeWhere((key, _) => key.endsWith('|$deviceId'));
       await packages.save();
+      await chats.dropPendingFor(deviceId);
+      for (final t in [...transfers]) {
+        if (t.outgoing && !t.finished && t.peer.deviceId == deviceId) {
+          t.stop('Büro üyeliği sona erdi.');
+        }
+      }
     }
     return _after(error);
   }

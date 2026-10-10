@@ -387,14 +387,41 @@ class OfficeChats {
     await _save();
   }
 
+  /// [m] written in [chat], with where its [files] are here ("name" →
+  /// path) and the devices they wait for, kept together in one write: a
+  /// message never waits for a file it does not know the place of.
   Future<void> add(
     Chat chat,
     ChatMessage m, {
     Set<String> waiting = const {},
+    Map<String, String> files = const {},
   }) async {
     chat.messages.add(m);
+    for (final e in files.entries) {
+      _files['${m.id}/${e.key}'] = e.value;
+    }
     if (waiting.isNotEmpty) _pending[m.id] = {...waiting};
     await put(chat);
+  }
+
+  /// Whether [m]'s writer took it back in [chat].
+  bool takenBack(Chat chat, ChatMessage m) =>
+      chat.messages.any((c) => c.replaces == m.id && c.deleted && c.by == m.by);
+
+  /// [messageId]'s files no longer to go anywhere.
+  Future<void> dropPending(String messageId) async {
+    if (_pending.remove(messageId) == null) return;
+    await _save();
+  }
+
+  /// Nothing waits any more for [deviceId]: taken off the office.
+  Future<void> dropPendingFor(String deviceId) async {
+    var changed = false;
+    for (final left in _pending.values) {
+      if (left.remove(deviceId)) changed = true;
+    }
+    _pending.removeWhere((_, left) => left.isEmpty);
+    if (changed) await _save();
   }
 
   Future<void> fileCame(String messageId, String name, String path) async {

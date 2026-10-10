@@ -425,9 +425,12 @@ class _ChatThreadState extends State<ChatThread> {
 
   Future<void> _stopVoice() async {
     final mic = _mic, since = _since;
+    // A second tap while it stops sends nothing twice.
+    if (mic == null) return;
+    _mic = null;
     await _heard?.cancel();
-    await mic?.close();
-    setState(() => _mic = null);
+    await mic.close();
+    if (mounted) setState(() {});
     final length = _samples.fold<int>(0, (n, s) => n + s.length);
     if (length < 16000 ~/ 2 || since == null) return;
     final all = Float32List(length);
@@ -463,6 +466,11 @@ class _ChatThreadState extends State<ChatThread> {
         ),
       );
     }
+    // The message keeps a copy of its own (OfficeNetwork.post): this one,
+    // only the recording's, goes.
+    try {
+      await own.delete(recursive: true);
+    } catch (_) {}
   }
 
   void _send() {

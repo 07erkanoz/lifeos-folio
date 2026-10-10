@@ -164,6 +164,9 @@ class PortalSync extends ChangeNotifier {
         if (!paused) unawaited(_database().then(BackgroundNotices.seen));
         if (night(DateTime.now()) || !autoFetch) return;
         unawaited(syncNotices(within: noticeEvery, auto: true));
+        // The day's hearings and Monday's portfolio, when due: each asks
+        // nothing until it is.
+        _readDue();
       });
     }
   }
@@ -299,6 +302,35 @@ class PortalSync extends ChangeNotifier {
     autoFetch = on;
     (await _database()).setMeta(autoKey, on ? '1' : '0');
     notifyListeners();
+    uyapChanged?.call();
+    if (on && !night(DateTime.now())) {
+      unawaited(syncNotices(auto: true));
+      _readDue();
+    }
+  }
+
+  /// What is due of itself: the day's hearings, the week's portfolio;
+  /// nothing is started, nor told the other devices, when nothing is.
+  void _readDue() {
+    if (quiet) return;
+    unawaited(
+      () async {
+        final db = await _database();
+        final now = DateTime.now();
+        final read = DateTime.tryParse(db.meta(_portfolioKey) ?? '');
+        final tried = DateTime.tryParse(db.meta('portfolio_try_at') ?? '');
+        final portfolioDue =
+            (read == null || read.isBefore(weekStart(now))) &&
+            (tried == null || now.difference(tried) > const Duration(hours: 2));
+        if (_mobile.connected &&
+            (portfolioDue || _hearingsDue(db, PortalChannel.uyapMobile))) {
+          unawaited(syncMobile());
+        }
+        if (_web.connected && _hearingsDue(db, PortalChannel.uyapWeb)) {
+          unawaited(syncWeb());
+        }
+      }().catchError((Object _) {}),
+    );
   }
 
   /// Sessions taken up again (at start, from another own device) under way:
@@ -855,8 +887,11 @@ class PortalSync extends ChangeNotifier {
   }) {
     if (_noticeSync != null) return _noticeSync!;
     // Of itself (the hour's, Folio back in sight): only when the lawyer
-    // has Folio read UYAP of itself.
-    if (auto && !autoFetch) return Future.value();
+    // has Folio read UYAP of itself, not at night, and once an hour.
+    if (auto) {
+      if (!autoFetch || night(DateTime.now())) return Future.value();
+      within ??= noticeEvery;
+    }
     // A phone with Folio out of sight leaves it to the background check.
     if (paused && !force) return Future.value();
     if (!_mobile.connected && !_web.connected) return Future.value();
@@ -935,7 +970,8 @@ class PortalSync extends ChangeNotifier {
         // Their bodies, which name the case: a few at a time, not to ask
         // UYAP for hundreds at once. One UYAP gave empty is not asked for
         // again while Folio runs.
-        for (final r in db.uyapNoticesWithoutBody()) {
+        // Those UYAP gave empty set aside: the older ones are asked for.
+        for (final r in db.uyapNoticesWithoutBody(skip: _emptyBodies)) {
           if (!_mobile.connected || _disposed) break;
           if (_emptyBodies.contains(r.id)) continue;
           try {

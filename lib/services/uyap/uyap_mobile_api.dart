@@ -156,7 +156,7 @@ class UyapMobileApi {
       e is HttpException ||
       e is TlsException ||
       e is _Unreachable ||
-      (e is _HttpError && e.status >= 500);
+      (e is _HttpError && (e.status >= 500 || e.status == 429));
 
   Future<MobileSession> _identify() async {
     final user = await _get('mobile/avukat/user');

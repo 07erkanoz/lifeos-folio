@@ -66,6 +66,8 @@ jobs:
           PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
         run: |
           keychain="$RUNNER_TEMP/folio.keychain-db"
+          # Known to the clean-up at once, though a step below fails.
+          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
           pass="$(openssl rand -hex 16)"
           security create-keychain -p "$pass" "$keychain"
           security set-keychain-settings -lut 3600 "$keychain"
@@ -83,7 +85,6 @@ jobs:
             mkdir -p "$dir"
             cp "$RUNNER_TEMP/folio.mobileprovision" "$dir/$uuid.mobileprovision"
           done
-          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
       - name: Arşivle
         run: |
           xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
@@ -122,4 +123,5 @@ jobs:
         if: always()
         run: |
           rm -rf "$RUNNER_TEMP/asc"
+          rm -f "$RUNNER_TEMP/dist.p12" "$RUNNER_TEMP/folio.mobileprovision"
           [ -n "${KEYCHAIN:-}" ] && security delete-keychain "$KEYCHAIN" || true

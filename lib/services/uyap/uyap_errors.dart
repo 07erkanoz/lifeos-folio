@@ -32,8 +32,9 @@ String uyapStatus(String who, int status, [String said = '']) {
         'yeniden deneyin.';
   }
   if (status == 429) {
-    return '$who çok sık istek gönderildiğini bildirdi (HTTP 429). Folio bir '
-        'süre bekleyip yeniden dener.';
+    return '$who çok sık istek gönderildiğini bildirdi (HTTP 429). Folio '
+        'kendiliğinden yaptığı istekleri bir süre bekletir; birkaç dakika '
+        'sonra yeniden deneyin.';
   }
   if (status == 404) {
     return '$who bu işlemi tanımadı (HTTP 404).$words UYAP hizmetinde bir '

@@ -54,7 +54,9 @@ class UyapOwnSync {
     to: now.add(const Duration(days: 90)),
   );
 
-  static const _casesAtOnce = 100, _recordsAtOnce = 10, _noticesAtOnce = 100;
+  // Small enough parts for a message of a megabyte, a case's long list of
+  // documents and a notification's long body included.
+  static const _casesAtOnce = 50, _recordsAtOnce = 3, _noticesAtOnce = 50;
 
   /// This device's summary, for another own device to compare.
   Future<Map<String, Object?>> summary(String deviceId) async {
@@ -112,6 +114,7 @@ class UyapOwnSync {
       });
       final got = answer?['davalar'];
       if (got is! List) continue;
+      if (got.length < _end(i, _casesAtOnce, cases.length) - i) whole = false;
       if (db.adoptCases([
             for (final c in got)
               if (c is Map) c.cast<String, Object?>(),
@@ -139,6 +142,9 @@ class UyapOwnSync {
       });
       final got = answer?['kayitlar'];
       if (got is! List) continue;
+      if (got.length < _end(i, _recordsAtOnce, records.length) - i) {
+        whole = false;
+      }
       for (final r in got) {
         if (r is Map && await store.adopt(r.cast<String, Object?>())) {
           changed = true;
@@ -165,6 +171,9 @@ class UyapOwnSync {
       });
       final got = answer?['bildirimler'];
       if (got is! List) continue;
+      if (got.length < _end(i, _noticesAtOnce, notices.length) - i) {
+        whole = false;
+      }
       final rows = [
         for (final r in got)
           if (r is Map) ?noticeFromJson(r.cast<String, Object?>()),
@@ -173,11 +182,26 @@ class UyapOwnSync {
     }
 
     final stamped = (theirs['damga'] as Map?) ?? const {};
-    // The coming hearings, when theirs differ. A hearing taken off goes
-    // only by a whole reading of the web portal's today there, newer than
-    // this one's: as here, nothing else takes one off.
-    if ('${theirs['durusmalar']}' !=
-        PortalDatabase.digestOf(jsonEncode(_hearings(db)))) {
+    DateTime? latest(DateTime? Function(String key) at) {
+      DateTime? last;
+      for (final k in ['hearings_at:uyapMobile', 'hearings_at:uyapWeb']) {
+        final t = at(k);
+        if (t != null && (last == null || t.isAfter(last))) last = t;
+      }
+      return last;
+    }
+
+    final theirRead = latest((k) => DateTime.tryParse('${stamped[k] ?? ''}'));
+    final myRead = latest((k) => DateTime.tryParse(db.meta(k) ?? ''));
+    // The coming hearings, when theirs differ and were read later than
+    // these: an older list would bring back a hearing taken off here since.
+    // A hearing taken off goes only by a whole reading of the web portal's
+    // today there, newer than this one's: as here, nothing else takes one
+    // off.
+    if (theirRead != null &&
+        (myRead == null || theirRead.isAfter(myRead)) &&
+        '${theirs['durusmalar']}' !=
+            PortalDatabase.digestOf(jsonEncode(_hearings(db)))) {
       final answer = await asked({'parca': 'durusmalar'});
       final got = answer?['durusmalar'];
       if (got is List) {

@@ -102,6 +102,7 @@ class OwnSync extends ChangeNotifier {
         _net.ownOnline.any(
           (peer) =>
               !_phones.contains(peer.deviceId) &&
+              _reads.contains(peer.deviceId) &&
               (held[peer.deviceId]?.contains('mobil') ?? false),
         );
     // Read anew here: the others are given it a moment later.
@@ -118,6 +119,9 @@ class OwnSync extends ChangeNotifier {
         'cihaz': _net.self?.deviceId,
         'telefon': _isPhone,
         'acik': heldHere.toList(),
+        // Whether this one reads UYAP of itself and gives what it reads:
+        // a phone leaves UYAP only to such a computer.
+        'oto': (PortalSync.started?.autoFetch ?? false) && isOn(uyapData),
         // UYAP Mobil's latest tokens: the other goes on with them, not
         // with a refresh token this one may have spent.
         'mobil': ?_sessions.sessionOf('mobil'),
@@ -129,6 +133,11 @@ class OwnSync extends ChangeNotifier {
           for (final k in (theirs['acik'] as List? ?? const [])) '$k',
         };
         if (theirs['telefon'] == true) _phones.add(id);
+        if (theirs['oto'] == true) {
+          _reads.add(id);
+        } else {
+          _reads.remove(id);
+        }
         _sessions.keepMobileAlike(theirs['mobil']);
         notifyListeners();
         return false;
@@ -169,6 +178,9 @@ class OwnSync extends ChangeNotifier {
 
   /// The person's own devices that said they are phones.
   final _phones = <String>{};
+
+  /// The own devices that said they read UYAP of themselves and give it.
+  final _reads = <String>{};
 
   /// Whether this device is a phone; by the platform when not said.
   final bool? phone;

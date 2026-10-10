@@ -82,6 +82,14 @@ class UyapPace {
   }) async {
     if (!_queued) return request();
     final slow = inBackground;
+    // A sync waits out UYAP's failing before it takes its place in line:
+    // a lawyer's request behind it is not held for a quarter of an hour.
+    if (slow) {
+      final left = _coolUntil.difference(_now());
+      if (_cool > Duration.zero && left > Duration.zero) {
+        await Future<void>.delayed(left);
+      }
+    }
     final previous = _queue;
     final done = Completer<void>();
     _queue = done.future;

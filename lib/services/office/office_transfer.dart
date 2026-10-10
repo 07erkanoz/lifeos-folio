@@ -104,6 +104,10 @@ class OfficeTransfer extends ChangeNotifier {
   final _acked = <int, int>{};
   Completer<void>? _ackWait;
 
+  /// Stops a transfer that is no longer to go: its message taken back, or
+  /// its receiver no longer allowed it.
+  void stop(String reason) => _fail(reason);
+
   static Future<OfficeTransfer> send({
     required OfficeIdentity identity,
     required KnownDevice peer,

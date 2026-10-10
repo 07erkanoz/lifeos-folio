@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
@@ -206,6 +209,16 @@ class IndexDatabase {
             now,
             row['r'],
           ]);
+          // A highlight is found by its document's key, made of the path
+          // (PdfHighlight.keyFor): moved with it.
+          if (table == 'annotations') {
+            db.execute('UPDATE annotations SET doc_key=? WHERE rowid=?', [
+              sha256
+                  .convert(utf8.encode(p.normalize(p.absolute(now))))
+                  .toString(),
+              row['r'],
+            ]);
+          }
         }
       }
     });

@@ -812,8 +812,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         );
       }
     });
-    if (Platform.isAndroid) {
+    // Out of sight and back again on a phone (didChangeAppLifecycleState):
+    // an iPhone's too, not only Android's.
+    if (Platform.isAndroid || Platform.isIOS) {
       WidgetsBinding.instance.addObserver(this);
+    }
+    if (Platform.isAndroid) {
       windowFullScreen.addListener(_windowFullScreen);
       _startMobileWatch();
       _folderChanges = _intents.changes.listen((_) {

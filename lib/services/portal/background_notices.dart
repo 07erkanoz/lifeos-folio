@@ -105,9 +105,15 @@ abstract final class BackgroundNotices {
     // night (PortalSync.noticeEvery).
     final now = DateTime.now();
     if (PortalSync.night(now)) return 'gece sorulmaz';
-    final asked = DateTime.tryParse(db.meta(_askedKey) ?? '');
-    if (asked != null &&
-        now.difference(asked) <
+    // The last asking, here in the background or in the open app (or on
+    // another own device, which Senkron brings): the same hour for both.
+    DateTime? latest;
+    for (final kept in [db.meta(_askedKey), db.meta(PortalSync.noticesAtKey)]) {
+      final at = DateTime.tryParse(kept ?? '');
+      if (at != null && (latest == null || at.isAfter(latest))) latest = at;
+    }
+    if (latest != null &&
+        now.difference(latest) <
             PortalSync.noticeEvery - const Duration(minutes: 5)) {
       return 'son sorgudan bu yana bir saat geçmedi';
     }

@@ -230,9 +230,11 @@ class UyapCaseRecord {
     hidden: {for (final k in (json['gizli'] as List? ?? const [])) '$k'},
   );
 
+  /// Where a record's documents are, taken to Folio's folder as it is now
+  /// ([ownPath]: an iPhone moves it when Folio is updated).
   static Map<String, String> _paths(Object? json) => {
     for (final e in (json as Map? ?? const {}).entries)
-      '${e.key}': '${e.value}',
+      '${e.key}': ownPath('${e.value}'),
   };
 }
 
@@ -330,7 +332,9 @@ class UyapCaseStore {
       ...theirs.toJson(),
       'dosyalar': mine?['dosyalar'] ?? const {},
       'onizlemeler': mine?['onizlemeler'] ?? const {},
-      'bag': mine?['bag'],
+      // The case's place at UYAP (court, kind, number): the same for every
+      // session, and needed to find it on the web portal here.
+      'bag': mine?['bag'] ?? theirs.toJson()['bag'],
     };
     try {
       await _write(UyapCaseRecord.fromJson(kept));
@@ -345,7 +349,7 @@ class UyapCaseStore {
   Future<Map<String, Object?>?> recordToShare(String key) async {
     final json = await recordJson(key);
     if (json == null) return null;
-    return {...json, 'dosyalar': const {}, 'onizlemeler': const {}, 'bag': null};
+    return {...json, 'dosyalar': const {}, 'onizlemeler': const {}};
   }
 
   /// The folder [record]'s documents are saved in, when they are saved.
