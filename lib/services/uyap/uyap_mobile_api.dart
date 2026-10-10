@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 
+import 'uyap_errors.dart';
 import 'uyap_pace.dart';
 
 /// The UYAP mobile API (mobilws.uyap.gov.tr), Folio's second UYAP channel
@@ -135,7 +136,11 @@ class UyapMobileApi {
         _generation++;
         _tokens = null;
         session.value = null;
-        throw UyapMobileUnreachable('$e');
+        throw UyapMobileUnreachable(
+          e is _HttpError || e is _Unreachable
+              ? '$e'
+              : uyapFault('UYAP Mobil', e),
+        );
       }
       if (_tokens != null) _setTokens(null);
       session.value = null;
@@ -356,7 +361,7 @@ class UyapMobileApi {
     final data = jsonDecode(text);
     if (data is Map && data['status'] != null && '${data['status']}' != '200') {
       if (authorized && '${data['status']}' == '403') throw const _Refused();
-      throw StateError('UYAP Mobil: ${_message(text)}');
+      throw StateError(uyapRefused('UYAP Mobil', _message(text)));
     }
     return data;
   }
@@ -739,7 +744,7 @@ class UyapMobileUnreachable implements Exception {
   final String message;
   const UyapMobileUnreachable(this.message);
   @override
-  String toString() => 'UYAP Mobil’e ulaşılamadı: $message';
+  String toString() => message;
 }
 
 class _Unreachable implements Exception {
@@ -754,5 +759,5 @@ class _HttpError implements Exception {
   final String message;
   const _HttpError(this.status, this.message);
   @override
-  String toString() => 'HTTP $status: $message';
+  String toString() => uyapStatus('UYAP Mobil', status, message);
 }

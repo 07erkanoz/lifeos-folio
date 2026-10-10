@@ -11,6 +11,7 @@ import '../signing/signed_data.dart';
 import '../udf/signature_parser.dart';
 import 'tray_recovery.dart';
 import 'uyap_enforcement.dart';
+import 'uyap_errors.dart';
 import 'uyap_pace.dart';
 import 'uyap_case_data.dart';
 
@@ -648,13 +649,16 @@ class UyapWebService {
       throw StateError('UYAP oturumu sona erdi. Yeniden bağlanın.');
     }
     if (response.statusCode != 200) {
-      throw StateError('UYAP isteği başarısız (HTTP ${response.statusCode}).');
+      throw StateError(uyapStatus('UYAP Web', response.statusCode));
     }
     final parsed = jsonDecode(data);
     if (parsed is Map &&
         (parsed.containsKey('errorCode') || parsed['fmty'] == 'error')) {
       throw StateError(
-        'UYAP isteği reddetti: ${parsed['error'] ?? parsed['message'] ?? parsed['errorCode']}',
+        uyapRefused(
+          'UYAP Web',
+          '${parsed['error'] ?? parsed['message'] ?? parsed['errorCode']}',
+        ),
       );
     }
     return parsed;
