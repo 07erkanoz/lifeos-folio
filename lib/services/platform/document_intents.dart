@@ -44,6 +44,19 @@ class DocumentIntents {
   static Future<String?> pickPictureFolder() =>
       channel.invokeMethod<String>('pickPictureFolder');
 
+  /// The microphone allowed, asking the lawyer the first time; true on a
+  /// computer, which does not ask.
+  static Future<bool> microphone() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return true;
+    return await channel.invokeMethod<bool>('microphone') ?? false;
+  }
+
+  /// The phone made ready to play a sound aloud: on an iPhone, even when
+  /// set to silent, and not left recording.
+  static Future<void> readyToPlay() async {
+    if (Platform.isIOS) await channel.invokeMethod<void>('play');
+  }
+
   /// Hands a HEIF photograph to the system decoder, writing a JPEG beside it.
   /// False when this platform has no decoder or the file cannot be read.
   static Future<bool> decodeHeif(String source, String target) async {

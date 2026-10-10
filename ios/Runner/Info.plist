@@ -114,7 +114,7 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Düzenlediğiniz fotoğrafın kopyasını kaydetmek için.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Sesle yazdırma için.</string>
+	<string>Büro mesajlarında sesli mesaj kaydetmek ve sesle yazdırmak için.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Belgeleri kamerayla taramak için.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

@@ -7,6 +7,9 @@
     <!-- Read-only access to the phone's own picture folders, so the gallery
          can show them where they are instead of copying them into the app. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- The microphone, for a voice message in the office's talks: asked
+         for when the lawyer first records one. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- A newer Folio, downloaded from lifeos.com.tr and checked against
          its signed manifest, handed to Android's installer. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />

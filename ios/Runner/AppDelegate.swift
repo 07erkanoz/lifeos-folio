@@ -1,3 +1,4 @@
+import AVFoundation
 import Flutter
 import PDFKit
 import UIKit
@@ -137,6 +138,25 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
     case "forgetFolder":
       forgetFolder(call.arguments as? String)
       result(nil)
+    case "microphone":
+      // Recording and playing both: the voice message is heard back on the
+      // loudspeaker, not the earpiece.
+      let session = AVAudioSession.sharedInstance()
+      try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+      session.requestRecordPermission { granted in
+        DispatchQueue.main.async { result(granted) }
+      }
+    case "play":
+      // Heard though the phone is set to silent, as a message one chose to
+      // play is; a session left recording would play nothing.
+      let session = AVAudioSession.sharedInstance()
+      do {
+        try session.setCategory(.playback, mode: .default)
+        try session.setActive(true)
+        result(nil)
+      } catch {
+        result(FlutterError(code: "AUDIO", message: error.localizedDescription, details: nil))
+      }
     default:
       result(FlutterMethodNotImplemented)
     }

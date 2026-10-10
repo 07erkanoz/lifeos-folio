@@ -36,6 +36,7 @@ class MainActivity : FlutterActivity() {
     private var folderResult: MethodChannel.Result? = null
     private var folderInPlace = false
     private var pictureResult: MethodChannel.Result? = null
+    private var microphoneResult: MethodChannel.Result? = null
     private val extensions = setOf("udf", "pdf", "docx", "xlsx", "txt", "odt", "rtf", "doc", "html", "htm", "md", "markdown", "csv", "tsv", "json", "xml", "log", "svg", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff")
     private val preferences by lazy { getSharedPreferences("indexed_trees", MODE_PRIVATE) }
 
@@ -107,6 +108,17 @@ class MainActivity : FlutterActivity() {
                     if (source == null || target == null) false
                     else decodeHeif(File(source), File(target))
                 }
+                // The microphone, asked for when a voice message is first
+                // recorded: without it the recorder cannot start.
+                "microphone" -> {
+                    if (microphoneResult != null) { result.error("BUSY", "İzin isteği açık", null) }
+                    else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        result.success(true)
+                    } else {
+                        microphoneResult = result
+                        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 4109)
+                    }
+                }
                 "forgetFolder" -> {
                     // Forget only the permission mapping; never delete source documents.
                     val path = call.arguments as String
@@ -168,6 +180,12 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 4109) {
+            val asked = microphoneResult ?: return
+            microphoneResult = null
+            asked.success(grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+            return
+        }
         if (requestCode != 4108) return
         val result = pictureResult ?: return
         pictureResult = null

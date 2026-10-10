@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../services/office/office_chat.dart';
+import '../../services/platform/document_intents.dart';
 import '../../services/office/office_network.dart';
 import '../../services/platform/file_actions.dart';
 import '../../services/speech/speech_session.dart';
@@ -368,6 +369,19 @@ class _ChatThreadState extends State<ChatThread> {
 
   Future<void> _voice() async {
     if (_mic != null) return _stopVoice();
+    if (!await DocumentIntents.microphone()) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Mikrofon izni verilmedi. Telefonun ayarlarından Folio’ya '
+              'mikrofon izni verip yeniden deneyin.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final mic = RecorderMicrophone();
     try {
       final stream = await mic.open(16000);
@@ -793,6 +807,7 @@ class _ChatThreadState extends State<ChatThread> {
 
   Future<void> _play(String path) async {
     try {
+      await DocumentIntents.readyToPlay();
       final soloud = SoLoud.instance;
       if (!soloud.isInitialized) await soloud.init(channels: Channels.mono);
       final source = await soloud.loadFile(path);
