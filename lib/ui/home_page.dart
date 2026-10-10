@@ -864,7 +864,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // Back in sight: what the background check brought is shown, and
         // it is looked again.
         unawaited(_countAgenda());
-        unawaited(PortalSync.started?.syncNotices());
+        unawaited(PortalSync.started?.syncNotices(auto: true));
         // The office's files waiting for another device go now.
         unawaited(OfficeNetwork.instance.retryPending());
       }

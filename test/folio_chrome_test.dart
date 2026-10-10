@@ -89,7 +89,7 @@ void main() {
         const MaterialApp(home: Scaffold(body: FolioAboutDialog())),
       );
       expect(
-        find.text('Erkan ÖZ tarafından geliştirilmiştir.'),
+        find.text('Avukatlar için, bir tarayıcı gibi çalışan yerel bir uygulama.'),
         findsOneWidget,
       );
       expect(find.text('lifeos.com.tr'), findsOneWidget);

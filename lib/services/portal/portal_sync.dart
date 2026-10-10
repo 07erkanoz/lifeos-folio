@@ -148,16 +148,22 @@ class PortalSync extends ChangeNotifier {
       );
       mobileTokensChanged?.call();
     };
-    unawaited(_restoreMobile());
-    unawaited(_restoreKept());
+    // Whether UYAP is read of itself here, before the sessions come back:
+    // a session taken up again asks UYAP nothing unless it is.
+    unawaited(
+      _loadAuto().whenComplete(() {
+        unawaited(_restoreMobile());
+        unawaited(_restoreKept());
+      }),
+    );
     // UYAP's notifications are asked for now and then while a portal is
     // there to ask; not in tests, where nothing is.
     if (!quiet && !Platform.environment.containsKey('FLUTTER_TEST')) {
       _noticeTimer = Timer.periodic(const Duration(minutes: 5), (_) {
         // In sight: the phone's background check leaves it to this run.
         if (!paused) unawaited(_database().then(BackgroundNotices.seen));
-        if (night(DateTime.now())) return;
-        unawaited(syncNotices(within: noticeEvery));
+        if (night(DateTime.now()) || !autoFetch) return;
+        unawaited(syncNotices(within: noticeEvery, auto: true));
       });
     }
   }
@@ -196,19 +202,21 @@ class PortalSync extends ChangeNotifier {
           return false;
         }
         try {
-          if (await _mobile.restore(tokens) == null) return false;
+          if (await _quietly(() => _mobile.restore(tokens)) == null) {
+            return false;
+          }
         } on UyapMobileUnreachable {
           // UYAP out of reach: kept, and taken up when it answers.
           unawaited(_restoreMobile());
         }
         return true;
       case 'uets':
-        if (!await _uets.restoreSession(data)) return false;
+        if (!await _quietly(() => _uets.restoreSession(data))) return false;
         // Kept before it is said taken: the giver ends its own on that.
         final kept = _uets.exportSession();
         return kept != null && await _secrets.write(_uetsSecret, kept);
       case 'web':
-        if (!await _web.restoreSession(data)) return false;
+        if (!await _quietly(() => _web.restoreSession(data))) return false;
         final kept = _web.exportSession();
         return kept != null && await _secrets.write(_webSecret, kept);
     }
@@ -255,16 +263,59 @@ class PortalSync extends ChangeNotifier {
   Future<void> _restoreKept() async {
     final web = await _secrets.read(_webSecret);
     if (web != null && !_web.connected) {
-      if (!await _web.restoreSession(web)) await _secrets.remove(_webSecret);
+      if (!await _quietly(() => _web.restoreSession(web))) {
+        await _secrets.remove(_webSecret);
+      }
     }
     final uets = await _secrets.read(_uetsSecret);
     if (uets != null && !_uets.connected) {
-      if (!await _uets.restoreSession(uets)) await _secrets.remove(_uetsSecret);
+      if (!await _quietly(() => _uets.restoreSession(uets))) {
+        await _secrets.remove(_uetsSecret);
+      }
     }
     _restored = true;
     _keepWeb();
     _keepUets();
   }
+
+  // Reading UYAP of itself (Ayarlar › Bağlantılar).
+
+  /// Whether Folio reads UYAP of itself here: the notifications each hour,
+  /// the hearings each day, the portfolio each week, and whatever a
+  /// session taken up again would read. Off until the lawyer turns it on,
+  /// having read what it means; then Folio asks UYAP only when the lawyer
+  /// does something (signs in, refreshes, opens a case or a page), as a
+  /// browser would.
+  bool autoFetch = false;
+  static const autoKey = 'uyap_auto';
+
+  Future<void> _loadAuto() async {
+    try {
+      autoFetch = (await _database()).meta(autoKey) == '1';
+    } catch (_) {}
+  }
+
+  Future<void> setAutoFetch(bool on) async {
+    autoFetch = on;
+    (await _database()).setMeta(autoKey, on ? '1' : '0');
+    notifyListeners();
+  }
+
+  /// Sessions taken up again (at start, from another own device) under way:
+  /// nothing is read of UYAP for them unless [autoFetch] is on.
+  int _restoring = 0;
+  Future<T> _quietly<T>(Future<T> Function() take) async {
+    _restoring++;
+    try {
+      return await take();
+    } finally {
+      _restoring--;
+    }
+  }
+
+  /// Whether a session that came now is to be read: one the lawyer opened,
+  /// or any while Folio reads UYAP of itself.
+  bool get _readsNow => autoFetch || _restoring == 0;
 
   /// Not written over before the kept ones were taken up.
   bool _restored = false;
@@ -297,7 +348,7 @@ class PortalSync extends ChangeNotifier {
     final kept = MobileTokens.fromJson(await _secrets.read(_mobileSecret));
     if (kept == null) return;
     try {
-      await _mobile.restore(kept);
+      await _quietly(() => _mobile.restore(kept));
     } on UyapMobileUnreachable {
       if (attempt >= 8 || _disposed) return;
       final wait = Duration(seconds: 15 * (1 << attempt).clamp(1, 16));
@@ -335,7 +386,7 @@ class PortalSync extends ChangeNotifier {
     _keepWeb();
     notifyListeners();
     _rememberTc(_web.tckn);
-    if (_web.connected && !quiet) {
+    if (_web.connected && !quiet && _readsNow) {
       unawaited(syncWeb());
       unawaited(syncNotices());
     }
@@ -345,7 +396,7 @@ class PortalSync extends ChangeNotifier {
     _keepUets();
     notifyListeners();
     _rememberTc(_uets.session.value?.tckn ?? '');
-    if (_uets.connected && !quiet) unawaited(syncUets());
+    if (_uets.connected && !quiet && _readsNow) unawaited(syncUets());
   }
 
   /// The UETS inbox, from a day before the newest notice kept (or the last
@@ -740,7 +791,7 @@ class PortalSync extends ChangeNotifier {
         ),
       );
     }
-    if (_mobile.connected && !quiet) {
+    if (_mobile.connected && !quiet && _readsNow) {
       unawaited(syncMobile());
       unawaited(syncNotices());
     }
@@ -797,8 +848,15 @@ class PortalSync extends ChangeNotifier {
   /// UYAP Mobil's and the portal's notifications kept, each channel in
   /// its own rows. Not again within [noticeFresh] unless [force]d (the
   /// lawyer's Yenile); a second call while one runs waits for it.
-  Future<void> syncNotices({bool force = false, Duration? within}) {
+  Future<void> syncNotices({
+    bool force = false,
+    Duration? within,
+    bool auto = false,
+  }) {
     if (_noticeSync != null) return _noticeSync!;
+    // Of itself (the hour's, Folio back in sight): only when the lawyer
+    // has Folio read UYAP of itself.
+    if (auto && !autoFetch) return Future.value();
     // A phone with Folio out of sight leaves it to the background check.
     if (paused && !force) return Future.value();
     if (!_mobile.connected && !_web.connected) return Future.value();

@@ -33,6 +33,7 @@ import '../mobile/lawyer_profile_page.dart';
 import '../mobile/mobile_settings_page.dart'
     show ArchiveFoldersPage, LearningPage;
 import '../mobile/settings_parts.dart';
+import 'uyap_auto.dart';
 import '../security/security_settings.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/default_viewer_dialog.dart';
@@ -610,6 +611,10 @@ class _SettingsPageState extends State<SettingsPage> {
         lead: 'Oturumlar süreleri bitene kadar bu cihazda saklanır.',
         tag: '$connected/3',
         [
+          _Entry(
+            'uyap kendiliğinden otomatik veri al bildirim tarayıcı yardım',
+            UyapAutoRow(sync: _sync),
+          ),
           _Entry(
             'uyap mobil bağlantı e-devlet',
             SettingsRow(

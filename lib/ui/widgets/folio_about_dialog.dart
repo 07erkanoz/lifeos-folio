@@ -157,7 +157,8 @@ class FolioAboutDialog extends StatelessWidget {
                 child: Column(
                   children: [
                     const Text(
-                      'Erkan ÖZ tarafından geliştirilmiştir.',
+                      'Avukatlar için, bir tarayıcı gibi çalışan yerel bir '
+                      'uygulama.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
@@ -166,7 +167,10 @@ class FolioAboutDialog extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Önizleyin, arayın, düzenleyin.\nGünlük belge işleriniz için hızlı ve sade bir çalışma alanı.',
+                      'UYAP’a sizin imzanızla girer ve yalnız sizin '
+                      'dosyalarınızı gösterir. Verileriniz hiçbir sunucuya '
+                      'gitmez, yalnız cihazınızda kalır; Folio yapay zekâ '
+                      'hizmeti kullanmaz.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
@@ -220,7 +224,7 @@ class FolioAboutDialog extends StatelessWidget {
                               context: context,
                               applicationName: 'LifeOS Folio',
                               applicationVersion: info.version,
-                              applicationLegalese: '© 2026 Erkan ÖZ',
+                              applicationLegalese: '© 2026 LifeOS',
                             );
                           },
                           child: const Text('Bileşen lisansları'),

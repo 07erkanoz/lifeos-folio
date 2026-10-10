@@ -92,6 +92,10 @@ abstract final class BackgroundNotices {
   static Future<String> _check(PortalDatabase db) async {
     final alerts = UyapNoticeAlerts.of(db);
     if (!alerts.on || !alerts.background) return 'kapalı';
+    // Only when the lawyer has Folio read UYAP of itself.
+    if (db.meta(PortalSync.autoKey) != '1') {
+      return 'UYAP’tan kendiliğinden alma kapalı';
+    }
     final seen = DateTime.tryParse(db.meta(_seenKey) ?? '');
     if (seen != null && DateTime.now().difference(seen) < _quiet) {
       return 'Folio açıktı, ona bırakıldı';
