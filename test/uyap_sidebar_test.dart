@@ -41,7 +41,7 @@ void main() {
     await tester.pumpWidget(sidebar('all'));
     // No list of its own on the home screen any more: UYAP, closed.
     expect(find.text('UYAP DOSYALARI'), findsNothing);
-    expect(find.text('UYAP Dosyalarım'), findsOneWidget);
+    expect(find.text('Dava Dosyalarım'), findsOneWidget);
     expect(find.text('2026/1204'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('uyap-folder')));
     expect(chosen, ['uyap']);

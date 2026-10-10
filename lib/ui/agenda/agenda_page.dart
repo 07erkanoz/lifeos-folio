@@ -60,7 +60,7 @@ class AgendaPage extends StatefulWidget {
   final PortalSync? sync;
   final DateTime Function()? now;
 
-  /// Opens the case with this [caseKey] in UYAP Dosyalarım; null when the
+  /// Opens the case with this [caseKey] in Dava Dosyalarım; null when the
   /// case is not kept there.
   final bool Function(String caseKey)? onOpenCase;
 
@@ -1693,7 +1693,7 @@ class _AgendaPageState extends State<AgendaPage> {
                             ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Bu dosya UYAP Dosyalarım’da kayıtlı değil.',
+                                  'Bu dosya Dava Dosyalarım’da kayıtlı değil.',
                                 ),
                               ),
                             );
@@ -1890,7 +1890,7 @@ class _AgendaPageState extends State<AgendaPage> {
     if (!(widget.onOpenCase?.call(caseKey) ?? false)) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
-          content: Text('Bu dosya UYAP Dosyalarım’da kayıtlı değil.'),
+          content: Text('Bu dosya Dava Dosyalarım’da kayıtlı değil.'),
         ),
       );
     }

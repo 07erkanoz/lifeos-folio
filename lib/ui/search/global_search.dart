@@ -22,7 +22,7 @@ class FoundCase extends Found {
 }
 
 /// A party, with the cases it is in: one case opens its parties, more open
-/// UYAP Dosyalarım searched for the name.
+/// Dava Dosyalarım searched for the name.
 class FoundParty extends Found {
   const FoundParty(this.name, this.role, this.cases);
   final String name, role;

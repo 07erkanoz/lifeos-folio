@@ -74,7 +74,7 @@ class PortalCaseImport {
     );
   }
 
-  /// Fetches [kase] and keeps it in UYAP Dosyalarım; the record kept.
+  /// Fetches [kase] and keeps it in Dava Dosyalarım; the record kept.
   Future<UyapCaseRecord> add(PortalCase kase) async {
     if (!sync.web.connected && !sync.mobile.connected) {
       throw StateError(

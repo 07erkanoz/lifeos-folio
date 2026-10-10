@@ -10,7 +10,7 @@ import 'mobile_connect.dart';
 import 'uets_connect.dart';
 
 /// The three portals as one row, the same on every page that uses them
-/// (Ajanda, UYAP Dosyalarım, UETS Tebligatlarım): whether each is
+/// (Ajanda, Dava Dosyalarım, Tebligatlarım): whether each is
 /// connected, for how much longer, and what it is doing; a tap connects,
 /// syncs or ends it.
 class PortalChannelBar extends StatefulWidget {

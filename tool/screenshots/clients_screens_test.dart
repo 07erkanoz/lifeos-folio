@@ -72,6 +72,14 @@ Future<void> _loadFonts() async {
 }
 
 Future<void> _shot(WidgetTester tester, String name) async {
+  // Shadows as Folio draws them, not the test's flat stand-in; set back
+  // before the test ends, as the test asks.
+  debugDisableShadows = false;
+  // Everything drawn again, shadows the new way.
+  // Not waited on: it waits for a frame, which the pumps below make.
+  // ignore: unawaited_futures
+  tester.binding.reassembleApplication();
+  await tester.pump();
   for (var i = 0; i < 8; i++) {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -88,6 +96,8 @@ Future<void> _shot(WidgetTester tester, String name) async {
   final out = File('tool/screenshots/out/$name.png');
   out.parent.createSync(recursive: true);
   out.writeAsBytesSync(bytes!);
+  debugDisableShadows = true;
+  await tester.pump();
 }
 
 Widget _app(Widget home) => RepaintBoundary(

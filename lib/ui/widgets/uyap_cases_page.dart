@@ -199,7 +199,7 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
     if (!mounted) return;
     final added = chosen.length - failed.length;
     if (failed.isEmpty) {
-      _say('$added dosya UYAP Dosyalarım’a eklendi.');
+      _say('$added dosya Dava Dosyalarım’a eklendi.');
       if (chosen.length == 1 && last != null) widget.onShowCase(last.key);
     } else {
       await showDialog<void>(
@@ -341,7 +341,7 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
                 Padding(
                   padding: const EdgeInsets.only(left: 8),
                   child: Text(
-                    'UYAP Dosyalarım',
+                    'Dava Dosyalarım',
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 20,
@@ -417,13 +417,13 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
               key: const ValueKey('uyap-cases-back'),
               onPressed: () => widget.onShowCase(null),
               icon: const Icon(Icons.arrow_back_rounded, size: 18),
-              label: const Text('UYAP Dosyalarım'),
+              label: const Text('Dava Dosyalarım'),
             )
           else
             Padding(
               padding: const EdgeInsets.only(left: 8),
               child: Text(
-                'UYAP Dosyalarım',
+                'Dava Dosyalarım',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),

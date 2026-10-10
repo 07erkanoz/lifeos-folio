@@ -217,7 +217,7 @@ class MobileDrawer extends StatelessWidget {
                           context,
                           key: const ValueKey('drawer-uets'),
                           icon: const Icon(Icons.mark_email_unread_outlined),
-                          label: 'UETS Tebligatlarım',
+                          label: 'Tebligatlarım',
                           selected: !home && group == 'uets',
                           trailing: uetsUnread > 0
                               ? _pill(
@@ -315,7 +315,7 @@ class MobileDrawer extends StatelessWidget {
                           context,
                           key: const ValueKey('drawer-uyap'),
                           icon: const Icon(Icons.gavel_rounded),
-                          label: 'UYAP Dosyalarım',
+                          label: 'Dava Dosyalarım',
                           selected:
                               !home &&
                               (group == 'uyap' || group.startsWith('uyap:')),

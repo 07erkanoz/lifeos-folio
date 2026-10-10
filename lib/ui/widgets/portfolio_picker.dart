@@ -5,7 +5,7 @@ import '../../services/uyap/uyap_web_service.dart';
 
 /// The portfolio the portals gave (UYAP Mobil's every case, the web's
 /// hearings' cases), grouped by unit: a whole unit or cases one by one are
-/// chosen to be added to UYAP Dosyalarım. Cases already there are left out.
+/// chosen to be added to Dava Dosyalarım. Cases already there are left out.
 class PortfolioPicker extends StatefulWidget {
   const PortfolioPicker({super.key, required this.cases});
 
@@ -101,7 +101,7 @@ class _PortfolioPickerState extends State<PortfolioPicker> {
           child: Text(
             widget.cases.isEmpty
                 ? 'Eklenecek dosya yok: portföyünüzdeki dosyaların '
-                      'hepsi UYAP Dosyalarım’da.'
+                      'hepsi Dava Dosyalarım’da.'
                 : 'Aramaya uyan dosya yok.',
             textAlign: TextAlign.center,
             style: TextStyle(color: scheme.onSurfaceVariant),
@@ -209,7 +209,7 @@ class _PortfolioPickerState extends State<PortfolioPicker> {
           children: [
             Text(
               'Bir birimin tüm dosyalarını ya da dosyaları tek tek seçin. '
-              'Seçilenler UYAP’tan çekilip UYAP Dosyalarım’a eklenir.',
+              'Seçilenler UYAP’tan çekilip Dava Dosyalarım’a eklenir.',
               style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 10),
@@ -244,7 +244,7 @@ class _PortfolioPickerState extends State<PortfolioPicker> {
                       child: Text(
                         widget.cases.isEmpty
                             ? 'Eklenecek dosya yok: portföyünüzdeki dosyaların '
-                                  'hepsi UYAP Dosyalarım’da.'
+                                  'hepsi Dava Dosyalarım’da.'
                             : 'Aramaya uyan dosya yok.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: scheme.onSurfaceVariant),

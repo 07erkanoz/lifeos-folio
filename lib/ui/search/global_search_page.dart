@@ -6,7 +6,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import 'global_search.dart';
 import 'global_search_panel.dart';
 
-/// Where the phone's search leaves to: a row found, or UYAP Dosyalarım or
+/// Where the phone's search leaves to: a row found, or Dava Dosyalarım or
 /// the archive searched for the words.
 sealed class SearchExit {
   const SearchExit();

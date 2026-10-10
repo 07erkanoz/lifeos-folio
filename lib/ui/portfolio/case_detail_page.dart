@@ -353,7 +353,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               const Text('Dosya portföyde bulunamadı.'),
               TextButton(
                 onPressed: widget.onBack,
-                child: const Text('UYAP Dosyalarım’a dön'),
+                child: const Text('Dava Dosyalarım’a dön'),
               ),
             ],
           ),
@@ -519,7 +519,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       child: Row(
         children: [
           IconButton(
-            tooltip: 'UYAP Dosyalarım',
+            tooltip: 'Dava Dosyalarım',
             onPressed: widget.onBack,
             icon: const Icon(Icons.arrow_back_rounded),
           ),
@@ -1137,7 +1137,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           TextSpan(
             children: [
               TextSpan(
-                text: 'UYAP Dosyalarım',
+                text: 'Dava Dosyalarım',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w600,
@@ -1244,7 +1244,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     IconButton(
-                      tooltip: 'UYAP Dosyalarım’a dön',
+                      tooltip: 'Dava Dosyalarım’a dön',
                       onPressed: widget.onBack,
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
@@ -1271,7 +1271,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     IconButton(
-                      tooltip: 'UYAP Dosyalarım’a dön',
+                      tooltip: 'Dava Dosyalarım’a dön',
                       onPressed: widget.onBack,
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),

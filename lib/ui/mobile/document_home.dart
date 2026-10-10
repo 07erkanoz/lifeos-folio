@@ -408,7 +408,7 @@ class MobileDocumentHome extends StatelessWidget {
             icon: Icons.mark_email_unread_outlined,
             fill: AgendaColors.deadlineFill,
             tint: AgendaColors.deadline,
-            title: 'UETS Tebligatlarım',
+            title: 'Tebligatlarım',
             detail: uetsUnread > 0
                 ? '$uetsUnread okunmamış tebligat'
                 : 'Okunmamış tebligat yok',
@@ -422,7 +422,7 @@ class MobileDocumentHome extends StatelessWidget {
             icon: Icons.gavel_rounded,
             fill: AgendaColors.eHearingFill,
             tint: AgendaColors.eHearing,
-            title: 'UYAP Dosyalarım',
+            title: 'Dava Dosyalarım',
             detail: uyapCases == 0
                 ? 'Portföyünüzden dosya ekleyin'
                 : [

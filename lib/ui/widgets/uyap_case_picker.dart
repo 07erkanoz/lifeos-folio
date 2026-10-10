@@ -158,7 +158,7 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                   title: Text(record.number),
                   subtitle: Text(record.court),
                   trailing: const Text(
-                    'UYAP Dosyalarım',
+                    'Dava Dosyalarım',
                     style: TextStyle(fontSize: 11),
                   ),
                   onTap: () => unawaited(_take(record)),

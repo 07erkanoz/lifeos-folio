@@ -98,7 +98,7 @@ class DesktopHome extends StatefulWidget {
   /// Opens the one place of a row found.
   final ValueChanged<Found>? onFound;
 
-  /// UYAP Dosyalarım searched for these words.
+  /// Dava Dosyalarım searched for these words.
   final ValueChanged<String>? onShowCases;
   final ValueChanged<EvrakFile> onOpen, onEdit, onSendUyap;
   final VoidCallback onArchive, onDrafts, onAgenda, onUets;

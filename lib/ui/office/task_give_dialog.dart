@@ -468,8 +468,8 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
       icon: const Icon(Icons.add_rounded, size: 18),
       label: Text(
         _rows.isEmpty
-            ? 'UYAP Dosyalarım’da dosya yok'
-            : 'UYAP Dosyalarım’dan dosya ekle',
+            ? 'Dava Dosyalarım’da dosya yok'
+            : 'Dava Dosyalarım’dan dosya ekle',
       ),
     ),
   );
@@ -735,7 +735,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
   }
 }
 
-/// Choosing a case from UYAP Dosyalarım, by its number, court or party.
+/// Choosing a case from Dava Dosyalarım, by its number, court or party.
 class _CasePicker extends StatefulWidget {
   const _CasePicker({required this.rows});
   final List<PortfolioRow> rows;

@@ -15,7 +15,7 @@ import '../office/tasks_page.dart' show TaskDetail;
 import '../widgets/uyap_connect_view.dart';
 import 'portfolio_rows.dart';
 
-/// UYAP Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
+/// Dava Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
 /// portfolio, filled by the portals on their own, filtered on the left,
 /// searched by scope, each case with its kind, state, hearing, parties and
 /// what is new in it.
@@ -567,7 +567,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
             ),
           const Expanded(
             child: Text(
-              'UYAP Dosyalarım',
+              'Dava Dosyalarım',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 17.5, fontWeight: FontWeight.w700),
@@ -1410,7 +1410,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'UYAP Dosyalarım',
+          'Dava Dosyalarım',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,

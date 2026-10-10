@@ -26,7 +26,7 @@ class GlobalSearchPanel extends StatelessWidget {
   final int selected;
   final ValueChanged<Found> onPick;
 
-  /// UYAP Dosyalarım searched for the query; the archive searched for it.
+  /// Dava Dosyalarım searched for the query; the archive searched for it.
   final VoidCallback onShowCases, onShowFiles;
 
   /// The documents' or the agenda's group shown whole, in place.

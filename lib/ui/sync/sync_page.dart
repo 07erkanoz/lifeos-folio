@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/office/office_known.dart';
 import '../../services/office/office_network.dart';
@@ -201,6 +202,40 @@ class _SyncPageState extends State<SyncPage> {
               style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
+            // No computer of the person's yet: where to get Folio for one.
+            if (!_net.ownKnown.any((d) => !d.platform.phone)) ...[
+              Row(
+                children: [
+                  const Icon(
+                    Icons.laptop_rounded,
+                    size: 18,
+                    color: AgendaColors.muted,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Folio’nun Windows, macOS ve Linux sürümleri '
+                      'lifeos.com.tr adresinden ücretsiz indirilir.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    key: const ValueKey('sync-get-folio'),
+                    onPressed: () => unawaited(
+                      launchUrl(
+                        Uri.parse('https://lifeos.com.tr/#indir'),
+                        mode: LaunchMode.externalApplication,
+                      ).catchError((Object _) => false),
+                    ),
+                    child: const Text('İndir'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
             if (!_net.joined) ...[
               const Text(
                 'Senkron açılınca bu cihaz aynı ağdaki kendi cihazlarınızı '

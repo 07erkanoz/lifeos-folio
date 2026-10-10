@@ -24,7 +24,7 @@ class LibrarySidebar extends StatelessWidget {
   /// at its last fetch.
   final List<(String, String, String, int)> uyapCases;
 
-  /// The portfolio's open cases, as UYAP Dosyalarım counts them; null
+  /// The portfolio's open cases, as Dava Dosyalarım counts them; null
   /// until it is read, and then [uyapCases], the cases kept in detail.
   final int? uyapCount;
 
@@ -226,7 +226,7 @@ class LibrarySidebar extends StatelessWidget {
                   _nav(
                     context,
                     Icons.gavel_rounded,
-                    'UYAP Dosyalarım',
+                    'Dava Dosyalarım',
                     'uyap',
                     uyapCount ?? uyapCases.length,
                     key: const ValueKey('uyap-folder'),
@@ -261,7 +261,7 @@ class LibrarySidebar extends StatelessWidget {
                 _nav(
                   context,
                   Icons.mark_email_unread_outlined,
-                  'UETS Tebligatlarım',
+                  'Tebligatlarım',
                   'uets',
                   null,
                   key: const ValueKey('uets'),

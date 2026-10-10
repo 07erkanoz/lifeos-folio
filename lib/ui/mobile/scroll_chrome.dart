@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 /// The headings above a long list on a phone, folded away while the list
-/// is scrolled on and back as soon as it is pulled back (UYAP Dosyalarım's
+/// is scrolled on and back as soon as it is pulled back (Dava Dosyalarım's
 /// documents): the list takes the screen when it is being read.
 abstract final class ScrollChrome {
   static final hidden = ValueNotifier<bool>(false);

@@ -578,7 +578,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _goLibrary();
     } else if (_group.startsWith('uyap:')) {
       // A case's page: its preview first, then back to the portfolio, not
-      // out of UYAP Dosyalarım.
+      // out of Dava Dosyalarım.
       if (!CaseDetailPage.closePreview()) setState(() => _group = 'uyap');
     } else if (_phone && _isOfficePage(_group)) {
       // A phone's office pages come from its first page: back goes there,
@@ -668,7 +668,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<(UyapCaseRecord, int)> _uyapCases = const [];
   int _uyapTotal = -1;
 
-  /// The portfolio's open cases (UYAP Dosyalarım's own count); null until
+  /// The portfolio's open cases (Dava Dosyalarım's own count); null until
   /// it is read. The cases above are only those kept in detail.
   int? _portfolioOpen;
 
@@ -1342,7 +1342,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   int _agendaToday = 0;
 
-  /// The UETS notices not yet read, for the badge beside UETS Tebligatlarım.
+  /// The UETS notices not yet read, for the badge beside Tebligatlarım.
   int _uetsUnread = 0;
 
   /// UYAP's notifications not yet read, for the badge beside them.
@@ -1353,7 +1353,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _deadlinesToday = 0;
   NextHearingLine? _nextHearing;
 
-  /// The cases with news in them, for the badge beside UYAP Dosyalarım.
+  /// The cases with news in them, for the badge beside Dava Dosyalarım.
   int _uyapFresh = 0;
 
   /// The office as the desktop's first page shows it.
@@ -1504,7 +1504,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  /// A petition for the agenda's [kase]: UYAP Dosyalarım's own link when
+  /// A petition for the agenda's [kase]: Dava Dosyalarım's own link when
   /// the case is kept there, else one made of its court and number.
   void _agendaPetition(PortalCase kase) {
     UyapCaseLink? link;
@@ -1530,7 +1530,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// The case of the agenda or of UETS, by the portal's [key], on its own
-  /// page in UYAP Dosyalarım: the portfolio has every case, nothing is
+  /// page in Dava Dosyalarım: the portfolio has every case, nothing is
   /// added first.
   /// Straight to the case's page: the whole portfolio is not built first
   /// on the way to it.
@@ -1643,7 +1643,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  /// UYAP Dosyalarım searched for [query].
+  /// Dava Dosyalarım searched for [query].
   void _showCases(String query) {
     _portfolioQuery = query;
     unawaited(_selectGroup('uyap', asked: true));
@@ -1759,7 +1759,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onOpenCase: _openPortalCase,
   );
 
-  /// UYAP Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
+  /// Dava Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
   /// portfolio, and a case's own page as `uyap:<the portal's key>`.
   Widget _uyapPage() {
     final key = _group.startsWith('uyap:') ? _group.substring(5) : null;
@@ -2060,7 +2060,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ),
                               // The agenda and UETS fill the page with their
                               // own heading; on a phone the menu button stays.
-                              // UYAP Dosyalarım, a case's page and the
+                              // Dava Dosyalarım, a case's page and the
                               // office's network bring their own bar on a
                               // phone.
                               if (_showLibrary &&
@@ -2120,7 +2120,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                           Text(
                                             '/  ${_showLibrary
                                                 ? _isUyapGroup(_group)
-                                                      ? 'UYAP Dosyalarım'
+                                                      ? 'Dava Dosyalarım'
                                                       : 'Evrak arşivi'
                                                 : _isNewDocument
                                                 ? _newTitle
@@ -2886,8 +2886,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (_uyapCases.isEmpty) {
       showNotice(
         context,
-        'UYAP Dosyalarım boş',
-        detail: 'Önce UYAP Dosyalarım’a bir dosya ekleyin.',
+        'Dava Dosyalarım boş',
+        detail: 'Önce Dava Dosyalarım’a bir dosya ekleyin.',
       );
       return;
     }

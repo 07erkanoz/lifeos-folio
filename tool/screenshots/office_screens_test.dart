@@ -1070,7 +1070,7 @@ void main() {
     db.dispose();
   });
 
-  testWidgets('UYAP Dosyalarım and a case with a document open', (
+  testWidgets('Dava Dosyalarım and a case with a document open', (
     tester,
   ) async {
     _size(tester, logical);

@@ -82,7 +82,9 @@ Future<void> _shot(WidgetTester tester, String name) async {
   final boundary =
       _frame.currentContext!.findRenderObject()! as RenderRepaintBoundary;
   final bytes = await tester.runAsync(() async {
-    final image = await boundary.toImage(pixelRatio: pixelRatio);
+    final image = await boundary.toImage(
+      pixelRatio: tester.view.devicePixelRatio,
+    );
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     return data!.buffer.asUint8List();
   });
@@ -460,6 +462,14 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
     await _shot(tester, 'canli-sahne');
+
+    // The other side's lawyer's phone alone, the pen in hand: the size of
+    // an App Store screenshot.
+    await tester.binding.setSurfaceSize(const Size(440, 956));
+    tester.view.devicePixelRatio = 3;
+    await tester.pumpWidget(_app(LiveDocumentPage(session: session)));
+    await tester.pump(const Duration(milliseconds: 300));
+    await _shot(tester, 'canli-telefon');
     debugDisableShadows = true;
 
     await tester.runAsync(host.close);

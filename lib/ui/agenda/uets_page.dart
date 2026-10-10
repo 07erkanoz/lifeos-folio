@@ -32,7 +32,7 @@ import 'uets_connect.dart';
 
 enum _Filter { all, pending, unread, withDeadline, untied }
 
-/// UETS Tebligatlarım (UYGULAMAPLANI §10, T10): the notifications kept on
+/// Tebligatlarım (UYGULAMAPLANI §10, T10): the notifications kept on
 /// this computer, each with the case it was tied to and the deadlines it
 /// started; the attachments are fetched from UETS on demand. In the
 /// agenda's colours and cards.
@@ -485,7 +485,7 @@ class _UetsPageState extends State<UetsPage> {
               children: [
                 const Expanded(
                   child: Text(
-                    'UETS Tebligatlarım',
+                    'Tebligatlarım',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -511,7 +511,7 @@ class _UetsPageState extends State<UetsPage> {
       child: Row(
         children: [
           const Text(
-            'UETS Tebligatlarım',
+            'Tebligatlarım',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
           const SizedBox(width: 10),
@@ -1024,7 +1024,7 @@ class _UetsPageState extends State<UetsPage> {
                                 ?.showSnackBar(
                                   const SnackBar(
                                     content: Text(
-                                      'Bu dosya henüz UYAP Dosyalarım’da yok; '
+                                      'Bu dosya henüz Dava Dosyalarım’da yok; '
                                       'önce UYAP’tan alın.',
                                     ),
                                   ),

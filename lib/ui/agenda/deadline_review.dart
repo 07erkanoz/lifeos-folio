@@ -90,7 +90,7 @@ class DeadlineReviewTile extends StatelessWidget {
   /// The notice it came from ("Konya 14. Asliye Hukuk · 2026/441").
   final String? subtitle;
 
-  /// Goes to its case in UYAP Dosyalarım; null when it is not kept there.
+  /// Goes to its case in Dava Dosyalarım; null when it is not kept there.
   final VoidCallback? onOpenCase;
 
   /// Goes to its notice on the UETS page.

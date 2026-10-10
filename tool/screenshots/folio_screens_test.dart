@@ -14,6 +14,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:excel_plus/excel_plus.dart' as xl;
+import 'package:evrak_convert/ui/widgets/pdf_viewer_widget.dart';
+import 'package:evrak_convert/ui/widgets/spreadsheet_editor.dart';
+import 'package:evrak_convert/services/docx/docx_bridge.dart';
 import 'package:evrak_convert/models/document_model.dart';
 import 'package:evrak_convert/models/evrak_file.dart';
 import 'package:evrak_convert/services/editor/document_history.dart';
@@ -118,6 +122,11 @@ Future<void> _loadFonts() async {
   final flutter = File(Platform.resolvedExecutable).parent.parent.parent.parent;
   final material = '${flutter.path}/artifacts/material_fonts';
   await family('MaterialIcons', ['$material/MaterialIcons-Regular.otf']);
+  // The sheet's grid draws its headers in its own package's Roboto.
+  await family('packages/worksheet/Roboto', [
+    for (final style in ['Regular', 'Medium', 'Bold'])
+      '$material/Roboto-$style.ttf',
+  ]);
   await family('Roboto', [
     for (final style in ['Regular', 'Medium', 'Bold'])
       '$material/Roboto-$style.ttf',
@@ -169,7 +178,9 @@ Future<void> _shot(WidgetTester tester, String name) async {
   final boundary =
       _frame.currentContext!.findRenderObject()! as RenderRepaintBoundary;
   final bytes = await tester.runAsync(() async {
-    final image = await boundary.toImage(pixelRatio: pixelRatio);
+    final image = await boundary.toImage(
+      pixelRatio: tester.view.devicePixelRatio,
+    );
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     return data!.buffer.asUint8List();
   });
@@ -424,7 +435,7 @@ Future<UyapCaseStore> _demoCase(
 }
 
 /// The demo cases of [_demoCase] in the portfolio, as UYAP Mobil's reading
-/// of it would leave them: UYAP Dosyalarım lists what the portfolio holds,
+/// of it would leave them: Dava Dosyalarım lists what the portfolio holds,
 /// with what Folio kept of each beside it.
 Future<void> _demoPortfolio() async {
   final db = await PortalDatabase.shared();
@@ -632,6 +643,134 @@ void main() {
         lawyers: [Lawyer(name: 'Deniz Yılmaz', bar: 'İstanbul Barosu')],
       ),
     );
+  });
+
+  testWidgets('formats: a Word file, an Excel sheet and a PDF', (tester) async {
+    addTearDown(tester.view.reset);
+    final base = _home();
+    // On a computer, then on a phone the size of an App Store screenshot.
+    for (final (size, ratio, suffix) in [
+      (logical, pixelRatio, ''),
+      (const Size(440, 956), 3.0, '-telefon'),
+    ]) {
+      tester.view.physicalSize = size * ratio;
+      tester.view.devicePixelRatio = ratio;
+      final model = DocModel(
+        blocks: [
+          for (final paragraph in demoPetition(_decision)) _block(paragraph),
+        ],
+      );
+      // A Word file, opened and edited as it is.
+      final docx = File('${base.path}/Cevap Dilekçesi.docx');
+      await tester.runAsync(
+        () async => docx.writeAsBytes(await DocxBridge.writeBytes(model)),
+      );
+      await tester.pumpWidget(
+        _app(
+          EditorWidget(
+            initialFilePath: docx.path,
+            initialFormat: EvrakFormat.docx,
+          ),
+        ),
+      );
+      await _settle(
+        tester,
+        () =>
+            find
+                .byKey(const ValueKey('citation-status'))
+                .evaluate()
+                .isNotEmpty ||
+            find.byKey(const ValueKey('editor-flowing')).evaluate().isNotEmpty,
+        rounds: 60,
+      );
+      await _shot(tester, 'bicim-docx$suffix');
+
+      // An Excel sheet: the office's fees, invented.
+      final xlsx = File('${base.path}/Ücret Takibi.xlsx');
+      await tester.runAsync(() async {
+        final book = xl.Excel.createExcel();
+        final first = book.getDefaultSheet() ?? 'Sheet1';
+        book.rename(first, 'Ücretler');
+        final sheet = book['Ücretler'];
+        xl.CellValue t(String v) => xl.TextCellValue(v);
+        xl.CellValue d(double v) => xl.DoubleCellValue(v);
+        sheet.appendRow([
+          for (final h in [
+            'Müvekkil',
+            'Dosya',
+            'Mahkeme',
+            'Ücret (TL)',
+            'Ödenen (TL)',
+            'Kalan (TL)',
+          ])
+            t(h),
+        ]);
+        for (final r in const [
+          (
+            'Ayşe Karaca',
+            '2024/318',
+            'Antalya 3. Asliye Hukuk',
+            45000.0,
+            30000.0,
+          ),
+          ('Örnek Lojistik A.Ş.', '2025/77', 'Antalya 2. İş', 60000.0, 60000.0),
+          (
+            'Hakan Öztürk',
+            '2025/201',
+            'Manavgat 2. Asliye Hukuk',
+            35000.0,
+            15000.0,
+          ),
+          ('Mustafa Şahin', '2025/933', 'Antalya 5. İş', 40000.0, 25000.0),
+          (
+            'Mert Yıldız',
+            '2025/4410',
+            'Antalya 6. İcra Dairesi',
+            18000.0,
+            18000.0,
+          ),
+          ('Zeynep Arslan', '2025/1876', 'Antalya 1. İdare', 30000.0, 10000.0),
+        ]) {
+          sheet.appendRow([
+            t(r.$1),
+            t(r.$2),
+            t(r.$3),
+            d(r.$4),
+            d(r.$5),
+            d(r.$4 - r.$5),
+          ]);
+        }
+        for (final (i, w) in [24.0, 12.0, 30.0, 14.0, 14.0, 14.0].indexed) {
+          sheet.setColumnWidth(i, w);
+        }
+        await xlsx.writeAsBytes(await book.encodeAsync() ?? const []);
+      });
+      await tester.pumpWidget(_app(SpreadsheetEditor(path: xlsx.path)));
+      await _settle(
+        tester,
+        () => find.textContaining('Ayşe Karaca').evaluate().isNotEmpty,
+        rounds: 40,
+      );
+      await _shot(tester, 'bicim-excel$suffix');
+
+      // A PDF, read and marked.
+      final pdf = File('${base.path}/Bilirkişi Raporu.pdf');
+      await tester.runAsync(
+        () async => pdf.writeAsBytes(
+          await PdfService.modelToPdfBytes(model, title: 'Bilirkişi Raporu'),
+        ),
+      );
+      await tester.pumpWidget(_app(PdfViewerWidget(filePath: pdf.path)));
+      for (var i = 0; i < 30; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await _shot(tester, 'bicim-pdf$suffix');
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 5));
+    }
   });
 
   testWidgets('editor: a petition with its articles and decision', (
@@ -1271,7 +1410,7 @@ void main() {
   });
 
   testWidgets('phone: home, a petition and an article', (tester) async {
-    const phone = Size(390, 844);
+    const phone = Size(440, 956);
     const ratio = 3.0;
     tester.view.physicalSize = phone * ratio;
     tester.view.devicePixelRatio = ratio;
