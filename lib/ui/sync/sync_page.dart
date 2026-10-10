@@ -33,6 +33,23 @@ class SyncPage extends StatefulWidget {
   /// The library's folders, to choose one to keep alike.
   final List<String> Function()? archiveFolders;
 
+  /// Senkron on a page of its own, as a phone opens it from its settings
+  /// or its menu.
+  static Future<void> open(
+    BuildContext context, {
+    List<String> Function()? archiveFolders,
+  }) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (context) => Scaffold(
+        appBar: AppBar(title: const Text('Senkron')),
+        body: SafeArea(
+          top: false,
+          child: SyncPage(archiveFolders: archiveFolders),
+        ),
+      ),
+    ),
+  );
+
   @override
   State<SyncPage> createState() => _SyncPageState();
 }

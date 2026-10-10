@@ -33,6 +33,7 @@ import '../mobile/lawyer_profile_page.dart';
 import '../mobile/mobile_settings_page.dart'
     show ArchiveFoldersPage, LearningPage;
 import '../mobile/settings_parts.dart';
+import '../sync/sync_page.dart';
 import 'uyap_auto.dart';
 import '../security/security_settings.dart';
 import '../theme/theme_controller.dart';
@@ -705,18 +706,20 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           if (_phone)
             _Entry(
-              'bilgisayarla senkron qr',
+              'senkron bilgisayarla eşitle cihaz qr',
               SettingsRow(
                 key: const ValueKey('settings-sync'),
                 icon: Icons.sync_alt_rounded,
-                title: 'Bilgisayarla senkronla',
-                subtitle: 'QR ile, aynı ağda',
-                onTap: () => showNotice(
-                  context,
-                  'Bilgisayarla senkron hazırlanıyor',
-                  detail:
-                      'Masaüstünde “Telefonla senkronla” deyip QR’ı okutarak '
-                      'eşitleyeceksiniz; bu özellik bir sonraki sürümde.',
+                title: 'Senkron',
+                subtitle: 'Bilgisayarınızla ve öbür cihazlarınızla eşitle',
+                onTap: () => unawaited(
+                  SyncPage.open(
+                    context,
+                    archiveFolders: () => [
+                      for (final s in widget.library.sources)
+                        if (s.folder) s.path,
+                    ],
+                  ),
                 ),
               ),
             ),

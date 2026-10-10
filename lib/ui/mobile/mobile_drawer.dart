@@ -386,7 +386,7 @@ class MobileDrawer extends StatelessWidget {
                           context,
                           key: const ValueKey('drawer-sync'),
                           icon: const Icon(Icons.sync_alt_rounded),
-                          label: 'Bilgisayarla senkronla',
+                          label: 'Senkron',
                           onTap: onSyncComputer,
                         ),
                       ],

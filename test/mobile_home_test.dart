@@ -73,7 +73,7 @@ void main() {
       expect(find.text('Bugün 2'), findsOne);
       // Further down the menu, past the office's pages.
       await tester.scrollUntilVisible(
-        find.text('Bilgisayarla senkronla'),
+        find.byKey(const ValueKey('drawer-sync')),
         120,
         scrollable: find
             .descendant(
@@ -82,7 +82,7 @@ void main() {
             )
             .first,
       );
-      expect(find.text('Bilgisayarla senkronla'), findsOne);
+      expect(find.byKey(const ValueKey('drawer-sync')), findsOne);
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('drawer-uets')),
         -120,

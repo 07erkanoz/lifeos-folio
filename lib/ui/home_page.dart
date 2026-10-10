@@ -2716,12 +2716,14 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     },
     onSyncComputer: () {
       _closeDrawer();
-      showNotice(
-        context,
-        'Bilgisayarla senkron hazırlanıyor',
-        detail:
-            'Masaüstünde “Telefonla senkronla” deyip QR’ı okutarak '
-            'eşitleyeceksiniz; bu özellik bir sonraki sürümde.',
+      unawaited(
+        SyncPage.open(
+          context,
+          archiveFolders: () => [
+            for (final s in _library.sources)
+              if (s.folder) s.path,
+          ],
+        ),
       );
     },
   );
