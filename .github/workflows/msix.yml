@@ -32,8 +32,9 @@ jobs:
       - name: MSIX paketlerini oluştur
         shell: pwsh
         run: ./packaging/windows/build-msix.ps1
+      # Add-AppxPackage is in Windows PowerShell's Appx module, not pwsh's.
       - name: MSIX paketini kur ve dene
-        shell: pwsh
+        shell: powershell
         run: ./packaging/windows/test-msix.ps1
       - if: always()
         uses: actions/upload-artifact@v7.0.1
