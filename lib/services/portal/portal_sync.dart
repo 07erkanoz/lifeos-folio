@@ -1996,8 +1996,12 @@ Future<PortfolioResult> syncWebPortfolio(
     return false;
   }
 
-  // The courts first, so that how far the reading has come can be said.
-  final courts = <(String, String, UyapOption, bool)>[];
+  // Each kind of court read as soon as its courts are known, hukuk first:
+  // the cases come in from the first minute, not after every list of
+  // courts and every province's prosecutors' offices has been asked. How
+  // far the reading has come counts what is known so far.
+  var steps = 0;
+  var step = 0;
   onProgress?.call(0, 0);
   for (final jurisdiction
       in webOnly ? _webOnlyJurisdictions : webJurisdictions) {
@@ -2008,6 +2012,7 @@ Future<PortfolioResult> syncWebPortfolio(
       complete = false;
       continue;
     }
+    final courts = <(String, UyapOption, bool)>[];
     for (final unit in units) {
       for (final closed in [false, if (includeClosed) true]) {
         try {
@@ -2016,18 +2021,70 @@ Future<PortfolioResult> syncWebPortfolio(
             unit.id,
             closed: closed,
           )) {
-            courts.add((jurisdiction, unit.id, court, closed));
+            courts.add((unit.id, court, closed));
           }
         } catch (_) {
           complete = false;
         }
       }
     }
+    steps += courts.length;
+    for (final (unit, court, closed) in courts) {
+      onProgress?.call(step++, steps);
+      try {
+        final whole = await pages(
+          (page) => web.casePage(
+            jurisdiction: jurisdiction,
+            courtType: unit,
+            court: court,
+            closed: closed,
+            pageNumber: page,
+          ),
+          (c) => add(
+            c,
+            CaseFamily.court,
+            jurisdiction: jurisdiction,
+            unit: unit,
+            closed: closed,
+          ),
+        );
+        if (!whole) complete = false;
+      } catch (_) {
+        complete = false;
+      }
+    }
   }
 
-  // The prosecutors' offices: the known ones, or every province's. Known
-  // by the cases kept of them, which another own device brings too, and
-  // by those found before with no case kept now.
+  // The high courts, chamber by chamber: a few lists.
+  for (final (jurisdiction, family) in [
+    ('yargitay', CaseFamily.yargitay),
+    // The mobile API lists the Council of State's itself.
+    if (!webOnly) ('danistay', CaseFamily.danistay),
+  ]) {
+    List<UyapOption> chambers;
+    try {
+      chambers = await web.chambers(jurisdiction);
+    } catch (_) {
+      complete = false;
+      continue;
+    }
+    // One chamber that fails does not keep the others from being read.
+    for (final chamber in chambers) {
+      try {
+        for (final c in await web.chamberCases(jurisdiction, chamber)) {
+          add(c, family, jurisdiction: jurisdiction);
+        }
+        keep();
+      } catch (_) {
+        complete = false;
+      }
+    }
+  }
+
+  // The prosecutors' offices last: the known ones, or every province's,
+  // which is hundreds of questions. Known by the cases kept of them, which
+  // another own device brings too, and by those found before with no case
+  // kept now.
   final known = <String, String>{
     for (final o
         in (jsonDecode(db.meta(_prosecutorOfficesKey) ?? '[]') as List))
@@ -2049,48 +2106,27 @@ Future<PortfolioResult> syncWebPortfolio(
   if (everywhere) {
     try {
       final all = <UyapOption>[];
+      var whole = true;
       for (final province in await web.provinces()) {
         try {
           all.addAll(await web.prosecutorOffices(province.id));
         } catch (_) {
-          complete = false;
+          whole = false;
         }
       }
-      offices = all;
-      provincesRead = complete;
+      if (!whole) complete = false;
+      // The known ones too: a province that did not answer keeps its own.
+      final ids = {for (final o in all) o.id};
+      offices = [...all, ...offices.where((o) => !ids.contains(o.id))];
+      provincesRead = whole;
     } catch (_) {
       complete = false;
     }
   }
 
-  final steps = courts.length + offices.length;
-  var step = 0;
-  for (final (jurisdiction, unit, court, closed) in courts) {
-    onProgress?.call(step++, steps);
-    try {
-      final whole = await pages(
-        (page) => web.casePage(
-          jurisdiction: jurisdiction,
-          courtType: unit,
-          court: court,
-          closed: closed,
-          pageNumber: page,
-        ),
-        (c) => add(
-          c,
-          CaseFamily.court,
-          jurisdiction: jurisdiction,
-          unit: unit,
-          closed: closed,
-        ),
-      );
-      if (!whole) complete = false;
-    } catch (_) {
-      complete = false;
-    }
-  }
+  steps += offices.length;
   final withCases = <String, String>{...known};
-  var officesWhole = provincesRead;
+  var officesWhole = provincesRead || !everywhere;
   for (final office in offices) {
     onProgress?.call(step++, steps);
     for (final closed in [false, true]) {
@@ -2130,35 +2166,10 @@ Future<PortfolioResult> syncWebPortfolio(
       for (final e in withCases.entries) {'id': e.key, 'ad': e.value},
     ]),
   );
-  if (officesWhole) {
+  if (everywhere && officesWhole) {
     db.setMeta(_prosecutorFullKey, DateTime.now().toIso8601String());
   }
   onProgress?.call(steps, steps);
-
-  for (final (jurisdiction, family) in [
-    ('yargitay', CaseFamily.yargitay),
-    // The mobile API lists the Council of State's itself.
-    if (!webOnly) ('danistay', CaseFamily.danistay),
-  ]) {
-    List<UyapOption> chambers;
-    try {
-      chambers = await web.chambers(jurisdiction);
-    } catch (_) {
-      complete = false;
-      continue;
-    }
-    // One chamber that fails does not keep the others from being read.
-    for (final chamber in chambers) {
-      try {
-        for (final c in await web.chamberCases(jurisdiction, chamber)) {
-          add(c, family, jurisdiction: jurisdiction);
-        }
-        keep();
-      } catch (_) {
-        complete = false;
-      }
-    }
-  }
   keep();
   return PortfolioResult(steps, complete, changed);
 }

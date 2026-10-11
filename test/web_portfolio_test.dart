@@ -189,6 +189,23 @@ void main() {
     expect(cases[caseKey('2025/9', _yargitay)]!.family, CaseFamily.yargitay);
   });
 
+  test('the courts\' cases come first, hukuk before the other courts are '
+      'even listed, and the provinces\' hundred questions last', () async {
+    final web = _Web();
+    final seen = <int>[];
+    await syncWebPortfolio(
+      web,
+      db,
+      onChanged: () => seen.add(web.asked.length),
+    );
+    int at(String what) => web.asked.indexOf(what);
+    expect(at('cases w1 1'), lessThan(at('types 0')));
+    expect(at('cases c1 1'), lessThan(at('provinces')));
+    expect(at('chamber cases y3'), lessThan(at('provinces')));
+    // The family court's case was in the database when it was read.
+    expect(seen.first, at('cases w1 1') + 1);
+  });
+
   test('beside UYAP Mobil the web reads only what it alone has: the '
       'prosecutors\' offices and the Court of Cassation', () async {
     final web = _Web();
