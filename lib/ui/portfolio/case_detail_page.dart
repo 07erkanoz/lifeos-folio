@@ -93,6 +93,7 @@ enum _Tab {
   hearings,
   deadlines,
   parties,
+  money,
   facts,
   petitions,
   tasks,
@@ -578,8 +579,10 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     );
   }
 
-  /// The parties, the next hearing and deadline, the last news.
+  /// The next hearing and deadline, the last news, the documents and the
+  /// money, each a tile in its colour that opens its tab.
   Widget _factsLine(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final hearing = ([
@@ -590,54 +593,196 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       for (final i in _items)
         if (i.kind == 'deadline' && !i.done && i.at != null) i,
     ]..sort((a, b) => a.at!.compareTo(b.at!))).firstOrNull;
-    final change = _state.changeAt ?? _documents.firstOrNull?.date;
-    bool soon(DateTime at, int days) =>
-        DateTime(at.year, at.month, at.day).difference(today).inDays <= days;
-    Widget fact(String label, String value, {bool warn = false}) => Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(text: '$label '),
-          TextSpan(
-            text: value,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: warn
-                  ? AgendaColors.deadline
-                  : Theme.of(context).colorScheme.onSurface,
-            ),
+    final newest = _documents.firstOrNull;
+    final change = _state.changeAt ?? newest?.date;
+    int daysTo(DateTime at) =>
+        DateTime(at.year, at.month, at.day).difference(today).inDays;
+    String left(int days) => days == 0
+        ? 'bugün'
+        : days == 1
+        ? 'yarın'
+        : days > 0
+        ? '$days gün kaldı'
+        : '${-days} gün geçti';
+    final docs = _c.record?.documents ?? const <UyapCaseDocument>[];
+    final saved = docs.where(_downloaded).length;
+    final kase = _kase;
+    final money = kase != null && CaseKind.of(kase) == CaseKind.icra
+        ? null
+        : _c.record?.money;
+    final fees = money?.fees.fold<double>(0, (s, i) => s + i.amount) ?? 0;
+
+    Widget tile(
+      String key,
+      IconData icon,
+      Color color,
+      String label,
+      String value,
+      String sub, {
+      _Tab? opens,
+      bool strong = false,
+    }) {
+      final body = Container(
+        constraints: const BoxConstraints(minWidth: 170, maxWidth: 300),
+        padding: const EdgeInsets.fromLTRB(10, 9, 14, 9),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: strong ? .10 : .05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: color.withValues(alpha: strong ? .45 : .18),
           ),
-        ],
-      ),
-      style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
-    );
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: .6,
+                      color: AgendaColors.muted,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  if (sub.isNotEmpty)
+                    Text(
+                      sub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+      return Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          key: ValueKey('case-fact-$key'),
+          borderRadius: BorderRadius.circular(10),
+          onTap: opens == null ? null : () => setState(() => _tab = opens),
+          child: body,
+        ),
+      );
+    }
+
+    final hearingDays = hearing == null ? null : daysTo(hearing.at);
+    final deadlineDays = deadline == null ? null : daysTo(deadline.at!);
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 12),
       child: Wrap(
         key: const ValueKey('case-facts'),
-        spacing: 18,
-        runSpacing: 4,
+        spacing: 10,
+        runSpacing: 8,
         children: [
-          fact(
-            'Duruşma',
+          tile(
+            'hearing',
+            Icons.event_rounded,
             hearing == null
-                ? 'yok'
+                ? AgendaColors.muted
+                : hearing.isEHearing
+                ? AgendaColors.eHearing
+                : AgendaColors.hearing,
+            hearing?.isEHearing == true ? 'E-DURUŞMA' : 'DURUŞMA',
+            hearing == null
+                ? 'Yok'
                 : '${dayText(hearing.at)} ${clockText(hearing.at)}',
-            warn: hearing != null && soon(hearing.at, 7),
+            hearingDays == null ? '' : left(hearingDays),
+            opens: _Tab.hearings,
+            strong: hearingDays != null && hearingDays <= 7,
           ),
-          fact(
-            'Açık süre',
+          tile(
+            'deadline',
+            Icons.timer_outlined,
             deadline == null
-                ? 'yok'
-                : '${deadline.title} · ${dayText(deadline.at!)}',
-            warn: deadline != null && soon(deadline.at!, 3),
+                ? AgendaColors.muted
+                : deadlineDays! <= 3
+                ? AgendaColors.deadline
+                : AgendaColors.task,
+            'AÇIK SÜRE',
+            deadline == null ? 'Yok' : deadline.title,
+            deadline == null
+                ? ''
+                : '${dayText(deadline.at!)} · ${left(deadlineDays!)}',
+            opens: _Tab.deadlines,
+            strong: deadlineDays != null && deadlineDays <= 3,
           ),
-          fact('Son gelişme', change == null ? '—' : dayText(change)),
+          tile(
+            'change',
+            Icons.bolt_rounded,
+            const Color(0xFF6D4AB8),
+            'SON GELİŞME',
+            change == null ? '—' : dayText(change),
+            newest == null
+                ? ''
+                : (newest.type.isNotEmpty ? newest.type : newest.title),
+            opens: _Tab.documents,
+          ),
+          tile(
+            'documents',
+            Icons.folder_open_rounded,
+            scheme.primary,
+            'EVRAK',
+            '${docs.length} evrak',
+            _fresh.isNotEmpty
+                ? '${_fresh.length} yeni'
+                : docs.isEmpty
+                ? ''
+                : '$saved indirildi',
+            opens: _Tab.documents,
+            strong: _fresh.isNotEmpty,
+          ),
+          if (money != null && !money.isEmpty)
+            tile(
+              'money',
+              Icons.account_balance_wallet_outlined,
+              const Color(0xFF157A52),
+              'HARÇ',
+              formatTl(fees),
+              [
+                if (money.collected != null && money.collected! > 0)
+                  'tahsilat ${formatTl(money.collected!)}',
+                if (money.collected == null || money.collected == 0)
+                  '${money.fees.length} kalem',
+              ].join(),
+              opens: _Tab.money,
+            ),
         ],
       ),
     );
   }
 
-  /// The list, which keeps its place, and the document chosen in it.
   Widget _documentsSplit(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final entries = _documentEntries();
@@ -1236,8 +1381,18 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ),
       ],
     );
-    return _card(
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        gradient: LinearGradient(
+          colors: [kind.fill.withValues(alpha: .75), scheme.surface],
+          stops: const [0, .5],
+        ),
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: wide
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1305,6 +1460,38 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     ),
   );
 
+  /// A party's initials in a round of its side's colour.
+  Widget _initials(String name, Color color) {
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where(
+          (w) => w.isNotEmpty && RegExp(r'[A-Za-zÇĞİÖŞÜçğıöşü]').hasMatch(w[0]),
+        )
+        .toList();
+    final letters = [
+      if (words.isNotEmpty) words.first[0],
+      if (words.length > 1) words[1][0],
+    ].join().toUpperCase();
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .14),
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        letters,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   /// The sides in the heading when the page has no room for their cards:
   /// whom the lawyer stands for and against whom, with their roles and
   /// counsel; the rest a tap away in Taraflar.
@@ -1350,32 +1537,40 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               children: [
                 for (final p in shown)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: titleName(p.name),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: scheme.onSurface,
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        _initials(p.name, color),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: titleName(p.name),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: scheme.onSurface,
+                                  ),
+                                ),
+                                if (p.role.trim().isNotEmpty)
+                                  TextSpan(text: '  ${titleName(p.role)}'),
+                                if (counsel && p.lawyer.trim().isNotEmpty)
+                                  TextSpan(
+                                    text:
+                                        ' · Vekil: ${titleName(p.lawyer.trim().replaceAll(RegExp(r'^\[|\]$'), ''))}',
+                                  ),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: AgendaColors.muted,
                             ),
                           ),
-                          if (p.role.trim().isNotEmpty)
-                            TextSpan(text: '  ${titleName(p.role)}'),
-                          if (counsel && p.lawyer.trim().isNotEmpty)
-                            TextSpan(
-                              text:
-                                  ' · Vekil: ${titleName(p.lawyer.trim().replaceAll(RegExp(r'^\[|\]$'), ''))}',
-                            ),
-                        ],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        color: AgendaColors.muted,
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 if (list.length > 2)
@@ -1848,6 +2043,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     _Tab.hearings => _hearingsTab(context),
     _Tab.deadlines => _deadlinesTab(context),
     _Tab.parties => _partiesTab(context),
+    _Tab.money => _moneyTab(context),
     _Tab.notices => _noticesTab(context),
     _Tab.facts => _factsTab(context),
     _Tab.petitions => _petitionsTab(context),
@@ -1946,13 +2142,21 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               ),
             ),
             if (count != null && count > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
+              Container(
+                margin: const EdgeInsets.only(left: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: _tab == t
+                      ? scheme.primary.withValues(alpha: .12)
+                      : const Color(0xFFEEF0F4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Text(
                   '$count',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AgendaColors.muted,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: _tab == t ? scheme.primary : AgendaColors.muted,
                   ),
                 ),
               ),
@@ -1998,6 +2202,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             tab(_Tab.hearings, 'Duruşmalar', _hearings.length),
             tab(_Tab.deadlines, 'Süreler & Tebligat', deadlines),
             tab(_Tab.parties, 'Taraflar', parties),
+            // An icra file's money is on its İcra tab.
+            if (_kase == null || CaseKind.of(_kase!) != CaseKind.icra)
+              tab(_Tab.money, 'Harç & Tahsilat', _moneyCount),
             tab(_Tab.facts, 'Künye', null),
             tab(_Tab.petitions, 'Dilekçelerim', _petitions.length),
             tab(
@@ -2258,9 +2465,11 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         : folded.contains('zabt') ||
               folded.contains('zapt') ||
               folded.contains('tutanak')
-        ? (Icons.receipt_long_outlined, const Color(0xFF4B5465))
+        ? (Icons.receipt_long_outlined, const Color(0xFF6D4AB8))
         : folded.contains('teblig') || folded.contains('muzekkere')
-        ? (Icons.mail_outline_rounded, const Color(0xFF4B5465))
+        ? (Icons.mail_outline_rounded, AgendaColors.eHearing)
+        : folded.contains('bilirkisi') || folded.contains('rapor')
+        ? (Icons.assignment_outlined, AgendaColors.task)
         : (Icons.description_outlined, const Color(0xFF4B5465));
     final title = d.type.isNotEmpty ? d.type : d.title;
     final meta = [
@@ -2300,7 +2509,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F3F7),
+                color: ink.withValues(alpha: .1),
                 borderRadius: BorderRadius.circular(7),
               ),
               child: Icon(icon, size: 16, color: ink),
@@ -2602,6 +2811,128 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               if (t.kind.trim().isNotEmpty) t.kind,
             ].join(' · '),
           ),
+      ],
+    );
+  }
+
+  int? get _moneyCount {
+    final money = _c.record?.money;
+    if (money == null) return null;
+    return money.fees.length + money.collections.length + money.payments.length;
+  }
+
+  static Color _moneyColor(String label) => switch (label) {
+    'Harç' => const Color(0xFFB7791F),
+    'Tahsilat' => const Color(0xFF157A52),
+    'Reddiyat' => AgendaColors.hearing,
+    _ => const Color(0xFF4B5465),
+  };
+
+  /// The case's fees, collections and payments out, as UYAP Web's money
+  /// page shows them.
+  Widget _moneyTab(BuildContext context) {
+    final money = _c.record?.money;
+    if (money == null) {
+      return _empty(
+        'Harç ve tahsilat bilgisi UYAP Web’den gelir. UYAP Web bağlıyken '
+        'dosyayı UYAP’tan tazeleyin.',
+      );
+    }
+    if (money.isEmpty) {
+      return _empty(
+        'UYAP bu dosyada harç, tahsilat ya da reddiyat kaydı göstermiyor.',
+      );
+    }
+    Widget heading(String text) => Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: .6,
+          color: AgendaColors.muted,
+        ),
+      ),
+    );
+    Widget item(UyapMoneyItem i) => _line(
+      i.kind.isEmpty ? '—' : i.kind,
+      [
+        i.date.split(' ').first,
+        if (i.receipt.isNotEmpty) 'Makbuz ${i.receipt}',
+        i.payer,
+      ].where((v) => v.trim().isNotEmpty).join(' · '),
+      trailing: Text(
+        formatTl(i.amount),
+        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+      ),
+    );
+    final totals = [
+      if (money.fees.isNotEmpty)
+        ('Harç', money.fees.fold<double>(0, (s, i) => s + i.amount)),
+      if (money.collected != null) ('Tahsilat', money.collected!),
+      if (money.paidOut != null) ('Reddiyat', money.paidOut!),
+      if (money.deposit != null && money.deposit != 0)
+        ('Teminat', money.deposit!),
+      if (money.remaining != null) ('Kalan', money.remaining!),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (totals.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                for (final (label, value) in totals)
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 130),
+                    padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+                    decoration: BoxDecoration(
+                      color: _moneyColor(label).withValues(alpha: .07),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _moneyColor(label).withValues(alpha: .22),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AgendaColors.muted,
+                          ),
+                        ),
+                        Text(
+                          formatTl(value),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: _moneyColor(label),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (money.fees.isNotEmpty) ...[
+          heading('HARÇLAR · ${money.fees.length}'),
+          for (final i in money.fees) item(i),
+        ],
+        if (money.collections.isNotEmpty) ...[
+          heading('TAHSİLATLAR · ${money.collections.length}'),
+          for (final i in money.collections) item(i),
+        ],
+        if (money.payments.isNotEmpty) ...[
+          heading('REDDİYATLAR · ${money.payments.length}'),
+          for (final i in money.payments) item(i),
+        ],
       ],
     );
   }

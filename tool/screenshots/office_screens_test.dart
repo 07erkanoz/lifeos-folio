@@ -824,6 +824,52 @@ const _report = [
       'talep edebileceği kanaatine varılmıştır.',
 ];
 
+/// The money page of the case: invented fees and an advance.
+const _money = UyapCaseMoney(
+  collected: 6200,
+  paidOut: 0,
+  remaining: 6200,
+  fees: [
+    UyapMoneyItem(
+      kind: 'Başvurma Harcı',
+      date: '12.03.2024 10:41',
+      amount: 427.60,
+      receipt: '2024-118204',
+      payer: 'AYŞE KARACA',
+    ),
+    UyapMoneyItem(
+      kind: 'Peşin Harç',
+      date: '12.03.2024 10:41',
+      amount: 3415.50,
+      receipt: '2024-118204',
+      payer: 'AYŞE KARACA',
+    ),
+    UyapMoneyItem(
+      kind: 'Vekalet Harcı',
+      date: '12.03.2024 10:41',
+      amount: 87.50,
+      receipt: '2024-118204',
+      payer: 'AYŞE KARACA',
+    ),
+  ],
+  collections: [
+    UyapMoneyItem(
+      kind: 'Gider Avansı',
+      date: '12.03.2024 10:41',
+      amount: 2200,
+      receipt: '2024-118205',
+      payer: 'AYŞE KARACA',
+    ),
+    UyapMoneyItem(
+      kind: 'Bilirkişi Ücreti',
+      date: '02.09.2024 14:05',
+      amount: 4000,
+      receipt: '2024-402117',
+      payer: 'AYŞE KARACA',
+    ),
+  ],
+);
+
 Future<UyapCaseStore> _store(Directory root) async {
   final store = UyapCaseStore(
     directory: Directory('${root.path}/destek'),
@@ -868,6 +914,7 @@ Future<UyapCaseStore> _store(Directory root) async {
         details: details,
         parties: parties,
         documents: UyapCaseDocuments(fresh),
+        money: c.number == '2024/318' ? _money : null,
         now: now.subtract(const Duration(hours: 1)),
       );
     }
@@ -1178,6 +1225,28 @@ void main() {
       await tester.tap(row);
       await _settle(tester, rounds: 60);
       await _shot(tester, 'dosya-onizleme');
+      await tester.pumpWidget(const SizedBox());
+      // The case's page as it opens, and its money.
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: CaseDetailPage(
+              caseKey: _of('2024/318').key,
+              database: db,
+              controller: controller,
+              links: links,
+              lawyer: lawyer,
+              onBack: () {},
+              onOpen: (_) {},
+            ),
+          ),
+        ),
+      );
+      await _settle(tester, ready: () => row.evaluate().isNotEmpty);
+      await _shot(tester, 'dosya-sayfasi');
+      await tester.tap(find.text('Harç & Tahsilat'));
+      await _settle(tester, rounds: 20);
+      await _shot(tester, 'dosya-harc');
       await tester.pumpWidget(const SizedBox());
       // The same case on a phone: its page, then a document on its own.
       _size(tester, phone);

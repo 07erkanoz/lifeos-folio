@@ -330,6 +330,66 @@ void main() {
     await settle(tester);
   }
 
+  testWidgets('a court case\'s fees, advances and payments out have a tab of '
+      'their own, opened from the tile in its heading', (tester) async {
+    await tester.runAsync(
+      () => store.keep(
+        target: const UyapCase('1', '2024/318', '', civil),
+        details: const UyapCaseDetails(),
+        parties: const [],
+        documents: UyapCaseDocuments([
+          doc('a', 'Tensip Zaptı', '01.09.2026'),
+          doc('b', 'Bilirkişi Raporu', '06.10.2026'),
+        ]),
+        money: const UyapCaseMoney(
+          collected: 2200,
+          fees: [
+            UyapMoneyItem(
+              kind: 'Başvurma Harcı',
+              date: '12.03.2024 10:41',
+              amount: 427.6,
+              receipt: '2024-1',
+            ),
+            UyapMoneyItem(
+              kind: 'Peşin Harç',
+              date: '12.03.2024 10:41',
+              amount: 3415.5,
+            ),
+          ],
+          collections: [
+            UyapMoneyItem(
+              kind: 'Gider Avansı',
+              date: '12.03.2024 10:41',
+              amount: 2200,
+            ),
+          ],
+        ),
+      ),
+    );
+    await pumpCase(tester, const Size(1440, 900));
+    expect(tester.takeException(), isNull);
+    expect(find.text('3.843,10 TL'), findsOneWidget, reason: 'the tile');
+    await tester.tap(find.byKey(const ValueKey('case-fact-money')));
+    await tester.pump();
+    expect(find.text('HARÇLAR · 2'), findsOneWidget);
+    expect(find.text('Başvurma Harcı'), findsOneWidget);
+    expect(find.text('12.03.2024 · Makbuz 2024-1'), findsOneWidget);
+    expect(find.text('TAHSİLATLAR · 1'), findsOneWidget);
+    expect(find.text('Gider Avansı'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a case not yet read from UYAP Web says where its fees come '
+      'from', (tester) async {
+    await pumpCase(tester, const Size(1440, 900));
+    expect(find.byKey(const ValueKey('case-fact-money')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('case-tab-money')));
+    await tester.pump();
+    expect(find.textContaining('UYAP Web’den gelir'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a document is shown beside the list, which keeps its place; '
       'the arrows go through it and the preview folds away', (tester) async {
     await pumpCase(tester, const Size(1440, 900));

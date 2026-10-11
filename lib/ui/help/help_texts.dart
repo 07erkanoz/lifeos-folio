@@ -124,6 +124,11 @@ abstract final class Help {
         'UYAP’tan tazele ile hemen yeniletebilirsiniz. Para girişleri, '
             'tahsilat ve icra hesabı UYAP Web’den gelir; bu yüzden UYAP '
             'Web bağlıyken tazelemek en eksiksiz bilgiyi verir.',
+        'Üstteki renkli kutulara dokununca ilgili sekme açılır: duruşma, '
+            'süre, evraklar ya da harç.',
+        'Harç & Tahsilat sekmesinde dosyaya yatırılan harçlar, gider '
+            'avansı ve reddiyatlar makbuzlarıyla görünür. İcra dosyasında '
+            'bunlar İcra sekmesindedir.',
       ]),
       HelpPart('Evrakla çalışmak', [
         'Bir evraka dokununca açılır ve bilgisayarınıza kaydedilir.',
