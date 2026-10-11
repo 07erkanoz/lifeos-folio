@@ -80,6 +80,10 @@ foreach ($variant in @(@{ Name = 'Store'; Publisher = $storePublisher },
     $listed = (Get-Content -LiteralPath $dump -Raw).Replace('/', '\')
     $assets = @(Get-ChildItem -LiteralPath (Join-Path $stage 'Assets') -Filter '*.png')
     if ($assets.Count -lt 55) { throw "Only $($assets.Count) logos were packaged." }
+    # The certification kit's limit for one image.
+    foreach ($asset in $assets) {
+        if ($asset.Length -ge 204800) { throw "$($asset.Name) is not under 200 KB." }
+    }
     foreach ($asset in $assets) {
         if (!$listed.Contains("Assets\$($asset.Name)")) { throw "resources.pri lacks Assets\$($asset.Name)" }
     }
