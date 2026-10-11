@@ -2,6 +2,7 @@
 #include <shobjidl.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
+#include <appmodel.h>
 #include <winrt/base.h>
 
 #include "flutter_window.h"
@@ -35,7 +36,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // identity of its own, so its windows group apart from Folio's and carry
   // its own icon.
   command_line_arguments.insert(command_line_arguments.begin(), "--editor");
-  ::SetCurrentProcessExplicitAppUserModelID(L"com.erkanoz.lifeos.editor");
+  // From the Store, the package gives each of its apps an identity of its
+  // own already, and one set here would part the window from its tile.
+  UINT32 package_name_length = 0;
+  if (::GetCurrentPackageFullName(&package_name_length, nullptr) ==
+      APPMODEL_ERROR_NO_PACKAGE) {
+    ::SetCurrentProcessExplicitAppUserModelID(L"com.erkanoz.lifeos.editor");
+  }
   const wchar_t* title = L"LifeOS Edit\u00f6r";
 #else
   const wchar_t* title = L"LifeOS Folio";

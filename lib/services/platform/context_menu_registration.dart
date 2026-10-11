@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'app_directories.dart';
+import 'store_package.dart';
 import 'viewer_registration.dart';
 
 class ContextMenuRegistration {
@@ -11,6 +12,12 @@ class ContextMenuRegistration {
     if (!Platform.isLinux && !Platform.isWindows) {
       throw UnsupportedError(
         'Dosya yöneticisi bağlantıları masaüstünde kullanılır.',
+      );
+    }
+    // The package's manifest registers them; nothing goes into the registry.
+    if (runsFromStorePackage) {
+      throw UnsupportedError(
+        'Microsoft Store’dan kurulan Folio, dosya türlerini ve sağ tık menüsünü Windows’a kendi paketiyle tanıtır.',
       );
     }
     final root = await folioSupportDirectory();

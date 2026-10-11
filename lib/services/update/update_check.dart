@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'update_manifest.dart';
+import '../platform/store_package.dart';
 
 /// Looks, now and then, whether a newer Folio has been published, and says
 /// so through [available]. It never downloads or installs anything itself:
@@ -46,6 +47,8 @@ class UpdateCheck {
   /// not distributed from lifeos.com.tr.
   static String? get platformName {
     if (kIsWeb) return null;
+    // The Store updates its own package.
+    if (runsFromStorePackage) return null;
     if (Platform.isWindows) return 'windows-x64';
     if (Platform.isLinux) return 'linux-x64';
     if (Platform.isAndroid) return 'android';

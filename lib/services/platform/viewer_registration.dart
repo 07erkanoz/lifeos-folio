@@ -7,6 +7,8 @@ import 'viewer_file_types.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import 'store_package.dart';
+
 import 'app_directories.dart';
 
 class ViewerRegistration {
@@ -44,6 +46,14 @@ MimeType=$mimeTypes
   static Future<String>? _pending;
 
   static Future<String> register({required List<ViewerFileType> types}) {
+    // The package's manifest registers them; nothing goes into the registry.
+    if (runsFromStorePackage) {
+      return Future.error(
+        UnsupportedError(
+          'Microsoft Store’dan kurulan Folio, dosya türlerini ve sağ tık menüsünü Windows’a kendi paketiyle tanıtır.',
+        ),
+      );
+    }
     if (types.isEmpty ||
         types.any((t) => !ViewerFileType.supported.contains(t))) {
       return Future.error(

@@ -5,14 +5,45 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'store_package.dart';
+
 /// Windows path_provider uses ProductName. Keep the established data location
 /// when the visible brand changes, including the index, theme and signing setup.
 Future<Directory> folioSupportDirectory() async {
   final current = await getApplicationSupportDirectory();
   if (Platform.isMacOS) return macDataFolder(current);
   if (!Platform.isWindows) return current;
+  if (runsFromStorePackage) {
+    final store = Directory(storeDataFolder(_userProfile()));
+    await store.create(recursive: true);
+    return store;
+  }
   return windowsDataFolder(current);
 }
+
+/// The Windows user's folder. Never AppData in its place: there a
+/// package's records would be kept apart and deleted with it.
+String _userProfile() {
+  final env = Platform.environment;
+  final profile = env['USERPROFILE'];
+  if (profile != null && p.windows.isAbsolute(profile)) return profile;
+  final drive = env['HOMEDRIVE'], path = env['HOMEPATH'];
+  if (drive != null && path != null && p.windows.isAbsolute('$drive$path')) {
+    return '$drive$path';
+  }
+  throw StateError(
+    'Windows kullanıcı klasörü bulunamadı; Folio verilerini güvenle tutamıyor.',
+  );
+}
+
+/// The Store package's data folder. Windows keeps what a package writes
+/// into AppData apart and deletes it with the package; a lawyer's clients
+/// and cash book must outlive that. The user folder's root is neither
+/// AppData nor anything OneDrive keeps in step, which takes its own folder
+/// and Desktop, Documents and Pictures.
+@visibleForTesting
+String storeDataFolder(String userProfile) =>
+    p.windows.join(userProfile, 'LifeOS Folio');
 
 /// The executable's company named the data folder's parent: com.erkanoz
 /// until 1.6.7 named it LifeOS. A Folio that ran before keeps its folder

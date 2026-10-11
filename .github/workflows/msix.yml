@@ -1,0 +1,48 @@
+name: MSIX
+run-name: LifeOS Folio · MSIX · ${{ github.sha }}
+# The Microsoft Store package, built and tried on its own until the Store
+# has taken one: then it joins release.yml.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: folio-msix-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  msix:
+    # As release.yml's Windows job: webview_windows needs Visual Studio 2022.
+    runs-on: windows-2022
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Paketli araçları ve DLL dosyalarını doğrula
+        run: python packaging/native/verify.py windows-x64 --smoke
+      - run: flutter build windows --release
+      # Puts the C++ runtime beside the executable, which the package needs too.
+      - name: Windows kurulum paketini oluştur
+        shell: pwsh
+        run: ./packaging/windows/build-installer.ps1
+      - name: MSIX paketlerini oluştur
+        shell: pwsh
+        run: ./packaging/windows/build-msix.ps1
+      - name: MSIX paketini kur ve dene
+        shell: pwsh
+        run: ./packaging/windows/test-msix.ps1
+      - if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: folio-msix
+          if-no-files-found: ignore
+          path: |
+            build/windows/msix/*.msix
+            build/windows/msix/*.sha256
+            build/windows/msix/wack-report.xml
+            build/windows/msix/resources-*-dump.xml
+          retention-days: 14

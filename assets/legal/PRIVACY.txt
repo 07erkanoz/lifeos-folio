@@ -5,13 +5,13 @@ Son güncelleme: 10 Ekim 2026
 Bu metin, LifeOS tarafından avukatlar için geliştirilen LifeOS Folio uygulamasının kişisel verileri nasıl ele aldığını, 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) çerçevesinde açıklar.
 
 2. Verileriniz yalnız sizin cihazınızda kalır
-Folio yerel bir uygulamadır ve bir sunucusu yoktur. Belgeleriniz, dava dosyalarınız, tebligatlarınız, müvekkil bilgileriniz, ajandanız, kasa kayıtlarınız ve oturumlarınız yalnız sizin bilgisayarınızda ya da telefonunuzda tutulur. Bu verilerin hiçbiri LifeOS'a ya da başka bir sunucuya gönderilmez; LifeOS bu verileri görmez, saklamaz ve işlemez.
+Folio yerel bir uygulamadır ve bir sunucusu yoktur. Belgeleriniz, dava dosyalarınız, tebligatlarınız, müvekkil bilgileriniz, ajandanız, kasa kayıtlarınız ve oturumlarınız yalnız sizin bilgisayarınızda ya da telefonunuzda tutulur. Bu veriler LifeOS'a gönderilmez; LifeOS bunları görmez, saklamaz ve işlemez. Bir veri cihazınızdan yalnız sizin başlattığınız bir işlemle ve yalnız o işin gerektirdiği kamu hizmetine gider; bunlar 4. ve 7. maddede anlatılır.
 
 3. Veri sorumlusu
 Folio'da tuttuğunuz müvekkil ve dosya bilgilerinin veri sorumlusu, mesleğini yürüten avukat olarak sizsiniz. Folio bu verileri yalnız sizin cihazınızda ve sizin denetiminizde işlemenize yarayan bir araçtır.
 
 4. Kamu hizmetlerine bağlantı
-Folio, UYAP'a ve e-Tebligat'a sizin e-Devlet girişiniz, e-imzanız ya da mobil imzanızla bağlanır ve yalnız sizin görme yetkiniz olan bilgileri gösterir. Bu hizmetlerden gelen bilgiler doğrudan sizin cihazınıza iner; arada başka bir sunucu yoktur. Şifreniz ve e-imza PIN kodunuz hiçbir yerde saklanmaz; oturumlar işletim sisteminin güvenli anahtar deposunda tutulur.
+Folio, UYAP'a ve e-Tebligat'a sizin e-Devlet girişiniz, e-imzanız ya da mobil imzanızla bağlanır ve yalnız sizin görme yetkiniz olan bilgileri gösterir. Bu hizmetlerden gelen bilgiler doğrudan sizin cihazınıza iner; arada başka bir sunucu yoktur. Bir evrakı dava dosyasına gönderdiğinizde ya da imzaladığınızda o evrak ve imza bilgisi UYAP'a, mobil imzada ayrıca telefon numaranız ve operatörünüz imza hizmetine gönderilir; bunlar sizin dokunuşunuzla yapılır. Şifreniz ve e-imza PIN kodunuz hiçbir yerde saklanmaz; oturumlar işletim sisteminin güvenli anahtar deposunda tutulur.
 
 5. Büro ağı ve Senkron
 Büro ağı ve Senkron, aynı yerel ağdaki kendi cihazlarınız ve büronuzdaki kişilerin cihazları arasında doğrudan ve şifreli çalışır; aktarım internetteki bir sunucudan geçmez. Büro ağında yalnız sizin paylaştığınız dosyalar, mesajlar ve görevler gider. Ücret ve avans gibi mali bilgiler yalnız bunları görme yetkisi olanlara gider.
@@ -22,7 +22,7 @@ Folio hiçbir yapay zekâ hizmeti kullanmaz ve belgelerinizi hiçbir yapay zekâ
 7. Folio'nun internete bağlandığı durumlar
 Kamu hizmetleri: yukarıda anlatıldığı gibi, yalnız sizin oturumunuzla.
 Mevzuat ve karar arama: aradığınız sözcükler ya da madde numarası resmî mevzuat ve karar bankalarına gönderilir; belgeniz gönderilmez.
-Güncelleme denetimi: Folio lifeos.com.tr adresinden yeni sürüm bilgisini okur; bu sırada kişisel veri gönderilmez.
+Güncelleme denetimi: bilgisayar ve Android sürümleri lifeos.com.tr adresinden yeni sürüm bilgisini okur; bu sırada kişisel veri gönderilmez. App Store ve Microsoft Store sürümlerini mağazanın kendisi günceller.
 Ses modelleri: sesli okuma ve sesli yazma ilk kullanıldığında modeller lifeos.com.tr adresinden indirilir.
 
 8. Haklarınız

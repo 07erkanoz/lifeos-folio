@@ -38,6 +38,7 @@ import 'uyap_auto.dart';
 import '../security/security_settings.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/default_viewer_dialog.dart';
+import '../../services/platform/store_package.dart';
 import '../widgets/folio_about_dialog.dart';
 import '../widgets/notice.dart';
 import '../widgets/signing_dialog.dart';
@@ -883,7 +884,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: _pickingOcr ? null : () => unawaited(_addOcrFolder()),
               ),
             ),
-          if (!Platform.isIOS)
+          // A Store package names its file types and context menu itself.
+          if (!Platform.isIOS && !runsFromStorePackage)
             _Entry(
               'varsayılan uygulama dosya türleri aç',
               SettingsRow(
@@ -897,7 +899,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
-          if (Platform.isLinux || Platform.isWindows)
+          if (Platform.isLinux || (Platform.isWindows && !runsFromStorePackage))
             _Entry(
               'sağ tık menü önizle düzenle',
               SettingsRow(
@@ -1124,8 +1126,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   _update ??
                   (Platform.isIOS
                       ? 'Güncellemeler App Store’dan gelir'
+                      : runsFromStorePackage
+                      ? 'Güncellemeler Microsoft Store’dan gelir'
                       : 'Yeni sürüm çıkınca Folio kendisi de haber verir'),
-              trailing: Platform.isIOS
+              trailing: Platform.isIOS || runsFromStorePackage
                   ? null
                   : _newer != null
                   ? FilledButton(

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Folio's Microsoft Store package; build-msix.ps1 fills in the version and
+  the publisher. The identity is the one Partner Center reserved for
+  "LifeOS Folio: Avukatlar için". Two apps, as the installer gives: Folio
+  and LifeOS Editör, each with the file types and verbs folio.iss registers.
+  No restricted capability beyond runFullTrust: Folio keeps a Store
+  package's data in the user folder, outside the AppData Windows keeps
+  apart for a package and deletes with it (app_directories.dart).
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap2="http://schemas.microsoft.com/appx/manifest/uap/windows10/2"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap2 uap3 desktop com rescap">
+
+  <Identity
+    Name="ErkanZ.LifeOSFolioAvukatlariin"
+    Publisher="{PUBLISHER}"
+    Version="{VERSION}"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>LifeOS Folio: Avukatlar için</DisplayName>
+    <PublisherDisplayName>Erkan ÖZ</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <!-- 1903: where Windows honours activeCodePage=UTF-8 (folio.iss). -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.18362.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="tr-TR" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Folio" Executable="lifeos_folio.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="LifeOS Folio"
+        Description="Avukatlar için dilekçe, dava ve büro uygulaması"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\FolioSquare150x150Logo.png"
+        Square44x44Logo="Assets\FolioSquare44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\FolioWide310x150Logo.png" ShortName="Folio" />
+      </uap:VisualElements>
+      <Extensions>
+        <uap3:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="lifeos-folio-belge" Parameters="--preview -- &quot;%1&quot;">
+            <uap:DisplayName>LifeOS Folio Belgesi</uap:DisplayName>
+            <uap:Logo>Assets\FolioSquare44x44Logo.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.udf</uap:FileType>
+              <uap:FileType>.pdf</uap:FileType>
+              <uap:FileType>.docx</uap:FileType>
+              <uap:FileType>.xlsx</uap:FileType>
+              <uap:FileType>.odt</uap:FileType>
+              <uap:FileType>.txt</uap:FileType>
+              <uap:FileType>.md</uap:FileType>
+              <uap:FileType>.markdown</uap:FileType>
+              <uap:FileType>.csv</uap:FileType>
+              <uap:FileType>.tsv</uap:FileType>
+              <uap:FileType>.json</uap:FileType>
+              <uap:FileType>.xml</uap:FileType>
+              <uap:FileType>.log</uap:FileType>
+              <uap:FileType>.htm</uap:FileType>
+              <uap:FileType>.html</uap:FileType>
+              <uap:FileType>.png</uap:FileType>
+              <uap:FileType>.jpg</uap:FileType>
+              <uap:FileType>.jpeg</uap:FileType>
+              <uap:FileType>.gif</uap:FileType>
+              <uap:FileType>.bmp</uap:FileType>
+              <uap:FileType>.webp</uap:FileType>
+              <uap:FileType>.svg</uap:FileType>
+              <uap:FileType>.tif</uap:FileType>
+              <uap:FileType>.tiff</uap:FileType>
+            </uap:SupportedFileTypes>
+            <uap2:SupportedVerbs>
+              <uap3:Verb Id="folio-preview" Parameters="--preview -- &quot;%1&quot;">Folio ile önizle</uap3:Verb>
+              <uap3:Verb Id="folio-edit" Parameters="--edit -- &quot;%1&quot;">Folio ile düzenle</uap3:Verb>
+            </uap2:SupportedVerbs>
+          </uap3:FileTypeAssociation>
+        </uap3:Extension>
+        <!-- A notification clicked while Folio is closed opens it (system_notices.dart). -->
+        <desktop:Extension Category="windows.toastNotificationActivation">
+          <desktop:ToastNotificationActivation ToastActivatorCLSID="5050b8bd-2412-4507-b2a9-d08dd96d1a0c" />
+        </desktop:Extension>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer Executable="lifeos_folio.exe" Arguments="-ToastActivated" DisplayName="LifeOS Folio">
+              <com:Class Id="5050b8bd-2412-4507-b2a9-d08dd96d1a0c" DisplayName="LifeOS Folio" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+
+    <Application Id="Editor" Executable="lifeos_editor.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="LifeOS Editör"
+        Description="UDF ve Word belgeleri için yalın editör"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\EditorSquare150x150Logo.png"
+        Square44x44Logo="Assets\EditorSquare44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\EditorWide310x150Logo.png" ShortName="Editör" />
+      </uap:VisualElements>
+      <Extensions>
+        <uap3:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="lifeos-editor-belge" Parameters="-- &quot;%1&quot;">
+            <uap:DisplayName>LifeOS Editör Belgesi</uap:DisplayName>
+            <uap:Logo>Assets\EditorSquare44x44Logo.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.udf</uap:FileType>
+              <uap:FileType>.docx</uap:FileType>
+              <uap:FileType>.rtf</uap:FileType>
+              <uap:FileType>.odt</uap:FileType>
+              <uap:FileType>.txt</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap3:FileTypeAssociation>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

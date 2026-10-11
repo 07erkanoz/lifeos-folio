@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../platform/app_directories.dart';
 import '../platform/file_actions.dart';
 import 'update_manifest.dart';
+import '../platform/store_package.dart';
 
 /// A newer Folio fetched and installed from inside Folio: the package the
 /// signed manifest names, downloaded, held to the manifest's size and
@@ -27,6 +28,8 @@ abstract final class UpdateInstaller {
   /// Whether this Folio can install an update itself; elsewhere the
   /// download page is opened.
   static bool get canInstall {
+    // The Store updates its own package.
+    if (runsFromStorePackage) return false;
     if (Platform.isWindows || Platform.isAndroid) return true;
     if (Platform.isLinux) {
       return p.isWithin(_linuxHome, Platform.resolvedExecutable);
@@ -42,6 +45,9 @@ abstract final class UpdateInstaller {
     void Function(int done, int total)? progress,
     HttpClient? client,
   }) async {
+    if (runsFromStorePackage) {
+      throw StateError('Microsoft Store’dan kurulan Folio’yu Store günceller.');
+    }
     final folder = Directory(
       p.join((await folioSupportDirectory()).path, 'guncelleme'),
     );
@@ -127,6 +133,9 @@ abstract final class UpdateInstaller {
     File package, {
     required Future<void> Function() restart,
   }) async {
+    if (runsFromStorePackage) {
+      throw StateError('Microsoft Store’dan kurulan Folio’yu Store günceller.');
+    }
     if (Platform.isWindows) {
       await Process.start(package.path, const [
         '/SP-',
