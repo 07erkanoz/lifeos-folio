@@ -2,8 +2,8 @@
 <!--
   Folio's Microsoft Store package; build-msix.ps1 fills in the version and
   the publisher. The identity is the one Partner Center reserved for
-  "LifeOS Folio: Avukatlar için". Two apps, as the installer gives: Folio
-  and LifeOS Editör, each with the file types and verbs folio.iss registers.
+  "LifeOS Folio: Avukatlar için". Two apps, as the installer gives: Folio,
+  with the file types and verbs folio.iss registers, and LifeOS Editör.
   No restricted capability beyond runFullTrust: Folio keeps a Store
   package's data in the user folder, outside the AppData Windows keeps
   apart for a package and deletes with it (app_directories.dart).
@@ -50,17 +50,32 @@
         <uap:DefaultTile Wide310x150Logo="Assets\FolioWide310x150Logo.png" ShortName="Folio" />
       </uap:VisualElements>
       <Extensions>
+        <!-- A file type is declared once in a package: what LifeOS Editör also
+             opens is Folio's, with a verb that opens it in the editor. -->
+        <uap3:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="lifeos-folio-yazi" Parameters="--preview -- &quot;%1&quot;">
+            <uap:DisplayName>LifeOS Folio Belgesi</uap:DisplayName>
+            <uap:Logo>Assets\FolioSquare44x44Logo.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.udf</uap:FileType>
+              <uap:FileType>.docx</uap:FileType>
+              <uap:FileType>.odt</uap:FileType>
+              <uap:FileType>.txt</uap:FileType>
+            </uap:SupportedFileTypes>
+            <uap2:SupportedVerbs>
+              <uap3:Verb Id="FolioPreview" Parameters="--preview -- &quot;%1&quot;">Folio ile önizle</uap3:Verb>
+              <uap3:Verb Id="FolioEdit" Parameters="--edit -- &quot;%1&quot;">Folio ile düzenle</uap3:Verb>
+              <uap3:Verb Id="EditorOpen" Parameters="--editor -- &quot;%1&quot;">LifeOS Editör ile aç</uap3:Verb>
+            </uap2:SupportedVerbs>
+          </uap3:FileTypeAssociation>
+        </uap3:Extension>
         <uap3:Extension Category="windows.fileTypeAssociation">
           <uap3:FileTypeAssociation Name="lifeos-folio-belge" Parameters="--preview -- &quot;%1&quot;">
             <uap:DisplayName>LifeOS Folio Belgesi</uap:DisplayName>
             <uap:Logo>Assets\FolioSquare44x44Logo.png</uap:Logo>
             <uap:SupportedFileTypes>
-              <uap:FileType>.udf</uap:FileType>
               <uap:FileType>.pdf</uap:FileType>
-              <uap:FileType>.docx</uap:FileType>
               <uap:FileType>.xlsx</uap:FileType>
-              <uap:FileType>.odt</uap:FileType>
-              <uap:FileType>.txt</uap:FileType>
               <uap:FileType>.md</uap:FileType>
               <uap:FileType>.markdown</uap:FileType>
               <uap:FileType>.csv</uap:FileType>
@@ -115,11 +130,7 @@
             <uap:DisplayName>LifeOS Editör Belgesi</uap:DisplayName>
             <uap:Logo>Assets\EditorSquare44x44Logo.png</uap:Logo>
             <uap:SupportedFileTypes>
-              <uap:FileType>.udf</uap:FileType>
-              <uap:FileType>.docx</uap:FileType>
               <uap:FileType>.rtf</uap:FileType>
-              <uap:FileType>.odt</uap:FileType>
-              <uap:FileType>.txt</uap:FileType>
             </uap:SupportedFileTypes>
           </uap3:FileTypeAssociation>
         </uap3:Extension>
