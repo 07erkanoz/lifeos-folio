@@ -304,8 +304,12 @@ jobs:
         run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
 
   # The phone, once the tests pass: to TestFlight, then to App Review.
+  # Set the repository variable FOLIO_IOS_RELEASE to off to leave the phone
+  # out of a release (gh variable set FOLIO_IOS_RELEASE --body off); delete
+  # it to bring it back.
   ios:
     needs: [version, tests]
+    if: vars.FOLIO_IOS_RELEASE != 'off'
     uses: ./.github/workflows/ios.yml
     with:
       submit: true
