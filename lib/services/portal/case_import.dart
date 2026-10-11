@@ -3,6 +3,7 @@ import '../uyap/uyap_case_panel_controller.dart';
 import '../uyap/uyap_case_store.dart';
 import '../uyap/uyap_web_service.dart';
 import 'portal_case.dart';
+import 'portal_channel.dart';
 import 'portal_sync.dart';
 
 /// Brings a case of the portfolio (the agenda's, UETS's) into UYAP
@@ -26,6 +27,50 @@ class PortalCaseImport {
       ? '6'
       : '1';
 
+  /// The prosecutor's office or the high court chamber [court] names, on
+  /// the web: (yargı türü, birim id); null when it names neither or is not
+  /// found. A prosecutor's office is looked for among the cases [kept]
+  /// first, then province by province.
+  static Future<(String, String)?> ownListPlace(
+    UyapWebService web,
+    String court,
+    Future<Iterable<PortalCase>> Function() kept,
+  ) async {
+    final name = UyapWebService.fold(court);
+    if (name.contains('savcilig')) {
+      for (final c in await kept()) {
+        final id = '${c.details?.value['birimId'] ?? ''}';
+        if (c.family == CaseFamily.prosecutor &&
+            id.isNotEmpty &&
+            UyapWebService.fold(c.court) == name) {
+          return (UyapWebService.prosecution, id);
+        }
+      }
+      for (final province in await web.provinces()) {
+        for (final office in await web.prosecutorOffices(province.id)) {
+          if (UyapWebService.fold(office.label) == name) {
+            return (UyapWebService.prosecution, office.id);
+          }
+        }
+      }
+      return null;
+    }
+    for (final MapEntry(key: jurisdiction, value: label)
+        in UyapWebService.highCourts.entries) {
+      if (!name.contains(UyapWebService.fold(label))) continue;
+      for (final chamber in await web.chambers(jurisdiction)) {
+        final bare = UyapWebService.fold(
+          chamber.label.replaceFirst(RegExp(r'\s*\(\d+\)\s*$'), ''),
+        );
+        if (name == bare || name.endsWith(' $bare') || name.endsWith(bare)) {
+          return (jurisdiction, chamber.id);
+        }
+      }
+      return null;
+    }
+    return null;
+  }
+
   /// Where [kase] is in UYAP. What the mobile API gave (yargı türü and
   /// birimi) and the web's unit id are used; with the web connected, what
   /// is missing is looked up among its courts by the court's name.
@@ -43,9 +88,18 @@ class PortalCaseImport {
     final web = sync.web;
     // A prosecutor's office and a high court are found by lists of their
     // own (findCase), not among the courts.
-    final ownList =
+    var ownList =
         jurisdiction == UyapWebService.prosecution ||
         UyapWebService.isHighCourt(jurisdiction);
+    // Known by name alone: a prosecutor's office or a chamber is found by
+    // its own list.
+    if (web.connected && known.isEmpty && courtId.isEmpty) {
+      final place = await ownListPlace(web, kase.court, sync.portfolio);
+      if (place != null) {
+        (jurisdiction, courtId) = place;
+        ownList = true;
+      }
+    }
     if (web.connected && !ownList && (courtType.isEmpty || courtId.isEmpty)) {
       final name = UyapWebService.fold(kase.court);
       // A guess is tried first, then the other kinds: a guess is no fact.

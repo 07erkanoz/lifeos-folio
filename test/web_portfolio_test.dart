@@ -6,6 +6,8 @@ import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/sync/uyap_own_sync.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_data.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
@@ -73,7 +75,9 @@ class _Web extends UyapWebService {
     asked.add('cases ${court.id} $pageNumber');
     final one = UyapCase('id-${court.id}', '2025/80', court.id, court.label);
     if (fullPages && court.id == 'w1') {
-      return UyapCasePage([one], UyapWebService.pageSize);
+      return UyapCasePage([
+        UyapCase('id-w1-$pageNumber', '2025/$pageNumber', 'w1', court.label),
+      ], UyapWebService.pageSize);
     }
     return UyapCasePage([one], 1);
   }
@@ -132,6 +136,25 @@ class _Web extends UyapWebService {
     DateTime from,
     DateTime to,
   ) async => const [];
+}
+
+/// A portal that answers the same full page again.
+class _RepeatingWeb extends _Web {
+  @override
+  Future<UyapCasePage> casePage({
+    required String jurisdiction,
+    required String courtType,
+    required UyapOption court,
+    int? year,
+    int? number,
+    bool closed = false,
+    int pageNumber = 1,
+  }) async {
+    asked.add('cases ${court.id} $pageNumber');
+    return UyapCasePage([
+      UyapCase('id-${court.id}', '2025/80', court.id, court.label),
+    ], UyapWebService.pageSize);
+  }
 }
 
 void main() {
@@ -238,6 +261,17 @@ void main() {
     expect(db.meta(PortalSync.enrichedKey), isNull, reason: 'off');
     sync.autoFetch = true;
     await sync.enrichOnWeb();
+    expect(
+      db.meta(PortalSync.enrichedKey),
+      isNull,
+      reason: 'no case yet: not done',
+    );
+    await syncWebPortfolio(_Web(), db);
+    db.setMeta(
+      '${PortalSync.enrichedKey}_try',
+      DateTime(2000).toIso8601String(),
+    );
+    await sync.enrichOnWeb();
     if (PortalSync.night(DateTime.now())) {
       expect(db.meta(PortalSync.enrichedKey), isNull, reason: 'at night');
       return;
@@ -285,6 +319,49 @@ void main() {
     await syncWebPortfolio(again, other, webOnly: true);
     expect(again.asked, isNot(contains('provinces')));
     expect(again.asked, contains('investigations s1 true'));
+  });
+
+  test('a newer reading by UYAP Mobil on another own device keeps what '
+      'only the web gave here: the money and the case\'s place', () async {
+    final root = await Directory.systemTemp.createTemp('folio-uyap-kayit-');
+    addTearDown(() => root.delete(recursive: true));
+    final store = UyapCaseStore(directory: Directory(root.path));
+    const place = UyapCaseLink(
+      jurisdiction: '2',
+      courtType: 'ICRA',
+      courtId: 'i7',
+      court: 'Manavgat 1. İcra Dairesi',
+      number: '2025/3311',
+    );
+    final fromWeb = UyapCaseRecord(
+      court: place.court,
+      number: place.number,
+      fetchedAt: DateTime(2026, 10, 10, 9),
+      link: place,
+      money: const UyapCaseMoney(collected: 1250.5, remaining: 800),
+    );
+    expect(await store.adoptChecked(fromWeb.toJson()), AdoptResult.kept);
+    final fromMobile = UyapCaseRecord(
+      court: place.court,
+      number: place.number,
+      fetchedAt: DateTime(2026, 10, 11, 9),
+    );
+    expect(await store.adoptChecked(fromMobile.toJson()), AdoptResult.kept);
+    final kept = (await store.load(place.court, place.number))!;
+    expect(kept.fetchedAt, DateTime(2026, 10, 11, 9));
+    expect(kept.money?.collected, 1250.5);
+    expect(kept.link?.courtId, 'i7');
+    // An older one changes nothing.
+    expect(await store.adoptChecked(fromWeb.toJson()), AdoptResult.older);
+    expect(await store.adoptChecked({'esas': 'bozuk'}), AdoptResult.failed);
+  });
+
+  test('a list whose page comes again is said to be incomplete', () async {
+    final web = _RepeatingWeb();
+    final result = await syncWebPortfolio(web, db);
+    expect(result.complete, isFalse);
+    expect(web.asked, contains('cases w1 2'));
+    expect(web.asked, isNot(contains('cases w1 3')));
   });
 
   group('with both connected', () {

@@ -314,34 +314,80 @@ class UyapCaseStore {
   /// A case's list another own device fetched, kept here when it is newer
   /// than this one's. Its documents themselves are not: each is fetched
   /// where it is opened. True when it was kept.
-  Future<bool> adopt(Map<String, Object?> json) async {
+  Future<bool> adopt(Map<String, Object?> json) async =>
+      await adoptChecked(json) == AdoptResult.kept;
+
+  /// [adopt], saying whether the record was kept, was older than this
+  /// device's (nothing to do) or could not be kept (the transfer is not
+  /// whole).
+  Future<AdoptResult> adoptChecked(Map<String, Object?> json) async {
     final UyapCaseRecord theirs;
     try {
       theirs = UyapCaseRecord.fromJson(json);
     } catch (_) {
-      return false;
+      return AdoptResult.failed;
     }
-    final mine = await recordJson(theirs.key);
+    final Map<String, Object?>? mine;
+    try {
+      mine = await recordJson(theirs.key);
+    } catch (_) {
+      return AdoptResult.failed;
+    }
     if (mine != null) {
       final at = DateTime.tryParse('${mine['cekildi']}');
-      if (at != null && !theirs.fetchedAt.isAfter(at)) return false;
+      if (at != null && !theirs.fetchedAt.isAfter(at)) {
+        return AdoptResult.older;
+      }
     }
-    // What is this device's own stays: where its documents and previews
-    // are on its disk, and the case's link in its own session.
+    final their = theirs.toJson();
+    bool empty(Object? v) =>
+        v == null ||
+        (v is Map && v.isEmpty) ||
+        (v is List && v.isEmpty) ||
+        (v is String && v.isEmpty);
+    // What only the web gives (the money, the enforcement account, the
+    // parties, the particulars) a newer reading by UYAP Mobil there does
+    // not have: what is here of it stays.
+    Object? richer(String field) =>
+        empty(their[field]) && mine != null && !empty(mine[field])
+        ? mine[field]
+        : their[field];
+    // The case's place at UYAP (court, kind, number): the same for every
+    // session, and needed to find it on the web portal here; the whole one
+    // of the two is kept.
+    bool placed(Object? bag) =>
+        bag is Map &&
+        '${bag['birimId'] ?? ''}'.isNotEmpty &&
+        ('${bag['yargiBirimi'] ?? ''}'.isNotEmpty ||
+            // A high court's chamber and a prosecutor's office have no kind.
+            const {
+              'yargitay',
+              'danistay',
+              '3',
+            }.contains('${bag['yargiTuru']}'));
+    final bag = placed(mine?['bag'])
+        ? mine!['bag']
+        : placed(their['bag'])
+        ? their['bag']
+        : mine?['bag'] ?? their['bag'];
     final kept = {
-      ...theirs.toJson(),
+      ...their,
+      'para': richer('para'),
+      'icra': richer('icra'),
+      'taraflar': richer('taraflar'),
+      'kunye': richer('kunye'),
+      // What is this device's own stays: where its documents and previews
+      // are on its disk.
       'dosyalar': mine?['dosyalar'] ?? const {},
       'onizlemeler': mine?['onizlemeler'] ?? const {},
-      // The case's place at UYAP (court, kind, number): the same for every
-      // session, and needed to find it on the web portal here.
-      'bag': mine?['bag'] ?? theirs.toJson()['bag'],
+      'bag': bag,
     };
     try {
       await _write(UyapCaseRecord.fromJson(kept));
     } catch (_) {
-      return false;
+      return AdoptResult.failed;
     }
-    return true;
+    return AdoptResult.kept;
   }
 
   /// The kept case of [key] as another own device is given it: without
@@ -723,3 +769,7 @@ class UyapCaseStore {
     return 'bin';
   }
 }
+
+/// What became of a record another own device gave ([UyapCaseStore
+/// .adoptChecked]).
+enum AdoptResult { kept, older, failed }

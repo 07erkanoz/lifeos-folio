@@ -219,7 +219,9 @@ class UyapCasePanelController extends ChangeNotifier {
       _link != null &&
       _link!.courtId.isNotEmpty &&
       (_link!.courtType.isNotEmpty ||
-          UyapWebService.isHighCourt(_link!.jurisdiction));
+          UyapWebService.isHighCourt(_link!.jurisdiction) ||
+          // A prosecutor's office lists its cases by itself, with no kind.
+          _link!.jurisdiction == UyapWebService.prosecution);
 
   /// The courts the web portal lists, asked once a session for each kind:
   /// a sync places many cases of one court kind one after another.
@@ -256,13 +258,33 @@ class UyapCasePanelController extends ChangeNotifier {
         UyapWebService.isHighCourt(link.jurisdiction)) {
       return;
     }
-    // A case known only from a hearing or a notice has no yargı türü: the
-    // court's name tells it, and the others are tried after it.
+    // A case known only from a hearing or a notice has no yargı türü. A
+    // prosecutor's office or a chamber is found by its own list; a court's
+    // kind the name tells, and the others are tried after it.
+    if (link.jurisdiction.isEmpty) {
+      final place = await PortalCaseImport.ownListPlace(
+        web,
+        link.court,
+        () => sync.portfolio(),
+      );
+      if (place != null) {
+        _link = UyapCaseLink(
+          jurisdiction: place.$1,
+          courtType: '',
+          courtId: place.$2,
+          court: link.court,
+          number: link.number,
+          closed: link.closed,
+        );
+        if (_path != null) await links.link(_path!, _link);
+        return;
+      }
+    }
     final jurisdictions = link.jurisdiction.isNotEmpty
         ? [link.jurisdiction]
         : {
             PortalCaseImport.guessJurisdiction(link.court),
-            for (final j in mobileJurisdictions) '$j',
+            ...webJurisdictions,
           }.toList();
     final name = UyapWebService.fold(link.court);
     for (final jurisdiction in jurisdictions) {
@@ -380,7 +402,8 @@ class UyapCasePanelController extends ChangeNotifier {
       // particulars call is not known to answer for it.
       final details =
           hidden.contains('ayrinti_bilgileri') ||
-              UyapWebService.isHighCourt(_link!.jurisdiction)
+              UyapWebService.isHighCourt(_link!.jurisdiction) ||
+              _link!.jurisdiction == UyapWebService.prosecution
           ? const UyapCaseDetails()
           : await web.caseDetails(live);
       final parties = hidden.contains('taraf_bilgileri')

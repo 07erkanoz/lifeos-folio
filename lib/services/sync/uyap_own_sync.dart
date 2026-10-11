@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../portal/observed.dart' show caseKey;
 import '../portal/portal_channel.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_hearing.dart';
@@ -43,6 +44,7 @@ class UyapOwnSync {
     'portfolio_at',
     'portfolio_web_only_at',
     'web_prosecutor_full_at',
+    'web_enriched_at',
     'hearings_at:uyapMobile',
     'hearings_at:uyapWeb',
     PortalSync.noticesAtKey,
@@ -59,6 +61,10 @@ class UyapOwnSync {
   // Small enough parts for a message of a megabyte, a case's long list of
   // documents and a notification's long body included.
   static const _casesAtOnce = 50, _recordsAtOnce = 3, _noticesAtOnce = 50;
+
+  /// What the records of one answer come to at most, under the megabyte a
+  /// message carries once sealed and in base64.
+  static const _recordBytes = 600 * 1024;
 
   /// This device's summary, for another own device to compare.
   Future<Map<String, Object?>> summary(String deviceId) async {
@@ -115,7 +121,10 @@ class UyapOwnSync {
         'anahtarlar': cases.sublist(i, _end(i, _casesAtOnce, cases.length)),
       });
       final got = answer?['davalar'];
-      if (got is! List) continue;
+      if (got is! List) {
+        whole = false;
+        continue;
+      }
       if (got.length < _end(i, _casesAtOnce, cases.length) - i) whole = false;
       if (db.adoptCases([
             for (final c in got)
@@ -134,24 +143,57 @@ class UyapOwnSync {
         if (DateTime.tryParse('$value') case final at?)
           if (fetched['$key'] == null || at.isAfter(fetched['$key']!)) '$key',
     ];
-    for (var i = 0; i < records.length; i += _recordsAtOnce) {
-      final answer = await asked({
-        'parca': 'kayitlar',
-        'anahtarlar': records.sublist(
-          i,
-          _end(i, _recordsAtOnce, records.length),
-        ),
-      });
+    // As many at a time as fit in a message (answer); asked again for the
+    // rest until all came, or one comes that nothing fits.
+    var left = records;
+    while (left.isNotEmpty) {
+      final batch = left.take(_recordsAtOnce).toList();
+      final answer = await asked({'parca': 'kayitlar', 'anahtarlar': batch});
       final got = answer?['kayitlar'];
-      if (got is! List) continue;
-      if (got.length < _end(i, _recordsAtOnce, records.length) - i) {
+      if (got is! List || got.isEmpty) {
         whole = false;
+        break;
       }
+      final came = <String>{};
       for (final r in got) {
-        if (r is Map && await store.adopt(r.cast<String, Object?>())) {
-          changed = true;
+        if (r is! Map) continue;
+        final json = r.cast<String, Object?>();
+        final record = UyapCaseStore.keyOf(
+          '${json['mahkeme'] ?? ''}',
+          '${json['esas'] ?? ''}',
+        );
+        came.add(record);
+        switch (await store.adoptChecked(json)) {
+          case AdoptResult.kept:
+            changed = true;
+            // Fetched there, as if here: its turn in the day's enrichment.
+            final at = DateTime.tryParse('${json['cekildi'] ?? ''}');
+            final key = caseKey(
+              '${json['esas'] ?? ''}',
+              '${json['mahkeme'] ?? ''}',
+            );
+            final mineAt = DateTime.tryParse(
+              db.meta('case_checked:$key') ?? '',
+            );
+            if (at != null && (mineAt == null || at.isAfter(mineAt))) {
+              db.setMeta('case_checked:$key', at.toIso8601String());
+            }
+          case AdoptResult.older:
+            break;
+          case AdoptResult.failed:
+            whole = false;
         }
       }
+      final rest = [
+        for (final k in left)
+          if (!came.contains(k)) k,
+      ];
+      // Nothing of the batch came: it is not asked for again without end.
+      if (rest.length == left.length) {
+        whole = false;
+        break;
+      }
+      left = rest;
     }
 
     // Notifications not kept here, or read or unread there and not here.
@@ -184,24 +226,20 @@ class UyapOwnSync {
     }
 
     final stamped = (theirs['damga'] as Map?) ?? const {};
-    DateTime? latest(DateTime? Function(String key) at) {
-      DateTime? last;
-      for (final k in ['hearings_at:uyapMobile', 'hearings_at:uyapWeb']) {
-        final t = at(k);
-        if (t != null && (last == null || t.isAfter(last))) last = t;
-      }
-      return last;
-    }
-
-    final theirRead = latest((k) => DateTime.tryParse('${stamped[k] ?? ''}'));
-    final myRead = latest((k) => DateTime.tryParse(db.meta(k) ?? ''));
-    // The coming hearings, when theirs differ and were read later than
-    // these: an older list would bring back a hearing taken off here since.
-    // A hearing taken off goes only by a whole reading of the web portal's
+    // The coming hearings, when theirs differ and one of the channels was
+    // read later there than here, each channel's time against its own: an
+    // older list would bring back a hearing taken off here since. A
+    // hearing taken off goes only by a whole reading of the web portal's
     // today there, newer than this one's: as here, nothing else takes one
     // off.
-    if (theirRead != null &&
-        (myRead == null || theirRead.isAfter(myRead)) &&
+    bool newerThere(String k) {
+      final there = DateTime.tryParse('${stamped[k] ?? ''}');
+      final here = DateTime.tryParse(db.meta(k) ?? '');
+      return there != null && (here == null || there.isAfter(here));
+    }
+
+    if ((newerThere('hearings_at:uyapMobile') ||
+            newerThere('hearings_at:uyapWeb')) &&
         '${theirs['durusmalar']}' !=
             PortalDatabase.digestOf(jsonEncode(_hearings(db)))) {
       final answer = await asked({'parca': 'durusmalar'});
@@ -262,12 +300,19 @@ class UyapOwnSync {
       case 'davalar':
         return {'davalar': db.casesOf(keys.take(_casesAtOnce))};
       case 'kayitlar':
-        return {
-          'kayitlar': [
-            for (final k in keys.take(_recordsAtOnce))
-              ?await store.recordToShare(k),
-          ],
-        };
+        // As many as fit in a message of a megabyte, sealed and in base64
+        // (OfficeLink): the first always, the asker asks again for the rest.
+        final out = <Map<String, Object?>>[];
+        var size = 0;
+        for (final k in keys.take(_recordsAtOnce)) {
+          final r = await store.recordToShare(k);
+          if (r == null) continue;
+          final bytes = utf8.encode(jsonEncode(r)).length;
+          if (out.isNotEmpty && size + bytes > _recordBytes) break;
+          out.add(r);
+          size += bytes;
+        }
+        return {'kayitlar': out};
       case 'bildirimler':
         return {
           'bildirimler': [

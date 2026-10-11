@@ -704,16 +704,12 @@ class PortalSync extends ChangeNotifier {
   /// their names whole; UYAP Mobil's, which may shorten them, after.
   Future<List<UyapParty>?> _partiesFromUyap(PortalCase kase) async {
     final details = kase.details?.value ?? const <String, Object?>{};
-    final webId = kase.ids[PortalChannel.uyapWeb];
-    if (_web.connected && webId != null && webId.isNotEmpty) {
+    // The web's ids are its session's: found in this one by its court
+    // and number, even a case known only from a hearing.
+    if (_web.connected) {
       try {
         return await _web.parties(
-          UyapCase(
-            webId,
-            kase.number,
-            '${details['birimId'] ?? ''}',
-            kase.court,
-          ),
+          await _web.findCase(await PortalCaseImport(sync: this).linkFor(kase)),
         );
       } catch (_) {}
     }
@@ -1030,9 +1026,10 @@ class PortalSync extends ChangeNotifier {
         // One running now may not read the portfolio: this one follows it.
         // Both the readings under way are waited for: a call while one
         // runs would only be given that one.
-        final running = Future.wait([?_mobileSync, ?_webSync]);
         unawaited(
-          running.whenComplete(() => syncPortfolio(full: true, newCase: true)),
+          _whenIdle().whenComplete(
+            () => syncPortfolio(full: true, newCase: true),
+          ),
         );
       }
     }
@@ -1358,7 +1355,9 @@ class PortalSync extends ChangeNotifier {
   Future<void> enrichOnWeb() => _enrichment ??= () async {
     bool keepGoing() =>
         !_disposed && _web.connected && autoFetch && !night(DateTime.now());
-    if (!keepGoing() || (deferToComputer?.call() ?? false)) return;
+    // Not left to a computer of the person's: it may have UYAP Mobil only,
+    // and the money is the web's.
+    if (!keepGoing()) return;
     final db = await _database();
     final now = DateTime.now();
     final at = DateTime.tryParse(db.meta(enrichedKey) ?? '');
@@ -1368,9 +1367,15 @@ class PortalSync extends ChangeNotifier {
         at.day == now.day) {
       return;
     }
-    // Marked first: one that fails is not begun again every five minutes.
-    db.setMeta(enrichedKey, now.toIso8601String());
-    await UyapPace.background(
+    // Tried, it is tried again in two hours, not every five minutes.
+    final tried = DateTime.tryParse(db.meta('${enrichedKey}_try') ?? '');
+    if (tried != null && now.difference(tried) < const Duration(hours: 2)) {
+      return;
+    }
+    db.setMeta('${enrichedKey}_try', now.toIso8601String());
+    // Nothing to enrich yet (the first portfolio still coming): not done.
+    if (db.cases().isEmpty) return;
+    final done = await UyapPace.background(
       () => refreshCases(
         db,
         changed: const {},
@@ -1378,6 +1383,10 @@ class PortalSync extends ChangeNotifier {
         keepGoing: keepGoing,
       ),
     );
+    if (done) {
+      db.setMeta(enrichedKey, DateTime.now().toIso8601String());
+      uyapChanged?.call();
+    }
   }().catchError((Object _) {}).whenComplete(() => _enrichment = null);
 
   Future<void>? _enrichment;
@@ -1454,6 +1463,19 @@ class PortalSync extends ChangeNotifier {
       key == _portfolioKey ? 'portfolio_try_at' : '${key}_try';
 
   Future<void>? _webSync;
+
+  /// When no UYAP reading runs: a call made while one runs would be given
+  /// that one, or dropped by [_run]; at most half an hour is waited.
+  Future<void> _whenIdle() async {
+    await Future.wait([?_mobileSync, ?_webSync]);
+    for (var i = 0; i < 900 && !_disposed; i++) {
+      if (!state(PortalChannel.uyapMobile).running &&
+          !state(PortalChannel.uyapWeb).running) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+  }
 
   /// The portfolio read again from whichever portal is connected, UYAP
   /// Mobil first; [full] as the lawyer's Senkronize et, [newCase] at once.
@@ -1634,7 +1656,7 @@ class PortalSync extends ChangeNotifier {
   /// asked within a week of daily syncs). Kept only where something changed, and the change remembered
   /// for the portfolio's list. One case at a time, as UYAP answers a
   /// burst with errors. With [changed] null, every open case is asked.
-  Future<void> refreshCases(
+  Future<bool> refreshCases(
     PortalDatabase db, {
     Set<String>? changed,
     int? stale,
@@ -1686,9 +1708,13 @@ class PortalSync extends ChangeNotifier {
           if (chosen.contains(c.key)) c,
       ];
     }
+    var through = true;
     for (final (i, kase) in open.indexed) {
-      if (!_mobile.connected && !_web.connected) break;
-      if (keepGoing != null && !keepGoing()) break;
+      if ((!_mobile.connected && !_web.connected) ||
+          (keepGoing != null && !keepGoing())) {
+        through = false;
+        break;
+      }
       _progress(
         channel,
         channel == PortalChannel.uyapWeb
@@ -1707,6 +1733,8 @@ class PortalSync extends ChangeNotifier {
         await panel.attach(linkOf(kase));
         final before = panel.record;
         await panel.refresh();
+        // Not answered: its turn comes again soon, not in a week.
+        if (panel.error != null) continue;
         // Asked, changed or not: it waits its turn again.
         db.setMeta(
           'case_checked:${kase.key}',
@@ -1729,6 +1757,7 @@ class PortalSync extends ChangeNotifier {
     }
     db.setMeta(_checkedKey, DateTime.now().toIso8601String());
     notifyListeners();
+    return through;
   }
 
   late final _finder = MobileCaseFinder(_mobile);
@@ -1934,17 +1963,23 @@ Future<PortfolioResult> syncWebPortfolio(
     Future<UyapCasePage> Function(int page) ask,
     void Function(UyapCase c) each,
   ) async {
-    var seen = 0;
+    final ids = <String>{};
     for (var page = 1; page <= _webPages; page++) {
       final got = await ask(page);
+      var fresh = 0;
       for (final c in got.cases) {
+        if (ids.add(c.id.isEmpty ? '${c.courtId}|${c.number}' : c.id)) fresh++;
         each(c);
       }
       keep();
-      seen += got.rows;
       final total = got.total;
-      if (got.rows < UyapWebService.pageSize) return true;
-      if (total != null && seen >= total) return true;
+      // A page answered again as the last one: no more is coming.
+      if (got.cases.isNotEmpty && fresh == 0) return false;
+      if (got.rows < UyapWebService.pageSize) {
+        // Short of what the portal said it has: not whole.
+        return total == null || ids.length >= total;
+      }
+      if (total != null && ids.length >= total) return true;
     }
     return false;
   }
@@ -2043,6 +2078,7 @@ Future<PortfolioResult> syncWebPortfolio(
     }
   }
   final withCases = <String, String>{...known};
+  var officesWhole = provincesRead;
   for (final office in offices) {
     onProgress?.call(step++, steps);
     for (final closed in [false, true]) {
@@ -2066,6 +2102,9 @@ Future<PortfolioResult> syncWebPortfolio(
         if (!whole) complete = false;
       } catch (_) {
         complete = false;
+        officesWhole = false;
+        // Asked again next time, whether it has cases or not.
+        withCases[office.id] = office.label;
       }
     }
   }
@@ -2075,7 +2114,7 @@ Future<PortfolioResult> syncWebPortfolio(
       for (final e in withCases.entries) {'id': e.key, 'ad': e.value},
     ]),
   );
-  if (provincesRead) {
+  if (officesWhole) {
     db.setMeta(_prosecutorFullKey, DateTime.now().toIso8601String());
   }
   onProgress?.call(steps, steps);
