@@ -101,6 +101,16 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
 
   /// A case an earlier Folio kept without where it is in UYAP: the lawyer
   /// shows it once, and it is fetched and kept with its place.
+  /// Fetched again from whichever portal is connected, a case whose place
+  /// is not known found on the web by its court's name first; chosen by
+  /// hand only when it is not found, or nothing is connected.
+  Future<void> _refreshOrLocate() async {
+    if (!_c.connected) return _locate();
+    await _withSession(_c.refresh);
+    if (!mounted || _c.findable || _c.mobile.connected) return;
+    await _locate();
+  }
+
   Future<void> _locate() async {
     final record = _c.record;
     final go = await showDialog<bool>(
@@ -406,11 +416,7 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
               tooltip: 'UYAP’tan yenile',
               onPressed: _c.busy != null
                   ? null
-                  : () => unawaited(
-                      _c.findable || _c.mobile.connected
-                          ? _withSession(_c.refresh)
-                          : _locate(),
-                    ),
+                  : () => unawaited(_refreshOrLocate()),
               icon: const Icon(Icons.refresh_rounded, size: 20),
             ),
           PopupMenuButton<String>(

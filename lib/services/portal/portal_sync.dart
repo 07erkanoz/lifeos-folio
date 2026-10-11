@@ -28,6 +28,7 @@ import '../uyap/uyap_pace.dart';
 import '../uyap/uyap_web_service.dart';
 import 'hearing_sync.dart';
 import 'observed.dart';
+import 'case_import.dart';
 import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_database.dart';
@@ -337,6 +338,7 @@ class PortalSync extends ChangeNotifier {
             (_hearingsDue(db, PortalChannel.uyapWeb) || webPortfolioDue)) {
           unawaited(syncWeb());
         }
+        if (_web.connected) unawaited(enrichOnWeb());
       }().catchError((Object _) {}),
     );
   }
@@ -1026,11 +1028,11 @@ class PortalSync extends ChangeNotifier {
       // waiting. A notification is new only once, so none reads twice.
       if (rows.any((r) => uyapNoticeNamesNewCase(r, keys))) {
         // One running now may not read the portfolio: this one follows it.
-        final running = _mobile.connected ? _mobileSync : _webSync;
+        // Both the readings under way are waited for: a call while one
+        // runs would only be given that one.
+        final running = Future.wait([?_mobileSync, ?_webSync]);
         unawaited(
-          (running ?? Future<void>.value()).whenComplete(
-            () => syncPortfolio(full: true, newCase: true),
-          ),
+          running.whenComplete(() => syncPortfolio(full: true, newCase: true)),
         );
       }
     }
@@ -1266,14 +1268,15 @@ class PortalSync extends ChangeNotifier {
       kase.family,
     )) {
       final id = kase.ids[channel];
-      if (id == null || id.isEmpty) continue;
+      // The web's ids are its session's: the case is found in this one by
+      // its court and number, even one known only from a hearing.
+      if (channel != PortalChannel.uyapWeb && (id == null || id.isEmpty)) {
+        continue;
+      }
       try {
         if (channel == PortalChannel.uyapWeb) {
-          final target = UyapCase(
-            id,
-            kase.number,
-            '${old['birimId'] ?? ''}',
-            kase.court,
+          final target = await _web.findCase(
+            await PortalCaseImport(sync: this).linkFor(kase),
           );
           final details = await _web.caseDetails(target);
           final documents = await _web.caseDocuments(target);
@@ -1310,7 +1313,7 @@ class PortalSync extends ChangeNotifier {
             ),
           ]);
         } else {
-          final raw = await _mobile.caseDocuments(id);
+          final raw = await _mobile.caseDocuments(id!);
           db.mergeCases([
             PortalCase(
               key: kase.key,
@@ -1342,6 +1345,45 @@ class PortalSync extends ChangeNotifier {
     await refreshCases(db, channel: PortalChannel.uyapWeb);
     return null;
   });
+
+  /// The open cases enriched from the web of themselves while [autoFetch]
+  /// is on, once a day (the lawyer's choice, 11 Ekim 2026): the cases with
+  /// a hearing within a month, those never fetched, and a seventh of the
+  /// rest, so that each is fetched within the week. The money, the
+  /// enforcement account and the debtors are the web's alone; the
+  /// documents' list comes, the documents do not. Apart from [syncWeb], so
+  /// that the lawyer's Senkronize et is not held while it runs; in UYAP's
+  /// one queue, a lawyer opening a case going first (refreshCases), and it
+  /// stops when the web goes, at night or when [autoFetch] is turned off.
+  Future<void> enrichOnWeb() => _enrichment ??= () async {
+    bool keepGoing() =>
+        !_disposed && _web.connected && autoFetch && !night(DateTime.now());
+    if (!keepGoing() || (deferToComputer?.call() ?? false)) return;
+    final db = await _database();
+    final now = DateTime.now();
+    final at = DateTime.tryParse(db.meta(enrichedKey) ?? '');
+    if (at != null &&
+        at.year == now.year &&
+        at.month == now.month &&
+        at.day == now.day) {
+      return;
+    }
+    // Marked first: one that fails is not begun again every five minutes.
+    db.setMeta(enrichedKey, now.toIso8601String());
+    await UyapPace.background(
+      () => refreshCases(
+        db,
+        changed: const {},
+        channel: PortalChannel.uyapWeb,
+        keepGoing: keepGoing,
+      ),
+    );
+  }().catchError((Object _) {}).whenComplete(() => _enrichment = null);
+
+  Future<void>? _enrichment;
+
+  /// When the open cases were last enriched from the web of themselves.
+  static const enrichedKey = 'web_enriched_at';
 
   /// The web portal's hearings, once a day of itself, and, when UYAP Mobil
   /// is not connected, the portfolio on the same terms as [syncMobile]'s;
@@ -1378,6 +1420,8 @@ class PortalSync extends ChangeNotifier {
             _web,
             db,
             webOnly: webOnly,
+            // A new case may be in a prosecutor's office not yet known.
+            everyProvince: newCase,
             includeClosed: db.meta(_closedKey) == '1',
             onChanged: () => portfolioVersion.value++,
             onProgress: (done, total) => _progress(
@@ -1385,11 +1429,14 @@ class PortalSync extends ChangeNotifier {
               total == 0 ? 'Portföy' : 'Portföy $done/$total',
             ),
           );
-          final key = webOnly ? _webOnlyKey : _portfolioKey;
-          db.setMeta(
-            cases.complete ? key : '${key}_try',
-            DateTime.now().toIso8601String(),
-          );
+          final now = DateTime.now().toIso8601String();
+          if (!cases.complete) {
+            db.setMeta(_tryKey(webOnly ? _webOnlyKey : _portfolioKey), now);
+          } else {
+            // Read whole alone, it read what only the web has as well.
+            db.setMeta(_webOnlyKey, now);
+            if (!webOnly) db.setMeta(_portfolioKey, now);
+          }
         }
         if (!hearings.complete || !cases.complete) {
           return 'Bazı kayıtlar alınamadı';
@@ -1401,6 +1448,11 @@ class PortalSync extends ChangeNotifier {
   /// cases whole, while UYAP Mobil read the rest.
   static const _webOnlyKey = 'portfolio_web_only_at';
 
+  /// Where a reading of [key]'s that came back in part is stamped: tried
+  /// again in two hours, not at once.
+  static String _tryKey(String key) =>
+      key == _portfolioKey ? 'portfolio_try_at' : '${key}_try';
+
   Future<void>? _webSync;
 
   /// The portfolio read again from whichever portal is connected, UYAP
@@ -1411,6 +1463,19 @@ class PortalSync extends ChangeNotifier {
         // Alone, the web reads it all; beside UYAP Mobil, what only it has.
         if (_web.connected) syncWeb(force: full, newCase: newCase),
       ]);
+
+  /// Whether the portfolio is being read, by either portal.
+  bool get portfolioRunning =>
+      state(PortalChannel.uyapMobile).running ||
+      state(PortalChannel.uyapWeb).running;
+
+  /// The state of the portal reading the portfolio now, UYAP Mobil's when
+  /// neither is.
+  ChannelSync get portfolioState => state(PortalChannel.uyapMobile).running
+      ? state(PortalChannel.uyapMobile)
+      : state(PortalChannel.uyapWeb).running
+      ? state(PortalChannel.uyapWeb)
+      : state(PortalChannel.uyapMobile);
 
   /// The channel [syncPortfolio] reads with now; null with neither.
   PortalChannel? get portfolioChannel => _mobile.connected
@@ -1429,9 +1494,7 @@ class PortalSync extends ChangeNotifier {
   }) {
     final now = DateTime.now();
     final read = DateTime.tryParse(db.meta(key) ?? '');
-    final tried = DateTime.tryParse(
-      db.meta(key == _portfolioKey ? 'portfolio_try_at' : '${key}_try') ?? '',
-    );
+    final tried = DateTime.tryParse(db.meta(_tryKey(key)) ?? '');
     if (!full) {
       return (
         (read == null || read.isBefore(weekStart(now))) &&
@@ -1576,6 +1639,7 @@ class PortalSync extends ChangeNotifier {
     Set<String>? changed,
     int? stale,
     PortalChannel channel = PortalChannel.uyapMobile,
+    bool Function()? keepGoing,
   }) async {
     final all = [
       for (final c in db.cases().values)
@@ -1624,6 +1688,7 @@ class PortalSync extends ChangeNotifier {
     }
     for (final (i, kase) in open.indexed) {
       if (!_mobile.connected && !_web.connected) break;
+      if (keepGoing != null && !keepGoing()) break;
       _progress(
         channel,
         channel == PortalChannel.uyapWeb
@@ -1766,23 +1831,37 @@ class PortfolioResult {
 /// web's alone (§9.2).
 const mobileJurisdictions = [1, 0, 2, 6];
 
-/// The web portal's courts give at most this many cases a page.
-const _webPage = 500;
+/// The kinds of jurisdiction the web portal lists cases for, court by
+/// court: the mobile API's four and satış and arabuluculuk, which it has
+/// not. The prosecutors' offices and the high courts have lists of their
+/// own (§9.2).
+const webJurisdictions = ['1', '0', '2', '6', '11', '13'];
 
-/// A Cumhuriyet (Baş)savcılığı: its cases the mobile API does not list.
-bool isProsecutor(String court) {
-  final name = court.toLowerCase();
-  return name.contains('savcılığı') || name.contains('savcilig');
-}
+/// What the web reads beside UYAP Mobil: what the mobile API does not give.
+const _webOnlyJurisdictions = ['11', '13'];
+
+/// Pages of [UyapWebService.pageSize] asked at most of one list: past it
+/// the reading is said to be incomplete, never cut short in silence.
+const _webPages = 40;
+
+/// The prosecutors' offices where the lawyer has had a case, kept so that
+/// a reading asks them alone and not all 81 provinces.
+const _prosecutorOfficesKey = 'web_prosecutor_offices';
+const _prosecutorFullKey = 'web_prosecutor_full_at';
 
 /// Every case the web portal knows of the lawyer's, merged into [db] as
 /// [syncMobilePortfolio] merges the mobile API's: court by court, by yargı
-/// türü and birimi (the same codes as the mobile API's), and the high
-/// courts chamber by chamber. With each case its place on the web is kept
-/// (its id, birim and the codes), so that its page fetches it without
-/// looking for it. [webOnly], while UYAP Mobil reads the rest: only what
-/// it cannot give (§9.2), the prosecutors' offices and the Court of
-/// Cassation. A court that fails makes the answer incomplete; the others
+/// türü and birimi (the same codes as the mobile API's), page by page; the
+/// prosecutors' offices province by province (open and closed, for most
+/// investigations are closed); the high courts chamber by chamber. With
+/// each case its place on the web is kept (its birim and the codes).
+///
+/// [webOnly], while UYAP Mobil reads the courts' cases: only what it does
+/// not give, satış and arabuluculuk, the prosecutors' offices and the
+/// Court of Cassation. The prosecutors' offices are found in all 81
+/// provinces the first time, when [everyProvince] or a month on; between,
+/// only those where a case was found are asked. A list that fails, or is
+/// longer than [_webPages] pages, makes the answer incomplete; the others
 /// are still asked.
 Future<PortfolioResult> syncWebPortfolio(
   UyapWebService web,
@@ -1791,6 +1870,7 @@ Future<PortfolioResult> syncWebPortfolio(
   void Function(int done, int total)? onProgress,
   bool includeClosed = false,
   bool webOnly = false,
+  bool everyProvince = false,
 }) async {
   final baseline = db.meta('portfolio_at') == null;
   final asked = DateTime.now().toUtc();
@@ -1848,12 +1928,32 @@ Future<PortfolioResult> syncWebPortfolio(
     found.clear();
   }
 
+  /// Every page of one list, until a page is not full or the total is
+  /// reached; false when it ran past [_webPages].
+  Future<bool> pages(
+    Future<UyapCasePage> Function(int page) ask,
+    void Function(UyapCase c) each,
+  ) async {
+    var seen = 0;
+    for (var page = 1; page <= _webPages; page++) {
+      final got = await ask(page);
+      for (final c in got.cases) {
+        each(c);
+      }
+      keep();
+      seen += got.rows;
+      final total = got.total;
+      if (got.rows < UyapWebService.pageSize) return true;
+      if (total != null && seen >= total) return true;
+    }
+    return false;
+  }
+
   // The courts first, so that how far the reading has come can be said.
   final courts = <(String, String, UyapOption, bool)>[];
   onProgress?.call(0, 0);
-  // The prosecutors' offices are among the ceza units.
-  for (final type in webOnly ? const [0] : mobileJurisdictions) {
-    final jurisdiction = '$type';
+  for (final jurisdiction
+      in webOnly ? _webOnlyJurisdictions : webJurisdictions) {
     List<UyapOption> units;
     try {
       units = await web.courtTypes(jurisdiction);
@@ -1869,7 +1969,6 @@ Future<PortfolioResult> syncWebPortfolio(
             unit.id,
             closed: closed,
           )) {
-            if (webOnly && !isProsecutor(court.label)) continue;
             courts.add((jurisdiction, unit.id, court, closed));
           }
         } catch (_) {
@@ -1878,54 +1977,135 @@ Future<PortfolioResult> syncWebPortfolio(
       }
     }
   }
-  for (final (i, (jurisdiction, unit, court, closed)) in courts.indexed) {
-    onProgress?.call(i, courts.length);
+
+  // The prosecutors' offices: the known ones, or every province's. Known
+  // by the cases kept of them, which another own device brings too, and
+  // by those found before with no case kept now.
+  final known = <String, String>{
+    for (final o
+        in (jsonDecode(db.meta(_prosecutorOfficesKey) ?? '[]') as List))
+      if (o is Map) '${o['id']}': '${o['ad'] ?? ''}',
+    for (final c in db.cases().values)
+      if (c.family == CaseFamily.prosecutor)
+        if ('${c.details?.value['birimId'] ?? ''}'.trim() case final id
+            when id.isNotEmpty)
+          id: c.court,
+  };
+  final full = DateTime.tryParse(db.meta(_prosecutorFullKey) ?? '');
+  final everywhere =
+      everyProvince ||
+      known.isEmpty ||
+      full == null ||
+      DateTime.now().difference(full) > const Duration(days: 30);
+  var offices = [for (final e in known.entries) UyapOption(e.key, e.value)];
+  var provincesRead = false;
+  if (everywhere) {
     try {
-      for (var page = 1; page <= 20; page++) {
-        final cases = await web.cases(
+      final all = <UyapOption>[];
+      for (final province in await web.provinces()) {
+        try {
+          all.addAll(await web.prosecutorOffices(province.id));
+        } catch (_) {
+          complete = false;
+        }
+      }
+      offices = all;
+      provincesRead = complete;
+    } catch (_) {
+      complete = false;
+    }
+  }
+
+  final steps = courts.length + offices.length;
+  var step = 0;
+  for (final (jurisdiction, unit, court, closed) in courts) {
+    onProgress?.call(step++, steps);
+    try {
+      final whole = await pages(
+        (page) => web.casePage(
           jurisdiction: jurisdiction,
           courtType: unit,
           court: court,
           closed: closed,
           pageNumber: page,
-        );
-        for (final c in cases) {
-          add(
-            c,
-            isProsecutor(c.courtName)
-                ? CaseFamily.prosecutor
-                : CaseFamily.court,
-            jurisdiction: jurisdiction,
-            unit: unit,
-            closed: closed,
-          );
-        }
-        keep();
-        if (cases.length < _webPage) break;
-      }
+        ),
+        (c) => add(
+          c,
+          CaseFamily.court,
+          jurisdiction: jurisdiction,
+          unit: unit,
+          closed: closed,
+        ),
+      );
+      if (!whole) complete = false;
     } catch (_) {
       complete = false;
     }
   }
-  onProgress?.call(courts.length, courts.length);
+  final withCases = <String, String>{...known};
+  for (final office in offices) {
+    onProgress?.call(step++, steps);
+    for (final closed in [false, true]) {
+      try {
+        var any = false;
+        final whole = await pages(
+          (page) =>
+              web.prosecutorCases(office, closed: closed, pageNumber: page),
+          (c) {
+            any = true;
+            add(
+              c,
+              CaseFamily.prosecutor,
+              jurisdiction: UyapWebService.prosecution,
+              unit: office.id,
+              closed: closed,
+            );
+          },
+        );
+        if (any) withCases[office.id] = office.label;
+        if (!whole) complete = false;
+      } catch (_) {
+        complete = false;
+      }
+    }
+  }
+  db.setMeta(
+    _prosecutorOfficesKey,
+    jsonEncode([
+      for (final e in withCases.entries) {'id': e.key, 'ad': e.value},
+    ]),
+  );
+  if (provincesRead) {
+    db.setMeta(_prosecutorFullKey, DateTime.now().toIso8601String());
+  }
+  onProgress?.call(steps, steps);
+
   for (final (jurisdiction, family) in [
     ('yargitay', CaseFamily.yargitay),
     // The mobile API lists the Council of State's itself.
     if (!webOnly) ('danistay', CaseFamily.danistay),
   ]) {
+    List<UyapOption> chambers;
     try {
-      for (final chamber in await web.chambers(jurisdiction)) {
+      chambers = await web.chambers(jurisdiction);
+    } catch (_) {
+      complete = false;
+      continue;
+    }
+    // One chamber that fails does not keep the others from being read.
+    for (final chamber in chambers) {
+      try {
         for (final c in await web.chamberCases(jurisdiction, chamber)) {
           add(c, family, jurisdiction: jurisdiction);
         }
         keep();
+      } catch (_) {
+        complete = false;
       }
-    } catch (_) {
-      complete = false;
     }
   }
   keep();
-  return PortfolioResult(courts.length, complete, changed);
+  return PortfolioResult(steps, complete, changed);
 }
 
 /// Every case the mobile API knows of the lawyer's, open and closed, merged

@@ -787,6 +787,31 @@ class UyapWebService {
     int? number,
     bool closed = false,
     int pageNumber = 1,
+  }) async => (await casePage(
+    jurisdiction: jurisdiction,
+    courtType: courtType,
+    court: court,
+    year: year,
+    number: number,
+    closed: closed,
+    pageNumber: pageNumber,
+  )).cases;
+
+  /// The rows a page holds at most ([cases], [casePage],
+  /// [prosecutorCases]).
+  static const pageSize = 500;
+
+  /// A page of [court]'s cases: [UyapCasePage.rows] says how many came
+  /// before they were sifted, so that a reading knows whether a next page
+  /// is there.
+  Future<UyapCasePage> casePage({
+    required String jurisdiction,
+    required String courtType,
+    required UyapOption court,
+    int? year,
+    int? number,
+    bool closed = false,
+    int pageNumber = 1,
   }) => _serial(() async {
     final filters = <String, Object?>{
       'dosyaDurumKod': closed ? 1 : 0,
@@ -802,25 +827,97 @@ class UyapWebService {
     final rows = data is List && data.isNotEmpty && data.first is List
         ? data.first as List
         : const [];
+    final cases =
+        [
+              for (final row in rows)
+                if (row is Map && (row['dosyaId']?.toString() ?? '').isNotEmpty)
+                  UyapCase(
+                    _id(row['dosyaId']),
+                    row['dosyaNo']?.toString() ?? '',
+                    _id(row['birimId'] ?? court.id),
+                    row['birimAdi']?.toString() ?? court.label,
+                    listing: UyapCaseListing.fromJson(row),
+                  ),
+            ]
+            .where(
+              (e) =>
+                  (year == null ||
+                      number == null ||
+                      _sameCaseNumber(e.number, year, number)) &&
+                  e.courtId == court.id,
+            )
+            .toList();
+    return UyapCasePage(cases, rows.length, _total(data));
+  });
+
+  /// The total a list answer `[[rows], total]` gives; null when none.
+  static int? _total(Object? data) => data is List && data.length > 1
+      ? int.tryParse('${data[1]}'.trim())
+      : null;
+
+  /// The prosecutors' offices (Cumhuriyet Başsavcılığı) list their
+  /// investigations by province, not by court kind: the provinces first.
+  Future<List<UyapOption>> provinces() => _serial(() async {
+    final data = await _post('/illeri_getirJSON.ajx', {});
     return [
-          for (final row in rows)
-            if (row is Map && (row['dosyaId']?.toString() ?? '').isNotEmpty)
-              UyapCase(
-                _id(row['dosyaId']),
-                row['dosyaNo']?.toString() ?? '',
-                _id(row['birimId'] ?? court.id),
-                row['birimAdi']?.toString() ?? court.label,
-                listing: UyapCaseListing.fromJson(row),
+      for (final item in data is List ? data : const [])
+        if (item is Map && '${item['il'] ?? ''}'.trim().isNotEmpty)
+          UyapOption('${item['il']}'.trim(), '${item['ad'] ?? ''}'.trim()),
+    ];
+  });
+
+  /// [province]'s prosecutors' offices.
+  Future<List<UyapOption>> prosecutorOffices(String province) =>
+      _serial(() async {
+        final data = await _post('/cbs_birim_sorgula.ajx', {
+          'ilKodu': int.tryParse(province) ?? province,
+        });
+        return [
+          for (final item in data is List ? data : const [])
+            if (item is Map)
+              UyapOption(
+                _id(item['birimId']),
+                item['birimAdi']?.toString().trim() ?? '',
               ),
-        ]
-        .where(
-          (e) =>
-              (year == null ||
-                  number == null ||
-                  _sameCaseNumber(e.number, year, number)) &&
-              e.courtId == court.id,
-        )
-        .toList();
+        ].where((e) => e.id.isNotEmpty).toList();
+      });
+
+  /// The yargı türü the prosecutors' offices are asked under.
+  static const prosecution = '3';
+
+  /// A page of [office]'s investigations, open or [closed]: both are to be
+  /// asked, for most are closed.
+  Future<UyapCasePage> prosecutorCases(
+    UyapOption office, {
+    bool closed = false,
+    int pageNumber = 1,
+  }) => _serial(() async {
+    final data = await _post('/avukat_dosya_sorgula_cbs_brd.ajx', {
+      'dosyaDurumKod': closed ? 1 : 0,
+      'pageSize': pageSize,
+      'pageNumber': pageNumber,
+      'birimId': '',
+      'birimTuru2': office.id,
+      'birimTuru3': prosecution,
+    });
+    final rows = data is List && data.isNotEmpty && data.first is List
+        ? data.first as List
+        : const [];
+    return UyapCasePage(
+      [
+        for (final row in rows)
+          if (row is Map && (row['dosyaId']?.toString() ?? '').isNotEmpty)
+            UyapCase(
+              _id(row['dosyaId']),
+              row['dosyaNo']?.toString() ?? '',
+              _id(row['birimId'] ?? office.id),
+              row['birimAdi']?.toString() ?? office.label,
+              listing: UyapCaseListing.fromJson(row),
+            ),
+      ],
+      rows.length,
+      _total(data),
+    );
   });
 
   Future<List<UyapDocumentType>> documentTypes(UyapCase target) =>
@@ -1311,6 +1408,15 @@ class UyapWebService {
 /// "İşlemlerim" query issues new handles.
 class UyapStaleDocument extends StateError {
   UyapStaleDocument(super.message);
+}
+
+/// A page of a list of cases: [rows] is how many came before they were
+/// sifted, [total] what the portal says it has, if it says.
+class UyapCasePage {
+  const UyapCasePage(this.cases, this.rows, [this.total]);
+  final List<UyapCase> cases;
+  final int rows;
+  final int? total;
 }
 
 class UyapOption {

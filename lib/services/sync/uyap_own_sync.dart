@@ -41,6 +41,8 @@ class UyapOwnSync {
   /// was read, each channel's hearings, and the notifications.
   static const stamps = [
     'portfolio_at',
+    'portfolio_web_only_at',
+    'web_prosecutor_full_at',
     'hearings_at:uyapMobile',
     'hearings_at:uyapWeb',
     PortalSync.noticesAtKey,

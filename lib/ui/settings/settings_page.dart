@@ -660,13 +660,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   : _desktop
                   ? 'Bağlı değil · e-imza ya da mobil imza ile'
                   : 'Bağlı değil · mobil imza ile, e-Devlet üzerinden',
-              trailing: actions(web.connected, _sync.syncWeb, web.disconnect),
+              trailing: actions(
+                web.connected,
+                () => _sync.syncWeb(force: true),
+                web.disconnect,
+              ),
               onTap: () async {
                 if (web.connected) {
                   if (wide) return;
                   await _portalMenu(
                     name: 'UYAP Web',
-                    sync: _sync.syncWeb,
+                    sync: () => _sync.syncWeb(force: true),
                     disconnect: () async => web.disconnect(),
                   );
                 } else {

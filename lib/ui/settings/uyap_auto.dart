@@ -26,7 +26,7 @@ class UyapAutoRow extends StatelessWidget {
           title: 'UYAP verilerini kendiliğinden al',
           subtitle: sync.autoFetch
               ? 'Açık. Bildirimler saatte bir, duruşmalar günde bir, dosya '
-                    'listeniz haftada bir alınır.'
+                    'listeniz haftada bir, her açık dosyanız haftada bir alınır.'
               : 'Kapalı. Folio UYAP’a yalnız siz bir şey yaptığınızda, bir '
                     'tarayıcı gibi sorar.',
           trailing: settingsSwitch(sync.autoFetch, (on) async {
@@ -85,6 +85,9 @@ class _UyapAutoDialogState extends State<_UyapAutoDialog> {
               'Bildirimlerinizi saatte bir; gece sormaz.',
               'Duruşmalarınızı günde bir.',
               'Dosya listenizi haftada bir, pazartesi günleri.',
+              'UYAP Web bağlıyken açık dosyalarınızın ayrıntılarını, '
+                  'tarafları, evrak listesini, harç, tahsilat ve icra '
+                  'bilgilerini: her gün bir kısmını, her dosyayı haftada bir.',
             ])
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 4),
@@ -156,7 +159,10 @@ class UyapHelpPage extends StatelessWidget {
           'dosyayı ya da bildirimler sayfasını açtığınızda. “UYAP verilerini '
           'kendiliğinden al” ayarını açarsanız bunlara ek olarak bildirimler '
           'saatte bir, duruşmalar günde bir ve dosya listeniz haftada bir '
-          'alınır; gece hiçbir şey sorulmaz.',
+          'alınır. UYAP Web bağlıysa açık dosyalarınızın ayrıntıları, '
+          'tahsilat ve icra bilgileri de her gün bir kısmı olmak üzere '
+          'haftada bir yenilenir; evrakın kendisi indirilmez. Gece hiçbir '
+          'şey sorulmaz.',
     ),
     (
       'UYAP’ı yormamak için',

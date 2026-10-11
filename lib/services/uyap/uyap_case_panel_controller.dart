@@ -726,6 +726,11 @@ class UyapCasePanelController extends ChangeNotifier {
         'Evrakı indirmek için UYAP Web’e ya da UYAP Mobil’e bağlanın.',
       );
     }
+    // Placed on the web first, as a refresh is: the web gives what the
+    // mobile API does not.
+    try {
+      await _placeOnWeb();
+    } catch (_) {}
     if (!_useWeb) return _fetchMobile(document);
     await _liveCase();
     var live = _liveDocuments[document.key];

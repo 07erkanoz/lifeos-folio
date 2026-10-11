@@ -36,33 +36,44 @@ class PortalCaseImport {
     }
     final details = kase.details?.value ?? const <String, Object?>{};
     String text(String key) => '${details[key] ?? ''}'.trim();
-    final jurisdiction = text('yargiTuru').isNotEmpty
-        ? text('yargiTuru')
-        : guessJurisdiction(kase.court);
+    final known = text('yargiTuru');
+    var jurisdiction = known.isNotEmpty ? known : guessJurisdiction(kase.court);
     var courtType = text('yargiBirimi');
     var courtId = text('birimId');
     final web = sync.web;
-    if (web.connected && (courtType.isEmpty || courtId.isEmpty)) {
+    // A prosecutor's office and a high court are found by lists of their
+    // own (findCase), not among the courts.
+    final ownList =
+        jurisdiction == UyapWebService.prosecution ||
+        UyapWebService.isHighCourt(jurisdiction);
+    if (web.connected && !ownList && (courtType.isEmpty || courtId.isEmpty)) {
       final name = UyapWebService.fold(kase.court);
-      final types = courtType.isNotEmpty
-          ? [courtType]
-          : [for (final t in await web.courtTypes(jurisdiction)) t.id];
+      // A guess is tried first, then the other kinds: a guess is no fact.
+      final candidates = known.isNotEmpty
+          ? [known]
+          : {jurisdiction, ...webJurisdictions}.toList();
+      var found = false;
       search:
-      for (final type in types) {
-        for (final closed in [false, true]) {
-          for (final c in await web.courts(
-            jurisdiction,
-            type,
-            closed: closed,
-          )) {
-            if (c.id == courtId || UyapWebService.fold(c.label) == name) {
-              courtType = type;
-              courtId = c.id;
-              break search;
+      for (final candidate in candidates) {
+        final types = courtType.isNotEmpty
+            ? [courtType]
+            : [for (final t in await web.courtTypes(candidate)) t.id];
+        for (final type in types) {
+          for (final closed in [false, true]) {
+            for (final c in await web.courts(candidate, type, closed: closed)) {
+              if (c.id == courtId || UyapWebService.fold(c.label) == name) {
+                jurisdiction = candidate;
+                courtType = type;
+                courtId = c.id;
+                found = true;
+                break search;
+              }
             }
           }
         }
       }
+      // Not found: the guess is not kept as if it were known.
+      if (!found && known.isEmpty) jurisdiction = '';
     }
     return UyapCaseLink(
       jurisdiction: jurisdiction,

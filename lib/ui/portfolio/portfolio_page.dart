@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../services/office/office_network.dart';
-import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_case_store.dart';
@@ -112,7 +111,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
   bool _wasRunning = false;
   void _synced() {
-    final running = _sync?.state(PortalChannel.uyapMobile).running ?? false;
+    final running = _sync?.portfolioRunning ?? false;
     // What the reading added is shown as it comes, at most every few
     // seconds, and once more when it ends.
     if (_wasRunning && !running) _reload();
@@ -212,7 +211,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
     PortalSync.begin();
     final sync = PortalSync.instance;
     if (sync.web.connected) {
-      unawaited(sync.syncWeb());
+      unawaited(sync.syncWeb(force: true));
     } else {
       unawaited(
         connectUyapWeb(context, onConnected: () => unawaited(sync.syncWeb())),
@@ -536,7 +535,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
     final now = DateTime.now();
     final mobile = UyapMobileApi.instance.connected;
     final web = UyapWebService.instance.connected;
-    final running = _sync?.state(PortalChannel.uyapMobile).running ?? false;
+    final running = _sync?.portfolioRunning ?? false;
     final dot = mobile && web
         ? AgendaColors.ok
         : mobile || web
@@ -1305,7 +1304,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
     final sync = _sync;
     final mobile = UyapMobileApi.instance.connected;
     final web = UyapWebService.instance.connected;
-    final running = sync?.state(PortalChannel.uyapMobile).running ?? false;
+    final running = sync?.portfolioRunning ?? false;
     // A channel's chip is its button: not connected, it connects; connected,
     // it syncs that channel again.
     Widget source(
@@ -1496,7 +1495,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
   }
 
   Widget _progress(BuildContext context) {
-    final state = _sync?.state(PortalChannel.uyapMobile);
+    final state = _sync?.portfolioState;
     if (state == null || !state.running) return const SizedBox.shrink();
     final text = state.progress ?? 'Hazırlanıyor';
     final m = RegExp(r'(\d+)/(\d+)').firstMatch(text);
@@ -1560,8 +1559,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'UYAP Mobil’e bağlanınca açık dosyalarınızın tamamı buraya '
-            'kendiliğinden gelir; seçip eklemeniz gerekmez.',
+            'UYAP Web’e ya da UYAP Mobil’e bağlanınca açık dosyalarınızın '
+            'tamamı buraya kendiliğinden gelir; seçip eklemeniz gerekmez.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AgendaColors.muted),
           ),

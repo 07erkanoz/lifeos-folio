@@ -154,8 +154,25 @@ extension UyapCaseFinding on UyapWebService {
       }
       throw StateError('${link.title} UYAP’ta bulunamadı.');
     }
-    final number = RegExp(r'(\d{4})\s*/\s*(\d+)').firstMatch(link.number);
     final wanted = UyapCase('', link.number, link.courtId, link.court);
+    if (link.jurisdiction == UyapWebService.prosecution) {
+      // A prosecutor's office lists by page only, open and closed apart.
+      for (final closed in [link.closed, !link.closed]) {
+        for (var page = 1; page <= 40; page++) {
+          final got = await prosecutorCases(
+            UyapOption(link.courtId, link.court),
+            closed: closed,
+            pageNumber: page,
+          );
+          for (final c in got.cases) {
+            if (c.sameCase(wanted)) return c;
+          }
+          if (got.rows < UyapWebService.pageSize) break;
+        }
+      }
+      throw StateError('${link.title} UYAP’ta bulunamadı.');
+    }
+    final number = RegExp(r'(\d{4})\s*/\s*(\d+)').firstMatch(link.number);
     for (final closed in [link.closed, !link.closed]) {
       final found = await cases(
         jurisdiction: link.jurisdiction,
