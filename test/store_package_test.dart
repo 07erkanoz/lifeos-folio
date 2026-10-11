@@ -49,4 +49,25 @@ void main() {
     expect(folder.toLowerCase(), isNot(contains('appdata')));
     expect(folder.toLowerCase(), isNot(contains('onedrive')));
   });
+
+  test('the user folder is a full path with its drive, or nothing', () {
+    expect(
+      userProfileFrom({'USERPROFILE': r'C:\Users\avukat'}),
+      r'C:\Users\avukat',
+    );
+    // A path without its drive hangs on the drive Folio started from.
+    expect(
+      userProfileFrom({
+        'USERPROFILE': r'\Users\avukat',
+        'HOMEDRIVE': 'D:',
+        'HOMEPATH': r'\Users\avukat',
+      }),
+      r'D:\Users\avukat',
+    );
+    expect(
+      () => userProfileFrom({'USERPROFILE': r'\Users\avukat', 'HOMEDRIVE': ''}),
+      throwsStateError,
+    );
+    expect(() => userProfileFrom({}), throwsStateError);
+  });
 }

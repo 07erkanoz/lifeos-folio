@@ -81,8 +81,8 @@
               <uap:FileType>.tiff</uap:FileType>
             </uap:SupportedFileTypes>
             <uap2:SupportedVerbs>
-              <uap3:Verb Id="folio-preview" Parameters="--preview -- &quot;%1&quot;">Folio ile önizle</uap3:Verb>
-              <uap3:Verb Id="folio-edit" Parameters="--edit -- &quot;%1&quot;">Folio ile düzenle</uap3:Verb>
+              <uap3:Verb Id="FolioPreview" Parameters="--preview -- &quot;%1&quot;">Folio ile önizle</uap3:Verb>
+              <uap3:Verb Id="FolioEdit" Parameters="--edit -- &quot;%1&quot;">Folio ile düzenle</uap3:Verb>
             </uap2:SupportedVerbs>
           </uap3:FileTypeAssociation>
         </uap3:Extension>

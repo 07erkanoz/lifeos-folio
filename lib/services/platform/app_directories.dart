@@ -23,12 +23,18 @@ Future<Directory> folioSupportDirectory() async {
 
 /// The Windows user's folder. Never AppData in its place: there a
 /// package's records would be kept apart and deleted with it.
-String _userProfile() {
-  final env = Platform.environment;
+String _userProfile() => userProfileFrom(Platform.environment);
+
+/// [env]'s USERPROFILE, else HOMEDRIVE and HOMEPATH: a full path with its
+/// drive, never one hung on whatever drive Folio was started from.
+@visibleForTesting
+String userProfileFrom(Map<String, String> env) {
+  bool full(String path) =>
+      p.windows.isAbsolute(path) && !p.windows.isRootRelative(path);
   final profile = env['USERPROFILE'];
-  if (profile != null && p.windows.isAbsolute(profile)) return profile;
+  if (profile != null && full(profile)) return profile;
   final drive = env['HOMEDRIVE'], path = env['HOMEPATH'];
-  if (drive != null && path != null && p.windows.isAbsolute('$drive$path')) {
+  if (drive != null && path != null && full('$drive$path')) {
     return '$drive$path';
   }
   throw StateError(
