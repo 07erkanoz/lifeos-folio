@@ -25,6 +25,7 @@ import '../../services/portal/portal_hearing.dart';
 import '../../services/uets/notice_matcher.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
+import '../help/help_button.dart';
 import '../mobile/scroll_chrome.dart';
 import '../office/tasks_page.dart' show TaskDetail;
 import 'channel_bar.dart';
@@ -516,6 +517,8 @@ class _AgendaPageState extends State<AgendaPage> {
             ),
           ),
           const Spacer(),
+          const HelpButton(Help.agenda),
+          const SizedBox(width: 8),
           box(
             const Icon(Icons.chevron_left, size: 16),
             onTap: () => _move(-1),
@@ -653,6 +656,7 @@ class _AgendaPageState extends State<AgendaPage> {
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
+              const HelpButton(Help.agenda),
               IconButton(
                 key: const ValueKey('agenda-calendar'),
                 tooltip: 'Takvime aktar',

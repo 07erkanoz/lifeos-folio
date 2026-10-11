@@ -11,6 +11,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
+import '../help/help_button.dart';
 import '../office/tasks_page.dart' show TaskDetail;
 import '../widgets/uyap_connect_view.dart';
 import 'portfolio_rows.dart';
@@ -582,6 +583,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
               style: TextStyle(fontSize: 17.5, fontWeight: FontWeight.w700),
             ),
           ),
+          const HelpButton(Help.portfolio),
           PopupMenuButton<String>(
             key: const ValueKey('portfolio-live'),
             tooltip: 'Bağlantılar',
@@ -1420,6 +1422,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
       children: [
         const Text(
           'Dava Dosyalarım',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
@@ -1435,6 +1439,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
             if (freshDocs > 0)
               '${freshCases.length} dosyada $freshDocs yeni evrak',
           ].join(' · '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
       ],
@@ -1449,6 +1455,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
           ? Row(
               children: [
                 Expanded(child: title),
+                const HelpButton(Help.portfolio),
+                const SizedBox(width: 8),
                 ...actions,
               ],
             )
@@ -1460,6 +1468,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                 Row(
                   children: [
                     Expanded(child: title),
+                    const HelpButton(Help.portfolio),
                     IconButton(
                       key: const ValueKey('portfolio-refresh'),
                       tooltip: 'Portföyü yenile',

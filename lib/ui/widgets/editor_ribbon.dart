@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_quill/quill_delta.dart';
 import '../../models/document_model.dart';
 import '../../services/editor/doc_delta_map.dart';
 import '../../services/editor/petition_templates.dart';
+import '../help/help_button.dart';
 
 /// The editor's ribbon tabs (docs/design/editor-serit-taslak.png), after
 /// Banaozel's: Giriş holds the writing tools, Hukuk the petition, the case,
@@ -69,6 +72,12 @@ class EditorRibbonTabs extends StatelessWidget {
                 ),
               ),
             ),
+          // The editor's help, at the tabs' height.
+          const SizedBox(width: 4),
+          SizedBox(
+            height: height,
+            child: const Center(child: HelpButton(Help.editor, size: 18)),
+          ),
         ],
       ),
     );
@@ -96,6 +105,14 @@ class RibbonTabPicker extends StatelessWidget {
                   : const SizedBox(width: 18),
               child: Text(tab.label),
             ),
+          // No room for the help's own button here: it is in the menu.
+          const Divider(height: 1),
+          MenuItemButton(
+            key: const ValueKey('ribbon-pick-help'),
+            onPressed: () => unawaited(showHelp(context, Help.editor)),
+            leadingIcon: const Icon(Icons.help_outline_rounded, size: 18),
+            child: const Text('Bu sayfa nasıl kullanılır?'),
+          ),
         ],
         builder: (context, menu, _) => MediaQuery.sizeOf(context).width < 600
             // A phone keeps the row's room for its tools: an icon alone.

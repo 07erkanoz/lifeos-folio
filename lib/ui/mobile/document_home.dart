@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/evrak_file.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../help/help_button.dart';
 
 /// The next hearing as the first page shows it, under the agenda's card:
 /// "09:20 · Antalya 3. Asliye Hukuk · 2025/412" over "Ön inceleme
@@ -328,15 +329,22 @@ class MobileDocumentHome extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
-            child: Text(
-              '${today.day} ${_months[today.month - 1]} '
-              '${_days[today.weekday - 1]}',
-              style: const TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -.3,
-              ),
+            padding: const EdgeInsets.fromLTRB(4, 4, 0, 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${today.day} ${_months[today.month - 1]} '
+                    '${_days[today.weekday - 1]}',
+                    style: const TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -.3,
+                    ),
+                  ),
+                ),
+                const HelpButton(Help.home),
+              ],
             ),
           ),
           Padding(

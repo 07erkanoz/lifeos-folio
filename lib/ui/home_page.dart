@@ -52,6 +52,7 @@ import 'portfolio/portfolio_page.dart';
 import 'search/global_search.dart';
 import 'search/global_search_page.dart';
 import 'desktop/desktop_home.dart';
+import 'help/help_button.dart';
 import 'widgets/editor_ribbon.dart';
 import 'widgets/desktop_frame.dart' show windowFullScreen;
 import 'library/search_controls.dart';
@@ -2131,6 +2132,14 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                             ),
                                           ),
                                         const Spacer(),
+                                        // On a phone the bar is full; the
+                                        // pages under it have their own.
+                                        if (!mobile)
+                                          HelpButton(
+                                            _showLibrary && _isUyapGroup(_group)
+                                                ? Help.portfolio
+                                                : Help.library,
+                                          ),
                                         if (_files.isNotEmpty)
                                           PopupMenuButton<int>(
                                             tooltip: 'Açık evraklar',

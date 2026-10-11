@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../help/help_button.dart';
 import '../../services/live/live_share.dart';
 import '../../services/office/office_network.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
@@ -24,7 +25,12 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text('Canlı paylaş · ${widget.host.title}'),
+    title: Row(
+      children: [
+        Expanded(child: Text('Canlı paylaş · ${widget.host.title}')),
+        const HelpButton(Help.live),
+      ],
+    ),
     content: SizedBox(
       width: 440,
       child: ListenableBuilder(

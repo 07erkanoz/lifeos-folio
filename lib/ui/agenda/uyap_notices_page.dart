@@ -9,6 +9,7 @@ import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/portal/uyap_notice.dart';
 import '../../services/portal/uyap_notice_alerts.dart';
+import '../help/help_button.dart';
 import '../mobile/scroll_chrome.dart';
 import '../portfolio/portfolio_rows.dart';
 import 'agenda_page.dart' show AgendaColors;
@@ -297,7 +298,12 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                title,
+                Row(
+                  children: [
+                    Expanded(child: title),
+                    const HelpButton(Help.uyapNotices),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, runSpacing: 6, children: actions),
               ],
@@ -305,6 +311,8 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
           : Row(
               children: [
                 Expanded(child: title),
+                const HelpButton(Help.uyapNotices),
+                const SizedBox(width: 8),
                 Wrap(spacing: 8, runSpacing: 6, children: actions),
               ],
             ),

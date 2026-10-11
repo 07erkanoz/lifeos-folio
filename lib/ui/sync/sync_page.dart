@@ -11,6 +11,7 @@ import '../../services/office/office_peer.dart';
 import '../../services/sync/folder_sync.dart';
 import '../../services/sync/own_sync.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../help/help_button.dart';
 import '../office/office_pairing_dialog.dart';
 import '../office/qr_pairing.dart';
 import '../widgets/drop_zone.dart';
@@ -156,6 +157,7 @@ class _SyncPageState extends State<SyncPage> {
           ],
         ),
       ),
+      const HelpButton(Help.sync),
       if (any && _net.joined)
         OutlinedButton.icon(
           key: const ValueKey('sync-now'),

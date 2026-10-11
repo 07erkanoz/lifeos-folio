@@ -15,6 +15,7 @@ import '../../services/platform/file_actions.dart';
 import '../../services/platform/phone_document_save.dart';
 import '../../services/speech/speech_session.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../help/help_button.dart';
 import '../widgets/drop_zone.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'office_offer_dialog.dart' show sizeText;
@@ -215,6 +216,7 @@ class _MessagesPageState extends State<MessagesPage> {
                             ),
                           ),
                         ),
+                        const HelpButton(Help.messages),
                         if (_net.ledger.exists)
                           FilledButton.icon(
                             key: const ValueKey('chat-new'),

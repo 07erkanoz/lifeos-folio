@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../help/help_button.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../services/editor/lawyer_profile.dart';
@@ -349,7 +351,12 @@ class _LiveJoinDialogState extends State<LiveJoinDialog> {
     final asking = pairing != null && !pairing.finished;
     final waitingDoc = pairing?.state == PairingState.done && _came == null;
     return AlertDialog(
-      title: const Text('Canlı belgeye katıl'),
+      title: const Row(
+        children: [
+          Expanded(child: Text('Canlı belgeye katıl')),
+          HelpButton(Help.live),
+        ],
+      ),
       content: SizedBox(
         width: 400,
         child:

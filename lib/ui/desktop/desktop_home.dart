@@ -20,6 +20,7 @@ import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
 import '../agenda/uets_connect.dart';
+import '../help/help_button.dart';
 import '../search/global_search.dart';
 import '../search/home_search_box.dart';
 import '../widgets/uyap_connect_view.dart';
@@ -446,6 +447,8 @@ class _DesktopHomeState extends State<DesktopHome> {
             ),
           ),
         ),
+        const SizedBox(width: 4),
+        const HelpButton(Help.home),
       ],
     );
   }

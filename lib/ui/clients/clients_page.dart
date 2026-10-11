@@ -23,6 +23,7 @@ import '../widgets/speech_download_dialog.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../help/help_button.dart';
 import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
 import 'attachment_preview.dart';
@@ -625,6 +626,7 @@ class _ClientsPageState extends State<ClientsPage> {
                   ),
                 ),
               ),
+              const HelpButton(Help.clients),
               OutlinedButton.icon(
                 key: const ValueKey('clients-new'),
                 style: OutlinedButton.styleFrom(

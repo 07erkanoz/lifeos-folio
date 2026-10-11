@@ -29,6 +29,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
 import '../agenda/uets_connect.dart';
 import '../desktop/quick_search_settings.dart';
+import '../help/help_button.dart';
 import '../mobile/lawyer_profile_page.dart';
 import '../mobile/mobile_settings_page.dart'
     show ArchiveFoldersPage, LearningPage;
@@ -1358,7 +1359,11 @@ class _SettingsPageState extends State<SettingsPage> {
             return Scaffold(
               backgroundColor: settingsPage(context),
               appBar: widget.onBack == null
-                  ? settingsBar(context, 'Ayarlar')
+                  ? settingsBar(
+                      context,
+                      'Ayarlar',
+                      action: const HelpButton(Help.settings),
+                    )
                   : AppBar(
                       leading: IconButton(
                         tooltip: 'Geri',
@@ -1366,6 +1371,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         icon: const Icon(Icons.arrow_back_rounded),
                       ),
                       title: const Text('Ayarlar'),
+                      actions: const [HelpButton(Help.settings)],
                     ),
               body: list,
             );
@@ -1419,6 +1425,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         ],
                       ),
                       const Spacer(),
+                      const HelpButton(Help.settings),
+                      const SizedBox(width: 8),
                       SizedBox(width: 320, child: _searchField()),
                     ],
                   ),

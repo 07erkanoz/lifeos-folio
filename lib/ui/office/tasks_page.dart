@@ -12,6 +12,7 @@ import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/platform/file_actions.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../help/help_button.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'task_give_dialog.dart';
 
@@ -223,7 +224,7 @@ class _TasksPageState extends State<TasksPage> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const HelpButton(Help.tasks),
                         for (final (v, label) in [
                           if (manager) (_View.all, 'Bütün büro'),
                           (_View.given, 'Verdiğim'),

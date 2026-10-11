@@ -21,6 +21,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../agenda/mobile_connect.dart';
+import '../help/help_button.dart';
 import '../office/send_to_office.dart';
 import '../office/task_give_dialog.dart';
 import '../office/tasks_page.dart' show TaskDetail, dueOf;
@@ -560,6 +561,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
           ),
+          const HelpButton(Help.caseDetail),
           TextButton.icon(
             key: const ValueKey('case-header-details'),
             onPressed: () => setState(() => _detailsWanted = true),
@@ -1258,6 +1260,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                           : info,
                     ),
                     const SizedBox(width: 12),
+                    const HelpButton(Help.caseDetail),
+                    const SizedBox(width: 4),
                     Wrap(spacing: 8, runSpacing: 8, children: actions),
                   ],
                 ),
@@ -1276,6 +1280,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                     Expanded(child: info),
+                    const HelpButton(Help.caseDetail),
                   ],
                 ),
                 const SizedBox(height: 10),

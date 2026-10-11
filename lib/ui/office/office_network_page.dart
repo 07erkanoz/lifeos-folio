@@ -10,6 +10,7 @@ import '../../services/office/office_transfer.dart';
 import '../../services/platform/file_actions.dart';
 import '../../services/office/office_peer.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../help/help_button.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'office_offer_dialog.dart' show sizeText;
 import 'office_pairing_dialog.dart';
@@ -172,6 +173,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
             ],
           ),
         ),
+        const HelpButton(Help.office),
         if (_net.joined)
           _phone
               ? FilledButton.tonalIcon(

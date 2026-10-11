@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import '../help/help_button.dart';
+
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -421,6 +424,8 @@ class _CashPageState extends State<CashPage> {
           const SizedBox(width: 10),
           period,
           const Spacer(),
+          const HelpButton(Help.cash),
+          const SizedBox(width: 6),
           for (final a in actions) ...[a, const SizedBox(width: 6)],
         ],
       );
@@ -428,7 +433,14 @@ class _CashPageState extends State<CashPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(children: [title, const Spacer(), ...actions]),
+        Row(
+          children: [
+            title,
+            const Spacer(),
+            const HelpButton(Help.cash),
+            ...actions,
+          ],
+        ),
         const SizedBox(height: 8),
         Row(
           children: [

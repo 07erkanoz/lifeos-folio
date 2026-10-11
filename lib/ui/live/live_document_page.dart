@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../help/help_button.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
@@ -222,6 +224,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
       appBar: AppBar(
         title: Text(_s.title, overflow: TextOverflow.ellipsis),
         actions: [
+          const HelpButton(Help.live),
           TextButton(
             key: const ValueKey('live-leave'),
             onPressed: () async {

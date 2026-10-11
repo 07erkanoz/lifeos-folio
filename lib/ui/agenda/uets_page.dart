@@ -22,6 +22,7 @@ import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_web_service.dart' show UyapParty;
 import 'agenda_page.dart' show AgendaColors;
+import '../help/help_button.dart';
 import '../mobile/scroll_chrome.dart';
 import '../portfolio/portfolio_rows.dart' show titleName;
 import 'channel_bar.dart';
@@ -489,6 +490,7 @@ class _UetsPageState extends State<UetsPage> {
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                   ),
                 ),
+                const HelpButton(Help.uets),
                 button,
               ],
             ),
@@ -524,6 +526,8 @@ class _UetsPageState extends State<UetsPage> {
             ),
           ),
           const Spacer(),
+          const HelpButton(Help.uets),
+          const SizedBox(width: 8),
           filters,
           const SizedBox(width: 14),
           button,

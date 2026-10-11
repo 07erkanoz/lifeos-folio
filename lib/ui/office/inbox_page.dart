@@ -8,6 +8,7 @@ import '../../services/office/office_network.dart';
 import '../../services/platform/file_actions.dart';
 import '../../services/platform/folder_zip.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../help/help_button.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'office_offer_dialog.dart' show sizeText;
 
@@ -165,6 +166,7 @@ class _InboxPageState extends State<InboxPage> {
                         ],
                       ),
                     ),
+                    const HelpButton(Help.inbox),
                     if (!_phone)
                       OutlinedButton.icon(
                         key: const ValueKey('inbox-folder'),
