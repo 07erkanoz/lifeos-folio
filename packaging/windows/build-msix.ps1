@@ -6,7 +6,9 @@ param([string]$BundleDirectory = '', [string]$OutputDirectory = '')
 #   LifeOS-Folio-<version>-Deneme.msix unsigned as well, but with the
 #                                      publisher Windows 11 installs with
 #                                      Add-AppxPackage -AllowUnsigned, to try
-#                                      a package before it goes to the Store.
+#                                      a package before it goes to the Store;
+#                                      without the toast activator, which
+#                                      Windows allows only signed.
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (!$BundleDirectory) { $BundleDirectory = Join-Path $root 'build/windows/x64/runner/Release' }
@@ -50,6 +52,11 @@ foreach ($variant in @(@{ Name = 'Store'; Publisher = $storePublisher },
     Copy-Item -Path (Join-Path $bundle '*') -Destination $stage -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'msix/Assets') -Destination (Join-Path $stage 'Assets') -Recurse -Force
     $manifest = $template.Replace('{VERSION}', $packageVersion).Replace('{PUBLISHER}', $variant.Publisher)
+    if ($variant.Name -eq 'Deneme') {
+        # An unsigned package may not start an executable as a COM server.
+        $manifest = [regex]::Replace($manifest, '(?s)\s*<!-- toast-begin -->.*?<!-- toast-end -->', '')
+        if ($manifest -match 'comServer|toastNotificationActivation') { throw 'The toast activator is left in the Deneme manifest.' }
+    }
     if ($manifest -match '\{[A-Z]+\}') { throw 'A placeholder is left in the manifest.' }
     [IO.File]::WriteAllText((Join-Path $stage 'AppxManifest.xml'), $manifest, $utf8)
 
