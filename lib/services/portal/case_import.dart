@@ -62,7 +62,8 @@ class PortalCaseImport {
         final bare = UyapWebService.fold(
           chamber.label.replaceFirst(RegExp(r'\s*\(\d+\)\s*$'), ''),
         );
-        if (name == bare || name.endsWith(' $bare') || name.endsWith(bare)) {
+        // Whole words: "11. Hukuk Dairesi" is not "1. Hukuk Dairesi".
+        if (name == bare || name.endsWith(' $bare')) {
           return (jurisdiction, chamber.id);
         }
       }

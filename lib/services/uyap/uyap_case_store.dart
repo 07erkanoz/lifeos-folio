@@ -340,11 +340,13 @@ class UyapCaseStore {
       }
     }
     final their = theirs.toJson();
+    // Empty all through: a particulars' map of empty fields is none.
     bool empty(Object? v) =>
         v == null ||
-        (v is Map && v.isEmpty) ||
-        (v is List && v.isEmpty) ||
-        (v is String && v.isEmpty);
+        (v is String && v.trim().isEmpty) ||
+        (v is List && v.every(empty)) ||
+        (v is Map && v.values.every(empty)) ||
+        v == false;
     // What only the web gives (the money, the enforcement account, the
     // parties, the particulars) a newer reading by UYAP Mobil there does
     // not have: what is here of it stays.

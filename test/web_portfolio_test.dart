@@ -276,10 +276,29 @@ void main() {
       expect(db.meta(PortalSync.enrichedKey), isNull, reason: 'at night');
       return;
     }
-    final first = db.meta(PortalSync.enrichedKey);
-    expect(first, isNotNull);
+    // The cases could not be fetched here (no portal answers the panel):
+    // tried, and not counted done, so it is tried again in two hours.
+    final tried = db.meta('${PortalSync.enrichedKey}_try');
+    expect(tried, isNot(DateTime(2000).toIso8601String()));
+    expect(db.meta(PortalSync.enrichedKey), isNull, reason: 'not done');
     await sync.enrichOnWeb();
-    expect(db.meta(PortalSync.enrichedKey), first, reason: 'once a day');
+    expect(
+      db.meta('${PortalSync.enrichedKey}_try'),
+      tried,
+      reason: 'not again within two hours',
+    );
+    // Done today: not begun again, whatever was tried.
+    db.setMeta(PortalSync.enrichedKey, DateTime.now().toIso8601String());
+    db.setMeta(
+      '${PortalSync.enrichedKey}_try',
+      DateTime(2000).toIso8601String(),
+    );
+    await sync.enrichOnWeb();
+    expect(
+      db.meta('${PortalSync.enrichedKey}_try'),
+      DateTime(2000).toIso8601String(),
+      reason: 'once a day',
+    );
   });
 
   test('what one own device read of the web goes whole to another: the '

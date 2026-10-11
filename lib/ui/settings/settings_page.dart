@@ -38,6 +38,7 @@ import 'uyap_auto.dart';
 import '../security/security_settings.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/default_viewer_dialog.dart';
+import 'clear_data.dart';
 import '../../services/platform/store_package.dart';
 import '../widgets/folio_about_dialog.dart';
 import '../widgets/notice.dart';
@@ -1169,6 +1170,18 @@ class _SettingsPageState extends State<SettingsPage> {
             title: 'Gizlilik ve KVKK',
             subtitle: 'Verileriniz yalnız bu cihazda ve kendi cihazlarınızda',
             onTap: () => unawaited(openFolioLegal(context, folioPrivacy)),
+          ),
+        ),
+        _Entry(
+          'tüm verileri temizle sil sıfırla kurulum baştan',
+          SettingsRow(
+            key: const ValueKey('settings-clear-all'),
+            icon: Icons.delete_forever_outlined,
+            fill: AgendaColors.deadlineFill,
+            tint: AgendaColors.deadline,
+            title: 'Tüm verileri temizle',
+            subtitle: 'Folio’yu ilk kurulduğu hâline döndürür ve kapatır',
+            onTap: () => unawaited(clearAllData(context)),
           ),
         ),
       ]),

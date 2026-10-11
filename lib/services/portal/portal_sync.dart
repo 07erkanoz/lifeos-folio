@@ -713,9 +713,14 @@ class PortalSync extends ChangeNotifier {
         );
       } catch (_) {}
     }
-    final mobileId = kase.ids[PortalChannel.uyapMobile];
-    if (_mobile.connected && mobileId != null && mobileId.isNotEmpty) {
+    if (_mobile.connected) {
       try {
+        // The mobile API's ids are its session's too.
+        final mobileId = await mobileCaseId(
+          court: kase.court,
+          number: kase.number,
+        );
+        if (mobileId == null) return null;
         return [
           for (final p in await _mobile.parties(
             mobileId,
@@ -1412,7 +1417,9 @@ class PortalSync extends ChangeNotifier {
         );
         final hearingsDue = force || _hearingsDue(db, PortalChannel.uyapWeb);
         if (!hearingsDue && !portfolioDue) return null;
-        if (!force && (deferToComputer?.call() ?? false)) return null;
+        // Not left to a computer of the person's: it may have UYAP Mobil
+        // only, and the prosecutors' and the Court of Cassation's are the
+        // web's.
         var hearings = const HearingSyncResult(0, true, []);
         if (hearingsDue) {
           _progress(PortalChannel.uyapWeb, 'Duruşmalar');
@@ -1465,10 +1472,10 @@ class PortalSync extends ChangeNotifier {
   Future<void>? _webSync;
 
   /// When no UYAP reading runs: a call made while one runs would be given
-  /// that one, or dropped by [_run]; at most half an hour is waited.
+  /// that one, or dropped by [_run].
   Future<void> _whenIdle() async {
     await Future.wait([?_mobileSync, ?_webSync]);
-    for (var i = 0; i < 900 && !_disposed; i++) {
+    while (!_disposed) {
       if (!state(PortalChannel.uyapMobile).running &&
           !state(PortalChannel.uyapWeb).running) {
         return;
@@ -1733,8 +1740,12 @@ class PortalSync extends ChangeNotifier {
         await panel.attach(linkOf(kase));
         final before = panel.record;
         await panel.refresh();
-        // Not answered: its turn comes again soon, not in a week.
-        if (panel.error != null) continue;
+        // Not answered: its turn comes again soon, not in a week, and the
+        // day is not done.
+        if (panel.error != null || panel.record == null) {
+          through = false;
+          continue;
+        }
         // Asked, changed or not: it waits its turn again.
         db.setMeta(
           'case_checked:${kase.key}',
@@ -1750,6 +1761,7 @@ class PortalSync extends ChangeNotifier {
         portfolioVersion.value++;
       } catch (_) {
         // One case that does not answer does not stop the others.
+        through = false;
       } finally {
         panel.dispose();
       }
@@ -2099,7 +2111,11 @@ Future<PortfolioResult> syncWebPortfolio(
           },
         );
         if (any) withCases[office.id] = office.label;
-        if (!whole) complete = false;
+        if (!whole) {
+          complete = false;
+          officesWhole = false;
+          withCases[office.id] = office.label;
+        }
       } catch (_) {
         complete = false;
         officesWhole = false;

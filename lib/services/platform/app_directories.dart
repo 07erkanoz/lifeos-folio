@@ -47,7 +47,6 @@ String userProfileFrom(Map<String, String> env) {
 /// and cash book must outlive that. The user folder's root is neither
 /// AppData nor anything OneDrive keeps in step, which takes its own folder
 /// and Desktop, Documents and Pictures.
-@visibleForTesting
 String storeDataFolder(String userProfile) =>
     p.windows.join(userProfile, 'LifeOS Folio');
 

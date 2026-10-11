@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:async';
 
 import 'services/desktop/desktop_instance.dart';
+import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
 import 'services/platform/onboarding_store.dart';
 import 'services/security/app_lock.dart';
@@ -40,6 +41,9 @@ import 'ui/widgets/suggestion_list.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Tüm verileri temizle left what was open then: cleared before anything
+  // is read.
+  await DataReset.finishPending();
   // LifeOS Editör: the editor alone, in a window of its own, without the
   // archive, the tray or the single-instance lock.
   if (arguments.contains(previewFlag)) {

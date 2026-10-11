@@ -125,12 +125,14 @@ class UyapOwnSync {
         whole = false;
         continue;
       }
-      if (got.length < _end(i, _casesAtOnce, cases.length) - i) whole = false;
-      if (db.adoptCases([
-            for (final c in got)
-              if (c is Map) c.cast<String, Object?>(),
-          ]) >
-          0) {
+      final valid = [
+        for (final c in got)
+          if (c is Map && c.isNotEmpty) c.cast<String, Object?>(),
+      ];
+      if (valid.length < _end(i, _casesAtOnce, cases.length) - i) {
+        whole = false;
+      }
+      if (db.adoptCases(valid) > 0) {
         changed = true;
       }
     }
@@ -166,8 +168,13 @@ class UyapOwnSync {
         switch (await store.adoptChecked(json)) {
           case AdoptResult.kept:
             changed = true;
-            // Fetched there, as if here: its turn in the day's enrichment.
-            final at = DateTime.tryParse('${json['cekildi'] ?? ''}');
+            // Read from the web there, as if here: its turn in the day's
+            // enrichment. A reading by UYAP Mobil, without the money, is
+            // none.
+            final fromWeb = json['para'] != null || json['icra'] != null;
+            final at = fromWeb
+                ? DateTime.tryParse('${json['cekildi'] ?? ''}')
+                : null;
             final key = caseKey(
               '${json['esas'] ?? ''}',
               '${json['mahkeme'] ?? ''}',
@@ -214,14 +221,17 @@ class UyapOwnSync {
         ),
       });
       final got = answer?['bildirimler'];
-      if (got is! List) continue;
-      if (got.length < _end(i, _noticesAtOnce, notices.length) - i) {
+      if (got is! List) {
         whole = false;
+        continue;
       }
       final rows = [
         for (final r in got)
           if (r is Map) ?noticeFromJson(r.cast<String, Object?>()),
       ];
+      if (rows.length < _end(i, _noticesAtOnce, notices.length) - i) {
+        whole = false;
+      }
       if (db.adoptUyapNotices(rows) > 0 || rows.isNotEmpty) changed = true;
     }
 
@@ -244,6 +254,7 @@ class UyapOwnSync {
             PortalDatabase.digestOf(jsonEncode(_hearings(db)))) {
       final answer = await asked({'parca': 'durusmalar'});
       final got = answer?['durusmalar'];
+      if (got is! List) whole = false;
       if (got is List) {
         final list = [
           for (final h in got)
