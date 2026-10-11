@@ -101,10 +101,7 @@
             </uap2:SupportedVerbs>
           </uap3:FileTypeAssociation>
         </uap3:Extension>
-        <!-- A notification clicked while Folio is closed opens it (system_notices.dart).
-             Windows refuses this in an unsigned package: build-msix.ps1 leaves it
-             out of the Deneme one. -->
-        <!-- toast-begin -->
+        <!-- A notification clicked while Folio is closed opens it (system_notices.dart). -->
         <desktop:Extension Category="windows.toastNotificationActivation">
           <desktop:ToastNotificationActivation ToastActivatorCLSID="5050b8bd-2412-4507-b2a9-d08dd96d1a0c" />
         </desktop:Extension>
@@ -115,7 +112,6 @@
             </com:ExeServer>
           </com:ComServer>
         </com:Extension>
-        <!-- toast-end -->
       </Extensions>
     </Application>
 

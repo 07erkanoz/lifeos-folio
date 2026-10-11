@@ -35,3 +35,25 @@ kararlı sürümün Latest işareti değiştirilmez. Paketler Actions artefakt k
 kullanmaz. Eski test sürümleri Releases üzerinden
 silinebilir. Hata günlüklerinin Actions saklama süresi üç gündür.
 Kod imzalama sertifikası yapılandırılmadığı için Setup.exe Authenticode imzası içermez.
+
+## Microsoft Store paketi (MSIX)
+
+`.github/workflows/msix.yml` elle başlatılır ve `build-msix.ps1` ile
+`LifeOS-Folio-<sürüm>-Store.msix` üretir. Paket imzasızdır; Partner Center
+onu ayrılan kimlikle imzalar. `test-msix.ps1` paketi kurar, Folio ile
+LifeOS Editör'ü açar, verinin `%USERPROFILE%\LifeOS Folio` altına yazıldığını
+ve paket kaldırılınca durduğunu denetler, WACK'ı çalıştırır ve aşağıdaki
+deneme satırını aynen dener.
+
+Mağazadan önce kendi Windows'unda denemek için: Ayarlar › Sistem ›
+Geliştiriciler için › Geliştirici Modu'nu aç, paketi İndirilenler'e koy ve
+PowerShell'de şu satırı çalıştır. Windows imzasız bir masaüstü paketini
+kurmaz; bu satır paketin içeriğini kaydeder. Sürüm numarası pakettekiyle
+aynı olmalı.
+
+```powershell
+Get-AppxPackage *LifeOSFolio* | Remove-AppxPackage; Copy-Item "$HOME\Downloads\LifeOS-Folio-1.6.8-Store.msix" "$HOME\Downloads\folio-msix.zip" -Force; Expand-Archive "$HOME\Downloads\folio-msix.zip" "$HOME\FolioMsixDeneme" -Force; Add-AppxPackage -Register "$HOME\FolioMsixDeneme\AppxManifest.xml"
+```
+
+Kaldırmak için: `Get-AppxPackage *LifeOSFolio* | Remove-AppxPackage`.
+

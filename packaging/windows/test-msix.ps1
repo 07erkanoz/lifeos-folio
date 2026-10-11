@@ -100,5 +100,36 @@ if (Test-Path -LiteralPath $appcert) {
 } else {
     Write-Host '::warning::The Windows App Certification Kit is not on this runner.'
 }
+# What the lawyer is told to do to try the package before the Store: with
+# Developer Mode on, the one line from packaging/windows/README.md, as it
+# is written there. It must install and Folio must start from it.
+$devMode = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock'
+New-Item -Path $devMode -Force | Out-Null
+Set-ItemProperty -Path $devMode -Name 'AllowDevelopmentWithoutDevLicense' -Value 1 -Type DWord
+$downloads = Join-Path $HOME 'Downloads'
+New-Item -ItemType Directory -Path $downloads -Force | Out-Null
+Copy-Item -LiteralPath $stores[0].FullName -Destination (Join-Path $downloads $stores[0].Name) -Force
+$line = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'README.md') -Encoding UTF8 |
+    Where-Object { $_ -like 'Get-AppxPackage *LifeOSFolio* | Remove-AppxPackage;*' } | Select-Object -First 1)
+if (!$line) { throw 'The try-it line is missing from packaging/windows/README.md.' }
+# The README names one version; the line is tried with this build's.
+$line = $line -replace 'LifeOS-Folio-[0-9.]+-Store\.msix', $stores[0].Name
+Invoke-Expression $line
+try {
+    $registered = Get-AppxPackage -Name 'ErkanZ.LifeOSFolioAvukatlariin'
+    if (!$registered) { throw 'The try-it line did not register the package.' }
+    Start-Process -FilePath 'explorer.exe' -ArgumentList "shell:AppsFolder\$($registered.PackageFamilyName)!Folio"
+    $running = $null
+    for ($i = 0; $i -lt 30 -and !$running; $i++) {
+        Start-Sleep -Seconds 2
+        $running = Get-Process -Name 'lifeos_folio' -ErrorAction SilentlyContinue
+    }
+    if (!$running) { throw 'Folio did not start from the registered package.' }
+    Write-Host 'The try-it line registered the package and Folio started from it.'
+} finally {
+    Get-Process -Name 'lifeos_folio', 'lifeos_editor' -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-AppxPackage -Name 'ErkanZ.LifeOSFolioAvukatlariin' | Remove-AppxPackage
+}
+
 # The kit's own exit code is reported above, not passed on as this test's.
 exit 0

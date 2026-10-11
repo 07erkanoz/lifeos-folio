@@ -1,14 +1,10 @@
 param([string]$BundleDirectory = '', [string]$OutputDirectory = '')
 # Folio's Microsoft Store package, from the bundle build-installer.ps1 has
-# already completed with the C++ runtime. Two packages come out:
-#   LifeOS-Folio-<version>-Store.msix  unsigned, for Partner Center, which
-#                                      signs it with the reserved identity;
-#   LifeOS-Folio-<version>-Deneme.msix unsigned as well, but with the
-#                                      publisher Windows 11 installs with
-#                                      Add-AppxPackage -AllowUnsigned, to try
-#                                      a package before it goes to the Store;
-#                                      without the toast activator, which
-#                                      Windows allows only signed.
+# already completed with the C++ runtime: LifeOS-Folio-<version>-Store.msix,
+# unsigned, for Partner Center, which signs it with the reserved identity.
+# Windows installs no unsigned package that starts a desktop executable, so
+# to try it before the Store, test-msix.ps1 registers its unpacked content
+# as a Windows with Developer Mode does (Add-AppxPackage -Register).
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (!$BundleDirectory) { $BundleDirectory = Join-Path $root 'build/windows/x64/runner/Release' }
@@ -37,26 +33,18 @@ $makepri = Join-Path $sdk.FullName 'x64/makepri.exe'
 
 $template = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'msix/AppxManifest.xml') -Raw -Encoding UTF8
 $storePublisher = 'CN=A88DF4A4-5857-47AC-959B-C26094290704'
-# Microsoft's mark for a package that is installed unsigned.
-$unsignedPublisher = "$storePublisher, OID.2.25.311729368913984317654407730594956997722=1"
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $output = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 
-foreach ($variant in @(@{ Name = 'Store'; Publisher = $storePublisher },
-                       @{ Name = 'Deneme'; Publisher = $unsignedPublisher })) {
+foreach ($variant in @(@{ Name = 'Store'; Publisher = $storePublisher })) {
     $stage = Join-Path $output "stage-$($variant.Name)"
     if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
     New-Item -ItemType Directory -Path $stage | Out-Null
     Copy-Item -Path (Join-Path $bundle '*') -Destination $stage -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'msix/Assets') -Destination (Join-Path $stage 'Assets') -Recurse -Force
     $manifest = $template.Replace('{VERSION}', $packageVersion).Replace('{PUBLISHER}', $variant.Publisher)
-    if ($variant.Name -eq 'Deneme') {
-        # An unsigned package may not start an executable as a COM server.
-        $manifest = [regex]::Replace($manifest, '(?s)\s*<!-- toast-begin -->.*?<!-- toast-end -->', '')
-        if ($manifest -match 'comServer|toastNotificationActivation') { throw 'The toast activator is left in the Deneme manifest.' }
-    }
     if ($manifest -match '\{[A-Z]+\}') { throw 'A placeholder is left in the manifest.' }
     [IO.File]::WriteAllText((Join-Path $stage 'AppxManifest.xml'), $manifest, $utf8)
 
