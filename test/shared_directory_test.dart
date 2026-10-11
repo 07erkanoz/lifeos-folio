@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:evrak_convert/services/platform/app_directories.dart';
 
@@ -48,5 +49,25 @@ void main() {
     final old = Directory('${root.path}/com.erkanoz.evrakConvert')
       ..createSync();
     expect((await macDataFolder(now)).path, old.path);
+  });
+
+  test('on Windows the data stays in the folder it was first kept in, '
+      'whatever company the executable names', () async {
+    final roaming = await Directory.systemTemp.createTemp('folio-roaming-');
+    addTearDown(() => roaming.delete(recursive: true));
+    // What path_provider gives 1.6.7 and later: <company>\\<product>.
+    final current = Directory(p.join(roaming.path, 'LifeOS', 'LifeOS Folio'));
+
+    // First installed since 1.6.7: its own folder under LifeOS.
+    final fresh = await windowsDataFolder(current);
+    expect(fresh.path, p.join(roaming.path, 'LifeOS', 'LifeOS Evrakçı'));
+    expect(fresh.existsSync(), isTrue);
+
+    // Kept by 1.6.6 or before under com.erkanoz: that one, even beside a
+    // folder 1.6.7 made when it did not find it.
+    final before = await Directory(
+      p.join(roaming.path, 'com.erkanoz', 'LifeOS Evrakçı'),
+    ).create(recursive: true);
+    expect((await windowsDataFolder(current)).path, before.path);
   });
 }

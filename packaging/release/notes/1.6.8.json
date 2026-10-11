@@ -1,0 +1,4 @@
+{
+  "tr": "Windows'ta 1.6.7'ye güncelledikten sonra Folio bazı bilgisayarlarda belgelerinizi, ayarlarınızı ve dava dosyalarınızı göstermiyordu. Verileriniz silinmemişti; bu sürüm Folio'nun onları yeniden bulmasını sağlar.",
+  "en": "On Windows, after updating to 1.6.7, Folio did not show your documents, settings and cases on some computers. Your data had not been deleted; this version lets Folio find it again."
+}

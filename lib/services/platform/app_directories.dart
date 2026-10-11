@@ -11,6 +11,19 @@ Future<Directory> folioSupportDirectory() async {
   final current = await getApplicationSupportDirectory();
   if (Platform.isMacOS) return macDataFolder(current);
   if (!Platform.isWindows) return current;
+  return windowsDataFolder(current);
+}
+
+/// The executable's company named the data folder's parent: com.erkanoz
+/// until 1.6.7 named it LifeOS. A Folio that ran before keeps its folder
+/// under com.erkanoz; one first installed since keeps its own under the
+/// company it was installed with.
+@visibleForTesting
+Future<Directory> windowsDataFolder(Directory current) async {
+  final before = Directory(
+    p.join(current.parent.parent.path, 'com.erkanoz', 'LifeOS Evrakçı'),
+  );
+  if (await before.exists()) return before;
   final stable = Directory(p.join(current.parent.path, 'LifeOS Evrakçı'));
   await stable.create(recursive: true);
   return stable;

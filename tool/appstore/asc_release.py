@@ -133,6 +133,14 @@ def submit(version, number, notes_path):
     whats_new = json.load(open(notes_path, encoding='utf-8'))['tr'].strip()[:4000]
     build = wait_for_build(version, number)
     print(f'Derleme {version} ({number}) işlendi.')
+    # Apple asked something about a version and awaits the answer: what it
+    # reviews is left as it is, and this build stays in TestFlight.
+    waiting = api('GET', f'/v1/reviewSubmissions?filter[app]={APP}'
+                         f'&filter[platform]=IOS&filter[state]=UNRESOLVED_ISSUES')['data']
+    if waiting:
+        print('Apple bir önceki gönderim için yanıt bekliyor (App Review sayfası); '
+              f'{version} yalnız TestFlight’ta kaldı, incelemeye gönderilmedi.')
+        return
     v = the_version(version)
     state = v['attributes']['appStoreState']
     if state in SUBMITTED:
