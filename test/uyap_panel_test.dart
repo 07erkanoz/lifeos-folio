@@ -115,6 +115,13 @@ class _Portal {
               },
             ],
           };
+        // The hukuk court kinds; the others have none for this lawyer.
+        case '/yargiBirimleriSorgula_brd.ajx':
+          body = sent.contains('"yargiTuru":"1"')
+              ? [
+                  {'tablo': '0926', 'kod': 'Aile Mahkemesi'},
+                ]
+              : const [];
         case '/avukat_mahkemeleri_sorgula.ajx':
           body = [
             {'birimId': 'c4', 'birimAdi': 'İstanbul 4. Aile Mahkemesi'},
@@ -332,6 +339,29 @@ void main() {
         ),
       );
       expect(again.findable, isTrue);
+    },
+  );
+
+  test(
+    'a case known only from a hearing, with no yargı türü, birim or id, is '
+    'found on the web by its court\'s name and fetched, not refused',
+    () async {
+      await portal.login(web);
+      final c = panel();
+      await c.attach(
+        const UyapCaseLink(
+          jurisdiction: '',
+          courtType: '',
+          courtId: '',
+          court: 'İstanbul 5. Aile Mahkemesi',
+          number: '2026/1204',
+        ),
+      );
+      await c.refresh();
+      expect(c.error, isNull);
+      expect(c.link?.jurisdiction, '1');
+      expect(c.link?.courtId, 'c5');
+      expect(c.record?.details.kind, 'Boşanma');
     },
   );
 

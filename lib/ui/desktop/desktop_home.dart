@@ -497,11 +497,13 @@ class _DesktopHomeState extends State<DesktopHome> {
                 tint: AgendaColors.hearing,
                 title: 'UYAP Web',
                 dot: web.connected ? AgendaColors.ok : const Color(0xFF9AA2B1),
-                status: web.connected && webSession != null
+                status: web.connected && state(PortalChannel.uyapWeb).running
+                    ? 'Güncelleniyor${state(PortalChannel.uyapWeb).progress == null ? '…' : ' · ${state(PortalChannel.uyapWeb).progress}'}'
+                    : web.connected && webSession != null
                     ? 'Bağlı · ${webSession.user} · '
                           '${_left(DateTime.now().add(webSession.remaining()))} kaldı'
                           '${last(PortalChannel.uyapWeb)}'
-                    : 'Bağlı değil · Yargıtay ve tam evrak için',
+                    : 'Bağlı değil · portföy, duruşma ve tam evrak için',
                 busy: state(PortalChannel.uyapWeb).running,
                 connected: web.connected,
                 action: web.connected ? 'Senkronize et' : 'Bağlan',
@@ -528,7 +530,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                     ? AgendaColors.ok
                     : const Color(0xFF9AA2B1),
                 status: !mobile.connected
-                    ? 'Bağlı değil · portföy ve duruşmalar için'
+                    ? 'Bağlı değil · isteğe bağlı, telefondan giriş'
                     : mobileState.running
                     ? 'Güncelleniyor${mobileState.progress == null ? '…' : ' · ${mobileState.progress}'}'
                     : 'Bağlı · ${_left(mobileSession?.expires ?? DateTime.now())} geçerli'

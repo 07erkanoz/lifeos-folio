@@ -126,15 +126,19 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
       return;
     }
     var all = await _sync.portfolio();
-    if (all.isEmpty && _sync.mobile.connected) {
+    final channel = _sync.portfolioChannel;
+    if (all.isEmpty && channel != null) {
       // The portfolio is read court by court; how far it has come is
       // shown, and the cases come as they are read.
+      final from = channel == PortalChannel.uyapMobile
+          ? 'UYAP Mobil’den'
+          : 'UYAP Web’den';
       void tick() {
-        final p = _sync.state(PortalChannel.uyapMobile).progress;
+        final p = _sync.state(channel).progress;
         if (mounted) {
           setState(
             () => _progress =
-                'UYAP Mobil’den portföy okunuyor${p == null ? '…' : ' · $p'}',
+                '$from portföy okunuyor${p == null ? '…' : ' · $p'}',
           );
         }
       }
@@ -142,7 +146,7 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
       tick();
       _sync.addListener(tick);
       try {
-        await _sync.syncMobile(full: true);
+        await _sync.syncPortfolio(full: true);
       } finally {
         _sync.removeListener(tick);
       }
@@ -152,8 +156,8 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
     if (!mounted) return;
     if (all.isEmpty) {
       _say(
-        'Portföy henüz boş. UYAP Mobil’e bağlanın: tüm dosyalarınız birim '
-        'birim gelir.',
+        'Portföy henüz boş. UYAP Web’e ya da UYAP Mobil’e bağlanın: tüm '
+        'dosyalarınız birim birim gelir.',
       );
       return;
     }

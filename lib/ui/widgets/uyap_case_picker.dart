@@ -332,7 +332,11 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                   children: [
                     if (_kept.isNotEmpty || _portfolio.isNotEmpty)
                       _keptList(context),
-                    if (!_mobile.connected && PortalSync.started != null) ...[
+                    // The web reads the portfolio too; UYAP Mobil is
+                    // offered only when neither is connected.
+                    if (PortalSync.started != null &&
+                        !_mobile.connected &&
+                        !_web.connected) ...[
                       OutlinedButton.icon(
                         key: const ValueKey('uyap-picker-mobile'),
                         onPressed: () async {

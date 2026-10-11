@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -175,13 +176,22 @@ class _PortfolioPageState extends State<PortfolioPage> {
     }
   }
 
+  /// The portfolio read again from whichever portal is connected; with
+  /// neither, a login first: the web portal on a computer, UYAP Mobil on a
+  /// phone.
   Future<void> _refresh() async {
     PortalSync.begin();
     final sync = PortalSync.instance;
-    if (!sync.mobile.connected) {
-      if (!await connectUyapMobile(context, api: sync.mobile)) return;
+    if (sync.portfolioChannel == null) {
+      if (Platform.isAndroid || Platform.isIOS) {
+        if (!await connectUyapMobile(context, api: sync.mobile)) return;
+      } else {
+        final done = Completer<void>();
+        await connectUyapWeb(context, onConnected: done.complete);
+        if (!sync.web.connected) return;
+      }
     }
-    await sync.syncMobile(full: true);
+    await sync.syncPortfolio(full: true);
     await _reload();
   }
 

@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../portal/case_import.dart';
 import '../portal/observed.dart' show caseKey;
 import '../portal/portal_sync.dart';
 import 'uyap_case_links.dart';
@@ -252,28 +253,37 @@ class UyapCasePanelController extends ChangeNotifier {
         findable ||
         !web.connected ||
         link.court.isEmpty ||
-        link.jurisdiction.isEmpty ||
         UyapWebService.isHighCourt(link.jurisdiction)) {
       return;
     }
+    // A case known only from a hearing or a notice has no yargı türü: the
+    // court's name tells it, and the others are tried after it.
+    final jurisdictions = link.jurisdiction.isNotEmpty
+        ? [link.jurisdiction]
+        : {
+            PortalCaseImport.guessJurisdiction(link.court),
+            for (final j in mobileJurisdictions) '$j',
+          }.toList();
     final name = UyapWebService.fold(link.court);
-    final types = link.courtType.isNotEmpty
-        ? [link.courtType]
-        : [for (final t in await web.courtTypes(link.jurisdiction)) t.id];
-    for (final type in types) {
-      for (final closed in [link.closed, !link.closed]) {
-        for (final c in await _courtsOf(link.jurisdiction, type, closed)) {
-          if (UyapWebService.fold(c.label) != name) continue;
-          _link = UyapCaseLink(
-            jurisdiction: link.jurisdiction,
-            courtType: type,
-            courtId: c.id,
-            court: link.court,
-            number: link.number,
-            closed: link.closed,
-          );
-          if (_path != null) await links.link(_path!, _link);
-          return;
+    for (final jurisdiction in jurisdictions) {
+      final types = link.courtType.isNotEmpty
+          ? [link.courtType]
+          : [for (final t in await web.courtTypes(jurisdiction)) t.id];
+      for (final type in types) {
+        for (final closed in [link.closed, !link.closed]) {
+          for (final c in await _courtsOf(jurisdiction, type, closed)) {
+            if (UyapWebService.fold(c.label) != name) continue;
+            _link = UyapCaseLink(
+              jurisdiction: jurisdiction,
+              courtType: type,
+              courtId: c.id,
+              court: link.court,
+              number: link.number,
+              closed: link.closed,
+            );
+            if (_path != null) await links.link(_path!, _link);
+            return;
+          }
         }
       }
     }
@@ -294,8 +304,10 @@ class UyapCasePanelController extends ChangeNotifier {
   Future<UyapCase> _liveCase() async {
     if (!findable) {
       throw StateError(
-        'Bu dosyanın UYAP’taki yeri kayıtlı değil. Dosyayı UYAP’tan yeniden '
-        'ekleyin.',
+        web.connected
+            ? 'Bu dosya UYAP Web’de ${_link?.court ?? 'mahkemesinde'} '
+                  'bulunamadı. Mahkeme adı UYAP’takiyle aynı mı?'
+            : 'Bu dosyayı UYAP’tan getirmek için UYAP Web’e bağlanın.',
       );
     }
     final session = web.session.value;
