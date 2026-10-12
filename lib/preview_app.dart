@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
 
+import 'models/evrak_file.dart';
 import 'services/platform/editor_window.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
@@ -102,10 +103,42 @@ class _PreviewAppState extends State<PreviewApp> {
           body: path == null
               ? const Center(child: Text('Gösterilecek belge yok.'))
               : FilePreview(path: path),
+          // Opened from the file manager to be read; written in Folio itself
+          // with one press, as the file manager's "Folio ile düzenle" does.
+          floatingActionButton: path != null && _editable(path)
+              ? FloatingActionButton.extended(
+                  key: const ValueKey('preview-window-edit'),
+                  onPressed: () => unawaited(_edit(path)),
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('Düzenle'),
+                )
+              : null,
         ),
       ),
     );
   }
+}
+
+bool _editable(String path) {
+  if (!EditorWindow.available) return false;
+  try {
+    return EvrakFile.fromPath(path).format.canEdit;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// [path] handed to Folio to be edited (the open Folio takes it if there is
+/// one), and this window closed.
+Future<void> _edit(String path) async {
+  await Process.start(Platform.resolvedExecutable, [
+    '--edit',
+    '--',
+    path,
+  ], mode: ProcessStartMode.detached);
+  try {
+    await windowManager.close();
+  } catch (_) {}
 }
 
 /// [path] in a preview window of its own.

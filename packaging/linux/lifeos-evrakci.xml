@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+<mime-type type="application/udf">
+<comment>UYAP UDF belgesi</comment>
+<glob pattern="*.udf"/>
+<alias type="application/x-uyap-udf"/>
+<alias type="application/x-udf"/>
+</mime-type>
+</mime-info>

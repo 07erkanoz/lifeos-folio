@@ -40,6 +40,9 @@ StartupWMClass=$linuxApplicationId
 MimeType=$mimeTypes
 ''';
 
+  /// UDF's other names, which `udfMime` makes aliases of application/udf.
+  static const udfAliases = {'application/x-uyap-udf', 'application/x-udf'};
+
   /// Desktop Exec has its own escaping rules (not shell quoting).
   static String quoteExec(String value) =>
       '"${value.replaceAll('\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('`', '\\\\`').replaceAll(r'$', r'\\$').replaceAll('%', '%%')}"';
@@ -119,8 +122,15 @@ MimeType=$mimeTypes
       if (result.exitCode != 0) {
         throw StateError('Uygulama kaydedilemedi: ${result.stderr}');
       }
-      await Process.start('explorer.exe', ['ms-settings:defaultapps']);
-      return 'Seçilen türler: ${types.map((t) => t.extensions.map((e) => ".$e").join(", ")).join(", ")}. Windows ayarlarında LifeOS Folio’yu seçip bu türleri onaylayın. Son seçimi Windows ekranında yaparsınız.';
+      // Folio's own page in Default apps, not the list of every program.
+      await Process.start('explorer.exe', [
+        'ms-settings:defaultapps?registeredAppUser=LifeOSEvrak',
+      ]);
+      return 'Windows ayarlarında LifeOS Folio sayfası açıldı. '
+          '${types.expand((t) => t.extensions).map((e) => ".$e").join(", ")} '
+          'türlerinin yanındaki uygulamayı LifeOS Folio yapın; Windows '
+          'varsayılanı yalnız orada değiştirmeye izin verir. Folio, '
+          'desteklediği bütün türler için “Birlikte aç” listesinde de durur.';
     }
     if (Platform.isAndroid) {
       return configureAndroidDefaultViewer();
@@ -156,13 +166,25 @@ MimeType=$mimeTypes
       ),
       icon,
     );
+    // A tool the desktop lacks is said, not a reason to stop: the files
+    // are in place, and the desktop reads them once it has the tool.
+    final missing = <String>[];
+    Future<ProcessResult?> tool(String command, List<String> args) async {
+      try {
+        return await run(command, args);
+      } on ProcessException {
+        missing.add(command);
+        return null;
+      }
+    }
+
     final mimeChanged = await replaceFileIfChanged(
       File(p.join(base, 'mime', 'packages', 'lifeos-evrakci.xml')),
       utf8.encode(udfMime),
     );
     if (mimeChanged) {
-      final result = await run('update-mime-database', [p.join(base, 'mime')]);
-      if (result.exitCode != 0) {
+      final result = await tool('update-mime-database', [p.join(base, 'mime')]);
+      if (result != null && result.exitCode != 0) {
         throw StateError('UDF dosya türü kaydedilemedi: ${result.stderr}');
       }
     }
@@ -171,15 +193,23 @@ MimeType=$mimeTypes
       utf8.encode(desktopEntry(executable, linuxApplicationId)),
     );
     if (entryChanged) {
-      final result = await run('update-desktop-database', [applications]);
-      if (result.exitCode != 0) {
+      final result = await tool('update-desktop-database', [applications]);
+      if (result != null && result.exitCode != 0) {
         throw StateError('Uygulama kaydı güncellenemedi: ${result.stderr}');
       }
     }
     // GNOME observes complete files itself. Do not force a shared icon cache reload.
     final failed = <String>[];
     for (final mime in types.expand((t) => t.mimeTypes).toSet()) {
-      final current = await run('xdg-mime', ['query', 'default', mime]);
+      final ProcessResult current;
+      try {
+        current = await run('xdg-mime', ['query', 'default', mime]);
+      } on ProcessException {
+        throw StateError(
+          'xdg-mime bulunamadı: varsayılan uygulama atanamadı. '
+          'xdg-utils paketini kurup yeniden deneyin.',
+        );
+      }
       if (current.exitCode == 0 &&
           current.stdout.toString().trim() == '$linuxApplicationId.desktop') {
         continue;
@@ -189,6 +219,12 @@ MimeType=$mimeTypes
         '$linuxApplicationId.desktop',
         mime,
       ]);
+      // An alias answers for its type, or not at all, as the desktop's
+      // xdg-mime has it: only the type itself is asked back.
+      if (udfAliases.contains(mime)) {
+        if (result.exitCode != 0) failed.add(mime);
+        continue;
+      }
       final check = await run('xdg-mime', ['query', 'default', mime]);
       if (result.exitCode != 0 ||
           check.exitCode != 0 ||
@@ -201,6 +237,14 @@ MimeType=$mimeTypes
         'Bazı türler atanamadı: ${failed.join(', ')}. Diğer türler için işlem tamamlanmış olabilir.',
       );
     }
-    return 'LifeOS Folio şu türler için varsayılan oldu: ${types.expand((t) => t.extensions).map((e) => ".$e").join(", ")}. Belgeler doğrudan geniş önizlemede açılır.';
+    final done =
+        'LifeOS Folio şu türler için varsayılan oldu: '
+        '${types.expand((t) => t.extensions).map((e) => ".$e").join(", ")}. '
+        'Belgeler Folio’da önizlemeyle açılır.';
+    return missing.isEmpty
+        ? done
+        : '$done Bu sistemde ${missing.join(", ")} yok; dosya yöneticisi '
+              'yeni kaydı oturum yeniden açılınca görebilir '
+              '(shared-mime-info ve desktop-file-utils paketleri).';
   }
 }

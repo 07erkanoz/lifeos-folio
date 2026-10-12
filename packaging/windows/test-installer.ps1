@@ -50,6 +50,33 @@ if ((Get-Item "$contextBase\LifeOSFolio.Preview\command").GetValue('') -ne $expe
 if ((Get-Item "$contextBase\LifeOSFolio.Edit\command").GetValue('') -ne "`"$exe`" --edit -- `"%1`"") {
     throw 'Edit context command is incorrect.'
 }
+if ((Get-Item "$progId\shell\edit\command").GetValue('') -ne "`"$exe`" --edit -- `"%1`"") {
+    throw 'Edit command on the document type is incorrect.'
+}
+$application = 'HKCU:\Software\Classes\Applications\lifeos_folio.exe'
+if ((Get-Item "$application\SupportedTypes").GetValue('.udf') -ne '') {
+    throw 'Folio is not offered in Open with for .udf.'
+}
+# Settings › Varsayılan uygulama runs register-viewer.ps1 with what the lawyer
+# chose: it must leave every type the installer registered, the preview as
+# the open command, and other programs' Open with entries alone.
+$otherProgId = 'HKCU:\Software\Classes\.pdf\OpenWithProgids'
+New-ItemProperty -LiteralPath $otherProgId -Name 'Other.Reader' -PropertyType String -Value '' -Force | Out-Null
+$script = Join-Path $installDir 'data/flutter_assets/packaging/windows/register-viewer.ps1'
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Executable $exe -SelectedExtensions udf
+if ($LASTEXITCODE -ne 0) { throw 'register-viewer.ps1 failed.' }
+if ((Get-Item "$progId\shell\open\command").GetValue('') -ne $expectedPreview) {
+    throw 'register-viewer.ps1 changed the open command.'
+}
+foreach ($extension in @('.pdf', '.udf', '.tif', '.tiff')) {
+    if ((Get-Item "$capabilities\FileAssociations").GetValue($extension) -ne 'LifeOSEvrak.Document') {
+        throw "register-viewer.ps1 dropped $extension from Default apps."
+    }
+}
+if ($null -eq (Get-Item $otherProgId).GetValue('Other.Reader')) {
+    throw 'register-viewer.ps1 removed another program from Open with.'
+}
+Remove-ItemProperty -LiteralPath $otherProgId -Name 'Other.Reader'
 # Installing over an existing version must keep unrelated user files intact.
 $sentinel = Join-Path $installDir 'user-document.txt'
 [IO.File]::WriteAllText($sentinel, 'preserve during upgrade and uninstall')

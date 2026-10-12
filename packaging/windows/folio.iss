@@ -83,9 +83,19 @@ Name: "{autodesktop}\LifeOS Editör"; Filename: "{app}\lifeos_editor.exe"; Worki
 ; Register availability only. Windows UserChoice/default application is untouched.
 Root: HKCU; Subkey: "Software\Classes\LifeOSEvrak.Document"; ValueType: string; ValueData: "LifeOS Folio Belgesi"; Flags: uninsdeletekey; Tasks: associations
 Root: HKCU; Subkey: "Software\Classes\LifeOSEvrak.Document\DefaultIcon"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"",0"; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\LifeOSEvrak.Document\shell"; ValueType: string; ValueData: "open"; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\LifeOSEvrak.Document\shell\open"; ValueType: string; ValueData: "Folio ile önizle"; Tasks: associations
 Root: HKCU; Subkey: "Software\Classes\LifeOSEvrak.Document\shell\open\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --preview -- ""%1"""; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\LifeOSEvrak.Document\shell\edit"; ValueType: string; ValueData: "Folio ile düzenle"; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\LifeOSEvrak.Document\shell\edit\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --edit -- ""%1"""; Tasks: associations
+; Birlikte aç → LifeOS Folio, by its own name, for every type it reads.
+Root: HKCU; Subkey: "Software\Classes\Applications\lifeos_folio.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "LifeOS Folio"; Flags: uninsdeletekey; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\Applications\lifeos_folio.exe\DefaultIcon"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"",0"; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\Applications\lifeos_folio.exe\shell\open\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --preview -- ""%1"""; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\Applications\lifeos_folio.exe\shell\edit\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --edit -- ""%1"""; Tasks: associations
 Root: HKCU; Subkey: "Software\LifeOSEvrak\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "LifeOS Folio"; Flags: uninsdeletekey; Tasks: associations
 Root: HKCU; Subkey: "Software\LifeOSEvrak\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Belge arama, önizleme ve düzenleme"; Tasks: associations
+Root: HKCU; Subkey: "Software\LifeOSEvrak\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\lifeos_folio.exe"",0"; Tasks: associations
 Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "LifeOSEvrak"; ValueData: "Software\LifeOSEvrak\Capabilities"; Flags: uninsdeletevalue; Tasks: associations
 ; Birlikte aç → LifeOS Editör, for what its text editor opens.
 Root: HKCU; Subkey: "Software\Classes\Applications\lifeos_editor.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "LifeOS Editör"; Flags: uninsdeletekey; Tasks: editoropenwith

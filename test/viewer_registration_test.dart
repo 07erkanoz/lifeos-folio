@@ -94,6 +94,78 @@ void main() {
     expect(await uyap.readAsString(), uyapEntry);
   }, skip: !Platform.isLinux);
 
+  test('the Linux installer ships the same UDF type the app registers', () {
+    expect(
+      File('packaging/linux/lifeos-evrakci.xml').readAsStringSync().trim(),
+      ViewerRegistration.udfMime.trim(),
+    );
+    expect(
+      File('packaging/linux/make-release.sh').readAsStringSync(),
+      contains('lifeos-evrakci.xml'),
+    );
+  });
+
+  test('a desktop without the MIME tools still gets its defaults, and is '
+      'told what it lacks; UDF\'s aliases are not asked back', () async {
+    final root = await Directory.systemTemp.createTemp('folio-register-');
+    addTearDown(() => root.delete(recursive: true));
+    final defaults = <String, String>{};
+    Future<ProcessResult> run(String executable, List<String> args) async {
+      if (executable != 'xdg-mime') {
+        throw ProcessException(executable, args, 'not found');
+      }
+      if (args.first == 'default') defaults[args.last] = args[1];
+      // This xdg-mime answers for the type itself only, never an alias.
+      final answer =
+          args.first == 'query' &&
+              !ViewerRegistration.udfAliases.contains(args.last)
+          ? defaults[args.last] ?? ''
+          : '';
+      return ProcessResult(1, 0, answer, '');
+    }
+
+    final message = await ViewerRegistration.registerLinux(
+      base: root.path,
+      executable: '/opt/folio/lifeos_folio',
+      icon: [1],
+      types: [ViewerFileType.supported.first],
+      run: run,
+    );
+    expect(message, contains('update-mime-database'));
+    expect(message, contains('update-desktop-database'));
+    for (final type in ViewerFileType.supported.first.mimeTypes) {
+      expect(
+        defaults[type],
+        '${ViewerRegistration.linuxApplicationId}.desktop',
+      );
+    }
+  });
+
+  test(
+    'without xdg-mime the lawyer is told which package to install',
+    () async {
+      final root = await Directory.systemTemp.createTemp('folio-register-');
+      addTearDown(() => root.delete(recursive: true));
+      await expectLater(
+        ViewerRegistration.registerLinux(
+          base: root.path,
+          executable: '/opt/folio/lifeos_folio',
+          icon: [1],
+          types: [ViewerFileType.supported.first],
+          run: (command, args) async =>
+              throw ProcessException(command, args, 'not found'),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('xdg-utils'),
+          ),
+        ),
+      );
+    },
+  );
+
   test('registration is idempotent and changes only selected defaults', () async {
     final root = await Directory.systemTemp.createTemp('folio-register-');
     addTearDown(() => root.delete(recursive: true));

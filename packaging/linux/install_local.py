@@ -45,6 +45,25 @@ def install_editor(executable, applications, icons):
     print(entry)
 
 
+def install_mime(base):
+    """UDF as a type of its own. Without it the desktop takes a .udf for the
+    ZIP it is, and offers neither Folio nor UYAP to open it."""
+    source = Path(__file__).parent / 'lifeos-evrakci.xml'
+    if not source.is_file():
+        return
+    packages = base / 'mime/packages'
+    packages.mkdir(parents=True, exist_ok=True)
+    changed = replace_if_changed(packages / 'lifeos-evrakci.xml', source.read_bytes())
+    tool = shutil.which('update-mime-database')
+    if not tool:
+        print('update-mime-database yok (shared-mime-info): UDF türü oturum yeniden açılınca tanınabilir.')
+        return
+    if changed or not (base / 'mime/mime.cache').exists():
+        result = subprocess.run([tool, str(base / 'mime')], capture_output=True, text=True, timeout=30)
+        if result.returncode:
+            print(f'update-mime-database: {result.stderr.strip()}')
+
+
 def refresh_icon_cache(theme):
     """GTK trusts a theme's icon-theme.cache over the files beside it, and
     judges it stale by the theme folder's time alone, which an icon written
@@ -81,12 +100,15 @@ def main():
     template = (Path(__file__).parent / f'{APP_ID}.desktop').read_text()
     desktop = template.replace('Exec=lifeos_folio %F', f'Exec={quote_exec(str(executable))} %F')
     entry = applications / f'{APP_ID}.desktop'
-    changed = replace_if_changed(entry, desktop.encode('utf-8'))
-    if changed and shutil.which('update-desktop-database'):
+    install_mime(base)
+    replace_if_changed(entry, desktop.encode('utf-8'))
+    # Both menus' entries first, then the index of what opens which type:
+    # the Editör's types too.
+    install_editor(executable.parent / 'lifeos_editor', applications, icons)
+    if shutil.which('update-desktop-database'):
         result = subprocess.run(['update-desktop-database', str(applications)], capture_output=True, text=True, timeout=15)
         if result.returncode:
             print(f'update-desktop-database: {result.stderr.strip()}')
-    install_editor(executable.parent / 'lifeos_editor', applications, icons)
     refresh_icon_cache(icons.parent.parent)
     install_context_menus(executable, base)
     print(entry)
