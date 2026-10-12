@@ -377,10 +377,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? 'Ad, baro, sicil ve TC kimlik no; UYAP’a bağlanınca '
                               'kendiliğinden dolar'
                         : detail,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
                 ],
               ),
@@ -596,13 +593,13 @@ class _SettingsPageState extends State<SettingsPage> {
       _Section('profile', 'Profil', Icons.person_outline_rounded, [
         _Entry('profil avukat ad baro sicil tc kimlik', _profileCard(context)),
       ], lead: 'Dilekçelerin ve imzanın kullandığı bilgiler.'),
-      _Section(
+      const _Section(
         'security',
         'Güvenlik',
         Icons.lock_outline_rounded,
         lead: 'Folio’yu açmak için şifre ve kurtarma kodu.',
         [
-          const _Entry(
+          _Entry(
             'güvenlik giriş şifre parola kilit kurtarma kodu ekran koruyucu',
             SecuritySettings(),
           ),
@@ -1302,10 +1299,7 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: const EdgeInsets.only(top: 3, bottom: 10),
               child: Text(
                 s.lead!,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               ),
             )
           else
@@ -1362,8 +1356,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 for (final s in shown) _sectionView(context, s, wide),
                 if (shown.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(28),
+                  Padding(
+                    padding: const EdgeInsets.all(28),
                     child: Text(
                       'Bu sözcükle bir ayar bulunamadı.',
                       textAlign: TextAlign.center,
@@ -1435,7 +1429,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           if (_version.isNotEmpty)
                             Text(
                               'LifeOS Folio $_version',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AgendaColors.muted,
                               ),

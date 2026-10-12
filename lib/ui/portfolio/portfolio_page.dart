@@ -15,6 +15,7 @@ import '../help/help_button.dart';
 import '../office/tasks_page.dart' show TaskDetail;
 import '../widgets/uyap_connect_view.dart';
 import 'portfolio_rows.dart';
+import '../theme/folio_palette.dart';
 
 /// Dava Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
 /// portfolio, filled by the portals on their own, filtered on the left,
@@ -540,8 +541,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
     final dot = mobile && web
         ? AgendaColors.ok
         : mobile || web
-        ? const Color(0xFFE0A100)
-        : const Color(0xFF9AA2B1);
+        ? FolioPalette.tone(const Color(0xFFE0A100))
+        : FolioPalette.tone(const Color(0xFF9AA2B1));
     PopupMenuItem<String> channel(String value, String text, bool on) =>
         PopupMenuItem(
           key: ValueKey('portfolio-connect-$value'),
@@ -552,7 +553,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: on ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                  color: on
+                      ? AgendaColors.ok
+                      : FolioPalette.tone(const Color(0xFF9AA2B1)),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -714,7 +717,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
     final searching = _words.isNotEmpty;
     final well = dark
         ? scheme.surfaceContainerHighest
-        : const Color(0xFFF1F3F7);
+        : FolioPalette.tone(const Color(0xFFF1F3F7));
     void pick(void Function() change) => setState(() {
       change();
       _shown = 100;
@@ -738,7 +741,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                       TextSpan(text: label),
                       TextSpan(
                         text: '  $n',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w500,
                           color: AgendaColors.muted,
@@ -763,7 +766,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
       final ink = on
           ? scheme.primary
           : n == 0
-          ? const Color(0xFFA9B0BD)
+          ? FolioPalette.tone(const Color(0xFFA9B0BD))
           : null;
       return Expanded(
         child: Padding(
@@ -772,7 +775,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
             color: on
                 ? dark
                       ? scheme.primary.withValues(alpha: .16)
-                      : const Color(0xFFEAF0F9)
+                      : FolioPalette.tone(const Color(0xFFEAF0F9))
                 : null,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(9),
@@ -983,7 +986,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
         children: [
           Text(
             '$n dosya',
-            style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+            style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
           if (_words.isNotEmpty && other > 0)
             Flexible(
@@ -1241,7 +1244,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                                   padding: const EdgeInsets.only(right: 8),
                                   child: Text(
                                     '${each[value]}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 13,
                                       color: AgendaColors.muted,
                                     ),
@@ -1333,16 +1336,18 @@ class _PortfolioPageState extends State<PortfolioPage> {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: on ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                    color: on
+                        ? AgendaColors.ok
+                        : FolioPalette.tone(const Color(0xFF9AA2B1)),
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 7),
                 Text(
                   '$name · $detail',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: Color(0xFF3F4656),
+                    color: FolioPalette.tone(const Color(0xFF3F4656)),
                   ),
                 ),
               ],
@@ -1441,7 +1446,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
           ].join(' · '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+          style: TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
       ],
     );
@@ -1519,13 +1524,15 @@ class _PortfolioPageState extends State<PortfolioPage> {
     return Container(
       key: const ValueKey('portfolio-progress'),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF3F7FC),
-        border: Border(bottom: BorderSide(color: Color(0xFFDCE6F4))),
+      decoration: BoxDecoration(
+        color: FolioPalette.tone(const Color(0xFFF3F7FC)),
+        border: Border(
+          bottom: BorderSide(color: FolioPalette.tone(const Color(0xFFDCE6F4))),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.downloading_rounded,
             size: 16,
             color: AgendaColors.hearing,
@@ -1536,7 +1543,10 @@ class _PortfolioPageState extends State<PortfolioPage> {
               '$what — uygulamayı kullanmaya devam edebilirsiniz',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF1F467F)),
+              style: TextStyle(
+                fontSize: 12,
+                color: FolioPalette.tone(const Color(0xFF1F467F)),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -1560,14 +1570,14 @@ class _PortfolioPageState extends State<PortfolioPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.gavel_rounded, size: 40, color: AgendaColors.muted),
+          Icon(Icons.gavel_rounded, size: 40, color: AgendaColors.muted),
           const SizedBox(height: 12),
           const Text(
             'Portföy henüz boş',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'UYAP Web’e ya da UYAP Mobil’e bağlanınca açık dosyalarınızın '
             'tamamı buraya kendiliğinden gelir; seçip eklemeniz gerekmez.',
             textAlign: TextAlign.center,
@@ -1602,7 +1612,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
       padding: const EdgeInsets.fromLTRB(0, 14, 0, 6),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w800,
           letterSpacing: 1,
@@ -1619,7 +1629,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
       bool badge = false,
       Key? key,
     }) => Material(
-      color: on ? const Color(0xFFEAF0F9) : Colors.transparent,
+      color: on
+          ? FolioPalette.tone(const Color(0xFFEAF0F9))
+          : Colors.transparent,
       borderRadius: BorderRadius.circular(7),
       child: InkWell(
         key: key,
@@ -1837,7 +1849,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
             child: Text(
               'GÖREVLE GELEN DOSYALAR · ${rows.length}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: FontWeight.w800,
                 letterSpacing: .7,
@@ -1871,7 +1883,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                       ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -1993,8 +2005,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
               scopeChip(_Scope.number, 'Dosya no'),
               scopeChip(_Scope.court, 'Mahkeme'),
               if (wide)
-                const Padding(
-                  padding: EdgeInsets.only(left: 6, right: 12),
+                Padding(
+                  padding: const EdgeInsets.only(left: 6, right: 12),
                   child: Text(
                     'büyük/küçük harf ve aksan farkı aramayı bozmaz '
                     '(ozturk = ÖZTÜRK)',
@@ -2024,7 +2036,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                 _search.text.trim().length >= 2 || _filtered
                     ? '${visible.length} dosya eşleşti'
                     : '${visible.length} dosya',
-                style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
               ),
             ),
             PopupMenuButton<_Sort>(
@@ -2091,7 +2103,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
           const Text('Eşleşen dosya yok.'),
           if (_filtered) ...[
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Süzgeçler açık: arama bunların içinde yapıldı.',
               style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
@@ -2143,7 +2155,11 @@ class _FilterChip extends StatelessWidget {
       color: on ? scheme.primary : scheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: on ? scheme.primary : const Color(0xFFD5DBE5)),
+        side: BorderSide(
+          color: on
+              ? scheme.primary
+              : FolioPalette.tone(const Color(0xFFD5DBE5)),
+        ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -2278,13 +2294,13 @@ class _CaseRowState extends State<_CaseRow> {
         switch (tone) {
           StatusTone.open => chip(
             status,
-            const Color(0xFFEAF7F1),
-            const Color(0xFF157A52),
+            FolioPalette.tone(const Color(0xFFEAF7F1)),
+            FolioPalette.tone(const Color(0xFF157A52)),
           ),
           StatusTone.closed => chip(
             status,
-            const Color(0xFFEEF0F3),
-            const Color(0xFF5D6474),
+            FolioPalette.tone(const Color(0xFFEEF0F3)),
+            FolioPalette.tone(const Color(0xFF5D6474)),
           ),
           StatusTone.other => chip(
             status,
@@ -2352,13 +2368,13 @@ class _CaseRowState extends State<_CaseRow> {
             ),
             TextSpan(
               text: ' ${titleName(p.role as String)}',
-              style: const TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
             ),
           ],
           if (parties.length > 2)
             TextSpan(
               text: ' · +${parties.length - 2} taraf',
-              style: const TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
             ),
         ],
       );
@@ -2431,11 +2447,13 @@ class _CaseRowState extends State<_CaseRow> {
         onTap: widget.onTap,
         child: Container(
           decoration: BoxDecoration(
-            color: _hover ? const Color(0xFFF8FAFD) : null,
+            color: _hover ? FolioPalette.tone(const Color(0xFFF8FAFD)) : null,
             border: Border(
               top: widget.first
                   ? BorderSide.none
-                  : const BorderSide(color: Color(0xFFEEF1F5)),
+                  : BorderSide(
+                      color: FolioPalette.tone(const Color(0xFFEEF1F5)),
+                    ),
               left: BorderSide(color: kind.ink, width: 3),
             ),
           ),
@@ -2453,9 +2471,9 @@ class _CaseRowState extends State<_CaseRow> {
                       TextSpan(text: '${why.$1}: '),
                       TextSpan(
                         children: _marked(titleName(why.$2.name), words),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1B2130),
+                          color: FolioPalette.tone(const Color(0xFF1B2130)),
                         ),
                       ),
                       if (why.$2.role.isNotEmpty)
@@ -2464,10 +2482,7 @@ class _CaseRowState extends State<_CaseRow> {
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                 ),
               ],
               if (!widget.wide && chips.isNotEmpty) ...[
@@ -2479,13 +2494,13 @@ class _CaseRowState extends State<_CaseRow> {
                 if (r.ours.isNotEmpty)
                   partyLine(
                     'MÜVEKKİL',
-                    const Color(0xFF157A52),
+                    FolioPalette.tone(const Color(0xFF157A52)),
                     names(r.ours, bold: true),
                   ),
                 if (r.others.isNotEmpty)
                   partyLine(
                     r.ours.isEmpty ? 'TARAFLAR' : 'KARŞI',
-                    const Color(0xFF8A92A3),
+                    FolioPalette.tone(const Color(0xFF8A92A3)),
                     names(r.others, bold: false),
                   ),
               ],
@@ -2509,10 +2524,7 @@ class _CaseRowState extends State<_CaseRow> {
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
               ),
             ],
           ),
@@ -2547,7 +2559,9 @@ List<TextSpan> _marked(String text, List<String> words) {
     }
   }
   if (!mark.contains(true)) return [TextSpan(text: text)];
-  const style = TextStyle(backgroundColor: Color(0xFFFFE8A3));
+  final style = TextStyle(
+    backgroundColor: FolioPalette.tone(const Color(0xFFFFE8A3)),
+  );
   final spans = <TextSpan>[];
   var from = 0;
   for (var i = 1; i <= text.length; i++) {

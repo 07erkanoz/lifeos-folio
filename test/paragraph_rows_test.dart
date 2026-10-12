@@ -176,18 +176,18 @@ void main() {
         'sonucunda davanın kısmen kabulüne karar verilmiştir.';
     // The first word straight after the tab, as in UYAP and in Flutter; the
     // preview used to spread room between the tab and the word too.
-    final tabbed = '\t$long';
+    const tabbed = '\t$long';
     laidText = tabbed;
     final laid = rows(tabbed, align: RowAlign.justify);
     expect(at(laid, 1), closeTo(72, .01));
     expect(laid.first.right, closeTo(page, .01));
     // A space ahead of the row's first word takes no room.
-    final spaced = ' $long';
+    const spaced = ' $long';
     laidText = spaced;
     expect(at(rows(spaced, align: RowAlign.justify), 1), closeTo(0, .01));
     // Spaces before a tab are spread too, and push it along: UYAP drew this
     // colon at 115.9, three points past its stop.
-    final label = 'DAVACI VEKİLİ\t: Av. $long';
+    const label = 'DAVACI VEKİLİ\t: Av. $long';
     laidText = label;
     final withLabel = rows(label, tabSet: '113.0:0:0', align: RowAlign.justify);
     expect(at(withLabel, label.indexOf(':')), closeTo(115.9, 1.5));

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/portal/portal_sync.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../theme/folio_palette.dart';
 
 /// The phone's menu (docs/design/mobil-anasayfa-taslak.png): the first
 /// page; the office with what waits in each place; the documents; the
@@ -57,7 +58,7 @@ class MobileDrawer extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w800,
         letterSpacing: .8,
@@ -79,7 +80,7 @@ class MobileDrawer extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
-        color: selected ? const Color(0xFFEAF0F9) : Colors.transparent,
+        color: selected ? tone(const Color(0xFFEAF0F9)) : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           key: key,
@@ -92,7 +93,9 @@ class MobileDrawer extends StatelessWidget {
                 IconTheme(
                   data: IconThemeData(
                     size: 20,
-                    color: selected ? colors.primary : const Color(0xFF5A6273),
+                    color: selected
+                        ? colors.primary
+                        : tone(const Color(0xFF5A6273)),
                   ),
                   child: SizedBox(width: 22, child: Center(child: icon)),
                 ),
@@ -322,8 +325,8 @@ class MobileDrawer extends StatelessWidget {
                           trailing: uyapCases > 0
                               ? _pill(
                                   '$uyapCases',
-                                  const Color(0xFFEEF1F6),
-                                  const Color(0xFF4B5465),
+                                  tone(const Color(0xFFEEF1F6)),
+                                  tone(const Color(0xFF4B5465)),
                                 )
                               : null,
                           onTap: () => onGroup('uyap'),
@@ -357,7 +360,9 @@ class MobileDrawer extends StatelessWidget {
                           context,
                           key: const ValueKey('drawer-web'),
                           icon: _dot(
-                            web ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                            web
+                                ? AgendaColors.ok
+                                : tone(const Color(0xFF9AA2B1)),
                           ),
                           label: web ? 'UYAP Web · bağlı' : 'UYAP Web · bağlan',
                           onTap: onConnectWeb,
@@ -366,7 +371,9 @@ class MobileDrawer extends StatelessWidget {
                           context,
                           key: const ValueKey('drawer-mobile'),
                           icon: _dot(
-                            mobile ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                            mobile
+                                ? AgendaColors.ok
+                                : tone(const Color(0xFF9AA2B1)),
                           ),
                           label: mobile
                               ? 'UYAP Mobil · bağlı'
@@ -377,7 +384,9 @@ class MobileDrawer extends StatelessWidget {
                           context,
                           key: const ValueKey('drawer-uets-connect'),
                           icon: _dot(
-                            uets ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                            uets
+                                ? AgendaColors.ok
+                                : tone(const Color(0xFF9AA2B1)),
                           ),
                           label: uets ? 'UETS · bağlı' : 'UETS · bağlan',
                           onTap: onConnectUets,

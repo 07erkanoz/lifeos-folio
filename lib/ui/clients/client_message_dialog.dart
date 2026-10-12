@@ -17,6 +17,7 @@ import '../../services/portal/portal_hearing.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
+import '../theme/folio_palette.dart';
 
 /// What the day asks to be told to clients who wish it: a hearing within
 /// three days, an instalment within three days or late; none told before.
@@ -355,18 +356,15 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
               SegmentedButton<MessageChannel>(
                 key: const ValueKey('message-channel'),
                 showSelectedIcon: false,
-                segments: [
+                segments: const [
                   ButtonSegment(
                     value: MessageChannel.whatsapp,
-                    label: const Text('WhatsApp'),
+                    label: Text('WhatsApp'),
                   ),
-                  ButtonSegment(
-                    value: MessageChannel.sms,
-                    label: const Text('SMS'),
-                  ),
+                  ButtonSegment(value: MessageChannel.sms, label: Text('SMS')),
                   ButtonSegment(
                     value: MessageChannel.email,
-                    label: const Text('E-posta'),
+                    label: Text('E-posta'),
                   ),
                 ],
                 selected: {_channel},
@@ -382,10 +380,7 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
                         : 'Kartta telefon yok: kişiyi '
                               '${_channel == MessageChannel.sms ? 'mesajlar uygulamasında' : 'WhatsApp\'ta'} '
                               'siz seçersiniz.',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
                 ),
               const SizedBox(height: 10),
@@ -469,7 +464,7 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
                 'Mesaj ${_channel.label} programınızda yazılmış olarak açılır; '
                 'gönder düğmesine siz basarsınız. Dosya numarası ve karşı '
                 'taraf yazılmaz.',
-                style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
               ),
             ],
           ),
@@ -491,7 +486,9 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
         FilledButton(
           key: const ValueKey('message-send'),
           style: _channel == MessageChannel.whatsapp
-              ? FilledButton.styleFrom(backgroundColor: const Color(0xFF1FA855))
+              ? FilledButton.styleFrom(
+                  backgroundColor: tone(const Color(0xFF1FA855)),
+                )
               : null,
           onPressed: _busy ? null : _send,
           child: Text(verb),

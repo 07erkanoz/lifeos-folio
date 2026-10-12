@@ -29,6 +29,7 @@ import '../widgets/file_preview.dart';
 import '../widgets/share_as.dart';
 import 'enforcement_view.dart';
 import 'portfolio_rows.dart';
+import '../theme/folio_palette.dart';
 
 /// A case's own page (docs/design/uyap-portfoy-taslak.png, the second
 /// frame): its number, court and state; whose side is whose; its last
@@ -549,7 +550,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                     const TextSpan(text: ' · Duruşma '),
                     TextSpan(
                       text: '${dayText(hearing.at)} ${clockText(hearing.at)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AgendaColors.deadline,
                         fontWeight: FontWeight.w600,
                       ),
@@ -559,7 +560,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
           ),
           const HelpButton(Help.caseDetail),
@@ -652,7 +653,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 children: [
                   Text(
                     label,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w800,
                       letterSpacing: .6,
@@ -741,7 +742,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           tile(
             'change',
             Icons.bolt_rounded,
-            const Color(0xFF6D4AB8),
+            tone(const Color(0xFF6D4AB8)),
             'SON GELİŞME',
             change == null ? '—' : dayText(change),
             newest == null
@@ -767,7 +768,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             tile(
               'money',
               Icons.account_balance_wallet_outlined,
-              const Color(0xFF157A52),
+              tone(const Color(0xFF157A52)),
               'HARÇ',
               formatTl(fees),
               [
@@ -810,7 +811,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           ),
           child: Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   '↑ ↓ evrak değiştirir · Enter ya da çift tık açar',
                   style: TextStyle(fontSize: 11, color: AgendaColors.muted),
@@ -970,14 +971,16 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   ) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final back = dark ? scheme.surfaceContainerLowest : const Color(0xFFE9ECF1);
+    final back = dark
+        ? scheme.surfaceContainerLowest
+        : tone(const Color(0xFFE9ECF1));
     final docs = _shownDocuments(entries);
     final at = docs.indexWhere((d) => d.key == _shownKey);
     final d = at >= 0 ? docs[at] : _documentOf(_shownKey);
     if (d == null) {
       return ColoredBox(
         color: back,
-        child: const Center(
+        child: Center(
           child: Text(
             'Önizlemek için soldan bir evrak seçin.',
             style: TextStyle(color: AgendaColors.muted),
@@ -1020,7 +1023,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                       ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -1129,14 +1132,14 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             if (fetching) ...[
               const LinearProgressIndicator(),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Bu sırada listede gezmeye devam edebilirsiniz; inince burada '
                 'açılır.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: AgendaColors.muted),
               ),
             ] else ...[
-              const Text(
+              Text(
                 'Göstermek için UYAP’tan indirilir ve dosyanın klasörüne '
                 'kaydedilir.',
                 textAlign: TextAlign.center,
@@ -1294,7 +1297,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               TextSpan(text: ' › ${kind.label}'),
             ],
           ),
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+          style: TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
         const SizedBox(height: 4),
         Wrap(
@@ -1332,13 +1335,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               switch (toneOf(status)) {
                 StatusTone.open => _chip(
                   status,
-                  const Color(0xFFEAF7F1),
-                  const Color(0xFF157A52),
+                  tone(const Color(0xFFEAF7F1)),
+                  tone(const Color(0xFF157A52)),
                 ),
                 StatusTone.closed => _chip(
                   status,
-                  const Color(0xFFEEF0F3),
-                  const Color(0xFF5D6474),
+                  tone(const Color(0xFFEEF0F3)),
+                  tone(const Color(0xFF5D6474)),
                 ),
                 StatusTone.other => _chip(
                   status,
@@ -1377,7 +1380,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             ],
           ),
           key: const ValueKey('case-type'),
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+          style: TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
       ],
     );
@@ -1564,7 +1567,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12.5,
                               color: AgendaColors.muted,
                             ),
@@ -1606,7 +1609,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                     children: [
                       side(
                         'MÜVEKKİL',
-                        const Color(0xFF157A52),
+                        tone(const Color(0xFF157A52)),
                         ours,
                         counsel: false,
                       ),
@@ -1626,7 +1629,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                   ),
                 ),
                 const SizedBox(width: 24),
-                Expanded(child: side('KARŞI', const Color(0xFFB7791F), others)),
+                Expanded(
+                  child: side('KARŞI', tone(const Color(0xFFB7791F)), others),
+                ),
               ],
             ),
     );
@@ -1682,22 +1687,22 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               width: 32,
               height: 32,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEEF1F5),
+              decoration: BoxDecoration(
+                color: tone(const Color(0xFFEEF1F5)),
                 shape: BoxShape.circle,
               ),
               child: institution
-                  ? const Icon(
+                  ? Icon(
                       Icons.apartment_rounded,
                       size: 16,
-                      color: Color(0xFF4B5465),
+                      color: tone(const Color(0xFF4B5465)),
                     )
                   : Text(
                       initials,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF4B5465),
+                        color: tone(const Color(0xFF4B5465)),
                       ),
                     ),
             ),
@@ -1721,10 +1726,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                         : 'Vekil: ${titleName(party.lawyer.trim())}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                   ),
                 ],
               ),
@@ -1732,12 +1734,15 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFFEEF1F5),
+                color: tone(const Color(0xFFEEF1F5)),
                 borderRadius: BorderRadius.circular(7),
               ),
               child: Text(
                 '${titleName(party.role)}${mine ? ' · müvekkil' : ''}',
-                style: const TextStyle(fontSize: 11, color: Color(0xFF4B5465)),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tone(const Color(0xFF4B5465)),
+                ),
               ),
             ),
           ],
@@ -1765,12 +1770,17 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         );
     final mine = side(
       ours.isEmpty ? 'TARAFLAR' : 'BİZİM TARAF',
-      const Color(0xFF157A52),
+      tone(const Color(0xFF157A52)),
       ours.isEmpty ? others : ours,
       ours.isNotEmpty,
     );
     if (ours.isEmpty) return mine;
-    final theirs = side('KARŞI TARAF', const Color(0xFFE0A23B), others, false);
+    final theirs = side(
+      'KARŞI TARAF',
+      tone(const Color(0xFFE0A23B)),
+      others,
+      false,
+    );
     return wide
         ? IntrinsicHeight(
             child: Row(
@@ -1795,7 +1805,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     children: [
       Text(
         '$title · ${list.length}',
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w800,
           letterSpacing: .8,
@@ -1804,8 +1814,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       ),
       const SizedBox(height: 4),
       if (list.isEmpty)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 6),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Text(
             'Taraf bilgisi UYAP’tan tazelenince gelir.',
             style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
@@ -1815,7 +1825,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       if (list.length > 4)
         Text(
           '+${list.length - 4} taraf daha',
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+          style: TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
     ],
   );
@@ -1865,7 +1875,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           : const EdgeInsets.fromLTRB(14, 11, 14, 11),
       border: Border.all(
         color: warn
-            ? const Color(0xFFF0B4AF)
+            ? tone(const Color(0xFFF0B4AF))
             : Theme.of(context).colorScheme.outlineVariant,
       ),
       child: Column(
@@ -2085,8 +2095,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 ),
               ),
             if (tasks.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
                   'Bu dosyaya bağlı görev yok.',
                   style: TextStyle(color: AgendaColors.muted),
@@ -2148,7 +2158,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 decoration: BoxDecoration(
                   color: _tab == t
                       ? scheme.primary.withValues(alpha: .12)
-                      : const Color(0xFFEEF0F4),
+                      : tone(const Color(0xFFEEF0F4)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -2299,7 +2309,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const Text(
+            Text(
               'Bu dosyanın evrak listesi henüz alınmadı.',
               style: TextStyle(color: AgendaColors.muted),
             ),
@@ -2360,10 +2370,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               filter(_DocFilter.notDownloaded, 'İndirilmemiş'),
               Text(
                 'Evrak listesi ${whenText(record.fetchedAt, DateTime.now())}’de tazelendi',
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
               ),
             ],
           ),
@@ -2376,7 +2383,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                   ? (record.withheld ?? 'UYAP bu dosyada evrak listelemedi.')
                   : 'Bu süzgece uyan evrak yok.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AgendaColors.muted),
+              style: TextStyle(color: AgendaColors.muted),
             ),
           ),
         ...rows,
@@ -2435,7 +2442,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
           child: Text(
             e.bucket!,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 10.5,
               fontWeight: FontWeight.w800,
               letterSpacing: .9,
@@ -2465,12 +2472,12 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         : folded.contains('zabt') ||
               folded.contains('zapt') ||
               folded.contains('tutanak')
-        ? (Icons.receipt_long_outlined, const Color(0xFF6D4AB8))
+        ? (Icons.receipt_long_outlined, tone(const Color(0xFF6D4AB8)))
         : folded.contains('teblig') || folded.contains('muzekkere')
         ? (Icons.mail_outline_rounded, AgendaColors.eHearing)
         : folded.contains('bilirkisi') || folded.contains('rapor')
         ? (Icons.assignment_outlined, AgendaColors.task)
-        : (Icons.description_outlined, const Color(0xFF4B5465));
+        : (Icons.description_outlined, tone(const Color(0xFF4B5465)));
     final title = d.type.isNotEmpty ? d.type : d.title;
     final meta = [
       if (attachment != null) 'Ek $attachment',
@@ -2492,7 +2499,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           color: shown
               ? scheme.primary.withValues(alpha: .1)
               : fresh
-              ? const Color(0xFFF6F9FE)
+              ? tone(const Color(0xFFF6F9FE))
               : null,
           border: split
               ? Border(
@@ -2560,7 +2567,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                       meta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -2583,7 +2590,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                             : Icons.download_rounded,
                         size: 17,
                         color: downloaded
-                            ? const Color(0xFF157A52)
+                            ? tone(const Color(0xFF157A52))
                             : scheme.primary,
                       ),
                     )
@@ -2593,7 +2600,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 style: TextStyle(
                   fontSize: 11.5,
                   color: downloaded
-                      ? const Color(0xFF157A52)
+                      ? tone(const Color(0xFF157A52))
                       : AgendaColors.taskText,
                 ),
               ),
@@ -2605,7 +2612,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                       ? Icons.folder_open_outlined
                       : Icons.download_rounded,
                   size: 18,
-                  color: downloaded ? const Color(0xFF9AA2B1) : scheme.primary,
+                  color: downloaded
+                      ? tone(const Color(0xFF9AA2B1))
+                      : scheme.primary,
                 ),
               ),
             ],
@@ -2623,7 +2632,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     child: Text(
       text,
       textAlign: TextAlign.center,
-      style: const TextStyle(color: AgendaColors.muted),
+      style: TextStyle(color: AgendaColors.muted),
     ),
   );
 
@@ -2641,7 +2650,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       decoration: BoxDecoration(
         border: Border(
           left: BorderSide(color: accent ?? Colors.transparent, width: 3),
-          top: const BorderSide(color: Color(0xFFF0F2F6)),
+          top: BorderSide(color: tone(const Color(0xFFF0F2F6))),
         ),
       ),
       child: Row(
@@ -2661,10 +2670,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 if (sub.isNotEmpty)
                   Text(
                     sub,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                   ),
               ],
             ),
@@ -2785,7 +2791,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               n.message.sender,
               if (n.message.read == null) 'okunmadı',
             ].where((s) => s.trim().isNotEmpty).join(' · '),
-            leading: const Icon(
+            leading: Icon(
               Icons.mark_email_unread_outlined,
               size: 18,
               color: AgendaColors.deadline,
@@ -2822,10 +2828,10 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   }
 
   static Color _moneyColor(String label) => switch (label) {
-    'Harç' => const Color(0xFFB7791F),
-    'Tahsilat' => const Color(0xFF157A52),
+    'Harç' => tone(const Color(0xFFB7791F)),
+    'Tahsilat' => tone(const Color(0xFF157A52)),
     'Reddiyat' => AgendaColors.hearing,
-    _ => const Color(0xFF4B5465),
+    _ => tone(const Color(0xFF4B5465)),
   };
 
   /// The case's fees, collections and payments out, as UYAP Web's money
@@ -2847,7 +2853,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11.5,
           fontWeight: FontWeight.w700,
           letterSpacing: .6,
@@ -2902,7 +2908,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                       children: [
                         Text(
                           label,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: AgendaColors.muted,
                           ),
@@ -2979,7 +2985,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                     width: 150,
                     child: Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12.5,
                         color: AgendaColors.muted,
                       ),
@@ -3287,10 +3293,7 @@ class _CasePreviewPageState extends State<_CasePreviewPage> {
                   '${_at + 1} / ${docs.length}',
                   if (d.date != null) dayText(d.date!),
                 ].join(' · '),
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
               ),
             ],
           ),

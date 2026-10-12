@@ -32,6 +32,7 @@ import 'client_accounts_view.dart';
 import 'client_message_dialog.dart';
 import '../../services/clients/client_messages.dart';
 import '../../services/clients/client_overview.dart';
+import '../theme/folio_palette.dart';
 
 /// A scan to keep: from the camera where there is one (Android, iPhone),
 /// or a file (a PDF or a picture) chosen; null when backed out.
@@ -237,7 +238,7 @@ class _ClientsPageState extends State<ClientsPage> {
             content: SizedBox(
               width: 440,
               child: due.isEmpty
-                  ? const Text(
+                  ? Text(
                       'Gönderilecek mesaj kalmadı.',
                       style: TextStyle(color: AgendaColors.muted),
                     )
@@ -262,7 +263,7 @@ class _ClientsPageState extends State<ClientsPage> {
                             ),
                             trailing: FilledButton(
                               style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF1FA855),
+                                backgroundColor: tone(const Color(0xFF1FA855)),
                               ),
                               onPressed: () async {
                                 final e = _entries
@@ -480,7 +481,7 @@ class _ClientsPageState extends State<ClientsPage> {
             ),
             style: TextStyle(
               fontSize: 11,
-              color: on ? Colors.white : const Color(0xFF4A5466),
+              color: on ? Colors.white : tone(const Color(0xFF4A5466)),
             ),
           ),
         ),
@@ -530,7 +531,7 @@ class _ClientsPageState extends State<ClientsPage> {
                           style: TextStyle(
                             fontSize: 11.5,
                             color: _group == null
-                                ? const Color(0xFF4A5466)
+                                ? tone(const Color(0xFF4A5466))
                                 : AgendaColors.hearingText,
                             fontWeight: _group == null ? null : FontWeight.w700,
                           ),
@@ -549,10 +550,7 @@ class _ClientsPageState extends State<ClientsPage> {
                   _byName ? 'Sıra: ada göre' : 'Sıra: yaklaşan işe göre',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                 ),
               ),
               TextButton(
@@ -590,7 +588,7 @@ class _ClientsPageState extends State<ClientsPage> {
                       'UYAP’tan okunuyor'
                       '${sync.portfolioState.progress == null ? '' : ' · ${sync.portfolioState.progress}'}'
                       '. Müvekkiller geldikçe eklenir.',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.hearingText,
                       ),
@@ -645,7 +643,7 @@ class _ClientsPageState extends State<ClientsPage> {
             padding: const EdgeInsets.fromLTRB(8, 10, 8, 3),
             child: Text(
               item,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: FontWeight.w700,
                 letterSpacing: .5,
@@ -687,14 +685,11 @@ class _ClientsPageState extends State<ClientsPage> {
                   onPressed: () => _fold(false),
                   icon: const Icon(Icons.keyboard_double_arrow_left_rounded),
                 ),
-              Expanded(
+              const Expanded(
                 child: Text(
                   'Müvekkiller',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                 ),
               ),
               const HelpButton(Help.clients),
@@ -729,7 +724,7 @@ class _ClientsPageState extends State<ClientsPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Material(
-              color: const Color(0xFFE7F6EC),
+              color: tone(const Color(0xFFE7F6EC)),
               borderRadius: BorderRadius.circular(10),
               child: ListTile(
                 key: const ValueKey('clients-due'),
@@ -737,15 +732,15 @@ class _ClientsPageState extends State<ClientsPage> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-                leading: const Icon(
+                leading: Icon(
                   Icons.chat_outlined,
-                  color: Color(0xFF11663A),
+                  color: tone(const Color(0xFF11663A)),
                 ),
                 title: Text(
                   'Bugün gönderilecek ${_due.length} mesaj',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF11663A),
+                    color: tone(const Color(0xFF11663A)),
                   ),
                 ),
                 onTap: _dueList,
@@ -763,10 +758,7 @@ class _ClientsPageState extends State<ClientsPage> {
                               'olduğunuz taraflardan ve "kimi temsil ediyorum" '
                               'kayıtlarından kendiliğinden gelir.'
                         : 'Bu süzgece uyan müvekkil yok.',
-                    style: const TextStyle(
-                      color: AgendaColors.muted,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: AgendaColors.muted, fontSize: 13),
                   ),
                 )
               : _listOf(shown, wide),
@@ -799,7 +791,7 @@ class _ClientsPageState extends State<ClientsPage> {
                     quarterTurns: 1,
                     child: Text(
                       'Müvekkiller · ${_entries.length}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12.5,
                         color: AgendaColors.muted,
                       ),
@@ -930,7 +922,7 @@ class _ClientLine extends StatelessWidget {
         next.at.isBefore(DateTime.now().add(const Duration(days: 30)));
     final hidden = entry.client?.hidden ?? false;
     final Widget? tag = hidden
-        ? const _Pill('gizli', Color(0xFFEEF1F5), AgendaColors.muted)
+        ? _Pill('gizli', tone(const Color(0xFFEEF1F5)), AgendaColors.muted)
         : late > 0
         ? _Pill(
             '$late taksit gecikti',
@@ -946,7 +938,11 @@ class _ClientLine extends StatelessWidget {
         : (g?.owed ?? 0) > 0
         ? _Pill(lira(g!.owed), AgendaColors.taskFill, AgendaColors.taskText)
         : done && g?.closedYear != null
-        ? _Pill('${g!.closedYear}', const Color(0xFFEEF1F5), AgendaColors.muted)
+        ? _Pill(
+            '${g!.closedYear}',
+            tone(const Color(0xFFEEF1F5)),
+            AgendaColors.muted,
+          )
         : null;
     return Material(
       color: selected ? AgendaColors.hearingFill : Colors.transparent,
@@ -997,7 +993,7 @@ class _ClientLine extends StatelessWidget {
                             ].join(' · '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               color: AgendaColors.muted,
                             ),
@@ -1065,7 +1061,7 @@ class ClientInitials extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: faded ? const Color(0xFF8A93A3) : colorOf(name),
+        color: faded ? tone(const Color(0xFF8A93A3)) : colorOf(name),
         borderRadius: BorderRadius.circular(body ? size * .24 : size / 2),
       ),
       child: Text(
@@ -1785,7 +1781,7 @@ class _ClientCardState extends State<ClientCard> {
                 if (kept > 0) 'Bu dosyada $kept kayıt var; silinmez.',
                 'Dosyayı "Çıkarılan dosyalar" altından geri alabilirsiniz.',
               ].join(' '),
-              style: const TextStyle(color: AgendaColors.muted, fontSize: 13),
+              style: TextStyle(color: AgendaColors.muted, fontSize: 13),
             ),
           ],
         ),
@@ -1943,7 +1939,7 @@ class _ClientCardState extends State<ClientCard> {
                 ),
               ].where((s) => s.isNotEmpty).join(': '),
               _number(x.caseKey),
-              const Color(0xFF139C8B),
+              tone(const Color(0xFF139C8B)),
               caseKey: x.caseKey,
             ),
         if (DateTime.tryParse(
@@ -1954,7 +1950,7 @@ class _ClientCardState extends State<ClientCard> {
             closed,
             stageLabel(_db.caseOf(x.caseKey)?.status?.value ?? 'Kapandı'),
             _number(x.caseKey),
-            const Color(0xFF7A4FC4),
+            tone(const Color(0xFF7A4FC4)),
             caseKey: x.caseKey,
           ),
       ],
@@ -2127,7 +2123,7 @@ class _ClientCardState extends State<ClientCard> {
       ),
       if (e.cases.isEmpty)
         _frame(
-          const Text(
+          Text(
             'Bu müvekkile bağlı dosya yok. "Dosya ekle" ile UYAP '
             'dosyalarınızdan seçebilirsiniz.',
             style: TextStyle(color: AgendaColors.muted),
@@ -2135,7 +2131,7 @@ class _ClientCardState extends State<ClientCard> {
         )
       else if (open.isEmpty)
         _frame(
-          const Text(
+          Text(
             'Açık dosya yok; dosyalarının hepsi sonuçlanmış.',
             style: TextStyle(color: AgendaColors.muted),
           ),
@@ -2268,7 +2264,7 @@ class _ClientCardState extends State<ClientCard> {
               count == null ? title : '$title · $count',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w700,
                 letterSpacing: .5,
@@ -2319,7 +2315,7 @@ class _ClientCardState extends State<ClientCard> {
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: .3,
@@ -2341,7 +2337,7 @@ class _ClientCardState extends State<ClientCard> {
                 sub,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
               ),
             ],
           ),
@@ -2400,8 +2396,8 @@ class _ClientCardState extends State<ClientCard> {
   static ({Color fill, Color ink, Color edge}) _stageColors(CaseStage s) =>
       switch (s) {
         CaseStage.open => (
-          fill: const Color(0xFFE3F4EC),
-          ink: const Color(0xFF16754F),
+          fill: tone(const Color(0xFFE3F4EC)),
+          ink: tone(const Color(0xFF16754F)),
           edge: AgendaColors.hearing,
         ),
         CaseStage.stopped => (
@@ -2410,12 +2406,12 @@ class _ClientCardState extends State<ClientCard> {
           edge: AgendaColors.task,
         ),
         CaseStage.appeal => (
-          fill: const Color(0xFFEFE8FA),
-          ink: const Color(0xFF5B3A9A),
-          edge: const Color(0xFF7A4FC4),
+          fill: tone(const Color(0xFFEFE8FA)),
+          ink: tone(const Color(0xFF5B3A9A)),
+          edge: tone(const Color(0xFF7A4FC4)),
         ),
         CaseStage.closed => (
-          fill: const Color(0xFFEEF1F5),
+          fill: tone(const Color(0xFFEEF1F5)),
           ink: AgendaColors.muted,
           edge: AgendaColors.muted,
         ),
@@ -2428,7 +2424,7 @@ class _ClientCardState extends State<ClientCard> {
           children: [
             TextSpan(
               text: '$label ',
-              style: const TextStyle(color: AgendaColors.muted),
+              style: TextStyle(color: AgendaColors.muted),
             ),
             TextSpan(
               text: value,
@@ -2485,7 +2481,7 @@ class _ClientCardState extends State<ClientCard> {
           PopupMenuItem(
             key: ValueKey('case-remove-${x.caseKey}'),
             value: 'cikar',
-            child: const Text(
+            child: Text(
               'Bu müvekkilden çıkar…',
               style: TextStyle(color: AgendaColors.deadlineText),
             ),
@@ -2554,7 +2550,10 @@ class _ClientCardState extends State<ClientCard> {
         if (kase != null)
           Text(
             kase.court,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF4A5466)),
+            style: TextStyle(
+              fontSize: 13,
+              color: tone(const Color(0xFF4A5466)),
+            ),
           ),
         _Pill(stageLabel(status), colors.fill, colors.ink),
         if (hand) const _HandTag(),
@@ -2609,7 +2608,7 @@ class _ClientCardState extends State<ClientCard> {
             'Sözleşme',
             paper.locked ? 'imzalı' : 'imza bekliyor',
             color: paper.locked
-                ? const Color(0xFF16754F)
+                ? tone(const Color(0xFF16754F))
                 : AgendaColors.taskText,
             bold: true,
           ),
@@ -2617,7 +2616,7 @@ class _ClientCardState extends State<ClientCard> {
           _pair(
             'Avans',
             _plain(a.advanceLeft),
-            color: a.advanceLeft > 0 ? const Color(0xFF1B6B3A) : null,
+            color: a.advanceLeft > 0 ? tone(const Color(0xFF1B6B3A)) : null,
           ),
         if (widget.seesMoney && (a?.lawyerOwed ?? 0) > 0)
           _pair(
@@ -2635,44 +2634,43 @@ class _ClientCardState extends State<ClientCard> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
-          color: (note?.text ?? '').isEmpty ? null : const Color(0xFFFFFBEA),
+          color: (note?.text ?? '').isEmpty
+              ? null
+              : tone(const Color(0xFFFFFBEA)),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: (note?.text ?? '').isEmpty
                 ? AgendaColors.line
-                : const Color(0xFFF1E3B0),
+                : tone(const Color(0xFFF1E3B0)),
           ),
         ),
         child: (note?.text ?? '').isEmpty
-            ? const Text(
+            ? Text(
                 '+ Bu dosyaya not ekle',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               )
             : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.sticky_note_2_outlined,
                     size: 15,
-                    color: Color(0xFF8A6A12),
+                    color: tone(const Color(0xFF8A6A12)),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       note!.text,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12.5,
-                        color: Color(0xFF5A4A12),
+                        color: tone(const Color(0xFF5A4A12)),
                         height: 1.3,
                       ),
                     ),
                   ),
                   Text(
                     _shortDay(note.at),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11, color: AgendaColors.muted),
                   ),
                 ],
               ),
@@ -2805,7 +2803,7 @@ class _ClientCardState extends State<ClientCard> {
                             if (x.role.isNotEmpty) titleName(x.role),
                             if (kind.isNotEmpty) kind,
                           ].join(' · '),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: AgendaColors.muted,
                           ),
@@ -2819,10 +2817,7 @@ class _ClientCardState extends State<ClientCard> {
                       if (x.role.isNotEmpty) titleName(x.role),
                       if (kind.isNotEmpty) kind,
                     ].join(' · '),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
                 _caseMenu(x, null),
               ],
@@ -2861,7 +2856,7 @@ class _ClientCardState extends State<ClientCard> {
       if ((c?.email ?? '').isEmpty) 'e-posta',
       if ((c?.idNo ?? '').isEmpty) body ? 'VKN' : 'TCKN',
     ];
-    const link = TextStyle(
+    final link = TextStyle(
       fontSize: 12.5,
       color: AgendaColors.hearing,
       fontWeight: FontWeight.w700,
@@ -2897,7 +2892,9 @@ class _ClientCardState extends State<ClientCard> {
     final actions = [
       FilledButton.icon(
         key: const ValueKey('client-message'),
-        style: FilledButton.styleFrom(backgroundColor: const Color(0xFF1FA855)),
+        style: FilledButton.styleFrom(
+          backgroundColor: tone(const Color(0xFF1FA855)),
+        ),
         onPressed: _message,
         icon: const Icon(Icons.chat_outlined, size: 18),
         label: const Text('Mesaj'),
@@ -2997,7 +2994,7 @@ class _ClientCardState extends State<ClientCard> {
                 '$open açık',
                 if (years.isNotEmpty) 'ilk dosya ${years.first}',
               ].join(' · '),
-              style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
             for (final (label, value) in contacts)
               SelectionArea(child: _pair(label, value)),
@@ -3086,10 +3083,7 @@ class _ClientCardState extends State<ClientCard> {
               width: 50,
               child: Text(
                 _shortDay(ev.at),
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
               ),
             ),
             Padding(
@@ -3111,7 +3105,7 @@ class _ClientCardState extends State<ClientCard> {
                       ev.detail,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -3134,8 +3128,8 @@ class _ClientCardState extends State<ClientCard> {
           : null,
       children: [
         if (count == 0)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
             child: Text(
               'Henüz bir şey yok.',
               style: TextStyle(color: AgendaColors.muted),
@@ -3163,9 +3157,9 @@ class _ClientCardState extends State<ClientCard> {
       ),
       _ when name.startsWith('İbraname') => (
         icon: Icons.draw_outlined,
-        fill: const Color(0xFFEEF1F5),
+        fill: tone(const Color(0xFFEEF1F5)),
       ),
-      _ => (icon: Icons.receipt_outlined, fill: const Color(0xFFE3F4EC)),
+      _ => (icon: Icons.receipt_outlined, fill: tone(const Color(0xFFE3F4EC))),
     };
     Widget tile({
       required Key key,
@@ -3188,7 +3182,7 @@ class _ClientCardState extends State<ClientCard> {
                 color: fill,
                 borderRadius: BorderRadius.circular(7),
               ),
-              child: Icon(icon, size: 16, color: const Color(0xFF4A5466)),
+              child: Icon(icon, size: 16, color: tone(const Color(0xFF4A5466))),
             ),
             const SizedBox(width: 9),
             Expanded(
@@ -3206,7 +3200,7 @@ class _ClientCardState extends State<ClientCard> {
                       sub,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -3267,8 +3261,8 @@ class _ClientCardState extends State<ClientCard> {
           ),
           _Pill(
             r.locked ? 'imzalı' : 'imza bekliyor',
-            r.locked ? const Color(0xFFE3F4EC) : AgendaColors.taskFill,
-            r.locked ? const Color(0xFF16754F) : AgendaColors.taskText,
+            r.locked ? tone(const Color(0xFFE3F4EC)) : AgendaColors.taskFill,
+            r.locked ? tone(const Color(0xFF16754F)) : AgendaColors.taskText,
           ),
           PopupMenuButton<String>(
             key: ValueKey('paper-menu-${r.id}'),
@@ -3307,8 +3301,8 @@ class _ClientCardState extends State<ClientCard> {
       ),
       children: [
         if (count == 0)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
             child: Text(
               'Belge yok. Ücret sözleşmesi ve ibraname "Belge hazırla"dan '
               'hazırlanır.',
@@ -3329,7 +3323,7 @@ class _ClientCardState extends State<ClientCard> {
           tile(
             key: ValueKey('attorney-${a.id}'),
             icon: Icons.assignment_ind_outlined,
-            fill: const Color(0xFFEFE8FA),
+            fill: tone(const Color(0xFFEFE8FA)),
             title: [
               'Vekâletname',
               if (a.text('noter').isNotEmpty) a.text('noter'),
@@ -3409,7 +3403,7 @@ class _ClientCardState extends State<ClientCard> {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     letterSpacing: .5,
@@ -3420,10 +3414,7 @@ class _ClientCardState extends State<ClientCard> {
               if (count != null)
                 Text(
                   '  $count',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                 ),
               const Spacer(),
               ?action,
@@ -3502,20 +3493,20 @@ class _ClientCardState extends State<ClientCard> {
     ]..sort((a, b) => a.day.compareTo(b.day));
     final mine = {...?_client?.folded, UyapWebService.fold(widget.entry.name)};
     final others = [
-      for (final t in _db.caseParties(caseKey: key)[key] ?? const <UyapParty>[])
+      for (final t in _db.caseParties(caseKey: key)[key] ?? <UyapParty>[])
         if (!mine.contains(UyapWebService.fold(t.name)) &&
             !isShortenedName(t.name))
           t,
     ];
     final status = _db.caseOf(key)?.status?.value ?? '';
-    const muted = TextStyle(fontSize: 12.5, color: AgendaColors.muted);
+    final muted = TextStyle(fontSize: 12.5, color: AgendaColors.muted);
     Widget head(String t, {Widget? action}) => SizedBox(
       height: 26,
       child: Row(
         children: [
           Text(
             t,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: .5,
@@ -3558,7 +3549,7 @@ class _ClientCardState extends State<ClientCard> {
           line(
             '${_day(d.day).substring(0, 5)} ${d.title} · '
             '${d.day.difference(today).inDays} gün',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12.5,
               color: AgendaColors.taskText,
               fontWeight: FontWeight.w700,
@@ -3577,7 +3568,7 @@ class _ClientCardState extends State<ClientCard> {
     );
     return Container(
       key: ValueKey('case-detail-$key'),
-      color: const Color(0xFFF7F9FD),
+      color: tone(const Color(0xFFF7F9FD)),
       padding: const EdgeInsets.fromLTRB(16, 4, 10, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3646,8 +3637,8 @@ class _ClientCardState extends State<ClientCard> {
     ),
     children: [
       if (meetings.isEmpty)
-        const Padding(
-          padding: EdgeInsets.fromLTRB(4, 0, 4, 6),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
           child: Text(
             'Görüşme tutanağı yok.',
             style: TextStyle(color: AgendaColors.muted),
@@ -3710,8 +3701,8 @@ class _ClientCardState extends State<ClientCard> {
   Widget _meetings(List<ClientRecord> meetings) => ListView(
     children: [
       if (meetings.isEmpty)
-        const Padding(
-          padding: EdgeInsets.all(18),
+        Padding(
+          padding: const EdgeInsets.all(18),
           child: Text(
             'Görüşme tutanağı yok. Tutanak yazdırılıp müvekkile imzalatılır; '
             'imzalı sureti eklenince kilitlenir ve değiştirilemez.',
@@ -3810,7 +3801,7 @@ class _HandTag extends StatelessWidget {
       color: AgendaColors.taskFill,
       borderRadius: BorderRadius.circular(5),
     ),
-    child: const Text(
+    child: Text(
       'elle',
       style: TextStyle(
         fontSize: 10.5,
@@ -3895,7 +3886,7 @@ class _CaseAddDialogState extends State<_CaseAddDialog> {
             const SizedBox(height: 6),
             Expanded(
               child: shown.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                         'Eklenecek dosya bulunamadı.',
                         style: TextStyle(color: AgendaColors.muted),
@@ -4111,7 +4102,7 @@ class _ContactDialogState extends State<_ContactDialog> {
                 'WhatsApp, SMS ya da e-postayla siz gönderirsiniz.',
               ),
             ),
-            const Text(
+            Text(
               'Bilgiler alan alan eşitlenir: bir cihazda telefonu, ötekinde '
               'adresi değiştirirseniz ikisi de korunur.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
@@ -4464,7 +4455,7 @@ class _MeetingFormState extends State<MeetingForm> {
             ),
             Center(child: SpeechBar(owner: this)),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Kaydedince "Tutanağı yazdır" ile çıkarıp müvekkile '
               'imzalatın; imzalı sureti ekleyince tutanak kilitlenir.',
               style: TextStyle(color: AgendaColors.muted, fontSize: 12.5),

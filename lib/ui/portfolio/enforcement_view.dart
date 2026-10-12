@@ -13,8 +13,10 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../tools/interest_page.dart';
 import '../widgets/notice.dart';
 import 'portfolio_rows.dart';
+import '../theme/folio_palette.dart';
 
-const _green = Color(0xFF1B6B3A), _purple = Color(0xFF5B3B9A);
+final _green = tone(const Color(0xFF1B6B3A)),
+    _purple = tone(const Color(0xFF5B3B9A));
 
 /// "250.000,00" from lira.
 String _tl(double v) {
@@ -198,8 +200,8 @@ class _EnforcementViewState extends State<EnforcementView> {
   Widget build(BuildContext context) {
     final record = widget.record;
     if (record == null) {
-      return const Padding(
-        padding: EdgeInsets.all(18),
+      return Padding(
+        padding: const EdgeInsets.all(18),
         child: Text(
           'Dosya henüz UYAP\'tan çekilmedi. "UYAP\'tan tazele" ile borç '
           'hesabı, tahsilatlar ve borçlular gelir.',
@@ -244,15 +246,15 @@ class _EnforcementViewState extends State<EnforcementView> {
             child: LinearProgressIndicator(
               value: share,
               minHeight: 9,
-              color: const Color(0xFF3E9C6B),
-              backgroundColor: const Color(0xFFEEF0F4),
+              color: tone(const Color(0xFF3E9C6B)),
+              backgroundColor: tone(const Color(0xFFEEF0F4)),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             '%${(share * 100).toStringAsFixed(1).replaceAll('.', ',')} '
             'tahsil edildi',
-            style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+            style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
         ],
         const SizedBox(height: 8),
@@ -371,7 +373,7 @@ class _EnforcementViewState extends State<EnforcementView> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     letterSpacing: .5,
@@ -382,10 +384,7 @@ class _EnforcementViewState extends State<EnforcementView> {
                 if (right != null)
                   Text(
                     right,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                   ),
               ],
             ),
@@ -399,10 +398,7 @@ class _EnforcementViewState extends State<EnforcementView> {
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Text(
-        label,
-        style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
-      ),
+      Text(label, style: TextStyle(fontSize: 12, color: AgendaColors.muted)),
       Text(
         v == null ? '—' : '${_tl(v)} TL',
         style: TextStyle(
@@ -439,8 +435,10 @@ class _EnforcementViewState extends State<EnforcementView> {
   Widget _row(String a, String b, {bool bold = false, Color? color}) =>
       Container(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFFF0F1F5))),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: tone(const Color(0xFFF0F1F5))),
+          ),
         ),
         child: Row(
           children: [
@@ -474,7 +472,7 @@ class _EnforcementViewState extends State<EnforcementView> {
     children: [
       Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: .5,
@@ -483,7 +481,7 @@ class _EnforcementViewState extends State<EnforcementView> {
       ),
       const SizedBox(height: 2),
       if (rows.isEmpty)
-        const Text(
+        Text(
           'UYAP göstermedi.',
           style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
         ),
@@ -520,7 +518,7 @@ class _EnforcementViewState extends State<EnforcementView> {
     final collected = m?.collected, out = m?.paidOut;
     return _box('TAHSİLAT VE REDDİYAT', right: '${items.length}', [
       if (items.isEmpty)
-        const Text(
+        Text(
           'Tahsilat ya da reddiyat yok.',
           style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
         ),
@@ -531,8 +529,10 @@ class _EnforcementViewState extends State<EnforcementView> {
               : null,
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFFF0F1F5))),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: tone(const Color(0xFFF0F1F5))),
+              ),
             ),
             child: Row(
               children: [
@@ -553,8 +553,8 @@ class _EnforcementViewState extends State<EnforcementView> {
                     ),
                     decoration: BoxDecoration(
                       color: i.out
-                          ? const Color(0xFFEFE9FA)
-                          : const Color(0xFFE6F4EC),
+                          ? tone(const Color(0xFFEFE9FA))
+                          : tone(const Color(0xFFE6F4EC)),
                       borderRadius: BorderRadius.circular(5),
                     ),
                     child: Text(
@@ -592,7 +592,7 @@ class _EnforcementViewState extends State<EnforcementView> {
       if (items.length > 8)
         Text(
           've ${items.length - 8} kayıt daha',
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+          style: TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
       if (m?.remaining != null || (collected != null && out != null))
         _row(
@@ -605,7 +605,7 @@ class _EnforcementViewState extends State<EnforcementView> {
           margin: const EdgeInsets.only(top: 6),
           padding: const EdgeInsets.fromLTRB(8, 2, 2, 2),
           decoration: BoxDecoration(
-            color: const Color(0xFFFCEBEA),
+            color: tone(const Color(0xFFFCEBEA)),
             borderRadius: BorderRadius.circular(7),
           ),
           child: Row(
@@ -614,7 +614,7 @@ class _EnforcementViewState extends State<EnforcementView> {
                 child: Text(
                   '${p.date.split(' ').first} reddiyatı (${_tl(p.amount)} TL) '
                   'müvekkil hesabına işlenmedi.',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     color: AgendaColors.deadlineText,
                   ),
@@ -631,71 +631,68 @@ class _EnforcementViewState extends State<EnforcementView> {
     ]);
   }
 
-  Widget _debtors(List<UyapDebtor> debtors) => _box(
-    'BORÇLULAR',
-    right: debtors.isEmpty ? null : '${debtors.length}',
-    [
-      if (debtors.isEmpty)
-        const Text(
-          'UYAP borçlu listesi gelmedi; "UYAP\'tan tazele" ile çekilir.',
-          style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
-        ),
-      for (final d in debtors)
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: Color(0xFFF0F1F5))),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: titleName(d.name),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    if (d.idNo.isNotEmpty)
-                      TextSpan(
-                        text: '  ${d.body ? 'VKN' : 'TCKN'} ${d.idNo}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AgendaColors.muted,
-                        ),
-                      ),
-                  ],
-                ),
-                style: const TextStyle(fontSize: 12.5),
-              ),
-              if (d.dead || d.moved || d.warning)
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    if (d.dead)
-                      _flag('Ölüm kaydı var', AgendaColors.deadlineText),
-                    if (d.moved)
-                      _flag(
-                        d.movedWhy.isEmpty
-                            ? 'Adresi değişmiş'
-                            : 'Adresi değişmiş · ${d.movedWhy}',
-                        AgendaColors.taskText,
-                      ),
-                    if (d.warning) _flag('UYAP uyarısı', AgendaColors.taskText),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      const SizedBox(height: 6),
-      const Text(
-        'Borçlu sorguları (araç, tapu, banka, SGK) UYAP\'ta dosya başına '
-        'günde 5 ücretsiz, sonrası ücretlidir; burada kendiliğinden '
-        'yapılmaz.',
-        style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+  Widget _debtors(
+    List<UyapDebtor> debtors,
+  ) => _box('BORÇLULAR', right: debtors.isEmpty ? null : '${debtors.length}', [
+    if (debtors.isEmpty)
+      Text(
+        'UYAP borçlu listesi gelmedi; "UYAP\'tan tazele" ile çekilir.',
+        style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
       ),
-    ],
-  );
+    for (final d in debtors)
+      Container(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: tone(const Color(0xFFF0F1F5))),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: titleName(d.name),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  if (d.idNo.isNotEmpty)
+                    TextSpan(
+                      text: '  ${d.body ? 'VKN' : 'TCKN'} ${d.idNo}',
+                      style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                    ),
+                ],
+              ),
+              style: const TextStyle(fontSize: 12.5),
+            ),
+            if (d.dead || d.moved || d.warning)
+              Wrap(
+                spacing: 6,
+                children: [
+                  if (d.dead)
+                    _flag('Ölüm kaydı var', AgendaColors.deadlineText),
+                  if (d.moved)
+                    _flag(
+                      d.movedWhy.isEmpty
+                          ? 'Adresi değişmiş'
+                          : 'Adresi değişmiş · ${d.movedWhy}',
+                      AgendaColors.taskText,
+                    ),
+                  if (d.warning) _flag('UYAP uyarısı', AgendaColors.taskText),
+                ],
+              ),
+          ],
+        ),
+      ),
+    const SizedBox(height: 6),
+    Text(
+      'Borçlu sorguları (araç, tapu, banka, SGK) UYAP\'ta dosya başına '
+      'günde 5 ücretsiz, sonrası ücretlidir; burada kendiliğinden '
+      'yapılmaz.',
+      style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+    ),
+  ]);
 
   Widget _flag(String text, Color color) => Padding(
     padding: const EdgeInsets.only(top: 3),
@@ -740,7 +737,7 @@ class _EnforcementViewState extends State<EnforcementView> {
     final shown = _allCourse ? events : events.take(8).toList();
     return _box('DOSYA SEYRİ', right: 'evraklar ve para hareketleri', [
       if (events.isEmpty)
-        const Text(
+        Text(
           'Henüz bir şey yok.',
           style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
         ),
@@ -758,10 +755,7 @@ class _EnforcementViewState extends State<EnforcementView> {
                 width: 78,
                 child: Text(
                   dayText(ev.at),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                 ),
               ),
               Expanded(

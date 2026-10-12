@@ -15,6 +15,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../help/help_button.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 import 'task_give_dialog.dart';
+import '../theme/folio_palette.dart';
 
 enum _View { all, given, mine, load }
 
@@ -35,7 +36,7 @@ enum _View { all, given, mine, load }
 Color _stageInk(TaskStage s) => switch (s) {
   TaskStage.given => AgendaColors.hearing,
   TaskStage.running => AgendaColors.taskText,
-  TaskStage.review => const Color(0xFF0E7C86),
+  TaskStage.review => tone(const Color(0xFF0E7C86)),
   TaskStage.done => AgendaColors.ok,
   TaskStage.cancelled => AgendaColors.muted,
 };
@@ -111,7 +112,7 @@ class _TasksPageState extends State<TasksPage> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        border: Border.all(color: const Color(0xFFF2D59B)),
+        border: Border.all(color: tone(const Color(0xFFF2D59B))),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -253,9 +254,9 @@ class _TasksPageState extends State<TasksPage> {
                       _move(context, m),
                   Expanded(
                     child: !_net.ledger.exists
-                        ? const Center(
+                        ? Center(
                             child: Padding(
-                              padding: EdgeInsets.all(24),
+                              padding: const EdgeInsets.all(24),
                               child: Text(
                                 'Görevler büroyla gelir. Büro ağı sayfasında bir '
                                 'büro kurun ya da büronuzun yöneticisinin sizi '
@@ -471,8 +472,8 @@ class _TasksPageState extends State<TasksPage> {
         const SizedBox(height: 8),
         for (final t in shown) _card(context, t, now),
         if (shown.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(24),
+          Padding(
+            padding: const EdgeInsets.all(24),
             child: Text(
               'Burada görev yok.',
               textAlign: TextAlign.center,
@@ -545,10 +546,7 @@ class _TasksPageState extends State<TasksPage> {
                   ].join(' '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                 ),
               const SizedBox(height: 6),
               LinearProgressIndicator(
@@ -561,10 +559,7 @@ class _TasksPageState extends State<TasksPage> {
                 '${t.byName} → ${t.assignees.values.join(', ')}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
               ),
               if (last != null && last.text.isNotEmpty)
                 Text(
@@ -912,10 +907,7 @@ class _TaskDetailState extends State<TaskDetail> {
                     c.docs == TaskDocs.chosen
                         ? '${c.docKeys.length} evrak seçildi'
                         : c.docs.label,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
                   _received(context, t, c, doer),
                   for (final item in c.items)
@@ -942,7 +934,7 @@ class _TaskDetailState extends State<TaskDetail> {
                     ),
                   const SizedBox(height: 8),
                 ],
-                const Text(
+                Text(
                   'GİDİŞAT VE YAZIŞMA',
                   style: TextStyle(
                     fontSize: 10.5,
@@ -1004,8 +996,8 @@ class _TaskDetailState extends State<TaskDetail> {
     if (!doer) return const SizedBox.shrink();
     final got = _net.receivedCase(t, c.caseKey);
     if (got == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 4),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: Text(
           'Dosya ve evrak işi verenden geliyor…',
           style: TextStyle(fontSize: 12, color: AgendaColors.muted),
@@ -1033,7 +1025,7 @@ class _TaskDetailState extends State<TaskDetail> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'GÖREVLE GELEN DOSYA · UYAP yetkiniz olmasa da inceleyebilirsiniz',
             style: TextStyle(
               fontSize: 10.5,
@@ -1114,10 +1106,7 @@ class _TaskDetailState extends State<TaskDetail> {
             children: [
               Text(
                 '${mine ? 'Siz' : e.byName} · $when',
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 10.5, color: AgendaColors.muted),
               ),
               Text(e.text),
             ],
@@ -1145,8 +1134,8 @@ class _TaskDetailState extends State<TaskDetail> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 4, right: 8),
+          Padding(
+            padding: const EdgeInsets.only(top: 4, right: 8),
             child: Icon(Icons.circle, size: 9, color: AgendaColors.hearing),
           ),
           Expanded(
@@ -1159,10 +1148,7 @@ class _TaskDetailState extends State<TaskDetail> {
                   ),
                   TextSpan(
                     text: '  $when',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11, color: AgendaColors.muted),
                   ),
                   if (e.text.isNotEmpty) TextSpan(text: '\n${e.text}'),
                 ],

@@ -38,6 +38,7 @@ import 'ui/theme/theme_controller.dart';
 import 'services/search/library_controller.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/widgets/suggestion_list.dart';
+import 'ui/theme/folio_palette.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -360,6 +361,9 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
     navigatorKey: _navigator,
     builder: (context, child) => LayoutBuilder(
       builder: (context, constraints) {
+        // The pages' own colours follow the theme (FolioPalette); read
+        // here, above them, each time the theme changes.
+        FolioPalette.dark = Theme.of(context).brightness == Brightness.dark;
         final quick = companion?.quick ?? false;
         final main = widget.desktopChrome
             ? DesktopFrame(

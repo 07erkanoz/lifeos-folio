@@ -311,7 +311,7 @@ final _marker =
 final _special = '(?:(?<ozel>${trLoose('geçici')}|ek)\\s+)?';
 
 /// "madde", "maddesi", "maddesinin", "MADDESİ" — after the number.
-final _articleWord = 'madde[$_suffix]*';
+const _articleWord = 'madde[$_suffix]*';
 
 /// What may follow an article number: the letter of a lettered article
 /// (68/a), the fıkra (/1, /II) and the bent (-a).

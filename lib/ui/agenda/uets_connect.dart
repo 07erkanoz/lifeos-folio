@@ -309,7 +309,7 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
       subtitle: 'Ulusal Elektronik Tebligat Sistemi',
       onClose: _close,
       progress: _busy,
-      footerNote: const Row(
+      footerNote: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.schedule_rounded, size: 14, color: AgendaColors.muted),

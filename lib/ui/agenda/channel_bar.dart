@@ -117,7 +117,7 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (busy)
-            const SizedBox(
+            SizedBox(
               width: 9,
               height: 9,
               child: CircularProgressIndicator(

@@ -17,6 +17,7 @@ import 'office_pairing_dialog.dart';
 import 'qr_pairing.dart';
 import 'send_to_office.dart';
 import '../widgets/drop_zone.dart';
+import '../theme/folio_palette.dart';
 
 /// Büro ağı (docs/buro.md, docs/design/buro-paylasim-taslak.png): the
 /// Folios on the office's network under their people. Sending, knowing a
@@ -165,10 +166,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     ? 'Aynı ağdaki Folio’lar birbirini bulur'
                     : 'Aynı ağda ${people.length} kişi, $devices cihaz · bu '
                           'cihaz: ${self.device} (${self.platform.label})',
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               ),
             ],
           ),
@@ -218,7 +216,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.lan_outlined, size: 30, color: AgendaColors.hearing),
+          Icon(Icons.lan_outlined, size: 30, color: AgendaColors.hearing),
           const SizedBox(height: 10),
           const Text(
             'Büro ağına katılın',
@@ -233,7 +231,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
             style: TextStyle(fontSize: 13.5, height: 1.45),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Kafe ya da otel gibi ortak ağlarda katılmayın. Katıldığınız '
             'ağda Folio her açılışta yeniden görünür; istediğiniz zaman '
             'ayrılabilirsiniz.',
@@ -289,8 +287,8 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
           ],
           // Alone only when no other device is listed, the user's own too.
           if (people.fold<int>(0, (n, p) => n + p.devices.length) < 2)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Text(
                 'Bu ağda henüz başka bir Folio görünmüyor. Diğer cihazda '
                 'Folio’nun açık olduğundan, büro ağına katıldığından ve aynı '
@@ -313,12 +311,12 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
         .take(2)
         .map((w) => w.substring(0, 1).toUpperCase())
         .join();
-    const tones = [
-      Color(0xFF2B5EA8),
-      Color(0xFF157A52),
-      Color(0xFF0E7C86),
-      Color(0xFF97600D),
-      Color(0xFF4B5465),
+    final tones = [
+      FolioPalette.tone(const Color(0xFF2B5EA8)),
+      FolioPalette.tone(const Color(0xFF157A52)),
+      FolioPalette.tone(const Color(0xFF0E7C86)),
+      FolioPalette.tone(const Color(0xFF97600D)),
+      FolioPalette.tone(const Color(0xFF4B5465)),
     ];
     final tone = person.self
         ? tones[0]
@@ -353,7 +351,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                         children: [
                           TextSpan(text: name),
                           if (person.self)
-                            const TextSpan(
+                            TextSpan(
                               text: '  (siz)',
                               style: TextStyle(
                                 fontSize: 12,
@@ -370,7 +368,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     ),
                     Text(
                       '${person.devices.length} cihaz · $online çevrimiçi',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -418,14 +416,16 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                 ? Icons.smartphone_rounded
                 : Icons.computer_rounded,
             size: 17,
-            color: const Color(0xFF4B5465),
+            color: FolioPalette.tone(const Color(0xFF4B5465)),
           ),
           const SizedBox(width: 8),
           Container(
             width: 7,
             height: 7,
             decoration: BoxDecoration(
-              color: d.online ? AgendaColors.ok : const Color(0xFFB8BFCC),
+              color: d.online
+                  ? AgendaColors.ok
+                  : FolioPalette.tone(const Color(0xFFB8BFCC)),
               shape: BoxShape.circle,
             ),
           ),
@@ -436,7 +436,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                 children: [
                   TextSpan(text: '${d.device} · ${d.platform.label}'),
                   if (self)
-                    const TextSpan(
+                    TextSpan(
                       text: '  bu cihaz',
                       style: TextStyle(fontSize: 11, color: AgendaColors.muted),
                     )
@@ -445,10 +445,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                       text: seen == null
                           ? '  kapalı'
                           : '  kapalı · ${when(seen)}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AgendaColors.muted,
-                      ),
+                      style: TextStyle(fontSize: 11, color: AgendaColors.muted),
                     ),
                 ],
               ),
@@ -491,8 +488,8 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     child: Text('${r.label} olarak ekle'),
                   ),
               ],
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Text(
                   'Büroya ekle ▾',
                   style: TextStyle(fontSize: 12.5, color: AgendaColors.hearing),
@@ -508,10 +505,10 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
               label: const Text('Gönder'),
             ),
           if (!self && _net.isKnown(d.deviceId))
-            const Tooltip(
+            Tooltip(
               message: 'Tanınan cihaz',
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Icon(
                   Icons.verified_rounded,
                   size: 17,
@@ -559,7 +556,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                 style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'Büro kurduğunuzda büronun ilk yöneticisi siz olursunuz; '
                 'tanıdığınız cihazları rolleriyle büroya alırsınız. Başka bir '
                 'büroya katılacaksanız o büronun yöneticisinin sizi tanıyıp '
@@ -609,7 +606,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                   TextSpan(text: l.officeName),
                   TextSpan(
                     text: '  ${members.length} üye',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
                       color: AgendaColors.muted,
@@ -643,7 +640,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                           '${m.device} · ${m.platform.label}'
                           '${l.devicesOf(m.person).length > 1 ? ' · ${l.devicesOf(m.person).length} cihaz' : ''}'
                           '${m.founder ? ' · kurucu' : ''}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11.5,
                             color: AgendaColors.muted,
                           ),
@@ -659,7 +656,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                     decoration: BoxDecoration(
                       color: m.role == OfficeRole.manager
                           ? AgendaColors.hearingFill
-                          : const Color(0xFFEEF0F3),
+                          : FolioPalette.tone(const Color(0xFFEEF0F3)),
                       borderRadius: BorderRadius.circular(5),
                     ),
                     child: Text(
@@ -669,7 +666,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                         fontWeight: FontWeight.w800,
                         color: m.role == OfficeRole.manager
                             ? AgendaColors.hearing
-                            : const Color(0xFF5E6677),
+                            : FolioPalette.tone(const Color(0xFF5E6677)),
                       ),
                     ),
                   ),
@@ -918,17 +915,17 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                                 ? tag(
                                     'GÖNDERİLDİ',
                                     AgendaColors.ok,
-                                    const Color(0xFFE3F5EF),
+                                    FolioPalette.tone(const Color(0xFFE3F5EF)),
                                   )
                                 : tag(
                                     'ALINDI',
                                     AgendaColors.ok,
-                                    const Color(0xFFE3F5EF),
+                                    FolioPalette.tone(const Color(0xFFE3F5EF)),
                                   ),
                           TransferState.declined => tag(
                             'REDDEDİLDİ',
                             AgendaColors.muted,
-                            const Color(0xFFEEF0F3),
+                            FolioPalette.tone(const Color(0xFFEEF0F3)),
                           ),
                           TransferState.failed => tag(
                             'KESİLDİ',
@@ -963,7 +960,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                         ),
                         Text(
                           clockText(t.at),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             color: AgendaColors.muted,
                           ),
@@ -981,7 +978,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                       ].join(' · '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -1065,7 +1062,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
             ),
             if (self != null && self.name.isEmpty) ...[
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'Diğerleri sizi adınızla görsün diye Ayarlar’daki avukat '
                 'profilinize adınızı yazın.',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.taskText),
@@ -1073,7 +1070,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
             ],
             if (!_net.kept) ...[
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'Bu cihazda güvenli anahtar deposu bulunamadı; Folio her '
                 'açılışta ağa yeni bir cihaz olarak görünür.',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.taskText),
@@ -1102,7 +1099,7 @@ class _OfficeNetworkPageState extends State<OfficeNetworkPage> {
                 Row(
                   key: ValueKey('office-known-${k.deviceId}'),
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.verified_rounded,
                       size: 15,
                       color: AgendaColors.ok,

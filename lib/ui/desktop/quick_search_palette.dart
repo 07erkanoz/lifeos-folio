@@ -7,6 +7,7 @@ import '../../models/evrak_file.dart';
 import '../../services/search/library_controller.dart';
 import '../library/search_controls.dart';
 import '../library/search_results.dart';
+import '../theme/folio_palette.dart';
 
 /// No separate index, extraction, ranking, or query dialect in this surface.
 class QuickSearchPalette extends StatefulWidget {
@@ -120,7 +121,7 @@ class _QuickSearchPaletteState extends State<QuickSearchPalette> {
                   gradient: LinearGradient(
                     colors: [
                       colors.primary,
-                      const Color(0xFF86B7A9),
+                      tone(const Color(0xFF86B7A9)),
                       colors.surface,
                     ],
                   ),

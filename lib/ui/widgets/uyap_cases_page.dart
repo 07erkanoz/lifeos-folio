@@ -318,13 +318,15 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
   /// The top on a phone: one row, small buttons, the chips under it.
   Widget _topNarrow(ThemeData theme) {
     final inCase = widget.caseKey != null;
-    final small = ButtonStyle(
+    const small = ButtonStyle(
       visualDensity: VisualDensity.compact,
-      padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 12),
-      ),
-      textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+      textStyle: WidgetStatePropertyAll(
+        TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
     return Padding(

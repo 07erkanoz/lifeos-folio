@@ -127,6 +127,7 @@ import 'widgets/optimize_dialog.dart';
 import 'widgets/pdf_viewer_widget.dart';
 import 'widgets/tiff_viewer_widget.dart';
 import 'widgets/folio_select.dart';
+import 'theme/folio_palette.dart';
 
 class HomePage extends StatefulWidget {
   final List<String> initialPaths;
@@ -3068,7 +3069,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             Icons.folder_copy_outlined,
                             'Arşivdeki evrak',
                             '${_library.total}',
-                            const Color(0xFF6B8DED),
+                            tone(const Color(0xFF6B8DED)),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -3077,7 +3078,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             Icons.manage_search_rounded,
                             'İçeriği aranabilir',
                             '${_library.searchable}',
-                            const Color(0xFF36B895),
+                            tone(const Color(0xFF36B895)),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -3086,7 +3087,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             Icons.folder_outlined,
                             'Bağlı klasör',
                             '${_library.sources.where((s) => s.folder).length}',
-                            const Color(0xFFB395E3),
+                            tone(const Color(0xFFB395E3)),
                           ),
                         ),
                       ],
@@ -3407,8 +3408,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             Container(
               width: 6,
               height: 6,
-              decoration: const BoxDecoration(
-                color: Color(0xFF2CBA8C),
+              decoration: BoxDecoration(
+                color: tone(const Color(0xFF2CBA8C)),
                 shape: BoxShape.circle,
               ),
             ),

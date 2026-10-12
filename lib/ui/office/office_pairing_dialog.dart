@@ -89,7 +89,7 @@ class OfficePairingDialog extends StatelessWidget {
             if (state == PairingState.confirmed)
               waiting('Karşı tarafın onayı bekleniyor…')
             else
-              const Text(
+              Text(
                 'Başka bir odadaysanız kodu telefonla okuyarak '
                 'karşılaştırabilirsiniz. Onaydan sonra bu cihazla her aktarım '
                 'şifreli olur; kod bir daha sorulmaz, tanınan cihazlarda '
@@ -100,7 +100,7 @@ class OfficePairingDialog extends StatelessWidget {
         ),
         PairingState.done => Row(
           children: [
-            const Icon(Icons.verified_rounded, color: AgendaColors.ok),
+            Icon(Icons.verified_rounded, color: AgendaColors.ok),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

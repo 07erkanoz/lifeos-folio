@@ -5,6 +5,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/notice.dart';
 import 'profile_from_uyap.dart';
 import 'settings_parts.dart';
+import '../theme/folio_palette.dart';
 
 /// The lawyer's profile on a phone, a page of its own (docs/design/mobil-
 /// ayarlar-taslak.png): filled from UYAP Mobil in one tap, the office's
@@ -70,7 +71,7 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
     _lawyers
       ..clear()
       ..addAll([
-        for (final l in p.lawyers.isEmpty ? const [Lawyer()] : p.lawyers)
+        for (final l in p.lawyers.isEmpty ? [const Lawyer()] : p.lawyers)
           _LawyerFields(l),
       ]);
     _main = p.main.clamp(0, _lawyers.length - 1);
@@ -172,7 +173,7 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF0F9),
+                    color: tone(const Color(0xFFEAF0F9)),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -198,10 +199,10 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
                 IconButton(
                   tooltip: 'Bu avukatı kaldır',
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.delete_outline_rounded,
                     size: 19,
-                    color: Color(0xFF9AA2B1),
+                    color: tone(const Color(0xFF9AA2B1)),
                   ),
                   onPressed: () => setState(() {
                     _lawyers.removeAt(i).dispose();

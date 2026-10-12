@@ -5,6 +5,7 @@ import '../../services/clients/client_accounts.dart';
 import '../../services/clients/client_files.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import 'clients_page.dart' show pickScan;
+import '../theme/folio_palette.dart';
 
 String _two(int v) => v.toString().padLeft(2, '0');
 String _day(DateTime t) => '${_two(t.day)}.${_two(t.month)}.${t.year}';
@@ -102,7 +103,7 @@ class ClientAccountsView extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AgendaColors.line),
+        side: BorderSide(color: AgendaColors.line),
       ),
       child: ExpansionTile(
         initiallyExpanded: true,
@@ -118,7 +119,7 @@ class ClientAccountsView extends StatelessWidget {
             if (late > 0)
               Text(
                 '$late taksit gecikti',
-                style: const TextStyle(
+                style: TextStyle(
                   color: AgendaColors.deadline,
                   fontWeight: FontWeight.w700,
                   fontSize: 12.5,
@@ -186,8 +187,8 @@ class ClientAccountsView extends StatelessWidget {
             ),
           const Divider(height: 1),
           if (a.movements.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(14),
+            Padding(
+              padding: const EdgeInsets.all(14),
               child: Text(
                 'Hareket yok.',
                 style: TextStyle(color: AgendaColors.muted),
@@ -220,7 +221,7 @@ class ClientAccountsView extends StatelessWidget {
           ? AgendaColors.muted
           : owed == value > 0
           ? AgendaColors.deadlineText
-          : const Color(0xFF1B6B3A),
+          : tone(const Color(0xFF1B6B3A)),
     ),
   );
 
@@ -264,7 +265,7 @@ class ClientAccountsView extends StatelessWidget {
               color: gone
                   ? AgendaColors.muted
                   : sign > 0
-                  ? const Color(0xFF1B6B3A)
+                  ? tone(const Color(0xFF1B6B3A))
                   : AgendaColors.deadlineText,
             ),
           ),
@@ -463,7 +464,7 @@ class _MovementDialogState extends State<MovementDialog> {
               label: Text(_file?.name ?? 'Dekont / makbuz ekle'),
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Kaydedilen hareket değiştirilemez; yanlışsa ters kayıtla '
               'düzeltilir. Yazıldığı an ve yazan kayda geçer.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
@@ -658,7 +659,7 @@ class _FeeDialogState extends State<FeeDialog> {
               ],
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Taksitler birer ay arayla yazılır.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),

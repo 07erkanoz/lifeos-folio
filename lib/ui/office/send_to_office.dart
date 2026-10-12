@@ -155,10 +155,7 @@ class _Targets extends StatelessWidget {
                       if (!t.online)
                         t.member ? 'ağda değil, gelince gider' : 'ağda değil',
                     ].join(' · '),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
                   // An own device away cannot take it now.
                   enabled: t.member || t.online,

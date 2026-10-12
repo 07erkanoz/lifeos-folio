@@ -136,10 +136,7 @@ class _HomeSearchBoxState extends State<HomeSearchBox> {
                   ),
                   child: Text(
                     Platform.isMacOS ? '⌘ K' : 'Ctrl K',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11, color: AgendaColors.muted),
                   ),
                 ),
               ),

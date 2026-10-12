@@ -70,7 +70,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
                 ),
               ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Belge bu cihazda kalır; yalnız seçtiklerinizin ekranına canlı '
               'yansır. "Yalnız görebilir" olanlar kopyalayamaz. "Sırayla '
               'düzenleyebilir" olanlara kalemi verince yazdıkları belgenize '
@@ -91,11 +91,11 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
             await widget.host.close();
             if (context.mounted) Navigator.pop(context);
           },
-          child: const Text('Paylaşımı kapat'),
+          child: Text('Paylaşımı kapat'),
         ),
       FilledButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Tamam'),
+        child: Text('Tamam'),
       ),
     ],
   );
@@ -105,7 +105,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
   List<Widget> _office() {
     final ledger = _net.ledger;
     if (_net.self == null || ledger.officeId == null) {
-      return const [
+      return [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
@@ -125,7 +125,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
           m,
     ];
     if (members.isEmpty) {
-      return const [
+      return [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
@@ -239,7 +239,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
                           if (device.isNotEmpty) device,
                           if (_state(peer).isNotEmpty) _state(peer),
                         ].join(' · '),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: AgendaColors.muted,
                         ),
@@ -255,7 +255,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
                             color: AgendaColors.taskFill,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
@@ -323,8 +323,8 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
           await widget.host.takeGuests(on);
           if (mounted) setState(() {});
         },
-        title: const Text('Misafirleri kabul et'),
-        subtitle: const Text(
+        title: Text('Misafirleri kabul et'),
+        subtitle: Text(
           'Büronuzda olmayan, Folio kullanan biri aynı ağda Dosya ▸ Canlı '
           'belgeye katıl\'a basar ve sizi seçer. İki ekranda aynı kod çıkar; '
           'siz kabul edince belgeyi görür.',
@@ -333,7 +333,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
       for (final g in guests)
         _row(id: g.deviceId, name: g.name, peer: g, guest: true),
       if (widget.host.takingGuests && guests.isEmpty)
-        const Padding(
+        Padding(
           padding: EdgeInsets.symmetric(vertical: 8),
           child: Text(
             'Henüz katılan misafir yok.',
@@ -345,7 +345,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
 
   List<Widget> _devices() {
     if (_net.self == null) {
-      return const [
+      return [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
@@ -368,7 +368,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
           p.deviceId: p,
     };
     if (online.isEmpty && peers.isEmpty) {
-      return const [
+      return [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(

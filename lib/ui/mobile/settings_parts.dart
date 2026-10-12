@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../theme/folio_palette.dart';
 
 /// The pieces the phone's settings are made of (docs/design/mobil-ayarlar-
 /// taslak.png): a section's heading, a white group of rows, a row with its
@@ -43,7 +44,7 @@ class SettingsSection extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(6, 16, 6, 6),
     child: Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w800,
         letterSpacing: .8,
@@ -91,8 +92,8 @@ class SettingsRow extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.status,
-    this.fill = AgendaColors.hearingFill,
-    this.tint = AgendaColors.hearing,
+    this.fill,
+    this.tint,
     this.trailing,
     this.onTap,
   });
@@ -103,7 +104,9 @@ class SettingsRow extends StatelessWidget {
 
   /// A dot before the subtitle: green for connected, grey for not.
   final Color? status;
-  final Color fill, tint;
+
+  /// The icon's square and the icon; the hearing's blue when not given.
+  final Color? fill, tint;
 
   /// A switch or a choice; a chevron when null and the row leads on.
   final Widget? trailing;
@@ -120,10 +123,10 @@ class SettingsRow extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: fill,
+              color: fill ?? AgendaColors.hearingFill,
               borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, size: 17, color: tint),
+            child: Icon(icon, size: 17, color: tint ?? AgendaColors.hearing),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -157,7 +160,7 @@ class SettingsRow extends StatelessWidget {
                           subtitle!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: AgendaColors.muted,
                           ),
@@ -173,7 +176,10 @@ class SettingsRow extends StatelessWidget {
           trailing ??
               (onTap == null
                   ? const SizedBox.shrink()
-                  : const Icon(Icons.chevron_right, color: Color(0xFF9AA2B1))),
+                  : Icon(
+                      Icons.chevron_right,
+                      color: tone(const Color(0xFF9AA2B1)),
+                    )),
         ],
       ),
     ),
@@ -205,12 +211,12 @@ class UyapFillCard extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: AgendaColors.eHearingFill,
-      border: Border.all(color: const Color(0xFFBFE5DE)),
+      border: Border.all(color: tone(const Color(0xFFBFE5DE))),
       borderRadius: BorderRadius.circular(14),
     ),
     child: Row(
       children: [
-        const Icon(Icons.gavel_rounded, color: AgendaColors.eHearingText),
+        Icon(Icons.gavel_rounded, color: AgendaColors.eHearingText),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -225,7 +231,7 @@ class UyapFillCard extends StatelessWidget {
               ),
               Text(
                 subtitle,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11.5,
                   color: AgendaColors.eHearingText,
                 ),
@@ -244,7 +250,8 @@ class UyapFillCard extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
-            textStyle: const TextStyle(fontFamily: 'Inter', 
+            textStyle: const TextStyle(
+              fontFamily: 'Inter',
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),

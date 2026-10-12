@@ -42,7 +42,7 @@ class OfficeOfferDialog extends StatelessWidget {
           children: [
             Text(
               '${t.files.length} dosya · ${sizeText(t.total)} · ${t.peer.device}',
-              style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
             const SizedBox(height: 8),
             for (final f in t.files.take(8))
@@ -61,10 +61,7 @@ class OfficeOfferDialog extends StatelessWidget {
                     ),
                     Text(
                       sizeText(f.size),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AgendaColors.muted,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                     ),
                   ],
                 ),
@@ -78,7 +75,7 @@ class OfficeOfferDialog extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Kabul ederseniz dosyalar şifreli olarak gelir, her biri gelince '
               'denetlenir ve “Folio Gelenler” klasörüne konur.',
               style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),

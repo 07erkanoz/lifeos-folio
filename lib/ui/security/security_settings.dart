@@ -84,7 +84,7 @@ class SecuritySettings extends StatelessWidget {
               onTap: _lock.lockNow,
             ),
           ],
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(12, 6, 12, 10),
             child: Text(
               'Şifre Folio’nun açılmasını korur; bilgisayardaki dosyaları '

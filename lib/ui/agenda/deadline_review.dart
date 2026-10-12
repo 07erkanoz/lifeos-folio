@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_deadline.dart';
 import 'agenda_page.dart' show AgendaColors;
+import '../theme/folio_palette.dart';
 
 /// The reasons a lawyer reads first, most telling first; the one every
 /// notice has (the service day not yet checked against the evidence) is
@@ -113,8 +114,8 @@ class DeadlineReviewTile extends StatelessWidget {
     return Container(
       key: ValueKey('review-${r.id}'),
       padding: const EdgeInsets.symmetric(vertical: 9),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFFF1F3F6))),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tone(const Color(0xFFF1F3F6)))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,7 +153,7 @@ class DeadlineReviewTile extends StatelessWidget {
                         deadlineStateText(d),
                         ?subtitle,
                       ].join(' · '),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -280,7 +281,7 @@ Future<void> showDeadlineDetails(
             children: [
               Text(
                 [if (r.law.isNotEmpty) r.law, deadlineStateText(d)].join(' · '),
-                style: const TextStyle(color: AgendaColors.muted),
+                style: TextStyle(color: AgendaColors.muted),
               ),
               const SizedBox(height: 10),
               _row(
@@ -327,10 +328,7 @@ Future<void> showDeadlineDetails(
                       '${h.at.hour.toString().padLeft(2, '0')}:'
                       '${h.at.minute.toString().padLeft(2, '0')} · ${h.change}'
                       '${h.dueDay == null ? '' : ' · ${_dayText(h.dueDay!)}'}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AgendaColors.muted,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                     ),
                   ),
               ],
@@ -355,7 +353,7 @@ Widget _row(String label, String value) => Padding(
     children: [
       SizedBox(
         width: 140,
-        child: Text(label, style: const TextStyle(color: AgendaColors.muted)),
+        child: Text(label, style: TextStyle(color: AgendaColors.muted)),
       ),
       Expanded(child: Text(value)),
     ],

@@ -61,7 +61,7 @@ class GlobalSearchPanel extends StatelessWidget {
           searching
               ? 'Aranıyor…'
               : '“${results.query}” için bir şey bulunamadı.',
-          style: const TextStyle(fontSize: 13, color: AgendaColors.muted),
+          style: TextStyle(fontSize: 13, color: AgendaColors.muted),
         ),
       );
     }
@@ -82,7 +82,7 @@ class GlobalSearchPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Text(
             '$title · $total',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: .6,
@@ -104,7 +104,7 @@ class GlobalSearchPanel extends StatelessWidget {
             child: Text(
               'İlk ${found.items.length} gösteriliyor; daha fazla kelimeyle '
               'arayın.',
-              style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
           ),
         );
@@ -121,6 +121,7 @@ class GlobalSearchPanel extends StatelessWidget {
                 style: TextButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   textStyle: const TextStyle(
+                    fontFamily: 'Inter',
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -305,17 +306,14 @@ class GlobalSearchPanel extends StatelessWidget {
                       detail,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AgendaColors.muted,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                     ),
                 ],
               ),
             ),
             if (selected)
-              const Padding(
-                padding: EdgeInsets.only(left: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
                 child: Icon(
                   Icons.keyboard_return_rounded,
                   size: 16,

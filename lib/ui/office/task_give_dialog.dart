@@ -11,6 +11,7 @@ import '../../services/office/task_package.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart';
+import '../theme/folio_palette.dart';
 
 /// A case being put in a task: its things to do and what goes with it.
 class _Draft {
@@ -302,7 +303,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
       padding: const EdgeInsets.only(top: 12, bottom: 5),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w800,
           letterSpacing: .7,
@@ -330,7 +331,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
               ),
               label('KİME'),
               if (people.isEmpty)
-                const Text(
+                Text(
                   'Görev verebileceğiniz bir üye yok. Önce Büro ağı sayfasında '
                   'büroyu kurup üyeleri ekleyin.',
                   style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
@@ -428,8 +429,8 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                   ),
                 ),
               if (_cases.isNotEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     'Seçilen evrak, dosyanın künyesi ve taraflarıyla şifreli '
                     'gider; alan kişi o dosyada UYAP yetkisi olmasa da dosyayı '
@@ -556,7 +557,10 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
             'Son gün: ${dayText(_due!)} · duruşmadan ${_byHearing!.days} gün '
             'önce. Duruşma ertelenirse size sorulur.',
             key: const ValueKey('task-hearing-due'),
-            style: const TextStyle(fontSize: 12, color: Color(0xFF1B6B3A)),
+            style: TextStyle(
+              fontSize: 12,
+              color: tone(const Color(0xFF1B6B3A)),
+            ),
           ),
         ),
     ];
@@ -723,7 +727,7 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                     ),
                   ),
                 if (docs.isEmpty)
-                  const Text(
+                  Text(
                     'Bu dosyanın evrak listesi henüz UYAP’tan gelmedi.',
                     style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),

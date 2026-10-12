@@ -151,7 +151,7 @@ class _RulerPainter extends CustomPainter {
     );
     paint.color = scheme.onSurfaceVariant.withValues(alpha: .45);
     paint.strokeWidth = .7;
-    final step = DocumentRuler.pointsPerCm / 2;
+    const step = DocumentRuler.pointsPerCm / 2;
     for (
       var tick = (-leading / step).ceil();
       tick <= ((points - leading) / step).floor();

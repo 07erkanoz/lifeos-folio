@@ -138,7 +138,7 @@ class _CalendarExportDialogState extends State<CalendarExportDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'Google, Outlook ve Apple takvimine',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               ),
@@ -177,7 +177,7 @@ class _CalendarExportDialogState extends State<CalendarExportDialog> {
                 onChanged: (v) => setState(() => _months = v ?? _months),
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Hatırlatma (takvim uygulaması çalar)',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               ),
@@ -225,10 +225,7 @@ class _CalendarExportDialogState extends State<CalendarExportDialog> {
                       : 'Google Takvim: Ayarlar → İçe ve dışa aktar → İçe aktar. '
                             'Outlook: Dosya → Aç ve Dışa Aktar → İçe Aktar. '
                             'Yeniden aktarmak kayıtları çoğaltmaz, günceller.',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AgendaColors.taskText,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AgendaColors.taskText),
                 ),
               ),
             ],

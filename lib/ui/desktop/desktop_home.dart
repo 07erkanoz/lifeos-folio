@@ -24,6 +24,7 @@ import '../help/help_button.dart';
 import '../search/global_search.dart';
 import '../search/home_search_box.dart';
 import '../widgets/uyap_connect_view.dart';
+import '../theme/folio_palette.dart';
 
 /// What the desktop's first page shows of the office, gathered by the home
 /// page from the portal database.
@@ -277,7 +278,7 @@ class _DesktopHomeState extends State<DesktopHome> {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: FontWeight.w800,
                 letterSpacing: .9,
@@ -429,7 +430,7 @@ class _DesktopHomeState extends State<DesktopHome> {
               const SizedBox(height: 3),
               Text(
                 summary,
-                style: const TextStyle(fontSize: 13, color: AgendaColors.muted),
+                style: TextStyle(fontSize: 13, color: AgendaColors.muted),
               ),
             ],
           ),
@@ -499,7 +500,9 @@ class _DesktopHomeState extends State<DesktopHome> {
                 fill: AgendaColors.hearingFill,
                 tint: AgendaColors.hearing,
                 title: 'UYAP Web',
-                dot: web.connected ? AgendaColors.ok : const Color(0xFF9AA2B1),
+                dot: web.connected
+                    ? AgendaColors.ok
+                    : tone(const Color(0xFF9AA2B1)),
                 status: web.connected && state(PortalChannel.uyapWeb).running
                     ? 'Güncelleniyor${state(PortalChannel.uyapWeb).progress == null ? '…' : ' · ${state(PortalChannel.uyapWeb).progress}'}'
                     : web.connected && webSession != null
@@ -531,7 +534,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                 title: 'UYAP Mobil',
                 dot: mobile.connected
                     ? AgendaColors.ok
-                    : const Color(0xFF9AA2B1),
+                    : tone(const Color(0xFF9AA2B1)),
                 status: !mobile.connected
                     ? 'Bağlı değil · isteğe bağlı, telefondan giriş'
                     : mobileState.running
@@ -560,7 +563,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                 tint: AgendaColors.deadline,
                 title: 'UETS',
                 dot: !uets.connected
-                    ? const Color(0xFF9AA2B1)
+                    ? tone(const Color(0xFF9AA2B1))
                     : uetsSoon
                     ? AgendaColors.task
                     : AgendaColors.ok,
@@ -650,7 +653,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                         status,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: AgendaColors.muted,
                         ),
@@ -725,7 +728,7 @@ class _DesktopHomeState extends State<DesktopHome> {
           children: [
             _kicker('KALDIĞINIZ YERDEN DEVAM EDİN'),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Açtığınız ve düzenlediğiniz belgeler burada görünür.',
               style: TextStyle(fontSize: 13, color: AgendaColors.muted),
             ),
@@ -783,7 +786,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                           link.court,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: AgendaColors.eHearingText,
@@ -798,7 +801,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                         file.format.label,
                         p.basename(p.dirname(file.path)),
                       ].join(' · '),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12.5,
                         height: 1.6,
                         color: AgendaColors.muted,
@@ -865,7 +868,7 @@ class _DesktopHomeState extends State<DesktopHome> {
     return Text(
       'Duruşma: ${h.at.day} ${_months[h.at.month - 1]} ${_clock(h.at)}'
       '${h.isEHearing ? ' (e-duruşma)' : ''}',
-      style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+      style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
     );
   }
 
@@ -900,10 +903,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                   ),
                 ],
               ),
@@ -946,10 +946,10 @@ class _DesktopHomeState extends State<DesktopHome> {
       return Padding(
         padding: const EdgeInsets.only(right: 6),
         child: Material(
-          color: on ? const Color(0xFFEAF0F9) : scheme.surface,
+          color: on ? tone(const Color(0xFFEAF0F9)) : scheme.surface,
           shape: StadiumBorder(
             side: BorderSide(
-              color: on ? const Color(0xFFCFDDF1) : scheme.outlineVariant,
+              color: on ? tone(const Color(0xFFCFDDF1)) : scheme.outlineVariant,
             ),
           ),
           child: InkWell(
@@ -972,7 +972,7 @@ class _DesktopHomeState extends State<DesktopHome> {
       );
     }
 
-    const heading = TextStyle(
+    final heading = TextStyle(
       fontSize: 11,
       fontWeight: FontWeight.w700,
       color: AgendaColors.muted,
@@ -1004,7 +1004,7 @@ class _DesktopHomeState extends State<DesktopHome> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
-              children: const [
+              children: [
                 Expanded(flex: 5, child: Text('Evrak', style: heading)),
                 Expanded(flex: 2, child: Text('Dosya', style: heading)),
                 Expanded(flex: 2, child: Text('Klasör', style: heading)),
@@ -1028,14 +1028,16 @@ class _DesktopHomeState extends State<DesktopHome> {
                                   'indirebilirsiniz.'
                             : 'Bu süzgece uyan evrak yok.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: AgendaColors.muted),
+                        style: TextStyle(color: AgendaColors.muted),
                       ),
                     ),
                   )
                 : ListView.separated(
                     itemCount: rows.length,
-                    separatorBuilder: (_, _) =>
-                        const Divider(height: 1, color: Color(0xFFF0F2F6)),
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      color: tone(const Color(0xFFF0F2F6)),
+                    ),
                     itemBuilder: (context, i) {
                       final f = rows[i];
                       final m = _modified(f);
@@ -1198,7 +1200,7 @@ class _DesktopHomeState extends State<DesktopHome> {
           for (final h in o.today) _hearingBlock(h),
           if (o.today.isEmpty) ...[
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'SIRADAKİ',
               style: TextStyle(
                 fontSize: 11,
@@ -1219,7 +1221,7 @@ class _DesktopHomeState extends State<DesktopHome> {
               ),
               child: Text.rich(
                 TextSpan(
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12.5,
                     color: AgendaColors.muted,
                     height: 1.4,
@@ -1232,7 +1234,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                             text:
                                 '${next.at.day} ${_months[next.at.month - 1]} '
                                 '${_days[next.at.weekday - 1]} ${_clock(next.at)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w700,
                               color: AgendaColors.hearingText,
                             ),
@@ -1259,15 +1261,15 @@ class _DesktopHomeState extends State<DesktopHome> {
           _kicker('YAKLAŞAN SÜRELER', link: 'Tümü', onLink: widget.onAgenda),
           const SizedBox(height: 4),
           if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'Yaklaşan süre yok.',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               ),
             ),
           for (final (i, d) in items.indexed) ...[
-            if (i > 0) const Divider(height: 1, color: Color(0xFFF0F2F6)),
+            if (i > 0) Divider(height: 1, color: tone(const Color(0xFFF0F2F6))),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
@@ -1283,7 +1285,10 @@ class _DesktopHomeState extends State<DesktopHome> {
                         ? (AgendaColors.deadlineFill, AgendaColors.deadlineText)
                         : days <= 3
                         ? (AgendaColors.taskFill, AgendaColors.taskText)
-                        : (const Color(0xFFF1F3F7), const Color(0xFF4B5465));
+                        : (
+                            tone(const Color(0xFFF1F3F7)),
+                            tone(const Color(0xFF4B5465)),
+                          );
                     return Container(
                       width: 58,
                       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -1336,7 +1341,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                           ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11.5,
                             color: AgendaColors.muted,
                           ),
@@ -1385,8 +1390,10 @@ class _DesktopHomeState extends State<DesktopHome> {
                 decoration: BoxDecoration(
                   border: i == o.notices.length - 1
                       ? null
-                      : const Border(
-                          bottom: BorderSide(color: Color(0xFFF0F2F6)),
+                      : Border(
+                          bottom: BorderSide(
+                            color: tone(const Color(0xFFF0F2F6)),
+                          ),
                         ),
                 ),
                 child: Row(
@@ -1418,7 +1425,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                             ].join(' · '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
                               color: AgendaColors.muted,
                             ),
@@ -1490,7 +1497,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                         '${newest.sent == null ? '' : ' · ${_ago(newest.sent!)}'}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: AgendaColors.muted,
                         ),
@@ -1540,8 +1547,8 @@ class _Paper extends StatelessWidget {
                   height: 2,
                   margin: const EdgeInsets.only(bottom: 6),
                   color: i == 0
-                      ? const Color(0xFF9AA3B2)
-                      : const Color(0xFFC3CAD6),
+                      ? tone(const Color(0xFF9AA3B2))
+                      : tone(const Color(0xFFC3CAD6)),
                 ),
             ],
           ),
@@ -1551,10 +1558,10 @@ class _Paper extends StatelessWidget {
           bottom: 6,
           child: Text(
             kind,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF9AA3B2),
+              color: tone(const Color(0xFF9AA3B2)),
             ),
           ),
         ),

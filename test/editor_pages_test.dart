@@ -93,7 +93,7 @@ void main() {
       ..insert('bir\niki\nuc\n')
       ..insert('$long\n');
     final (editor, _) = await pump(tester, delta);
-    final start = 'bir\niki\nuc\n'.length;
+    const start = 'bir\niki\nuc\n'.length;
     final rows = <double>{};
     for (var i = 0; i < long.length; i++) {
       rows.add(top(editor, start + i));
@@ -133,7 +133,7 @@ void main() {
       ..insert('bir\niki\nuc\n')
       ..insert('$long\n');
     final (editor, _) = await pump(tester, delta);
-    final start = 'bir\niki\nuc\n'.length;
+    const start = 'bir\niki\nuc\n'.length;
     final shift = editor
         .getLocalRectForCaret(const TextPosition(offset: 0))
         .top;
@@ -154,7 +154,7 @@ void main() {
       ..insert('bir\niki\nuc\n')
       ..insert('$long\n');
     final (editor, controller) = await pump(tester, delta, focus: true);
-    final start = 'bir\niki\nuc\n'.length;
+    const start = 'bir\niki\nuc\n'.length;
     // The second row of the paragraph, the last of page one.
     final last = [
       for (var i = 0; i < long.length; i++)
@@ -180,9 +180,9 @@ void main() {
       ..insert('bir\niki\nuc\n')
       ..insert('$long\n');
     final (editor, _) = await pump(tester, delta);
-    final start = 'bir\niki\nuc\n'.length;
+    const start = 'bir\niki\nuc\n'.length;
     final ends = editor.getEndpointsForSelection(
-      TextSelection(baseOffset: start, extentOffset: start + long.length),
+      const TextSelection(baseOffset: start, extentOffset: start + long.length),
     );
     expect(ends.first.point.dy, lessThanOrEqualTo(100));
     expect(ends.last.point.dy, greaterThan(140));

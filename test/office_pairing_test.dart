@@ -199,7 +199,7 @@ void main() {
       asking.confirm();
       await until(() => a.isKnown(b.self!.deviceId));
     });
-    final c = OfficePeer(
+    const c = OfficePeer(
       deviceId: 'cccccccccccccccc',
       userId: 'uc',
       name: 'Av. Selin Aksoy',

@@ -228,8 +228,8 @@ class _MessagesPageState extends State<MessagesPage> {
                     ),
                   ),
                   if (!_net.ledger.exists)
-                    const Padding(
-                      padding: EdgeInsets.all(20),
+                    Padding(
+                      padding: const EdgeInsets.all(20),
                       child: Text(
                         'Mesajlar büroyla gelir. Büro ağı sayfasında bir büro '
                         'kurun ya da büronuzun yöneticisinin sizi eklemesini '
@@ -286,7 +286,7 @@ class _MessagesPageState extends State<MessagesPage> {
                   const VerticalDivider(width: 1),
                   Expanded(
                     child: _open == null || _net.chats.of(_open!) == null
-                        ? const Center(
+                        ? Center(
                             child: Text(
                               'Soldan bir konuşma seçin ya da yenisini başlatın.',
                               style: TextStyle(color: AgendaColors.muted),
@@ -539,8 +539,8 @@ class _ChatThreadState extends State<ChatThread> {
             ),
           ),
           if (!writes)
-            const Padding(
-              padding: EdgeInsets.all(12),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: Text(
                 'Bu konuşmaya yalnız büronun yöneticileri yazar.',
                 style: TextStyle(color: AgendaColors.muted),
@@ -635,10 +635,7 @@ class _ChatThreadState extends State<ChatThread> {
                     '${mine ? 'Siz' : m.byName} · ${dayText(m.at)} '
                     '${clockText(m.at)}'
                     '${!m.deleted && chat.edited(m.id) ? ' · düzenlendi' : ''}',
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 10.5, color: AgendaColors.muted),
                   ),
                 ),
                 // One's own words: corrected or taken back, for all.
@@ -651,7 +648,7 @@ class _ChatThreadState extends State<ChatThread> {
                       tooltip: 'Mesaj',
                       padding: EdgeInsets.zero,
                       iconSize: 16,
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.more_horiz_rounded,
                         color: AgendaColors.muted,
                       ),
@@ -671,7 +668,7 @@ class _ChatThreadState extends State<ChatThread> {
               ],
             ),
             if (m.deleted)
-              const Text(
+              Text(
                 'Bu mesaj silindi',
                 style: TextStyle(
                   fontStyle: FontStyle.italic,
@@ -792,7 +789,7 @@ class _ChatThreadState extends State<ChatThread> {
         padding: const EdgeInsets.only(top: 4),
         child: Text(
           '${a.name} · ${sizeText(a.size)} · $state',
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+          style: TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
       );
     }
@@ -808,7 +805,7 @@ class _ChatThreadState extends State<ChatThread> {
                   ? 'Bir cihaza henüz ulaşmadı; ağda görününce gönderilecek.'
                   : '$waiting cihaza henüz ulaşmadı; ağda görününce '
                         'gönderilecek.',
-              style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 11, color: AgendaColors.muted),
             ),
           );
     final shown = switch (a.kind) {

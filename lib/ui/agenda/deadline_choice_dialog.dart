@@ -8,6 +8,7 @@ import '../../services/legal/deadlines/mahkeme_kategori.dart';
 import '../../services/legal/deadlines/yasal_sure.dart';
 import '../../services/uets/deadline_choice.dart';
 import 'agenda_page.dart' show AgendaColors;
+import '../theme/folio_palette.dart';
 
 /// The lawyer's own deadline for a notice: a rule chosen (or a time of
 /// their own), its start, and the last day reckoned before it is kept.
@@ -209,10 +210,7 @@ class _DeadlineChoiceDialogState extends State<_DeadlineChoiceDialog> {
               if (trailing.isNotEmpty)
                 Text(
                   trailing,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                 ),
             ],
           ),
@@ -225,7 +223,7 @@ class _DeadlineChoiceDialogState extends State<_DeadlineChoiceDialog> {
     padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: .6,
@@ -261,7 +259,7 @@ class _DeadlineChoiceDialogState extends State<_DeadlineChoiceDialog> {
                   ),
                   child: Text(
                     _hint!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       color: AgendaColors.hearingText,
                     ),
@@ -382,7 +380,7 @@ class _DeadlineChoiceDialogState extends State<_DeadlineChoiceDialog> {
                 decoration: BoxDecoration(
                   color: item == null
                       ? AgendaColors.page
-                      : const Color(0xFFEAF5EE),
+                      : tone(const Color(0xFFEAF5EE)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: item == null
@@ -408,9 +406,9 @@ class _DeadlineChoiceDialogState extends State<_DeadlineChoiceDialog> {
                                   '+ ${item.sureMetni}.',
                               ...item.dayanakNotlari,
                             ].join(' '),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: Color(0xFF3B5E47),
+                              color: tone(const Color(0xFF3B5E47)),
                             ),
                           ),
                         ],

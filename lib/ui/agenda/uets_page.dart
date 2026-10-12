@@ -30,6 +30,7 @@ import '../office/send_to_office.dart';
 import 'deadline_choice_dialog.dart';
 import 'deadline_review.dart';
 import 'uets_connect.dart';
+import '../theme/folio_palette.dart';
 
 enum _Filter { all, pending, unread, withDeadline, untied }
 
@@ -252,7 +253,7 @@ class _UetsPageState extends State<UetsPage> {
     }
     if (dated.isNotEmpty) {
       return (
-        const Color(0xFFEEF0F3),
+        tone(const Color(0xFFEEF0F3)),
         AgendaColors.muted,
         Icons.swap_horiz,
         'Karşı tarafın süresi',
@@ -260,7 +261,7 @@ class _UetsPageState extends State<UetsPage> {
     }
     if (live.isNotEmpty) {
       return (
-        const Color(0xFFEEF0F3),
+        tone(const Color(0xFFEEF0F3)),
         AgendaColors.muted,
         Icons.help_outline,
         'Süreyi kontrol edin',
@@ -269,13 +270,13 @@ class _UetsPageState extends State<UetsPage> {
     final e = _envelopes[n.message.id];
     return e == null
         ? (
-            const Color(0xFFEEF0F3),
+            tone(const Color(0xFFEEF0F3)),
             AgendaColors.muted,
             Icons.downloading,
             'Paket bekleniyor',
           )
         : (
-            const Color(0xFFEEF0F3),
+            tone(const Color(0xFFEEF0F3)),
             AgendaColors.muted,
             Icons.check,
             'Süre yok',
@@ -398,7 +399,7 @@ class _UetsPageState extends State<UetsPage> {
 
   Widget _kicker(String text) => Text(
     text,
-    style: const TextStyle(
+    style: TextStyle(
       fontSize: 10.5,
       fontWeight: FontWeight.w800,
       letterSpacing: .8,
@@ -566,7 +567,7 @@ class _UetsPageState extends State<UetsPage> {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
           const SizedBox(width: 10),
-          const Flexible(
+          Flexible(
             child: Text(
               '/ Elektronik tebligatlar ve dosyalarınızla eşleşmeleri',
               maxLines: 1,
@@ -645,10 +646,7 @@ class _UetsPageState extends State<UetsPage> {
                     l,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                   ),
                 ],
               ),
@@ -695,7 +693,7 @@ class _UetsPageState extends State<UetsPage> {
         const SizedBox(width: 12),
         stat(
           Icons.link_off,
-          const Color(0xFFEEF0F3),
+          tone(const Color(0xFFEEF0F3)),
           AgendaColors.muted,
           untied,
           'Dosyayla eşleşmeyen',
@@ -717,7 +715,7 @@ class _UetsPageState extends State<UetsPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.mark_email_read_outlined,
                 size: 34,
                 color: AgendaColors.muted,
@@ -732,10 +730,7 @@ class _UetsPageState extends State<UetsPage> {
                                 'süreleri ajandaya düşer.'
                     : 'Bu süzgece uyan tebligat yok.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               ),
             ],
           ),
@@ -831,10 +826,7 @@ class _UetsPageState extends State<UetsPage> {
                     ].join(' · '),
                     maxLines: _narrow ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                   ),
                   if (_narrow) ...[
                     const SizedBox(height: 6),
@@ -946,7 +938,7 @@ class _UetsPageState extends State<UetsPage> {
           children: [
             _kicker('TEBLİGAT'),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Ayrıntısını görmek için bir tebligat seçin.',
               style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
@@ -974,7 +966,7 @@ class _UetsPageState extends State<UetsPage> {
             width: 96,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
           ),
           Expanded(
@@ -1020,7 +1012,7 @@ class _UetsPageState extends State<UetsPage> {
               if (parsed != null)
                 Text(
                   parsed.number,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: AgendaColors.hearingText,
                     fontWeight: FontWeight.w700,
@@ -1029,7 +1021,7 @@ class _UetsPageState extends State<UetsPage> {
               const SizedBox(height: 12),
               _timeline(n, deadlines),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Tebliğ, kutuya girişi izleyen 5. günün sonunda sayılır '
                 '(Tebligat K. m.7/a). Okuma tarihi bunu öne çekmez.',
                 style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
@@ -1062,10 +1054,7 @@ class _UetsPageState extends State<UetsPage> {
                 Text(
                   '${kase.number} · '
                   '${n.link == 'manual' ? 'elle eşleştirildi' : 'otomatik eşleşti'}',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                 ),
               ] else
                 Text(
@@ -1073,10 +1062,7 @@ class _UetsPageState extends State<UetsPage> {
                       ? 'Bu tebligat bir dosyaya bağlanmasın diye işaretlendi.'
                       : 'Portföyünüzde tek bir karşılığı bulunamadı; '
                             'dosyayı siz seçebilirsiniz.',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                 ),
               const SizedBox(height: 10),
               Row(
@@ -1146,30 +1132,24 @@ class _UetsPageState extends State<UetsPage> {
                   style: TextStyle(
                     fontSize: 12,
                     color: !cover.reading && cover.unread > 0
-                        ? const Color(0xFF7A4B00)
+                        ? tone(const Color(0xFF7A4B00))
                         : AgendaColors.muted,
                   ),
                 )
               else if (deadlines.isEmpty)
-                Text(
-                  switch (manifest?.state) {
-                    'alinmadi' || null =>
-                      'Ekler henüz alınmadı; bir sonraki eşitlemede alınır ve '
-                          'süreler hesaplanır.',
-                    'hata' => 'Ekler UETS’ten alınamadı; yeniden denenecek.',
-                    'bos' => 'Tebligatta ek yok; süre hesaplanamadı.',
-                    _ =>
-                      'Eklerin adından süre doğuran bir belge türü '
-                          'anlaşılmadı; süreyi ajandada “Not / iş ekle → '
-                          'Süre” ile hesaplayabilirsiniz.',
-                  },
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AgendaColors.muted,
-                  ),
-                )
+                Text(switch (manifest?.state) {
+                  'alinmadi' || null =>
+                    'Ekler henüz alınmadı; bir sonraki eşitlemede alınır ve '
+                        'süreler hesaplanır.',
+                  'hata' => 'Ekler UETS’ten alınamadı; yeniden denenecek.',
+                  'bos' => 'Tebligatta ek yok; süre hesaplanamadı.',
+                  _ =>
+                    'Eklerin adından süre doğuran bir belge türü '
+                        'anlaşılmadı; süreyi ajandada “Not / iş ekle → '
+                        'Süre” ile hesaplayabilirsiniz.',
+                }, style: TextStyle(fontSize: 12, color: AgendaColors.muted))
               else ...[
-                const Text(
+                Text(
                   'Süreler siz onaylayana kadar ajandaya ve sayaçlara girmez.',
                   style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                 ),
@@ -1240,7 +1220,7 @@ class _UetsPageState extends State<UetsPage> {
       RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
     textStyle: const WidgetStatePropertyAll(
-      TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w700),
     ),
   );
 
@@ -1360,7 +1340,7 @@ class _UetsPageState extends State<UetsPage> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
         decoration: BoxDecoration(
-          color: const Color(0xFFE6F4EC),
+          color: tone(const Color(0xFFE6F4EC)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -1370,9 +1350,9 @@ class _UetsPageState extends State<UetsPage> {
                 '${said.isEmpty ? 'UYAP’a göre bu dosyada' : 'Bu dosyada'} '
                 '${[for (final t in shown) '${titleName(t.ad)} (${t.rol})'].join(', ')} '
                 'vekilisiniz.',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12.5,
-                  color: Color(0xFF1B6B3A),
+                  color: tone(const Color(0xFF1B6B3A)),
                 ),
               ),
             ),
@@ -1400,7 +1380,7 @@ class _UetsPageState extends State<UetsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Bu dosyada kimi temsil ediyorsunuz?',
             style: TextStyle(
               fontSize: 13.5,
@@ -1409,19 +1389,19 @@ class _UetsPageState extends State<UetsPage> {
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Bir kez seçin; sürenin size mi karşı tarafa mı ait olduğu buna '
             'göre belirlenir.',
             style: TextStyle(fontSize: 12, color: AgendaColors.hearingText),
           ),
           const SizedBox(height: 10),
           if (parties == null)
-            const Text(
+            Text(
               'Taraflar okunuyor…',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             )
           else if (parties.isEmpty)
-            const Text(
+            Text(
               'Bu dosyanın tarafları henüz bilinmiyor; dosyayı UYAP’tan '
               'tazeleyin.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
@@ -1462,7 +1442,7 @@ class _UetsPageState extends State<UetsPage> {
           const SizedBox(height: 6),
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Birden fazla müvekkiliniz varsa hepsini seçin.',
                   style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
@@ -1603,19 +1583,22 @@ class _UetsPageState extends State<UetsPage> {
             margin: const EdgeInsets.only(top: 8),
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF6E5),
-              border: Border.all(color: const Color(0xFFF2D59B)),
+              color: tone(const Color(0xFFFFF6E5)),
+              border: Border.all(color: tone(const Color(0xFFF2D59B))),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               '$unread belge okunamadı; bu tebligattaki süreleri o belgeyi '
               'açıp kendiniz kontrol edin.',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF7A4B00)),
+              style: TextStyle(
+                fontSize: 12,
+                color: tone(const Color(0xFF7A4B00)),
+              ),
             ),
           ),
         const SizedBox(height: 6),
         if (kept.attachments.isEmpty)
-          const Text(
+          Text(
             'Pakette ek yok.',
             style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
@@ -1632,7 +1615,7 @@ class _UetsPageState extends State<UetsPage> {
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.description_outlined,
                     size: 17,
                     color: AgendaColors.hearing,
@@ -1666,15 +1649,11 @@ class _UetsPageState extends State<UetsPage> {
                               : FontWeight.w700,
                           color: doc.read
                               ? AgendaColors.muted
-                              : const Color(0xFFC62828),
+                              : tone(const Color(0xFFC62828)),
                         ),
                       ),
                     ),
-                  const Icon(
-                    Icons.open_in_new,
-                    size: 15,
-                    color: AgendaColors.muted,
-                  ),
+                  Icon(Icons.open_in_new, size: 15, color: AgendaColors.muted),
                 ],
               ),
             ),
@@ -1683,7 +1662,7 @@ class _UetsPageState extends State<UetsPage> {
           const SizedBox(height: 4),
           SelectableText(
             kept.folder!,
-            style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
+            style: TextStyle(fontSize: 11, color: AgendaColors.muted),
           ),
         ],
       ],
@@ -1727,7 +1706,7 @@ class _UetsPageState extends State<UetsPage> {
                     color: color ?? Colors.white,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: color ?? const Color(0xFF9AA2B1),
+                      color: color ?? tone(const Color(0xFF9AA2B1)),
                       width: 2,
                     ),
                   ),
@@ -1744,10 +1723,7 @@ class _UetsPageState extends State<UetsPage> {
                 Text(
                   label,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 11, color: AgendaColors.muted),
                 ),
               ],
             ),
@@ -1776,7 +1752,7 @@ class _UetsPageState extends State<UetsPage> {
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Bu tebligat 40 günden eski; paketi kendiliğinden inmedi. '
             'İndirirseniz UETS’te okundu olarak görünür; tebliğ günü '
             'değişmez.',
@@ -1807,7 +1783,7 @@ class _UetsPageState extends State<UetsPage> {
         _api.connected
             ? 'Tebligat paketi indiriliyor; zarf ve ekler birazdan burada.'
             : 'Tebligat paketi UETS’ye bağlandığınızda kendiliğinden iner.',
-        style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+        style: TextStyle(fontSize: 12, color: AgendaColors.muted),
       );
     } else if (envelope.state == 'hata') {
       body = Text(
@@ -1819,12 +1795,12 @@ class _UetsPageState extends State<UetsPage> {
         ),
       );
     } else if (envelope.state == 'zarfYok') {
-      body = const Text(
+      body = Text(
         'Pakette zarf (üst yazı) yok.',
         style: TextStyle(fontSize: 12, color: AgendaColors.muted),
       );
     } else if (text.isEmpty) {
-      body = const Text(
+      body = Text(
         'Zarfın metni okunamadı; zarfı açıp süreyi kendiniz kontrol edin.',
         style: TextStyle(fontSize: 12, color: AgendaColors.muted),
       );
@@ -1840,8 +1816,8 @@ class _UetsPageState extends State<UetsPage> {
               margin: const EdgeInsets.only(bottom: 6),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFFCF5),
-                border: Border.all(color: const Color(0xFFE7DCC4)),
+                color: tone(const Color(0xFFFFFCF5)),
+                border: Border.all(color: tone(const Color(0xFFE7DCC4))),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: SelectableText.rich(
@@ -1853,7 +1829,7 @@ class _UetsPageState extends State<UetsPage> {
             directives.isEmpty
                 ? 'Zarfta süre veren bir cümle bulunamadı.'
                 : 'Zarftan metin olarak okundu; süreleri aşağıda.',
-            style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
+            style: TextStyle(fontSize: 11, color: AgendaColors.muted),
           ),
         ],
       );
@@ -1914,8 +1890,8 @@ class _UetsPageState extends State<UetsPage> {
         TextSpan(text: quote.substring(0, m.start)),
         TextSpan(
           text: quote.substring(m.start, m.end),
-          style: const TextStyle(
-            backgroundColor: Color(0xFFFFE7A8),
+          style: TextStyle(
+            backgroundColor: tone(const Color(0xFFFFE7A8)),
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -1940,7 +1916,7 @@ class _UetsPageState extends State<UetsPage> {
           _kicker('EKLER'),
           const SizedBox(height: 8),
           if (!_api.connected)
-            const Text(
+            Text(
               'Ekleri indirmek için UETS’ye bağlanın.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             )
@@ -1960,7 +1936,7 @@ class _UetsPageState extends State<UetsPage> {
             )
           else ...[
             if (parts.isEmpty)
-              const Text(
+              Text(
                 'Bu tebligatta ek yok.',
                 style: TextStyle(fontSize: 12, color: AgendaColors.muted),
               ),
@@ -1997,7 +1973,7 @@ class _UetsPageState extends State<UetsPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         else
-                          const Icon(
+                          Icon(
                             Icons.download_outlined,
                             size: 16,
                             color: AgendaColors.muted,
@@ -2034,7 +2010,7 @@ class _UetsPageState extends State<UetsPage> {
             ),
           ],
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'İndirilen ek UETS’de okundu olarak işaretlenir; tebliğ tarihi '
             'değişmez.',
             style: TextStyle(fontSize: 11, color: AgendaColors.muted),

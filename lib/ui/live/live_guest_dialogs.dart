@@ -150,7 +150,7 @@ class _LiveGuestAskDialogState extends State<LiveGuestAskDialog> {
             if (state == PairingState.confirmed)
               _waiting('Misafirin onayı bekleniyor…')
             else
-              const Text(
+              Text(
                 'Misafir yalnız bu belgeyi, yalnız bu paylaşım sürerken '
                 'görür; büronuza ya da cihazlarınıza eklenmez.',
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
@@ -456,7 +456,7 @@ class _LiveJoinDialogState extends State<LiveJoinDialog> {
               '"Misafirleri kabul et"i açmış olmalı.',
             )
           else ...[
-            const Text(
+            Text(
               'Paylaşan',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
@@ -491,7 +491,7 @@ class _LiveJoinDialogState extends State<LiveJoinDialog> {
             decoration: const InputDecoration(labelText: 'Bürosu'),
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'Aynı Wi-Fi\'de olmanız gerekir; misafir Wi-Fi\'leri cihazları '
             'birbirinden ayırıyorsa bağlantı kurulmaz. Belge yalnız '
             'görüntülenir; paylaşım bitince bu cihazda kalmaz.',

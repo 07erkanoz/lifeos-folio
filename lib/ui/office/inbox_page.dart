@@ -144,18 +144,18 @@ class _InboxPageState extends State<InboxPage> {
                         onPressed: () => Scaffold.of(context).openDrawer(),
                         icon: const Icon(Icons.menu_rounded),
                       ),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          const Text(
                             'Gelenler',
                             style: TextStyle(
                               fontSize: 19,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
                             'Size gönderilen dosyalar, en yenisi üstte',
                             style: TextStyle(
@@ -199,8 +199,8 @@ class _InboxPageState extends State<InboxPage> {
                 ),
                 const SizedBox(height: 6),
                 if (items.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
                     child: Text(
                       'Henüz gelen dosya yok. Telefonunuzdan ya da büronuzdan '
                       'gönderilen dosyalar burada görünür.',
@@ -220,7 +220,7 @@ class _InboxPageState extends State<InboxPage> {
                               padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
                               child: Text(
                                 last = _day(i.at),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: .7,
@@ -304,10 +304,7 @@ class _InboxPageState extends State<InboxPage> {
                       detail,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AgendaColors.muted,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                     ),
                     if (i.note.isNotEmpty) ...[
                       const SizedBox(height: 4),

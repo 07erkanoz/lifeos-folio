@@ -14,6 +14,7 @@ import '../mobile/scroll_chrome.dart';
 import '../portfolio/portfolio_rows.dart';
 import 'agenda_page.dart' show AgendaColors;
 import 'channel_bar.dart';
+import '../theme/folio_palette.dart';
 
 enum _Filter { all, unread, untied }
 
@@ -192,7 +193,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                             child: switch (_notices
                                 .where((n) => n.key == _selected)
                                 .firstOrNull) {
-                              null => const Center(
+                              null => Center(
                                 child: Text(
                                   'Okumak için soldan bir bildirim seçin.',
                                   style: TextStyle(color: AgendaColors.muted),
@@ -246,17 +247,14 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
             if (checked != null) 'son kontrol ${clockText(checked)}',
           ].join(' · '),
           key: const ValueKey('notices-summary'),
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+          style: TextStyle(fontSize: 12, color: AgendaColors.muted),
         ),
         if (problem != null)
           Text(
             problem,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: AgendaColors.deadline,
-            ),
+            style: TextStyle(fontSize: 11.5, color: AgendaColors.deadline),
           ),
       ],
     );
@@ -353,8 +351,8 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                     onChanged: (v) => set(alerts.copyWith(on: v)),
                   ),
                   const Divider(),
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
                       'Uyarılacak türler',
                       style: TextStyle(
@@ -523,7 +521,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                                 'bağlıyken bildirimler burada toplanır.'
                           : 'Bu süzgece uyan bildirim yok.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: AgendaColors.muted),
+                      style: TextStyle(color: AgendaColors.muted),
                     ),
                   ),
                 )
@@ -535,7 +533,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                       child: Text(
                         b,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10.5,
                           fontWeight: FontWeight.w800,
                           letterSpacing: .9,
@@ -570,8 +568,8 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
         n.named == null
             ? 'Dosyası bulunamadı'
             : '${n.named!.number} · portföyde yok',
-        const Color(0xFF6B7383),
-        const Color(0xFFF1F3F7),
+        tone(const Color(0xFF6B7383)),
+        tone(const Color(0xFFF1F3F7)),
       );
     }
     final kind = CaseKind.of(kase);
@@ -615,10 +613,10 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
     ),
     child: Text(
       s == UyapNoticeSource.mobile ? 'Mobil' : 'Web',
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w700,
-        color: Color(0xFF5E6677),
+        color: tone(const Color(0xFF5E6677)),
       ),
     ),
   );
@@ -638,7 +636,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
               color: selected ? scheme.primary : Colors.transparent,
               width: 3,
             ),
-            bottom: const BorderSide(color: Color(0xFFF0F2F6)),
+            bottom: BorderSide(color: tone(const Color(0xFFF0F2F6))),
           ),
         ),
         child: Row(
@@ -679,9 +677,9 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                       n.body,
                       maxLines: _narrow ? 2 : 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.8,
-                        color: Color(0xFF4B5465),
+                        color: tone(const Color(0xFF4B5465)),
                       ),
                     ),
                   const SizedBox(height: 5),
@@ -699,7 +697,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                       if (n.sentAt != null)
                         Text(
                           clockText(n.sentAt!),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             color: AgendaColors.muted,
                           ),
@@ -731,7 +729,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
               Text(
                 'BİLDİRİM${at == null ? '' : ' · ${dayText(at)} ${clockText(at)}'}'
                 ' · ${n.kind.label.toUpperCase()}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: .9,
@@ -759,10 +757,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                           : n.sources.single == UyapNoticeSource.mobile
                           ? 'UYAP Mobil’den geldi'
                           : 'UYAP web portalından geldi',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AgendaColors.muted,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                     ),
                   ),
                 ],
@@ -781,7 +776,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).brightness == Brightness.dark
                       ? scheme.surfaceContainerLow
-                      : const Color(0xFFF7F8FA),
+                      : tone(const Color(0xFFF7F8FA)),
                   border: Border.all(color: scheme.outlineVariant),
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -826,7 +821,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                             ),
                             Text(
                               kase.court,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AgendaColors.muted,
                               ),
@@ -854,10 +849,7 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
                             'bağlanmadı.'
                       : '${n.named!.court} ${n.named!.number} dosyası portföyde '
                             'yok. Portföy yenilenince bağlanır.',
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
                 ),
             ],
           ),

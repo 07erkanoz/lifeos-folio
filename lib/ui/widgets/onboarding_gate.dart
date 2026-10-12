@@ -704,7 +704,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             border: const OutlineInputBorder(),
             // What UYAP filled in, in its teal.
             enabledBorder: _fromUyap && c.text.isNotEmpty
-                ? const OutlineInputBorder(
+                ? OutlineInputBorder(
                     borderSide: BorderSide(color: AgendaColors.eHearing),
                   )
                 : null,

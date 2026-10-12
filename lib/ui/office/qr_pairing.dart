@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_pairing.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../theme/folio_palette.dart';
 
 /// "Telefonumu ekle" on a computer: a QR the phone reads, and word when
 /// it has. No code to compare; the phone becomes one of this person's
@@ -134,7 +135,7 @@ class _QrInviteDialogState extends State<QrInviteDialog> {
             style: TextStyle(fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Kod beş dakika geçerlidir ve yalnız bir telefon için kullanılır.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: AgendaColors.muted),
@@ -389,17 +390,20 @@ class _FirewallNoteState extends State<FirewallNote> {
       key: const ValueKey('firewall-note'),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E5),
+        color: tone(const Color(0xFFFFF4E5)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Bu bilgisayarın güvenlik duvarı öbür cihazların bağlanmasına '
             'izin vermiyor. “İzin ver”e basın; bilgisayarınız şifrenizi '
             'bir kez sorar.',
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF6B4A12)),
+            style: TextStyle(
+              fontSize: 12.5,
+              color: tone(const Color(0xFF6B4A12)),
+            ),
           ),
           const SizedBox(height: 8),
           FilledButton.tonal(
@@ -409,10 +413,13 @@ class _FirewallNoteState extends State<FirewallNote> {
           ),
           if (_failed) ...[
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'İzin verilemedi. Bilgisayarınızı yöneten biri uçbirimde şu '
               'komutları bir kez çalıştırabilir:',
-              style: TextStyle(fontSize: 12, color: Color(0xFF6B4A12)),
+              style: TextStyle(
+                fontSize: 12,
+                color: tone(const Color(0xFF6B4A12)),
+              ),
             ),
             const SizedBox(height: 4),
             SelectableText(

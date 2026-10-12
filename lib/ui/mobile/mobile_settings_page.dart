@@ -10,6 +10,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/learned_phrases_dialog.dart';
 import '../widgets/notice.dart';
 import 'settings_parts.dart';
+import '../theme/folio_palette.dart';
 
 /// The archive's folders, on a page: each with its documents, rescanned or
 /// left out; a folder added; all brought up to date.
@@ -104,13 +105,13 @@ class _ArchiveFoldersPageState extends State<ArchiveFoldersPage> {
               const SizedBox(height: 6),
               Text(
                 '${library.phase} · ${library.processed}/${library.toProcess}',
-                style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
+                style: TextStyle(fontSize: 11, color: AgendaColors.muted),
               ),
             ],
             const SettingsSection('KLASÖRLER'),
             if (folders.isEmpty)
-              const SettingsGroup(
-                padding: EdgeInsets.all(18),
+              SettingsGroup(
+                padding: const EdgeInsets.all(18),
                 children: [
                   Text(
                     'Henüz klasör eklenmedi. Eklediğiniz klasörlerdeki '
@@ -126,7 +127,7 @@ class _ArchiveFoldersPageState extends State<ArchiveFoldersPage> {
                   for (final f in folders)
                     SettingsRow(
                       icon: Icons.folder_outlined,
-                      fill: const Color(0xFFFFF3E0),
+                      fill: tone(const Color(0xFFFFF3E0)),
                       tint: AgendaColors.task,
                       title: f.name,
                       subtitle: f.error ?? '${f.count} evrak · ${f.path}',
@@ -148,8 +149,8 @@ class _ArchiveFoldersPageState extends State<ArchiveFoldersPage> {
                     ),
                 ],
               ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(6, 12, 6, 0),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 12, 6, 0),
               child: Text(
                 'Arşivden çıkarmak dosyaları silmez.',
                 style: TextStyle(fontSize: 12, color: AgendaColors.muted),
@@ -215,8 +216,8 @@ class _LearningPageState extends State<LearningPage> {
             ),
           ],
         ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(6, 12, 6, 0),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 12, 6, 0),
           child: Text(
             'Kişisel bilgi içeren ifadeler öğrenilmez; hepsi bu cihazda kalır.',
             style: TextStyle(fontSize: 12, color: AgendaColors.muted),

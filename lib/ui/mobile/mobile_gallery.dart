@@ -8,6 +8,7 @@ import '../../services/platform/heif_images.dart';
 import '../../services/search/library_controller.dart';
 import '../../services/search/search_models.dart';
 import 'scroll_chrome.dart';
+import '../theme/folio_palette.dart';
 
 /// The phone's gallery (docs/design/mobil-galeri-taslak.png): the
 /// photographs edge to edge, three a row, under the days they were taken;
@@ -327,10 +328,10 @@ class _MobileGalleryState extends State<MobileGallery> {
   }) => Padding(
     padding: const EdgeInsets.only(right: 6),
     child: Material(
-      color: on ? const Color(0xFFEAF0F9) : scheme.surface,
+      color: on ? tone(const Color(0xFFEAF0F9)) : scheme.surface,
       shape: StadiumBorder(
         side: BorderSide(
-          color: on ? const Color(0xFFCFDDF1) : scheme.outlineVariant,
+          color: on ? tone(const Color(0xFFCFDDF1)) : scheme.outlineVariant,
         ),
       ),
       child: InkWell(
@@ -354,7 +355,7 @@ class _MobileGalleryState extends State<MobileGallery> {
 
   Widget _choiceBar(ColorScheme scheme) => Container(
     height: 56,
-    color: const Color(0xFFEAF0F9),
+    color: tone(const Color(0xFFEAF0F9)),
     padding: const EdgeInsets.symmetric(horizontal: 4),
     child: Row(
       children: [

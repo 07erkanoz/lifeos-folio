@@ -140,15 +140,15 @@ class _SyncPageState extends State<SyncPage> {
           onPressed: () => Scaffold.of(context).openDrawer(),
           icon: const Icon(Icons.menu_rounded),
         ),
-      const Expanded(
+      Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Senkron',
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
             ),
-            SizedBox(height: 2),
+            const SizedBox(height: 2),
             Text(
               'Yalnız kendi cihazlarınız arasında; aynı ağda olunca '
               'kendiliğinden',
@@ -208,13 +208,13 @@ class _SyncPageState extends State<SyncPage> {
             if (!_net.ownKnown.any((d) => !d.platform.phone)) ...[
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.laptop_rounded,
                     size: 18,
                     color: AgendaColors.muted,
                   ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Folio’nun Windows, macOS ve Linux sürümleri '
                       'lifeos.com.tr adresinden ücretsiz indirilir.',
@@ -239,7 +239,7 @@ class _SyncPageState extends State<SyncPage> {
               const SizedBox(height: 8),
             ],
             if (!_net.joined) ...[
-              const Text(
+              Text(
                 'Senkron açılınca bu cihaz aynı ağdaki kendi cihazlarınızı '
                 'bulur. Büro kurmanız gerekmez; başka kimse sizin cihazınızı '
                 'tanımadan hiçbir şey alamaz.',
@@ -249,7 +249,7 @@ class _SyncPageState extends State<SyncPage> {
                 const SizedBox(height: 6),
                 Text(
                   _net.error!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12.5,
                     color: AgendaColors.taskText,
                   ),
@@ -286,10 +286,7 @@ class _SyncPageState extends State<SyncPage> {
                             '“QR okut” ile okutun.'
                       : 'Henüz başka cihazınız yok. Telefonunuzu QR ile, başka '
                             'bir bilgisayarınızı ağda seçerek ekleyin.',
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
                 ),
               ],
               if (_walled) ...[
@@ -715,11 +712,7 @@ class _SyncPageState extends State<SyncPage> {
                 padding: const EdgeInsets.fromLTRB(40, 2, 0, 2),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.check_rounded,
-                      size: 16,
-                      color: AgendaColors.ok,
-                    ),
+                    Icon(Icons.check_rounded, size: 16, color: AgendaColors.ok),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -762,8 +755,8 @@ class _SyncPageState extends State<SyncPage> {
                 ),
               ),
             if (mine.isEmpty && offered.isEmpty)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(40, 2, 0, 4),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(40, 2, 0, 4),
                 child: Text(
                   'Henüz eşitlenen klasör yok.',
                   style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),

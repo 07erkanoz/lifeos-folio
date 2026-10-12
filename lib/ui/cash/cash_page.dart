@@ -23,6 +23,7 @@ import '../clients/client_accounts_view.dart' show MovementDialog;
 import '../clients/clients_page.dart' show pickScan;
 import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
+import '../theme/folio_palette.dart';
 
 String _two(int v) => v.toString().padLeft(2, '0');
 String _day(DateTime t) => '${_two(t.day)}.${_two(t.month)}.${t.year}';
@@ -31,8 +32,10 @@ String _time(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
 /// "15.000" from kuruş: TL is the column's.
 String _plain(int kurus) => lira(kurus).replaceAll(' TL', '');
 
-const _green = Color(0xFF1B6B3A), _purple = Color(0xFF5B3B9A);
-const _trustFill = Color(0xFFF6F3FC), _trustLine = Color(0xFFE2DAF3);
+final _green = tone(const Color(0xFF1B6B3A)),
+    _purple = tone(const Color(0xFF5B3B9A));
+final _trustFill = tone(const Color(0xFFF6F3FC)),
+    _trustLine = tone(const Color(0xFFE2DAF3));
 
 Color _sideColor(CashSide s) => switch (s) {
   CashSide.income => _green,
@@ -42,9 +45,9 @@ Color _sideColor(CashSide s) => switch (s) {
 };
 
 Color _sideFill(CashSide s) => switch (s) {
-  CashSide.income => const Color(0xFFE6F4EC),
-  CashSide.expense => const Color(0xFFFCEBEA),
-  CashSide.trust => const Color(0xFFEFE9FA),
+  CashSide.income => tone(const Color(0xFFE6F4EC)),
+  CashSide.expense => tone(const Color(0xFFFCEBEA)),
+  CashSide.trust => tone(const Color(0xFFEFE9FA)),
   CashSide.onBehalf => AgendaColors.taskFill,
 };
 
@@ -470,10 +473,7 @@ class _CashPageState extends State<CashPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: AgendaColors.muted)),
         const SizedBox(height: 2),
         FittedBox(
           fit: BoxFit.scaleDown,
@@ -492,7 +492,7 @@ class _CashPageState extends State<CashPage> {
             sub,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+            style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
           ),
       ],
     ),
@@ -613,8 +613,8 @@ class _CashPageState extends State<CashPage> {
             filters,
             const SizedBox(height: 6),
             if (shown.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
                 child: Text(
                   'Bu ayda kayıt yok. Müvekkil kartında yazılan tahsilat, '
                   'avans ve masraflar buraya kendiliğinden gelir; büronun '
@@ -627,7 +627,7 @@ class _CashPageState extends State<CashPage> {
               for (final l in shown) wide ? _row(l) : _tile(l),
             ],
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Müvekkil kartında yazılan kayıtlar buraya kendiliğinden gelir; '
               'düzeltmesi kartta ters kayıtla yapılır. Emanet, müvekkil adına '
               'tutulan paradır; büronun geliri sayılmaz.',
@@ -672,7 +672,7 @@ class _CashPageState extends State<CashPage> {
       final text = Text(
         t,
         textAlign: right ? TextAlign.right : TextAlign.left,
-        style: const TextStyle(fontSize: 11, color: AgendaColors.muted),
+        style: TextStyle(fontSize: 11, color: AgendaColors.muted),
       );
       return w == null
           ? Expanded(child: text)
@@ -738,7 +738,7 @@ class _CashPageState extends State<CashPage> {
     );
     return Container(
       constraints: const BoxConstraints(minHeight: 36),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AgendaColors.line)),
       ),
       child: Row(
@@ -783,7 +783,7 @@ class _CashPageState extends State<CashPage> {
             child:
                 _menu(l) ??
                 (l.fromClient
-                    ? const Tooltip(
+                    ? Tooltip(
                         message: 'Müvekkil kartında yazıldı',
                         child: Icon(
                           Icons.lock_outline_rounded,
@@ -807,7 +807,7 @@ class _CashPageState extends State<CashPage> {
     ].join(' · ');
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 7),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AgendaColors.line)),
       ),
       child: Row(
@@ -836,10 +836,7 @@ class _CashPageState extends State<CashPage> {
                 ),
                 Text(
                   sub,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AgendaColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                 ),
               ],
             ),
@@ -908,14 +905,14 @@ class _CashPageState extends State<CashPage> {
           if (right != null)
             Text(
               right,
-              style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
         ],
       ),
     );
     Widget line(String a, String b, {Color? color, Widget? tag}) => Container(
       padding: const EdgeInsets.symmetric(vertical: 5),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AgendaColors.line)),
       ),
       child: Row(
@@ -964,8 +961,14 @@ class _CashPageState extends State<CashPage> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               for (final (v, c) in [
-                                (months[m].income, const Color(0xFF3E9C6B)),
-                                (months[m].expense, const Color(0xFFC2523F)),
+                                (
+                                  months[m].income,
+                                  tone(const Color(0xFF3E9C6B)),
+                                ),
+                                (
+                                  months[m].expense,
+                                  tone(const Color(0xFFC2523F)),
+                                ),
                               ])
                                 Container(
                                   width: wide ? 11 : 6,
@@ -985,7 +988,7 @@ class _CashPageState extends State<CashPage> {
                           const SizedBox(height: 3),
                           Text(
                             monthNames[m].substring(0, 3),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10.5,
                               color: AgendaColors.muted,
                             ),
@@ -1001,7 +1004,7 @@ class _CashPageState extends State<CashPage> {
           Text(
             'Yıl: gelir ${lira(total.income)} · gider ${lira(total.expense)} '
             '· net ${lira(total.net)}',
-            style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
+            style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
         ],
       ),
@@ -1013,7 +1016,7 @@ class _CashPageState extends State<CashPage> {
         children: [
           title('Giderler', right: '$_year'),
           if (cats.isEmpty)
-            const Text(
+            Text(
               'Bu yıl gider yazılmadı.',
               style: TextStyle(color: AgendaColors.muted),
             ),
@@ -1024,8 +1027,8 @@ class _CashPageState extends State<CashPage> {
               child: LinearProgressIndicator(
                 value: c.value / most,
                 minHeight: 6,
-                color: const Color(0xFFC2523F),
-                backgroundColor: const Color(0xFFEEF0F4),
+                color: tone(const Color(0xFFC2523F)),
+                backgroundColor: tone(const Color(0xFFEEF0F4)),
               ),
             ),
             const SizedBox(height: 4),
@@ -1044,7 +1047,7 @@ class _CashPageState extends State<CashPage> {
         children: [
           title(t, right: right),
           if (rows.isEmpty)
-            const Text('Yok.', style: TextStyle(color: AgendaColors.muted)),
+            Text('Yok.', style: TextStyle(color: AgendaColors.muted)),
           ...rows.take(8),
         ],
       ),
@@ -1112,10 +1115,10 @@ class _CashPageState extends State<CashPage> {
   Widget _late() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
     decoration: BoxDecoration(
-      color: const Color(0xFFFCEBEA),
+      color: tone(const Color(0xFFFCEBEA)),
       borderRadius: BorderRadius.circular(5),
     ),
-    child: const Text(
+    child: Text(
       'gecikti',
       style: TextStyle(
         fontSize: 10.5,
@@ -1343,7 +1346,7 @@ class _CashDialogState extends State<_CashDialog> {
                 value: _repeat,
                 onChanged: (v) => setState(() => _repeat = v),
               ),
-            const Text(
+            Text(
               'Yazılan kayıt değiştirilmez; yanlışsa ters kayıtla düzeltilir.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
@@ -1352,7 +1355,7 @@ class _CashDialogState extends State<_CashDialog> {
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
                   _error!,
-                  style: const TextStyle(color: AgendaColors.deadlineText),
+                  style: TextStyle(color: AgendaColors.deadlineText),
                 ),
               ),
           ],
@@ -1489,7 +1492,7 @@ class _ClientPickState extends State<_ClientPick> {
                       child: const Text('Değiştir'),
                     ),
                   ),
-                  const Text(
+                  Text(
                     'Hangi dosyanın?',
                     style: TextStyle(color: AgendaColors.muted),
                   ),
@@ -1565,7 +1568,7 @@ class _RepeatsDialogState extends State<_RepeatsDialog> {
       content: SizedBox(
         width: 460,
         child: repeats.isEmpty
-            ? const Text(
+            ? Text(
                 'Yok. Bir gider yazarken "Her ay tekrarla" seçilirse burada '
                 'görünür.',
                 style: TextStyle(color: AgendaColors.muted),

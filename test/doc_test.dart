@@ -219,7 +219,7 @@ void main() {
   });
 
   test('a document written in UTF-16 reads back the same way', () {
-    final text = 'Çiğdem Şenoğlu';
+    const text = 'Çiğdem Şenoğlu';
     final units = <int>[];
     for (final unit in text.codeUnits) {
       units.addAll([unit & 0xff, (unit >> 8) & 0xff]);

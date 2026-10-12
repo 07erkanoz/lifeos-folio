@@ -391,7 +391,7 @@ class _InterestPageState extends State<InterestPage> {
               '3095 s.K. m.2/2 · TCMB avans oranı; '
                   'kanuni faizden az olamaz',
             InterestKind.fixed => 'Taraflarca kararlaştırılan yıllık oran',
-          }, style: const TextStyle(fontSize: 12, color: AgendaColors.muted)),
+          }, style: TextStyle(fontSize: 12, color: AgendaColors.muted)),
           if (_kind == InterestKind.fixed) ...[
             const SizedBox(height: 8),
             TextField(
@@ -429,7 +429,7 @@ class _InterestPageState extends State<InterestPage> {
             ],
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Kısmi ödemeler · önce faize, sonra anaparaya (TBK m.100)',
             style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
@@ -470,7 +470,7 @@ class _InterestPageState extends State<InterestPage> {
   Widget _out(InterestResult? r, InterestRates rates) {
     if (r == null) {
       return _frame(
-        const Text(
+        Text(
           'Asıl alacağı ve başlangıç gününü yazın; hesap kendiliğinden '
           'yapılır.',
           style: TextStyle(color: AgendaColors.muted),
@@ -480,10 +480,7 @@ class _InterestPageState extends State<InterestPage> {
     Widget big(String label, int v, {Color? color}) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: AgendaColors.muted),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: AgendaColors.muted)),
         Text(
           '${_money(v)} TL',
           style: TextStyle(
@@ -494,7 +491,7 @@ class _InterestPageState extends State<InterestPage> {
         ),
       ],
     );
-    const head = TextStyle(fontSize: 11, color: AgendaColors.muted);
+    final head = TextStyle(fontSize: 11, color: AgendaColors.muted);
     const cell = TextStyle(fontSize: 12.5);
     final verified = rates.verified;
     return _frame(
@@ -544,7 +541,7 @@ class _InterestPageState extends State<InterestPage> {
               dataRowMaxHeight: 44,
               columnSpacing: 18,
               horizontalMargin: 4,
-              columns: const [
+              columns: [
                 DataColumn(label: Text('Dönem', style: head)),
                 DataColumn(label: Text('Gün', style: head), numeric: true),
                 DataColumn(label: Text('Oran', style: head), numeric: true),
@@ -612,7 +609,7 @@ class _InterestPageState extends State<InterestPage> {
               'karşılaştırıldı; sonrasında değişen bir oran varsa yansımamış '
               'olabilir.',
             ),
-          const Text(
+          Text(
             'Faiz her gün o gün geçerli oranla, yıl 365 gün sayılarak '
             'hesaplanır; faize faiz yürütülmez. Sonuç bilgi amaçlıdır.',
             style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
@@ -631,7 +628,7 @@ class _InterestPageState extends State<InterestPage> {
     ),
     child: Text(
       text,
-      style: const TextStyle(fontSize: 12, color: AgendaColors.taskText),
+      style: TextStyle(fontSize: 12, color: AgendaColors.taskText),
     ),
   );
 }

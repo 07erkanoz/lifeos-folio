@@ -160,7 +160,7 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
                     ? 'Aranıyor…'
                     : 'UYAP dosyaları, taraflar, evraklar, arşiv ve '
                           'ajanda birlikte aranır.',
-                style: const TextStyle(fontSize: 13, color: AgendaColors.muted),
+                style: TextStyle(fontSize: 13, color: AgendaColors.muted),
               ),
             )
           : GlobalSearchPanel(

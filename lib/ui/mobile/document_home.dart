@@ -124,7 +124,7 @@ class MobileDocumentHome extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w800,
               letterSpacing: .8,
@@ -351,7 +351,7 @@ class MobileDocumentHome extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
             child: Text(
               name.isEmpty ? _greeting(today) : '${_greeting(today)}, $name',
-              style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
           ),
           if (channels != null) ...[channels!, const SizedBox(height: 14)],
@@ -376,9 +376,9 @@ class MobileDocumentHome extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: AgendaColors.hearingFill,
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
+                    borderRadius: const BorderRadius.all(Radius.circular(8)),
                     border: Border(
                       left: BorderSide(color: AgendaColors.hearing, width: 3),
                     ),
@@ -390,7 +390,7 @@ class MobileDocumentHome extends StatelessWidget {
                         next!.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
                           color: AgendaColors.hearingText,
@@ -400,7 +400,7 @@ class MobileDocumentHome extends StatelessWidget {
                         next!.detail,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: AgendaColors.hearingText,
                         ),
@@ -557,7 +557,7 @@ class MobileDocumentHome extends StatelessWidget {
                                   _kind(file),
                                   _ago(file.path, today),
                                 ].where((s) => s.isNotEmpty).join(' · '),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
                                   color: AgendaColors.muted,
                                 ),

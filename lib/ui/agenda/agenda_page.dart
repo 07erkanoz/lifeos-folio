@@ -8,6 +8,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/folio_palette.dart';
+
 import 'package:path/path.dart' as p;
 
 import '../../services/legal/deadlines/belge_turu.dart';
@@ -80,24 +82,29 @@ class AgendaPage extends StatefulWidget {
 
 enum _View { day, week, month, list }
 
-/// The design's colours: one per kind of entry.
+/// The design's colours: one per kind of entry, each with its dark
+/// counterpart (FolioPalette).
 abstract final class AgendaColors {
-  static const hearing = Color(0xFF2D5AA8);
-  static const hearingFill = Color(0xFFE8EEF8);
-  static const hearingText = Color(0xFF1F467F);
-  static const eHearing = Color(0xFF139C8B);
-  static const eHearingFill = Color(0xFFE3F4F1);
-  static const eHearingText = Color(0xFF0C6B5F);
-  static const deadline = Color(0xFFD93B3B);
-  static const deadlineFill = Color(0xFFFDECEC);
-  static const deadlineText = Color(0xFF9C2525);
-  static const task = Color(0xFFE08A00);
-  static const taskFill = Color(0xFFFFF3E0);
-  static const taskText = Color(0xFF8A5300);
-  static const page = Color(0xFFF4F6F9);
-  static const line = Color(0xFFE3E7EE);
-  static const muted = Color(0xFF6B7383);
-  static const ok = Color(0xFF1FA37A);
+  static Color get hearing => tone(const Color(0xFF2D5AA8));
+  static Color get hearingFill => tone(const Color(0xFFE8EEF8));
+  static Color get hearingText => tone(const Color(0xFF1F467F));
+  static Color get eHearing => tone(const Color(0xFF139C8B));
+  static Color get eHearingFill => tone(const Color(0xFFE3F4F1));
+  static Color get eHearingText => tone(const Color(0xFF0C6B5F));
+  static Color get deadline => tone(const Color(0xFFD93B3B));
+  static Color get deadlineFill => tone(const Color(0xFFFDECEC));
+  static Color get deadlineText => tone(const Color(0xFF9C2525));
+  static Color get task => tone(const Color(0xFFE08A00));
+  static Color get taskFill => tone(const Color(0xFFFFF3E0));
+  static Color get taskText => tone(const Color(0xFF8A5300));
+
+  /// The page under the cards: the app's own black on the dark theme.
+  static Color get page =>
+      FolioPalette.dark ? Colors.black : const Color(0xFFF4F6F9);
+  static Color get line =>
+      FolioPalette.dark ? const Color(0xFF2B2F36) : const Color(0xFFE3E7EE);
+  static Color get muted => tone(const Color(0xFF6B7383));
+  static Color get ok => tone(const Color(0xFF1FA37A));
 }
 
 const _days = [
@@ -508,7 +515,7 @@ class _AgendaPageState extends State<AgendaPage> {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
           const SizedBox(width: 10),
-          const Flexible(
+          Flexible(
             child: Text(
               '/ Duruşmalar, süreler ve işleriniz',
               maxLines: 1,
@@ -667,7 +674,7 @@ class _AgendaPageState extends State<AgendaPage> {
                 key: const ValueKey('agenda-add'),
                 tooltip: 'Not / iş ekle',
                 onPressed: _db == null ? null : () => _addItem(),
-                icon: const Icon(Icons.add_circle, color: AgendaColors.hearing),
+                icon: Icon(Icons.add_circle, color: AgendaColors.hearing),
               ),
             ],
           ),
@@ -810,10 +817,7 @@ class _AgendaPageState extends State<AgendaPage> {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AgendaColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                   ),
                 ],
               ),
@@ -896,7 +900,7 @@ class _AgendaPageState extends State<AgendaPage> {
     final scheme = Theme.of(context).colorScheme;
     final today = _day(_now());
     const gutter = 52.0;
-    final hours = _lastHour - _firstHour + 1;
+    const hours = _lastHour - _firstHour + 1;
     return Container(
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -930,7 +934,7 @@ class _AgendaPageState extends State<AgendaPage> {
                         children: [
                           Text(
                             _days[day.weekday - 1],
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
                               color: AgendaColors.muted,
                             ),
@@ -977,9 +981,9 @@ class _AgendaPageState extends State<AgendaPage> {
                               ),
                               child: Text(
                                 '${_two(h)}:00',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10.5,
-                                  color: Color(0xFF9AA1AD),
+                                  color: tone(const Color(0xFF9AA1AD)),
                                 ),
                               ),
                             ),
@@ -1099,7 +1103,7 @@ class _AgendaPageState extends State<AgendaPage> {
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AgendaColors.deadline,
                         shape: BoxShape.circle,
                       ),
@@ -1163,10 +1167,10 @@ class _AgendaPageState extends State<AgendaPage> {
                 subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   height: 1.2,
-                  color: Color(0xFF5B6576),
+                  color: tone(const Color(0xFF5B6576)),
                 ),
               ),
           ],
@@ -1238,7 +1242,7 @@ class _AgendaPageState extends State<AgendaPage> {
           key(AgendaColors.deadline, 'Süre'),
           key(AgendaColors.task, 'Not / iş'),
           const Spacer(),
-          const Flexible(
+          Flexible(
             child: Text(
               'Duruşmalar UYAP Mobil ve Web’den birleştirilir',
               maxLines: 1,
@@ -1271,7 +1275,7 @@ class _AgendaPageState extends State<AgendaPage> {
                     padding: const EdgeInsets.all(8),
                     child: Text(
                       d.substring(0, 3),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -1345,7 +1349,7 @@ class _AgendaPageState extends State<AgendaPage> {
                                   if (hs.length + is_.length > 2)
                                     Text(
                                       '+${hs.length + is_.length - 2} daha',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 10,
                                         color: AgendaColors.muted,
                                       ),
@@ -1399,7 +1403,7 @@ class _AgendaPageState extends State<AgendaPage> {
     if (entries.isEmpty) {
       return _card(
         context,
-        child: const Center(
+        child: Center(
           child: Text(
             'Önümüzdeki 60 günde kayıt yok.',
             style: TextStyle(color: AgendaColors.muted),
@@ -1440,7 +1444,7 @@ class _AgendaPageState extends State<AgendaPage> {
 
   Widget _kicker(String text) => Text(
     text,
-    style: const TextStyle(
+    style: TextStyle(
       fontSize: 10.5,
       fontWeight: FontWeight.w700,
       letterSpacing: .8,
@@ -1452,11 +1456,11 @@ class _AgendaPageState extends State<AgendaPage> {
     padding: const EdgeInsets.fromLTRB(0, 12, 0, 6),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: .3,
-        color: Color(0xFF4B5465),
+        color: tone(const Color(0xFF4B5465)),
       ),
     ),
   );
@@ -1475,7 +1479,7 @@ class _AgendaPageState extends State<AgendaPage> {
               _web.connected
                   ? 'Yaklaşan duruşma yok.'
                   : 'Duruşmalarınız UYAP bağlantısı kurulunca burada görünür.',
-              style: const TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
           ],
         ),
@@ -1522,7 +1526,10 @@ class _AgendaPageState extends State<AgendaPage> {
             width: 78,
             child: Text(
               k,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF7A8394)),
+              style: TextStyle(
+                fontSize: 12,
+                color: tone(const Color(0xFF7A8394)),
+              ),
             ),
           ),
           Expanded(child: Text(v, style: const TextStyle(fontSize: 12))),
@@ -1557,7 +1564,7 @@ class _AgendaPageState extends State<AgendaPage> {
                         padding: EdgeInsets.zero,
                         iconSize: 17,
                         onPressed: () => _syncCase(h.caseKey),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.sync_rounded,
                           color: AgendaColors.hearing,
                         ),
@@ -1572,7 +1579,7 @@ class _AgendaPageState extends State<AgendaPage> {
           ),
           Text(
             '${h.number} Esas',
-            style: const TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+            style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
           ),
           const SizedBox(height: 10),
           row(
@@ -1588,7 +1595,7 @@ class _AgendaPageState extends State<AgendaPage> {
           row('Kaynak', 'UYAP ${sources.join(' + ')}'),
           _heading('SON EVRAKLAR'),
           if (docs.isEmpty)
-            const Text(
+            Text(
               'Evrakı getirmek için ↻ Dosyayı senkronize edin.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             )
@@ -1596,8 +1603,10 @@ class _AgendaPageState extends State<AgendaPage> {
             for (final d in docs.take(3))
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 5),
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: Color(0xFFF1F3F6))),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: tone(const Color(0xFFF1F3F6))),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -1611,7 +1620,7 @@ class _AgendaPageState extends State<AgendaPage> {
                     ),
                     Text(
                       '${d['tarih'] ?? ''}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         color: AgendaColors.muted,
                       ),
@@ -1634,7 +1643,7 @@ class _AgendaPageState extends State<AgendaPage> {
                       size: 16,
                       color: t.done
                           ? AgendaColors.hearing
-                          : const Color(0xFF9AA1AD),
+                          : tone(const Color(0xFF9AA1AD)),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -1642,7 +1651,7 @@ class _AgendaPageState extends State<AgendaPage> {
                         t.title,
                         style: TextStyle(
                           fontSize: 12,
-                          color: t.done ? const Color(0xFF9AA1AD) : null,
+                          color: t.done ? tone(const Color(0xFF9AA1AD)) : null,
                           decoration: t.done
                               ? TextDecoration.lineThrough
                               : null,
@@ -1658,10 +1667,7 @@ class _AgendaPageState extends State<AgendaPage> {
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12,
-              ),
+              textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 12),
             ),
             icon: const Icon(Icons.add, size: 15),
             label: const Text('İş ekle'),
@@ -1676,10 +1682,7 @@ class _AgendaPageState extends State<AgendaPage> {
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12,
-              ),
+              textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 12),
             ),
             icon: const Icon(Icons.event_available_outlined, size: 15),
             label: const Text('Takvimime ekle'),
@@ -1806,7 +1809,7 @@ class _AgendaPageState extends State<AgendaPage> {
       RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
     textStyle: const WidgetStatePropertyAll(
-      TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w700),
     ),
   );
 
@@ -1821,7 +1824,7 @@ class _AgendaPageState extends State<AgendaPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _heading('İNCELENECEK SÜRELER · ${_review.length}'),
-          const Text(
+          Text(
             'UETS tebligatlarından hesaplanan süreler, siz onaylayana kadar '
             'ajandaya ve sayaçlara girmez.',
             style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
@@ -1870,10 +1873,7 @@ class _AgendaPageState extends State<AgendaPage> {
               child: Text(
                 've ${_review.length - 8} süre daha; UETS sayfasında '
                 'tebligatlarıyla birlikte görünür.',
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: AgendaColors.muted,
-                ),
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
               ),
             ),
         ],
@@ -1917,15 +1917,17 @@ class _AgendaPageState extends State<AgendaPage> {
         children: [
           _heading('YAKLAŞAN SÜRELER'),
           if (soon.isEmpty)
-            const Text(
+            Text(
               'Yaklaşan süre yok.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
             ),
           for (final i in soon.take(6))
             Container(
               padding: const EdgeInsets.symmetric(vertical: 7),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFF1F3F6))),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: tone(const Color(0xFFF1F3F6))),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1944,7 +1946,7 @@ class _AgendaPageState extends State<AgendaPage> {
                         ),
                         Text(
                           _days[i.at!.weekday - 1],
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             color: AgendaColors.muted,
                           ),
@@ -1960,7 +1962,7 @@ class _AgendaPageState extends State<AgendaPage> {
                         if (i.body.isNotEmpty)
                           Text(
                             i.body,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
                               color: AgendaColors.muted,
                             ),
@@ -2110,7 +2112,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Süreyi hesapla',
             style: TextStyle(
               fontSize: 12,
@@ -2245,7 +2247,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
                           ),
                           Text(
                             '${item.kanun} · ${item.sureMetni}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
                               color: AgendaColors.muted,
                             ),
@@ -2258,14 +2260,14 @@ class _AddItemDialogState extends State<_AddItemDialog> {
                       children: [
                         Text(
                           _long(item.etkiliSonGun),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
                             color: AgendaColors.deadlineText,
                           ),
                         ),
                         if (item.guven != SureGuveni.yuksek)
-                          const Text(
+                          Text(
                             'kontrol edin',
                             style: TextStyle(
                               fontSize: 11,
@@ -2279,8 +2281,8 @@ class _AddItemDialogState extends State<_AddItemDialog> {
               ),
             ),
           if (_served != null && _results.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 6),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
               child: Text(
                 'Hesapla’ya basın; bir sonuca dokunmak başlığı ve son günü doldurur.',
                 style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
@@ -2488,7 +2490,7 @@ class _ExcuseDialogState extends State<_ExcuseDialog> {
           children: [
             Text(
               '${h.court} · ${h.number}\n$when duruşması',
-              style: const TextStyle(fontSize: 13, color: AgendaColors.muted),
+              style: TextStyle(fontSize: 13, color: AgendaColors.muted),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -2507,7 +2509,7 @@ class _ExcuseDialogState extends State<_ExcuseDialog> {
                 ),
               ),
             ),
-            const Text(
+            Text(
               'Talep UYAP Mobil üzerinden mahkemeye gönderilir. Göndermeden '
               'önce duruşma UYAP’tan yeniden okunur.',
               style: TextStyle(fontSize: 12, color: AgendaColors.muted),
