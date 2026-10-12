@@ -71,6 +71,12 @@ class _Web extends UyapWebService {
     bool closed = false,
     int pageNumber = 1,
   }) async {
+    // A whole kind of unit asked: its one court.
+    court = court.id.isNotEmpty
+        ? court
+        : courtType == 'HUKUK'
+        ? const UyapOption('w1', _aile)
+        : const UyapOption('c1', _ceza);
     asked.add('cases ${court.id} $pageNumber');
     final one = UyapCase('id-${court.id}', '2025/80', court.id, court.label);
     if (fullPages && court.id == 'w1') {
@@ -162,6 +168,12 @@ class _RepeatingWeb extends _Web {
     bool closed = false,
     int pageNumber = 1,
   }) async {
+    // A whole kind of unit asked: its one court.
+    court = court.id.isNotEmpty
+        ? court
+        : courtType == 'HUKUK'
+        ? const UyapOption('w1', _aile)
+        : const UyapOption('c1', _ceza);
     asked.add('cases ${court.id} $pageNumber');
     return UyapCasePage([
       UyapCase('id-${court.id}', '2025/80', court.id, court.label),
@@ -178,7 +190,7 @@ void main() {
       'case with its place on the web, the prosecutors\' and the Court of '
       'Cassation\'s with their own kind', () async {
     final web = _Web();
-    final result = await syncWebPortfolio(web, db);
+    final result = await syncWebPortfolio(web, db, includeClosed: true);
     expect(result.complete, isTrue);
     final cases = db.cases();
     expect(cases.keys, {
@@ -218,10 +230,29 @@ void main() {
     expect(seen.first, at('cases w1 1') + 1);
   });
 
+  test('the closed investigations are read only when the lawyer asked for '
+      'the closed cases', () async {
+    final web = _Web();
+    await syncWebPortfolio(web, db);
+    expect(web.asked, contains('investigations s1 false'));
+    expect(web.asked, isNot(contains('investigations s1 true')));
+    expect(db.cases().keys, isNot(contains(caseKey('2025/6426', _savcilik))));
+  });
+
+  test(
+    'a whole kind of unit is one list: no court is asked for its own',
+    () async {
+      final web = _Web();
+      await syncWebPortfolio(web, db);
+      expect(web.asked.where((a) => a.startsWith('courts ')), isEmpty);
+      expect(db.cases().keys, contains(caseKey('2025/80', _aile)));
+    },
+  );
+
   test('beside UYAP Mobil the web reads only what it alone has: the '
       'prosecutors\' offices and the Court of Cassation', () async {
     final web = _Web();
-    await syncWebPortfolio(web, db, webOnly: true);
+    await syncWebPortfolio(web, db, webOnly: true, includeClosed: true);
     expect(db.cases().keys, {
       caseKey('2026/12', _savcilik),
       caseKey('2025/6426', _savcilik),
@@ -243,6 +274,7 @@ void main() {
       database: () async => db,
     );
     addTearDown(sync.dispose);
+    db.setMeta('portfolio_closed', '1');
     expect(sync.portfolioChannel, PortalChannel.uyapWeb);
     await sync.syncPortfolio(full: true);
     expect(web.asked, contains('cases w1 1'));
@@ -344,7 +376,7 @@ void main() {
     final other = PortalDatabase.memory();
     addTearDown(other.dispose);
     final web = _Web();
-    await syncWebPortfolio(web, db);
+    await syncWebPortfolio(web, db, includeClosed: true);
     db.setMeta('portfolio_at', DateTime.now().toIso8601String());
     db.setMeta('portfolio_web_only_at', DateTime.now().toIso8601String());
     final storeA = UyapCaseStore(directory: Directory('${root.path}/a'));
@@ -370,7 +402,7 @@ void main() {
     // The other device knows the office from the cases it took in: it does
     // not look in every province again.
     final again = _Web();
-    await syncWebPortfolio(again, other, webOnly: true);
+    await syncWebPortfolio(again, other, webOnly: true, includeClosed: true);
     expect(again.asked, isNot(contains('provinces')));
     expect(again.asked, contains('investigations s1 true'));
   });
@@ -478,6 +510,7 @@ void main() {
         database: () async => db,
       );
       addTearDown(sync.dispose);
+      db.setMeta('portfolio_closed', '1');
       expect(sync.portfolioChannel, PortalChannel.uyapMobile);
       await sync.syncPortfolio(full: true);
       expect(db.cases().keys, {

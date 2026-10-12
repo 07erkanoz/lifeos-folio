@@ -813,13 +813,16 @@ class UyapWebService {
     bool closed = false,
     int pageNumber = 1,
   }) => _serial(() async {
+    // With no court, every court of the kind at once (as banaozel reads
+    // the portfolio): one list a kind, not one a court.
+    final every = court.id.isEmpty;
     final filters = <String, Object?>{
       'dosyaDurumKod': closed ? 1 : 0,
       'pageSize': 500,
       'pageNumber': pageNumber,
       'birimTuru2': courtType,
       'birimTuru3': jurisdiction,
-      'birimId': court.id,
+      if (!every) 'birimId': court.id,
     };
     if (year != null) filters['dosyaYil'] = year;
     if (number != null) filters['dosyaSira'] = number;
@@ -844,7 +847,7 @@ class UyapWebService {
                   (year == null ||
                       number == null ||
                       _sameCaseNumber(e.number, year, number)) &&
-                  e.courtId == court.id,
+                  (every || e.courtId == court.id),
             )
             .toList();
     return UyapCasePage(cases, rows.length, _total(data));

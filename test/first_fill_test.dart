@@ -74,7 +74,15 @@ class _Web extends UyapWebService {
     int? number,
     bool closed = false,
     int pageNumber = 1,
-  }) async => UyapCasePage([_case(court.id)], 1);
+  }) async {
+    // A whole kind of unit asked: its one court.
+    final id = court.id.isNotEmpty
+        ? court.id
+        : courtType == 'ICRA'
+        ? 'i1'
+        : 'h1';
+    return UyapCasePage([_case(id)], 1);
+  }
 
   @override
   Future<List<UyapOption>> provinces() async => const [];

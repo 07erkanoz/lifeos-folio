@@ -1478,12 +1478,12 @@ class PortalSync extends ChangeNotifier {
       ),
     );
     if (portfolioDue) {
-      final session = _web.session.value;
-      final live = <String, UyapCase>{};
       cases = await syncWebPortfolio(
         _web,
         db,
-        onCase: (key, c) => live[key] = c,
+        // Each page's open cases' parties while their ids are fresh: the
+        // clients come as the portfolio is read.
+        onPage: (open) => _partiesOf(db, open),
         webOnly: webOnly,
         // A new case may be in a prosecutor's office not yet known.
         everyProvince: newCase,
@@ -1494,8 +1494,6 @@ class PortalSync extends ChangeNotifier {
           total == 0 ? 'Portföy' : 'Portföy $done/$total',
         ),
       );
-      _webLive = live;
-      _webLiveSession = session;
       final now = DateTime.now().toIso8601String();
       unawaited(
         SyncLog.note(
@@ -1559,34 +1557,62 @@ class PortalSync extends ChangeNotifier {
     ];
   }
 
-  /// The cases as the web's last reading of the portfolio gave them, with
-  /// this session's ids, while [_webLiveSession] lasts: their parties are
-  /// asked by them with no search of their own.
-  Map<String, UyapCase> _webLive = const {};
-  Object? _webLiveSession;
+  /// The parties of [open], cases of a list just answered, asked by the
+  /// ids that answer gave (they do not last), where none are kept yet.
+  Future<void> _partiesOf(PortalDatabase db, List<UyapCase> open) async {
+    final kept = db.caseParties();
+    var got = 0, failed = 0;
+    for (final c in open) {
+      final key = caseKey(c.number.trim(), c.courtName.trim());
+      if (kept.containsKey(key) || !_web.connected || _disposed) continue;
+      while (UyapCasePanelController.lawyerWaiting) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      try {
+        final parties = await _web.parties(c);
+        if (parties.isNotEmpty) {
+          db.saveCaseParties(key, parties, source: 'uyap');
+          got++;
+          _partiesRead++;
+          _progress(PortalChannel.uyapWeb, 'Taraflar · $_partiesRead dosya');
+          portfolioVersion.value++;
+        }
+      } catch (e) {
+        failed++;
+        if (failed <= 3) unawaited(SyncLog.note('Taraflar okunamadı: $e'));
+      }
+    }
+    if (got > 0 || failed > 0) {
+      unawaited(
+        SyncLog.note(
+          'Liste sayfası: ${open.length} açık dosya, $got tanesinin '
+          'tarafları alındı${failed > 0 ? ', $failed tanesi alınamadı' : ''}',
+        ),
+      );
+    }
+  }
 
-  /// Every case's parties first, one request each where this session's id
-  /// is known: the clients' list comes in minutes, not after each case has
-  /// been read whole, which takes some seconds a case.
+  int _partiesRead = 0;
+
+  /// UYAP Mobil's cases' parties first, one request each by the ids its
+  /// reading of the portfolio gave (they last the session): the clients'
+  /// list comes in minutes, not after each case has been read whole. The
+  /// web's ids do not last: its parties come with each list's page
+  /// ([_partiesOf]).
   Future<void> _partiesFirst(
     PortalDatabase db,
     List<PortalCase> todo,
     PortalChannel channel,
     bool Function() keepGoing,
   ) async {
+    if (channel != PortalChannel.uyapMobile) return;
     final kept = db.caseParties();
-    final web = channel == PortalChannel.uyapWeb;
-    final webLive = identical(_web.session.value, _webLiveSession)
-        ? _webLive
-        : const <String, UyapCase>{};
-    final mobileIds = identical(_mobile.session.value, _idsSession)
+    final ids = identical(_mobile.session.value, _idsSession)
         ? _sessionIds
         : const <String, String>{};
     final quick = [
       for (final c in todo)
-        if (!kept.containsKey(c.key) &&
-            (web ? webLive[c.key] != null : mobileIds[c.key] != null))
-          c,
+        if (!kept.containsKey(c.key) && ids[c.key] != null) c,
     ];
     if (quick.isEmpty) return;
     unawaited(SyncLog.note('Önce taraflar: ${quick.length} dosya'));
@@ -1598,15 +1624,13 @@ class PortalSync extends ChangeNotifier {
       }
       _progress(channel, 'Taraflar ${i + 1}/${quick.length}');
       try {
-        final parties = web
-            ? await _web.parties(webLive[c.key]!)
-            : [
-                for (final p in await _mobile.parties(
-                  mobileIds[c.key]!,
-                  caseType: '${c.details?.value['dosyaTurKod'] ?? ''}',
-                ))
-                  UyapParty.fromMap(p),
-              ];
+        final parties = [
+          for (final p in await _mobile.parties(
+            ids[c.key]!,
+            caseType: '${c.details?.value['dosyaTurKod'] ?? ''}',
+          ))
+            UyapParty.fromMap(p),
+        ];
         if (parties.isNotEmpty) {
           db.saveCaseParties(c.key, parties, source: 'uyap');
           got++;
@@ -1642,11 +1666,12 @@ class PortalSync extends ChangeNotifier {
       ))
         h.caseKey,
     };
-    todo.sort(
-      (a, b) => (soon.contains(a.key) ? 0 : 1).compareTo(
-        soon.contains(b.key) ? 0 : 1,
-      ),
-    );
+    int rank(PortalCase c) => soon.contains(c.key)
+        ? 0
+        : '${c.details?.value['yargiTuru'] ?? ''}' == '2'
+        ? 1
+        : 2;
+    todo.sort((a, b) => rank(a).compareTo(rank(b)));
     bool connected() =>
         !_disposed &&
         (channel == PortalChannel.uyapWeb ? _web.connected : _mobile.connected);
@@ -2233,7 +2258,7 @@ Future<PortfolioResult> syncWebPortfolio(
   bool includeClosed = false,
   bool webOnly = false,
   bool everyProvince = false,
-  void Function(String key, UyapCase live)? onCase,
+  Future<void> Function(List<UyapCase> open)? onPage,
 }) async {
   final baseline = db.meta('portfolio_at') == null;
   final asked = DateTime.now().toUtc();
@@ -2241,6 +2266,7 @@ Future<PortfolioResult> syncWebPortfolio(
   var complete = true;
   final found = <String, PortalCase>{};
   final changed = <String>{};
+  final pageOpen = <UyapCase>[];
 
   void add(
     UyapCase c,
@@ -2276,11 +2302,12 @@ Future<PortfolioResult> syncWebPortfolio(
       details: Observed(details, channel, asked, complete: false),
     );
     found[one.key] = found[one.key]?.merge(one) ?? one;
-    if (c.id.isNotEmpty) onCase?.call(one.key, c);
+    if (c.id.isNotEmpty && !closed && !isClosedStatus(state)) pageOpen.add(c);
   }
 
   void keep() {
     if (found.isEmpty) return;
+    // (pageOpen is handed on by [pages], after the page is kept.)
     final before = changed.length;
     db.mergeCases(
       found.values,
@@ -2298,15 +2325,22 @@ Future<PortfolioResult> syncWebPortfolio(
     Future<UyapCasePage> Function(int page) ask,
     void Function(UyapCase c) each,
   ) async {
+    // By court and number: UYAP gives a case a new id in every answer.
     final ids = <String>{};
     for (var page = 1; page <= _webPages; page++) {
       final got = await ask(page);
       var fresh = 0;
       for (final c in got.cases) {
-        if (ids.add(c.id.isEmpty ? '${c.courtId}|${c.number}' : c.id)) fresh++;
+        if (ids.add('${c.courtId}|${c.number}')) fresh++;
         each(c);
       }
       keep();
+      if (onPage != null && pageOpen.isNotEmpty) {
+        final open = [...pageOpen];
+        pageOpen.clear();
+        await onPage(open);
+      }
+      pageOpen.clear();
       final total = got.total;
       // A page answered again as the last one: no more is coming.
       if (got.cases.isNotEmpty && fresh == 0) return false;
@@ -2319,10 +2353,9 @@ Future<PortfolioResult> syncWebPortfolio(
     return false;
   }
 
-  // Each kind of court read as soon as its courts are known, hukuk first:
-  // the cases come in from the first minute, not after every list of
-  // courts and every province's prosecutors' offices has been asked. How
-  // far the reading has come counts what is known so far.
+  // A list a kind of unit, every court of it at once, hukuk first (as
+  // banaozel reads it): some sixty lists, not one a court. How far the
+  // reading has come counts what is known so far.
   var steps = 0;
   var step = 0;
   onProgress?.call(0, 0);
@@ -2335,31 +2368,19 @@ Future<PortfolioResult> syncWebPortfolio(
       complete = false;
       continue;
     }
-    final courts = <(String, UyapOption, bool)>[];
-    for (final unit in units) {
-      for (final closed in [false, if (includeClosed) true]) {
-        try {
-          for (final court in await web.courts(
-            jurisdiction,
-            unit.id,
-            closed: closed,
-          )) {
-            courts.add((unit.id, court, closed));
-          }
-        } catch (_) {
-          complete = false;
-        }
-      }
-    }
-    steps += courts.length;
-    for (final (unit, court, closed) in courts) {
+    final lists = [
+      for (final unit in units)
+        for (final closed in [false, if (includeClosed) true]) (unit, closed),
+    ];
+    steps += lists.length;
+    for (final (unit, closed) in lists) {
       onProgress?.call(step++, steps);
       try {
         final whole = await pages(
           (page) => web.casePage(
             jurisdiction: jurisdiction,
-            courtType: unit,
-            court: court,
+            courtType: unit.id,
+            court: const UyapOption('', ''),
             closed: closed,
             pageNumber: page,
           ),
@@ -2367,7 +2388,7 @@ Future<PortfolioResult> syncWebPortfolio(
             c,
             CaseFamily.court,
             jurisdiction: jurisdiction,
-            unit: unit,
+            unit: unit.id,
             closed: closed,
           ),
         );
@@ -2398,6 +2419,12 @@ Future<PortfolioResult> syncWebPortfolio(
           add(c, family, jurisdiction: jurisdiction);
         }
         keep();
+        if (onPage != null && pageOpen.isNotEmpty) {
+          final open = [...pageOpen];
+          pageOpen.clear();
+          await onPage(open);
+        }
+        pageOpen.clear();
       } catch (_) {
         complete = false;
       }
@@ -2451,7 +2478,9 @@ Future<PortfolioResult> syncWebPortfolio(
   var officesWhole = provincesRead || !everywhere;
   for (final office in offices) {
     onProgress?.call(step++, steps);
-    for (final closed in [false, true]) {
+    // The closed investigations only where the lawyer asked for the
+    // closed cases.
+    for (final closed in [false, if (includeClosed) true]) {
       try {
         var any = false;
         final whole = await pages(
