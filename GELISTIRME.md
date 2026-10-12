@@ -42,7 +42,10 @@ Sırayla yapılacak; her biri bitince testleri geçer, main'e gider ve burada i�
    - [x] Tema: Inter yazı tipi, masaüstünde 13 pt temelli yazı ölçeği, yeni renkler, çerçevesiz diyaloglar, hap biçiminde filtreler.
    - [x] Yeni modal kalıbı (`FolioDialog`); e-imza, UETS ve UYAP Web girişi buna taşındı.
    - [x] Ana pencere: logolu ve sık kenar çubuğu, evrak listesinde dosya başına tek satır, sade sayfa başlığı.
-   - [ ] Önce mock, onaydan sonra kod: Anasayfa, Ajanda, Tebligatlarım, Dava Dosyalarım, Müvekkiller, Kasa.
+   - [x] Mock'lar (12 Ekim 2026) uygulandı: Anasayfa, Ajanda (sol panel: mini takvim, Göster, eşitleme), Tebligatlarım, Dava Dosyalarım.
+   - [x] Koyu tema: sayfaların sabit renkleri `FolioPalette.tone` ile koyulaşıyor (Android'de tebligat zarfı okunmuyordu).
+   - [x] Bildirimler: Android kilit ekranında içerik, "Bildirimde ayrıntıyı göster" ayarı.
+   - [ ] Müvekkiller ve Kasa sayfaları için mock.
    - [ ] Kalan ~190 diyaloğun `FolioDialog`'a taşınması (sık kullanılanlar önce).
 10. **UETS tebligatları** (12 Ekim 2026, kullanıcı bildirdi):
     - [x] Kenar çubuğundaki okunmamış sayısı hiç düşmüyordu: yalnızca UETS'in okunma (tebliğ) tarihine bakılıyordu. Artık Folio'da açılan tebligat "görüldü" sayılıyor (`uets_seen` tablosu); UETS'e bir şey gönderilmiyor, tebliğ tarihi ve süreler değişmiyor.
