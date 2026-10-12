@@ -149,7 +149,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(db.notices().where((n) => n.unread), isEmpty);
     expect(db.notice('m3')!.message.read, isNull);
-    expect(find.byKey(const ValueKey('uets-mark-all-read')), findsNothing);
+    // Nothing left unread: the button is there, and does nothing.
+    final markAll = tester.widget<ButtonStyleButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey('uets-mark-all-read')),
+        matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+        matchRoot: true,
+      ),
+    );
+    expect(markAll.onPressed, isNull);
   });
 
   testWidgets('the lawyer ties a notice by hand', (tester) async {

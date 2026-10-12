@@ -144,6 +144,22 @@ class _AgendaPageState extends State<AgendaPage> {
   List<PortalHearing> _hearings = const [];
   List<AgendaItem> _items = const [];
 
+  /// The month the small calendar shows; the shown range's until moved.
+  DateTime? _miniMonth;
+
+  /// The kinds the lawyer has hidden from the calendar ("Göster"):
+  /// hearing, ehearing, deadline, task.
+  final _hidden = <String>{};
+
+  static String _kindOfHearing(PortalHearing h) =>
+      h.isEHearing ? 'ehearing' : 'hearing';
+  static String _kindOfItem(AgendaItem i) =>
+      i.kind == 'deadline' ? 'deadline' : 'task';
+
+  /// The hearings the calendar shows, the hidden kinds left out.
+  Iterable<PortalHearing> get _shownHearings =>
+      _hearings.where((h) => !_hidden.contains(_kindOfHearing(h)));
+
   /// The notices' deadlines the lawyer is still to look at.
   List<KeptDeadline> _review = const [];
 
@@ -334,7 +350,11 @@ class _AgendaPageState extends State<AgendaPage> {
   /// shown in that hearing's preparation card, not beside it.
   List<AgendaItem> _itemsOn(DateTime day) => [
     for (final i in _items)
-      if (i.at != null && _day(i.at!) == day && i.hearingKey == null) i,
+      if (i.at != null &&
+          _day(i.at!) == day &&
+          i.hearingKey == null &&
+          !_hidden.contains(_kindOfItem(i)))
+        i,
   ];
 
   // Saving
@@ -451,18 +471,44 @@ class _AgendaPageState extends State<AgendaPage> {
                     ],
                   );
                   if (!side) return main;
+                  // Wide enough: the month at a glance on the left, what
+                  // to show and the last sync under it, as a calendar's own
+                  // app has it; the numbers are the left's then.
+                  final left = box.maxWidth >= 1040;
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: main),
+                      if (left) ...[
+                        SizedBox(
+                          width: 224,
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _miniCalendar(context),
+                                const SizedBox(height: 12),
+                                _rangeSummary(context),
+                                const SizedBox(height: 12),
+                                _syncCard(context),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                      ],
+                      Expanded(
+                        child: left ? _body(context, legend: false) : main,
+                      ),
                       const SizedBox(width: 16),
                       SizedBox(
-                        width: math.min(380, box.maxWidth * .3),
+                        width: left ? 300 : math.min(380, box.maxWidth * .3),
                         child: SingleChildScrollView(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _prepCard(context),
+                              const SizedBox(height: 16),
+                              _weekList(context),
                               const SizedBox(height: 12),
                               _deadlinesCard(context),
                               if (_review.isNotEmpty) ...[
@@ -492,10 +538,11 @@ class _AgendaPageState extends State<AgendaPage> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
+            color: scheme.surface,
             border: Border.all(color: scheme.outlineVariant),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(9),
           ),
           child: child,
         ),
@@ -551,12 +598,13 @@ class _AgendaPageState extends State<AgendaPage> {
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           ),
           const SizedBox(width: 14),
+          // The views as pills on a grey track.
           Container(
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(8),
+              color: scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(10),
             ),
-            clipBehavior: Clip.antiAlias,
             child: Row(
               children: [
                 for (final (view, label) in const [
@@ -567,34 +615,41 @@ class _AgendaPageState extends State<AgendaPage> {
                 ])
                   InkWell(
                     key: ValueKey('agenda-view-${view.name}'),
+                    borderRadius: BorderRadius.circular(8),
                     onTap: () {
                       setState(() => _view = view);
                       unawaited(_saveView());
                       _reload();
                     },
-                    child: Container(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 13,
-                        vertical: 7,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: _view == view
-                            ? scheme.primary.withValues(alpha: .09)
+                        color: _view == view ? scheme.surface : null,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: _view == view
+                            ? const [
+                                BoxShadow(
+                                  color: Color(0x1A000000),
+                                  blurRadius: 3,
+                                  offset: Offset(0, 1),
+                                ),
+                              ]
                             : null,
-                        border: Border(
-                          right: view == _View.list
-                              ? BorderSide.none
-                              : BorderSide(color: scheme.outlineVariant),
-                        ),
                       ),
                       child: Text(
                         label,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 12.5,
                           fontWeight: _view == view
-                              ? FontWeight.w700
-                              : FontWeight.w400,
-                          color: _view == view ? scheme.primary : null,
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: _view == view
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -883,11 +938,13 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
-  Widget _body(BuildContext context) => switch (_view) {
+  /// The calendar in the chosen view; the colours' key under the grid
+  /// unless the left panel shows them ([legend]).
+  Widget _body(BuildContext context, {bool legend = true}) => switch (_view) {
     _View.week => _grid(context, [
       for (var i = 0; i < 5; i++) _monday(_anchor).add(Duration(days: i)),
-    ]),
-    _View.day => _grid(context, [_anchor]),
+    ], legend: legend),
+    _View.day => _grid(context, [_anchor], legend: legend),
     _View.month => _month(context),
     _View.list => _list(context),
   };
@@ -896,7 +953,11 @@ class _AgendaPageState extends State<AgendaPage> {
 
   static const _firstHour = 8, _lastHour = 18, _hourHeight = 52.0;
 
-  Widget _grid(BuildContext context, List<DateTime> days) {
+  Widget _grid(
+    BuildContext context,
+    List<DateTime> days, {
+    bool legend = true,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     final today = _day(_now());
     const gutter = 52.0;
@@ -997,7 +1058,7 @@ class _AgendaPageState extends State<AgendaPage> {
               ),
             ),
           ),
-          _legend(context),
+          if (legend) _legend(context),
         ],
       ),
     );
@@ -1022,7 +1083,7 @@ class _AgendaPageState extends State<AgendaPage> {
         if (i.kind == 'deadline' || i.allDay) i,
     ];
     final timed = <(DateTime, Widget)>[
-      for (final h in _hearings)
+      for (final h in _shownHearings)
         if (_day(h.at) == day) (h.at, _hearingBlock(h)),
       for (final i in items)
         if (!(i.kind == 'deadline' || i.allDay)) (i.at!, _itemBlock(i)),
@@ -1210,6 +1271,499 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
+  /// The month in small: a day pressed shows its week (its day in the
+  /// day's view), the days with a hearing or a deadline marked.
+  Widget _miniCalendar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final today = _day(_now());
+    final month = _miniMonth ?? DateTime(_anchor.year, _anchor.month);
+    final first = DateTime(month.year, month.month);
+    final next = DateTime(month.year, month.month + 1);
+    final (from, to) = _range;
+    final marked = <DateTime>{};
+    final db = _db;
+    if (db != null) {
+      for (final h in db.hearings(from: first, to: next)) {
+        marked.add(_day(h.at));
+      }
+      for (final i in db.agenda(from: first, to: next)) {
+        if (i.kind == 'deadline' && !i.done && i.at != null) {
+          marked.add(_day(i.at!));
+        }
+      }
+    }
+    final lead = first.weekday - 1;
+    final count = next.difference(first).inDays;
+    Widget arrow(IconData icon, int step) => IconButton(
+      visualDensity: VisualDensity.compact,
+      iconSize: 18,
+      onPressed: () =>
+          setState(() => _miniMonth = DateTime(month.year, month.month + step)),
+      icon: Icon(icon),
+    );
+    return Container(
+      key: const ValueKey('agenda-mini-calendar'),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              arrow(Icons.chevron_left_rounded, -1),
+              Expanded(
+                child: Text(
+                  '${_months[month.month - 1]} ${month.year}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              arrow(Icons.chevron_right_rounded, 1),
+            ],
+          ),
+          const SizedBox(height: 4),
+          GridView.count(
+            crossAxisCount: 7,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1,
+            children: [
+              for (final d in const ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'])
+                Center(
+                  child: Text(
+                    d,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AgendaColors.muted,
+                    ),
+                  ),
+                ),
+              for (var i = 0; i < lead; i++) const SizedBox.shrink(),
+              for (var i = 0; i < count; i++)
+                () {
+                  final day = DateTime(month.year, month.month, i + 1);
+                  final isToday = day == today;
+                  final inRange = !day.isBefore(from) && day.isBefore(to);
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
+                      setState(() {
+                        _anchor = day;
+                        _miniMonth = null;
+                      });
+                      _reload();
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.all(1.5),
+                      decoration: BoxDecoration(
+                        color: isToday
+                            ? scheme.primary
+                            : inRange && _view != _View.month
+                            ? scheme.primaryContainer
+                            : null,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Text(
+                            '${i + 1}',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: isToday || inRange
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                              color: isToday
+                                  ? scheme.onPrimary
+                                  : inRange
+                                  ? scheme.primary
+                                  : null,
+                            ),
+                          ),
+                          if (marked.contains(day))
+                            Positioned(
+                              bottom: 3,
+                              child: Container(
+                                width: 4,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: isToday
+                                      ? scheme.onPrimary
+                                      : AgendaColors.deadline,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                }(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What the shown days hold, kind by kind, in the agenda's colours;
+  /// each a box that shows or hides its kind in the calendar.
+  Widget _rangeSummary(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (from, to) = _range;
+    bool inRange(DateTime? t) =>
+        t != null && !t.isBefore(from) && t.isBefore(to);
+    final shown = [
+      for (final h in _hearings)
+        if (inRange(h.at)) h,
+    ];
+    final items = [
+      for (final i in _items)
+        if (inRange(i.at) && !i.done) i,
+    ];
+    final counts = {
+      'hearing': shown.where((h) => !h.isEHearing).length,
+      'ehearing': shown.where((h) => h.isEHearing).length,
+      'deadline': items.where((i) => i.kind == 'deadline').length,
+      'task': items.where((i) => i.kind != 'deadline').length,
+    };
+    Widget line(String kind, Color color, String text) {
+      final on = !_hidden.contains(kind);
+      return InkWell(
+        key: ValueKey('agenda-show-$kind'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: () =>
+            setState(() => on ? _hidden.add(kind) : _hidden.remove(kind)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: on ? color : Colors.transparent,
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: color, width: 1.6),
+                ),
+                child: on
+                    ? const Icon(
+                        Icons.check_rounded,
+                        size: 12,
+                        color: Colors.white,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: on ? null : AgendaColors.muted,
+                  ),
+                ),
+              ),
+              Text(
+                '${counts[kind]}',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: AgendaColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 2, bottom: 4),
+            child: Text(
+              'GÖSTER',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: .8,
+                color: AgendaColors.muted,
+              ),
+            ),
+          ),
+          line('hearing', AgendaColors.hearing, 'Duruşmalar'),
+          line('ehearing', AgendaColors.eHearing, 'E-duruşmalar'),
+          line('deadline', AgendaColors.deadline, 'Süreler'),
+          line('task', AgendaColors.task, 'İşler ve notlar'),
+        ],
+      ),
+    );
+  }
+
+  /// The hearings from the portals connected, now.
+  Future<void> _syncAll() async {
+    await Future.wait([
+      if (_web.connected) _sync.syncWeb(force: true),
+      if (_mobile.connected) _sync.syncMobile(full: true),
+    ]);
+    if (mounted) _reload();
+  }
+
+  /// The hearings' last sync, and a sync now on a press.
+  Widget _syncCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListenableBuilder(
+      listenable: _sync,
+      builder: (context, _) {
+        final states = [
+          _sync.state(PortalChannel.uyapWeb),
+          _sync.state(PortalChannel.uyapMobile),
+        ];
+        final running = states.any((s) => s.running);
+        final finished = [for (final s in states) ?s.finished]..sort();
+        final last = finished.lastOrNull;
+        final connected = _web.connected || _mobile.connected;
+        return Material(
+          color: scheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: scheme.outlineVariant),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const ValueKey('agenda-sync-card'),
+            onTap: running || !connected ? null : () => unawaited(_syncAll()),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AgendaColors.hearingFill,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: running
+                        ? Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AgendaColors.hearing,
+                            ),
+                          )
+                        : Icon(
+                            Icons.sync_rounded,
+                            size: 19,
+                            color: AgendaColors.hearing,
+                          ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          running
+                              ? 'Eşitleniyor…'
+                              : connected
+                              ? 'UYAP ile eşit'
+                              : 'UYAP’a bağlı değil',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          last == null
+                              ? 'Henüz eşitlenmedi'
+                              : 'Son eşitleme ${_hm(last)}',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AgendaColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// The shown days' hearings, tasks and notes, in order, as the right
+  /// panel lists them:
+  /// each with its kind's colour on its edge; a hearing pressed is shown
+  /// in the card above.
+  Widget _weekList(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (from, to) = _range;
+    final now = _now();
+    final start = from.isBefore(_day(now)) && to.isAfter(now)
+        ? _day(now)
+        : from;
+    final entries = <(DateTime, Widget)>[
+      for (final h in _shownHearings)
+        if (!h.at.isBefore(start) && h.at.isBefore(to))
+          (
+            h.at,
+            _weekEntry(
+              context,
+              color: h.isEHearing
+                  ? AgendaColors.eHearing
+                  : AgendaColors.hearing,
+              title: '${h.isEHearing ? 'E-duruşma' : 'Duruşma'} · ${h.number}',
+              subtitle: '${_whenShort(h.at)} · ${h.court}',
+              selected: h.key == _selected,
+              onTap: () => setState(() => _selected = h.key),
+            ),
+          ),
+      // The deadlines have their own card under this one.
+      for (final i in _items)
+        if (i.at != null &&
+            !i.done &&
+            i.kind != 'deadline' &&
+            !i.at!.isBefore(start) &&
+            i.at!.isBefore(to) &&
+            !_hidden.contains(_kindOfItem(i)))
+          (
+            i.at!,
+            _weekEntry(
+              context,
+              color: AgendaColors.task,
+              title: i.title,
+              subtitle: _whenShort(i.at!, time: !i.allDay),
+            ),
+          ),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _view == _View.month
+                    ? 'Bu ay'
+                    : _view == _View.day
+                    ? 'Bu gün'
+                    : 'Bu hafta',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.2,
+                ),
+              ),
+            ),
+            Text(
+              '${entries.length} kayıt',
+              style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (entries.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              border: Border.all(color: scheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Kalan günlerde kayıt yok.',
+              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+            ),
+          ),
+        for (final (_, w) in entries.take(8)) ...[w, const SizedBox(height: 8)],
+      ],
+    );
+  }
+
+  /// "Bugün 14:00", "Çarşamba 09:30", "14 Ekim".
+  String _whenShort(DateTime t, {bool time = true}) {
+    final today = _day(_now());
+    final day = _day(t);
+    final d = day == today
+        ? 'Bugün'
+        : day == today.add(const Duration(days: 1))
+        ? 'Yarın'
+        : day.difference(today).inDays.abs() < 7
+        ? _days[t.weekday - 1]
+        : '${t.day} ${_months[t.month - 1]}';
+    return time ? '$d ${_hm(t)}' : d;
+  }
+
+  Widget _weekEntry(
+    BuildContext context, {
+    required Color color,
+    required String title,
+    required String subtitle,
+    bool selected = false,
+    VoidCallback? onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? scheme.primaryContainer : scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: color, width: 4)),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _legend(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     Widget key(Color color, String text) => Padding(
@@ -1294,7 +1848,9 @@ class _AgendaPageState extends State<AgendaPage> {
                       child: Builder(
                         builder: (context) {
                           final day = start.add(Duration(days: week * 7 + d));
-                          final hs = _hearings.where((h) => _day(h.at) == day);
+                          final hs = _shownHearings.where(
+                            (h) => _day(h.at) == day,
+                          );
                           final is_ = _itemsOn(day);
                           return InkWell(
                             onTap: () {
@@ -1394,10 +1950,13 @@ class _AgendaPageState extends State<AgendaPage> {
   Widget _list(BuildContext context) {
     final (from, to) = _range;
     final entries = <(DateTime, Widget)>[
-      for (final h in _hearings)
+      for (final h in _shownHearings)
         if (!h.at.isBefore(from) && h.at.isBefore(to)) (h.at, _hearingBlock(h)),
       for (final i in _items)
-        if (i.at != null && !i.at!.isBefore(from) && i.at!.isBefore(to))
+        if (i.at != null &&
+            !i.at!.isBefore(from) &&
+            i.at!.isBefore(to) &&
+            !_hidden.contains(_kindOfItem(i)))
           (i.at!, _itemBlock(i)),
     ]..sort((a, b) => a.$1.compareTo(b.$1));
     if (entries.isEmpty) {
@@ -1688,9 +2247,11 @@ class _AgendaPageState extends State<AgendaPage> {
             label: const Text('Takvimime ekle'),
           ),
           const SizedBox(height: 8),
-          Row(
+          // The case first and wide; the petition and the excuse under it.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
+              SizedBox(
                 child: FilledButton(
                   onPressed: widget.onOpenCase == null
                       ? null
@@ -1715,55 +2276,59 @@ class _AgendaPageState extends State<AgendaPage> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: widget.onPetition == null
-                      ? null
-                      : () {
-                          _leaveSheet(context);
-                          widget.onPetition!(
-                            kase ??
-                                PortalCase.create(
-                                  number: h.number,
-                                  court: h.court,
-                                ),
-                          );
-                        },
-                  style: _buttonStyle(),
-                  child: const Text(
-                    'Dilekçe başlat',
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.fade,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Tooltip(
-                  message: !_mobile.connected
-                      ? 'Mazeret UYAP Mobil ile gönderilir; önce UYAP Mobil’e '
-                            'bağlanın.'
-                      : h.at.isBefore(now)
-                      ? 'Geçmiş bir duruşma için mazeret gönderilemez.'
-                      : 'UYAP Mobil ile mazeret talebi gönderin.',
-                  child: OutlinedButton(
-                    key: const ValueKey('agenda-excuse'),
-                    // The mobile API alone takes excuses: whether the web
-                    // portal is connected too does not matter.
-                    onPressed: _mobile.connected && !h.at.isBefore(now)
-                        ? () => unawaited(_askExcuse(context, h))
-                        : null,
-                    style: _buttonStyle(),
-                    child: const Text(
-                      'Mazeret',
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.fade,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: widget.onPetition == null
+                          ? null
+                          : () {
+                              _leaveSheet(context);
+                              widget.onPetition!(
+                                kase ??
+                                    PortalCase.create(
+                                      number: h.number,
+                                      court: h.court,
+                                    ),
+                              );
+                            },
+                      style: _buttonStyle(),
+                      child: const Text(
+                        'Dilekçe başlat',
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.fade,
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Tooltip(
+                      message: !_mobile.connected
+                          ? 'Mazeret UYAP Mobil ile gönderilir; önce UYAP Mobil’e '
+                                'bağlanın.'
+                          : h.at.isBefore(now)
+                          ? 'Geçmiş bir duruşma için mazeret gönderilemez.'
+                          : 'UYAP Mobil ile mazeret talebi gönderin.',
+                      child: OutlinedButton(
+                        key: const ValueKey('agenda-excuse'),
+                        // The mobile API alone takes excuses: whether the web
+                        // portal is connected too does not matter.
+                        onPressed: _mobile.connected && !h.at.isBefore(now)
+                            ? () => unawaited(_askExcuse(context, h))
+                            : null,
+                        style: _buttonStyle(),
+                        child: const Text(
+                          'Mazeret',
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.fade,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

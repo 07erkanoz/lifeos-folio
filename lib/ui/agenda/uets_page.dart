@@ -87,6 +87,9 @@ class _UetsPageState extends State<UetsPage> {
   >
   _manifests = const {};
   _Filter _filter = _Filter.all;
+
+  /// The words the list is narrowed to: a court, a number, a kind.
+  String _search = '';
   String? _selected;
   final Map<String, List<UetsPart>> _parts = {};
   String? _partsLoading;
@@ -283,17 +286,32 @@ class _UetsPageState extends State<UetsPage> {
           );
   }
 
-  List<KeptNotice> get _shown => [
-    for (final n in _notices)
-      if (switch (_filter) {
-        _Filter.all => true,
-        _Filter.pending => _of(n).any(
+  /// Lower case the Turkish way, for the search.
+  static String _fold(String s) =>
+      s.replaceAll('İ', 'i').replaceAll('I', 'ı').toLowerCase();
+
+  int get _pendingCount => _notices
+      .where(
+        (n) => _of(n).any(
           (d) => d.toReview && !d.expired(_now()) && d.record.state == 'aday',
         ),
-        _Filter.unread => n.unread,
-        _Filter.withDeadline => _of(n).any((d) => d.record.state != 'eski'),
-        _Filter.untied => n.caseKey == null,
-      })
+      )
+      .length;
+
+  List<KeptNotice> get _shown => [
+    for (final n in _notices)
+      if ((_search.isEmpty ||
+              _fold(n.message.subject).contains(_fold(_search.trim()))) &&
+          switch (_filter) {
+            _Filter.all => true,
+            _Filter.pending => _of(n).any(
+              (d) =>
+                  d.toReview && !d.expired(_now()) && d.record.state == 'aday',
+            ),
+            _Filter.unread => n.unread,
+            _Filter.withDeadline => _of(n).any((d) => d.record.state != 'eski'),
+            _Filter.untied => n.caseKey == null,
+          })
         n,
   ];
 
@@ -317,6 +335,13 @@ class _UetsPageState extends State<UetsPage> {
     if (!time) return d;
     String two(int v) => v.toString().padLeft(2, '0');
     return '$d ${two(t.hour)}:${two(t.minute)}';
+  }
+
+  /// "11 Eki" this year, "11 Eki 25" before: the list's date column.
+  String _short(DateTime? t) {
+    if (t == null) return '—';
+    final d = '${t.day} ${_months[t.month - 1]}';
+    return t.year == _now().year ? d : '$d ${t.year % 100}';
   }
 
   // Building.
@@ -391,7 +416,7 @@ class _UetsPageState extends State<UetsPage> {
       decoration: BoxDecoration(
         color: scheme.surface,
         border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: child,
     );
@@ -452,57 +477,7 @@ class _UetsPageState extends State<UetsPage> {
   Widget _topBar(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final connected = _api.connected;
-    final filters = Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        children: [
-          for (final (filter, label) in [
-            (_Filter.all, 'Tümü · ${_notices.length}'),
-            (
-              _Filter.pending,
-              'Onay bekleyen · ${_notices.where((n) => _of(n).any((d) => d.toReview && !d.expired(_now()) && d.record.state == 'aday')).length}',
-            ),
-            (_Filter.unread, 'Okunmamış'),
-            (_Filter.withDeadline, 'Süresi olan'),
-            (_Filter.untied, 'Eşleşmeyen'),
-          ])
-            InkWell(
-              key: ValueKey('uets-filter-${filter.name}'),
-              onTap: () => setState(() => _filter = filter),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: _filter == filter
-                      ? scheme.primary.withValues(alpha: .09)
-                      : null,
-                  border: Border(
-                    right: filter == _Filter.untied
-                        ? BorderSide.none
-                        : BorderSide(color: scheme.outlineVariant),
-                  ),
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: _filter == filter
-                        ? FontWeight.w700
-                        : FontWeight.w400,
-                    color: _filter == filter ? scheme.primary : null,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
+    final unread = _notices.where((n) => n.unread).length;
     final button = FilledButton.icon(
       key: const ValueKey('uets-sync'),
       onPressed: _sync.state(PortalChannel.uets).running
@@ -510,51 +485,32 @@ class _UetsPageState extends State<UetsPage> {
           : connected
           ? _sync.syncUets
           : () => connectUets(context, api: _api, secrets: _sync.secrets),
-      style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 12.5,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      icon: Icon(connected ? Icons.sync_rounded : Icons.link, size: 16),
+      icon: Icon(connected ? Icons.sync_rounded : Icons.link, size: 17),
       label: Text(connected ? 'Senkronize et' : 'UETS’ye bağlan'),
     );
     if (_narrow) {
       return Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
         decoration: BoxDecoration(
           color: scheme.surface,
           border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Tebligatlarım',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                const HelpButton(Help.uets),
-                button,
-              ],
+            const Expanded(
+              child: Text(
+                'Tebligatlarım',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
             ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: filters,
-            ),
+            const HelpButton(Help.uets),
+            button,
           ],
         ),
       );
     }
     return Container(
-      height: 58,
+      height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -564,7 +520,11 @@ class _UetsPageState extends State<UetsPage> {
         children: [
           const Text(
             'Tebligatlarım',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -.3,
+            ),
           ),
           const SizedBox(width: 10),
           Flexible(
@@ -578,9 +538,170 @@ class _UetsPageState extends State<UetsPage> {
           const Spacer(),
           const HelpButton(Help.uets),
           const SizedBox(width: 8),
-          filters,
-          const SizedBox(width: 14),
+          OutlinedButton.icon(
+            key: const ValueKey('uets-mark-all-read'),
+            onPressed: unread == 0 ? null : _markAllSeen,
+            icon: const Icon(Icons.done_all_rounded, size: 17),
+            label: const Text('Tümünü okundu say'),
+          ),
+          const SizedBox(width: 8),
           button,
+        ],
+      ),
+    );
+  }
+
+  /// The list's choices, as pills on a grey track, each with its count.
+  Widget _filters(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final unread = _notices.where((n) => n.unread).length;
+    final untied = _notices.where((n) => n.caseKey == null).length;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (filter, label, count) in [
+            (_Filter.all, 'Tümü', _notices.length),
+            (_Filter.unread, 'Okunmamış', unread),
+            (_Filter.pending, 'Onay bekleyen', _pendingCount),
+            (_Filter.withDeadline, 'Süresi olan', null),
+            (_Filter.untied, 'Eşleşmeyen', untied),
+          ])
+            InkWell(
+              key: ValueKey('uets-filter-${filter.name}'),
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => setState(() => _filter = filter),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _filter == filter ? scheme.surface : null,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: _filter == filter
+                      ? const [
+                          BoxShadow(
+                            color: Color(0x1A000000),
+                            blurRadius: 3,
+                            offset: Offset(0, 1),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Text(
+                  count == null ? label : '$label $count',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: _filter == filter
+                        ? FontWeight.w600
+                        : FontWeight.w500,
+                    color: _filter == filter
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Over the list: its choices and a search through it.
+  Widget _listHead(BuildContext context) {
+    final search = SizedBox(
+      height: 36,
+      child: TextField(
+        key: const ValueKey('uets-search'),
+        onChanged: (v) => setState(() => _search = v),
+        style: const TextStyle(fontSize: 13),
+        decoration: const InputDecoration(
+          hintText: 'Mahkeme, dosya no, tür…',
+          prefixIcon: Icon(Icons.search_rounded, size: 18),
+          contentPadding: EdgeInsets.symmetric(horizontal: 10),
+        ),
+      ),
+    );
+    if (_narrow) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: _filters(context),
+                  ),
+                ),
+                // On a phone beside the choices, the bar having no room.
+                IconButton(
+                  key: const ValueKey('uets-mark-all-read'),
+                  tooltip: 'Tümünü okundu say',
+                  onPressed: _notices.any((n) => n.unread)
+                      ? _markAllSeen
+                      : null,
+                  icon: const Icon(Icons.done_all_rounded, size: 20),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            search,
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      child: Row(
+        children: [
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: _filters(context),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(width: 240, child: search),
+        ],
+      ),
+    );
+  }
+
+  /// The columns' names, over the rows on a wide window.
+  Widget _columns(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: scheme.onSurfaceVariant,
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(32, 8, 14, 8),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        border: Border.symmetric(
+          horizontal: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Text('Tebligat', style: style)),
+          SizedBox(width: 150, child: Text('Dosya', style: style)),
+          SizedBox(width: 210, child: Text('Süre', style: style)),
+          SizedBox(
+            width: 64,
+            child: Text('Geliş', style: style, textAlign: TextAlign.right),
+          ),
         ],
       ),
     );
@@ -680,15 +801,6 @@ class _UetsPageState extends State<UetsPage> {
           AgendaColors.hearing,
           unread,
           'Okunmamış',
-          // Beside the count it clears; only while there is one.
-          action: unread == 0
-              ? null
-              : IconButton(
-                  key: const ValueKey('uets-mark-all-read'),
-                  tooltip: 'Tümünü okundu say',
-                  onPressed: _markAllSeen,
-                  icon: const Icon(Icons.done_all_rounded, size: 19),
-                ),
         ),
         const SizedBox(width: 12),
         stat(
@@ -708,10 +820,11 @@ class _UetsPageState extends State<UetsPage> {
   Widget _list(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final shown = _shown;
+    final Widget body;
     if (shown.isEmpty) {
-      return _card(
-        context,
-        child: Center(
+      body = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -736,15 +849,31 @@ class _UetsPageState extends State<UetsPage> {
           ),
         ),
       );
-    }
-    return _card(
-      context,
-      padding: EdgeInsets.zero,
-      child: ListView.separated(
+    } else {
+      body = ListView.separated(
         itemCount: shown.length,
         separatorBuilder: (_, _) =>
             Divider(height: 1, color: scheme.outlineVariant),
         itemBuilder: (context, i) => _row(context, shown[i]),
+      );
+    }
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _listHead(context),
+          if (!_narrow && shown.isNotEmpty)
+            _columns(context)
+          else
+            Divider(height: 1, color: scheme.outlineVariant),
+          Expanded(child: body),
+        ],
       ),
     );
   }
@@ -784,16 +913,22 @@ class _UetsPageState extends State<UetsPage> {
         if (_narrow) _openNotice();
       },
       child: Container(
-        color: selected ? scheme.primary.withValues(alpha: .06) : null,
+        color: selected ? scheme.primaryContainer.withValues(alpha: .5) : null,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
+          crossAxisAlignment: _narrow
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: unread ? AgendaColors.deadline : Colors.transparent,
-                shape: BoxShape.circle,
+            Padding(
+              padding: EdgeInsets.only(top: _narrow ? 5 : 0),
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: unread ? scheme.primary : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -801,32 +936,37 @@ class _UetsPageState extends State<UetsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // A phone: the court in full, on two lines if need be;
-                  // the badges under it, not beside it.
+                  // What came, first: the kind; the court and the case's
+                  // number under it.
                   Text(
-                    parsed == null
-                        ? m.subject
-                        : _narrow
-                        ? parsed.unit
-                        : '${parsed.unit} · ${parsed.number}',
+                    kind.isNotEmpty ? kind : (parsed?.unit ?? m.subject),
                     maxLines: _narrow ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 13.5,
                       fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    [
-                      if (kind.isNotEmpty) kind,
-                      if (m.sender.isNotEmpty && parsed == null) m.sender,
-                      if (!_narrow) 'kutuya giriş ${_date(m.sent)}',
-                      'tebliğ ${_date(m.served)}',
-                    ].join(' · '),
+                    parsed == null
+                        ? [
+                            if (kind.isNotEmpty) m.subject,
+                            if (m.sender.isNotEmpty) m.sender,
+                          ].join(' · ')
+                        : '${parsed.unit} · ${parsed.number}',
                     maxLines: _narrow ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                  ),
+                  Text(
+                    [
+                      'kutuya giriş ${_date(m.sent)}',
+                      'tebliğ ${_date(m.served)}',
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: AgendaColors.muted),
                   ),
                   if (_narrow) ...[
                     const SizedBox(height: 6),
@@ -846,12 +986,31 @@ class _UetsPageState extends State<UetsPage> {
                 ],
               ),
             ),
-            if (!_narrow) ...[const SizedBox(width: 10), tag],
-            if (badge != null && !_narrow) ...[
-              const SizedBox(width: 8),
-              KeyedSubtree(
-                key: ValueKey('uets-badge-${m.id}'),
-                child: _tag(badge),
+            if (!_narrow) ...[
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 150,
+                child: Align(alignment: Alignment.centerLeft, child: tag),
+              ),
+              SizedBox(
+                width: 210,
+                child: badge == null
+                    ? const SizedBox.shrink()
+                    : Align(
+                        alignment: Alignment.centerLeft,
+                        child: KeyedSubtree(
+                          key: ValueKey('uets-badge-${m.id}'),
+                          child: _tag(badge),
+                        ),
+                      ),
+              ),
+              SizedBox(
+                width: 64,
+                child: Text(
+                  _short(m.sent),
+                  textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                ),
               ),
             ],
           ],

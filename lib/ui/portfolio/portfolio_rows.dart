@@ -8,6 +8,7 @@ import '../../services/portal/portal_hearing.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_web_service.dart';
+import '../theme/folio_palette.dart';
 
 /// The kinds of file the portfolio is coloured by.
 enum CaseKind {
@@ -17,9 +18,13 @@ enum CaseKind {
   idari('İdari', Color(0xFF5B4BB7), Color(0xFFF1EEFB)),
   diger('Diğer', Color(0xFF6B7383), Color(0xFFF1F3F7));
 
-  const CaseKind(this.label, this.ink, this.fill);
+  const CaseKind(this.label, this._ink, this._fill);
   final String label;
-  final Color ink, fill;
+  final Color _ink, _fill;
+
+  /// The kind's colour and its pale fill, dark on the dark theme.
+  Color get ink => FolioPalette.tone(_ink);
+  Color get fill => FolioPalette.tone(_fill);
 
   static CaseKind of(PortalCase kase) {
     if (kase.family == CaseFamily.danistay) return CaseKind.idari;

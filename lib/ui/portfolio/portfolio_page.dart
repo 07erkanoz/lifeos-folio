@@ -1913,36 +1913,73 @@ class _PortfolioPageState extends State<PortfolioPage> {
               color: scheme.surface,
               border: Border.all(color: scheme.outlineVariant),
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
+                top: Radius.circular(14),
               ),
             ),
             clipBehavior: Clip.antiAlias,
             child: shown.isEmpty
                 ? _noMatch(context)
-                : ListView.builder(
-                    key: const ValueKey('portfolio-list'),
-                    itemCount: shown.length + (visible.length > _shown ? 1 : 0),
-                    itemBuilder: (context, i) {
-                      if (i == shown.length) {
-                        return TextButton(
-                          key: const ValueKey('portfolio-more'),
-                          onPressed: () => setState(() => _shown += 100),
-                          child: Text(
-                            'Daha fazla (${visible.length - _shown} dosya daha)',
-                          ),
-                        );
-                      }
-                      return _CaseRow(
-                        row: shown[i],
-                        first: i == 0,
-                        wide: wide,
-                        onTap: () => widget.onShowCase(shown[i].key),
-                      );
-                    },
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (wide) _columns(context),
+                      Expanded(
+                        child: ListView.builder(
+                          key: const ValueKey('portfolio-list'),
+                          itemCount:
+                              shown.length + (visible.length > _shown ? 1 : 0),
+                          itemBuilder: (context, i) {
+                            if (i == shown.length) {
+                              return TextButton(
+                                key: const ValueKey('portfolio-more'),
+                                onPressed: () => setState(() => _shown += 100),
+                                child: Text(
+                                  'Daha fazla (${visible.length - _shown} dosya daha)',
+                                ),
+                              );
+                            }
+                            return _CaseRow(
+                              row: shown[i],
+                              first: i == 0,
+                              wide: wide,
+                              onTap: () => widget.onShowCase(shown[i].key),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
           ),
         ),
       ],
+    );
+  }
+
+  /// The columns' names over a wide list.
+  Widget _columns(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: scheme.onSurfaceVariant,
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(17, 9, 34, 9),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 4, child: Text('Dosya', style: style)),
+          const SizedBox(width: 12),
+          Expanded(flex: 4, child: Text('Taraflar', style: style)),
+          const SizedBox(width: 12),
+          SizedBox(width: 130, child: Text('Sonraki duruşma', style: style)),
+          const SizedBox(width: 12),
+          SizedBox(width: 190, child: Text('Durum', style: style)),
+        ],
+      ),
     );
   }
 
@@ -2270,7 +2307,8 @@ class _CaseRowState extends State<_CaseRow> {
           Colors.white,
           key: ValueKey('portfolio-fresh-${r.key}'),
         ),
-      if (r.hearing != null)
+      // Its own column on a wide window.
+      if (r.hearing != null && !widget.wide)
         () {
           final at = r.hearing!.at;
           final days = DateTime(
@@ -2321,10 +2359,9 @@ class _CaseRowState extends State<_CaseRow> {
         Text(
           r.kase.number,
           style: const TextStyle(
-            fontFamily: 'Consolas',
-            fontFamilyFallback: ['Cascadia Mono', 'monospace'],
             fontSize: 13.5,
             fontWeight: FontWeight.w700,
+            fontFeatures: [FontFeature.tabularFigures()],
           ),
         ),
         const SizedBox(width: 9),
@@ -2439,6 +2476,211 @@ class _CaseRowState extends State<_CaseRow> {
       if (record != null) 'senkron ${whenText(record.fetchedAt, now)}',
       if (record == null) 'yalnız künye',
     ];
+    // On a wide window, a table's row: the case, its parties, its next
+    // hearing and its state, each in a column of its own (the columns'
+    // names are over the list).
+    if (widget.wide) {
+      final hearing = r.hearing;
+      final hearingDays = hearing == null
+          ? null
+          : DateTime(
+              hearing.at.year,
+              hearing.at.month,
+              hearing.at.day,
+            ).difference(DateTime(now.year, now.month, now.day)).inDays;
+      return MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: InkWell(
+          key: ValueKey('portfolio-row-${r.key}'),
+          onTap: widget.onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              color: _hover ? FolioPalette.tone(const Color(0xFFF8FAFD)) : null,
+              border: Border(
+                top: widget.first
+                    ? BorderSide.none
+                    : BorderSide(
+                        color: FolioPalette.tone(const Color(0xFFEEF1F5)),
+                      ),
+                left: BorderSide(color: kind.ink, width: 3),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            r.kase.number,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kind.fill,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              kind.label.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: .4,
+                                color: kind.ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      DefaultTextStyle.merge(
+                        style: TextStyle(color: AgendaColors.muted),
+                        child: court,
+                      ),
+                      const SizedBox(height: 3),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            if (fresh.isNotEmpty)
+                              TextSpan(
+                                text:
+                                    'Yeni: ${fresh.take(3).map((d) => d.type.isNotEmpty ? d.type : d.title).join(', ')}'
+                                    '${fresh.length > 3 ? ' +${fresh.length - 3}' : ''}'
+                                    '${footer.isEmpty ? '' : ' · '}',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            TextSpan(text: footer.join(' · ')),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AgendaColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (r.ours.isNotEmpty)
+                        partyLine(
+                          'MÜVEKKİL',
+                          FolioPalette.tone(const Color(0xFF157A52)),
+                          names(r.ours, bold: true),
+                        ),
+                      if (r.others.isNotEmpty)
+                        partyLine(
+                          r.ours.isEmpty ? 'TARAFLAR' : 'KARŞI',
+                          FolioPalette.tone(const Color(0xFF8A92A3)),
+                          names(r.others, bold: false),
+                        ),
+                      if (r.ours.isEmpty && r.others.isEmpty)
+                        Text('—', style: TextStyle(color: AgendaColors.muted)),
+                      if (why != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(text: '${why.$1}: '),
+                                TextSpan(
+                                  children: _marked(
+                                    titleName(why.$2.name),
+                                    words,
+                                  ),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: AgendaColors.muted,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 130,
+                  child: hearing == null
+                      ? Text('—', style: TextStyle(color: AgendaColors.muted))
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              hearingDays == 0
+                                  ? 'Bugün ${clockText(hearing.at)}'
+                                  : '${dayText(hearing.at)} ${clockText(hearing.at)}',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: hearingDays == 0
+                                    ? AgendaColors.deadline
+                                    : null,
+                              ),
+                            ),
+                            if (hearingDays != null &&
+                                hearingDays > 0 &&
+                                hearingDays <= 30)
+                              Text(
+                                '$hearingDays gün sonra',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AgendaColors.muted,
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 190,
+                  child: Wrap(spacing: 6, runSpacing: 4, children: chips),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, top: 1),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: AgendaColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),

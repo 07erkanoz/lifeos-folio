@@ -529,8 +529,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           Text(
             kase.number,
             style: const TextStyle(
-              fontFamily: 'Consolas',
-              fontFamilyFallback: ['Cascadia Mono', 'monospace'],
+              
               fontSize: 17,
               fontWeight: FontWeight.w600,
             ),
@@ -1309,8 +1308,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               kase.number,
               key: const ValueKey('case-number'),
               style: TextStyle(
-                fontFamily: 'Consolas',
-                fontFamilyFallback: const ['Cascadia Mono', 'monospace'],
+                
                 fontSize: facts ? 21 : (wide ? 26 : 21),
                 fontWeight: FontWeight.w600,
               ),

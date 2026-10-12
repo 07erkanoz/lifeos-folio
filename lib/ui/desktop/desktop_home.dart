@@ -230,10 +230,10 @@ class _DesktopHomeState extends State<DesktopHome> {
   }
 
   static (Color, Color) _kindColors(String kind) => switch (kind) {
-    'UDF' => (const Color(0xFFFFF1E2), const Color(0xFFC26A00)),
+    'UDF' => (tone(const Color(0xFFFFF1E2)), tone(const Color(0xFFC26A00))),
     'PDF' => (AgendaColors.deadlineFill, AgendaColors.deadline),
     'DOCX' || 'DOC' => (AgendaColors.hearingFill, AgendaColors.hearing),
-    _ => (const Color(0xFFF1F3F7), const Color(0xFF4B5465)),
+    _ => (tone(const Color(0xFFF1F3F7)), tone(const Color(0xFF4B5465))),
   };
 
   Widget _kindBadge(String kind, {double w = 34, double h = 38}) {
@@ -319,9 +319,14 @@ class _DesktopHomeState extends State<DesktopHome> {
             final wide = box.maxWidth >= 1080;
             // The list takes what the window leaves; in a low one it keeps
             // a height of its own and the column scrolls.
+            final hero = _nextToday();
             Widget leftColumn(bool fill) => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (hero != null) ...[
+                  _heroCard(context, hero),
+                  const SizedBox(height: 16),
+                ],
                 _continue(context),
                 const SizedBox(height: 16),
                 if (fill)
@@ -334,6 +339,12 @@ class _DesktopHomeState extends State<DesktopHome> {
             final right = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // The portals beside the day on a wide window, one under
+                // another; across the top on a narrow one.
+                if (wide) ...[
+                  _portals(context, stacked: true),
+                  const SizedBox(height: 16),
+                ],
                 _todayCard(context),
                 const SizedBox(height: 16),
                 _deadlinesCard(context),
@@ -348,8 +359,9 @@ class _DesktopHomeState extends State<DesktopHome> {
             final top = [
               _head(context),
               const SizedBox(height: 16),
-              _portals(context),
+              _counts(context),
               const SizedBox(height: 16),
+              if (!wide) ...[_portals(context), const SizedBox(height: 16)],
             ];
             if (!wide) {
               return ListView(
@@ -454,6 +466,244 @@ class _DesktopHomeState extends State<DesktopHome> {
     );
   }
 
+  /// The day's numbers, each a door to its page: hearings today, deadlines
+  /// within a week, notices unread, UYAP's notifications unread.
+  Widget _counts(BuildContext context) {
+    final o = widget.office;
+    final now = _now();
+    final today = DateTime(now.year, now.month, now.day);
+    final week = o.deadlines.where((d) {
+      final at = d.at;
+      if (at == null) return false;
+      final day = DateTime(at.year, at.month, at.day);
+      return !day.isBefore(today) &&
+          day.isBefore(today.add(const Duration(days: 8)));
+    }).length;
+    Widget tile(
+      Key key,
+      IconData icon,
+      Color fill,
+      Color tint,
+      int value,
+      String label,
+      VoidCallback? onTap,
+    ) => Expanded(
+      child: Material(
+        color: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: key,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: fill,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: tint, size: 19),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$value',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -.4,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: AgendaColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    return Row(
+      children: [
+        tile(
+          const ValueKey('home-count-hearings'),
+          Icons.gavel_rounded,
+          AgendaColors.hearingFill,
+          AgendaColors.hearing,
+          o.today.length,
+          'Bugünkü duruşma',
+          widget.onAgenda,
+        ),
+        const SizedBox(width: 12),
+        tile(
+          const ValueKey('home-count-deadlines'),
+          Icons.timer_outlined,
+          AgendaColors.deadlineFill,
+          AgendaColors.deadline,
+          week,
+          '7 gün içinde süre',
+          widget.onAgenda,
+        ),
+        const SizedBox(width: 12),
+        tile(
+          const ValueKey('home-count-uets'),
+          Icons.mark_email_unread_outlined,
+          AgendaColors.taskFill,
+          AgendaColors.task,
+          o.unread,
+          'Okunmamış tebligat',
+          widget.onUets,
+        ),
+        if (widget.onNotices != null) ...[
+          const SizedBox(width: 12),
+          tile(
+            const ValueKey('home-count-notices'),
+            Icons.notifications_none_rounded,
+            AgendaColors.eHearingFill,
+            AgendaColors.eHearing,
+            o.noticesUnread,
+            'Okunmamış UYAP bildirimi',
+            widget.onNotices,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Today's next hearing still to come, for the banner over the
+  /// documents; none once the day's are over.
+  PortalHearing? _nextToday() {
+    final now = _now();
+    for (final h in widget.office.today) {
+      if (h.at.isAfter(now)) return h;
+    }
+    return null;
+  }
+
+  /// The next hearing, today: when, where and how long until, in the one
+  /// strong colour of the page.
+  Widget _heroCard(BuildContext context, PortalHearing h) {
+    final until = h.at.difference(_now());
+    final relative = until.inHours < 1
+        ? '${until.inMinutes} DK SONRA'
+        : '${until.inHours} SA SONRA';
+    final kind = (h.kind?.value ?? '').trim();
+    const white = Colors.white;
+    return Container(
+      key: const ValueKey('home-hero'),
+      padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: white.withValues(alpha: .16),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Bugün',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: white.withValues(alpha: .85),
+                  ),
+                ),
+                Text(
+                  _clock(h.at),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${h.isEHearing ? 'SIRADAKİ E-DURUŞMA' : 'SIRADAKİ DURUŞMA'} · $relative',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: .6,
+                    color: white.withValues(alpha: .85),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${h.court} · ${h.number}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: white,
+                  ),
+                ),
+                if (kind.isNotEmpty)
+                  Text(
+                    kind,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: white.withValues(alpha: .9),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton(
+            key: const ValueKey('home-hero-agenda'),
+            onPressed: widget.onAgenda,
+            style: FilledButton.styleFrom(
+              backgroundColor: white,
+              foregroundColor: const Color(0xFF1D4ED8),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text('Ajandada aç'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // The portals.
 
   static String _left(DateTime until) {
@@ -464,7 +714,7 @@ class _DesktopHomeState extends State<DesktopHome> {
     return '${d.inMinutes} dk';
   }
 
-  Widget _portals(BuildContext context) {
+  Widget _portals(BuildContext context, {bool stacked = false}) {
     final web = UyapWebService.instance;
     final mobile = UyapMobileApi.instance;
     final uets = UetsApi.instance;
@@ -491,104 +741,112 @@ class _DesktopHomeState extends State<DesktopHome> {
             uetsSession != null &&
             uetsSession.expires.difference(DateTime.now()).inMinutes < 10;
         final mobileState = state(PortalChannel.uyapMobile);
-        return Row(
-          children: [
-            Expanded(
-              child: _portal(
-                key: const ValueKey('home-portal-web'),
-                icon: Icons.account_balance_outlined,
-                fill: AgendaColors.hearingFill,
-                tint: AgendaColors.hearing,
-                title: 'UYAP Web',
-                dot: web.connected
-                    ? AgendaColors.ok
-                    : tone(const Color(0xFF9AA2B1)),
-                status: web.connected && state(PortalChannel.uyapWeb).running
-                    ? 'Güncelleniyor${state(PortalChannel.uyapWeb).progress == null ? '…' : ' · ${state(PortalChannel.uyapWeb).progress}'}'
-                    : web.connected && webSession != null
-                    ? 'Bağlı · ${webSession.user} · '
-                          '${_left(DateTime.now().add(webSession.remaining()))} kaldı'
-                          '${last(PortalChannel.uyapWeb)}'
-                    : 'Bağlı değil · portföy, duruşma ve tam evrak için',
-                busy: state(PortalChannel.uyapWeb).running,
-                connected: web.connected,
-                action: web.connected ? 'Senkronize et' : 'Bağlan',
-                onAction: () => web.connected
-                    ? unawaited(PortalSync.instance.syncWeb(force: true))
-                    : unawaited(
-                        connectUyapWeb(
-                          context,
-                          onConnected: () =>
-                              unawaited(PortalSync.instance.syncWeb()),
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _portal(
-                key: const ValueKey('home-portal-mobile'),
-                icon: Icons.gavel_rounded,
-                fill: AgendaColors.eHearingFill,
-                tint: AgendaColors.eHearing,
-                title: 'UYAP Mobil',
-                dot: mobile.connected
-                    ? AgendaColors.ok
-                    : tone(const Color(0xFF9AA2B1)),
-                status: !mobile.connected
-                    ? 'Bağlı değil · isteğe bağlı, telefondan giriş'
-                    : mobileState.running
-                    ? 'Güncelleniyor${mobileState.progress == null ? '…' : ' · ${mobileState.progress}'}'
-                    : 'Bağlı · ${_left(mobileSession?.expires ?? DateTime.now())} geçerli'
-                          '${last(PortalChannel.uyapMobile)}',
-                busy: mobileState.running,
-                connected: mobile.connected,
-                action: mobile.connected ? 'Senkronize et' : 'Bağlan',
-                onAction: () async {
-                  PortalSync.begin();
-                  if (mobile.connected) {
-                    unawaited(PortalSync.instance.syncMobile(full: true));
-                  } else if (await connectUyapMobile(context, api: mobile)) {
-                    unawaited(PortalSync.instance.syncMobile());
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _portal(
-                key: const ValueKey('home-portal-uets'),
-                icon: Icons.mark_email_unread_outlined,
-                fill: AgendaColors.deadlineFill,
-                tint: AgendaColors.deadline,
-                title: 'UETS',
-                dot: !uets.connected
-                    ? tone(const Color(0xFF9AA2B1))
-                    : uetsSoon
-                    ? AgendaColors.task
-                    : AgendaColors.ok,
-                status: uets.connected && uetsSession != null
-                    ? '${uetsSoon ? 'Oturum ${_left(uetsSession.expires)} sonra kapanacak' : 'Bağlı · ${_left(uetsSession.expires)} kaldı'}'
-                          ' · ${widget.office.unread} okunmamış'
-                    : 'Bağlı değil · ${widget.office.unread} okunmamış',
-                busy: state(PortalChannel.uets).running,
-                connected: uets.connected,
-                action: uets.connected ? 'Yenile' : 'Bağlan',
-                onAction: () {
-                  PortalSync.begin();
-                  final sync = PortalSync.instance;
-                  if (uets.connected) {
-                    unawaited(sync.syncUets());
-                  } else {
-                    unawaited(
-                      connectUets(context, api: uets, secrets: sync.secrets),
-                    );
-                  }
-                },
-              ),
-            ),
-          ],
-        );
+        Widget lay(List<Widget> three) => stacked
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (i, w) in three.indexed) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    w,
+                  ],
+                ],
+              )
+            : Row(
+                children: [
+                  for (final (i, w) in three.indexed) ...[
+                    if (i > 0) const SizedBox(width: 12),
+                    Expanded(child: w),
+                  ],
+                ],
+              );
+        return lay([
+          _portal(
+            key: const ValueKey('home-portal-web'),
+            icon: Icons.account_balance_outlined,
+            fill: AgendaColors.hearingFill,
+            tint: AgendaColors.hearing,
+            title: 'UYAP Web',
+            dot: web.connected
+                ? AgendaColors.ok
+                : tone(const Color(0xFF9AA2B1)),
+            status: web.connected && state(PortalChannel.uyapWeb).running
+                ? 'Güncelleniyor${state(PortalChannel.uyapWeb).progress == null ? '…' : ' · ${state(PortalChannel.uyapWeb).progress}'}'
+                : web.connected && webSession != null
+                ? 'Bağlı · ${webSession.user} · '
+                      '${_left(DateTime.now().add(webSession.remaining()))} kaldı'
+                      '${last(PortalChannel.uyapWeb)}'
+                : 'Bağlı değil · portföy, duruşma ve tam evrak için',
+            busy: state(PortalChannel.uyapWeb).running,
+            connected: web.connected,
+            action: web.connected ? 'Senkronize et' : 'Bağlan',
+            onAction: () => web.connected
+                ? unawaited(PortalSync.instance.syncWeb(force: true))
+                : unawaited(
+                    connectUyapWeb(
+                      context,
+                      onConnected: () =>
+                          unawaited(PortalSync.instance.syncWeb()),
+                    ),
+                  ),
+          ),
+          _portal(
+            key: const ValueKey('home-portal-mobile'),
+            icon: Icons.gavel_rounded,
+            fill: AgendaColors.eHearingFill,
+            tint: AgendaColors.eHearing,
+            title: 'UYAP Mobil',
+            dot: mobile.connected
+                ? AgendaColors.ok
+                : tone(const Color(0xFF9AA2B1)),
+            status: !mobile.connected
+                ? 'Bağlı değil · isteğe bağlı, telefondan giriş'
+                : mobileState.running
+                ? 'Güncelleniyor${mobileState.progress == null ? '…' : ' · ${mobileState.progress}'}'
+                : 'Bağlı · ${_left(mobileSession?.expires ?? DateTime.now())} geçerli'
+                      '${last(PortalChannel.uyapMobile)}',
+            busy: mobileState.running,
+            connected: mobile.connected,
+            action: mobile.connected ? 'Senkronize et' : 'Bağlan',
+            onAction: () async {
+              PortalSync.begin();
+              if (mobile.connected) {
+                unawaited(PortalSync.instance.syncMobile(full: true));
+              } else if (await connectUyapMobile(context, api: mobile)) {
+                unawaited(PortalSync.instance.syncMobile());
+              }
+            },
+          ),
+          _portal(
+            key: const ValueKey('home-portal-uets'),
+            icon: Icons.mark_email_unread_outlined,
+            fill: AgendaColors.deadlineFill,
+            tint: AgendaColors.deadline,
+            title: 'UETS',
+            dot: !uets.connected
+                ? tone(const Color(0xFF9AA2B1))
+                : uetsSoon
+                ? AgendaColors.task
+                : AgendaColors.ok,
+            status: uets.connected && uetsSession != null
+                ? '${uetsSoon ? 'Oturum ${_left(uetsSession.expires)} sonra kapanacak' : 'Bağlı · ${_left(uetsSession.expires)} kaldı'}'
+                      ' · ${widget.office.unread} okunmamış'
+                : 'Bağlı değil · ${widget.office.unread} okunmamış',
+            busy: state(PortalChannel.uets).running,
+            connected: uets.connected,
+            action: uets.connected ? 'Yenile' : 'Bağlan',
+            onAction: () {
+              PortalSync.begin();
+              final sync = PortalSync.instance;
+              if (uets.connected) {
+                unawaited(sync.syncUets());
+              } else {
+                unawaited(
+                  connectUets(context, api: uets, secrets: sync.secrets),
+                );
+              }
+            },
+          ),
+        ]);
       },
     );
   }
