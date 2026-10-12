@@ -15,6 +15,7 @@ import '../../services/clients/client_files.dart';
 import '../../services/clients/client_statement_pdf.dart';
 import '../../services/clients/fee_reminders.dart';
 import '../../services/portal/portal_database.dart';
+import '../../services/portal/portal_sync.dart';
 import '../../services/platform/document_scan.dart';
 import '../../services/speech/speech_models.dart';
 import '../../services/speech/speech_session.dart';
@@ -146,10 +147,43 @@ class _ClientsPageState extends State<ClientsPage> {
   void initState() {
     super.initState();
     unawaited(_load());
+    // The parties a UYAP reading brings as it runs, the list made again
+    // with them: a client comes while the first reading goes on.
+    _sync = PortalSync.started;
+    _sync?.portfolioVersion.addListener(_partiesCame);
+  }
+
+  PortalSync? _sync;
+  Timer? _again;
+  int? _seenRevision;
+
+  void _partiesCame() {
+    _again?.cancel();
+    _again = Timer(const Duration(seconds: 1), () {
+      final db = _db;
+      if (!mounted || db == null) return;
+      if (db.clientsRevision == _seenRevision) return;
+      unawaited(_load());
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant ClientsPage old) {
+    super.didUpdateWidget(old);
+    // The lawyer's name came: whose clients the parties are is known now.
+    if (old.lawyer != widget.lawyer) unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _again?.cancel();
+    _sync?.portfolioVersion.removeListener(_partiesCame);
+    super.dispose();
   }
 
   Future<void> _load() async {
     final db = _db ??= widget.database ?? await PortalDatabase.shared();
+    _seenRevision = db.clientsRevision;
     if (!mounted) return;
     final late = <String, int>{};
     if (widget.seesMoney) {

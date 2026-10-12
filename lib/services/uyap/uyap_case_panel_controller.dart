@@ -388,6 +388,11 @@ class UyapCasePanelController extends ChangeNotifier {
   /// money and an enforcement file's account; else the mobile API.
   bool usedWeb = false;
 
+  /// Whether the last [refresh] read the case whole: not when its parties,
+  /// money or account were asked for and did not come. Then it is not
+  /// counted read, and is asked again.
+  bool whole = true;
+
   Future<void> _refresh() async {
     try {
       await _placeOnWeb();
@@ -395,6 +400,7 @@ class UyapCasePanelController extends ChangeNotifier {
       // Not found on the web: the mobile API, as before.
     }
     usedWeb = _useWeb;
+    whole = true;
     if (!usedWeb) return _refreshMobile();
     await _doing('Dosya UYAP’ta aranıyor', () async {
       final live = await _liveCase();
@@ -404,8 +410,10 @@ class UyapCasePanelController extends ChangeNotifier {
       try {
         permissions = await web.permissions(live);
       } catch (_) {
-        // Not answered: everything is asked for, as before.
+        // Not answered: everything is asked for, as before; the money and
+        // an icra file's account, which it tells, wait for the next time.
         permissions = const UyapCasePermissions(null, null);
+        whole = false;
       }
       final hidden = {
         for (final what in hiddenNotes.keys)
@@ -443,6 +451,7 @@ class UyapCasePanelController extends ChangeNotifier {
           money = await web.caseMoney(live, typeCode);
         } catch (_) {
           // The rest of the case stands without it.
+          whole = false;
         }
       }
       // An enforcement file's account and debtors: asked only where UYAP
@@ -458,10 +467,14 @@ class UyapCasePanelController extends ChangeNotifier {
         var debtors = const <UyapDebtor>[];
         try {
           if (account) lines = await web.accountLines(live);
-        } catch (_) {}
+        } catch (_) {
+          whole = false;
+        }
         try {
           if (debtorsShown) debtors = await web.debtors(live);
-        } catch (_) {}
+        } catch (_) {
+          whole = false;
+        }
         if (lines.isNotEmpty || debtors.isNotEmpty) {
           enforcement = UyapEnforcement(lines: lines, debtors: debtors);
         }
@@ -530,6 +543,7 @@ class UyapCasePanelController extends ChangeNotifier {
         ];
       } catch (_) {
         parties = const [];
+        whole = false;
       }
       busy = 'Evrak listesi çekiliyor';
       _changed();

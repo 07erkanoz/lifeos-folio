@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:evrak_convert/services/portal/observed.dart';
+import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
@@ -32,6 +33,9 @@ class _Web extends UyapWebService {
 
   bool on = true;
   final asked = <String>[];
+
+  /// The hukuk case's money not answered.
+  bool moneyFails = false;
 
   @override
   bool get connected => on;
@@ -114,16 +118,18 @@ class _Web extends UyapWebService {
   }) async => const UyapCaseDocuments([]);
 
   @override
-  Future<UyapCaseMoney> caseMoney(UyapCase target, int typeCode) async =>
-      const UyapCaseMoney(
-        fees: [
-          UyapMoneyItem(
-            kind: 'Peşin Harç',
-            date: '12.03.2025 10:41',
-            amount: 3415.5,
-          ),
-        ],
-      );
+  Future<UyapCaseMoney> caseMoney(UyapCase target, int typeCode) async {
+    if (moneyFails && target.id == 'id-h1') throw StateError('UYAP');
+    return const UyapCaseMoney(
+      fees: [
+        UyapMoneyItem(
+          kind: 'Peşin Harç',
+          date: '12.03.2025 10:41',
+          amount: 3415.5,
+        ),
+      ],
+    );
+  }
 
   @override
   Future<List<UyapAccountLine>> accountLines(UyapCase target) async => const [
@@ -152,10 +158,18 @@ class _Mobile extends UyapMobileApi {
     DateTime to,
   ) async => const [];
 
+  /// The same codes as the web's: a case it lists is found there.
   @override
-  Future<List<Map<String, Object?>>> unitTypes(int type) async => [
-    {'tablo': 'T$type'},
-  ];
+  Future<List<Map<String, Object?>>> unitTypes(int type) async =>
+      switch (type) {
+        1 => [
+          {'tablo': 'HUKUK'},
+        ],
+        2 => [
+          {'tablo': 'ICRA'},
+        ],
+        _ => const [],
+      };
 
   @override
   Future<List<Map<String, Object?>>> courts(
@@ -167,6 +181,30 @@ class _Mobile extends UyapMobileApi {
       : [
           {'birimId': 'm$type', 'birimAdi': type == 2 ? _icra : _hukuk},
         ];
+
+  /// Answered late: the web is done with its own part by then.
+  Duration late = Duration.zero;
+
+  @override
+  Future<List<Map<String, Object?>>> cases(
+    int type,
+    String unitKind,
+    String court, {
+    required bool closed,
+  }) async {
+    await Future<void>.delayed(late);
+    return [
+      {
+        'dosyaId': 'mid-$type',
+        'dosyaNo': type == 2 ? '2025/4410' : '2025/80',
+        'birimAdi': type == 2 ? _icra : _hukuk,
+        'dosyaDurumAciklama': 'Açık',
+      },
+    ];
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> danistayChambers() async => const [];
 
   @override
   Future<List<Map<String, Object?>>> findCase(
@@ -297,6 +335,49 @@ void main() {
     expect(clients(), contains('AYŞE KARACA'));
     expect(
       (await store.load(_icra, '2025/4410'))!.enforcement!.debtors,
+      isNotEmpty,
+    );
+  });
+
+  test('a case whose money did not come is not counted read: it is asked '
+      'again', () async {
+    final web = _Web()..moneyFails = true;
+    final sync = syncOf(web, _Mobile()..on = false);
+    await sync.syncPortfolio(full: true);
+    expect(db.meta(PortalSync.webCheckedKey(hukuk)), isNull);
+    expect(db.meta(PortalSync.webCheckedKey(icra)), isNotNull);
+    // Its parties came all the same: the client is there.
+    expect(clients(), contains('AYŞE KARACA'));
+    expect(
+      sync.state(PortalChannel.uyapWeb).problem,
+      'Bazı kayıtlar alınamadı',
+    );
+  });
+
+  test('with both connected, the cases UYAP Mobil lists when the web has '
+      'nothing of its own to read are read by the web all the same', () async {
+    final web = _Web();
+    final mobile = _Mobile()..late = const Duration(milliseconds: 300);
+    final sync = syncOf(web, mobile);
+    // The web has nothing of its own due today: only UYAP Mobil reads.
+    final now = DateTime.now().toIso8601String();
+    db.setMeta('portfolio_web_only_at', now);
+    db.setMeta('hearings_at:${PortalChannel.uyapWeb.name}', now);
+    await sync.syncMobile();
+    // What runs after UYAP Mobil's reading.
+    for (
+      var i = 0;
+      i < 50 && db.meta(PortalSync.webCheckedKey(icra)) == null;
+      i++
+    ) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(db.cases().keys, containsAll([hukuk, icra]));
+    expect(mobile.asked, isEmpty, reason: 'the web reads the cases');
+    expect(web.asked, containsAll(['parties id-h1', 'parties id-i1']));
+    expect(clients(), contains('AYŞE KARACA'));
+    expect(
+      (await store.load(_icra, '2025/4410'))!.enforcement!.lines,
       isNotEmpty,
     );
   });
