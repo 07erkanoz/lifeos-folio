@@ -9,6 +9,7 @@ import '../../services/uyap/adalet_eimza.dart';
 import '../../services/uyap/edevlet_window.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import 'edevlet_web_dialog.dart';
+import 'folio_dialog.dart';
 
 /// Opens a UYAP web portal session in a dialog: the card with Adalet
 /// E-İmza on a computer, the mobile signature or the e-signature through
@@ -18,28 +19,28 @@ Future<void> connectUyapWeb(
   VoidCallback? onConnected,
 }) => showDialog<void>(
   context: context,
-  builder: (context) => AlertDialog(
-    title: const Text('UYAP Web’e bağlan'),
-    content: SizedBox(
-      width: 520,
-      child: SingleChildScrollView(
-        child: UyapConnectView(
-          note:
-              'UYAP Web her şeyi verir: dosya bilgileri, tam evrak listesi, '
-              'Yargıtay ve Cumhuriyet Başsavcılığı dosyaları.',
-          onConnected: (_) async {
-            if (context.mounted) Navigator.pop(context);
-            onConnected?.call();
-          },
-        ),
-      ),
-    ),
+  builder: (context) => FolioDialog(
+    width: 540,
+    icon: Icons.account_balance_outlined,
+    title: 'UYAP Web’e bağlan',
+    subtitle: 'Avukat Portalı',
+    onClose: () => Navigator.pop(context),
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
         child: const Text('Kapat'),
       ),
     ],
+    child: UyapConnectView(
+      heading: false,
+      note:
+          'UYAP Web her şeyi verir: dosya bilgileri, tam evrak listesi, '
+          'Yargıtay ve Cumhuriyet Başsavcılığı dosyaları.',
+      onConnected: (_) async {
+        if (context.mounted) Navigator.pop(context);
+        onConnected?.call();
+      },
+    ),
   ),
 );
 
@@ -47,7 +48,12 @@ Future<void> connectUyapWeb(
 /// a session: a mobile signature or an e-signature through e-Devlet, or the
 /// card with its PIN through the Adalet E-İmza application.
 class UyapConnectView extends StatefulWidget {
-  const UyapConnectView({super.key, required this.onConnected, this.note});
+  const UyapConnectView({
+    super.key,
+    required this.onConnected,
+    this.note,
+    this.heading = true,
+  });
 
   /// Runs once the session is open, with the name of the lawyer in it:
   /// what the caller loads first, while the view still says it is busy.
@@ -55,6 +61,10 @@ class UyapConnectView extends StatefulWidget {
 
   /// What the session is wanted for, said above the choices.
   final String? note;
+
+  /// Whether the view names the portal itself; a dialog that already does
+  /// in its own heading leaves it out.
+  final bool heading;
 
   @override
   State<UyapConnectView> createState() => _UyapConnectViewState();
@@ -198,14 +208,57 @@ class _UyapConnectViewState extends State<UyapConnectView> {
 
   Widget _choice(_Route route, String title, String detail, IconData icon) {
     final enabled = !_busy && _available(route);
-    return RadioListTile<_Route>(
-      value: route,
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      secondary: Icon(icon, size: 22),
-      title: Text(title),
-      subtitle: Text(detail),
-      enabled: enabled,
+    final colors = Theme.of(context).colorScheme;
+    final selected = route == _route && _available(route);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: RadioListTile<_Route>(
+        value: route,
+        dense: true,
+        selected: selected,
+        contentPadding: const EdgeInsets.fromLTRB(12, 2, 4, 2),
+        tileColor: colors.surface,
+        selectedTileColor: colors.primaryContainer.withValues(alpha: .6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: selected ? colors.primary : colors.outlineVariant,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        secondary: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: (selected ? colors.primary : colors.onSurfaceVariant)
+                .withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: selected ? colors.primary : colors.onSurfaceVariant,
+          ),
+        ),
+        controlAffinity: ListTileControlAffinity.trailing,
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: !enabled && !selected
+                ? colors.onSurfaceVariant
+                : selected
+                ? colors.primary
+                : colors.onSurface,
+          ),
+        ),
+        subtitle: Text(
+          detail,
+          style: TextStyle(fontSize: 11.5, color: colors.onSurfaceVariant),
+        ),
+        enabled: enabled,
+      ),
     );
   }
 
@@ -217,17 +270,22 @@ class _UyapConnectViewState extends State<UyapConnectView> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'UYAP Avukat Portalı’na bağlanın',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
+        if (widget.heading)
+          Text(
+            'UYAP Avukat Portalı’na bağlanın',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
         if (widget.note != null) ...[
-          const SizedBox(height: 4),
-          Text(widget.note!),
+          if (widget.heading) const SizedBox(height: 4),
+          Text(
+            widget.note!,
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
         ],
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
+        const FolioSectionLabel('Giriş yöntemi'),
         RadioGroup<_Route>(
           groupValue: _route,
           onChanged: (value) {
@@ -245,7 +303,7 @@ class _UyapConnectViewState extends State<UyapConnectView> {
                 ),
               if (_tray == false && !_phone)
                 Padding(
-                  padding: const EdgeInsets.only(left: 40, bottom: 6),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 0, 10),
                   child: Wrap(
                     crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: 4,
@@ -314,8 +372,7 @@ class _UyapConnectViewState extends State<UyapConnectView> {
             },
             decoration: const InputDecoration(
               labelText: 'E-imza PIN',
-              prefixIcon: Icon(Icons.lock_outline),
-              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.lock_outline_rounded, size: 19),
             ),
           ),
         ],
@@ -345,13 +402,13 @@ class _UyapConnectViewState extends State<UyapConnectView> {
               onPressed: _busy || !_available(_route)
                   ? null
                   : () => unawaited(_connect()),
-              icon: const Icon(Icons.login),
+              icon: const Icon(Icons.login_rounded, size: 18),
               label: const Text('Bağlan'),
             ),
           ),
         if (_error != null) ...[
-          const SizedBox(height: 10),
-          Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+          const SizedBox(height: 12),
+          FolioCallout(tone: CalloutTone.error, child: Text(_error!)),
         ],
         const SizedBox(height: 10),
         Text(

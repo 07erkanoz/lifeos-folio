@@ -474,7 +474,7 @@ class MobileDocumentHome extends StatelessWidget {
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 textStyle: const TextStyle(
-                  fontFamily: 'LiberationSans',
+                  fontFamily: 'Inter',
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),

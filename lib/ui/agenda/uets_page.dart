@@ -464,7 +464,7 @@ class _UetsPageState extends State<UetsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(
-          fontFamily: 'LiberationSans',
+          fontFamily: 'Inter',
           fontSize: 12.5,
           fontWeight: FontWeight.w700,
         ),
@@ -1947,7 +1947,7 @@ class _UetsPageState extends State<UetsPage> {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 textStyle: const TextStyle(
-                  fontFamily: 'LiberationSans',
+                  fontFamily: 'Inter',
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),

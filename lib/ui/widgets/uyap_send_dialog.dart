@@ -776,7 +776,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                   initialValue: _jurisdiction,
                   decoration: _field('Yargı türü'),
                   style: TextStyle(
-                    fontFamily: 'LiberationSans',
+                    fontFamily: 'Inter',
                     fontSize: 13,
                     color: theme.colorScheme.onSurface,
                   ),
@@ -806,7 +806,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                       style: const ButtonStyle(
                         visualDensity: VisualDensity.compact,
                         textStyle: WidgetStatePropertyAll(
-                          TextStyle(fontFamily: 'LiberationSans', fontSize: 12),
+                          TextStyle(fontFamily: 'Inter', fontSize: 12),
                         ),
                       ),
                       segments: const [
@@ -843,7 +843,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                     initialValue: _type,
                     decoration: _field('Mahkeme türü'),
                     style: TextStyle(
-                      fontFamily: 'LiberationSans',
+                      fontFamily: 'Inter',
                       fontSize: 13,
                       color: theme.colorScheme.onSurface,
                     ),
@@ -874,7 +874,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                     initialValue: _court,
                     decoration: _field('Mahkeme'),
                     style: TextStyle(
-                      fontFamily: 'LiberationSans',
+                      fontFamily: 'Inter',
                       fontSize: 13,
                       color: theme.colorScheme.onSurface,
                     ),
@@ -1135,7 +1135,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                   initialValue: _documentType,
                   decoration: _field('Evrak türü'),
                   style: TextStyle(
-                    fontFamily: 'LiberationSans',
+                    fontFamily: 'Inter',
                     fontSize: 13,
                     color: theme.colorScheme.onSurface,
                   ),

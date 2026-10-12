@@ -756,7 +756,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                       value: _fit,
                       isDense: true,
                       style: TextStyle(
-                        fontFamily: 'LiberationSans',
+                        fontFamily: 'Inter',
                         fontSize: 12,
                         color: scheme.onSurface,
                       ),

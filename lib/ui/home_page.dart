@@ -3259,7 +3259,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 value: _library.sort,
                 isDense: true,
                 style: TextStyle(
-                  fontFamily: 'LiberationSans',
+                  fontFamily: 'Inter',
                   fontSize: 11,
                   color: scheme.onSurfaceVariant,
                 ),
@@ -3850,7 +3850,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             textStyle: const TextStyle(
-                              fontFamily: 'LiberationSans',
+                              fontFamily: 'Inter',
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),

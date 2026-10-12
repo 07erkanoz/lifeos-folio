@@ -612,7 +612,7 @@ class _AgendaPageState extends State<AgendaPage> {
                 borderRadius: BorderRadius.circular(8),
               ),
               textStyle: const TextStyle(
-                fontFamily: 'LiberationSans',
+                fontFamily: 'Inter',
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -1659,7 +1659,7 @@ class _AgendaPageState extends State<AgendaPage> {
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
               textStyle: const TextStyle(
-                fontFamily: 'LiberationSans',
+                fontFamily: 'Inter',
                 fontSize: 12,
               ),
             ),
@@ -1677,7 +1677,7 @@ class _AgendaPageState extends State<AgendaPage> {
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
               textStyle: const TextStyle(
-                fontFamily: 'LiberationSans',
+                fontFamily: 'Inter',
                 fontSize: 12,
               ),
             ),

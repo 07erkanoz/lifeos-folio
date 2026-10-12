@@ -117,7 +117,7 @@ class SuggestionPopup {
     final colors = Theme.of(context).colorScheme;
     final typed = s.typed.clamp(0, s.text.length);
     final style = TextStyle(
-      fontFamily: 'LiberationSans',
+      fontFamily: 'Inter',
       fontSize: 13.5,
       color: colors.onSurface,
     );

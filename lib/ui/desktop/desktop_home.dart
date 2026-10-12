@@ -670,7 +670,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                 visualDensity: VisualDensity.compact,
                 foregroundColor: scheme.primary,
                 textStyle: const TextStyle(
-                  fontFamily: 'LiberationSans',
+                  fontFamily: 'Inter',
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -694,7 +694,7 @@ class _DesktopHomeState extends State<DesktopHome> {
               style: FilledButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 textStyle: const TextStyle(
-                  fontFamily: 'LiberationSans',
+                  fontFamily: 'Inter',
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),
