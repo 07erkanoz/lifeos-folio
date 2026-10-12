@@ -1383,10 +1383,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       name = (await LawyerProfile.load()).lawyer?.titled ?? '';
     } catch (_) {}
     if (name.isEmpty) {
-      final user = UyapMobileApi.instance.session.value?.user ?? '';
-      if (user.isNotEmpty && user != 'UYAP Mobil') {
-        name = 'Av. ${titleCaseTr(user)}';
+      var user = UyapMobileApi.instance.session.value?.user ?? '';
+      if (user == 'UYAP Mobil') user = '';
+      // Logged in through the web portal alone: its name.
+      if (user.isEmpty) {
+        user = UyapWebService.instance.session.value?.user ?? '';
       }
+      if (user.trim().isNotEmpty) name = 'Av. ${titleCaseTr(user.trim())}';
     }
     if (mounted && name != _lawyerName) setState(() => _lawyerName = name);
   }

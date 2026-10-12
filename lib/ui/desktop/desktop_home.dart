@@ -1015,10 +1015,21 @@ class _DesktopHomeState extends State<DesktopHome> {
           Divider(height: 1, color: scheme.outlineVariant),
           Expanded(
             child: rows.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Bu süzgece uyan evrak yok.',
-                      style: TextStyle(color: AgendaColors.muted),
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        // Nothing on this computer yet: what comes here.
+                        _existing.isEmpty
+                            ? 'Bilgisayarınızda henüz evrak yok. Yazdığınız '
+                                  'dilekçeler, UYAP’tan indirdiğiniz evraklar '
+                                  've taramalarınız burada görünür. UYAP '
+                                  'evraklarını dosyanın sayfasından '
+                                  'indirebilirsiniz.'
+                            : 'Bu süzgece uyan evrak yok.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AgendaColors.muted),
+                      ),
                     ),
                   )
                 : ListView.separated(

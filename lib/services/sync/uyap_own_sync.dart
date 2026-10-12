@@ -184,6 +184,16 @@ class UyapOwnSync {
             );
             if (at != null && (mineAt == null || at.isAfter(mineAt))) {
               db.setMeta('case_checked:$key', at.toIso8601String());
+              // Read by the web there: not read again here for it.
+              db.setMeta(PortalSync.webCheckedKey(key), at.toIso8601String());
+            }
+            // Its parties for the clients here too.
+            if (await store.load(
+                  '${json['mahkeme'] ?? ''}',
+                  '${json['esas'] ?? ''}',
+                )
+                case final kept? when kept.parties.isNotEmpty) {
+              db.saveCaseParties(key, kept.parties, source: 'uyap');
             }
           case AdoptResult.older:
             break;

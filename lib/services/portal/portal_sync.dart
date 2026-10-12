@@ -323,8 +323,11 @@ class PortalSync extends ChangeNotifier {
         final portfolioDue =
             (read == null || read.isBefore(weekStart(now))) &&
             (tried == null || now.difference(tried) > const Duration(hours: 2));
+        final unfilled = _unfilled(db).isNotEmpty;
         if (_mobile.connected &&
-            (portfolioDue || _hearingsDue(db, PortalChannel.uyapMobile))) {
+            (portfolioDue ||
+                _hearingsDue(db, PortalChannel.uyapMobile) ||
+                (unfilled && !_web.connected))) {
           unawaited(syncMobile());
         }
         // The web reads the portfolio alone, or beside UYAP Mobil what only
@@ -335,7 +338,9 @@ class PortalSync extends ChangeNotifier {
           key: _mobile.connected ? _webOnlyKey : _portfolioKey,
         ).$1;
         if (_web.connected &&
-            (_hearingsDue(db, PortalChannel.uyapWeb) || webPortfolioDue)) {
+            (_hearingsDue(db, PortalChannel.uyapWeb) ||
+                webPortfolioDue ||
+                unfilled)) {
           unawaited(syncWeb());
         }
         if (_web.connected) unawaited(enrichOnWeb());
@@ -428,6 +433,10 @@ class PortalSync extends ChangeNotifier {
     _keepWeb();
     notifyListeners();
     _rememberTc(_web.tckn);
+    // The lawyer's name as the web portal gives it, where the profile has
+    // none: whose clients the parties are is told by it.
+    final user = _web.session.value?.user.trim() ?? '';
+    if (user.isNotEmpty) _remember(() => rememberLawyer(name: user));
     if (_web.connected && !quiet && _readsNow) {
       unawaited(syncWeb());
       unawaited(syncNotices());
@@ -612,6 +621,7 @@ class PortalSync extends ChangeNotifier {
     }
     var lawyer = _mobile.session.value?.user ?? '';
     if (lawyer == 'UYAP Mobil') lawyer = '';
+    if (lawyer.isEmpty) lawyer = _web.session.value?.user ?? '';
     if (lawyer.isEmpty) {
       try {
         lawyer = (await LawyerProfile.load()).lawyer?.name ?? '';
@@ -1416,7 +1426,9 @@ class PortalSync extends ChangeNotifier {
           key: webOnly ? _webOnlyKey : _portfolioKey,
         );
         final hearingsDue = force || _hearingsDue(db, PortalChannel.uyapWeb);
-        if (!hearingsDue && !portfolioDue) return null;
+        if (!hearingsDue && !portfolioDue && _unfilled(db).isEmpty) {
+          return null;
+        }
         // Not left to a computer of the person's: it may have UYAP Mobil
         // only, and the prosecutors' and the Court of Cassation's are the
         // web's.
@@ -1454,11 +1466,106 @@ class PortalSync extends ChangeNotifier {
             if (!webOnly) db.setMeta(_portfolioKey, now);
           }
         }
-        if (!hearings.complete || !cases.complete) {
+        // Every case the web has not read of itself yet, read now: its
+        // parties (whose clients they are), its money and an icra file's
+        // account, which only the web gives. Beside UYAP Mobil, after it
+        // has listed the courts' cases.
+        if (webOnly) await _mobileSync;
+        final filled = await _fill(db, PortalChannel.uyapWeb);
+        if (!hearings.complete || !cases.complete || !filled) {
           return 'Bazı kayıtlar alınamadı';
         }
         return rested;
       }).whenComplete(() => _webSync = null);
+
+  /// The open cases the channel reading them now has not read of
+  /// themselves: with the web connected, those it has not read (UYAP
+  /// Mobil's reading gives no money); else those UYAP Mobil has not. One
+  /// that would not be read waits a day.
+  List<PortalCase> _unfilled(PortalDatabase db) {
+    final web = _web.connected;
+    if (!web && !_mobile.connected) return const [];
+    final now = DateTime.now();
+    return [
+      for (final c in db.cases().values)
+        if (!isClosedStatus(c.status?.value) &&
+            // The prosecutors' and the high courts' are the web's alone.
+            (web || c.family == CaseFamily.court) &&
+            db.meta(web ? webCheckedKey(c.key) : 'case_checked:${c.key}') ==
+                null &&
+            switch (DateTime.tryParse(
+              db.meta(
+                    _fillTryKey(
+                      c.key,
+                      web ? PortalChannel.uyapWeb : PortalChannel.uyapMobile,
+                    ),
+                  ) ??
+                  '',
+            )) {
+              null => true,
+              final tried => now.difference(tried) > const Duration(days: 1),
+            })
+          c,
+    ];
+  }
+
+  /// Where it is kept that the web read a case of itself.
+  static String webCheckedKey(String key) => 'case_web_checked:$key';
+
+  /// Where [channel]'s try at reading a case is kept: UYAP Mobil's
+  /// does not keep the web from reading it.
+  static String _fillTryKey(String key, PortalChannel channel) =>
+      'case_fill_try:${channel.name}:$key';
+
+  /// [_unfilled]'s cases read one by one by [channel], those with a hearing
+  /// within a month first. True when every one was read.
+  Future<bool> _fill(PortalDatabase db, PortalChannel channel) async {
+    final todo = _unfilled(db);
+    if (todo.isEmpty) return true;
+    final now = DateTime.now();
+    final soon = {
+      for (final h in db.hearings(
+        from: now,
+        to: now.add(const Duration(days: 31)),
+      ))
+        h.caseKey,
+    };
+    todo.sort(
+      (a, b) => (soon.contains(a.key) ? 0 : 1).compareTo(
+        soon.contains(b.key) ? 0 : 1,
+      ),
+    );
+    bool connected() =>
+        !_disposed &&
+        (channel == PortalChannel.uyapWeb ? _web.connected : _mobile.connected);
+    return _refreshEach(db, todo, channel, keepGoing: connected);
+  }
+
+  /// What a case's reading brought kept beside the portfolio: its parties,
+  /// for the clients and whose a deadline is, and when it was read, and
+  /// whether by the web.
+  Future<void> caseRead(UyapCasePanelController panel) async {
+    final record = panel.record;
+    if (record == null || panel.error != null) return;
+    final db = await _database();
+    final key = caseKey(record.number, record.court);
+    _keepRead(db, key, record, web: panel.usedWeb);
+    portfolioVersion.value++;
+  }
+
+  void _keepRead(
+    PortalDatabase db,
+    String key,
+    UyapCaseRecord record, {
+    required bool web,
+  }) {
+    final at = DateTime.now().toIso8601String();
+    if (record.parties.isNotEmpty) {
+      db.saveCaseParties(key, record.parties, source: 'uyap');
+    }
+    db.setMeta('case_checked:$key', at);
+    if (web) db.setMeta(webCheckedKey(key), at);
+  }
 
   /// When the web last read the prosecutors' and the Court of Cassation's
   /// cases whole, while UYAP Mobil read the rest.
@@ -1594,7 +1701,11 @@ class PortalSync extends ChangeNotifier {
             DateTime.now().toIso8601String(),
           );
         }
-        if (!hearings.complete || !cases.complete) {
+        // Alone, UYAP Mobil reads each case it has not of itself: its
+        // parties and documents' list. Beside the web, the web does.
+        final filled =
+            _web.connected || await _fill(db, PortalChannel.uyapMobile);
+        if (!hearings.complete || !cases.complete || !filled) {
           return 'Bazı kayıtlar alınamadı';
         }
         return rested;
@@ -1715,6 +1826,22 @@ class PortalSync extends ChangeNotifier {
           if (chosen.contains(c.key)) c,
       ];
     }
+    final through = await _refreshEach(db, open, channel, keepGoing: keepGoing);
+    db.setMeta(_checkedKey, DateTime.now().toIso8601String());
+    notifyListeners();
+    return through;
+  }
+
+  /// [open] read one case at a time, as UYAP answers a burst with errors;
+  /// what each brought kept ([_keepRead]), and the change remembered for
+  /// the portfolio's list. False when one was not read or [keepGoing]
+  /// stopped it.
+  Future<bool> _refreshEach(
+    PortalDatabase db,
+    List<PortalCase> open,
+    PortalChannel channel, {
+    bool Function()? keepGoing,
+  }) async {
     var through = true;
     for (final (i, kase) in open.indexed) {
       if ((!_mobile.connected && !_web.connected) ||
@@ -1722,21 +1849,23 @@ class PortalSync extends ChangeNotifier {
         through = false;
         break;
       }
-      _progress(
-        channel,
-        channel == PortalChannel.uyapWeb
-            ? 'Dosyalar ${i + 1}/${open.length}'
-            : 'Evraklar ${i + 1}/${open.length}',
-      );
+      _progress(channel, 'Dosyalar ${i + 1}/${open.length}');
       // A lawyer waiting for a case of theirs goes first.
       while (UyapCasePanelController.lawyerWaiting) {
         await Future<void>.delayed(const Duration(milliseconds: 400));
       }
       final panel = UyapCasePanelController(
+        web: _web,
+        mobile: _mobile,
+        sync: this,
         pause: Duration.zero,
         background: true,
       );
       try {
+        db.setMeta(
+          _fillTryKey(kase.key, channel),
+          DateTime.now().toIso8601String(),
+        );
         await panel.attach(linkOf(kase));
         final before = panel.record;
         await panel.refresh();
@@ -1746,31 +1875,31 @@ class PortalSync extends ChangeNotifier {
           through = false;
           continue;
         }
+        final after = panel.record!;
         // Asked, changed or not: it waits its turn again.
-        db.setMeta(
-          'case_checked:${kase.key}',
-          DateTime.now().toIso8601String(),
-        );
-        final after = panel.record;
-        if (after == null || identical(after, before)) continue;
+        _keepRead(db, kase.key, after, web: panel.usedWeb);
+        portfolioVersion.value++;
+        if (identical(after, before)) continue;
         db.noteChange(
           kase.key,
           fresh: after.fresh.length,
           change: before == null ? null : describeChange(before, after),
         );
-        portfolioVersion.value++;
       } catch (_) {
         // One case that does not answer does not stop the others.
         through = false;
       } finally {
         panel.dispose();
       }
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(_caseGap);
     }
-    db.setMeta(_checkedKey, DateTime.now().toIso8601String());
-    notifyListeners();
     return through;
   }
+
+  /// Between two cases read one after another.
+  @visibleForTesting
+  static Duration caseGap = const Duration(milliseconds: 250);
+  Duration get _caseGap => caseGap;
 
   late final _finder = MobileCaseFinder(_mobile);
 

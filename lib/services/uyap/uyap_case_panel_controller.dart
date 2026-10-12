@@ -374,7 +374,19 @@ class UyapCasePanelController extends ChangeNotifier {
     } finally {
       if (!background) _waiting--;
     }
+    // A lawyer's own reading of a case is kept beside the portfolio as the
+    // sync's is: its parties for the clients, and that it was read. The
+    // sync's own readings keep theirs themselves.
+    if (!background && error == null && _record != null) {
+      try {
+        await (_sync ?? PortalSync.started)?.caseRead(this);
+      } catch (_) {}
+    }
   }
+
+  /// Whether the last [refresh] asked the web portal, which gives the
+  /// money and an enforcement file's account; else the mobile API.
+  bool usedWeb = false;
 
   Future<void> _refresh() async {
     try {
@@ -382,7 +394,8 @@ class UyapCasePanelController extends ChangeNotifier {
     } catch (_) {
       // Not found on the web: the mobile API, as before.
     }
-    if (!_useWeb) return _refreshMobile();
+    usedWeb = _useWeb;
+    if (!usedWeb) return _refreshMobile();
     await _doing('Dosya UYAP’ta aranıyor', () async {
       final live = await _liveCase();
       busy = 'Dosya bilgileri çekiliyor';

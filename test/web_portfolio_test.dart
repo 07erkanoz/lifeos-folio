@@ -136,6 +136,19 @@ class _Web extends UyapWebService {
     DateTime from,
     DateTime to,
   ) async => const [];
+
+  // A case of itself it does not open: never the real portal from a test.
+  @override
+  Future<UyapCasePermissions> permissions(UyapCase target) async =>
+      throw StateError('UYAP');
+
+  @override
+  Future<UyapCaseDetails> caseDetails(UyapCase target) async =>
+      throw StateError('UYAP');
+
+  @override
+  Future<List<UyapParty>> parties(UyapCase target) async =>
+      throw StateError('UYAP');
 }
 
 /// A portal that answers the same full page again.
@@ -235,7 +248,13 @@ void main() {
     await sync.syncPortfolio(full: true);
     expect(web.asked, contains('cases w1 1'));
     expect(db.cases(), hasLength(5));
-    expect(sync.state(PortalChannel.uyapWeb).problem, isNull);
+    // Read whole; its cases, which this portal will not open (see
+    // first_fill_test), are told as not read.
+    expect(db.meta('portfolio_at'), isNotNull);
+    expect(
+      sync.state(PortalChannel.uyapWeb).problem,
+      'Bazı kayıtlar alınamadı',
+    );
   });
 
   test('the prosecutors\' offices are looked for in every province the '
