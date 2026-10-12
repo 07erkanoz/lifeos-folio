@@ -758,6 +758,24 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
+          _Entry(
+            'bildirim ayrıntı içerik gizli kilit ekranı',
+            SettingsRow(
+              key: const ValueKey('settings-alert-details'),
+              icon: Icons.visibility_outlined,
+              title: 'Bildirimde ayrıntıyı göster',
+              subtitle: _alerts.details
+                  ? 'Dosya, duruşma ve süre bildirimde yazar (kilit ekranında '
+                        'da). Folio şifreyle kilitliyken yalnızca “yeni '
+                        'bildirim var” yazar.'
+                  : 'Bildirimde yalnızca “yeni bildirim var” yazar; '
+                        'ayrıntı Folio açılınca görünür.',
+              trailing: settingsSwitch(
+                _alerts.details,
+                (v) => _setAlerts(_alerts.copyWith(details: v)),
+              ),
+            ),
+          ),
           if (_phone)
             _Entry(
               'arka plan kapalıyken denetle pil',

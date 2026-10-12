@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import '../platform/system_notices.dart';
 import 'portal_database.dart';
+import 'uyap_notice_alerts.dart';
 
 /// What the agenda has to tell now: a deadline's last day coming or gone,
 /// a hearing tomorrow or today.
@@ -116,8 +117,9 @@ abstract final class AgendaReminders {
     final system = notices ?? SystemNotices.instance;
     final todo = due(db, now ?? DateTime.now(), mark: false);
     final told = <String>[];
+    final quiet = !UyapNoticeAlerts.of(db).details;
     for (final r in todo) {
-      final hide = private?.call() ?? false;
+      final hide = quiet || (private?.call() ?? false);
       final ok = await system
           .shown(
             id: r.key.hashCode & 0x7fffffff,

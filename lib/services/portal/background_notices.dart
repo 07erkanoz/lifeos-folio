@@ -5,6 +5,8 @@ import 'dart:ui';
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../security/app_lock.dart';
+
 import '../security/secret_store.dart';
 import '../uyap/uyap_mobile_api.dart';
 import 'agenda_reminders.dart';
@@ -76,10 +78,15 @@ abstract final class BackgroundNotices {
   /// One check: UYAP Mobil's newest notifications kept, the new ones told.
   static Future<void> check() async {
     final db = await PortalDatabase.shared();
-    // The agenda's alarms first, with or without a UYAP session: in the
-    // background, only that something is due shows.
+    // Folio's password, read here where Folio is not open: with one set,
+    // Folio counts as locked and a notification says only that something
+    // came; without one, it says what.
     try {
-      await AgendaReminders.tell(db, private: () => true);
+      await AppLock.instance.load();
+    } catch (_) {}
+    // The agenda's alarms first, with or without a UYAP session.
+    try {
+      await AgendaReminders.tell(db, private: () => AppLock.instance.locked);
     } catch (_) {}
     try {
       _note(db, await _check(db));

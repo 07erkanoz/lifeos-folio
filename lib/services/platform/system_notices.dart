@@ -176,7 +176,7 @@ class SystemNotices {
         title: title,
         body: body,
         payload: payload,
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             'uyap_bildirim',
             'UYAP bildirimleri',
@@ -184,10 +184,17 @@ class SystemNotices {
                 'UYAP Mobil ve UYAP Web’den gelen yeni bildirimler',
             importance: Importance.high,
             priority: Priority.high,
+            // Shown whole on the lock screen too: left private, Android
+            // put "content hidden" there in its place. What must not show
+            // is left out by the caller (Folio locked, or the lawyer's
+            // choice), so what comes here may.
+            visibility: NotificationVisibility.public,
+            // The whole text when pulled open, not its first line.
+            styleInformation: BigTextStyleInformation(body),
           ),
-          macOS: DarwinNotificationDetails(),
-          iOS: DarwinNotificationDetails(),
-          linux: LinuxNotificationDetails(),
+          macOS: const DarwinNotificationDetails(),
+          iOS: const DarwinNotificationDetails(),
+          linux: const LinuxNotificationDetails(),
         ),
       );
       return true;
