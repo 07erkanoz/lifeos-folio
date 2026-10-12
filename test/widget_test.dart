@@ -15,6 +15,7 @@ void main() {
     expect(find.text('EVRAK KÜTÜPHANENİZ'), findsNothing);
     expect(find.byType(Image), findsNothing);
     expect(find.text('Dosya Aç'), findsOneWidget);
-    expect(find.text('Klasör Ekle'), findsOneWidget);
+    // A folder is added from the square beside it, named by its tooltip.
+    expect(find.byTooltip('Klasör Ekle'), findsWidgets);
   });
 }

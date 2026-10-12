@@ -3036,27 +3036,29 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               MediaQuery.viewInsetsOf(context).bottom == 0 &&
               MediaQuery.sizeOf(context).height >= 650)
           ? Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+              padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // A page's name, as every other page has, not a slogan
+                  // the size of a poster above the list it is for.
                   const Text(
-                    'Evraklarınız. Tek bir yerde.',
+                    'Evraklarınız',
                     style: TextStyle(
-                      fontSize: 26,
+                      fontSize: 20,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: -.9,
+                      letterSpacing: -.4,
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 3),
                   Text(
                     'Dosyalarınızı bulun, önizleyin ve uygun biçime dönüştürün.',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12.5,
                       color: scheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   if (MediaQuery.sizeOf(context).width >= 700 &&
                       MediaQuery.sizeOf(context).height >= 650)
                     Row(
@@ -3187,7 +3189,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget _stat(IconData icon, String label, String value, Color accent) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: scheme.surface,
         borderRadius: BorderRadius.circular(12),
@@ -3196,14 +3198,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(9),
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: .1),
-              borderRadius: BorderRadius.circular(9),
+              color: accent.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: accent, size: 21),
+            child: Icon(icon, color: accent, size: 19),
           ),
-          const SizedBox(width: 13),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3211,12 +3214,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 23,
+                    fontSize: 19,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: -.8,
+                    letterSpacing: -.5,
+                    height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   label,
                   style: TextStyle(

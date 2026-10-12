@@ -148,44 +148,67 @@ class LibrarySidebar extends StatelessWidget {
           slivers: [
             SliverList.list(
               children: [
-                const SizedBox(height: 16),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 0 : 20,
+                    18,
+                    compact ? 0 : 16,
+                    16,
+                  ),
+                  child: _brand(context),
+                ),
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (compact) ...[
-                        IconButton.filled(
-                          tooltip: 'Dosya Aç',
-                          onPressed: pickFiles,
-                          icon: const Icon(Icons.add_rounded),
+                  child: compact
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            IconButton.filled(
+                              tooltip: 'Dosya Aç',
+                              onPressed: pickFiles,
+                              icon: const Icon(Icons.add_rounded),
+                            ),
+                            const SizedBox(height: 8),
+                            IconButton.outlined(
+                              tooltip: 'Klasör Ekle',
+                              onPressed: pickFolder,
+                              icon: const Icon(
+                                Icons.create_new_folder_outlined,
+                              ),
+                            ),
+                          ],
+                        )
+                      // The two ways in side by side: a file, the button;
+                      // a folder, the square beside it.
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: pickFiles,
+                                icon: const Icon(Icons.add_rounded, size: 18),
+                                label: const Text('Dosya Aç'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton.outlined(
+                              tooltip: 'Klasör Ekle',
+                              onPressed: pickFolder,
+                              style: IconButton.styleFrom(
+                                side: BorderSide(color: scheme.outlineVariant),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                fixedSize: const Size(42, 42),
+                              ),
+                              icon: const Icon(
+                                Icons.create_new_folder_outlined,
+                                size: 19,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        IconButton.outlined(
-                          tooltip: 'Klasör Ekle',
-                          onPressed: pickFolder,
-                          icon: const Icon(Icons.create_new_folder_outlined),
-                        ),
-                      ] else ...[
-                        FilledButton.icon(
-                          onPressed: pickFiles,
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text('Dosya Aç'),
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: pickFolder,
-                          icon: const Icon(
-                            Icons.create_new_folder_outlined,
-                            size: 18,
-                          ),
-                          label: const Text('Klasör Ekle'),
-                        ),
-                      ],
-                    ],
-                  ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 18),
                 if (showHome)
                   _nav(
                     context,
@@ -550,41 +573,58 @@ class LibrarySidebar extends StatelessWidget {
                           onPressed: showStatus,
                           icon: const Icon(Icons.storage_outlined),
                         ),
-                      if (!compact)
-                        TextButton.icon(
-                          onPressed: pickFolder,
-                          icon: const Icon(Icons.settings_outlined, size: 18),
-                          label: const Text('Ayarlar'),
-                        )
-                      else
+                      if (compact) ...[
                         IconButton(
                           tooltip: 'Ayarlar',
                           onPressed: pickFolder,
                           icon: const Icon(Icons.settings_outlined, size: 18),
                         ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: scheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(10),
+                        const SizedBox(height: 12),
+                        _themeTrack(
+                          context,
+                          _themeButton(
+                            context,
+                            appearance.mode == ThemeMode.dark
+                                ? ThemeMode.light
+                                : ThemeMode.dark,
+                          ),
                         ),
-                        child: compact
-                            ? _themeButton(
-                                context,
-                                appearance.mode == ThemeMode.dark
-                                    ? ThemeMode.light
-                                    : ThemeMode.dark,
-                              )
-                            : Row(
-                                children: [
-                                  for (final mode in ThemeMode.values)
-                                    Expanded(
-                                      child: _themeButton(context, mode),
-                                    ),
-                                ],
+                      ] else ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton.icon(
+                                onPressed: pickFolder,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: scheme.onSurface,
+                                  alignment: Alignment.centerLeft,
+                                ),
+                                icon: Icon(
+                                  Icons.settings_outlined,
+                                  size: 18,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                                label: const Text('Ayarlar'),
                               ),
-                      ),
+                            ),
+                            SizedBox(
+                              width: 102,
+                              child: _themeTrack(
+                                context,
+                                Row(
+                                  children: [
+                                    for (final mode in ThemeMode.values)
+                                      Expanded(
+                                        child: _themeButton(context, mode),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -595,6 +635,71 @@ class LibrarySidebar extends StatelessWidget {
       ),
     );
   }
+
+  /// The app's mark and name at the top of the panel; the mark alone when
+  /// it is folded.
+  Widget _brand(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // Drawn, not a picture: the panel opens with the window, and a
+    // picture to decode at start is one thing more before it shows.
+    final mark = Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            scheme.primary,
+            Color.lerp(scheme.primary, Colors.black, .25)!,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Icon(
+        Icons.auto_stories_rounded,
+        size: 18,
+        color: scheme.onPrimary,
+      ),
+    );
+    if (compact) return Center(child: mark);
+    return Row(
+      children: [
+        mark,
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(text: 'LifeOS '),
+                TextSpan(
+                  text: 'Folio',
+                  style: TextStyle(color: scheme.primary),
+                ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -.3,
+              color: scheme.onSurface,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _themeTrack(BuildContext context, Widget child) => Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: child,
+  );
 
   Widget _themeButton(BuildContext context, ThemeMode mode) {
     final scheme = Theme.of(context).colorScheme;
@@ -609,10 +714,19 @@ class LibrarySidebar extends StatelessWidget {
         borderRadius: BorderRadius.circular(7),
         onTap: () => appearance.setMode(mode),
         child: Container(
-          height: 32,
+          height: 28,
           decoration: BoxDecoration(
             color: selected ? scheme.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(7),
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 3,
+                      offset: Offset(0, 1),
+                    ),
+                  ]
+                : null,
           ),
           alignment: Alignment.center,
           child: Icon(
@@ -621,7 +735,7 @@ class LibrarySidebar extends StatelessWidget {
               ThemeMode.light => Icons.light_mode_outlined,
               ThemeMode.dark => Icons.dark_mode_outlined,
             },
-            size: 17,
+            size: 15,
             color: selected ? scheme.primary : scheme.onSurfaceVariant,
           ),
         ),
@@ -630,11 +744,11 @@ class LibrarySidebar extends StatelessWidget {
   }
 
   Widget _heading(BuildContext context, String text) => Padding(
-    padding: const EdgeInsets.fromLTRB(26, 14, 16, 4),
+    padding: const EdgeInsets.fromLTRB(24, 16, 16, 6),
     child: Text(
       text,
       style: TextStyle(
-        fontSize: 10,
+        fontSize: 10.5,
         fontWeight: FontWeight.w700,
         letterSpacing: 1,
         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -677,19 +791,20 @@ class LibrarySidebar extends StatelessWidget {
     final isSelected = selected ?? (group == value && library.sourceId == null);
     return Padding(
       key: key,
-      padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 12, vertical: 3),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 1),
       child: Tooltip(
         message: compact ? title : '',
         child: Material(
-          color: isSelected
-              ? scheme.primary.withValues(alpha: .09)
-              : Colors.transparent,
+          color: isSelected ? scheme.primaryContainer : Colors.transparent,
           borderRadius: BorderRadius.circular(9),
           child: InkWell(
             borderRadius: BorderRadius.circular(9),
             onTap: () => selectGroup(value),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 0 : 12,
+                vertical: compact ? 11 : 9,
+              ),
               child: Row(
                 mainAxisAlignment: compact
                     ? MainAxisAlignment.center
@@ -697,7 +812,7 @@ class LibrarySidebar extends StatelessWidget {
                 children: [
                   Icon(
                     icon,
-                    size: 19,
+                    size: 18,
                     color: isSelected
                         ? scheme.primary
                         : scheme.onSurfaceVariant,
@@ -707,10 +822,12 @@ class LibrarySidebar extends StatelessWidget {
                     Expanded(
                       child: Text(
                         title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: isSelected
-                              ? FontWeight.w700
+                              ? FontWeight.w600
                               : FontWeight.w500,
                           color: isSelected ? scheme.primary : scheme.onSurface,
                         ),
@@ -721,8 +838,11 @@ class LibrarySidebar extends StatelessWidget {
                       Text(
                         '$count',
                         style: TextStyle(
-                          fontSize: 10,
-                          color: scheme.onSurfaceVariant,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: isSelected
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
                         ),
                       ),
                   ],

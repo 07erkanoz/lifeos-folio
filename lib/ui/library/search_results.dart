@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
 
 import '../widgets/hover_document_preview.dart';
 import '../../services/preview/hover_thumbnail.dart';
@@ -36,7 +37,7 @@ class FileBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(size >= 36 ? 10 : 8),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -48,14 +49,16 @@ class FileBadge extends StatelessWidget {
                 ? Icons.image_outlined
                 : Icons.description_outlined,
             color: color,
-            size: size * .43,
+            size: size >= 36 ? size * .4 : size * .5,
           ),
-          if (size >= 44)
+          if (size >= 36)
             Text(
               file.name.split('.').last.toUpperCase(),
+              maxLines: 1,
               style: TextStyle(
                 color: color,
-                fontSize: 8,
+                fontSize: size >= 44 ? 8 : 7,
+                height: 1.1,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -350,7 +353,7 @@ class _SearchResultsState extends State<SearchResults> {
           24,
         ),
         itemCount: widget.hits.length + (widget.hasMore ? 1 : 0),
-        separatorBuilder: (_, i) => const SizedBox(height: 8),
+        separatorBuilder: (_, i) => const SizedBox(height: 6),
         itemBuilder: (context, index) {
           if (index == widget.hits.length) {
             return TextButton.icon(
@@ -374,10 +377,10 @@ class _SearchResultsState extends State<SearchResults> {
             enabled: widget.hoverPreview,
             child: Material(
               color: selected
-                  ? scheme.primary.withValues(alpha: 0.07)
+                  ? scheme.primaryContainer.withValues(alpha: .7)
                   : scheme.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 side: BorderSide(
                   color: selected
                       ? scheme.primary.withValues(alpha: 0.45)
@@ -400,118 +403,100 @@ class _SearchResultsState extends State<SearchResults> {
                   _focus.requestFocus();
                   widget.onOpen(file);
                 },
+                // One line a file, as a table's row: its name and folder,
+                // then what the index made of it, its size and its date in
+                // columns. A search adds the passage that matched under
+                // the name.
                 child: Padding(
-                  padding: EdgeInsets.all(widget.compact ? 13 : 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: widget.compact ? 12 : 14,
+                    vertical: widget.compact ? 10 : 9,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: hit.excerpt.isEmpty
+                        ? CrossAxisAlignment.center
+                        : CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          FileBadge(file: file, size: widget.compact ? 36 : 44),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SearchHighlight(
-                                  text: file.name,
-                                  query: widget.query,
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    fontSize: widget.compact ? 13 : 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: scheme.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  file.path,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (!widget.compact) ...[
-                            const SizedBox(width: 12),
-                            Text(
-                              file.readableSize,
+                      FileBadge(file: file, size: 36),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SearchHighlight(
+                              text: file.name,
+                              query: widget.query,
+                              maxLines: 1,
                               style: TextStyle(
-                                fontSize: 11,
-                                color: scheme.onSurfaceVariant,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: scheme.onSurface,
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            Icon(
-                              Icons.north_east_rounded,
-                              size: 16,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (hit.excerpt.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        SearchHighlight(
-                          text: hit.excerpt,
-                          query: widget.query,
-                          maxLines: widget.compact ? 2 : 3,
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.5,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: hit.state == 'ready'
-                                  ? const Color(0xFF22B58A)
-                                  : hit.state == 'error'
-                                  ? scheme.error
-                                  : scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Tooltip(
-                              message: hit.note ?? hit.stateLabel,
+                            const SizedBox(height: 2),
+                            Tooltip(
+                              message: file.path,
+                              waitDuration: const Duration(milliseconds: 600),
                               child: Text(
-                                hit.stateLabel,
+                                widget.compact
+                                    ? _meta(hit)
+                                    : p.dirname(file.path),
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 11.5,
                                   color: scheme.onSurfaceVariant,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ),
-                          if (hit.modified > 0)
-                            Text(
-                              DateFormat('dd.MM.yyyy').format(
-                                DateTime.fromMicrosecondsSinceEpoch(
-                                  hit.modified,
+                            if (hit.excerpt.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              SearchHighlight(
+                                text: hit.excerpt,
+                                query: widget.query,
+                                maxLines: 2,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  height: 1.45,
+                                  color: scheme.onSurfaceVariant,
                                 ),
                               ),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                        ],
+                            ],
+                          ],
+                        ),
                       ),
+                      if (!widget.compact) ...[
+                        const SizedBox(width: 16),
+                        SizedBox(width: 132, child: _state(hit, scheme)),
+                        SizedBox(
+                          width: 64,
+                          child: Text(
+                            file.readableSize,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 92,
+                          child: Text(
+                            hit.modified > 0 ? _date(hit.modified) : '',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Icon(
+                          Icons.north_east_rounded,
+                          size: 15,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -519,6 +504,63 @@ class _SearchResultsState extends State<SearchResults> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  static String _date(int modified) =>
+      DateFormat('dd.MM.yyyy')
+          .format(DateTime.fromMicrosecondsSinceEpoch(modified));
+
+  /// On a narrow window the columns' facts on one line under the name.
+  static String _meta(SearchHit hit) => [
+    hit.stateLabel,
+    hit.file.readableSize,
+    if (hit.modified > 0) _date(hit.modified),
+  ].join(' · ');
+
+  /// What the index made of the file, as a small tag: read, waiting or
+  /// not readable.
+  Widget _state(SearchHit hit, ColorScheme scheme) {
+    final color = hit.state == 'ready'
+        ? const Color(0xFF16A34A)
+        : hit.state == 'error'
+        ? scheme.error
+        : scheme.onSurfaceVariant;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Tooltip(
+        message: hit.note ?? hit.stateLabel,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  hit.stateLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

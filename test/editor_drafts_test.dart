@@ -158,7 +158,7 @@ void main() {
       tester.state<HomePageState>(find.byType(HomePage)).showHomeFromTray();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Evraklarınız. Tek bir yerde.'), findsOneWidget);
+      expect(find.text('Evraklarınız'), findsOneWidget);
       expect(find.byType(AlertDialog), findsNothing);
       expect(draft.hasChanges, true);
       expect(controller.document.toPlainText(), startsWith('Yeni '));

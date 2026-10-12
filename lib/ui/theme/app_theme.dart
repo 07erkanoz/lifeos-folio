@@ -412,18 +412,32 @@ class AppTheme {
         iconColor: muted,
         collapsedIconColor: muted,
       ),
+      // Filters and choices as pills: the chosen one tinted blue, the rest
+      // white with a hairline.
       chipTheme: base.chipTheme.copyWith(
-        side: BorderSide(color: border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        side: WidgetStateBorderSide.resolveWith(
+          (states) => BorderSide(
+            color: states.contains(WidgetState.selected)
+                ? scheme.primary.withValues(alpha: .35)
+                : border,
+          ),
+        ),
+        shape: const StadiumBorder(),
+        showCheckmark: false,
         selectedColor: scheme.primaryContainer,
         backgroundColor: surface,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         // A chip's label style replaces the theme's text rather than
         // extending it, so the family has to be named here too.
+        // The chip resolves its label's colour by state, not its style.
         labelStyle: TextStyle(
           fontFamily: uiFont,
-          fontSize: 12,
+          fontSize: 12.5,
           fontWeight: FontWeight.w500,
-          color: text,
+          color: WidgetStateColor.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? scheme.primary : text,
+          ),
         ),
       ),
       badgeTheme: BadgeThemeData(
