@@ -28,7 +28,15 @@ class KeptNotice {
 
   /// "auto" or "manual"; null while untied.
   final String? link;
-  const KeptNotice(this.message, {this.caseKey, this.link});
+
+  /// Whether the lawyer has looked at it in Folio. UETS's own read time is
+  /// the day it was served and only opening it at UETS sets it; this is
+  /// Folio's alone, for what the badges count, and never sent anywhere.
+  final bool seen;
+  const KeptNotice(this.message, {this.caseKey, this.link, this.seen = false});
+
+  /// Not yet looked at: neither opened at UETS nor in Folio.
+  bool get unread => message.read == null && !seen;
 }
 
 /// A note, a task or a deadline in the agenda: the lawyer's own, kept apart
@@ -146,6 +154,8 @@ class PortalDatabase {
         id TEXT PRIMARY KEY, sent TEXT, json TEXT NOT NULL,
         case_key TEXT, link TEXT);
       CREATE INDEX IF NOT EXISTS uets_sent ON uets(sent);
+      CREATE TABLE IF NOT EXISTS uets_seen (
+        id TEXT PRIMARY KEY, at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS meta (
         key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS case_state (
@@ -768,10 +778,12 @@ class PortalDatabase {
     for (final r
         in caseKey == null
             ? _db.select(
-                'SELECT json, case_key, link FROM uets ORDER BY sent DESC',
+                'SELECT json, case_key, link, s.id IS NOT NULL AS seen '
+                'FROM uets LEFT JOIN uets_seen s USING(id) ORDER BY sent DESC',
               )
             : _db.select(
-                'SELECT json, case_key, link FROM uets WHERE case_key=? '
+                'SELECT json, case_key, link, s.id IS NOT NULL AS seen '
+                'FROM uets LEFT JOIN uets_seen s USING(id) WHERE case_key=? '
                 'ORDER BY sent DESC',
                 [caseKey],
               ))
@@ -781,8 +793,25 @@ class PortalDatabase {
         ),
         caseKey: r['case_key'] as String?,
         link: r['link'] as String?,
+        seen: r['seen'] == 1,
       ),
   ];
+
+  /// Marks notifications [ids] as looked at in Folio. UETS is not told,
+  /// and its read time, the day of service, stays as UETS gave it.
+  void markNoticesSeen(Iterable<String> ids) => _transaction(() {
+    final write = _db.prepare(
+      'INSERT OR IGNORE INTO uets_seen(id, at) VALUES(?, ?)',
+    );
+    final now = DateTime.now().toIso8601String();
+    try {
+      for (final id in ids) {
+        if (id.isNotEmpty) write.execute([id, now]);
+      }
+    } finally {
+      write.dispose();
+    }
+  });
 
   /// The notifications' ids, newest first; nothing else read.
   List<String> noticeIds() => [
@@ -811,7 +840,8 @@ class PortalDatabase {
   /// One notification as kept; null when it is not.
   KeptNotice? notice(String id) {
     final rows = _db.select(
-      'SELECT json, case_key, link FROM uets WHERE id=?',
+      'SELECT json, case_key, link, s.id IS NOT NULL AS seen '
+      'FROM uets LEFT JOIN uets_seen s USING(id) WHERE uets.id=?',
       [id],
     );
     if (rows.isEmpty) return null;
@@ -822,6 +852,7 @@ class PortalDatabase {
       ),
       caseKey: r['case_key'] as String?,
       link: r['link'] as String?,
+      seen: r['seen'] == 1,
     );
   }
 

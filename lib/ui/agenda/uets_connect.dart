@@ -113,6 +113,11 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
     try {
       final kept = await widget.secrets.read(_remembered);
       if (kept == null || !mounted) return;
+      // Asked not to be kept: nothing filled, and the box stays unticked.
+      if (kept['keep'] == false) {
+        setState(() => _keep = false);
+        return;
+      }
       setState(() {
         final tc = '${kept['tckn'] ?? ''}';
         if (_askTc && tc.isNotEmpty) {
@@ -187,15 +192,27 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
     });
   });
 
+  /// Whether the TC number and the phone are kept for the next login,
+  /// sealed in this computer's keystore; ticked unless the lawyer said no.
+  bool _keep = true;
+
+  /// Keeps what was typed as soon as a login is asked for, not only once
+  /// it succeeds: a login the phone was too slow for need not be typed
+  /// again. Unticked, what was kept is dropped and only that choice stays.
   Future<void> _remember() async {
     if (!SecretStore.available) return;
     try {
-      await widget.secrets.write(_remembered, {
-        'tckn': _tckn.text.trim(),
-        'phone': _phone.text.trim(),
-        'operator': _operator.name,
-        'method': _method.name,
-      });
+      await widget.secrets.write(
+        _remembered,
+        _keep
+            ? {
+                'tckn': _tckn.text.trim(),
+                'phone': _phone.text.trim(),
+                'operator': _operator.name,
+                'method': _method.name,
+              }
+            : {'keep': false, 'method': _method.name},
+      );
     } catch (_) {}
   }
 
@@ -207,6 +224,7 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
     if (UetsApi.gsm(_phone.text).length != 10) {
       throw StateError('Cep telefonu numarasını 5xx xxx xx xx olarak yazın.');
     }
+    await _remember();
     setState(() => _status = 'Mobil imza isteği gönderiliyor…');
     final login = await widget.api.startMobile(
       tckn: tckn,
@@ -410,6 +428,27 @@ class _UetsConnectDialogState extends State<_UetsConnectDialog> {
                   ? null
                   : (o) => setState(() => _operator = o ?? _operator),
             ),
+            if (SecretStore.available) ...[
+              const SizedBox(height: 4),
+              CheckboxListTile(
+                key: const ValueKey('uets-keep'),
+                value: _keep,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                onChanged: _busy
+                    ? null
+                    : (v) => setState(() => _keep = v ?? true),
+                title: const Text(
+                  'TC kimlik ve telefon numaram bu bilgisayarda hatırlansın',
+                  style: TextStyle(fontSize: 12.5),
+                ),
+                subtitle: const Text(
+                  'Şifreli saklanır; PIN ve UETS oturumu saklanmaz.',
+                  style: TextStyle(fontSize: 11.5),
+                ),
+              ),
+            ],
           ] else ...[
             Row(
               children: [

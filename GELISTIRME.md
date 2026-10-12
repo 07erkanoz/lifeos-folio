@@ -38,6 +38,17 @@ Sırayla yapılacak; her biri bitince testleri geçer, main'e gider ve burada i�
 8. **Android: kameradan PDF** `[~]` (CamScanner gibi): telefonun ana ekranında "Kameradan PDF tara". Google ML Kit belge tarayıcısı kenarları bulur, perspektifi düzeltir, 100 sayfaya kadar alır ve tek PDF verir; PDF sistemin kaydet penceresiyle seçilen yere yazılır, Folio'da açılır ve son açılanlara girer. Derlendi; telefonda denenecek.
    - **Kamera izni:** ML Kit kamerayı Google Play Hizmetleri'nin kendi ekranında açtığı için Folio izin istemiyor (29 Eylül 2026'da izinsiz yol seçildi). Play Hizmetleri olmayan telefonda tarayıcı açılmaz, bunu söyleyen bir uyarı çıkar.
 
+9. **Arayüz yenileme** `[~]` (12 Ekim 2026, kullanıcının referans tasarımlarına göre):
+   - [x] Tema: Inter yazı tipi, masaüstünde 13 pt temelli yazı ölçeği, yeni renkler, çerçevesiz diyaloglar, hap biçiminde filtreler.
+   - [x] Yeni modal kalıbı (`FolioDialog`); e-imza, UETS ve UYAP Web girişi buna taşındı.
+   - [x] Ana pencere: logolu ve sık kenar çubuğu, evrak listesinde dosya başına tek satır, sade sayfa başlığı.
+   - [ ] Önce mock, onaydan sonra kod: Anasayfa, Ajanda, Tebligatlarım, Dava Dosyalarım, Müvekkiller, Kasa.
+   - [ ] Kalan ~190 diyaloğun `FolioDialog`'a taşınması (sık kullanılanlar önce).
+10. **UETS tebligatları** (12 Ekim 2026, kullanıcı bildirdi):
+    - [x] Kenar çubuğundaki okunmamış sayısı hiç düşmüyordu: yalnızca UETS'in okunma (tebliğ) tarihine bakılıyordu. Artık Folio'da açılan tebligat "görüldü" sayılıyor (`uets_seen` tablosu); UETS'e bir şey gönderilmiyor, tebliğ tarihi ve süreler değişmiyor.
+    - [x] Tebligatlarım'da **Tümünü okundu say** (Okunmamış sayacının yanında, onay sorarak).
+    - [x] UETS girişinde "TC kimlik ve telefon numaram bu bilgisayarda hatırlansın" seçeneği; işaretliyken bilgiler Bağlan'a basılır basılmaz şifreli saklanıyor, işaret kaldırılınca siliniyor.
+
 ### Biten maddeleri deneme
 
 1. **Dayanaklar:** Kanun maddesi ya da karar atfı olan bir dilekçeyi editörde açın. Sayfanın altındaki çubuğun solunda "N dayanak" görünür; üstüne gelince kaç madde ve kaç karar olduğu yazar. Tıklayınca liste sayfa ile çubuk arasında açılır, yeniden tıklayınca kapanır. Atıfsız belgede hiçbir şey görünmez.

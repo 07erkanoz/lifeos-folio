@@ -170,6 +170,13 @@ class _UetsPageState extends State<UetsPage> {
     if (!mounted) return;
     _db = db;
     _reload();
+    // Opened on one notice, from the home page or a notification: that
+    // one is looked at.
+    final asked = widget.initialNotice;
+    if (asked != null &&
+        _notices.any((n) => n.message.id == asked && n.unread)) {
+      _markSeen([asked]);
+    }
     if (_api.connected) await _sync.syncUets();
   }
 
@@ -282,7 +289,7 @@ class _UetsPageState extends State<UetsPage> {
         _Filter.pending => _of(n).any(
           (d) => d.toReview && !d.expired(_now()) && d.record.state == 'aday',
         ),
-        _Filter.unread => n.message.read == null,
+        _Filter.unread => n.unread,
         _Filter.withDeadline => _of(n).any((d) => d.record.state != 'eski'),
         _Filter.untied => n.caseKey == null,
       })
@@ -398,6 +405,48 @@ class _UetsPageState extends State<UetsPage> {
       color: AgendaColors.muted,
     ),
   );
+
+  /// Notices looked at in Folio: their badge goes, here and in the panel.
+  /// UETS is not told; the day each was served stays UETS's.
+  void _markSeen(Iterable<String> ids) {
+    final db = _db;
+    if (db == null) return;
+    db.markNoticesSeen(ids);
+    _reload();
+    widget.onChanged?.call();
+  }
+
+  Future<void> _markAllSeen() async {
+    final ids = [
+      for (final n in _notices)
+        if (n.unread) n.message.id,
+    ];
+    if (ids.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tümünü okundu say'),
+        content: Text(
+          '${ids.length} tebligat Folio’da okundu sayılacak ve okunmamış '
+          'sayısından düşecek.\n\nUETS’e bir şey gönderilmez: tebligatların '
+          'UETS’teki okunma (tebliğ) tarihi değişmez, süreler de buna göre '
+          'hesaplanmaya devam eder.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('uets-mark-all-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Okundu say'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) _markSeen(ids);
+  }
 
   Widget _topBar(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -543,7 +592,7 @@ class _UetsPageState extends State<UetsPage> {
 
   Widget _stats(BuildContext context) {
     final today = _day(_now());
-    final unread = _notices.where((n) => n.message.read == null).length;
+    final unread = _notices.where((n) => n.unread).length;
     final pending = _deadlines
         .where(
           (d) => d.toReview && !d.expired(_now()) && d.record.state == 'aday',
@@ -557,51 +606,58 @@ class _UetsPageState extends State<UetsPage> {
       return !at.isBefore(today) &&
           at.isBefore(today.add(const Duration(days: 8)));
     }).length;
-    Widget stat(IconData icon, Color fill, Color tint, int value, String l) =>
-        _Slot(
-          narrow: _narrow,
-          child: _card(
-            context,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: fill,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, size: 18, color: tint),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$value',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        l,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          color: AgendaColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    Widget stat(
+      IconData icon,
+      Color fill,
+      Color tint,
+      int value,
+      String l, {
+      Widget? action,
+    }) => _Slot(
+      narrow: _narrow,
+      child: _card(
+        context,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 18, color: tint),
             ),
-          ),
-        );
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$value',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    l,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AgendaColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ?action,
+          ],
+        ),
+      ),
+    );
     final row = Row(
       children: [
         stat(
@@ -626,6 +682,15 @@ class _UetsPageState extends State<UetsPage> {
           AgendaColors.hearing,
           unread,
           'Okunmamış',
+          // Beside the count it clears; only while there is one.
+          action: unread == 0
+              ? null
+              : IconButton(
+                  key: const ValueKey('uets-mark-all-read'),
+                  tooltip: 'Tümünü okundu say',
+                  onPressed: _markAllSeen,
+                  icon: const Icon(Icons.done_all_rounded, size: 19),
+                ),
         ),
         const SizedBox(width: 12),
         stat(
@@ -695,7 +760,7 @@ class _UetsPageState extends State<UetsPage> {
     final parsed = NoticeSubject.parse(m.subject);
     final kind = _kindOf(n);
     final badge = _badge(n);
-    final unread = m.read == null;
+    final unread = n.unread;
     final selected = m.id == _selected;
     final kase = n.caseKey == null ? null : _cases[n.caseKey];
     final tag = _tag(
@@ -720,6 +785,7 @@ class _UetsPageState extends State<UetsPage> {
           _selected = m.id;
           _partsProblem = null;
         });
+        if (unread) _markSeen([m.id]);
         if (_narrow) _openNotice();
       },
       child: Container(

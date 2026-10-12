@@ -1406,7 +1406,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final today = DateTime(now.year, now.month, now.day);
       final tomorrow = today.add(const Duration(days: 1));
       final count = db.hearings(from: today, to: tomorrow).length;
-      final unread = db.notices().where((n) => n.message.read == null).length;
+      final unread = db.notices().where((n) => n.unread).length;
       final open = db
           .cases()
           .values
@@ -1423,7 +1423,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final next = db
           .hearings(from: now, to: today.add(const Duration(days: 31)))
           .firstOrNull;
-      final notices = db.notices().where((n) => n.message.read == null).toList()
+      final notices = db.notices().where((n) => n.unread).toList()
         ..sort(
           (a, b) => (b.message.sent ?? DateTime(0)).compareTo(
             a.message.sent ?? DateTime(0),

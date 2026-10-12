@@ -93,6 +93,65 @@ void main() {
     expect(find.byKey(const ValueKey('uets-row-m1')), findsOne);
   });
 
+  testWidgets('a notice opened in Folio, or all of them at once, is no '
+      'longer counted unread; UETS\'s own read time stays', (tester) async {
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    db.mergeNotices([
+      UetsMessage(
+        id: 'a',
+        subject: 'A [1] [Karar]',
+        sent: DateTime(2026, 10, 2),
+      ),
+      UetsMessage(
+        id: 'b',
+        subject: 'B [2] [Karar]',
+        sent: DateTime(2026, 10, 1),
+      ),
+    ]);
+    expect(db.notices().where((n) => n.unread).length, 2);
+    db.markNoticesSeen(['a']);
+    db.markNoticesSeen(['a']);
+    final a = db.notice('a')!;
+    expect(a.unread, isFalse);
+    expect(a.message.read, isNull, reason: 'UETS\'s read time untouched');
+    // A sync merging the same notice again leaves Folio's mark alone.
+    db.mergeNotices([
+      UetsMessage(
+        id: 'a',
+        subject: 'A [1] [Karar]',
+        sent: DateTime(2026, 10, 2),
+      ),
+    ]);
+    expect(db.notice('a')!.unread, isFalse);
+    expect(db.notices().where((n) => n.unread).single.message.id, 'b');
+  });
+
+  testWidgets('the unread count falls as notices are opened, and to none '
+      'with Tümünü okundu say', (tester) async {
+    final db = await pump(tester);
+    db.mergeNotices([
+      UetsMessage(
+        id: 'm3',
+        subject: 'Antalya 1. İcra Dairesi [2026/77] [Ödeme Emri]',
+        sent: DateTime(2026, 9, 28, 10),
+      ),
+    ]);
+    await tester.tap(find.byKey(const ValueKey('uets-filter-all')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('uets-row-m1')));
+    await tester.pumpAndSettle();
+    expect(db.notice('m1')!.unread, isFalse);
+    expect(db.notice('m3')!.unread, isTrue);
+    await tester.tap(find.byKey(const ValueKey('uets-mark-all-read')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('uets-mark-all-confirm')));
+    await tester.pumpAndSettle();
+    expect(db.notices().where((n) => n.unread), isEmpty);
+    expect(db.notice('m3')!.message.read, isNull);
+    expect(find.byKey(const ValueKey('uets-mark-all-read')), findsNothing);
+  });
+
   testWidgets('the lawyer ties a notice by hand', (tester) async {
     final db = await pump(tester);
     await tester.tap(find.byKey(const ValueKey('uets-row-m2')));
