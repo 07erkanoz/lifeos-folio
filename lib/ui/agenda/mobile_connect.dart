@@ -15,7 +15,7 @@ Future<bool> connectUyapMobile(
 }) async {
   final mobile = api ?? UyapMobileApi.instance;
   final messenger = ScaffoldMessenger.maybeOf(context);
-  final code = await _edevletCode(context, messenger);
+  final code = await uyapMobileCode(context, messenger: messenger);
   if (code == null) return false;
   return _login(mobile, code, messenger);
 }
@@ -29,7 +29,7 @@ Future<String?> edevletIdentity(
 }) async {
   final mobile = api ?? UyapMobileApi.instance;
   final messenger = ScaffoldMessenger.maybeOf(context);
-  final code = await _edevletCode(context, messenger);
+  final code = await uyapMobileCode(context, messenger: messenger);
   if (code == null) return null;
   try {
     final session = await mobile.login(code);
@@ -40,19 +40,37 @@ Future<String?> edevletIdentity(
   }
 }
 
+/// Whether this is a phone: e-Devlet is entered with the mobile signature
+/// there, never with a card (a phone has no reader for one).
+@visibleForTesting
+bool? phoneOverride;
+
+bool get onPhone => phoneOverride ?? (Platform.isAndroid || Platform.isIOS);
+
+/// What the e-Devlet page is told to say: a phone's lawyer signs with the
+/// mobile signature alone.
+String get uyapMobileHint => onPhone
+    ? 'UYAP Mobil için e-Devlet girişi: Mobil İmza ile giriş yapın.'
+    : 'UYAP Mobil için e-Devlet girişi: e-imza ya da mobil imzayı seçin.';
+
+/// Whether e-Devlet's page can be shown here: a window of its own on a Mac
+/// and Linux, WebView2 on Windows, the phone's own web view on a phone.
+Future<bool> uyapMobileAvailable() async =>
+    (Platform.isMacOS || Platform.isLinux) && EdevletWindow.available ||
+    await EdevletWebDialog.available();
+
 /// e-Devlet's code for UYAP Mobil: in a window of its own on a Mac and
-/// Linux, in a dialog elsewhere.
-Future<String?> _edevletCode(
-  BuildContext context,
+/// Linux, in a dialog elsewhere. Null when it was given up.
+Future<String?> uyapMobileCode(
+  BuildContext context, {
   ScaffoldMessengerState? messenger,
-) async {
+}) async {
   if ((Platform.isMacOS || Platform.isLinux) && EdevletWindow.available) {
     final state = UyapMobileApi.newState();
     try {
       final window = await EdevletWindow.open(
         UyapMobileApi.loginPage(state),
-        hint:
-            'UYAP Mobil için e-Devlet girişi: e-imza ya da mobil imzayı seçin.',
+        hint: uyapMobileHint,
         redirect: '${UyapMobileApi.edevletReturn}',
       );
       return await window.code;
@@ -81,7 +99,7 @@ Future<String?> _edevletCode(
   return EdevletWebDialog.show(
     context,
     page: UyapMobileApi.loginPage(state),
-    hint: 'UYAP Mobil için e-Devlet girişi: e-imza ya da mobil imzayı seçin.',
+    hint: uyapMobileHint,
     isReturn: UyapMobileApi.isReturn,
     state: state,
   );

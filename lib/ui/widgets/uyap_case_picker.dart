@@ -10,7 +10,7 @@ import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
-import '../agenda/mobile_connect.dart';
+import '../../services/portal/portal_channel.dart';
 import 'uyap_connect_view.dart';
 import 'uyap_session_chip.dart';
 import 'folio_select.dart';
@@ -332,34 +332,24 @@ class _UyapCasePickerState extends State<UyapCasePicker> {
                   children: [
                     if (_kept.isNotEmpty || _portfolio.isNotEmpty)
                       _keptList(context),
-                    // The web reads the portfolio too; UYAP Mobil is
-                    // offered only when neither is connected.
-                    if (PortalSync.started != null &&
-                        !_mobile.connected &&
-                        !_web.connected) ...[
-                      OutlinedButton.icon(
-                        key: const ValueKey('uyap-picker-mobile'),
-                        onPressed: () async {
-                          if (await connectUyapMobile(
-                            context,
-                            api: _sync.mobile,
-                          )) {
-                            await _sync.syncMobile();
-                            await _loadKept();
-                          }
-                        },
-                        icon: const Icon(Icons.phone_iphone, size: 18),
-                        label: const Text(
-                          'UYAP Mobil ile bağlan (portföyü getirir)',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                    // The web searches UYAP; UYAP Mobil brings the
+                    // portfolio to choose from. Offered while neither is
+                    // connected.
                     UyapConnectView(
+                      channels: {
+                        PortalChannel.uyapWeb,
+                        if (PortalSync.started != null && !_mobile.connected)
+                          PortalChannel.uyapMobile,
+                      },
+                      mobile: _sync.mobile,
                       note: _kept.isEmpty
                           ? 'Dosyayı bulmak için bağlanın.'
                           : 'Başka bir dosyayı UYAP’ta bulmak için bağlanın.',
-                      onConnected: (_) => _loadTypes(),
+                      onConnected: (_) async {
+                        if (_web.connected) return _loadTypes();
+                        await _sync.syncMobile();
+                        await _loadKept();
+                      },
                     ),
                   ],
                 )

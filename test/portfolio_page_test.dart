@@ -15,6 +15,8 @@ import 'package:evrak_convert/ui/portfolio/portfolio_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:evrak_convert/services/uyap/adalet_eimza.dart';
+import 'package:evrak_convert/ui/widgets/uyap_connect_view.dart';
 
 void main() {
   late Directory root;
@@ -392,6 +394,11 @@ void main() {
 
   testWidgets('a document is shown beside the list, which keeps its place; '
       'the arrows go through it and the preview folds away', (tester) async {
+    // The door asks whether Adalet E-İmza is here; not this test's machine.
+    final check = AdaletEimza.check;
+    AdaletEimza.check = () async => false;
+    addTearDown(() => AdaletEimza.check = check);
+    UyapDoorMemory.reset();
     await pumpCase(tester, const Size(1440, 900));
     expect(tester.takeException(), isNull);
     // Closed until a document is chosen: the list has the width.
@@ -401,10 +408,17 @@ void main() {
     await tester.pump();
     final title = find.byKey(const ValueKey('case-preview-title'));
     expect(tester.widget<Text>(title).data, 'Bilirkişi Raporu');
-    // Not on this computer: a click asks UYAP for it; with no UYAP here it
-    // stays to be fetched, and the arrows do not ask for the others.
+    // Not on this computer: a click opens UYAP's one door; closed, the
+    // document stays to be fetched, and the arrows do not ask for the
+    // others.
     await tester.pump(const Duration(seconds: 1));
-    expect(find.textContaining('UYAP Mobil girişi'), findsOneWidget);
+    expect(find.text('UYAP’a bağlan'), findsOneWidget);
+    // On a computer the card and the web portal are offered first.
+    expect(find.text('Adalet E-İmza ile'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Kapat'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('UYAP’a bağlan'), findsNothing);
     expect(find.text('Bu evrak henüz indirilmedi'), findsOneWidget);
     expect(find.byKey(const ValueKey('case-preview-fetch')), findsOneWidget);
     expect(find.byKey(const ValueKey('case-doc-list')), findsOneWidget);

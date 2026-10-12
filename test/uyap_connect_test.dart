@@ -52,6 +52,7 @@ void main() {
     web = _CardUyap();
     UyapWebService.instance = web;
     AdaletEimza.check = () async => true;
+    UyapDoorMemory.reset();
   });
   tearDown(() {
     UyapWebService.instance = saved;
@@ -77,7 +78,13 @@ void main() {
           find.byWidgetPredicate((w) => w is RadioListTile),
         )
         .first;
-    expect((first.title as Text).data, 'Adalet E-İmza ile');
+    expect(
+      find.descendant(
+        of: find.byWidget(first),
+        matching: find.text('Adalet E-İmza ile'),
+      ),
+      findsOneWidget,
+    );
     expect(first.enabled, isFalse);
     expect(find.text('Bu bilgisayarda kurulu değil.'), findsOneWidget);
     expect(find.byKey(const ValueKey('adalet-eimza-download')), findsOneWidget);

@@ -71,7 +71,14 @@ Bu kararlar, `Folio_AI_Mobil_UYAP_Gelistirme_Plani.md` içindeki eski fiyat, lis
 - Kullanıcı farklı zamanlarda birden fazla portalı bağlayabilir. Aynı doğrulanmış portal sahibi kapsamındaki kayıtlar yerelde birleştirilebilir; bu, ortak giriş anlamına gelmez.
 - Aynı fiziksel kart için eşzamanlı işlemleri önleyen kaynak kilidi kullanılabilir. Kilit girişleri birleştirmeyecek; ikinci işlem “kart meşgul” durumunda bekletilecek veya kullanıcıya gösterilecek.
 - UETS kart girişi kimlik okumak için Adalet tray'e bağımlı olmayacak. Banaozel üst akışındaki UETS-only tray ön kontrolü taşınmayacak.
-- UETS e-Devlet/şifre+SMS ve UYAP web e-Devlet e-imza seçeneği bu sürümde ayrı Folio giriş yöntemi olarak eklenmeyecek; kullanıcı tarafından belirtilen altı yol uygulanacak.
+- UETS e-Devlet/şifre+SMS bu sürümde ayrı Folio giriş yöntemi olarak eklenmeyecek. UYAP web'e e-Devlet üzerinden e-imza girişi sonradan eklendi; yalnız masaüstünde sunulur.
+
+### Tek kapı (T14, 13 Ekim 2026)
+
+- Ekranlar kanal seçmez: `ensureUyap(context, UyapOp)` işi `ChannelTable`'a sorar. İşi yapabilen bir kanal bağlıysa hiçbir şey sorulmaz; değilse tek bir "UYAP'a bağlan" penceresi yalnız o işi yapabilen yolları gösterir.
+- Sıra masaüstünde: Adalet E-İmza (kart + PIN, Web Portal) → mobil imza (Web) → e-imza e-Devlet üzerinden (Web) → UYAP Mobil. Telefonda: UYAP Mobil → mobil imza (Web). Telefonda kart ve e-imza hiç gösterilmez.
+- Son seçilen yol cihazda `baglanti.json`'da saklanır; pencere onunla açılır.
+- Kanal çubuğundaki çipler, Ayarlar satırları ve profil doldurma bilerek tek kanala gider: kullanıcı orada kanalı kendisi seçmiştir.
 
 ### İki UYAP e-Devlet akışının ayrımı
 
@@ -677,7 +684,7 @@ Aynı ekranlar, aynı veritabanı kuralları; telefonda yalnız telefonun yapabi
 |---|---|---|
 | UYAP Mobil | Var, birincil | e-Devlet girişi telefonun kendi web görünümünde (Android WebView / iOS WKWebView; `webview_flutter`), dönüş adresi masaüstüyle aynı kuralla yakalanır. Oturum anahtarları Android Keystore / iOS Keychain ile saklanır (masaüstünde DPAPI). |
 | UETS | Var, mobil imza ile | Saf HTTP; kartla giriş telefonda yok. |
-| UYAP Web | Yok | E-imza kartı ve Adalet E-İmza gerekir. Yargıtay/Başsavcılık dosyaları ve web'e özgü bilgiler masaüstünden aktarılırsa görünür. |
+| UYAP Web | Var, mobil imza ile | e-Devlet üzerinden telefonun kendi web görünümünde. Kart ve Adalet E-İmza telefonda yok; e-imza seçeneği gösterilmez. |
 
 **Ekranlar**
 - Kenar çubuğu çekmecede: UYAP Dosyalarım → Ajanda → UETS Tebligatlarım, rozetlerle.

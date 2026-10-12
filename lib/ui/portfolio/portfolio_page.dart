@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -7,6 +6,7 @@ import '../../services/office/office_network.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_case_store.dart';
+import '../../services/portal/portal_channel.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
@@ -178,19 +178,19 @@ class _PortfolioPageState extends State<PortfolioPage> {
   }
 
   /// The portfolio read again from whichever portal is connected; with
-  /// neither, a login first: the web portal on a computer, UYAP Mobil on a
-  /// phone.
+  /// neither, UYAP's one door first: the card and the web portal on a
+  /// computer, UYAP Mobil on a phone.
   Future<void> _refresh() async {
     PortalSync.begin();
     final sync = PortalSync.instance;
-    if (sync.portfolioChannel == null) {
-      if (Platform.isAndroid || Platform.isIOS) {
-        if (!await connectUyapMobile(context, api: sync.mobile)) return;
-      } else {
-        final done = Completer<void>();
-        await connectUyapWeb(context, onConnected: done.complete);
-        if (!sync.web.connected) return;
-      }
+    if (!await ensureUyap(
+      context,
+      UyapOp.caseList,
+      why: 'Portföyü UYAP’tan okumak için bağlanın.',
+      web: sync.web,
+      mobile: sync.mobile,
+    )) {
+      return;
     }
     await sync.syncPortfolio(full: true);
     await _reload();

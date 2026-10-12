@@ -20,7 +20,7 @@ import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
-import '../agenda/mobile_connect.dart';
+import '../widgets/uyap_connect_view.dart';
 import '../help/help_button.dart';
 import '../office/send_to_office.dart';
 import '../office/task_give_dialog.dart';
@@ -296,33 +296,39 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     } catch (_) {}
   }
 
+  /// UYAP's one door when neither portal is connected: the card and the
+  /// web portal first on a computer, UYAP Mobil first on a phone.
+  Future<bool> _connect(UyapOp op, String why) async =>
+      _c.connected || await connectUyap(context, op: op, why: why);
+
   Future<void> _refresh() async {
-    if (!_c.connected) {
-      PortalSync.begin();
-      if (!await connectUyapMobile(context, api: UyapMobileApi.instance)) {
-        return;
-      }
+    if (!await _connect(
+      UyapOp.details,
+      'Dosyayı UYAP’tan tazelemek için bağlanın.',
+    )) {
+      return;
     }
     await _c.refresh();
   }
 
   Future<void> _open(UyapCaseDocument d) async {
-    if (!_c.connected && _c.store.fileOf(_c.record!, d.key) == null) {
-      PortalSync.begin();
-      if (!await connectUyapMobile(context, api: UyapMobileApi.instance)) {
-        return;
-      }
+    if (_c.store.fileOf(_c.record!, d.key) == null &&
+        !await _connect(
+          UyapOp.documentDownload,
+          'Evrakı UYAP’tan indirmek için bağlanın.',
+        )) {
+      return;
     }
     final file = await _c.open(d);
     if (file != null && mounted) widget.onOpen(file);
   }
 
   Future<void> _downloadFresh() async {
-    if (!_c.connected) {
-      PortalSync.begin();
-      if (!await connectUyapMobile(context, api: UyapMobileApi.instance)) {
-        return;
-      }
+    if (!await _connect(
+      UyapOp.documentDownload,
+      'Yeni evrakları indirmek için bağlanın.',
+    )) {
+      return;
     }
     final n = await _c.download(_fresh);
     if (mounted) {
@@ -528,11 +534,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           ),
           Text(
             kase.number,
-            style: const TextStyle(
-              
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -927,11 +929,11 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _fetchNext = d;
       return;
     }
-    if (!_c.connected) {
-      PortalSync.begin();
-      if (!await connectUyapMobile(context, api: UyapMobileApi.instance)) {
-        return;
-      }
+    if (!await _connect(
+      UyapOp.documentDownload,
+      'Evrakı UYAP’tan getirmek için bağlanın.',
+    )) {
+      return;
     }
     if (!mounted) return;
     setState(() => _fetchingKey = d.key);
@@ -1308,7 +1310,6 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               kase.number,
               key: const ValueKey('case-number'),
               style: TextStyle(
-                
                 fontSize: facts ? 21 : (wide ? 26 : 21),
                 fontWeight: FontWeight.w600,
               ),

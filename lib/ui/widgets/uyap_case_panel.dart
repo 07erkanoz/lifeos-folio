@@ -9,7 +9,7 @@ import '../../services/uyap/uyap_case_panel_controller.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
-import '../agenda/mobile_connect.dart';
+import '../../services/portal/portal_channel.dart';
 import '../mobile/scroll_chrome.dart';
 import 'uyap_case_picker.dart';
 import 'uyap_connect_view.dart';
@@ -347,19 +347,11 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          if (await connectUyapMobile(context)) {
-                            final then = _afterConnect;
-                            setState(() => _afterConnect = null);
-                            await then?.call();
-                          }
-                        },
-                        icon: const Icon(Icons.phone_iphone, size: 18),
-                        label: const Text('UYAP Mobil ile bağlan'),
-                      ),
-                      const SizedBox(height: 12),
                       UyapConnectView(
+                        channels: const {
+                          PortalChannel.uyapWeb,
+                          PortalChannel.uyapMobile,
+                        },
                         note:
                             'Bu iş için UYAP Web ya da UYAP Mobil oturumu '
                             'gerekiyor.',
