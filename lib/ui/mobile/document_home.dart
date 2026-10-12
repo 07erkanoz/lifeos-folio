@@ -354,6 +354,48 @@ class MobileDocumentHome extends StatelessWidget {
               style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
           ),
+          // The search first, as a phone's apps have it: the archive's,
+          // opened on a press.
+          Material(
+            color: colors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: colors.outlineVariant),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: const ValueKey('mobile-search'),
+              onTap: onArchive,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: colors.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Evrak adı ya da içinde geçen kelime…',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           if (channels != null) ...[channels!, const SizedBox(height: 14)],
           _heading('BÜRO'),
           _office(
@@ -373,36 +415,49 @@ class MobileDocumentHome extends StatelessWidget {
               child: InkWell(
                 key: const ValueKey('mobile-next-hearing'),
                 onTap: onAgenda,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
+                // The next hearing in the page's one strong colour.
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                  decoration: BoxDecoration(
-                    color: AgendaColors.hearingFill,
-                    borderRadius: const BorderRadius.all(Radius.circular(8)),
-                    border: Border(
-                      left: BorderSide(color: AgendaColors.hearing, width: 3),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
                     ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text(
+                        'SIRADAKİ DURUŞMA',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                          color: Color(0xCCFFFFFF),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       Text(
                         next!.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
+                        style: const TextStyle(
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: AgendaColors.hearingText,
+                          color: Colors.white,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         next!.detail,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: AgendaColors.hearingText,
+                          color: Color(0xDDFFFFFF),
                         ),
                       ),
                     ],

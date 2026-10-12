@@ -447,10 +447,18 @@ class EditorToolbar extends StatelessWidget {
         onPressed: action,
         icon: Icon(icon, size: 16),
         label: Text(label, style: const TextStyle(fontSize: 12)),
+        // The ribbon's other buttons' colours: the word in the page's ink,
+        // its icon quieter; blue only when chosen.
         style: TextButton.styleFrom(
           minimumSize: const Size(0, 30),
           padding: const EdgeInsets.symmetric(horizontal: 8),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          foregroundColor: selected ? scheme.primary : scheme.onSurface,
+          iconColor: selected ? scheme.primary : scheme.onSurfaceVariant,
+          textStyle: const TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w500,
+          ),
           backgroundColor: selected
               ? scheme.primary.withValues(alpha: .12)
               : null,

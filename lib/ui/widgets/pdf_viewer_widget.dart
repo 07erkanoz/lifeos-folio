@@ -669,6 +669,17 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
     );
   }
 
+  /// Buttons that belong together, on a grey pill of their own.
+  Widget _pill(List<Widget> children) => Container(
+    height: 34,
+    padding: const EdgeInsets.symmetric(horizontal: 2),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: children),
+  );
+
   Widget _button(String tooltip, IconData icon, VoidCallback? action) =>
       IconButton(
         tooltip: tooltip,
@@ -688,115 +699,128 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
           Container(
             key: const ValueKey('pdf-toolbar'),
             width: double.infinity,
-            height: 42,
+            height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               color: scheme.surface,
               border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
             ),
+            // The pages, the size and the turning, each a pill, in the
+            // middle; scrolled sideways on a narrow window.
+            alignment: Alignment.center,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _button(
-                    'İlk Sayfa',
-                    Icons.first_page_rounded,
-                    _currentPage > 1 ? () => _goToPage(1) : null,
-                  ),
-                  _button(
-                    'Önceki Sayfa',
-                    Icons.chevron_left_rounded,
-                    _currentPage > 1 ? () => _goToPage(_currentPage - 1) : null,
-                  ),
-                  PageJump(
-                    label:
-                        '$_currentPage / ${_pageCount > 0 ? _pageCount : "—"}',
-                    current: _currentPage,
-                    count: _pageCount,
-                    onGo: _goToPage,
-                  ),
-                  _button(
-                    'Sonraki Sayfa',
-                    Icons.chevron_right_rounded,
-                    _currentPage < _pageCount
-                        ? () => _goToPage(_currentPage + 1)
-                        : null,
-                  ),
-                  _button(
-                    'Son Sayfa',
-                    Icons.last_page_rounded,
-                    _currentPage < _pageCount
-                        ? () => _goToPage(_pageCount)
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  _button(
-                    'Uzaklaştır',
-                    Icons.remove_rounded,
-                    ready
-                        ? () {
-                            setState(() => _fit = _PageFit.manual);
-                            _controller.zoomDown();
-                          }
-                        : null,
-                  ),
-                  _button(
-                    'Yakınlaştır',
-                    Icons.add_rounded,
-                    ready
-                        ? () {
-                            setState(() => _fit = _PageFit.manual);
-                            _controller.zoomUp();
-                          }
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  DropdownButtonHideUnderline(
-                    child: FolioSelect<_PageFit>(
-                      value: _fit,
-                      isDense: true,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        color: scheme.onSurface,
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: _PageFit.reading,
-                          child: Text('%120'),
-                        ),
-                        DropdownMenuItem(
-                          value: _PageFit.page,
-                          child: Text('Sayfaya sığdır'),
-                        ),
-                        DropdownMenuItem(
-                          value: _PageFit.width,
-                          child: Text('Genişliğe sığdır'),
-                        ),
-                        DropdownMenuItem(
-                          value: _PageFit.manual,
-                          child: Text('Serbest yakınlaştırma'),
-                        ),
-                      ],
-                      onChanged: ready
-                          ? (fit) {
-                              setState(() => _fit = fit!);
-                              _applyFit();
+                  _pill([
+                    _button(
+                      'İlk Sayfa',
+                      Icons.first_page_rounded,
+                      _currentPage > 1 ? () => _goToPage(1) : null,
+                    ),
+                    _button(
+                      'Önceki Sayfa',
+                      Icons.chevron_left_rounded,
+                      _currentPage > 1
+                          ? () => _goToPage(_currentPage - 1)
+                          : null,
+                    ),
+                    PageJump(
+                      label:
+                          '$_currentPage / ${_pageCount > 0 ? _pageCount : "—"}',
+                      current: _currentPage,
+                      count: _pageCount,
+                      onGo: _goToPage,
+                    ),
+                    _button(
+                      'Sonraki Sayfa',
+                      Icons.chevron_right_rounded,
+                      _currentPage < _pageCount
+                          ? () => _goToPage(_currentPage + 1)
+                          : null,
+                    ),
+                    _button(
+                      'Son Sayfa',
+                      Icons.last_page_rounded,
+                      _currentPage < _pageCount
+                          ? () => _goToPage(_pageCount)
+                          : null,
+                    ),
+                  ]),
+                  const SizedBox(width: 10),
+                  _pill([
+                    _button(
+                      'Uzaklaştır',
+                      Icons.remove_rounded,
+                      ready
+                          ? () {
+                              setState(() => _fit = _PageFit.manual);
+                              _controller.zoomDown();
                             }
                           : null,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _button(
-                    'Sola 90° döndür',
-                    Icons.rotate_left_rounded,
-                    ready ? () => _rotate(false) : null,
-                  ),
-                  _button(
-                    'Sağa 90° döndür',
-                    Icons.rotate_right_rounded,
-                    ready ? () => _rotate(true) : null,
-                  ),
+                    _button(
+                      'Yakınlaştır',
+                      Icons.add_rounded,
+                      ready
+                          ? () {
+                              setState(() => _fit = _PageFit.manual);
+                              _controller.zoomUp();
+                            }
+                          : null,
+                    ),
+                    const SizedBox(width: 4),
+                    DropdownButtonHideUnderline(
+                      child: FolioSelect<_PageFit>(
+                        value: _fit,
+                        isDense: true,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          color: scheme.onSurface,
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: _PageFit.reading,
+                            child: Text('%120'),
+                          ),
+                          DropdownMenuItem(
+                            value: _PageFit.page,
+                            child: Text('Sayfaya sığdır'),
+                          ),
+                          DropdownMenuItem(
+                            value: _PageFit.width,
+                            child: Text('Genişliğe sığdır'),
+                          ),
+                          DropdownMenuItem(
+                            value: _PageFit.manual,
+                            child: Text('Serbest yakınlaştırma'),
+                          ),
+                        ],
+                        onChanged: ready
+                            ? (fit) {
+                                setState(() => _fit = fit!);
+                                _applyFit();
+                              }
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ]),
+                  const SizedBox(width: 10),
+                  _pill([
+                    _button(
+                      'Sola 90° döndür',
+                      Icons.rotate_left_rounded,
+                      ready ? () => _rotate(false) : null,
+                    ),
+                    _button(
+                      'Sağa 90° döndür',
+                      Icons.rotate_right_rounded,
+                      ready ? () => _rotate(true) : null,
+                    ),
+                  ]),
                   const SizedBox(width: 8),
                   OcrTextButton(
                     ocr: _ocr,

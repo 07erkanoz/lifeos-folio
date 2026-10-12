@@ -57,7 +57,7 @@ Future<Directory> _open(WidgetTester tester, List<String> paragraphs) async {
 
 void main() {
   testWidgets('what a filing rests on is counted under the page, once each, '
-      'and opens the list there', (tester) async {
+      'and opens the list in a dialog', (tester) async {
     final dir = await _open(tester, [
       'Boşanma talebi TMK m. 166 uyarınca sunulmuştur.',
       // The same article again is one article, as the list shows it.
@@ -76,16 +76,15 @@ void main() {
     expect(find.byKey(const ValueKey('citation-list')), findsNothing);
     await tester.tap(status);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    // In a dialog over the page, its articles each a chip.
     expect(find.byKey(const ValueKey('citation-list')), findsOneWidget);
-    // Between the page and the bar: the bar is still under it.
-    expect(
-      tester.getTopLeft(status).dy,
-      greaterThan(
-        tester.getTopLeft(find.byKey(const ValueKey('citation-list'))).dy,
-      ),
-    );
-    await tester.tap(status);
+    expect(find.text('Bu belgenin dayanakları'), findsOneWidget);
+    expect(find.text('m. 166'), findsOneWidget);
+    expect(find.text('m. 119'), findsOneWidget);
+    await tester.tap(find.byTooltip('Kapat'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.byKey(const ValueKey('citation-list')), findsNothing);
 
     await tester.pumpWidget(const SizedBox());

@@ -30,7 +30,9 @@ import 'citation_list_panel.dart';
 import 'file_preview.dart';
 import 'resize_handle.dart';
 import 'speech_actions.dart';
+import 'folio_dialog.dart';
 import 'uyap_case_panel.dart';
+import 'uyap_case_picker.dart';
 import 'speech_bar.dart';
 import 'speech_download_dialog.dart';
 import 'editor_citations.dart';
@@ -822,9 +824,6 @@ class _EditorWidgetState extends State<EditorWidget>
   /// Fetched once per decision and then kept, the answer either way.
   late final _caseLaw = widget.caseLaw ?? CaseLaw();
 
-  /// Whether the list of what this filing rests on is open at the foot.
-  bool _citationListOpen = false;
-
   /// What the filing rests on, at the foot of the page: where a reader looks
   /// for the state of a document. In the toolbar it was hard to find. Only
   /// there when the filing cites something.
@@ -838,18 +837,14 @@ class _EditorWidgetState extends State<EditorWidget>
       if (count.decisions > 0) '${count.decisions} karar',
     ].join(', ');
     return Tooltip(
-      message:
-          '$detail · ${_citationListOpen ? 'dayanakları gizle' : 'dayanakları göster'}',
+      message: '$detail · dayanakları göster',
       child: TextButton.icon(
         key: const ValueKey('citation-status'),
-        onPressed: () => setState(() => _citationListOpen = !_citationListOpen),
+        onPressed: () => unawaited(_showCitations(detail)),
         icon: const Icon(Icons.balance_outlined, size: 15),
         label: Text('$total dayanak'),
         style: TextButton.styleFrom(
           foregroundColor: scheme.primary,
-          backgroundColor: _citationListOpen
-              ? scheme.primary.withValues(alpha: .12)
-              : null,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           minimumSize: const Size(0, 24),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -860,34 +855,204 @@ class _EditorWidgetState extends State<EditorWidget>
     );
   }
 
-  /// The list itself, between the page and the bar, so the page gives way
-  /// and the bar stays where it was. Gone with the last citation.
-  Widget? _citationDrawer() {
-    if (!_citationListOpen ||
-        (_citations.marks.isEmpty && _citations.decisions.isEmpty)) {
-      return null;
-    }
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 220),
+  /// The list of what the filing rests on, in a dialog over the page: each
+  /// article and decision a chip that opens its text beside it.
+  Future<void> _showCitations(String detail) => showDialog<void>(
+    context: context,
+    builder: (dialog) => FolioDialog(
+      icon: Icons.balance_outlined,
+      title: 'Bu belgenin dayanakları',
+      subtitle: detail,
+      width: 560,
+      onClose: () => Navigator.pop(dialog),
       child: CitationList(
         laws: _citations.marks,
         decisions: _citations.decisions,
         onLaw: _showArticle,
         onDecision: _showDecision,
-        onClose: () => setState(() => _citationListOpen = false),
+        onClose: () => Navigator.pop(dialog),
+        header: false,
       ),
-    );
-  }
+    ),
+  );
 
   /// Whether the case-law search is open beside the page.
   ///
   /// Beside rather than elsewhere: a precedent is looked for while the
   /// paragraph that needs it is being written, and leaving the document to
   /// go and find one means coming back having lost the thread.
-  bool _caseLawOpen = false;
+  ///
+  /// The panel at the left of the page shows it, or the document's UYAP
+  /// case: one at a time, chosen by its tabs; null while it is closed.
+  _Side? _side;
+  bool get _caseLawOpen => _side == _Side.caseLaw;
 
   /// The UYAP case the document is written for, beside the page.
-  bool _uyapOpen = false;
+  bool get _uyapOpen => _side == _Side.uyap;
+
+  /// Opens the panel on [side], or closes it if it shows [side] already.
+  /// On a phone it is a sheet from below rather than a column beside a
+  /// page there is no room beside.
+  void _toggleSide(_Side side) {
+    if (MediaQuery.sizeOf(context).width < 760) {
+      unawaited(_sideSheet(side));
+      return;
+    }
+    setState(() => _side = _side == side ? null : side);
+    if (_side == _Side.uyap) unawaited(_uyap.bind(_documentPath));
+  }
+
+  Future<void> _sideSheet(_Side side) async {
+    if (side == _Side.uyap) unawaited(_uyap.bind(_documentPath));
+    var shown = side;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheet) => StatefulBuilder(
+        builder: (sheet, setSheet) => SizedBox(
+          height: MediaQuery.sizeOf(sheet).height * .86,
+          child: _sidePanel(
+            sheet,
+            shown,
+            onSide: (next) {
+              setSheet(() => shown = next);
+              if (next == _Side.uyap) unawaited(_uyap.bind(_documentPath));
+            },
+            onClose: () => Navigator.pop(sheet),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Ties the document to a case at once: the picker, then the case in
+  /// the panel. Opening the panel alone and leaving the lawyer to find its
+  /// button there was one step too many.
+  Future<void> _linkCase() async {
+    await _uyap.bind(_documentPath);
+    if (!mounted) return;
+    final chosen = await UyapCasePicker.show(context, offerKept: true);
+    if (chosen == null || !mounted) return;
+    final live = chosen.$2;
+    await (live == null
+        ? _uyap.attach(chosen.$1)
+        : _uyap.choose(chosen.$1, live));
+    if (mounted && !_uyapOpen && MediaQuery.sizeOf(context).width >= 760) {
+      _toggleSide(_Side.uyap);
+    }
+  }
+
+  /// The panel left of the page: its tabs over the document's case or the
+  /// case-law search.
+  Widget _sidePanel(
+    BuildContext context,
+    _Side side, {
+    required ValueChanged<_Side> onSide,
+    required VoidCallback onClose,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget tab(_Side value, IconData icon, String label) {
+      final on = side == value;
+      return Expanded(
+        child: InkWell(
+          key: ValueKey('side-tab-${value.name}'),
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => onSide(value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              color: on ? scheme.surface : null,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: on
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x1A000000),
+                        blurRadius: 3,
+                        offset: Offset(0, 1),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: on ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+                    color: on ? scheme.primary : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      key: const ValueKey('editor-side-panel'),
+      color: scheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 4, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        tab(_Side.uyap, Icons.folder_open_outlined, 'Dosya'),
+                        tab(_Side.caseLaw, Icons.gavel_rounded, 'Emsal'),
+                      ],
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Paneli kapat',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded, size: 19),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: scheme.outlineVariant),
+          Expanded(
+            child: switch (side) {
+              _Side.uyap => UyapCasePanel(
+                controller: _uyap,
+                onOpen: (file, document) => setState(() {
+                  _evrakPath = file.path;
+                  _evrakTitle = document.title;
+                }),
+                onInsert: _writeHeard,
+              ),
+              _Side.caseLaw => CaseLawSearchScreen(
+                bank: _caseLaw,
+                compact: true,
+              ),
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   /// The ribbon shown for a moment in full screen; see [windowFullScreen].
   bool _ribbonPeek = false;
@@ -899,10 +1064,7 @@ class _EditorWidgetState extends State<EditorWidget>
   String _evrakTitle = '';
   double _evrakWidth = 520;
 
-  void _toggleUyap() {
-    setState(() => _uyapOpen = !_uyapOpen);
-    if (_uyapOpen) unawaited(_uyap.bind(_documentPath));
-  }
+  void _toggleUyap() => _toggleSide(_Side.uyap);
 
   /// A UYAP document saved where Folio searches: the folder becomes one of
   /// the searched ones the first time, so the reports and petitions are
@@ -3241,12 +3403,7 @@ class _EditorWidgetState extends State<EditorWidget>
     VoidCallback needsCase(VoidCallback action) => () {
       if (_uyap.link != null) return action();
       if (_desktop) {
-        if (!_uyapOpen) _toggleUyap();
-        showNotice(
-          context,
-          'Belge bir UYAP dosyasına bağlı değil',
-          detail: 'Yandaki panelden dosyasını seçip bağlayın.',
-        );
+        unawaited(_linkCase());
       } else {
         showNotice(context, 'Belge bir UYAP dosyasına bağlı değil');
       }
@@ -3360,7 +3517,7 @@ class _EditorWidgetState extends State<EditorWidget>
             context,
             Icons.balance_outlined,
             'İçtihat',
-            () => setState(() => _caseLawOpen = !_caseLawOpen),
+            () => _toggleSide(_Side.caseLaw),
             selected: _caseLawOpen,
           ),
         ],
@@ -3546,7 +3703,7 @@ class _EditorWidgetState extends State<EditorWidget>
             context,
             Icons.balance_outlined,
             'İçtihat ara',
-            () => setState(() => _caseLawOpen = !_caseLawOpen),
+            () => _toggleSide(_Side.caseLaw),
             selected: _caseLawOpen,
             key: const ValueKey('legal-case-law'),
           ),
@@ -4099,7 +4256,7 @@ class _EditorWidgetState extends State<EditorWidget>
       if (widget.recovery == null) unawaited(_defaultLetterhead());
       final uyapCase = widget.uyapCase;
       if (uyapCase != null) {
-        _uyapOpen = true;
+        _side = _Side.uyap;
         unawaited(_uyap.attach(uyapCase));
       }
     }
@@ -4859,18 +5016,38 @@ class _EditorWidgetState extends State<EditorWidget>
                         builder: (context, _) {
                           final link = _uyap.link;
                           final width = MediaQuery.sizeOf(context).width;
-                          if (link == null || width < 700) {
+                          if (width < 700 || (link == null && width < 1500)) {
                             return const SizedBox.shrink();
                           }
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: RibbonCaseChip(
-                              court: link.court,
-                              number: link.number,
-                              short: width < 1400,
-                              onPressed: () {
-                                if (!_uyapOpen) _toggleUyap();
-                              },
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (link == null)
+                                  // Unlinked: tied from here, at once, where
+                                  // the ribbon can spare the room; narrower,
+                                  // Hukuk › Dosyaya bağla and the side panel
+                                  // do it.
+                                  IconButton.outlined(
+                                    key: const ValueKey('toolbar-link-case'),
+                                    tooltip: 'Dosya bağla',
+                                    onPressed: () => unawaited(_linkCase()),
+                                    icon: const Icon(
+                                      Icons.link_rounded,
+                                      size: 18,
+                                    ),
+                                  )
+                                else
+                                  RibbonCaseChip(
+                                    court: link.court,
+                                    number: link.number,
+                                    short: width < 1400,
+                                    onPressed: () {
+                                      if (!_uyapOpen) _toggleUyap();
+                                    },
+                                  ),
+                              ],
                             ),
                           );
                         },
@@ -4941,8 +5118,34 @@ class _EditorWidgetState extends State<EditorWidget>
             Expanded(
               child: Row(
                 children: [
-                  // The page keeps the room it had; the search takes its
-                  // own beside it rather than pushing the document over.
+                  // The document's case and the case-law search, left of
+                  // the page, as a writing app keeps its outline; a phone
+                  // has them in a sheet.
+                  if (_side != null &&
+                      MediaQuery.sizeOf(context).width >= 760) ...[
+                    SizedBox(
+                      width: _uyapWidth,
+                      child: _sidePanel(
+                        context,
+                        _side!,
+                        onSide: (side) {
+                          setState(() => _side = side);
+                          if (side == _Side.uyap) {
+                            unawaited(_uyap.bind(_documentPath));
+                          }
+                        },
+                        onClose: () => setState(() => _side = null),
+                      ),
+                    ),
+                    ResizeHandle(
+                      onDrag: (dx) => setState(
+                        () =>
+                            _uyapWidth = (_uyapWidth + dx).clamp(300.0, 640.0),
+                      ),
+                    ),
+                  ],
+                  // The page keeps the room it had; a document of the case
+                  // takes its own beside it rather than pushing it over.
                   Expanded(
                     child: Column(
                       children: [
@@ -5034,7 +5237,6 @@ class _EditorWidgetState extends State<EditorWidget>
                                       return MediaQuery.withNoTextScaling(
                                         child: EditorPageViewport(
                                           status: _citationStatus(context),
-                                          drawer: _citationDrawer(),
                                           background: isDark
                                               ? const Color(0xFF17191D)
                                               : const Color(0xFFE9ECF1),
@@ -5161,10 +5363,12 @@ class _EditorWidgetState extends State<EditorWidget>
                                 ),
                               ),
                               // A phone's view and the page's, one tap apart.
+                              // At the foot, where it covers no line of the
+                              // text: at the top it sat over the heading.
                               if (MediaQuery.sizeOf(context).width < 900)
                                 Positioned(
-                                  top: 8,
-                                  right: 8,
+                                  bottom: 16,
+                                  right: 12,
                                   child: ValueListenableBuilder<bool?>(
                                     valueListenable: _flowChoice,
                                     builder: (context, _, _) =>
@@ -5196,36 +5400,6 @@ class _EditorWidgetState extends State<EditorWidget>
                       ),
                     ),
                     SizedBox(width: _evrakWidth, child: _evrakPane(context)),
-                  ],
-                  if (_uyapOpen) ...[
-                    ResizeHandle(
-                      onDrag: (dx) => setState(
-                        () =>
-                            _uyapWidth = (_uyapWidth - dx).clamp(300.0, 700.0),
-                      ),
-                    ),
-                    SizedBox(
-                      width: _uyapWidth,
-                      child: UyapCasePanel(
-                        controller: _uyap,
-                        onOpen: (file, document) => setState(() {
-                          _evrakPath = file.path;
-                          _evrakTitle = document.title;
-                        }),
-                        onInsert: _writeHeard,
-                        onClose: _toggleUyap,
-                      ),
-                    ),
-                  ],
-                  if (_caseLawOpen) ...[
-                    VerticalDivider(
-                      width: 1,
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                    SizedBox(
-                      width: 420,
-                      child: CaseLawSearchScreen(bank: _caseLaw, compact: true),
-                    ),
                   ],
                 ],
               ),
@@ -5277,3 +5451,6 @@ class _DocumentController extends QuillController with EditorClipboard {
   @override
   set skipRequestKeyboard(bool value) => _once = value;
 }
+
+/// What the panel left of the page shows.
+enum _Side { uyap, caseLaw }

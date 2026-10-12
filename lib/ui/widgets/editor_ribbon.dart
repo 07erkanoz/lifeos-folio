@@ -189,8 +189,12 @@ Widget ribbonButton(
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       foregroundColor: selected ? scheme.primary : scheme.onSurface,
       iconColor: selected ? scheme.primary : scheme.onSurfaceVariant,
+      textStyle: const TextStyle(
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w500,
+      ),
       backgroundColor: selected ? scheme.primary.withValues(alpha: .12) : null,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
     ),
   );
   return tooltip == null ? button : Tooltip(message: tooltip, child: button);
@@ -315,7 +319,8 @@ Widget ribbonGroup(
           style: TextStyle(
             fontSize: 10,
             height: 1.5,
-            color: scheme.onSurfaceVariant,
+            letterSpacing: .2,
+            color: scheme.onSurfaceVariant.withValues(alpha: .8),
           ),
         ),
       ],

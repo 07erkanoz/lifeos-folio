@@ -19,7 +19,12 @@ class CitationList extends StatelessWidget {
     required this.onLaw,
     required this.onDecision,
     required this.onClose,
+    this.header = true,
   });
+
+  /// Its own heading and close button; a dialog that has its own leaves
+  /// them out, and the list does not scroll on its own there.
+  final bool header;
 
   final List<Citation> laws;
   final List<DecisionCitation> decisions;
@@ -75,6 +80,47 @@ class CitationList extends StatelessWidget {
     final cases = _decisionsOnce;
     final nothing = byLaw.isEmpty && cases.isEmpty;
 
+    final rows = [
+      for (final entry in byLaw.entries)
+        _Row(
+          title: entry.key,
+          chips: [
+            for (final one in entry.value)
+              _Chip(label: 'm. ${one.article}', onTap: (at) => onLaw(one, at)),
+          ],
+        ),
+      if (cases.isNotEmpty)
+        _Row(
+          title: 'Mahkeme kararları',
+          chips: [
+            for (final one in cases)
+              _Chip(
+                label: 'E.${one.esas} K.${one.karar}',
+                dotted: true,
+                onTap: (at) => onDecision(one, at),
+              ),
+          ],
+        ),
+    ];
+    if (!header) {
+      return Column(
+        key: const ValueKey('citation-list'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: nothing
+            ? [
+                Text(
+                  'Bu belgede kanun maddesi ya da mahkeme kararı atfı '
+                  'bulunamadı.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ]
+            : rows,
+      );
+    }
     return Material(
       key: const ValueKey('citation-list'),
       color: theme.colorScheme.surface,
@@ -140,31 +186,7 @@ class CitationList extends StatelessWidget {
                     child: ListView(
                       shrinkWrap: true,
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-                      children: [
-                        for (final entry in byLaw.entries)
-                          _Row(
-                            title: entry.key,
-                            chips: [
-                              for (final one in entry.value)
-                                _Chip(
-                                  label: 'm. ${one.article}',
-                                  onTap: (at) => onLaw(one, at),
-                                ),
-                            ],
-                          ),
-                        if (cases.isNotEmpty)
-                          _Row(
-                            title: 'Mahkeme kararları',
-                            chips: [
-                              for (final one in cases)
-                                _Chip(
-                                  label: 'E.${one.esas} K.${one.karar}',
-                                  dotted: true,
-                                  onTap: (at) => onDecision(one, at),
-                                ),
-                            ],
-                          ),
-                      ],
+                      children: rows,
                     ),
                   ),
           ),

@@ -176,7 +176,11 @@ class _RulerPainter extends CustomPainter {
       final text = TextPainter(
         text: TextSpan(
           text: '${tick ~/ 2}',
-          style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant),
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 9,
+            color: scheme.onSurfaceVariant,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
