@@ -102,8 +102,10 @@ class _Web extends UyapWebService {
       : const UyapCasePermissions(1, null);
 
   @override
-  Future<UyapCaseDetails> caseDetails(UyapCase target) async =>
-      const UyapCaseDetails();
+  Future<UyapCaseDetails> caseDetails(UyapCase target) async {
+    asked.add('details ${target.id}');
+    return const UyapCaseDetails();
+  }
 
   @override
   Future<List<UyapParty>> parties(UyapCase target) async {
@@ -380,5 +382,16 @@ void main() {
       (await store.load(_icra, '2025/4410'))!.enforcement!.lines,
       isNotEmpty,
     );
+  });
+
+  test('the parties of every case come first, a request each, before any '
+      'case is read whole: the clients are there in minutes', () async {
+    final web = _Web();
+    final sync = syncOf(web, _Mobile()..on = false);
+    await sync.syncPortfolio(full: true);
+    final firstDetails = web.asked.indexWhere((a) => a.startsWith('details'));
+    expect(web.asked.indexOf('parties id-h1'), lessThan(firstDetails));
+    expect(web.asked.indexOf('parties id-i1'), lessThan(firstDetails));
+    expect(clients(), contains('AYŞE KARACA'));
   });
 }

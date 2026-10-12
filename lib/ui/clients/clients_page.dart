@@ -151,11 +151,16 @@ class _ClientsPageState extends State<ClientsPage> {
     // with them: a client comes while the first reading goes on.
     _sync = PortalSync.started;
     _sync?.portfolioVersion.addListener(_partiesCame);
+    _sync?.addListener(_syncChanged);
   }
 
   PortalSync? _sync;
   Timer? _again;
   int? _seenRevision;
+
+  void _syncChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _partiesCame() {
     _again?.cancel();
@@ -178,6 +183,7 @@ class _ClientsPageState extends State<ClientsPage> {
   void dispose() {
     _again?.cancel();
     _sync?.portfolioVersion.removeListener(_partiesCame);
+    _sync?.removeListener(_syncChanged);
     super.dispose();
   }
 
@@ -562,6 +568,37 @@ class _ClientsPageState extends State<ClientsPage> {
               ),
             ],
           ),
+          if (_sync case final sync? when sync.portfolioRunning)
+            Container(
+              key: const ValueKey('clients-reading'),
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: AgendaColors.hearingFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'UYAP’tan okunuyor'
+                      '${sync.portfolioState.progress == null ? '' : ' · ${sync.portfolioState.progress}'}'
+                      '. Müvekkiller geldikçe eklenir.',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AgendaColors.hearingText,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

@@ -33,6 +33,7 @@ import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_database.dart';
 import 'portal_hearing.dart';
+import 'sync_log.dart';
 import 'background_notices.dart';
 import 'uyap_notice.dart';
 
@@ -432,6 +433,11 @@ class PortalSync extends ChangeNotifier {
   void _webChanged() {
     _keepWeb();
     notifyListeners();
+    unawaited(
+      SyncLog.note(
+        _web.connected ? 'UYAP Web bağlandı' : 'UYAP Web bağlantısı kapandı',
+      ),
+    );
     _rememberTc(_web.tckn);
     // The lawyer's name as the web portal gives it, where the profile has
     // none: whose clients the parties are is told by it.
@@ -1432,70 +1438,90 @@ class PortalSync extends ChangeNotifier {
   /// is not connected, the portfolio on the same terms as [syncMobile]'s;
   /// or both when [force]d (the lawyer's Senkronize et). A second call
   /// while one runs waits for that one.
-  Future<void> syncWeb({bool force = false, bool newCase = false}) =>
-      _webSync ??= _run(PortalChannel.uyapWeb, (db) async {
-        if (!_web.connected) return null;
-        // With UYAP Mobil connected it reads the courts' cases; the web
-        // reads only what it alone has, on its own clock.
-        final webOnly = _mobile.connected;
-        final (portfolioDue, rested) = _portfolioDue(
-          db,
-          full: force,
-          newCase: newCase,
-          key: webOnly ? _webOnlyKey : _portfolioKey,
-        );
-        final hearingsDue = force || _hearingsDue(db, PortalChannel.uyapWeb);
-        if (!hearingsDue && !portfolioDue && _unfilled(db).isEmpty) {
-          return null;
-        }
-        // Not left to a computer of the person's: it may have UYAP Mobil
-        // only, and the prosecutors' and the Court of Cassation's are the
-        // web's.
-        var hearings = const HearingSyncResult(0, true, []);
-        if (hearingsDue) {
-          _progress(PortalChannel.uyapWeb, 'Duruşmalar');
-          hearings = await syncHearings(
-            PortalChannel.uyapWeb,
-            db,
-            _web.hearingRows,
-          );
-          if (hearings.complete) _hearingsRead(db, PortalChannel.uyapWeb);
-        }
-        var cases = const PortfolioResult(0, true);
-        if (portfolioDue) {
-          cases = await syncWebPortfolio(
-            _web,
-            db,
-            webOnly: webOnly,
-            // A new case may be in a prosecutor's office not yet known.
-            everyProvince: newCase,
-            includeClosed: db.meta(_closedKey) == '1',
-            onChanged: () => portfolioVersion.value++,
-            onProgress: (done, total) => _progress(
-              PortalChannel.uyapWeb,
-              total == 0 ? 'Portföy' : 'Portföy $done/$total',
-            ),
-          );
-          final now = DateTime.now().toIso8601String();
-          if (!cases.complete) {
-            db.setMeta(_tryKey(webOnly ? _webOnlyKey : _portfolioKey), now);
-          } else {
-            // Read whole alone, it read what only the web has as well.
-            db.setMeta(_webOnlyKey, now);
-            if (!webOnly) db.setMeta(_portfolioKey, now);
-          }
-        }
-        // Every case the web has not read of itself yet, read now: its
-        // parties (whose clients they are), its money and an icra file's
-        // account, which only the web gives. Beside UYAP Mobil, after it
-        // has listed the courts' cases.
-        if (webOnly) await _mobileSync;
-        final filled = await _fill(db, PortalChannel.uyapWeb);
-        if (!hearings.complete || !cases.complete || !filled) {
-          return 'Bazı kayıtlar alınamadı';
-        }
-        return rested;
-      }).whenComplete(() => _webSync = null);
+  Future<void> syncWeb({
+    bool force = false,
+    bool newCase = false,
+  }) => _webSync ??= _run(PortalChannel.uyapWeb, (db) async {
+    if (!_web.connected) return null;
+    // With UYAP Mobil connected it reads the courts' cases; the web
+    // reads only what it alone has, on its own clock.
+    final webOnly = _mobile.connected;
+    final (portfolioDue, rested) = _portfolioDue(
+      db,
+      full: force,
+      newCase: newCase,
+      key: webOnly ? _webOnlyKey : _portfolioKey,
+    );
+    final hearingsDue = force || _hearingsDue(db, PortalChannel.uyapWeb);
+    if (!hearingsDue && !portfolioDue && _unfilled(db).isEmpty) {
+      return null;
+    }
+    // Not left to a computer of the person's: it may have UYAP Mobil
+    // only, and the prosecutors' and the Court of Cassation's are the
+    // web's.
+    var hearings = const HearingSyncResult(0, true, []);
+    if (hearingsDue) {
+      _progress(PortalChannel.uyapWeb, 'Duruşmalar');
+      hearings = await syncHearings(
+        PortalChannel.uyapWeb,
+        db,
+        _web.hearingRows,
+      );
+      if (hearings.complete) _hearingsRead(db, PortalChannel.uyapWeb);
+    }
+    var cases = const PortfolioResult(0, true);
+    unawaited(
+      SyncLog.note(
+        'Web senkronu: duruşmalar ${hearingsDue ? 'okunacak' : 'okunmayacak'}, '
+        'portföy ${portfolioDue ? 'okunacak' : 'okunmayacak'}'
+        '${webOnly ? ' (UYAP Mobil yanında, yalnız webe özgü olanlar)' : ''}',
+      ),
+    );
+    if (portfolioDue) {
+      final session = _web.session.value;
+      final live = <String, UyapCase>{};
+      cases = await syncWebPortfolio(
+        _web,
+        db,
+        onCase: (key, c) => live[key] = c,
+        webOnly: webOnly,
+        // A new case may be in a prosecutor's office not yet known.
+        everyProvince: newCase,
+        includeClosed: db.meta(_closedKey) == '1',
+        onChanged: () => portfolioVersion.value++,
+        onProgress: (done, total) => _progress(
+          PortalChannel.uyapWeb,
+          total == 0 ? 'Portföy' : 'Portföy $done/$total',
+        ),
+      );
+      _webLive = live;
+      _webLiveSession = session;
+      final now = DateTime.now().toIso8601String();
+      unawaited(
+        SyncLog.note(
+          'Web portföyü okundu: ${db.cases().length} dosya kayıtlı, '
+          '${cases.complete ? 'eksiksiz' : 'bazı listeler alınamadı'}',
+        ),
+      );
+      if (!cases.complete) {
+        db.setMeta(_tryKey(webOnly ? _webOnlyKey : _portfolioKey), now);
+      } else {
+        // Read whole alone, it read what only the web has as well.
+        db.setMeta(_webOnlyKey, now);
+        if (!webOnly) db.setMeta(_portfolioKey, now);
+      }
+    }
+    // Every case the web has not read of itself yet, read now: its
+    // parties (whose clients they are), its money and an icra file's
+    // account, which only the web gives. Beside UYAP Mobil, after it
+    // has listed the courts' cases.
+    if (webOnly) await _mobileSync;
+    final filled = await _fill(db, PortalChannel.uyapWeb);
+    if (!hearings.complete || !cases.complete || !filled) {
+      return 'Bazı kayıtlar alınamadı';
+    }
+    return rested;
+  }).whenComplete(() => _webSync = null);
 
   /// The open cases the channel reading them now has not read of
   /// themselves: with the web connected, those it has not read (UYAP
@@ -1533,6 +1559,68 @@ class PortalSync extends ChangeNotifier {
     ];
   }
 
+  /// The cases as the web's last reading of the portfolio gave them, with
+  /// this session's ids, while [_webLiveSession] lasts: their parties are
+  /// asked by them with no search of their own.
+  Map<String, UyapCase> _webLive = const {};
+  Object? _webLiveSession;
+
+  /// Every case's parties first, one request each where this session's id
+  /// is known: the clients' list comes in minutes, not after each case has
+  /// been read whole, which takes some seconds a case.
+  Future<void> _partiesFirst(
+    PortalDatabase db,
+    List<PortalCase> todo,
+    PortalChannel channel,
+    bool Function() keepGoing,
+  ) async {
+    final kept = db.caseParties();
+    final web = channel == PortalChannel.uyapWeb;
+    final webLive = identical(_web.session.value, _webLiveSession)
+        ? _webLive
+        : const <String, UyapCase>{};
+    final mobileIds = identical(_mobile.session.value, _idsSession)
+        ? _sessionIds
+        : const <String, String>{};
+    final quick = [
+      for (final c in todo)
+        if (!kept.containsKey(c.key) &&
+            (web ? webLive[c.key] != null : mobileIds[c.key] != null))
+          c,
+    ];
+    if (quick.isEmpty) return;
+    unawaited(SyncLog.note('Önce taraflar: ${quick.length} dosya'));
+    var got = 0;
+    for (final (i, c) in quick.indexed) {
+      if (!keepGoing()) break;
+      while (UyapCasePanelController.lawyerWaiting) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      _progress(channel, 'Taraflar ${i + 1}/${quick.length}');
+      try {
+        final parties = web
+            ? await _web.parties(webLive[c.key]!)
+            : [
+                for (final p in await _mobile.parties(
+                  mobileIds[c.key]!,
+                  caseType: '${c.details?.value['dosyaTurKod'] ?? ''}',
+                ))
+                  UyapParty.fromMap(p),
+              ];
+        if (parties.isNotEmpty) {
+          db.saveCaseParties(c.key, parties, source: 'uyap');
+          got++;
+          portfolioVersion.value++;
+        }
+      } catch (e) {
+        unawaited(SyncLog.note('Taraflar ${i + 1}/${quick.length}: $e'));
+      }
+    }
+    unawaited(
+      SyncLog.note('Taraflar bitti: ${quick.length} dosyadan $got tanesinde'),
+    );
+  }
+
   /// Where it is kept that the web read a case of itself.
   static String webCheckedKey(String key) => 'case_web_checked:$key';
 
@@ -1562,7 +1650,24 @@ class PortalSync extends ChangeNotifier {
     bool connected() =>
         !_disposed &&
         (channel == PortalChannel.uyapWeb ? _web.connected : _mobile.connected);
-    return _refreshEach(db, todo, channel, keepGoing: connected);
+    final began = DateTime.now();
+    final name = channel == PortalChannel.uyapWeb ? 'UYAP Web' : 'UYAP Mobil';
+    unawaited(
+      SyncLog.note(
+        'Dosyalar tek tek okunuyor ($name): ${todo.length} dosya, '
+        '${soon.length} duruşması yakın',
+      ),
+    );
+    await _partiesFirst(db, todo, channel, connected);
+    final through = await _refreshEach(db, todo, channel, keepGoing: connected);
+    unawaited(
+      SyncLog.note(
+        'Dosya okuma bitti ($name): ${_unfilled(db).length} dosya okunmadan '
+        'kaldı, ${DateTime.now().difference(began).inMinutes} dakika sürdü'
+        '${connected() ? '' : ', bağlantı kapandığı için durdu'}',
+      ),
+    );
+    return through;
   }
 
   /// What a case's reading brought kept beside the portfolio: its parties,
@@ -1904,10 +2009,22 @@ class PortalSync extends ChangeNotifier {
     for (final (i, kase) in open.indexed) {
       if ((!_mobile.connected && !_web.connected) ||
           (keepGoing != null && !keepGoing())) {
+        unawaited(
+          SyncLog.note('Dosya okuma ${i + 1}/${open.length}. dosyada durdu'),
+        );
         through = false;
         break;
       }
       _progress(channel, 'Dosyalar ${i + 1}/${open.length}');
+      if (i % 10 == 0) {
+        final cool = UyapPace.instance.cooling;
+        unawaited(
+          SyncLog.note(
+            'Dosya ${i + 1}/${open.length}'
+            '${cool > Duration.zero ? ', UYAP yavaşlattı: ${cool.inSeconds} sn bekleme' : ''}',
+          ),
+        );
+      }
       // A lawyer waiting for a case of theirs goes first.
       while (UyapCasePanelController.lawyerWaiting) {
         await Future<void>.delayed(const Duration(milliseconds: 400));
@@ -1930,13 +2047,28 @@ class PortalSync extends ChangeNotifier {
         // Not answered: its turn comes again soon, not in a week, and the
         // day is not done.
         if (panel.error != null || panel.record == null) {
+          unawaited(
+            SyncLog.note(
+              'Dosya ${i + 1}/${open.length} okunamadı: '
+              '${panel.error ?? 'kayıt yok'}',
+            ),
+          );
           through = false;
           continue;
         }
         final after = panel.record!;
         // Asked, changed or not: it waits its turn again.
         _keepRead(db, kase.key, after, web: panel.usedWeb, whole: panel.whole);
-        if (!panel.whole) through = false;
+        if (!panel.whole) {
+          through = false;
+          unawaited(
+            SyncLog.note(
+              'Dosya ${i + 1}/${open.length} yarım okundu '
+              '(${panel.usedWeb ? 'web' : 'mobil'}; taraf, para ya da hesap '
+              'gelmedi)',
+            ),
+          );
+        }
         portfolioVersion.value++;
         if (identical(after, before)) continue;
         db.noteChange(
@@ -1944,9 +2076,10 @@ class PortalSync extends ChangeNotifier {
           fresh: after.fresh.length,
           change: before == null ? null : describeChange(before, after),
         );
-      } catch (_) {
+      } catch (e) {
         // One case that does not answer does not stop the others.
         through = false;
+        unawaited(SyncLog.note('Dosya ${i + 1}/${open.length} hata: $e'));
       } finally {
         panel.dispose();
       }
@@ -2100,6 +2233,7 @@ Future<PortfolioResult> syncWebPortfolio(
   bool includeClosed = false,
   bool webOnly = false,
   bool everyProvince = false,
+  void Function(String key, UyapCase live)? onCase,
 }) async {
   final baseline = db.meta('portfolio_at') == null;
   final asked = DateTime.now().toUtc();
@@ -2142,6 +2276,7 @@ Future<PortfolioResult> syncWebPortfolio(
       details: Observed(details, channel, asked, complete: false),
     );
     found[one.key] = found[one.key]?.merge(one) ?? one;
+    if (c.id.isNotEmpty) onCase?.call(one.key, c);
   }
 
   void keep() {
