@@ -392,6 +392,35 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('documents are chosen together on the list, to be downloaded '
+      'through UYAP\'s door', (tester) async {
+    final check = AdaletEimza.check;
+    AdaletEimza.check = () async => false;
+    addTearDown(() => AdaletEimza.check = check);
+    UyapDoorMemory.reset();
+    await pumpCase(tester, const Size(1440, 900));
+    await tester.tap(find.byKey(const ValueKey('case-doc-select')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('case-doc-pick-bar')), findsOneWidget);
+    expect(find.text('Evrak seçin'), findsOneWidget);
+    // No office here: giving a task is not offered.
+    expect(find.byKey(const ValueKey('case-doc-pick-task')), findsNothing);
+    // A row's tap chooses it rather than opening it.
+    await tester.tap(find.byKey(const ValueKey('case-doc-b')));
+    await tester.pump();
+    expect(find.text('1 evrak seçili'), findsOneWidget);
+    expect(find.byKey(const ValueKey('case-preview-title')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('case-doc-pick-download')));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('UYAP’a bağlan'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Kapat'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.byKey(const ValueKey('case-doc-pick-done')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('case-doc-pick-bar')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a document is shown beside the list, which keeps its place; '
       'the arrows go through it and the preview folds away', (tester) async {
     // The door asks whether Adalet E-İmza is here; not this test's machine.

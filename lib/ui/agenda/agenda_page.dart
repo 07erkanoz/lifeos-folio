@@ -29,6 +29,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../help/help_button.dart';
 import '../mobile/scroll_chrome.dart';
+import '../office/task_give_dialog.dart';
 import '../office/tasks_page.dart' show TaskDetail;
 import 'channel_bar.dart';
 import 'deadline_review.dart';
@@ -2246,6 +2247,20 @@ class _AgendaPageState extends State<AgendaPage> {
             icon: const Icon(Icons.event_available_outlined, size: 15),
             label: const Text('Takvimime ekle'),
           ),
+          // The hearing's preparation given to a colleague, the case and
+          // the hearing already in the task.
+          if (_mayGiveTask)
+            TextButton.icon(
+              key: const ValueKey('agenda-hearing-task'),
+              onPressed: () => unawaited(_giveTask(h.caseKey)),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 12),
+              ),
+              icon: const Icon(Icons.assignment_ind_outlined, size: 15),
+              label: const Text('Görev ver'),
+            ),
           const SizedBox(height: 8),
           // The case first and wide; the petition and the excuse under it.
           Column(
@@ -2455,6 +2470,20 @@ class _AgendaPageState extends State<AgendaPage> {
     return parsed == null ? null : '${parsed.unit} · ${parsed.number}';
   }
 
+  bool get _mayGiveTask {
+    final net = OfficeNetwork.instance;
+    return net.ledger.members.any((m) => net.mayGive(m.deviceId));
+  }
+
+  /// Görev ver with [caseKey] already in it: from a hearing or a deadline.
+  Future<void> _giveTask(String caseKey) => showDialog<void>(
+    context: context,
+    builder: (_) => TaskGiveDialog(
+      network: OfficeNetwork.instance,
+      initialCaseKey: caseKey,
+    ),
+  );
+
   void _goToCase(String caseKey) {
     if (!(widget.onOpenCase?.call(caseKey) ?? false)) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -2536,6 +2565,17 @@ class _AgendaPageState extends State<AgendaPage> {
                           Wrap(
                             spacing: 4,
                             children: [
+                              if (i.caseKey != null && _mayGiveTask)
+                                TextButton(
+                                  key: ValueKey('deadline-task-${i.id}'),
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  onPressed: () =>
+                                      unawaited(_giveTask(i.caseKey!)),
+                                  child: const Text('Görev ver'),
+                                ),
                               if (i.caseKey != null &&
                                   widget.onOpenCase != null)
                                 TextButton(

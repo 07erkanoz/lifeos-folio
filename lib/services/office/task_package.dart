@@ -4,14 +4,16 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../platform/app_directories.dart';
+import '../portal/portal_database.dart';
 import '../uyap/uyap_case_panel_controller.dart';
 import '../uyap/uyap_case_store.dart';
 import 'office_task.dart';
 
 /// A task's case as it goes to those it is given to (docs/buro.md, Görev):
 /// they cannot open it in UYAP, so its particulars, parties, list of
-/// documents, hearings and money go with it, and the documents chosen,
-/// those not yet here fetched from UYAP first.
+/// documents and money go with it, its hearings, deadlines, UETS notices
+/// and the agenda's notes on it, and the documents chosen, those not yet
+/// here fetched from UYAP first, one at a time.
 class TaskPackage {
   const TaskPackage(this.paths, this.missing);
 
@@ -23,11 +25,44 @@ class TaskPackage {
 
   static const detailsName = 'dosya.json';
 
+  /// The documents of [c] it would send that are not on this device yet:
+  /// what has to come from UYAP before the task can go whole.
+  static Future<int> notHere(TaskCase c, {UyapCaseStore? store}) async {
+    final keep = store ?? UyapCaseStore.instance;
+    final record = await keep.load(c.court, c.number);
+    if (record == null) return 0;
+    return [
+      for (final k in _wanted(c, record))
+        if (keep.fileOf(record, k) == null) k,
+    ].length;
+  }
+
+  static List<String> _wanted(TaskCase c, UyapCaseRecord record) {
+    final all = {
+      for (final d in record.documents) ...[
+        d.key,
+        for (final a in d.attachments) a.key,
+      ],
+    };
+    return switch (c.docs) {
+      TaskDocs.all => all.toList(),
+      TaskDocs.chosen => [
+        for (final k in c.docKeys)
+          if (all.contains(k)) k,
+      ],
+      TaskDocs.particulars => <String>[],
+    };
+  }
+
+  /// [onProgress] hears what is being done: each document fetched, by its
+  /// name and its place among them.
   static Future<TaskPackage> pack(
     TaskCase c, {
     UyapCaseStore? store,
     UyapCasePanelController? controller,
     Future<Directory> Function()? temp,
+    Future<PortalDatabase?> Function()? database,
+    void Function(String doing)? onProgress,
   }) async {
     final keep = store ?? UyapCaseStore.instance;
     final record = await keep.load(c.court, c.number);
@@ -38,14 +73,7 @@ class TaskPackage {
         for (final a in d.attachments) a.key: a,
       },
     };
-    final wanted = switch (c.docs) {
-      TaskDocs.all => all.keys.toList(),
-      TaskDocs.chosen => [
-        for (final k in c.docKeys)
-          if (all.containsKey(k)) k,
-      ],
-      TaskDocs.particulars => <String>[],
-    };
+    final wanted = _wanted(c, record);
     var current = record;
     final notHere = [
       for (final k in wanted)
@@ -56,11 +84,25 @@ class TaskPackage {
       if (panel.connected) {
         try {
           await panel.show(current);
-          await panel.download(notHere);
+          // One at a time: one UYAP refuses does not keep the rest back.
+          for (final (i, k) in notHere.indexed) {
+            final d = all[k]!;
+            onProgress?.call(
+              'Evrak indiriliyor ${i + 1}/${notHere.length} · '
+              '${d.type.isNotEmpty ? d.type : d.title}',
+            );
+            try {
+              await panel.download([k]);
+            } catch (_) {}
+            if (i < notHere.length - 1) {
+              await Future<void>.delayed(panel.pause);
+            }
+          }
           current = await keep.load(c.court, c.number) ?? current;
         } catch (_) {}
       }
     }
+    onProgress?.call('${c.number} paketleniyor');
     final dir = Directory(
       p.join(
         (await (temp ?? _temp)()).path,
@@ -75,7 +117,17 @@ class TaskPackage {
       ..['dosyalar'] = const <String, String>{}
       ..['onizlemeler'] = const <String, String>{}
       ..['bag'] = null
-      ..['secili'] = wanted;
+      ..['secili'] = wanted
+      // Which file is which document, by its name: the documents come
+      // beside it.
+      ..['evrakAdlari'] = {
+        for (final k in wanted)
+          if (keep.fileOf(current, k) case final f?) k: p.basename(f.path),
+      };
+    try {
+      final db = await (database ?? _database)();
+      if (db != null) json.addAll(caseExtras(db, c.caseKey));
+    } catch (_) {}
     await details.writeAsString(jsonEncode(json));
     final paths = [details.path];
     final missing = <String>[];
@@ -92,6 +144,59 @@ class TaskPackage {
   }
 
   static Future<Directory> _temp() => folioSupportDirectory();
+
+  static Future<PortalDatabase?> _database() async =>
+      Platform.environment.containsKey('FLUTTER_TEST')
+      ? null
+      : PortalDatabase.shared();
+
+  /// What the portals and the lawyer keep of the case beside its record:
+  /// its hearings, the deadlines followed, its UETS notices and the
+  /// agenda's notes and tasks on it. Plain words, as the other reads them.
+  static Map<String, Object?> caseExtras(PortalDatabase db, String caseKey) {
+    String? day(DateTime? at) => at?.toIso8601String();
+    return {
+      'durusmalar': [
+        for (final h in db.hearings(caseKey: caseKey))
+          {
+            'tarih': day(h.at),
+            'tur': h.kind?.value ?? '',
+            'sonuc': h.result?.value ?? '',
+          },
+      ],
+      'sureler': [
+        for (final d in db.deadlines(decidedOnly: true))
+          if (d.record.caseKey == caseKey && d.onAgenda && d.day != null)
+            {
+              'baslik': d.user?.titleOverride ?? d.record.title,
+              'gun': d.day,
+              'tamam': d.user?.done ?? false,
+            },
+        for (final a in db.agenda(caseKey: caseKey))
+          if (a.kind == 'deadline')
+            {'baslik': a.title, 'gun': day(a.at), 'tamam': a.done},
+      ],
+      'tebligatlar': [
+        for (final n in db.notices(caseKey: caseKey))
+          {
+            'konu': n.message.subject,
+            'gonderen': n.message.sender,
+            'tarih': day(n.message.sent),
+          },
+      ],
+      'notlar': [
+        for (final a in db.agenda(caseKey: caseKey))
+          if (a.kind != 'deadline')
+            {
+              'tur': a.kind,
+              'baslik': a.title,
+              'metin': a.body,
+              'tarih': day(a.at),
+              'tamam': a.done,
+            },
+      ],
+    };
+  }
 }
 
 /// What came of a task's case on this device: its details and documents.
@@ -104,8 +209,25 @@ class ReceivedCase {
   String get number => '${details['esas'] ?? ''}';
   Map<String, Object?> get particulars =>
       (details['kunye'] as Map? ?? const {}).cast<String, Object?>();
-  List<Map<String, Object?>> get parties => [
-    for (final t in (details['taraflar'] as List? ?? const []))
+  List<Map<String, Object?>> get parties => _list('taraflar');
+
+  /// The case's hearings, newest last, as the giver's portals had them.
+  List<Map<String, Object?>> get hearings =>
+      _list('durusmalar')
+        ..sort((a, b) => '${a['tarih']}'.compareTo('${b['tarih']}'));
+
+  /// The deadlines the giver follows on it, by their last day.
+  List<Map<String, Object?>> get deadlines =>
+      _list('sureler')..sort((a, b) => '${a['gun']}'.compareTo('${b['gun']}'));
+
+  /// Its UETS notices.
+  List<Map<String, Object?>> get notices => _list('tebligatlar');
+
+  /// The agenda's notes and tasks on it.
+  List<Map<String, Object?>> get notes => _list('notlar');
+
+  List<Map<String, Object?>> _list(String key) => [
+    for (final t in (details[key] as List? ?? const []))
       if (t is Map) t.cast<String, Object?>(),
   ];
 

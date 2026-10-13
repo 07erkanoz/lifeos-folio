@@ -25,6 +25,8 @@ import '../../services/portal/portal_hearing.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../help/help_button.dart';
+import '../office/task_give_dialog.dart';
+import '../../services/office/office_network.dart';
 import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
 import 'attachment_preview.dart';
@@ -1414,6 +1416,31 @@ class _ClientCardState extends State<ClientCard> {
     final merged = _db.mergeClients(_card(), other);
     if (mounted) setState(() => _client = merged);
     widget.onChanged?.call(merged.id);
+  }
+
+  bool get _mayGiveTask {
+    final net = OfficeNetwork.instance;
+    return net.ledger.members.any((m) => net.mayGive(m.deviceId));
+  }
+
+  /// Görev ver with the client's open cases already in it; the closed ones
+  /// when it has no open one.
+  Future<void> _giveTask(ClientEntry e) async {
+    final open = [
+      for (final x in e.cases)
+        if (stageOf(_db.caseOf(x.caseKey)?.status?.value ?? '') !=
+            CaseStage.closed)
+          x.caseKey,
+    ];
+    await showDialog<void>(
+      context: context,
+      builder: (_) => TaskGiveDialog(
+        network: OfficeNetwork.instance,
+        initialCaseKeys: open.isNotEmpty
+            ? open
+            : [for (final x in e.cases) x.caseKey],
+      ),
+    );
   }
 
   /// Shared with the office, or no longer (KVKK: a client at a time).
@@ -2911,6 +2938,15 @@ class _ClientCardState extends State<ClientCard> {
         icon: const Icon(Icons.record_voice_over_outlined, size: 18),
         label: Text(wide ? 'Görüşme tutanağı' : 'Görüşme'),
       ),
+      // An office's lawyer gives the client's open cases to a colleague,
+      // with their documents and particulars.
+      if (widget.inOffice && e.cases.isNotEmpty && _mayGiveTask)
+        OutlinedButton.icon(
+          key: const ValueKey('client-give-task'),
+          onPressed: () => unawaited(_giveTask(e)),
+          icon: const Icon(Icons.assignment_ind_outlined, size: 18),
+          label: const Text('Görev ver'),
+        ),
       if (widget.seesMoney)
         OutlinedButton.icon(
           key: const ValueKey('client-statement'),

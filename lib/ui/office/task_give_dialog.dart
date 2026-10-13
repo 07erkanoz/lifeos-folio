@@ -8,10 +8,14 @@ import 'package:flutter/services.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_task.dart';
 import '../../services/office/task_package.dart';
+import '../../services/portal/portal_channel.dart';
+import '../../services/uyap/uyap_case_store.dart';
+import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../portfolio/portfolio_rows.dart';
 import '../theme/folio_palette.dart';
+import '../widgets/uyap_connect_view.dart';
 
 /// A case being put in a task: its things to do and what goes with it.
 class _Draft {
@@ -32,13 +36,21 @@ class TaskGiveDialog extends StatefulWidget {
     this.rows,
     this.initialCaseKey,
     this.initialDocKey,
+    this.initialDocKeys = const {},
+    this.initialCaseKeys = const [],
   });
 
   /// A document of that case to send with it: the one it was given from.
   final String? initialDocKey;
 
+  /// Documents of that case to send with it: those chosen on its page.
+  final Set<String> initialDocKeys;
+
   /// A case to start with: the one whose page it was given from.
   final String? initialCaseKey;
+
+  /// Cases to start with besides it: a client's, given from its card.
+  final List<String> initialCaseKeys;
 
   final OfficeNetwork network;
 
@@ -131,14 +143,16 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
 
   void _startWith() {
     final key = widget.initialCaseKey;
-    final doc = widget.initialDocKey;
-    final row = _rows.where((r) => r.key == key).firstOrNull;
-    if (row != null && !_cases.any((c) => c.row.key == key)) {
-      _cases.add(
-        _Draft(row)
-          ..items.add((TextEditingController(), ''))
-          ..chosen.addAll([?doc]),
-      );
+    final docs = {?widget.initialDocKey, ...widget.initialDocKeys};
+    for (final k in [?key, ...widget.initialCaseKeys]) {
+      final row = _rows.where((r) => r.key == k).firstOrNull;
+      if (row != null && !_cases.any((c) => c.row.key == k)) {
+        _cases.add(
+          _Draft(row)
+            ..items.add((TextEditingController(), ''))
+            ..chosen.addAll(k == key ? docs : const {}),
+        );
+      }
     }
   }
 
@@ -212,49 +226,42 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
         ),
     ];
     // The cases' details and documents, those not here fetched from UYAP:
-    // the assignee cannot open them there.
-    final packed = <String, TaskPackage>{};
-    final missing = <String>[];
+    // the assignee cannot open them there. UYAP's door first when some
+    // are to be fetched and no portal is there to fetch them.
+    var toFetch = 0;
     for (final c in cases) {
-      setState(() => _packing = '${c.number} hazırlanıyor…');
-      final pack = await TaskPackage.pack(c);
-      packed[c.caseKey] = pack;
-      missing.addAll([for (final m in pack.missing) '${c.number}: $m']);
+      toFetch += await TaskPackage.notHere(c);
     }
     if (!mounted) return;
-    setState(() => _packing = null);
-    if (missing.isNotEmpty) {
-      final go = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Bazı evrak indirilemedi'),
-          content: SizedBox(
-            width: 420,
-            child: Text(
-              'UYAP’a bağlı olmadığınız ya da UYAP vermediği için şu evrak '
-              'gönderilemeyecek:\n\n${missing.take(12).join('\n')}'
-              '${missing.length > 12 ? '\n+${missing.length - 12} evrak daha' : ''}'
-              '\n\nUYAP’a bağlanıp yeniden deneyebilir ya da görevi bunlarsız '
-              'verebilirsiniz.',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Vazgeç'),
-            ),
-            FilledButton(
-              key: const ValueKey('task-give-anyway'),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Yine de ver'),
-            ),
-          ],
-        ),
+    if (toFetch > 0 &&
+        !UyapWebService.instance.connected &&
+        !UyapMobileApi.instance.connected) {
+      await connectUyap(
+        context,
+        op: UyapOp.documentDownload,
+        why:
+            'Seçilen evraktan $toFetch tanesi bu cihazda yok. Görevi alan '
+            'kişiye gidebilmeleri için önce UYAP’tan indirilecek.',
       );
-      if (go != true || !mounted) {
+      if (!mounted) return;
+    }
+    Map<String, TaskPackage> packed;
+    while (true) {
+      final (got, missing) = await _pack(cases);
+      if (!mounted) return;
+      if (missing.isEmpty) {
+        packed = got;
+        break;
+      }
+      final go = await _askMissing(missing);
+      if (!mounted) return;
+      if (go == _Missing.retry) continue;
+      if (go != _Missing.give) {
         setState(() => _busy = false);
         return;
       }
+      packed = got;
+      break;
     }
     final error = await _net.giveTask(
       title: _title.text,
@@ -291,6 +298,69 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
     }
     Navigator.pop(context);
   }
+
+  /// Each case packed, its documents fetched one by one where they are
+  /// not here; and what could not be.
+  Future<(Map<String, TaskPackage>, List<String>)> _pack(
+    List<TaskCase> cases,
+  ) async {
+    final packed = <String, TaskPackage>{};
+    final missing = <String>[];
+    for (final c in cases) {
+      setState(() => _packing = '${c.number} hazırlanıyor…');
+      final pack = await TaskPackage.pack(
+        c,
+        onProgress: (doing) {
+          if (mounted) setState(() => _packing = doing);
+        },
+      );
+      packed[c.caseKey] = pack;
+      missing.addAll([for (final m in pack.missing) '${c.number}: $m']);
+    }
+    if (mounted) setState(() => _packing = null);
+    return (packed, missing);
+  }
+
+  Future<_Missing?> _askMissing(List<String> missing) => showDialog<_Missing>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Bazı evrak indirilemedi'),
+      content: SizedBox(
+        width: 420,
+        child: Text(
+          'UYAP’a bağlı olmadığınız ya da UYAP vermediği için şu evrak '
+          'gönderilemeyecek:\n\n${missing.take(12).join('\n')}'
+          '${missing.length > 12 ? '\n+${missing.length - 12} evrak daha' : ''}'
+          '\n\nYeniden deneyebilir ya da görevi bunlarsız verebilirsiniz; '
+          'indirilenler gider.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, _Missing.cancel),
+          child: const Text('Vazgeç'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('task-give-retry'),
+          onPressed: () async {
+            // A portal connected here first, when none is.
+            if (!UyapWebService.instance.connected &&
+                !UyapMobileApi.instance.connected &&
+                !await connectUyap(context, op: UyapOp.documentDownload)) {
+              return;
+            }
+            if (context.mounted) Navigator.pop(context, _Missing.retry);
+          },
+          child: const Text('Yeniden dene'),
+        ),
+        FilledButton(
+          key: const ValueKey('task-give-anyway'),
+          onPressed: () => Navigator.pop(context, _Missing.give),
+          child: const Text('Yine de ver'),
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -432,9 +502,11 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    'Seçilen evrak, dosyanın künyesi ve taraflarıyla şifreli '
-                    'gider; alan kişi o dosyada UYAP yetkisi olmasa da dosyayı '
-                    '"görevle gelen" olarak görür.',
+                    'Seçilen evrak; dosyanın künyesi, tarafları, duruşmaları, '
+                    'süreleri, tebligatları ve notlarıyla şifreli gider. Bu '
+                    'cihazda olmayan evrak önce UYAP’tan indirilir. Alan kişi '
+                    'o dosyada UYAP yetkisi olmasa da dosyayı "görevle gelen" '
+                    'olarak görür.',
                     style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
                 ),
@@ -578,6 +650,120 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
     return DateTime(now.year, now.month, now.day + days);
   }
 
+  /// Every document of the case and its attachments, each with whether it
+  /// is on this device or is to be fetched from UYAP before it goes.
+  Widget _docList(BuildContext context, _Draft c) {
+    final record = c.row.record;
+    final docs = record?.documents ?? const <UyapCaseDocument>[];
+    if (record == null || docs.isEmpty) {
+      return Text(
+        'Bu dosyanın evrak listesi henüz UYAP’tan gelmedi.',
+        style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+      );
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final rows = [
+      for (final d in docs) ...[
+        (d, false),
+        for (final a in d.attachments) (a, true),
+      ],
+    ];
+    final notHere = c.chosen
+        .where((k) => UyapCaseStore.instance.fileOf(record, k) == null)
+        .length;
+    Widget row(UyapCaseDocument d, bool attachment) {
+      final here = UyapCaseStore.instance.fileOf(record, d.key) != null;
+      final on = c.chosen.contains(d.key);
+      return InkWell(
+        key: ValueKey('task-doc-${d.key}'),
+        onTap: () =>
+            setState(() => on ? c.chosen.remove(d.key) : c.chosen.add(d.key)),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(attachment ? 26 : 0, 1, 4, 1),
+          child: Row(
+            children: [
+              Checkbox(
+                value: on,
+                visualDensity: VisualDensity.compact,
+                onChanged: (v) => setState(
+                  () =>
+                      v == true ? c.chosen.add(d.key) : c.chosen.remove(d.key),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  [
+                    d.type.isNotEmpty ? d.type : d.title,
+                    if (d.sentToSystem.isNotEmpty) d.sentToSystem,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              Icon(
+                here
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.cloud_download_outlined,
+                size: 15,
+                color: here
+                    ? tone(const Color(0xFF1B6B3A))
+                    : AgendaColors.muted,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                here ? 'İnmiş' : 'İndirilecek',
+                style: TextStyle(fontSize: 11, color: AgendaColors.muted),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                c.chosen.isEmpty
+                    ? 'Gidecek evrakı seçin'
+                    : '${c.chosen.length} evrak seçili'
+                          '${notHere == 0 ? '' : ' · $notHere tanesi UYAP’tan indirilip gidecek'}',
+                key: ValueKey('task-docs-summary-${c.row.key}'),
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+            ),
+            TextButton(
+              onPressed: () => setState(
+                () => c.chosen.length == rows.length
+                    ? c.chosen.clear()
+                    : c.chosen.addAll([for (final (d, _) in rows) d.key]),
+              ),
+              child: Text(
+                c.chosen.length == rows.length ? 'Hiçbiri' : 'Tümünü seç',
+              ),
+            ),
+          ],
+        ),
+        Container(
+          constraints: const BoxConstraints(maxHeight: 240),
+          decoration: BoxDecoration(
+            border: Border.all(color: scheme.outlineVariant),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            children: [for (final (d, a) in rows) row(d, a)],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _caseCard(BuildContext context, _Draft c) {
     final scheme = Theme.of(context).colorScheme;
     final docs = c.row.record?.documents ?? const [];
@@ -710,34 +896,14 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
                 ),
             ],
           ),
-          if (c.docs == TaskDocs.chosen)
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                for (final d in docs.take(40))
-                  FilterChip(
-                    label: Text(
-                      d.type.isNotEmpty ? d.type : d.title,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    selected: c.chosen.contains(d.key),
-                    onSelected: (on) => setState(
-                      () => on ? c.chosen.add(d.key) : c.chosen.remove(d.key),
-                    ),
-                  ),
-                if (docs.isEmpty)
-                  Text(
-                    'Bu dosyanın evrak listesi henüz UYAP’tan gelmedi.',
-                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
-                  ),
-              ],
-            ),
+          if (c.docs == TaskDocs.chosen) _docList(context, c),
         ],
       ),
     );
   }
 }
+
+enum _Missing { cancel, retry, give }
 
 /// Choosing a case from Dava Dosyalarım, by its number, court or party.
 class _CasePicker extends StatefulWidget {

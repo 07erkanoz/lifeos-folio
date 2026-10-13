@@ -122,6 +122,11 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   final _cleared = <String>{};
   _Tab _tab = _Tab.documents;
   _DocFilter _filter = _DocFilter.all;
+
+  /// Documents being chosen, to be downloaded or given with a task
+  /// together: a box before each row while [_selecting].
+  bool _selecting = false;
+  final _picked = <String>{};
   final _search = TextEditingController();
 
   /// The document shown beside the list; each case's last one is shown
@@ -1452,6 +1457,100 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     return net.ledger.members.any((m) => net.mayGive(m.deviceId));
   }
 
+  /// Görev ver with the documents chosen on the list.
+  Future<void> _giveTaskWithPicked() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => TaskGiveDialog(
+        network: OfficeNetwork.instance,
+        initialCaseKey: widget.caseKey,
+        initialDocKeys: {..._picked},
+      ),
+    );
+  }
+
+  /// The documents chosen fetched from UYAP, those not here yet.
+  Future<void> _downloadPicked() async {
+    if (!await _connect(
+      UyapOp.documentDownload,
+      'Seçilen evrakı indirmek için bağlanın.',
+    )) {
+      return;
+    }
+    final n = await _c.download({..._picked});
+    if (!mounted) return;
+    setState(() {
+      _selecting = false;
+      _picked.clear();
+    });
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text('$n evrak indirildi')));
+  }
+
+  /// The bar over the list while documents are being chosen.
+  Widget _pickBar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final all = [
+      for (final d in _documents) ...[
+        d.key,
+        for (final a in d.attachments) a.key,
+      ],
+    ];
+    return Container(
+      key: const ValueKey('case-doc-pick-bar'),
+      margin: const EdgeInsets.fromLTRB(18, 2, 18, 6),
+      padding: const EdgeInsets.fromLTRB(12, 4, 6, 4),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        runSpacing: 2,
+        children: [
+          Text(
+            _picked.isEmpty ? 'Evrak seçin' : '${_picked.length} evrak seçili',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+          TextButton(
+            onPressed: () => setState(
+              () => _picked.length == all.length
+                  ? _picked.clear()
+                  : _picked.addAll(all),
+            ),
+            child: Text(_picked.length == all.length ? 'Hiçbiri' : 'Tümü'),
+          ),
+          TextButton.icon(
+            key: const ValueKey('case-doc-pick-download'),
+            onPressed: _picked.isEmpty || _c.busy != null
+                ? null
+                : () => unawaited(_downloadPicked()),
+            icon: const Icon(Icons.download_rounded, size: 17),
+            label: const Text('İndir'),
+          ),
+          if (_mayGiveTask)
+            FilledButton.icon(
+              key: const ValueKey('case-doc-pick-task'),
+              onPressed: _picked.isEmpty
+                  ? null
+                  : () => unawaited(_giveTaskWithPicked()),
+              icon: const Icon(Icons.assignment_ind_outlined, size: 17),
+              label: const Text('Seçilenlerle görev ver'),
+            ),
+          TextButton(
+            key: const ValueKey('case-doc-pick-done'),
+            onPressed: () => setState(() {
+              _selecting = false;
+              _picked.clear();
+            }),
+            child: const Text('Bitti'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Görev ver from a document: its case and it, already chosen.
   Future<void> _giveTaskWith(UyapCaseDocument d) => showDialog<void>(
     context: context,
@@ -2367,6 +2466,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               filter(_DocFilter.decisions, 'Kararlar'),
               filter(_DocFilter.petitions, 'Dilekçeler'),
               filter(_DocFilter.notDownloaded, 'İndirilmemiş'),
+              if (!_selecting && docs.isNotEmpty)
+                TextButton.icon(
+                  key: const ValueKey('case-doc-select'),
+                  onPressed: () => setState(() => _selecting = true),
+                  icon: const Icon(Icons.checklist_rounded, size: 17),
+                  label: const Text('Seç'),
+                ),
               Text(
                 'Evrak listesi ${whenText(record.fetchedAt, DateTime.now())}’de tazelendi',
                 style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
@@ -2374,6 +2480,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             ],
           ),
         ),
+        if (_selecting) _pickBar(context),
         if (shown.isEmpty)
           Padding(
             padding: const EdgeInsets.all(24),
@@ -2484,9 +2591,16 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       if (d.sender.trim().isNotEmpty) titleName(d.sender.trim()),
       if (d.description.isNotEmpty && d.description != d.type) d.description,
     ].join(' · ');
+    final picked = _picked.contains(d.key);
+    void pick() =>
+        setState(() => picked ? _picked.remove(d.key) : _picked.add(d.key));
     final row = InkWell(
       key: ValueKey('case-doc-${d.key}'),
-      onTap: split ? () => _tapped(d) : () => unawaited(_openPreviewPage(d)),
+      onTap: _selecting
+          ? pick
+          : split
+          ? () => _tapped(d)
+          : () => unawaited(_openPreviewPage(d)),
       child: Container(
         padding: EdgeInsets.fromLTRB(
           attachment == null ? (split ? 15 : 18) : (split ? 44 : 58),
@@ -2511,15 +2625,26 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: ink.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(7),
+            if (_selecting)
+              SizedBox.square(
+                dimension: 28,
+                child: Checkbox(
+                  key: ValueKey('case-doc-pick-${d.key}'),
+                  value: picked,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (_) => pick(),
+                ),
+              )
+            else
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: ink.withValues(alpha: .1),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(icon, size: 16, color: ink),
               ),
-              child: Icon(icon, size: 16, color: ink),
-            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

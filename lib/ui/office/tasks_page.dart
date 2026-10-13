@@ -8,6 +8,7 @@ import '../../services/office/office_network.dart';
 import '../../services/office/office_notices.dart' show TaskReminders;
 import '../../services/office/office_task.dart';
 import '../../services/office/task_hearings.dart';
+import '../../services/office/task_package.dart' show ReceivedCase;
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/platform/file_actions.dart';
@@ -1041,6 +1042,7 @@ class _TaskDetailState extends State<TaskDetail> {
               '${'${party['vekil'] ?? ''}'.isEmpty ? '' : ' · vekil ${party['vekil']}'}',
               style: const TextStyle(fontSize: 12),
             ),
+          ..._receivedFacts(got),
           const SizedBox(height: 4),
           for (final path in got.documents)
             Row(
@@ -1076,6 +1078,88 @@ class _TaskDetailState extends State<TaskDetail> {
         ],
       ),
     );
+  }
+
+  /// The hearings, deadlines, notices and notes that came with the case,
+  /// under a heading each: what the one doing the work goes by.
+  List<Widget> _receivedFacts(ReceivedCase got) {
+    String day(Object? iso) {
+      final at = DateTime.tryParse('${iso ?? ''}');
+      if (at == null) return '${iso ?? ''}';
+      final d = dayText(at);
+      return at.hour == 0 && at.minute == 0 ? d : '$d ${clockText(at)}';
+    }
+
+    Widget heading(String text) => Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 2),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: .5,
+          color: AgendaColors.taskText,
+        ),
+      ),
+    );
+    Widget line(String text, {Key? key, bool done = false}) => Text(
+      text,
+      key: key,
+      style: TextStyle(
+        fontSize: 12,
+        decoration: done ? TextDecoration.lineThrough : null,
+      ),
+    );
+    final now = DateTime.now();
+    final hearings = got.hearings;
+    return [
+      if (hearings.isNotEmpty) ...[
+        heading('DURUŞMALAR'),
+        for (final h in hearings)
+          line(
+            [
+              day(h['tarih']),
+              if ('${h['tur'] ?? ''}'.isNotEmpty) '${h['tur']}',
+              if ('${h['sonuc'] ?? ''}'.isNotEmpty) '${h['sonuc']}',
+              if (DateTime.tryParse('${h['tarih']}')?.isAfter(now) ?? false)
+                'gelecek',
+            ].join(' · '),
+            key: const ValueKey('task-received-hearing'),
+          ),
+      ],
+      if (got.deadlines.isNotEmpty) ...[
+        heading('SÜRELER'),
+        for (final d in got.deadlines)
+          line(
+            '${day(d['gun'])} · ${d['baslik'] ?? ''}',
+            key: const ValueKey('task-received-deadline'),
+            done: d['tamam'] == true,
+          ),
+      ],
+      if (got.notices.isNotEmpty) ...[
+        heading('TEBLİGATLAR'),
+        for (final n in got.notices.take(8))
+          line(
+            [
+              if ('${n['tarih'] ?? ''}'.isNotEmpty) day(n['tarih']),
+              '${n['konu'] ?? ''}',
+              if ('${n['gonderen'] ?? ''}'.isNotEmpty) '${n['gonderen']}',
+            ].join(' · '),
+          ),
+      ],
+      if (got.notes.isNotEmpty) ...[
+        heading('NOTLAR'),
+        for (final n in got.notes)
+          line(
+            [
+              if ('${n['tarih'] ?? ''}'.isNotEmpty) day(n['tarih']),
+              '${n['baslik'] ?? ''}',
+              if ('${n['metin'] ?? ''}'.isNotEmpty) '${n['metin']}',
+            ].join(' · '),
+            done: n['tamam'] == true,
+          ),
+      ],
+    ];
   }
 
   void _send() {
