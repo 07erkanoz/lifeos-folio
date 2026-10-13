@@ -68,9 +68,9 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
   void initState() {
     super.initState();
     _sync.noticesVersion.addListener(_changed);
+    // What is kept is shown; opening the page asks UYAP nothing (§5):
+    // "Yenile" does.
     unawaited(_load(first: true));
-    // The page opened: UYAP is asked, at most once a minute.
-    unawaited(_sync.syncNotices());
   }
 
   @override

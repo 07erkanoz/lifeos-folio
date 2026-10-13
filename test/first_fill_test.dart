@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:evrak_convert/services/portal/case_sections.dart';
@@ -5,6 +6,7 @@ import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
+import 'package:evrak_convert/services/portal/uyap_job.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
@@ -128,7 +130,10 @@ class _Web extends UyapWebService {
   Future<UyapCaseDocuments> caseDocuments(
     UyapCase target, {
     void Function(int page, int pages)? onPage,
-  }) async => const UyapCaseDocuments([]);
+  }) async {
+    asked.add('documents ${target.id}');
+    return const UyapCaseDocuments([]);
+  }
 
   @override
   Future<UyapCaseMoney> caseMoney(UyapCase target, int typeCode) async {
@@ -241,18 +246,43 @@ class _Mobile extends UyapMobileApi {
     String? caseType,
   }) async {
     asked.add('parties $caseId');
+    // The session ending after this many answers.
+    if (--answersLeft == 0) on = false;
     return [
       for (final t in _parties)
         {'adi': t.name, 'rol': t.role, 'vekil': t.lawyer, 'kisiKurum': t.kind},
     ];
   }
 
+  /// Parties' answers before the session ends; endless when below zero.
+  int answersLeft = -1;
+
+  /// UYAP's notifications: a Vekil Kaydı for a case not in the portfolio.
+  bool vekilKaydi = false;
+
+  @override
+  Future<List<Map<String, Object?>>> noticeRows({String? after}) async =>
+      vekilKaydi && after == null
+      ? [
+          {
+            'bildirimId': 'b1',
+            'mesajId': 'm1',
+            'baslik': 'Vekil Kaydı',
+            'mesaj':
+                'Antalya 3. Asliye Ceza Mahkemesi birimi, 2026/91 dosyasında '
+                ', Sanık Deniz Yılmaz vekili olarak Vekil Kaydı yapıldı.',
+          },
+        ]
+      : const [];
+
   /// The documents' answer: none, or (null) one without the list.
   Map<String, Object?>? documents = const {'tumEvraklar': {}, 'son20Evrak': []};
 
   @override
-  Future<Map<String, Object?>> caseDocuments(String caseId) async =>
-      documents ?? const {'hata': 'yok'};
+  Future<Map<String, Object?>> caseDocuments(String caseId) async {
+    asked.add('documents $caseId');
+    return documents ?? const {'hata': 'yok'};
+  }
 }
 
 void main() {
@@ -293,14 +323,47 @@ void main() {
   Iterable<String> clients() =>
       db.clientEntries(lawyer: _lawyer).map((e) => e.name);
 
-  test('with the web portal alone the first reading brings every case with '
-      'its parties, so the clients are there, and its money; an icra file '
-      'its account and debtors', () async {
+  Map<(CaseSection, PortalChannel), SectionState> sections(String key) => {
+    for (final s in db.sections(key)) (s.section, s.channel): s,
+  };
+
+  // docs/uyap-hedef-harita.md §2.3: a list is a list; no case is read
+  // after it of itself.
+  test('the web\'s portfolio is its list alone: no case\'s parties, '
+      'particulars or money are asked after it', () async {
     final web = _Web();
     final sync = syncOf(web, _Mobile()..on = false);
     await sync.syncPortfolio(full: true);
     expect(db.cases().keys, containsAll([hukuk, icra]));
-    expect(db.caseParties().keys, containsAll([hukuk, icra]));
+    expect(web.asked, isEmpty);
+    expect(db.caseParties(), isEmpty);
+    expect(await store.load(_icra, '2025/4410'), isNull);
+    expect(sync.state(PortalChannel.uyapWeb).problem, isNull);
+  });
+
+  test('UYAP Mobil\'s portfolio is its list alone, the web connected or '
+      'not', () async {
+    for (final webOn in [false, true]) {
+      final web = _Web()..on = webOn;
+      final mobile = _Mobile();
+      final sync = syncOf(web, mobile);
+      await sync.syncMobile(full: true);
+      expect(db.cases().keys, containsAll([hukuk, icra]));
+      expect(mobile.asked, isEmpty, reason: 'web ${webOn ? 'on' : 'off'}');
+      expect(web.asked, isEmpty, reason: 'web ${webOn ? 'on' : 'off'}');
+      // Nothing waits to run after it.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(web.asked, isEmpty);
+    }
+  });
+
+  test('the lawyer\'s "Tümünü tazele" reads every open case on the web: '
+      'its parties make the clients, and its money; an icra file its account '
+      'and debtors', () async {
+    final web = _Web();
+    final sync = syncOf(web, _Mobile()..on = false);
+    await sync.syncPortfolio(full: true);
+    await sync.refreshAllOnWeb();
     expect(clients(), contains('AYŞE KARACA'));
     expect(clients(), isNot(contains('BERK İNŞAAT LTD. ŞTİ.')));
     final kept = (await store.load(_hukuk, '2025/80'))!;
@@ -309,105 +372,15 @@ void main() {
     expect(file.enforcement!.lines.single.label, 'Asıl alacak');
     expect(file.enforcement!.debtors.single.name, 'SELİN AKSOY');
     expect(db.meta(PortalSync.webCheckedKey(icra)), isNotNull);
-    // Read once: the next reading does not ask each case again.
-    web.asked.clear();
-    await sync.syncPortfolio();
-    expect(web.asked, isEmpty);
   });
-
-  test('with UYAP Mobil alone its parties make the clients; the web, '
-      'connected later, reads each case again for what only it has: the '
-      'money and the icra account', () async {
-    final web = _Web()..on = false;
-    final mobile = _Mobile();
-    final sync = syncOf(web, mobile);
-    // The courts' list as UYAP Mobil read it this week.
-    await syncWebPortfolio(_Web(), db);
-    db.setMeta('portfolio_at', DateTime.now().toIso8601String());
-    await sync.syncMobile();
-    expect(mobile.asked, containsAll(['parties mid-1', 'parties mid-2']));
-    expect(clients(), contains('AYŞE KARACA'));
-    expect((await store.load(_icra, '2025/4410'))!.enforcement, isNull);
-    // The web comes: it does the rest, and UYAP Mobil is not asked again.
-    web.on = true;
-    mobile.asked.clear();
-    await sync.syncPortfolio();
-    expect(web.asked, containsAll(['parties id-h1', 'parties id-i1']));
-    expect(mobile.asked, isEmpty);
-    final file = (await store.load(_icra, '2025/4410'))!;
-    expect(file.enforcement!.lines, isNotEmpty);
-    expect((await store.load(_hukuk, '2025/80'))!.money, isNotNull);
-  });
-
-  test('with both connected UYAP Mobil reads no case of itself: the web '
-      'enriches them all', () async {
-    final web = _Web();
-    final mobile = _Mobile();
-    final sync = syncOf(web, mobile);
-    await syncWebPortfolio(_Web(), db);
-    db.setMeta('portfolio_at', DateTime.now().toIso8601String());
-    await sync.syncPortfolio();
-    expect(mobile.asked, isEmpty);
-    expect(web.asked, containsAll(['parties id-h1', 'parties id-i1']));
-    expect(clients(), contains('AYŞE KARACA'));
-    expect(
-      (await store.load(_icra, '2025/4410'))!.enforcement!.debtors,
-      isNotEmpty,
-    );
-  });
-
-  test('a case whose money did not come is not counted read: it is asked '
-      'again', () async {
-    final web = _Web()..moneyFails = true;
-    final sync = syncOf(web, _Mobile()..on = false);
-    await sync.syncPortfolio(full: true);
-    expect(db.meta(PortalSync.webCheckedKey(hukuk)), isNull);
-    expect(db.meta(PortalSync.webCheckedKey(icra)), isNotNull);
-    // Its parties came all the same: the client is there.
-    expect(clients(), contains('AYŞE KARACA'));
-    expect(
-      sync.state(PortalChannel.uyapWeb).problem,
-      'Bazı kayıtlar alınamadı',
-    );
-  });
-
-  test('with both connected, the cases UYAP Mobil lists when the web has '
-      'nothing of its own to read are read by the web all the same', () async {
-    final web = _Web();
-    final mobile = _Mobile()..late = const Duration(milliseconds: 300);
-    final sync = syncOf(web, mobile);
-    // The web has nothing of its own due today: only UYAP Mobil reads.
-    final now = DateTime.now().toIso8601String();
-    db.setMeta('portfolio_web_only_at', now);
-    db.setMeta('hearings_at:${PortalChannel.uyapWeb.name}', now);
-    await sync.syncMobile();
-    // What runs after UYAP Mobil's reading.
-    for (
-      var i = 0;
-      i < 50 && db.meta(PortalSync.webCheckedKey(icra)) == null;
-      i++
-    ) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
-    expect(db.cases().keys, containsAll([hukuk, icra]));
-    expect(mobile.asked, isEmpty, reason: 'the web reads the cases');
-    expect(web.asked, containsAll(['parties id-h1', 'parties id-i1']));
-    expect(clients(), contains('AYŞE KARACA'));
-    expect(
-      (await store.load(_icra, '2025/4410'))!.enforcement!.lines,
-      isNotEmpty,
-    );
-  });
-
-  Map<(CaseSection, PortalChannel), SectionState> sections(String key) => {
-    for (final s in db.sections(key)) (s.section, s.channel): s,
-  };
 
   test('each reading leaves what came of each section on its channel: the '
       'web\'s icra file whole, a failed sum asked again', () async {
     final web = _Web()..moneyFails = true;
     final sync = syncOf(web, _Mobile()..on = false);
     await sync.syncPortfolio(full: true);
+    await sync.refreshAllOnWeb();
+    expect(db.meta(PortalSync.webCheckedKey(hukuk)), isNull);
     const w = PortalChannel.uyapWeb;
     final file = sections(icra);
     for (final s in [
@@ -435,8 +408,28 @@ void main() {
     final mobile = _Mobile()..documents = null;
     final sync = syncOf(web, mobile);
     await syncWebPortfolio(_Web(), db);
-    db.setMeta('portfolio_at', DateTime.now().toIso8601String());
-    await sync.syncMobile();
+    final panel = UyapCasePanelController(
+      web: web,
+      mobile: mobile,
+      sync: sync,
+      store: store,
+      pause: Duration.zero,
+    );
+    addTearDown(panel.dispose);
+    await panel.attach(
+      const UyapCaseLink(
+        jurisdiction: '1',
+        courtType: 'HUKUK',
+        courtId: 'h1',
+        court: _hukuk,
+        number: '2025/80',
+      ),
+    );
+    await panel.readSections(PortalChannel.uyapMobile, {
+      CaseSection.particulars,
+      CaseSection.parties,
+      CaseSection.documents,
+    });
     const m = PortalChannel.uyapMobile;
     final kase = sections(hukuk);
     expect(kase[(CaseSection.parties, m)]!.result, SectionResult.read);
@@ -444,6 +437,151 @@ void main() {
     expect(kase[(CaseSection.particulars, m)]!.partial, isTrue);
     expect(kase.keys.where((k) => k.$2 == PortalChannel.uyapWeb), isEmpty);
     expect(kase.containsKey((CaseSection.money, m)), isFalse);
+  });
+
+  test('opening a case\'s page reads only its sections never read or older '
+      'than a day, and not again within three minutes', () async {
+    final web = _Web();
+    final mobile = _Mobile();
+    final sync = syncOf(web, mobile);
+    await syncWebPortfolio(_Web(), db);
+    final panel = UyapCasePanelController(
+      web: web,
+      mobile: mobile,
+      sync: sync,
+      store: store,
+      pause: Duration.zero,
+    );
+    addTearDown(panel.dispose);
+    await panel.attach(
+      const UyapCaseLink(
+        jurisdiction: '2',
+        courtType: 'ICRA',
+        courtId: 'i1',
+        court: _icra,
+        number: '2025/4410',
+      ),
+    );
+    // Its parties and particulars read on the web an hour ago.
+    db.saveSections(icra, PortalChannel.uyapWeb, const [
+      SectionOutcome(CaseSection.particulars, SectionResult.read),
+      SectionOutcome(CaseSection.parties, SectionResult.read),
+    ], at: DateTime.now().subtract(const Duration(hours: 1)));
+    await sync.readOpened(panel, icra);
+    expect(web.asked, isNot(contains('parties id-i1')));
+    expect(web.asked, isNot(contains('details id-i1')));
+    expect(mobile.asked, isEmpty);
+    expect(panel.record!.money, isNotNull);
+    expect(panel.record!.enforcement!.debtors, isNotEmpty);
+    expect(
+      sections(icra)[(CaseSection.money, PortalChannel.uyapWeb)],
+      isNotNull,
+    );
+    // Opened again at once: nothing asked.
+    web.asked.clear();
+    db.saveSections(icra, PortalChannel.uyapWeb, const [
+      SectionOutcome(CaseSection.money, SectionResult.failed),
+    ]);
+    await sync.readOpened(panel, icra);
+    expect(web.asked, isEmpty);
+  });
+
+  test(
+    'a Vekil Kaydı for a case not in the portfolio reads the portfolio '
+    'only while Folio reads UYAP of itself; else the lawyer is told',
+    () async {
+      for (final auto in [false, true]) {
+        db.dispose();
+        db = PortalDatabase.memory();
+        final mobile = _Mobile()..vekilKaydi = true;
+        final sync = syncOf(_Web()..on = false, mobile);
+        await sync.setAutoFetch(auto);
+        // Not the first reading of the notifications: what comes is news.
+        db.setMeta('uyap_notice_mobile', DateTime(2026).toIso8601String());
+        await sync.syncNotices(force: true);
+        for (var i = 0; i < 20 && auto && db.cases().isEmpty; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+        expect(db.cases().isNotEmpty, auto, reason: 'auto $auto');
+        expect(sync.newCaseNotice.value != null, !auto, reason: 'auto $auto');
+      }
+    },
+  );
+
+  group('the lawyer\'s setup and the web\'s completion', () {
+    test('the setup on UYAP Mobil reads the list, then each case\'s '
+        'parties, then its documents\' list, on UYAP Mobil alone though the '
+        'web is connected', () async {
+      final web = _Web();
+      final mobile = _Mobile();
+      final sync = syncOf(web, mobile);
+      await sync.startSetup(PortalChannel.uyapMobile);
+      expect(sync.job.value!.done, isTrue);
+      expect(web.asked, isEmpty);
+      // Every case's parties before any case's documents.
+      expect(
+        mobile.asked.take(2),
+        unorderedEquals(['parties mid-1', 'parties mid-2']),
+      );
+      expect(
+        mobile.asked.skip(2),
+        unorderedEquals(['documents mid-1', 'documents mid-2']),
+      );
+      expect(clients(), contains('AYŞE KARACA'));
+      const m = PortalChannel.uyapMobile;
+      for (final key in [hukuk, icra]) {
+        expect(sections(key)[(CaseSection.parties, m)]!.complete, isTrue);
+        expect(sections(key)[(CaseSection.documents, m)]!.complete, isTrue);
+      }
+    });
+
+    test('the session ending stops it; connected again it goes on where it '
+        'was, no case asked twice', () async {
+      final web = _Web()..on = false;
+      final mobile = _Mobile()..answersLeft = 1;
+      final sync = syncOf(web, mobile);
+      await sync.startSetup(PortalChannel.uyapMobile);
+      expect(sync.job.value!.done, isFalse);
+      expect(sync.job.value!.stopped, UyapJobStop.session);
+      expect(sync.job.value!.stage, UyapJobStage.parties);
+      final first = mobile.asked.single;
+      mobile
+        ..on = true
+        ..asked.clear();
+      await sync.resumeJob();
+      expect(sync.job.value!.done, isTrue);
+      expect(mobile.asked.where((a) => a.startsWith('parties')), [
+        isNot(first),
+      ]);
+    });
+
+    test('paused by the lawyer it waits for them', () async {
+      final mobile = _Mobile();
+      final sync = syncOf(_Web()..on = false, mobile);
+      // Paused as soon as the list is read.
+      sync.portfolioVersion.addListener(() => unawaited(sync.pauseJob()));
+      await sync.startSetup(PortalChannel.uyapMobile);
+      expect(sync.job.value!.stopped, UyapJobStop.user);
+      expect(mobile.asked, isEmpty);
+    });
+
+    test('the web\'s completion asks what only the web has, not the '
+        'documents\' list UYAP Mobil gave whole; the case is then read '
+        'whole', () async {
+      final web = _Web();
+      final mobile = _Mobile();
+      final sync = syncOf(web, mobile);
+      await sync.startSetup(PortalChannel.uyapMobile);
+      await sync.startWebCompletion();
+      expect(sync.job.value!.done, isTrue);
+      expect(web.asked, containsAll(['parties id-h1', 'parties id-i1']));
+      expect(web.asked.where((a) => a.startsWith('documents')), isEmpty);
+      final file = (await store.load(_icra, '2025/4410'))!;
+      expect(file.enforcement!.debtors, isNotEmpty);
+      expect(db.meta(PortalSync.webCheckedKey(icra)), isNotNull);
+      // Its counsel came from the web: the client stays.
+      expect(clients(), contains('AYŞE KARACA'));
+    });
   });
 
   group('reading chosen sections on a chosen channel', () {
@@ -511,16 +649,5 @@ void main() {
       expect(mobile.asked, isEmpty);
       expect(panel.outcomes, isEmpty);
     });
-  });
-
-  test('the parties of every case come first, a request each, before any '
-      'case is read whole: the clients are there in minutes', () async {
-    final web = _Web();
-    final sync = syncOf(web, _Mobile()..on = false);
-    await sync.syncPortfolio(full: true);
-    final firstDetails = web.asked.indexWhere((a) => a.startsWith('details'));
-    expect(web.asked.indexOf('parties id-h1'), lessThan(firstDetails));
-    expect(web.asked.indexOf('parties id-i1'), lessThan(firstDetails));
-    expect(clients(), contains('AYŞE KARACA'));
   });
 }

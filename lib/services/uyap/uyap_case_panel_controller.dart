@@ -425,13 +425,22 @@ class UyapCasePanelController extends ChangeNotifier {
     try {
       usedWeb = onWeb;
       whole = true;
-      if (!onWeb) return await _refreshMobile(only);
-      try {
-        await _placeOnWeb();
-      } catch (_) {}
-      await _refreshWeb(only);
+      if (onWeb) {
+        try {
+          await _placeOnWeb();
+        } catch (_) {}
+        await _refreshWeb(only);
+      } else {
+        await _refreshMobile(only);
+      }
     } finally {
       if (!background) _waiting--;
+    }
+    // A lawyer's own reading kept beside the portfolio, as [refresh]'s.
+    if (!background && error == null && _record != null) {
+      try {
+        await (_sync ?? PortalSync.started)?.caseRead(this);
+      } catch (_) {}
     }
   }
 

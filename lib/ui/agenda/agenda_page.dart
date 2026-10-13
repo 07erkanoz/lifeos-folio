@@ -288,11 +288,9 @@ class _AgendaPageState extends State<AgendaPage> {
     final db = widget.database ?? await PortalDatabase.shared();
     if (!mounted) return;
     _db = db;
+    // What is kept is shown; opening the agenda asks UYAP nothing
+    // (docs/uyap-hedef-harita.md §5).
     _reload();
-    await Future.wait([
-      if (_web.connected) _sync.syncWeb(),
-      if (_mobile.connected) _sync.syncMobile(),
-    ]);
   }
 
   (DateTime, DateTime) get _range => switch (_view) {
@@ -1574,12 +1572,9 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
-  /// The hearings from the portals connected, now.
+  /// The hearings from the portals connected, now: the hearings alone.
   Future<void> _syncAll() async {
-    await Future.wait([
-      if (_web.connected) _sync.syncWeb(force: true),
-      if (_mobile.connected) _sync.syncMobile(full: true),
-    ]);
+    await _sync.refreshHearings();
     if (mounted) _reload();
   }
 

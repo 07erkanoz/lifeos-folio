@@ -17,6 +17,7 @@ import '../mobile/scroll_chrome.dart';
 import 'portfolio_picker.dart';
 import 'uyap_case_panel.dart';
 import 'uyap_case_picker.dart';
+import '../portfolio/uyap_setup_dialog.dart';
 
 /// The UYAP cases kept on this computer, where they are looked after on
 /// their own rather than beside a petition: each with its particulars,
@@ -127,7 +128,13 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
     }
     var all = await _sync.portfolio();
     final channel = _sync.portfolioChannel;
-    if (all.isEmpty && channel != null) {
+    // Never read: the setup the lawyer starts, its list first.
+    if (all.isEmpty && channel != null && _sync.job.value == null) {
+      if (!mounted) return;
+      await UyapSetupDialog.show(context, sync: _sync);
+      all = await _sync.portfolio();
+    }
+    if (all.isEmpty && channel != null && _sync.job.value == null) {
       // The portfolio is read court by court; how far it has come is
       // shown, and the cases come as they are read.
       final from = channel == PortalChannel.uyapMobile

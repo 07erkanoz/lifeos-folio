@@ -838,13 +838,7 @@ class _DesktopHomeState extends State<DesktopHome> {
             action: web.connected ? 'Senkronize et' : 'Bağlan',
             onAction: () => web.connected
                 ? unawaited(PortalSync.instance.syncWeb(force: true))
-                : unawaited(
-                    connectUyapWeb(
-                      context,
-                      onConnected: () =>
-                          unawaited(PortalSync.instance.syncWeb()),
-                    ),
-                  ),
+                : unawaited(connectUyapWeb(context)),
           ),
           _portal(
             key: const ValueKey('home-portal-mobile'),
@@ -868,8 +862,8 @@ class _DesktopHomeState extends State<DesktopHome> {
               PortalSync.begin();
               if (mobile.connected) {
                 unawaited(PortalSync.instance.syncMobile(full: true));
-              } else if (await connectUyapMobile(context, api: mobile)) {
-                unawaited(PortalSync.instance.syncMobile());
+              } else {
+                await connectUyapMobile(context, api: mobile);
               }
             },
           ),

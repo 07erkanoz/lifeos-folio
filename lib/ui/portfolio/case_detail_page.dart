@@ -297,32 +297,17 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     });
     _openAsked();
     await _seen();
-    // Fetched again when it has not been for a while and a portal is
-    // there to ask; the list shows what was kept meanwhile.
-    // Not while UYAP Mobil's portfolio is being read: the two would ask
-    // UYAP and write this case's record at once.
-    final record = _c.record;
-    final reading =
-        PortalSync.started?.state(PortalChannel.uyapMobile).running ?? false;
-    // Kept from the mobile API alone (no particulars, money or account,
-    // which only the web gives): fetched from the web at once when it is
-    // connected, however lately kept.
-    final mobileOnly =
-        record != null &&
-        record.details.kind.isEmpty &&
-        record.details.status.isEmpty &&
-        record.details.enforcement.isEmpty &&
-        record.money == null &&
-        record.enforcement == null &&
-        record.hidden.isEmpty;
-    final web = _c.web.connected;
-    if (_c.connected &&
-        (!reading || web) &&
-        (record == null ||
-            (web && mobileOnly) ||
-            DateTime.now().difference(record.fetchedAt) >
-                const Duration(minutes: 30))) {
-      unawaited(_c.refresh());
+    // Its sections never read, or older than a day, read again while a
+    // portal is there to ask (docs/uyap-hedef-harita.md §5); the list shows
+    // what was kept meanwhile. Not while UYAP Mobil's portfolio is being
+    // read: the two would ask UYAP and write this case's record at once.
+    final sync = PortalSync.started;
+    final reading = sync?.state(PortalChannel.uyapMobile).running ?? false;
+    if (sync != null &&
+        _c.connected &&
+        archive == null &&
+        (!reading || _c.web.connected)) {
+      unawaited(sync.readOpened(_c, kase.key));
     }
   }
 

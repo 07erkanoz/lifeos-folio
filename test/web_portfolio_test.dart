@@ -280,13 +280,9 @@ void main() {
     await sync.syncPortfolio(full: true);
     expect(web.asked, contains('cases w1 1'));
     expect(db.cases(), hasLength(5));
-    // Read whole; its cases, which this portal will not open (see
-    // first_fill_test), are told as not read.
+    // Read whole, the list alone: no case is opened after it.
     expect(db.meta('portfolio_at'), isNotNull);
-    expect(
-      sync.state(PortalChannel.uyapWeb).problem,
-      'Bazı kayıtlar alınamadı',
-    );
+    expect(sync.state(PortalChannel.uyapWeb).problem, isNull);
   });
 
   test('the prosecutors\' offices are looked for in every province the '

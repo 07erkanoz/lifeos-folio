@@ -641,8 +641,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     sync: () => _sync.syncMobile(full: true),
                     disconnect: mobile.logout,
                   );
-                } else if (await connectUyapMobile(context, api: mobile)) {
-                  unawaited(_sync.syncMobile());
+                } else {
+                  await connectUyapMobile(context, api: mobile);
                 }
               },
             ),
@@ -673,10 +673,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     disconnect: () async => web.disconnect(),
                   );
                 } else {
-                  await connectUyapWeb(
-                    context,
-                    onConnected: () => unawaited(_sync.syncWeb()),
-                  );
+                  await connectUyapWeb(context);
                 }
               },
             ),

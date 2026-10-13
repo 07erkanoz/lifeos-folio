@@ -49,6 +49,7 @@ import 'widgets/spreadsheet_viewer.dart';
 import 'widgets/hover_document_preview.dart';
 import 'portfolio/case_detail_page.dart';
 import 'portfolio/portfolio_page.dart';
+import 'portfolio/uyap_setup_dialog.dart';
 import 'search/global_search.dart';
 import 'search/global_search_page.dart';
 import 'desktop/desktop_home.dart';
@@ -797,6 +798,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (mounted) _checkRecovery();
     });
     DocumentHistory.recoveryChanges.addListener(_checkRecovery);
+    PortalSync.setupOffer.addListener(_offerSetup);
     _library = widget.library ?? LibraryController();
     _library.addListener(_changed);
     _library.addListener(_archiveChanged);
@@ -1109,8 +1111,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     unawaited(OfficePairingDialog.show(context, pairing));
   }
 
+  /// A portal connected and the portfolio never read: the setup offered,
+  /// for the lawyer to start (docs/uyap-hedef-harita.md §6).
+  void _offerSetup() {
+    if (!PortalSync.setupOffer.value || !mounted) return;
+    unawaited(UyapSetupDialog.show(context));
+  }
+
   @override
   void dispose() {
+    PortalSync.setupOffer.removeListener(_offerSetup);
     _keptSearch?.dispose();
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
     LiveShare.instance.incoming.removeListener(_liveCame);
@@ -2827,22 +2837,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     },
     onConnectMobile: () async {
       _closeDrawer();
+      // Connecting reads nothing (docs/uyap-hedef-harita.md §5).
       final sync = PortalSync.instance;
-      if (sync.mobile.connected) {
-        unawaited(sync.syncMobile());
-      } else if (await connectUyapMobile(context, api: sync.mobile)) {
-        unawaited(sync.syncMobile());
+      if (!sync.mobile.connected) {
+        await connectUyapMobile(context, api: sync.mobile);
       }
     },
     onConnectWeb: () {
       _closeDrawer();
-      final sync = PortalSync.instance;
-      if (sync.web.connected) {
-        unawaited(sync.syncWeb());
-      } else {
-        unawaited(
-          connectUyapWeb(context, onConnected: () => unawaited(sync.syncWeb())),
-        );
+      if (!PortalSync.instance.web.connected) {
+        unawaited(connectUyapWeb(context));
       }
     },
     onConnectUets: () {

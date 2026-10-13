@@ -80,8 +80,9 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
     return '${two(t.day)}.${two(t.month)}.${t.year} ${two(t.hour)}:${two(t.minute)}';
   }
 
-  Future<void> _connectWeb() =>
-      connectUyapWeb(context, onConnected: () => unawaited(_sync.syncWeb()));
+  /// Connecting reads nothing (§5): the first connection's portfolio is
+  /// PortalSync's own to start.
+  Future<void> _connectWeb() => connectUyapWeb(context);
 
   /// "6 g", "3 sa", "24 dk": a phone's chip's time left.
   static String shortLeft(DateTime until) {
@@ -316,11 +317,7 @@ class _PortalChannelBarState extends State<PortalChannelBar> {
         validity:
             'Erişim kendiliğinden yenilenir; oturum yeniden giriş '
             'gerekmeden şu tarihe kadar geçerli:',
-        connect: () async {
-          if (await connectUyapMobile(context, api: mobile)) {
-            unawaited(_sync.syncMobile());
-          }
-        },
+        connect: () => connectUyapMobile(context, api: mobile),
         syncNow: () => _sync.syncMobile(full: true),
         disconnect: () => unawaited(mobile.logout()),
       ),

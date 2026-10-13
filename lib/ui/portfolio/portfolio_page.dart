@@ -16,6 +16,7 @@ import '../help/help_button.dart';
 import '../office/tasks_page.dart' show TaskDetail;
 import '../widgets/uyap_connect_view.dart';
 import 'portfolio_rows.dart';
+import 'uyap_setup_dialog.dart';
 import '../theme/folio_palette.dart';
 
 /// Dava Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
@@ -206,27 +207,26 @@ class _PortfolioPageState extends State<PortfolioPage> {
   }
 
   /// UYAP Mobil: connected, its portfolio read again whole; else its
-  /// e-Devlet login first.
+  /// e-Devlet login, which reads nothing (§5).
   Future<void> _connectMobile() async {
     PortalSync.begin();
     final sync = PortalSync.instance;
-    if (sync.mobile.connected ||
-        await connectUyapMobile(context, api: sync.mobile)) {
+    if (sync.mobile.connected) {
       unawaited(sync.syncMobile(full: true));
+    } else {
+      await connectUyapMobile(context, api: sync.mobile);
     }
   }
 
-  /// The web portal: connected, its documents checked again; else its
-  /// login window.
+  /// The web portal: connected, its portfolio read again; else its login
+  /// window, which reads nothing (§5).
   void _connectWeb() {
     PortalSync.begin();
     final sync = PortalSync.instance;
     if (sync.web.connected) {
       unawaited(sync.syncWeb(force: true));
     } else {
-      unawaited(
-        connectUyapWeb(context, onConnected: () => unawaited(sync.syncWeb())),
-      );
+      unawaited(connectUyapWeb(context));
     }
   }
 
@@ -660,10 +660,21 @@ class _PortfolioPageState extends State<PortfolioPage> {
           PopupMenuButton<String>(
             key: const ValueKey('portfolio-menu'),
             tooltip: 'Diğer',
-            onSelected: (v) => v == 'web'
-                ? unawaited(_refreshAllOnWeb())
-                : unawaited(_setIncludeClosed(!_includeClosed)),
+            onSelected: (v) => switch (v) {
+              'web' => unawaited(_refreshAllOnWeb()),
+              'setup' => unawaited(UyapSetupDialog.show(context)),
+              _ => unawaited(_setIncludeClosed(!_includeClosed)),
+            },
             itemBuilder: (_) => [
+              PopupMenuItem(
+                key: const ValueKey('portfolio-setup'),
+                value: 'setup',
+                child: Text(
+                  PortalSync.instance.job.value == null
+                      ? 'UYAP’tan getir (kurulum)'
+                      : 'UYAP kurulumu ve web tamamlaması',
+                ),
+              ),
               CheckedPopupMenuItem(
                 key: const ValueKey('portfolio-closed-switch'),
                 value: 'closed',

@@ -213,6 +213,15 @@ Numaralar [uyap-senkron-haritasi.md](uyap-senkron-haritasi.md) §2'deki satırla
 | paylaşılan / görev evrakı indirme (`shared_cases.dart:343`, `task_package.dart:103`, `uyap_case_panel_controller.dart:828`) | E: kimlik çözme + evrak listesi; tam `refresh()` değil |
 | kalıcı `portfolio_closed` ayarı (`portal_sync.dart:2011`, `:1548`, `:1930`) | **kaldırılır**; kapalı tarama yalnız kullanıcının başlattığı ayrı iş |
 
+*Uygulandı (14 Ekim 2026, 3. adım):* `_fill`, `_fillOnly`, `_partiesOf`, `_partiesFirst`, `_unfilled`
+ve UETS'nin UYAP'a taraf sorması (`_fetchMissingParties`) kaldırıldı; `syncWeb`/`syncMobile` yalnız
+duruşma + listedir. Ekranlardaki giriş sonrası çağrılar, ajanda ve bildirim sayfası açılışı
+kaldırıldı; ajandada "Duruşmaları yenile" → `refreshHearings` (yalnız D). Vekil Kaydı: O kapalıyken
+`newCaseNotice` (uyarı ekranı 4. adımda), O açıkken ve telefon arka planı değilken portföy. Dosya
+sayfası açılışı → `readOpened` (eksik/kısmi/başarısız/24 saatten eski bölümler, 3 dk'da bir). Henüz
+duruyor: `portfolio_closed` ayarı ve kapalı tarama (5. adım); UETS sayfası açılışında UETS okuması
+(UYAP'a sormaz).
+
 ## 10. Karar bekleyenler
 
 1. ~~Mobil savcılık uç noktaları denensin mi?~~ Denendi, çalışıyor (§1). Savcılık listesi mobilde;
