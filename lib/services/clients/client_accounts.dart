@@ -25,6 +25,85 @@ enum MovementKind {
   }
 }
 
+/// The money a record is in: Turkish lira, euro or dollar. Sums of one are
+/// never added to another's; each is seen apart.
+enum Currency {
+  tl('TL', 'TL', 'TL'),
+  eur('EUR', '€', 'Euro'),
+  usd('USD', r'$', 'Dolar');
+
+  const Currency(this.code, this.sign, this.label);
+
+  /// As kept in a record's `para`; TL's is not written.
+  final String code;
+  final String sign, label;
+
+  static Currency of(Object? code) {
+    for (final c in values) {
+      if (c.code == code) return c;
+    }
+    return tl;
+  }
+}
+
+/// [cents] in [c]: "12.500 TL", "1.250,50 €", "300 $".
+String money(int cents, Currency c) => c == Currency.tl
+    ? lira(cents)
+    : '${plainMoney(cents, Currency.tl)} ${c.sign}';
+
+/// As a column of lira writes it: TL bare ("15.000"), another with its
+/// sign ("1.250 €").
+String plainMoney(int cents, Currency c) {
+  final t = lira(cents).replaceAll(' TL', '');
+  return c == Currency.tl ? t : '$t ${c.sign}';
+}
+
+/// Sums kept a currency apart: never added across.
+class Amounts {
+  Amounts([Map<Currency, int>? by]) : _by = {...?by};
+
+  final Map<Currency, int> _by;
+
+  int operator [](Currency c) => _by[c] ?? 0;
+
+  void add(Currency c, int cents) {
+    if (cents != 0) _by[c] = this[c] + cents;
+  }
+
+  Amounts operator +(Amounts o) {
+    final out = Amounts(_by);
+    for (final e in o._by.entries) {
+      out.add(e.key, e.value);
+    }
+    return out;
+  }
+
+  /// Only the currencies more than nothing is in.
+  Amounts get positive => Amounts({
+    for (final e in _by.entries)
+      if (e.value > 0) e.key: e.value,
+  });
+
+  /// The currencies it holds a sum in, in their order.
+  List<Currency> get currencies => [
+    for (final c in Currency.values)
+      if (this[c] != 0) c,
+  ];
+
+  bool get isZero => currencies.isEmpty;
+  bool get anyPositive => _by.values.any((v) => v > 0);
+
+  /// "12.500 TL + 1.000 €"; "0 TL" for nothing.
+  String get text => isZero
+      ? lira(0)
+      : [for (final c in currencies) money(this[c], c)].join(' + ');
+
+  /// As a column of lira writes it (see [plainMoney]).
+  String get plain => isZero
+      ? plainMoney(0, Currency.tl)
+      : [for (final c in currencies) plainMoney(this[c], c)].join(' + ');
+}
+
 /// A movement's fields, read from its record.
 extension Movement on ClientRecord {
   MovementKind? get movement => MovementKind.of(data['hesap']);
@@ -38,12 +117,22 @@ extension Movement on ClientRecord {
 
   /// The movement this one takes back, when it does.
   String get reverses => text('ters');
+
+  /// The money it is in: TL unless told.
+  Currency get currency => Currency.of(data['para']);
 }
 
-/// A case's account for a client: what was agreed, and the movements.
+/// A case's account for a client in one currency: what was agreed, and the
+/// movements. A case paid in more than one currency has an account in
+/// each: its main one (the fee's currency, else TL) and [others].
 class CaseAccount {
-  CaseAccount(this.caseKey, this.fee, List<ClientRecord> movements)
-    : movements = [...movements]..sort((a, b) => b.at.compareTo(a.at)) {
+  CaseAccount(
+    this.caseKey,
+    this.fee,
+    List<ClientRecord> movements, {
+    this.currency = Currency.tl,
+    this.others = const [],
+  }) : movements = [...movements]..sort((a, b) => b.at.compareTo(a.at)) {
     final taken = {
       for (final m in movements)
         if (m.reverses.isNotEmpty) m.reverses,
@@ -71,6 +160,13 @@ class CaseAccount {
   }
 
   final String caseKey;
+  final Currency currency;
+
+  /// The case's accounts in its other currencies.
+  final List<CaseAccount> others;
+
+  /// This one and [others].
+  List<CaseAccount> get all => [this, ...others];
 
   /// The fee agreed, null while none.
   final ClientRecord? fee;
@@ -92,6 +188,17 @@ class CaseAccount {
 
   /// What the lawyer met of the costs and was not paid back yet.
   int get lawyerOwed => lawyerSpent - lawyerRepaid;
+
+  /// Across the case's currencies, each apart: the fee owed (none when
+  /// overpaid), the advance left, the lawyer's costs not paid back.
+  Amounts get feeOwedAll => Amounts({
+    for (final a in all)
+      if (a.feeOwed > 0) a.currency: a.feeOwed,
+  });
+  Amounts get advanceLeftAll =>
+      Amounts({for (final a in all) a.currency: a.advanceLeft});
+  Amounts get lawyerOwedAll =>
+      Amounts({for (final a in all) a.currency: a.lawyerOwed});
 
   /// The instalments, with what is paid laid over them in order.
   List<({DateTime due, int amount, bool paid, bool late})> instalments(
@@ -120,24 +227,43 @@ class CaseAccount {
   }
 }
 
-/// [records]' accounts by case: each case's fee and movements apart. A
+/// [records]' accounts by case: each case's fee and movements apart, its
+/// main account by its key, the rest of its currencies in its [others]. A
 /// movement or fee of no case goes to the account "".
 Map<String, CaseAccount> caseAccounts(Iterable<ClientRecord> records) {
   final fees = <String, ClientRecord>{};
-  final moves = <String, List<ClientRecord>>{};
+  final moves = <String, Map<Currency, List<ClientRecord>>>{};
   for (final r in records) {
     final key = r.text('dosya');
     if (r.kind == ClientRecordKind.fee) {
       final kept = fees[key];
       if (kept == null || r.updated.isAfter(kept.updated)) fees[key] = r;
     } else if (r.kind == ClientRecordKind.movement) {
-      (moves[key] ??= []).add(r);
+      ((moves[key] ??= {})[r.currency] ??= []).add(r);
     }
   }
-  return {
-    for (final key in {...fees.keys, ...moves.keys})
-      key: CaseAccount(key, fees[key], moves[key] ?? const []),
-  };
+  final out = <String, CaseAccount>{};
+  for (final key in {...fees.keys, ...moves.keys}) {
+    final fee = fees[key];
+    final byCurrency = moves[key] ?? const {};
+    final main =
+        fee?.currency ??
+        (byCurrency.containsKey(Currency.tl) || byCurrency.isEmpty
+            ? Currency.tl
+            : byCurrency.keys.first);
+    out[key] = CaseAccount(
+      key,
+      fee,
+      byCurrency[main] ?? const [],
+      currency: main,
+      others: [
+        for (final c in Currency.values)
+          if (c != main && byCurrency.containsKey(c))
+            CaseAccount(key, null, byCurrency[c]!, currency: c),
+      ],
+    );
+  }
+  return out;
 }
 
 /// "12.500 TL" or "12.500,50 TL", from kuruş: the app's typeface has no

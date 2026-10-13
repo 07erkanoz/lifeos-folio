@@ -436,6 +436,10 @@ enum ClientRecordKind {
   /// An expense the office pays every month, written for each month.
   cashRepeat('kasaTekrar'),
 
+  /// A bank account kept beside the book, if the lawyer wants one: its
+  /// name, currency and balance as last told (office_cash.dart).
+  bank('banka'),
+
   /// A message written to the client (WhatsApp, SMS, e-mail) as the
   /// lawyer sent it: kept on their timeline.
   message('mesaj'),
@@ -454,6 +458,7 @@ enum ClientRecordKind {
       this == movement ||
       this == cash ||
       this == cashRepeat ||
+      this == bank ||
       this == paper;
 
   static ClientRecordKind? of(Object? code) {

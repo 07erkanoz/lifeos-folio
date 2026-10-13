@@ -8,7 +8,9 @@ enum CashSide {
   income('Gelir'),
   expense('Gider'),
   trust('Emanet'),
-  onBehalf('Müvekkil adına');
+
+  /// A cost the lawyer met for a client, and its paying back.
+  onBehalf('Müvekkil masrafı');
 
   const CashSide(this.label);
   final String label;
@@ -43,10 +45,14 @@ class CashLine {
     this.way = '',
     this.category = '',
     this.struck = false,
+    this.currency = Currency.tl,
   });
 
   final ClientRecord record;
   final CashSide side;
+
+  /// The money it is in: its sums are never added to another's.
+  final Currency currency;
   final DateTime at;
   final String title, client, caseKey, way, category;
 
@@ -111,6 +117,7 @@ List<CashLine> cashLines(PortalDatabase db, {List<ClientEntry>? entries}) {
           way: r.text('odeme'),
           category: r.text('kategori'),
           struck: struck,
+          currency: r.currency,
         ),
       );
       continue;
@@ -140,10 +147,32 @@ List<CashLine> cashLines(PortalDatabase db, {List<ClientEntry>? entries}) {
         way: r.text('odeme'),
         category: kind.label,
         struck: struck,
+        currency: r.currency,
       ),
     );
   }
   return out..sort((a, b) => b.at.compareTo(a.at));
+}
+
+/// The currencies [lines] are in, TL always first.
+List<Currency> cashCurrencies(Iterable<CashLine> lines) {
+  final used = {Currency.tl, for (final l in lines) l.currency};
+  return [
+    for (final c in Currency.values)
+      if (used.contains(c)) c,
+  ];
+}
+
+/// What the office has in each currency by its book: all it earned less
+/// all it spent. A client's advance held is not the office's.
+Amounts cashBalance(Iterable<CashLine> lines) {
+  final out = Amounts();
+  for (final l in lines) {
+    if (l.side == CashSide.income || l.side == CashSide.expense) {
+      out.add(l.currency, l.amount);
+    }
+  }
+  return out;
 }
 
 /// What the lines say together: earned, spent, and their difference.
@@ -156,9 +185,20 @@ List<CashLine> cashLines(PortalDatabase db, {List<ClientEntry>? entries}) {
   return (income: income, expense: expense, net: income - expense);
 }
 
-/// Each client's accounts together: the fee still owed and the costs the
-/// lawyer met, and the advance held, by the client's key in the list.
-List<({String key, String name, int owed, int held, bool late})> clientBalances(
+/// A client's accounts together, each currency apart: the fee still owed,
+/// the costs the lawyer met and was not paid back, and the advance held.
+typedef ClientBalance = ({
+  String key,
+  String name,
+  Amounts owed,
+  Amounts costs,
+  Amounts held,
+  bool late,
+});
+
+/// Each client's accounts together (see [ClientBalance]), by the client's
+/// key in the list.
+List<ClientBalance> clientBalances(
   PortalDatabase db,
   DateTime now, {
   List<ClientEntry>? entries,
@@ -170,21 +210,28 @@ List<({String key, String name, int owed, int held, bool late})> clientBalances(
       (records[r.clientId] ??= []).add(r);
     }
   }
-  final out = <({String key, String name, int owed, int held, bool late})>[];
+  final out = <ClientBalance>[];
   for (final e in all) {
     final ids = {...e.ids, ?e.client?.id};
     final mine = [for (final id in ids) ...?records[id]];
     if (mine.isEmpty) continue;
-    var owed = 0, held = 0;
+    var owed = Amounts(), costs = Amounts(), held = Amounts();
     var late = false;
     for (final a in caseAccounts(mine).values) {
-      if (a.feeOwed > 0) owed += a.feeOwed;
-      if (a.lawyerOwed > 0) owed += a.lawyerOwed;
-      held += a.advanceLeft;
+      owed += a.feeOwedAll;
+      costs += a.lawyerOwedAll.positive;
+      held += a.advanceLeftAll;
       if (a.instalments(now).any((t) => t.late)) late = true;
     }
-    if (owed != 0 || held != 0) {
-      out.add((key: e.key, name: e.name, owed: owed, held: held, late: late));
+    if (!owed.isZero || !costs.isZero || !held.isZero) {
+      out.add((
+        key: e.key,
+        name: e.name,
+        owed: owed,
+        costs: costs,
+        held: held,
+        late: late,
+      ));
     }
   }
   return out;
@@ -233,6 +280,7 @@ int writeRepeats(PortalDatabase db, DateTime now, {String person = ''}) {
             'zaman': day.toIso8601String(),
             'aciklama': t.text('aciklama'),
             'odeme': t.text('odeme'),
+            'para': ?t.data['para'],
             'tekrar': t.id,
           },
           created: now,
@@ -246,4 +294,41 @@ int writeRepeats(PortalDatabase db, DateTime now, {String person = ''}) {
     }
   }
   return made;
+}
+
+/// A bank account the lawyer chose to keep beside the book: its name, its
+/// currency and its balance as last told. Nothing is asked of a bank; the
+/// balance is what the lawyer wrote, with when.
+class BankAccount {
+  const BankAccount(this.record);
+
+  final ClientRecord record;
+
+  String get id => record.id;
+  String get name => record.text('ad');
+  Currency get currency => record.currency;
+
+  /// Kuruş, or the currency's hundredth.
+  int get balance =>
+      record.data['bakiye'] is int ? record.data['bakiye'] as int : 0;
+  DateTime get told =>
+      DateTime.tryParse(record.text('tarih')) ?? record.updated;
+}
+
+/// The bank accounts kept, by name.
+List<BankAccount> bankAccounts(PortalDatabase db) => [
+  for (final r in db.allClientRecords())
+    if (!r.removed &&
+        r.kind == ClientRecordKind.bank &&
+        r.clientId == officeCashId)
+      BankAccount(r),
+]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+/// The banks' balances together, each currency apart.
+Amounts bankTotal(Iterable<BankAccount> banks) {
+  final out = Amounts();
+  for (final b in banks) {
+    out.add(b.currency, b.balance);
+  }
+  return out;
 }

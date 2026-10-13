@@ -50,8 +50,8 @@ Future<Uint8List> clientStatementPdf({
         ],
       );
 
-  List<pw.Widget> account(String key) {
-    final a = accounts[key]!;
+  List<pw.Widget> account(String key, CaseAccount a, {bool secondary = false}) {
+    String lira(int v) => money(v, a.currency);
     final plan = a.instalments(at);
     final agreed = [
       if (a.feeAgreed > 0) 'Sabit ${lira(a.feeAgreed)}',
@@ -60,11 +60,14 @@ Future<Uint8List> clientStatementPdf({
     return [
       pw.SizedBox(height: 14),
       pw.Text(
-        key.isEmpty ? 'Dosyasız' : cases[key] ?? key,
+        [
+          key.isEmpty ? 'Dosyasız' : cases[key] ?? key,
+          if (secondary || a.currency != Currency.tl) a.currency.label,
+        ].join(' · '),
         style: head.copyWith(fontSize: 11.5),
       ),
       pw.SizedBox(height: 4),
-      line('Ücret anlaşması', agreed.isEmpty ? 'yok' : agreed),
+      if (!secondary) line('Ücret anlaşması', agreed.isEmpty ? 'yok' : agreed),
       for (final t in plan)
         line(
           '   Taksit ${day(t.due)}',
@@ -109,7 +112,7 @@ Future<Uint8List> clientStatementPdf({
         ],
       ),
       pw.SizedBox(height: 6),
-      line('Ödenen ücret', lira(a.feeIn)),
+      if (!secondary || a.feeIn != 0) line('Ödenen ücret', lira(a.feeIn)),
       if (a.feeAgreed > 0)
         line('Kalan ücret', lira(a.feeOwed), strongValue: true),
       line('Avans bakiyesi', lira(a.advanceLeft), strongValue: true),
@@ -147,7 +150,9 @@ Future<Uint8List> clientStatementPdf({
           pw.SizedBox(height: 14),
           pw.Text('Hesap hareketi yok.', style: base),
         ],
-        for (final k in keys) ...account(k),
+        for (final k in keys)
+          for (final (i, a) in accounts[k]!.all.indexed)
+            ...account(k, a, secondary: i > 0),
       ],
     ),
   );

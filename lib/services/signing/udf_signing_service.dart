@@ -59,6 +59,7 @@ class UdfSigningService {
   /// For the lock's "Şifremi unuttum"; no trust chain is checked.
   Future<String?> provenTckn(SigningCard card, String pin) =>
       _exclusive(_provenTckn, (card: card, pin: pin));
+
   /// The card's certificates; with an empty [pin], those it shows without
   /// one.
   Future<List<SigningCertificate>> certificates(SigningCard card, String pin) =>

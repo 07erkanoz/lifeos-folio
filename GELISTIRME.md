@@ -46,6 +46,7 @@ Sırayla yapılacak; her biri bitince testleri geçer, main'e gider ve burada i�
    - [x] Koyu tema: sayfaların sabit renkleri `FolioPalette.tone` ile koyulaşıyor (Android'de tebligat zarfı okunmuyordu).
    - [x] Bildirimler: Android kilit ekranında içerik, "Bildirimde ayrıntıyı göster" ayarı.
    - [ ] Müvekkiller ve Kasa sayfaları için mock.
+   - [x] Kasa'da para birimleri (13 Ekim 2026): gelir, gider, tahsilat, ücret anlaşması ve banka için TL, € ya da $ seçilir; her para birimi kendi kasasında toplanır, birbirine çevrilmez. Dosyanın Euro ücreti ile TL masrafları ayrı hesaplarda görünür. "Müvekkil masrafı" kutusu avukatın ödeyip geri almadığı masrafları gösterir. Banka bakiyesi isteğe bağlı; bankaya bağlanılmaz, IBAN istenmez.
    - [ ] Kalan ~190 diyaloğun `FolioDialog`'a taşınması (sık kullanılanlar önce).
 10. **UETS tebligatları** (12 Ekim 2026, kullanıcı bildirdi):
     - [x] Kenar çubuğundaki okunmamış sayısı hiç düşmüyordu: yalnızca UETS'in okunma (tebliğ) tarihine bakılıyordu. Artık Folio'da açılan tebligat "görüldü" sayılıyor (`uets_seen` tablosu); UETS'e bir şey gönderilmiyor, tebliğ tarihi ve süreler değişmiyor.

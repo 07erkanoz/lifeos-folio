@@ -81,6 +81,7 @@ List<DueMessage> dueMessages(
         caseKey: t.caseKey,
         amount: t.amount,
         daysLeft: t.daysLeft,
+        currency: t.currency,
       ),
     );
   }
@@ -182,6 +183,7 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
     var court = kase?.court ?? '';
     DateTime? at;
     var amount = 0;
+    var currency = Currency.tl;
     var result = '';
     switch (_kind) {
       case MessageKind.hearing:
@@ -211,11 +213,14 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
         if (due != null && due.kind == MessageKind.instalment) {
           at = due.at;
           amount = due.amount;
+          currency = due.currency;
         } else {
-          final plan = caseAccounts(_money)[_case]?.instalments(now) ?? [];
+          final account = caseAccounts(_money)[_case];
+          final plan = account?.instalments(now) ?? [];
           final next = plan.where((t) => !t.paid).firstOrNull;
           at = next?.due;
           amount = next?.amount ?? 0;
+          currency = account?.currency ?? Currency.tl;
         }
       case MessageKind.receipt:
         final paid = [
@@ -227,6 +232,7 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
         ]..sort((a, b) => b.at.compareTo(a.at));
         at = paid.firstOrNull?.at;
         amount = paid.firstOrNull?.amount ?? 0;
+        currency = paid.firstOrNull?.currency ?? Currency.tl;
       case MessageKind.free:
         break;
     }
@@ -237,6 +243,7 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
       court: court,
       at: at,
       amount: amount,
+      currency: currency,
       result: result,
     );
     _subject = m.subject;

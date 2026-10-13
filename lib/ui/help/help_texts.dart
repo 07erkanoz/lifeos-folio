@@ -210,8 +210,23 @@ abstract final class Help {
         'kendiliğinden düşer.',
     [
       HelpPart('Kullanmak', [
-        'Gider eklemek için Yeni’ye basın, tutarı ve açıklamayı yazın.',
+        'Gider eklemek için Gider’e basın, tutarı ve açıklamayı yazın.',
         'Aylık ve yıllık raporu seçip görüntüleyin ya da yazdırın.',
+      ]),
+      HelpPart('TL, Euro ve Dolar', [
+        'Tutarın yanındaki TL, € ve \$ düğmesiyle para birimini seçin.',
+        'Her para birimi kendi kasasında toplanır; birbirine çevrilmez. '
+            'Üstteki kasa kartına basınca sayfa o para birimini gösterir.',
+      ]),
+      HelpPart('Müvekkil masrafları', [
+        'Müvekkil için sizin ödediğiniz masraflar Müvekkil masrafı kutusunda '
+            'toplanır; geri alındıkça düşer. Kutuya basınca yalnız bunlar '
+            'listelenir.',
+      ]),
+      HelpPart('Banka (isteğe bağlı)', [
+        'İsterseniz Banka bakiyesi ekle ile hesabın adını ve bakiyesini '
+            'yazın. Bankaya bağlanılmaz, IBAN istenmez; bakiyeyi karta basıp '
+            'istediğiniz zaman güncellersiniz.',
       ]),
     ],
     'Kasayı yalnız yöneticiler ve yöneticinin izin verdiği kişiler görür.',

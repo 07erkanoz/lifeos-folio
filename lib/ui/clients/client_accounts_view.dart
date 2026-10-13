@@ -11,6 +11,34 @@ String _two(int v) => v.toString().padLeft(2, '0');
 String _day(DateTime t) => '${_two(t.day)}.${_two(t.month)}.${t.year}';
 String _time(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
 
+/// TL, € or \$: which money an amount is in.
+class CurrencyChoice extends StatelessWidget {
+  const CurrencyChoice({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final Currency value;
+  final ValueChanged<Currency> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SegmentedButton<Currency>(
+    showSelectedIcon: false,
+    style: const ButtonStyle(visualDensity: VisualDensity.compact),
+    segments: [
+      for (final c in Currency.values)
+        ButtonSegment(
+          value: c,
+          label: Text(c.sign, key: ValueKey('currency-${c.code}')),
+          tooltip: c == Currency.tl ? 'Türk lirası' : c.label,
+        ),
+    ],
+    selected: {value},
+    onSelectionChanged: (v) => onChanged(v.first),
+  );
+}
+
 /// A client's accounts, a case at a time: each case's fee, advance and the
 /// costs the lawyer met apart (docs/design/muvekkil-taslak).
 class ClientAccountsView extends StatelessWidget {
@@ -48,8 +76,9 @@ class ClientAccountsView extends StatelessWidget {
   /// The client's cases: key and title.
   final List<({String key, String title})> cases;
 
-  /// A movement to write, for the case given.
-  final void Function(String caseKey) onMovement;
+  /// A movement to write, for the case given, in the currency of the
+  /// account it was asked from.
+  final void Function(String caseKey, Currency currency) onMovement;
   final void Function(String caseKey, ClientRecord? kept) onFee;
   final void Function(ClientRecord movement) onReverse;
 
@@ -67,13 +96,11 @@ class ClientAccountsView extends StatelessWidget {
             if (!cases.any((c) => c.key == k))
               (key: k, title: k.isEmpty ? 'Dosyasız' : (titleOf?.call(k) ?? k)),
         ])
-          _account(
-            context,
-            c.title,
-            c.key,
-            accounts[c.key] ?? CaseAccount(c.key, null, const []),
-            now,
-          ),
+          for (final (i, a)
+              in (accounts[c.key] ?? CaseAccount(c.key, null, const []))
+                  .all
+                  .indexed)
+            _account(context, c.title, c.key, a, now, secondary: i > 0),
       ],
     );
   }
@@ -83,22 +110,26 @@ class ClientAccountsView extends StatelessWidget {
     String title,
     String key,
     CaseAccount a,
-    DateTime now,
-  ) {
+    DateTime now, {
+    bool secondary = false,
+  }) {
     final instalments = a.instalments(now);
     final late = instalments.where((t) => t.late).length;
+    String m(int v) => money(v, a.currency);
     String agreed() {
       final fixed = a.feeAgreed, share = a.feeShare;
       if (a.fee == null) return 'Ücret anlaşması yok';
       return [
-        if (fixed > 0) 'Sabit ${lira(fixed)}',
+        if (fixed > 0) 'Sabit ${m(fixed)}',
         if (share > 0) '%$share',
         if (instalments.isNotEmpty) '${instalments.length} taksit',
       ].join(' + ');
     }
 
     return Card(
-      key: ValueKey('account-$key'),
+      key: ValueKey(
+        secondary ? 'account-$key-${a.currency.code}' : 'account-$key',
+      ),
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -108,14 +139,20 @@ class ClientAccountsView extends StatelessWidget {
       child: ExpansionTile(
         initiallyExpanded: true,
         shape: const Border(),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(
+          a.currency == Currency.tl && !secondary
+              ? title
+              : '$title · ${a.currency.label}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         subtitle: Wrap(
           spacing: 10,
           children: [
-            _amount('Ücret kalan', a.feeOwed, owed: true),
-            _amount('Avans', a.advanceLeft),
+            if (!secondary)
+              _amount('Ücret kalan', a.feeOwed, a.currency, owed: true),
+            _amount('Avans', a.advanceLeft, a.currency),
             if (a.lawyerOwed != 0)
-              _amount('Avukat masrafı', a.lawyerOwed, owed: true),
+              _amount('Avukat masrafı', a.lawyerOwed, a.currency, owed: true),
             if (late > 0)
               Text(
                 '$late taksit gecikti',
@@ -128,43 +165,44 @@ class ClientAccountsView extends StatelessWidget {
           ],
         ),
         children: [
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.handshake_outlined, size: 20),
-            title: Text(agreed()),
-            subtitle: a.fee?.text('not').isNotEmpty ?? false
-                ? Text(a.fee!.text('not'))
-                : null,
-            trailing: Wrap(
-              children: [
-                if (onPaper != null)
-                  PopupMenuButton<String>(
-                    key: ValueKey('papers-$key'),
-                    tooltip: 'Belge hazırla',
-                    icon: const Icon(Icons.description_outlined, size: 20),
-                    onSelected: (v) => onPaper!(v, key, null),
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: 'sozlesme',
-                        child: Text('Avukatlık ücret sözleşmesi'),
-                      ),
-                      PopupMenuItem(value: 'ibra', child: Text('İbraname')),
-                    ],
-                  ),
-                if (onStatement != null && a.movements.isNotEmpty)
+          if (!secondary)
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.handshake_outlined, size: 20),
+              title: Text(agreed()),
+              subtitle: a.fee?.text('not').isNotEmpty ?? false
+                  ? Text(a.fee!.text('not'))
+                  : null,
+              trailing: Wrap(
+                children: [
+                  if (onPaper != null)
+                    PopupMenuButton<String>(
+                      key: ValueKey('papers-$key'),
+                      tooltip: 'Belge hazırla',
+                      icon: const Icon(Icons.description_outlined, size: 20),
+                      onSelected: (v) => onPaper!(v, key, null),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'sozlesme',
+                          child: Text('Avukatlık ücret sözleşmesi'),
+                        ),
+                        PopupMenuItem(value: 'ibra', child: Text('İbraname')),
+                      ],
+                    ),
+                  if (onStatement != null && a.movements.isNotEmpty)
+                    TextButton(
+                      key: ValueKey('statement-$key'),
+                      onPressed: () => onStatement!(key),
+                      child: const Text('Döküm'),
+                    ),
                   TextButton(
-                    key: ValueKey('statement-$key'),
-                    onPressed: () => onStatement!(key),
-                    child: const Text('Döküm'),
+                    key: ValueKey('fee-$key'),
+                    onPressed: () => onFee(key, a.fee),
+                    child: Text(a.fee == null ? 'Anlaşma ekle' : 'Değiştir'),
                   ),
-                TextButton(
-                  key: ValueKey('fee-$key'),
-                  onPressed: () => onFee(key, a.fee),
-                  child: Text(a.fee == null ? 'Anlaşma ekle' : 'Değiştir'),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           for (final t in instalments)
             ListTile(
               dense: true,
@@ -183,7 +221,7 @@ class ClientAccountsView extends StatelessWidget {
                     : AgendaColors.muted,
               ),
               title: Text('Taksit · ${_day(t.due)}'),
-              trailing: Text(lira(t.amount)),
+              trailing: Text(m(t.amount)),
             ),
           const Divider(height: 1),
           if (a.movements.isEmpty)
@@ -201,7 +239,7 @@ class ClientAccountsView extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
               child: TextButton.icon(
                 key: ValueKey('movement-$key'),
-                onPressed: () => onMovement(key),
+                onPressed: () => onMovement(key, a.currency),
                 icon: const Icon(Icons.add_rounded, size: 18),
                 label: const Text('Hareket ekle'),
               ),
@@ -212,8 +250,13 @@ class ClientAccountsView extends StatelessWidget {
     );
   }
 
-  Widget _amount(String label, int value, {bool owed = false}) => Text(
-    '$label ${lira(value)}',
+  Widget _amount(
+    String label,
+    int value,
+    Currency currency, {
+    bool owed = false,
+  }) => Text(
+    '$label ${money(value, currency)}',
     style: TextStyle(
       fontSize: 12.5,
       fontWeight: FontWeight.w600,
@@ -259,7 +302,7 @@ class ClientAccountsView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '${sign > 0 ? '+' : '−'}${lira(m.amount)}',
+            '${sign > 0 ? '+' : '−'}${money(m.amount, m.currency)}',
             style: TextStyle(
               fontWeight: FontWeight.w700,
               color: gone
@@ -301,11 +344,15 @@ class MovementDialog extends StatefulWidget {
     required this.lawyer,
     required this.person,
     required this.files,
+    this.currency = Currency.tl,
   });
 
   final Client client;
   final String caseKey, lawyer, person;
   final ClientFiles files;
+
+  /// The currency it starts in: the account's it was asked from.
+  final Currency currency;
 
   @override
   State<MovementDialog> createState() => _MovementDialogState();
@@ -314,6 +361,7 @@ class MovementDialog extends StatefulWidget {
 class _MovementDialogState extends State<MovementDialog> {
   static const _ways = ['Nakit', 'Havale / EFT', 'Kredi kartı', 'Çek'];
   var _kind = MovementKind.feePaid;
+  late Currency _currency = widget.currency;
   String? _way = _ways.first;
   DateTime _at = DateTime.now();
   final _amount = TextEditingController();
@@ -378,6 +426,7 @@ class _MovementDialogState extends State<MovementDialog> {
           'dosya': widget.caseKey,
           'hesap': _kind.code,
           'tutar': amount,
+          if (_currency != Currency.tl) 'para': _currency.code,
           'zaman': _at.toIso8601String(),
           if (_way != null && _kind.sign > 0) 'odeme': _way,
           if (_kind == MovementKind.costByLawyer) 'odeme': 'Avukat ödedi',
@@ -416,16 +465,33 @@ class _MovementDialogState extends State<MovementDialog> {
               onChanged: (v) => setState(() => _kind = v ?? _kind),
             ),
             const SizedBox(height: 10),
-            TextField(
-              key: const ValueKey('movement-amount'),
-              controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Tutar (TL)',
-                errorText: _error,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('movement-amount'),
+                    controller: _amount,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Tutar',
+                      suffixText: _currency.sign,
+                      errorText: _error,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: CurrencyChoice(
+                    key: const ValueKey('movement-currency'),
+                    value: _currency,
+                    onChanged: (c) => setState(() => _currency = c),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -523,6 +589,7 @@ class _FeeDialogState extends State<FeeDialog> {
   late final _note = TextEditingController(
     text: widget.kept?.text('not') ?? '',
   );
+  late Currency _currency = widget.kept?.currency ?? Currency.tl;
 
   /// The plan's first day as it was; today for a new agreement.
   late DateTime _first = () {
@@ -585,6 +652,7 @@ class _FeeDialogState extends State<FeeDialog> {
       'yuzde': share,
       'taksitler': plan,
       'not': _note.text.trim(),
+      if (_currency != Currency.tl) 'para': _currency.code,
     };
     final now = DateTime.now();
     Navigator.pop(
@@ -614,11 +682,27 @@ class _FeeDialogState extends State<FeeDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              key: const ValueKey('fee-fixed'),
-              controller: _fixed,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Sabit ücret (TL)'),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('fee-fixed'),
+                    controller: _fixed,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Sabit ücret',
+                      suffixText: _currency.sign,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CurrencyChoice(
+                  key: const ValueKey('fee-currency'),
+                  value: _currency,
+                  onChanged: (c) => setState(() => _currency = c),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             TextField(

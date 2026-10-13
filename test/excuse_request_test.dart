@@ -46,7 +46,10 @@ void main() {
     api = UyapMobileApi.forTesting(
       Uri.parse('http://127.0.0.1:${server.port}/services/'),
     );
-    sync = PortalSync(mobile: api, database: () async => PortalDatabase.memory());
+    sync = PortalSync(
+      mobile: api,
+      database: () async => PortalDatabase.memory(),
+    );
     await api.login('kod');
   });
   tearDown(() async {
@@ -97,13 +100,15 @@ void main() {
     });
   });
 
-  test('a hearing known only from the web is found by its case and minute',
-      () async {
-    rows = [row(time: '08.10.2026 14:00', id: 'other'), row()];
-    final answer = await sync.requestExcuse(hearing(), 'Hastalık.');
-    expect(answer.ok, isTrue);
-    expect(sent.single['kayitId'], 'enc-k1');
-  });
+  test(
+    'a hearing known only from the web is found by its case and minute',
+    () async {
+      rows = [row(time: '08.10.2026 14:00', id: 'other'), row()];
+      final answer = await sync.requestExcuse(hearing(), 'Hastalık.');
+      expect(answer.ok, isTrue);
+      expect(sent.single['kayitId'], 'enc-k1');
+    },
+  );
 
   test('a hearing closed to excuses is not asked for', () async {
     rows = [row(open: false)];

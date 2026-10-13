@@ -14,7 +14,7 @@ import 'office_network.dart';
 import 'office_task.dart';
 import 'task_hearings.dart';
 import '../portal/portal_database.dart';
-import '../clients/client_accounts.dart' show lira;
+import '../clients/client_accounts.dart' show money;
 import '../clients/fee_reminders.dart';
 
 /// The office's words as the system's notifications (docs/buro.md,
@@ -131,7 +131,7 @@ void tellOffice(OfficeNetwork net, {SystemNotices? notices, AppLock? lock}) {
           : t.daysLeft == 0
           ? 'Bugün taksit günü'
           : '${t.daysLeft} gün sonra taksit',
-      '${t.client.name}: ${lira(t.amount)}',
+      '${t.client.name}: ${money(t.amount, t.currency)}',
       'muvekkil:${t.client.id}',
       'Bir taksit hatırlatması',
     ),

@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:evrak_convert/services/clients/client.dart';
 import 'package:evrak_convert/services/clients/client_accounts.dart';
+import 'package:evrak_convert/services/clients/client_documents.dart'
+    show inWords;
 import 'package:evrak_convert/services/clients/client_files.dart';
 import 'package:evrak_convert/services/clients/office_cash.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -16,6 +18,7 @@ ClientRecord _move(
   DateTime at, {
   String client = 'c1',
   String reverses = '',
+  String currency = '',
 }) => ClientRecord(
   id: id,
   clientId: client,
@@ -26,6 +29,7 @@ ClientRecord _move(
     'tutar': lira * 100,
     'zaman': at.toIso8601String(),
     'ters': ?(reverses.isEmpty ? null : reverses),
+    'para': ?(currency.isEmpty ? null : currency),
   },
   created: at,
   by: 'Av. Deniz Kaya',
@@ -40,6 +44,7 @@ ClientRecord _cash(
   bool income = false,
   String category = 'Kira',
   String person = '',
+  String currency = '',
 }) => ClientRecord(
   id: id,
   clientId: officeCashId,
@@ -50,6 +55,7 @@ ClientRecord _cash(
     'tutar': lira * 100,
     'zaman': at.toIso8601String(),
     'odeme': 'Banka',
+    'para': ?(currency.isEmpty ? null : currency),
   },
   created: at,
   by: 'Av. Deniz Kaya',
@@ -103,8 +109,11 @@ void main() {
     expect(t.expense, 1800000);
     expect(t.net, 0);
     final b = clientBalances(db, oct).single;
-    expect(b.held, 250000);
-    expect(b.owed, 125000);
+    expect(b.held[Currency.tl], 250000);
+    // The lawyer's cost met for the client, not paid back: apart from the
+    // fee owed (none agreed here).
+    expect(b.costs[Currency.tl], 125000);
+    expect(b.owed.isZero, isTrue);
   });
 
   test('a monthly expense is written once a month, the same on every '
@@ -230,5 +239,148 @@ void main() {
     expect(r.locked, isTrue);
     expect(find.text('Ofis kirası'), findsOneWidget);
     expect(find.text('18.000 TL'), findsWidgets);
+  });
+
+  test('each currency is a book of its own: a case paid in euro keeps its '
+      'costs met in lira apart, and nothing is added across', () {
+    final oct = DateTime(2026, 10, 8, 14, 22);
+    db.saveClientRecord(
+      ClientRecord(
+        id: 'f1',
+        clientId: 'c1',
+        kind: ClientRecordKind.fee,
+        data: {'dosya': 'k1', 'tutar': 500000, 'para': 'EUR'},
+        created: oct,
+        by: 'Av. Deniz Kaya',
+        updated: oct,
+      ),
+    );
+    for (final r in [
+      _move('e1', MovementKind.feePaid, 2000, oct, currency: 'EUR'),
+      _move('t1', MovementKind.costByLawyer, 3500, oct),
+      _cash('g1', 18000, oct),
+      _cash('u1', 1200, oct, income: true, currency: 'USD'),
+    ]) {
+      db.saveClientRecord(r);
+    }
+    final a = caseAccounts(
+      db.allClientRecords().where((r) => r.clientId == 'c1'),
+    )['k1']!;
+    expect(a.currency, Currency.eur);
+    expect(a.feeOwed, 300000);
+    expect(a.others.single.currency, Currency.tl);
+    expect(a.others.single.lawyerOwed, 350000);
+    expect(a.feeOwedAll.text, '3.000 €');
+    final b = clientBalances(db, oct).single;
+    expect(b.owed[Currency.eur], 300000);
+    expect(b.owed[Currency.tl], 0);
+    expect(b.costs.text, '3.500 TL');
+
+    final lines = cashLines(db);
+    expect(cashCurrencies(lines), [Currency.tl, Currency.eur, Currency.usd]);
+    final balance = cashBalance(lines);
+    expect(balance[Currency.tl], -1800000);
+    expect(balance[Currency.eur], 200000);
+    expect(balance[Currency.usd], 120000);
+    expect(balance.text, '−18.000 TL + 2.000 € + 1.200 \$');
+    expect(inWords(150050, Currency.eur), 'bin beş yüz Avro elli sent');
+  });
+
+  test('a bank account is the lawyer\'s own word: its name, currency and '
+      'balance, told again whenever they like', () {
+    expect(bankAccounts(db), isEmpty);
+    final at = DateTime(2026, 10, 12);
+    final r = ClientRecord(
+      id: 'b1',
+      clientId: officeCashId,
+      kind: ClientRecordKind.bank,
+      data: {'ad': 'Garanti Euro', 'bakiye': 1250000, 'para': 'EUR'},
+      created: at,
+      by: 'Av. Deniz Kaya',
+      updated: at,
+    );
+    db.saveClientRecord(r);
+    final bank = bankAccounts(db).single;
+    expect(bank.name, 'Garanti Euro');
+    expect(bank.currency, Currency.eur);
+    expect(bankTotal([bank]).text, '12.500 €');
+    expect(ClientRecordKind.bank.money, isTrue);
+    db.saveClientRecord(r.copyWith(removed: true));
+    expect(bankAccounts(db), isEmpty);
+  });
+
+  testWidgets('the page shows a till for each currency, the one chosen '
+      'its own; a bank balance may be added, and need not be', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final root = Directory.systemTemp.createTempSync('folio_cash_');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final now = DateTime.now();
+    db.saveClientRecord(_cash('g1', 18000, now));
+    db.saveClientRecord(_cash('e1', 2000, now, income: true, currency: 'EUR'));
+    db.saveClientRecord(_move('m1', MovementKind.costByLawyer, 750, now));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CashPage(
+            lawyer: 'Av. Deniz Kaya',
+            database: db,
+            files: ClientFiles(root: () async => root),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('TL kasası'), findsOneWidget);
+    expect(find.text('Euro kasası'), findsOneWidget);
+    expect(find.text('Dolar kasası'), findsNothing);
+    expect(find.text('−18.000 TL'), findsWidgets);
+    expect(find.text('2.000 €'), findsWidgets);
+    // The costs met for clients, in TL.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('cash-client-costs')),
+        matching: find.text('750 TL'),
+      ),
+      findsOneWidget,
+    );
+    // TL's book: the euro income is not in it.
+    expect(find.byKey(const ValueKey('cash-line-e1')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('cash-till-EUR')));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('cash-client-costs')),
+        matching: find.text('0 €'),
+      ),
+      findsOneWidget,
+    );
+
+    // An expense written while the euro book is shown is in euro.
+    await tester.tap(find.byKey(const ValueKey('cash-expense')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('cash-amount')), '300');
+    await tester.tap(find.byKey(const ValueKey('cash-save')));
+    await tester.pumpAndSettle();
+    final written = db.allClientRecords().singleWhere(
+      (r) => r.kind == ClientRecordKind.cash && r.amount == 30000,
+    );
+    expect(written.currency, Currency.eur);
+
+    // A bank: never asked for, added when wanted.
+    await tester.tap(find.byKey(const ValueKey('cash-bank-add')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('bank-name')), 'Ziraat');
+    await tester.enterText(
+      find.byKey(const ValueKey('bank-balance')),
+      '45.000',
+    );
+    await tester.tap(find.byKey(const ValueKey('currency-TL')));
+    await tester.tap(find.byKey(const ValueKey('bank-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Ziraat'), findsOneWidget);
+    expect(find.text('45.000 TL'), findsOneWidget);
+    expect(find.byKey(const ValueKey('cash-bank-add')), findsNothing);
   });
 }

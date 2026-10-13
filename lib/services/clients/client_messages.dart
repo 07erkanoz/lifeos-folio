@@ -68,6 +68,7 @@ String longDay(DateTime t, {bool time = true}) =>
   String court = '',
   DateTime? at,
   int amount = 0,
+  Currency currency = Currency.tl,
   String result = '',
 }) {
   final hello = 'Sayın $client,';
@@ -84,12 +85,12 @@ String longDay(DateTime t, {bool time = true}) =>
           '${result.isEmpty ? '' : ' Sonuç: $result.'} '
           'Ayrıntıları görüşmek için bana ulaşabilirsiniz.',
     MessageKind.instalment =>
-      'avukatlık ücretinin ${lira(amount)} tutarındaki taksidinin ödeme '
+      'avukatlık ücretinin ${money(amount, currency)} tutarındaki taksidinin ödeme '
           'günü ${at == null ? 'yaklaşmaktadır' : '${longDay(at, time: false)}\'dir'}. '
           'Bilginize sunarım.',
     MessageKind.receipt =>
       '${at == null ? '' : '${longDay(at)} tarihinde '}'
-          'yaptığınız ${lira(amount)} tutarındaki ödeme alınmıştır. '
+          'yaptığınız ${money(amount, currency)} tutarındaki ödeme alınmıştır. '
           'Teşekkür ederim.',
     MessageKind.free => '',
   };
@@ -204,10 +205,12 @@ class DueMessage {
     this.court = '',
     this.amount = 0,
     this.daysLeft = 0,
+    this.currency = Currency.tl,
   });
   final Client client;
   final MessageKind kind;
   final DateTime at;
   final String about, caseKey, court;
   final int amount, daysLeft;
+  final Currency currency;
 }

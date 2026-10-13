@@ -71,6 +71,9 @@ Future<String?> pickScan(BuildContext context, String title) async {
   return picked?.files.single.path;
 }
 
+/// [money] where a list of records is named money too.
+String _money(int cents, Currency c) => money(cents, c);
+
 String _two(int v) => v.toString().padLeft(2, '0');
 String _day(DateTime t) => '${_two(t.day)}.${_two(t.month)}.${t.year}';
 String _time(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
@@ -256,7 +259,7 @@ class _ClientsPageState extends State<ClientsPage> {
                               d.kind == MessageKind.hearing
                                   ? 'Duruşma ${_day(d.at)} ${_time(d.at)}'
                                         ' · ${d.daysLeft == 0 ? 'bugün' : '${d.daysLeft} gün sonra'}'
-                                  : 'Taksit ${lira(d.amount)} · '
+                                  : 'Taksit ${money(d.amount, d.currency)} · '
                                         '${d.daysLeft < 0
                                             ? '${-d.daysLeft} gün gecikti'
                                             : d.daysLeft == 0
@@ -333,7 +336,7 @@ class _ClientsPageState extends State<ClientsPage> {
       _Filter.all => true,
       _Filter.open => (g?.open ?? 0) > 0,
       _Filter.week => g?.next != null && g!.next!.at.isBefore(week),
-      _Filter.owed => (g?.owed ?? 0) > 0,
+      _Filter.owed => g?.owed?.anyPositive ?? false,
       _Filter.late => _lateOf(e) > 0,
       _Filter.unreachable => !(g?.reachable ?? false),
       _Filter.body => e.client?.body ?? false,
@@ -935,8 +938,8 @@ class _ClientLine extends StatelessWidget {
             next.hearing ? AgendaColors.hearingFill : AgendaColors.deadlineFill,
             next.hearing ? AgendaColors.hearingText : AgendaColors.deadlineText,
           )
-        : (g?.owed ?? 0) > 0
-        ? _Pill(lira(g!.owed), AgendaColors.taskFill, AgendaColors.taskText)
+        : g?.owed?.anyPositive ?? false
+        ? _Pill(g!.owed!.text, AgendaColors.taskFill, AgendaColors.taskText)
         : done && g?.closedYear != null
         ? _Pill(
             '${g!.closedYear}',
@@ -1155,13 +1158,17 @@ class _ClientCardState extends State<ClientCard> {
       (key: c.caseKey, title: _caseTitle(c.caseKey)),
   ];
 
-  Future<void> _movement(String caseKey) async {
+  Future<void> _movement(
+    String caseKey, [
+    Currency currency = Currency.tl,
+  ]) async {
     final card = _card();
     final saved = await showDialog<ClientRecord>(
       context: context,
       builder: (_) => MovementDialog(
         client: card,
         caseKey: caseKey,
+        currency: currency,
         lawyer: widget.lawyer,
         person: widget.person,
         files: widget.files,
@@ -1327,6 +1334,9 @@ class _ClientCardState extends State<ClientCard> {
           'tur': paper,
           'ad': name,
           'dosya': caseKey,
+          if ((paper == 'tahsilat' ? movement?.currency : account.currency)
+              case final c? when c != Currency.tl)
+            'para': c.code,
           'tutar': switch (paper) {
             'sozlesme' => account.feeAgreed,
             'ibra' => account.feeAgreed - account.feeOwed,
@@ -1927,7 +1937,7 @@ class _ClientCardState extends State<ClientCard> {
               t.client.id == _client!.id)
             _Event(
               t.due,
-              'Taksit ${lira(t.amount)}',
+              'Taksit ${_money(t.amount, t.currency)}',
               t.daysLeft < 0
                   ? '${_number(t.caseKey)} · ${-t.daysLeft} gün gecikti'
                   : _number(t.caseKey),
@@ -1990,7 +2000,8 @@ class _ClientCardState extends State<ClientCard> {
             }} hazırlandı${r.locked ? ' · imzalı' : ''}',
             [
               if (r.text('dosya').isNotEmpty) _number(r.text('dosya')),
-              if (r.data['tutar'] case final int t when t > 0) lira(t),
+              if (r.data['tutar'] case final int t when t > 0)
+                _money(t, r.currency),
             ].join(' · '),
             AgendaColors.hearing,
             caseKey: r.text('dosya').isEmpty ? null : r.text('dosya'),
@@ -2006,7 +2017,7 @@ class _ClientCardState extends State<ClientCard> {
         if (m.kind == ClientRecordKind.movement)
           _Event(
             m.at,
-            '${m.movement?.label ?? 'Hareket'} ${lira(m.amount)}',
+            '${m.movement?.label ?? 'Hareket'} ${_money(m.amount, m.currency)}',
             [
               if (m.text('dosya').isNotEmpty) _number(m.text('dosya')),
               if (m.reverses.isNotEmpty) 'ters kayıt',
@@ -2324,9 +2335,9 @@ class _ClientCardState extends State<ClientCard> {
         default:
       }
     }
-    int sum(int Function(CaseAccount a) f) =>
-        accounts.values.fold(0, (n, a) => n + f(a));
-    final owed = sum((a) => a.feeOwed > 0 ? a.feeOwed : 0);
+    Amounts sum(Amounts Function(CaseAccount a) f) =>
+        accounts.values.fold(Amounts(), (n, a) => n + f(a));
+    final owed = sum((a) => a.feeOwedAll);
     Widget tile(String label, String value, String sub, {Color? color}) =>
         Container(
           padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
@@ -2398,9 +2409,9 @@ class _ClientCardState extends State<ClientCard> {
           onTap: () => _accounts(),
           child: tile(
             'ALACAK',
-            lira(owed),
-            'Avans ${lira(sum((a) => a.advanceLeft))} · '
-                'Masraf ${lira(sum((a) => a.lawyerOwed))}',
+            owed.text,
+            'Avans ${sum((a) => a.advanceLeftAll).text} · '
+                'Masraf ${sum((a) => a.lawyerOwedAll).text}',
           ),
         ),
     ];
@@ -2623,7 +2634,7 @@ class _ClientCardState extends State<ClientCard> {
               : _pair(
                   'Ücret',
                   [
-                    if (a!.feeAgreed > 0) lira(a.feeAgreed),
+                    if (a!.feeAgreed > 0) money(a.feeAgreed, a.currency),
                     if (a.feeShare > 0) '%${a.feeShare}',
                     'kalan ${fee.text}',
                   ].join(' · '),
@@ -2640,13 +2651,15 @@ class _ClientCardState extends State<ClientCard> {
         if (widget.seesMoney && a != null && a.fee != null)
           _pair(
             'Avans',
-            _plain(a.advanceLeft),
-            color: a.advanceLeft > 0 ? tone(const Color(0xFF1B6B3A)) : null,
+            a.advanceLeftAll.plain,
+            color: a.advanceLeftAll.anyPositive
+                ? tone(const Color(0xFF1B6B3A))
+                : null,
           ),
-        if (widget.seesMoney && (a?.lawyerOwed ?? 0) > 0)
+        if (widget.seesMoney && (a?.lawyerOwedAll.anyPositive ?? false))
           _pair(
             'Masraf',
-            _plain(a!.lawyerOwed),
+            a!.lawyerOwedAll.positive.plain,
             color: AgendaColors.deadlineText,
           ),
       ],
@@ -3286,7 +3299,7 @@ class _ClientCardState extends State<ClientCard> {
               title: kind == 'sozlesme' ? 'Ücret sözleşmesi' : label(kind),
               sub: [
                 if (r.text('dosya').isNotEmpty) _number(r.text('dosya')),
-                if (amount > 0) lira(amount),
+                if (amount > 0) money(amount, r.currency),
                 if (share > 0) '%$share',
                 _day(r.created),
               ].join(' · '),
@@ -3469,11 +3482,11 @@ class _ClientCardState extends State<ClientCard> {
       return (text: a.feeShare > 0 ? '%${a.feeShare}' : '—', color: null);
     }
     if (a.feeOwed <= 0) return (text: 'ödendi', color: AgendaColors.ok);
-    return (text: _plain(a.feeOwed), color: AgendaColors.deadlineText);
+    return (
+      text: plainMoney(a.feeOwed, a.currency),
+      color: AgendaColors.deadlineText,
+    );
   }
-
-  /// "15.000" from kuruş: TL is the column's.
-  static String _plain(int kurus) => lira(kurus).replaceAll(' TL', '');
 
   /// The cases opened to their detail.
   final _opened = <String>{};

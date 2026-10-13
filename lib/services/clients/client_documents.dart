@@ -101,8 +101,8 @@ DocModel _model(List<DocBlock> blocks) => DocModel(
 );
 
 /// "onbeş bin" — an amount in words, as a receipt writes it beside the
-/// figure: "15.000 TL (on beş bin Türk lirası)".
-String inWords(int kurus) {
+/// figure: "15.000 TL (on beş bin Türk lirası)"; in [c], its own name.
+String inWords(int kurus, [Currency c = Currency.tl]) {
   const ones = [
     '',
     'bir',
@@ -154,9 +154,14 @@ String inWords(int kurus) {
     return words.join(' ');
   }
 
-  final lira = kurus.abs() ~/ 100, cents = kurus.abs() % 100;
-  return '${whole(lira)} Türk lirası'
-      '${cents == 0 ? '' : ' ${whole(cents)} kuruş'}';
+  final units = kurus.abs() ~/ 100, cents = kurus.abs() % 100;
+  final (name, hundredth) = switch (c) {
+    Currency.tl => ('Türk lirası', 'kuruş'),
+    Currency.eur => ('Avro', 'sent'),
+    Currency.usd => ('Amerikan doları', 'sent'),
+  };
+  return '${whole(units)} $name'
+      '${cents == 0 ? '' : ' ${whole(cents)} $hundredth'}';
 }
 
 /// The fee agreement, on the form of the bar the lawyer gave (Avukatlık
@@ -171,11 +176,15 @@ DocModel feeAgreementDocument({
   DateTime? now,
 }) {
   final at = now ?? DateTime.now();
-  final account = fee == null ? null : CaseAccount('', fee, const []);
+  final currency = fee?.currency ?? Currency.tl;
+  String lira(int v) => money(v, currency);
+  final account = fee == null
+      ? null
+      : CaseAccount('', fee, const [], currency: currency);
   final fixed = account?.feeAgreed ?? 0;
   final share = account?.feeShare ?? 0;
   final price = [
-    if (fixed > 0) '${lira(fixed)} (${inWords(fixed)})',
+    if (fixed > 0) '${lira(fixed)} (${inWords(fixed, currency)})',
     if (share > 0) 'elde edilecek sonucun %$share oranında',
   ].join(' ve ');
   final plan = account?.instalments(at) ?? const [];
@@ -393,7 +402,8 @@ DocModel receiptDocument({
       after: 2,
     ),
     _p(
-      '**Tutar:** ${lira(movement.amount)} (${inWords(movement.amount)})',
+      '**Tutar:** ${money(movement.amount, movement.currency)} '
+      '(${inWords(movement.amount, movement.currency)})',
       after: 2,
     ),
     _p('**Karşılığı:** $what', after: 2),
@@ -428,6 +438,17 @@ DocModel releaseDocument({
   DateTime? now,
 }) {
   final at = now ?? DateTime.now();
+  // Each of the case's currencies apart, the main one first.
+  String sum(int Function(CaseAccount a) f) =>
+      Amounts({for (final a in account.all) a.currency: f(a)}).text;
+
+  final advanceLeft = Amounts({
+    for (final a in account.all) a.currency: a.advanceLeft,
+  });
+  final owed = Amounts({
+    for (final a in account.all)
+      a.currency: (a.feeOwed > 0 ? a.feeOwed : 0) + a.lawyerOwed,
+  });
   return _model([
     _title('İBRANAME'),
     _p(
@@ -437,11 +458,11 @@ DocModel releaseDocument({
       indent: true,
     ),
     _p(
-      'Bu dosya için avukata ${lira(account.feeIn)} avukatlık ücreti ve '
-      '${lira(account.advanceIn)} masraf avansı ödenmiş; avanstan '
-      '${lira(account.advanceSpent)} masraf yapılmış, '
-      '${lira(account.advanceLeft)} avans bakiyesi '
-      '${account.advanceLeft > 0 ? 'tarafıma iade edilmiştir' : 'kalmamıştır'}.',
+      'Bu dosya için avukata ${sum((a) => a.feeIn)} avukatlık ücreti ve '
+      '${sum((a) => a.advanceIn)} masraf avansı ödenmiş; avanstan '
+      '${sum((a) => a.advanceSpent)} masraf yapılmış, '
+      '${advanceLeft.text} avans bakiyesi '
+      '${advanceLeft.anyPositive ? 'tarafıma iade edilmiştir' : 'kalmamıştır'}.',
       indent: true,
     ),
     _p(
@@ -456,7 +477,7 @@ DocModel releaseDocument({
     ),
     _p(
       'Avukat da bu dosya nedeniyle müvekkilden ücret ve masraf alacağı '
-      '${account.feeOwed > 0 || account.lawyerOwed > 0 ? 'olarak ${lira((account.feeOwed > 0 ? account.feeOwed : 0) + account.lawyerOwed)} dışında' : ''} '
+      '${owed.anyPositive ? 'olarak ${owed.positive.text} dışında' : ''} '
       'bir alacağı kalmadığını kabul eder.',
       indent: true,
     ),

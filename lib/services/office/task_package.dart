@@ -228,8 +228,7 @@ class ReceivedCase {
       final names = (details['evrakAdlari'] as Map? ?? const {});
       final byName = {for (final d in documents) p.basename(d): d};
       final files = <String, String>{
-        for (final e in names.entries)
-          '${e.key}': ?byName['${e.value}'],
+        for (final e in names.entries) '${e.key}': ?byName['${e.value}'],
       };
       await (store ?? UyapCaseStore.instance).adoptReceived(details, files);
     } catch (_) {}

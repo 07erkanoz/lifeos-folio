@@ -141,10 +141,7 @@ void main() {
       (ad: 'AYŞE KARACA', rol: 'Davacı'),
     ]);
     final s2 = search();
-    expect(
-      (await s2.find('karaca')).clients.first.single.name,
-      'AYŞE KARACA',
-    );
+    expect((await s2.find('karaca')).clients.first.single.name, 'AYŞE KARACA');
     final party = byName.parties.first.single;
     expect(party.name, 'AYŞE KARACA');
     expect(party.cases.map((r) => r.kase.number), {'2024/318', '2025/77'});

@@ -28,7 +28,7 @@ const monthNames = [
 ];
 
 /// [lines] as a workbook, for the accountant: one row a line, the amounts
-/// in lira as numbers. [caseTitle] names a case by its key.
+/// as numbers in the line's own currency, named beside them. [caseTitle] names a case by its key.
 Future<Uint8List> cashWorkbook(
   List<CashLine> lines,
   String Function(String caseKey) caseTitle,
@@ -50,8 +50,9 @@ Future<Uint8List> cashWorkbook(
       'Müvekkil',
       'Dosya',
       'Ödeme',
-      'Giriş (TL)',
-      'Çıkış (TL)',
+      'Para birimi',
+      'Giriş',
+      'Çıkış',
       'Düzeltme',
     ])
       text(h),
@@ -66,6 +67,7 @@ Future<Uint8List> cashWorkbook(
       text(l.client),
       text(l.caseKey.isEmpty ? '' : caseTitle(l.caseKey)),
       text(l.way),
+      text(l.currency.code),
       money(l.amount > 0 ? l.amount : 0),
       money(l.amount < 0 ? -l.amount : 0),
       text(l.struck ? 'ters kayıtla düzeltildi' : ''),
@@ -75,12 +77,12 @@ Future<Uint8List> cashWorkbook(
 }
 
 /// The year's report: each month's income and expense, the expenses by
-/// kind, what the clients owe and what is held for them.
+/// kind, what the clients owe and what is held for them; each currency
+/// apart.
 Future<Uint8List> cashReportPdf({
   required int year,
   required List<CashLine> lines,
-  required List<({String key, String name, int owed, int held, bool late})>
-  balances,
+  required List<ClientBalance> balances,
   required String lawyer,
   DateTime? now,
 }) async {
@@ -98,7 +100,6 @@ Future<Uint8List> cashReportPdf({
     for (final l in lines)
       if (l.at.year == year) l,
   ];
-  final total = cashTotals(ofYear);
   pw.Widget row(List<String> cells, {bool bold = false}) => pw.Row(
     children: [
       for (var i = 0; i < cells.length; i++)
@@ -112,13 +113,47 @@ Future<Uint8List> cashReportPdf({
         ),
     ],
   );
-  final categories = <String, int>{};
-  for (final l in ofYear) {
-    if (l.side == CashSide.expense) {
-      final k = l.category.isEmpty ? 'Diğer' : l.category;
-      categories[k] = (categories[k] ?? 0) - l.amount;
+  List<pw.Widget> part(Currency c) {
+    final mine = [
+      for (final l in ofYear)
+        if (l.currency == c) l,
+    ];
+    final total = cashTotals(mine);
+    final categories = <String, int>{};
+    for (final l in mine) {
+      if (l.side == CashSide.expense) {
+        final k = l.category.isEmpty ? 'Diğer' : l.category;
+        categories[k] = (categories[k] ?? 0) - l.amount;
+      }
     }
+    String m(int v) => money(v, c);
+    return [
+      pw.Text(c == Currency.tl ? 'TL' : c.label, style: head),
+      pw.SizedBox(height: 4),
+      row(['', 'Gelir', 'Gider', 'Net'], bold: true),
+      pw.Divider(thickness: .5),
+      for (var n = 1; n <= 12; n++)
+        if (cashTotals([
+              for (final l in mine)
+                if (l.at.month == n) l,
+            ])
+            case final t)
+          row([monthNames[n - 1], m(t.income), m(t.expense), m(t.net)]),
+      pw.Divider(thickness: .5),
+      row(['Yıl', m(total.income), m(total.expense), m(total.net)], bold: true),
+      if (categories.isNotEmpty) ...[
+        pw.SizedBox(height: 10),
+        pw.Text('Giderler', style: head),
+        pw.SizedBox(height: 4),
+        for (final e
+            in categories.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value)))
+          row([e.key, m(e.value)]),
+      ],
+      pw.SizedBox(height: 18),
+    ];
   }
+
   final doc = pw.Document();
   doc.addPage(
     pw.MultiPage(
@@ -129,42 +164,16 @@ Future<Uint8List> cashReportPdf({
         pw.SizedBox(height: 4),
         pw.Text('$lawyer · ${_day(at)} ${_time(at)}', style: base),
         pw.SizedBox(height: 14),
-        row(['', 'Gelir', 'Gider', 'Net'], bold: true),
-        pw.Divider(thickness: .5),
-        for (var m = 1; m <= 12; m++)
-          if (cashTotals([
-                for (final l in ofYear)
-                  if (l.at.month == m) l,
-              ])
-              case final t)
-            row([
-              monthNames[m - 1],
-              lira(t.income),
-              lira(t.expense),
-              lira(t.net),
-            ]),
-        pw.Divider(thickness: .5),
-        row([
-          'Yıl',
-          lira(total.income),
-          lira(total.expense),
-          lira(total.net),
-        ], bold: true),
-        pw.SizedBox(height: 18),
-        pw.Text('Giderler', style: head),
+        for (final c in cashCurrencies(ofYear)) ...part(c),
+        pw.Text('Müvekkil alacakları, masrafları ve emanet', style: head),
         pw.SizedBox(height: 4),
-        for (final e
-            in categories.entries.toList()
-              ..sort((a, b) => b.value.compareTo(a.value)))
-          row([e.key, lira(e.value)]),
-        pw.SizedBox(height: 18),
-        pw.Text('Müvekkil alacakları ve emanet', style: head),
-        pw.SizedBox(height: 4),
-        row(['Müvekkil', 'Alacak', 'Emanet'], bold: true),
-        for (final b in balances) row([b.name, lira(b.owed), lira(b.held)]),
+        row(['Müvekkil', 'Ücret alacağı', 'Masraf', 'Emanet'], bold: true),
+        for (final b in balances)
+          row([b.name, b.owed.text, b.costs.text, b.held.text]),
         pw.SizedBox(height: 12),
         pw.Text(
-          'Emanet, müvekkil adına tutulan paradır; büronun geliri sayılmaz.',
+          'Emanet, müvekkil adına tutulan paradır; büronun geliri sayılmaz. '
+          'Her para birimi ayrı toplanır, birbirine çevrilmez.',
           style: base,
         ),
       ],

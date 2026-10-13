@@ -18,6 +18,7 @@ typedef DueInstalment = ({
   DateTime due,
   int amount,
   int daysLeft,
+  Currency currency,
 });
 
 /// The instalments of the fees agreed coming or late: told three days
@@ -75,6 +76,7 @@ class FeeReminders {
             due: t.due,
             amount: t.amount,
             daysLeft: left,
+            currency: a.currency,
           ));
         }
       }

@@ -71,9 +71,7 @@ void main() {
         await Directory('${root.path}/saved-documents').list().toList(),
         isEmpty,
       );
-      messenger.setMockMethodCallHandler(PhoneDocumentSave.channel, (
-        _,
-      ) async {
+      messenger.setMockMethodCallHandler(PhoneDocumentSave.channel, (_) async {
         throw PlatformException(
           code: 'SAVE_DOCUMENT',
           message: 'Konuma yazılamıyor',
@@ -102,9 +100,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     var opened = 0;
-    messenger.setMockMethodCallHandler(PhoneDocumentSave.channel, (
-      call,
-    ) async {
+    messenger.setMockMethodCallHandler(PhoneDocumentSave.channel, (call) async {
       expect(call.method, 'configureDefaultViewer');
       opened++;
       if (opened == 2) {

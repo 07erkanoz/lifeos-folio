@@ -90,7 +90,7 @@ class ClientGlance {
     required this.cases,
     required this.open,
     this.next,
-    this.owed = 0,
+    this.owed,
     this.reachable = false,
     this.closedYear,
   });
@@ -98,8 +98,9 @@ class ClientGlance {
   final int cases, open;
   final ({DateTime at, bool hearing, String caseKey})? next;
 
-  /// The fee still owed, in kuruş; 0 for one who may not see the money.
-  final int owed;
+  /// The fee still owed, each currency apart; null for nothing owed, and
+  /// for one who may not see the money.
+  final Amounts? owed;
   final bool reachable;
   final int? closedYear;
 
@@ -139,7 +140,7 @@ Map<String, ClientGlance> clientGlances(
     if (day.isBefore(today)) continue;
     soon(key, day, false);
   }
-  final owedBy = <String, int>{};
+  final owedBy = <String, Amounts>{};
   if (money) {
     final byClient = <String, List<ClientRecord>>{};
     for (final r in db.allClientRecords()) {
@@ -148,8 +149,9 @@ Map<String, ClientGlance> clientGlances(
     for (final e in entries) {
       final records = [for (final id in e.ids) ...?byClient[id]];
       if (records.isEmpty) continue;
-      owedBy[e.key] = caseAccounts(records).values
-          .fold(0, (n, a) => n + (a.feeOwed > 0 ? a.feeOwed : 0));
+      final owed = caseAccounts(records).values
+          .fold(Amounts(), (n, a) => n + a.feeOwedAll);
+      if (!owed.isZero) owedBy[e.key] = owed;
     }
   }
   return {
@@ -177,7 +179,7 @@ Map<String, ClientGlance> clientGlances(
           cases: e.cases.length,
           open: open,
           next: next,
-          owed: owedBy[e.key] ?? 0,
+          owed: owedBy[e.key],
           reachable:
               (client?.phone ?? '').trim().isNotEmpty ||
               (client?.email ?? '').trim().isNotEmpty,

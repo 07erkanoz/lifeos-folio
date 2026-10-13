@@ -38,7 +38,9 @@ abstract final class FolioPalette {
     }
     // A strong colour, or a grey for the quieter words: a little lighter,
     // to stand on a dark page as it did on a light one.
-    return hsl.withLightness((l + (s > .25 ? .12 : .08)).clamp(0, .78)).toColor();
+    return hsl
+        .withLightness((l + (s > .25 ? .12 : .08)).clamp(0, .78))
+        .toColor();
   }
 }
 

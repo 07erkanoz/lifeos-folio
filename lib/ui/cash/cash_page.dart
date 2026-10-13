@@ -19,7 +19,8 @@ import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../clients/attachment_preview.dart';
-import '../clients/client_accounts_view.dart' show MovementDialog;
+import '../clients/client_accounts_view.dart'
+    show CurrencyChoice, MovementDialog;
 import '../clients/clients_page.dart' show pickScan;
 import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
@@ -29,8 +30,9 @@ String _two(int v) => v.toString().padLeft(2, '0');
 String _day(DateTime t) => '${_two(t.day)}.${_two(t.month)}.${t.year}';
 String _time(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
 
-/// "15.000" from kuruş: TL is the column's.
-String _plain(int kurus) => lira(kurus).replaceAll(' TL', '');
+/// "15.000" from kuruş: TL is the column's; another currency with its
+/// sign.
+String _plain(int kurus, [Currency c = Currency.tl]) => plainMoney(kurus, c);
 
 // Getters, not finals: a final would keep the theme it was first read in.
 Color get _green => tone(const Color(0xFF1B6B3A));
@@ -82,8 +84,11 @@ class _CashPageState extends State<CashPage> {
   late final ClientFiles _files = widget.files ?? ClientFiles();
   List<ClientEntry> _entries = const [];
   List<CashLine> _lines = const [];
-  List<({String key, String name, int owed, int held, bool late})> _balances =
-      const [];
+  List<ClientBalance> _balances = const [];
+  List<BankAccount> _banks = const [];
+
+  /// The currency the page shows: each is its own book.
+  Currency _currency = Currency.tl;
   bool _reports = false;
   late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   late int _year = DateTime.now().year;
@@ -107,6 +112,10 @@ class _CashPageState extends State<CashPage> {
       _entries = entries;
       _lines = cashLines(db, entries: entries);
       _balances = clientBalances(db, now, entries: entries);
+      _banks = bankAccounts(db);
+      if (!cashCurrencies(_lines).contains(_currency)) {
+        _currency = Currency.tl;
+      }
     });
   }
 
@@ -117,9 +126,13 @@ class _CashPageState extends State<CashPage> {
 
   String _caseNumber(String key) => _db?.caseOf(key)?.number ?? key;
 
+  /// The month's lines in the currency shown.
   List<CashLine> _ofMonth(DateTime m) => [
     for (final l in _lines)
-      if (l.at.year == m.year && l.at.month == m.month) l,
+      if (l.at.year == m.year &&
+          l.at.month == m.month &&
+          l.currency == _currency)
+        l,
   ];
 
   // Writing
@@ -137,6 +150,7 @@ class _CashPageState extends State<CashPage> {
       context: context,
       builder: (_) => _CashDialog(
         income: income,
+        currency: _currency,
         lawyer: widget.lawyer,
         person: widget.person,
         files: _files,
@@ -170,9 +184,26 @@ class _CashPageState extends State<CashPage> {
       builder: (_) => MovementDialog(
         client: card!,
         caseKey: picked.caseKey,
+        currency: _currency,
         lawyer: widget.lawyer,
         person: widget.person,
         files: _files,
+      ),
+    );
+    if (saved == null) return;
+    _keep(saved);
+    await _load();
+  }
+
+  /// A bank account added, its balance told again, or taken off.
+  Future<void> _bank([BankAccount? kept]) async {
+    final saved = await showDialog<ClientRecord>(
+      context: context,
+      builder: (_) => _BankDialog(
+        kept: kept,
+        currency: _currency,
+        lawyer: widget.lawyer,
+        person: widget.person,
       ),
     );
     if (saved == null) return;
@@ -262,12 +293,14 @@ class _CashPageState extends State<CashPage> {
   }
 
   Future<void> _excel() async {
-    final lines = _reports
-        ? [
-            for (final l in _lines)
-              if (l.at.year == _year) l,
-          ]
-        : _ofMonth(_month);
+    // Every currency: the workbook names each line's.
+    final lines = [
+      for (final l in _lines)
+        if (_reports
+            ? l.at.year == _year
+            : l.at.year == _month.year && l.at.month == _month.month)
+          l,
+    ];
     final name = _reports
         ? 'Kasa $_year.xlsx'
         : 'Kasa ${monthNames[_month.month - 1]} ${_month.year}.xlsx';
@@ -354,6 +387,19 @@ class _CashPageState extends State<CashPage> {
             ],
             onChanged: (v) => setState(() => _month = v ?? _month),
           );
+    final currencies = cashCurrencies(_lines);
+    final currency = currencies.length < 2 || !_reports
+        ? null
+        : DropdownButton<Currency>(
+            key: const ValueKey('cash-report-currency'),
+            value: _currency,
+            underline: const SizedBox(),
+            items: [
+              for (final c in currencies)
+                DropdownMenuItem(value: c, child: Text(c.label)),
+            ],
+            onChanged: (v) => setState(() => _currency = v ?? _currency),
+          );
     final mode = SegmentedButton<bool>(
       key: const ValueKey('cash-mode'),
       showSelectedIcon: false,
@@ -369,6 +415,7 @@ class _CashPageState extends State<CashPage> {
       onSelected: (v) => switch (v) {
         'gelir' => _expense(income: true),
         'tekrar' => _repeats(),
+        'banka' => _bank(),
         'faiz' => InterestPage.open(context),
         'pdf' => _pdf(),
         _ => _excel(),
@@ -379,6 +426,7 @@ class _CashPageState extends State<CashPage> {
           value: 'tekrar',
           child: Text('Her ay tekrarlanan giderler'),
         ),
+        const PopupMenuItem(value: 'banka', child: Text('Banka hesabı ekle')),
         const PopupMenuItem(value: 'faiz', child: Text('Faiz hesabı')),
         const PopupMenuDivider(),
         const PopupMenuItem(value: 'excel', child: Text('Excel\'e aktar')),
@@ -427,6 +475,7 @@ class _CashPageState extends State<CashPage> {
           mode,
           const SizedBox(width: 10),
           period,
+          if (currency != null) ...[const SizedBox(width: 10), currency],
           const Spacer(),
           const HelpButton(Help.cash),
           const SizedBox(width: 6),
@@ -451,6 +500,7 @@ class _CashPageState extends State<CashPage> {
             Expanded(child: mode),
             const SizedBox(width: 8),
             period,
+            ?currency,
           ],
         ),
       ],
@@ -499,34 +549,210 @@ class _CashPageState extends State<CashPage> {
     ),
   );
 
+  /// One card a currency the book is in: what the office has in it, this
+  /// month's in and out; the one chosen is the page's. TL's always.
+  Widget _tills(bool wide) {
+    final balance = cashBalance(_lines);
+    final currencies = cashCurrencies(_lines);
+    Widget till(Currency c) {
+      final month = cashTotals([
+        for (final l in _lines)
+          if (l.currency == c &&
+              l.at.year == _month.year &&
+              l.at.month == _month.month)
+            l,
+      ]);
+      final chosen = c == _currency;
+      final value = balance[c];
+      return InkWell(
+        key: ValueKey('cash-till-${c.code}'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: currencies.length < 2
+            ? null
+            : () => setState(() {
+                _currency = c;
+                _side = null;
+              }),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 9),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: chosen && currencies.length > 1
+                  ? Theme.of(context).colorScheme.primary
+                  : AgendaColors.line,
+              width: chosen && currencies.length > 1 ? 1.6 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                c == Currency.tl ? 'TL kasası' : '${c.label} kasası',
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  money(value, c),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: value < 0 ? AgendaColors.deadlineText : null,
+                  ),
+                ),
+              ),
+              Text(
+                '${monthNames[_month.month - 1]}: '
+                '+${_plain(month.income, c)}  −${_plain(month.expense, c)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget bank(BankAccount b) => InkWell(
+      key: ValueKey('cash-bank-${b.id}'),
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _bank(b),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 9),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AgendaColors.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.account_balance_outlined,
+                  size: 14,
+                  color: AgendaColors.muted,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    b.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                money(b.balance, b.currency),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text(
+              '${_day(b.told)} itibarıyla',
+              style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final cards = [
+      for (final c in currencies) till(c),
+      for (final b in _banks) bank(b),
+    ];
+    final addBank = _banks.isEmpty
+        ? Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('cash-bank-add'),
+              onPressed: _bank,
+              icon: const Icon(Icons.account_balance_outlined, size: 16),
+              label: const Text('Banka bakiyesi ekle (isteğe bağlı)'),
+            ),
+          )
+        : null;
+    final across = wide ? 4 : 2;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, box) {
+            const gap = 8.0;
+            final w = (box.maxWidth - gap * (across - 1)) / across;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [for (final c in cards) SizedBox(width: w, child: c)],
+            );
+          },
+        ),
+        ?addBank,
+      ],
+    );
+  }
+
   List<Widget> _book(bool wide) {
+    final c = _currency;
     final month = _ofMonth(_month);
     final total = cashTotals(month);
     final before = cashTotals(
       _ofMonth(DateTime(_month.year, _month.month - 1)),
     );
-    final owed = _balances.fold(0, (n, b) => n + (b.owed > 0 ? b.owed : 0));
-    final held = _balances.fold(0, (n, b) => n + b.held);
+    final owed = _balances.fold(0, (n, b) => n + b.owed[c]);
+    final costs = _balances.fold(0, (n, b) => n + b.costs[c]);
+    final held = _balances.fold(0, (n, b) => n + b.held[c]);
     final late = _balances.where((b) => b.late).length;
-    final holding = _balances.where((b) => b.held > 0).length;
+    final holding = _balances.where((b) => b.held[c] > 0).length;
+    final spending = _balances.where((b) => b.costs[c] > 0).length;
+    String m(int v) => money(v, c);
     final kpis = [
-      _kpi('Gelir', lira(total.income), _green, sub: 'ücret ve karşı vekâlet'),
+      _kpi('Gelir', m(total.income), _green, sub: 'ücret ve diğer gelirler'),
       _kpi(
         'Gider',
-        lira(total.expense),
+        m(total.expense),
         AgendaColors.deadlineText,
         sub: 'büronun giderleri',
       ),
-      _kpi('Net', lira(total.net), null, sub: 'önceki ay ${lira(before.net)}'),
+      _kpi('Net', m(total.net), null, sub: 'önceki ay ${m(before.net)}'),
+      InkWell(
+        key: const ValueKey('cash-client-costs'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => _side = CashSide.onBehalf),
+        child: _kpi(
+          'Müvekkil masrafı',
+          m(costs),
+          costs > 0 ? AgendaColors.taskText : null,
+          sub: spending > 0
+              ? '$spending müvekkilden geri alınacak'
+              : 'sizin ödediğiniz masraflar',
+        ),
+      ),
       _kpi(
-        'Müvekkil alacağı',
-        lira(owed),
+        'Ücret alacağı',
+        m(owed),
         owed > 0 ? AgendaColors.deadlineText : null,
-        sub: late > 0 ? '$late müvekkilin taksiti gecikmiş' : 'ücret ve masraf',
+        sub: late > 0 ? '$late müvekkilin taksiti gecikmiş' : 'kalan ücretler',
       ),
       _kpi(
         'Emanet',
-        lira(held),
+        m(held),
         _purple,
         sub: 'gelir değil · $holding müvekkil',
         trust: true,
@@ -587,6 +813,8 @@ class _CashPageState extends State<CashPage> {
       ],
     );
     return [
+      _tills(wide),
+      const SizedBox(height: 10),
       if (wide)
         Row(
           children: [
@@ -733,7 +961,7 @@ class _CashPageState extends State<CashPage> {
       if (l.caseKey.isNotEmpty) _caseNumber(l.caseKey),
     ].join(' · ');
     Text sum(int v) => Text(
-      v == 0 ? '' : _plain(v),
+      v == 0 ? '' : _plain(v, l.currency),
       textAlign: TextAlign.right,
       style: _struck(base.copyWith(color: _sideColor(l.side)), l),
     );
@@ -846,7 +1074,7 @@ class _CashPageState extends State<CashPage> {
             ),
           ),
           Text(
-            '${l.amount > 0 ? '+' : '−'}${_plain(l.amount.abs())}',
+            '${l.amount > 0 ? '+' : '−'}${_plain(l.amount.abs(), l.currency)}',
             style: _struck(
               TextStyle(fontWeight: FontWeight.w700, color: _sideColor(l.side)),
               l,
@@ -859,9 +1087,11 @@ class _CashPageState extends State<CashPage> {
   }
 
   List<Widget> _report(bool wide) {
+    final c = _currency;
+    String m(int v) => money(v, c);
     final year = [
       for (final l in _lines)
-        if (l.at.year == _year) l,
+        if (l.at.year == _year && l.currency == c) l,
     ];
     final total = cashTotals(year);
     final months = [
@@ -894,12 +1124,16 @@ class _CashPageState extends State<CashPage> {
       ..sort((a, b) => b.value.compareTo(a.value));
     final owing = [
       for (final b in _balances)
-        if (b.owed > 0) b,
-    ]..sort((a, b) => b.owed.compareTo(a.owed));
+        if (b.owed[c] > 0) b,
+    ]..sort((a, b) => b.owed[c].compareTo(a.owed[c]));
+    final spent = [
+      for (final b in _balances)
+        if (b.costs[c] > 0) b,
+    ]..sort((a, b) => b.costs[c].compareTo(a.costs[c]));
     final holding = [
       for (final b in _balances)
-        if (b.held > 0) b,
-    ]..sort((a, b) => b.held.compareTo(a.held));
+        if (b.held[c] > 0) b,
+    ]..sort((a, b) => b.held[c].compareTo(a.held[c]));
     Widget title(String t, {String? right}) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -951,12 +1185,12 @@ class _CashPageState extends State<CashPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                for (var m = 0; m < 12; m++)
+                for (var n = 0; n < 12; n++)
                   Expanded(
                     child: Tooltip(
                       message:
-                          '${monthNames[m]}: gelir ${lira(months[m].income)}, '
-                          'gider ${lira(months[m].expense)}',
+                          '${monthNames[n]}: gelir ${m(months[n].income)}, '
+                          'gider ${m(months[n].expense)}',
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -966,11 +1200,11 @@ class _CashPageState extends State<CashPage> {
                             children: [
                               for (final (v, c) in [
                                 (
-                                  months[m].income,
+                                  months[n].income,
                                   tone(const Color(0xFF3E9C6B)),
                                 ),
                                 (
-                                  months[m].expense,
+                                  months[n].expense,
                                   tone(const Color(0xFFC2523F)),
                                 ),
                               ])
@@ -991,7 +1225,7 @@ class _CashPageState extends State<CashPage> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            monthNames[m].substring(0, 3),
+                            monthNames[n].substring(0, 3),
                             style: TextStyle(
                               fontSize: 10.5,
                               color: AgendaColors.muted,
@@ -1006,8 +1240,8 @@ class _CashPageState extends State<CashPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Yıl: gelir ${lira(total.income)} · gider ${lira(total.expense)} '
-            '· net ${lira(total.net)}',
+            'Yıl: gelir ${m(total.income)} · gider ${m(total.expense)} '
+            '· net ${m(total.net)}',
             style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
         ],
@@ -1025,7 +1259,7 @@ class _CashPageState extends State<CashPage> {
               style: TextStyle(color: AgendaColors.muted),
             ),
           for (final c in cats) ...[
-            line(c.key, _plain(c.value)),
+            line(c.key, _plain(c.value, _currency)),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
@@ -1059,36 +1293,52 @@ class _CashPageState extends State<CashPage> {
       line: trust ? _trustLine : null,
     );
     final receivable = list(
-      'Müvekkil alacakları',
-      _plain(owing.fold(0, (n, b) => n + b.owed)),
+      'Ücret alacakları',
+      _plain(owing.fold(0, (n, b) => n + b.owed[c]), c),
       [
         for (final b in owing)
           line(
             titleName(b.name),
-            _plain(b.owed),
+            _plain(b.owed[c], c),
             color: AgendaColors.deadlineText,
             tag: b.late ? _late() : null,
           ),
       ],
     );
+    final costs = list(
+      'Müvekkil masrafları',
+      _plain(spent.fold(0, (n, b) => n + b.costs[c]), c),
+      [
+        for (final b in spent)
+          line(
+            titleName(b.name),
+            _plain(b.costs[c], c),
+            color: AgendaColors.taskText,
+          ),
+      ],
+    );
     final collected = list('En çok tahsilat', '$_year', [
-      for (final p in payers) line(titleName(p.key), _plain(p.value)),
+      for (final p in payers) line(titleName(p.key), _plain(p.value, c)),
     ]);
     final trust = list(
       'Emanet bakiyeleri',
-      _plain(holding.fold(0, (n, b) => n + b.held)),
+      _plain(holding.fold(0, (n, b) => n + b.held[c]), c),
       [
         for (final b in holding)
-          line(titleName(b.name), _plain(b.held), color: _purple),
+          line(titleName(b.name), _plain(b.held[c], c), color: _purple),
       ],
       trust: true,
     );
     if (!wide) {
       return [
-        for (final w in [bars, expenses, receivable, collected, trust]) ...[
-          w,
-          const SizedBox(height: 10),
-        ],
+        for (final w in [
+          bars,
+          expenses,
+          receivable,
+          costs,
+          collected,
+          trust,
+        ]) ...[w, const SizedBox(height: 10)],
       ];
     }
     return [
@@ -1107,6 +1357,8 @@ class _CashPageState extends State<CashPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(child: receivable),
+          const SizedBox(width: 10),
+          Expanded(child: costs),
           const SizedBox(width: 10),
           Expanded(child: collected),
           const SizedBox(width: 10),
@@ -1141,8 +1393,12 @@ class _CashDialog extends StatefulWidget {
     required this.lawyer,
     required this.person,
     required this.files,
+    this.currency = Currency.tl,
   });
   final bool income;
+
+  /// The currency it starts in: the one the page shows.
+  final Currency currency;
   final String lawyer, person;
   final ClientFiles files;
 
@@ -1157,6 +1413,7 @@ class _CashDialogState extends State<_CashDialog> {
       ? 'Danışmanlık'
       : expenseCategories.first;
   String _way = cashWays[1];
+  late Currency _currency = widget.currency;
   DateTime _at = DateTime.now();
   bool _repeat = false;
   ClientFile? _file;
@@ -1221,6 +1478,7 @@ class _CashDialogState extends State<_CashDialog> {
       'zaman': _at.toIso8601String(),
       'aciklama': _what.text.trim(),
       'odeme': _way,
+      if (_currency != Currency.tl) 'para': _currency.code,
       'ekler': [?(_file == null ? null : clientFileJson(_file!))],
     };
     final out = <ClientRecord>[];
@@ -1235,6 +1493,7 @@ class _CashDialogState extends State<_CashDialog> {
           'tutar': amount,
           'aciklama': _what.text.trim(),
           'odeme': _way,
+          if (_currency != Currency.tl) 'para': _currency.code,
           'baslangic': _at.toIso8601String(),
           'bitis': '',
         },
@@ -1274,17 +1533,30 @@ class _CashDialogState extends State<_CashDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              key: const ValueKey('cash-amount'),
-              controller: _amount,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Tutar',
-                suffixText: 'TL',
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('cash-amount'),
+                    controller: _amount,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Tutar',
+                      suffixText: _currency.sign,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CurrencyChoice(
+                  key: const ValueKey('cash-currency'),
+                  value: _currency,
+                  onChanged: (c) => setState(() => _currency = c),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             Wrap(
@@ -1374,6 +1646,164 @@ class _CashDialogState extends State<_CashDialog> {
       FilledButton(
         key: const ValueKey('cash-save'),
         onPressed: _busy ? null : _save,
+        child: const Text('Kaydet'),
+      ),
+    ],
+  );
+}
+
+/// A bank account kept beside the book: its name, currency and balance as
+/// the lawyer last read it. Told again whenever they like; never needed.
+class _BankDialog extends StatefulWidget {
+  const _BankDialog({
+    required this.lawyer,
+    required this.person,
+    this.kept,
+    this.currency = Currency.tl,
+  });
+
+  final BankAccount? kept;
+  final Currency currency;
+  final String lawyer, person;
+
+  @override
+  State<_BankDialog> createState() => _BankDialogState();
+}
+
+class _BankDialogState extends State<_BankDialog> {
+  late final _name = TextEditingController(text: widget.kept?.name ?? '');
+  late final _balance = TextEditingController(
+    text: widget.kept == null
+        ? ''
+        : lira(widget.kept!.balance).replaceAll(' TL', ''),
+  );
+  late Currency _currency = widget.kept?.currency ?? widget.currency;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _balance.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final name = _name.text.trim();
+    final balance = kurusOf(_balance.text.replaceAll('−', '-'));
+    if (name.isEmpty) {
+      setState(() => _error = 'Hesaba bir ad verin (Ziraat TL gibi).');
+      return;
+    }
+    if (balance == null) {
+      setState(() => _error = 'Bakiyeyi yazın.');
+      return;
+    }
+    final now = DateTime.now();
+    final data = <String, Object?>{
+      'ad': name,
+      'bakiye': balance,
+      'tarih': now.toIso8601String(),
+      if (_currency != Currency.tl) 'para': _currency.code,
+    };
+    final kept = widget.kept?.record;
+    Navigator.pop(
+      context,
+      kept == null
+          ? ClientRecord(
+              id: Client.newId(),
+              clientId: officeCashId,
+              kind: ClientRecordKind.bank,
+              data: data,
+              created: now,
+              by: widget.lawyer,
+              updated: now,
+              person: widget.person,
+            )
+          : kept.copyWith(data: data),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.kept == null ? 'Banka hesabı' : widget.kept!.name),
+    content: SizedBox(
+      width: 400,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('bank-name'),
+            controller: _name,
+            autofocus: widget.kept == null,
+            decoration: const InputDecoration(
+              labelText: 'Hesabın adı',
+              hintText: 'Ziraat TL, Garanti Euro…',
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('bank-balance'),
+                  controller: _balance,
+                  autofocus: widget.kept != null,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Bugünkü bakiye',
+                    suffixText: _currency.sign,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              CurrencyChoice(
+                value: _currency,
+                onChanged: (c) => setState(() => _currency = c),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'İsteğe bağlıdır. Bankaya bağlanılmaz; IBAN ya da hesap '
+            'numarası istenmez. Bakiyeyi ne zaman isterseniz güncellersiniz.',
+            style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _error!,
+                style: TextStyle(color: AgendaColors.deadlineText),
+              ),
+            ),
+        ],
+      ),
+    ),
+    actions: [
+      if (widget.kept != null)
+        TextButton(
+          key: const ValueKey('bank-remove'),
+          onPressed: () => Navigator.pop(
+            context,
+            widget.kept!.record.copyWith(removed: true),
+          ),
+          child: Text(
+            'Kaldır',
+            style: TextStyle(color: AgendaColors.deadlineText),
+          ),
+        ),
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Vazgeç'),
+      ),
+      FilledButton(
+        key: const ValueKey('bank-save'),
+        onPressed: _save,
         child: const Text('Kaydet'),
       ),
     ],
@@ -1590,7 +2020,7 @@ class _RepeatsDialogState extends State<_RepeatsDialog> {
                         ].join(' · '),
                       ),
                       subtitle: Text(
-                        '${lira(r.amount)} · her ayın '
+                        '${money(r.amount, r.currency)} · her ayın '
                         '${DateTime.tryParse(r.text('baslangic'))?.day ?? 1}. '
                         'günü · ${r.text('odeme')}'
                         '${going(r) ? '' : ' · durduruldu'}',
