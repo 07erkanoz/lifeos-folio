@@ -148,8 +148,11 @@ class _DesktopHomeState extends State<DesktopHome> {
   @override
   void initState() {
     super.initState();
+    _statsFor = widget.recent.map((f) => f.path).join('\n');
     _tick = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {});
+      unawaited(_restat());
     });
     _loadCases();
   }
@@ -157,6 +160,13 @@ class _DesktopHomeState extends State<DesktopHome> {
   @override
   void didUpdateWidget(DesktopHome old) {
     super.didUpdateWidget(old);
+    // A document saved or opened: the list is looked at afresh. The list is
+    // the same one changed in place, so its paths are compared.
+    final paths = widget.recent.map((f) => f.path).join('\n');
+    if (paths != _statsFor) {
+      _statsFor = paths;
+      _stats.clear();
+    }
     _loadCases();
   }
 
@@ -216,13 +226,60 @@ class _DesktopHomeState extends State<DesktopHome> {
     return _when(t);
   }
 
-  static DateTime? _modified(EvrakFile f) {
+  DateTime? _modified(EvrakFile f) => _statOf(f.path).$2;
+
+  /// Whether each recent file is there, and when it last changed: looked at
+  /// once, then again each half minute off the window's thread. Asked of
+  /// the disk three times a build, a document on a network or OneDrive
+  /// folder held every frame.
+  final _stats = <String, (bool, DateTime?)>{};
+  String? _statsFor;
+
+  (bool, DateTime?) _statOf(String path) => _stats[path] ??= _statNow(path);
+
+  static (bool, DateTime?) _statNow(String path) {
     try {
-      return File(f.path).lastModifiedSync();
+      return _seen(File(path).statSync());
     } catch (_) {
-      return null;
+      return (false, null);
     }
   }
+
+  static (bool, DateTime?) _seen(FileStat s) =>
+      s.type == FileSystemEntityType.file || s.type == FileSystemEntityType.link
+      ? (true, s.modified)
+      : (false, null);
+
+  /// The paths taken first: the list is changed in place while the disk is
+  /// asked. One at a time; what one finds after the list was looked at
+  /// afresh ([_statsFor] changed) is dropped.
+  Future<void> _restat() async {
+    if (_restating) return;
+    _restating = true;
+    try {
+      final paths = [for (final f in widget.recent) f.path];
+      final asked = _statsFor;
+      final found = <String, (bool, DateTime?)>{};
+      for (final path in paths) {
+        try {
+          found[path] = _seen(await File(path).stat());
+        } catch (_) {
+          found[path] = (false, null);
+        }
+      }
+      if (!mounted || asked != _statsFor) return;
+      var changed = false;
+      found.forEach((path, now) {
+        if (_stats[path] != now) changed = true;
+        _stats[path] = now;
+      });
+      if (changed) setState(() {});
+    } finally {
+      _restating = false;
+    }
+  }
+
+  bool _restating = false;
 
   static String _kind(EvrakFile f) {
     final ext = p.extension(f.path).replaceFirst('.', '').toUpperCase();
@@ -974,7 +1031,7 @@ class _DesktopHomeState extends State<DesktopHome> {
 
   List<EvrakFile> get _existing => [
     for (final f in widget.recent)
-      if (File(f.path).existsSync()) f,
+      if (_statOf(f.path).$1) f,
   ];
 
   Widget _continue(BuildContext context) {

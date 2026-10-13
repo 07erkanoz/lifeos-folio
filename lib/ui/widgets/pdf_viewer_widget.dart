@@ -328,6 +328,8 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
       ..dispose();
     _searchField.dispose();
     _searchFocus.dispose();
+    // A reading still under way answers into nothing.
+    _ocr.dispose();
     super.dispose();
   }
 

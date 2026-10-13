@@ -41,10 +41,23 @@ class _TransitionPaneState extends State<TransitionPane>
     super.dispose();
   }
 
+  /// The child as it was when the pane was put away: given back unchanged
+  /// while it stays away, so that each rebuild of the page above (a badge,
+  /// a count) does not make the hidden editor or viewer again too. Shown
+  /// again, it is the page's latest.
+  Widget? _frozen;
+
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
+  Widget build(BuildContext context) {
+    final away = !widget.visible && _controller.isDismissed;
+    final shown = away ? (_frozen ??= widget.child) : widget.child;
+    if (!away) _frozen = null;
+    return _build(shown);
+  }
+
+  Widget _build(Widget shown) => AnimatedBuilder(
     animation: _controller,
-    child: RepaintBoundary(child: widget.child),
+    child: RepaintBoundary(child: shown),
     builder: (context, child) => Offstage(
       offstage: _controller.isDismissed,
       child: IgnorePointer(

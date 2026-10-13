@@ -156,6 +156,7 @@ class _ClientsPageState extends State<ClientsPage> {
     // The parties a UYAP reading brings as it runs, the list made again
     // with them: a client comes while the first reading goes on.
     _sync = PortalSync.started;
+    _reading = _sync?.portfolioRunning ?? false;
     _sync?.portfolioVersion.addListener(_partiesCame);
     _sync?.addListener(_syncChanged);
   }
@@ -165,8 +166,13 @@ class _ClientsPageState extends State<ClientsPage> {
   int? _seenRevision;
 
   void _syncChanged() {
-    if (mounted) setState(() {});
+    final reading = _sync?.portfolioRunning ?? false;
+    if (!mounted || reading == _reading) return;
+    _reading = reading;
+    setState(() {});
   }
+
+  bool _reading = false;
 
   void _partiesCame() {
     _again?.cancel();
@@ -351,16 +357,33 @@ class _ClientsPageState extends State<ClientsPage> {
         if (_keeps(_filter, e)) e,
     ];
     if (q.isEmpty) return base;
+    // Made again when the list is read again or any case is written (its
+    // number may have changed without its client's record changing).
+    final cases = _db?.casesRevision;
+    if (!identical(_searchOf, _entries) || cases != _searchCases) {
+      _searchOf = _entries;
+      _searchCases = cases;
+      _searchTexts.clear();
+    }
     return [
       for (final e in base)
-        if (UyapWebService.fold(
-          '${e.name} ${e.client?.idNo ?? ''} '
-          '${e.client?.phone ?? ''} ${e.client?.phone2 ?? ''} '
-          '${[for (final c in e.cases) _db?.caseOf(c.caseKey)?.number ?? ''].join(' ')}',
-        ).contains(q))
-          e,
+        if (_searchText(e).contains(q)) e,
     ];
   }
+
+  /// What a client is found by, folded once for each list read: made on
+  /// each keystroke, every case of every client was read from the database
+  /// for its number.
+  String _searchText(ClientEntry e) =>
+      _searchTexts[e.key] ??= UyapWebService.fold(
+        '${e.name} ${e.client?.idNo ?? ''} '
+        '${e.client?.phone ?? ''} ${e.client?.phone2 ?? ''} '
+        '${[for (final c in e.cases) _db?.caseOf(c.caseKey)?.number ?? ''].join(' ')}',
+      );
+
+  List<ClientEntry>? _searchOf;
+  int? _searchCases;
+  final _searchTexts = <String, String>{};
 
   void _open(ClientEntry e) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
@@ -589,13 +612,18 @@ class _ClientsPageState extends State<ClientsPage> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'UYAP’tan okunuyor'
-                      '${sync.portfolioState.progress == null ? '' : ' · ${sync.portfolioState.progress}'}'
-                      '. Müvekkiller geldikçe eklenir.',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AgendaColors.hearingText,
+                    // The line alone follows the progress: the page is
+                    // made again only as the reading starts and ends.
+                    child: ListenableBuilder(
+                      listenable: sync,
+                      builder: (context, _) => Text(
+                        'UYAP’tan okunuyor'
+                        '${sync.portfolioState.progress == null ? '' : ' · ${sync.portfolioState.progress}'}'
+                        '. Müvekkiller geldikçe eklenir.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: AgendaColors.hearingText,
+                        ),
                       ),
                     ),
                   ),
@@ -610,8 +638,10 @@ class _ClientsPageState extends State<ClientsPage> {
   /// The clients shown, in groups (this week, still worked on, done with)
   /// or by name alone.
   Widget _listOf(List<ClientEntry> shown, bool wide) {
+    // Each name folded once, not twice at each comparison of the sort.
+    final folded = {for (final e in shown) e.key: UyapWebService.fold(e.name)};
     int byName(ClientEntry a, ClientEntry b) =>
-        UyapWebService.fold(a.name).compareTo(UyapWebService.fold(b.name));
+        folded[a.key]!.compareTo(folded[b.key]!);
     final items = <Object>[];
     if (_byName) {
       items.addAll(List<ClientEntry>.of(shown)..sort(byName));

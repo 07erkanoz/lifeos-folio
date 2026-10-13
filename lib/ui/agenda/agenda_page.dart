@@ -227,17 +227,56 @@ class _AgendaPageState extends State<AgendaPage> {
   @override
   void dispose() {
     _clock?.cancel();
+    _syncLater?.cancel();
     _sync.removeListener(_syncChanged);
     _changes.dispose();
     super.dispose();
   }
 
   /// A channel connected, finished or failed: what is kept may have changed.
+  /// A line of progress alone reads nothing (the sync card and the channel
+  /// bar listen for those themselves); what a running sync keeps is read
+  /// again at most every few seconds.
+  ///
+  /// What is kept is told by the database itself ([PortalDatabase.revision]
+  /// changes with any write, from whichever path), not by the sync's own
+  /// counters, which some writers (another own device's agenda, a single
+  /// notice's package) do not move. A change held back by the few seconds'
+  /// wait is read when they are up, whether or not anything is told then.
   void _syncChanged() {
     if (!mounted) return;
+    final stamp = _sync.channelStamp;
+    if (stamp != _syncStamp) {
+      _syncStamp = stamp;
+      _readKept();
+      return;
+    }
+    if (_db?.revision == _syncKept) return;
+    final wait = _syncEvery - DateTime.now().difference(_syncRead);
+    if (wait <= Duration.zero) {
+      _readKept();
+    } else {
+      _syncLater ??= Timer(wait, () {
+        _syncLater = null;
+        if (mounted && _db?.revision != _syncKept) _readKept();
+      });
+    }
+  }
+
+  void _readKept() {
+    _syncLater?.cancel();
+    _syncLater = null;
+    _syncKept = _db?.revision;
+    _syncRead = DateTime.now();
     _reload();
     widget.onChanged?.call();
   }
+
+  String? _syncStamp;
+  (int, int)? _syncKept;
+  Timer? _syncLater;
+  DateTime _syncRead = DateTime.fromMillisecondsSinceEpoch(0);
+  static const _syncEvery = Duration(seconds: 4);
 
   Future<void> _open() async {
     final db = widget.database ?? await PortalDatabase.shared();
@@ -1274,6 +1313,8 @@ class _AgendaPageState extends State<AgendaPage> {
 
   /// The month in small: a day pressed shows its week (its day in the
   /// day's view), the days with a hearing or a deadline marked.
+  (DateTime, Object, Set<DateTime>)? _marked;
+
   Widget _miniCalendar(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final today = _day(_now());
@@ -1281,16 +1322,25 @@ class _AgendaPageState extends State<AgendaPage> {
     final first = DateTime(month.year, month.month);
     final next = DateTime(month.year, month.month + 1);
     final (from, to) = _range;
-    final marked = <DateTime>{};
-    final db = _db;
-    if (db != null) {
-      for (final h in db.hearings(from: first, to: next)) {
-        marked.add(_day(h.at));
-      }
-      for (final i in db.agenda(from: first, to: next)) {
-        if (i.kind == 'deadline' && !i.done && i.at != null) {
-          marked.add(_day(i.at!));
+    // Read once for each month shown and each reading of the agenda, not
+    // at every build (each minute, each sync, each parent's rebuild).
+    final kept = _marked;
+    final Set<DateTime> marked;
+    if (kept != null && kept.$1 == first && identical(kept.$2, _items)) {
+      marked = kept.$3;
+    } else {
+      marked = <DateTime>{};
+      final db = _db;
+      if (db != null) {
+        for (final h in db.hearings(from: first, to: next)) {
+          marked.add(_day(h.at));
         }
+        for (final i in db.agenda(from: first, to: next)) {
+          if (i.kind == 'deadline' && !i.done && i.at != null) {
+            marked.add(_day(i.at!));
+          }
+        }
+        _marked = (first, _items, marked);
       }
     }
     final lead = first.weekday - 1;

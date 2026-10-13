@@ -124,7 +124,27 @@ class _CashPageState extends State<CashPage> {
     return c == null ? key : '${c.number} · ${c.court}';
   }
 
-  String _caseNumber(String key) => _db?.caseOf(key)?.number ?? key;
+  /// Each case's number read once for each reading of the book: asked for
+  /// every line on every build, and every line on each keystroke of the
+  /// search, each was a query and a decoding.
+  ///
+  /// Read afresh when the book is read again or any case is written (a
+  /// number may change with no line of the book changing); that is looked
+  /// at once a build ([_freshNumbers]), not once a line.
+  String _caseNumber(String key) =>
+      _numbers[key] ??= _db?.caseOf(key)?.number ?? key;
+
+  void _freshNumbers() {
+    final cases = _db?.casesRevision;
+    if (identical(_numbersOf, _lines) && cases == _numbersCases) return;
+    _numbersOf = _lines;
+    _numbersCases = cases;
+    _numbers.clear();
+  }
+
+  List<CashLine>? _numbersOf;
+  int? _numbersCases;
+  final _numbers = <String, String>{};
 
   /// The month's lines in the currency shown.
   List<CashLine> _ofMonth(DateTime m) => [
@@ -324,6 +344,7 @@ class _CashPageState extends State<CashPage> {
   @override
   Widget build(BuildContext context) {
     if (_db == null) return const Center(child: CircularProgressIndicator());
+    _freshNumbers();
     return LayoutBuilder(
       builder: (context, box) {
         final wide = box.maxWidth >= 720;

@@ -19,6 +19,14 @@ abstract final class FolioPalette {
     final a = c.a;
     // A shadow or a veil: dark on the dark theme too.
     if (a < 1) return c;
+    // Worked out once a colour: the pages ask it thousands of times a frame
+    // of the same few dozen.
+    return _dark[c.toARGB32()] ??= _toned(c);
+  }
+
+  static final _dark = <int, Color>{};
+
+  static Color _toned(Color c) {
     final hsl = HSLColor.fromColor(c);
     final l = hsl.lightness;
     final s = hsl.saturation;

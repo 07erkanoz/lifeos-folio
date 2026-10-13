@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+
+import '../platform/app_directories.dart';
 
 String fontKey(String name) =>
     name.toLowerCase().replaceAll(RegExp(r'[\s_-]'), '');
@@ -9,13 +12,88 @@ String fontKey(String name) =>
 class SystemFontCatalog {
   static Future<Map<String, Map<String, String>>>? _pending;
   static Future<Map<String, Map<String, String>>> load() =>
-      _pending ??= compute(_scan, null);
+      _pending ??= _load();
+
+  /// The catalog is kept in Folio's data folder between runs: a document
+  /// waits for it before it opens, and reading the name of every font on the
+  /// computer took seconds on a cold disk. Read again only when a fonts
+  /// folder has changed.
+  static Future<Map<String, Map<String, String>>> _load() async {
+    String? kept;
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        kept = p.join((await folioSupportDirectory()).path, 'font_catalog.json');
+      } catch (_) {
+        /* No data folder: scanned each time, as before. */
+      }
+    }
+    return compute(_scanKept, kept);
+  }
 }
 
-/// Read only SFNT headers/name tables, not the full font files. Runs off the UI thread.
-Map<String, Map<String, String>> _scan(void _) {
+Map<String, Map<String, String>> _scanKept(String? kept) {
+  final roots = _roots();
+  final stamp = _stamp(roots);
+  if (kept != null) {
+    try {
+      final json = jsonDecode(File(kept).readAsStringSync());
+      if (json is Map && json['stamp'] == stamp && json['fonts'] is Map) {
+        return {
+          for (final e in (json['fonts'] as Map).entries)
+            '${e.key}': (e.value as Map).cast<String, String>(),
+        };
+      }
+    } catch (_) {
+      /* Not there yet, or unreadable: read the fonts again. */
+    }
+  }
+  final result = _scan(roots);
+  if (kept != null) {
+    try {
+      final part = File('$kept.part')
+        ..writeAsStringSync(jsonEncode({'stamp': stamp, 'fonts': result}));
+      part.renameSync(kept);
+    } catch (_) {
+      /* Kept next time instead. */
+    }
+  }
+  return result;
+}
+
+/// Each font file's size and time of change, in order, with the form the
+/// catalog is kept in: a font installed, removed or replaced changes it.
+/// Asked of the folder's listing alone, which is cheap beside opening
+/// every file for its name.
+String _stamp(List<String> roots) {
+  final parts = <String>['v1'];
+  for (final root in roots) {
+    try {
+      final directory = Directory(root);
+      if (!directory.existsSync()) continue;
+      final files = <String>[];
+      for (final entry in directory.listSync(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entry is! File || p.extension(entry.path).toLowerCase() != '.ttf') {
+          continue;
+        }
+        final stat = entry.statSync();
+        files.add(
+          '${entry.path}:${stat.size}:${stat.modified.microsecondsSinceEpoch}',
+        );
+      }
+      parts.addAll(files..sort());
+    } on FileSystemException {
+      parts.add('$root:?');
+    }
+  }
+  return parts.join('|');
+}
+
+List<String> _roots() {
   final home = Platform.environment['HOME'];
-  final roots = Platform.isWindows
+  return Platform.isWindows
       ? [
           p.join(Platform.environment['WINDIR'] ?? r'C:\Windows', 'Fonts'),
           if (Platform.environment['LOCALAPPDATA'] != null)
@@ -40,6 +118,10 @@ Map<String, Map<String, String>> _scan(void _) {
           if (home != null) '$home/.fonts',
           if (home != null) '$home/.local/share/fonts',
         ];
+}
+
+/// Read only SFNT headers/name tables, not the full font files. Runs off the UI thread.
+Map<String, Map<String, String>> _scan(List<String> roots) {
   final result = <String, Map<String, String>>{};
   for (final root in roots) {
     try {

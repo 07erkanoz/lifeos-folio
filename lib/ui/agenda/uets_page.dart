@@ -207,10 +207,22 @@ class _UetsPageState extends State<UetsPage> {
   }
 
   /// [n]'s deadlines, not set aside by the lawyer.
-  List<KeptDeadline> _of(KeptNotice n) => [
-    for (final d in _deadlines)
-      if (d.record.noticeId == n.message.id && !(d.user?.dismissed ?? false)) d,
-  ];
+  List<KeptDeadline> _of(KeptNotice n) {
+    // Grouped by notice once for each reading of the deadlines: looked up
+    // for every notice on every build, all of them were scanned each time.
+    if (!identical(_byNoticeOf, _deadlines)) {
+      _byNoticeOf = _deadlines;
+      _byNotice = {};
+      for (final d in _deadlines) {
+        if (d.user?.dismissed ?? false) continue;
+        (_byNotice[d.record.noticeId] ??= []).add(d);
+      }
+    }
+    return _byNotice[n.message.id] ?? const [];
+  }
+
+  List<KeptDeadline>? _byNoticeOf;
+  var _byNotice = <String, List<KeptDeadline>>{};
 
   /// What the notice is, by its documents' names, else by its envelope's
   /// heading, else by its subject.

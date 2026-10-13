@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/editor/spell_check.dart';
@@ -88,6 +89,25 @@ class EditorTabSpans {
         const <TextMark>[];
     final misspelt = spelling?.marks ?? const <Misspelling>[];
     if (misspelt.isEmpty) return cited;
+    // Merged once while neither list changes: asked by every run of every
+    // line, each misspelling was held against each citation every time.
+    final kept = _merged;
+    if (kept != null &&
+        identical(kept.$1, cited) &&
+        identical(kept.$2, misspelt)) {
+      return kept.$3;
+    }
+    final merged = _merge(cited, misspelt);
+    _merged = (cited, misspelt, merged);
+    return merged;
+  }
+
+  static (List<TextMark>, List<Misspelling>, List<TextMark>)? _merged;
+
+  static List<TextMark> _merge(
+    List<TextMark> cited,
+    List<Misspelling> misspelt,
+  ) {
     return [
       ...cited,
       for (final mark in misspelt)
@@ -267,6 +287,37 @@ class _LineTabs {
       );
 
   static _LineTabs _of(Line line, TextStyle base, double? pageWidth) {
+    // Within one frame's build and layout a line cannot change, yet it is
+    // asked for its rows once by its layout and twice more by each of its
+    // runs: what the first asking found stands for the rest of the frame,
+    // rather than the line's whole text being written out as a key again.
+    final binding = SchedulerBinding.instance;
+    final inFrame =
+        binding.schedulerPhase == SchedulerPhase.persistentCallbacks;
+    if (inFrame) {
+      // Keyed as the line's own cache is: by the page's width, not by the
+      // style asked with.
+      final seen = _frame[line];
+      if (seen != null && seen.$1 == pageWidth) return seen.$2;
+    }
+    final laid = _keyed(line, base, pageWidth);
+    if (inFrame) {
+      if (!_frameClearing) {
+        _frameClearing = true;
+        binding.addPostFrameCallback((_) {
+          _frameClearing = false;
+          _frame = Expando();
+        });
+      }
+      _frame[line] = (pageWidth, laid);
+    }
+    return laid;
+  }
+
+  static var _frame = Expando<(double?, _LineTabs)>();
+  static bool _frameClearing = false;
+
+  static _LineTabs _keyed(Line line, TextStyle base, double? pageWidth) {
     String attributes(Style style) =>
         style.attributes.values.map((a) => '${a.key}=${a.value}').join(';');
     // Everything the widths depend on, so an edit anywhere in the line lays

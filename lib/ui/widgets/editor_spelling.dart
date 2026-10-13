@@ -50,6 +50,17 @@ class SpellingMarks extends ChangeNotifier {
     _waiting = Timer(after, () => _ask(text));
   }
 
+  /// As [changed], the text read by [read] only once the typing settles:
+  /// written out on each keystroke, a long document's whole text was.
+  void changedLater(String Function() read) {
+    if (_disposed) return;
+    _waiting?.cancel();
+    _waiting = Timer(after, () {
+      final text = read();
+      if (text != _asked) _ask(text);
+    });
+  }
+
   /// Checks now rather than waiting, for a document that has just opened.
   Future<void> now(String text) => _ask(text);
 

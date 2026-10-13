@@ -342,6 +342,24 @@ class _EditorWidgetState extends State<EditorWidget>
     if (mounted) setState(() {});
   }
 
+  /// The document's text, read once for whoever asks within the same moment
+  /// (the spelling and the citations' timers firing together).
+  String _plainText() {
+    final document = _quillController.document;
+    final cached = _plainCache;
+    if (cached != null &&
+        identical(cached.$1, document) &&
+        cached.$2 == _plainRevision) {
+      return cached.$3;
+    }
+    final text = document.toPlainText();
+    _plainCache = (document, _plainRevision, text);
+    return text;
+  }
+
+  (Document, int, String)? _plainCache;
+  int _plainRevision = 0;
+
   void _watchDocument() {
     _documentChanges?.cancel();
     _quillController
@@ -350,15 +368,16 @@ class _EditorWidgetState extends State<EditorWidget>
     // A document put in its place: the whole of it to who watches.
     _live?.whole();
     _documentChanges = _quillController.document.changes.listen((event) {
+      _plainRevision++;
       if (event.source == ChangeSource.local) _live?.body(event.change);
       _fillTypedBlank(event);
       _typed(event);
       _recovery.changed();
       _checkEditedSoon();
       if (widget.initialFormat == EvrakFormat.pdf) return;
-      final text = _quillController.document.toPlainText();
-      _spelling.changed(text);
-      _citations.changed(text);
+      // The text read once the typing settles, not on each keystroke.
+      _spelling.changedLater(_plainText);
+      _citations.changedLater(_plainText);
     });
     if (widget.initialFormat == EvrakFormat.pdf) return;
     final text = _quillController.document.toPlainText();
@@ -811,11 +830,24 @@ class _EditorWidgetState extends State<EditorWidget>
 
   /// What the spelling checker last found, redrawn when it finds something
   /// else. Asked again a moment after the typing stops.
-  late final _spelling = SpellingMarks()..addListener(_spellingChanged);
+  late final _spelling = SpellingMarks();
+
+  /// The marks are drawn by the page's lines alone ([_bodyEditor] listens
+  /// for them): found again after each pause in typing, they no longer
+  /// rebuild the ribbon, the ruler and the panels with them. Only the count
+  /// at the foot of the page asks for more, and only when it changes.
+  late final _marks = Listenable.merge([_spelling, _citations]);
 
   void _spellingChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final count = CitationList.counts(_citations.marks, _citations.decisions);
+    final shown = (count.laws, count.decisions);
+    if (shown == _citationsShown) return;
+    _citationsShown = shown;
+    setState(() {});
   }
+
+  (int, int) _citationsShown = (0, 0);
 
   /// The laws the document cites, drawn as something to press.
   late final _citations = CitationMarks(
@@ -1478,11 +1510,38 @@ class _EditorWidgetState extends State<EditorWidget>
     page.headerOffset,
     page.footerOffset,
   ];
+  /// The saved text, decoded once for each time it is saved, and its length.
+  (String, Delta, int)? _baselineBody;
+
+  /// Whether the text differs from what was saved, told without writing the
+  /// whole of it out as JSON each time it is asked (each pause in typing): a
+  /// length that differs says so at once, an equal delta says it has not;
+  /// only what is left is written out and compared.
+  bool get _bodyChanged {
+    final document = _quillController.document;
+    var base = _baselineBody;
+    if (base == null || !identical(base.$1, _baselineDelta)) {
+      try {
+        final delta = Delta.fromJson(jsonDecode(_baselineDelta) as List);
+        base = _baselineBody = (
+          _baselineDelta,
+          delta,
+          delta.operations.fold<int>(0, (n, o) => n + (o.length ?? 0)),
+        );
+      } catch (_) {
+        return _deltaSnapshot() != _baselineDelta;
+      }
+    }
+    if (document.length != base.$3) return true;
+    if (document.toDelta() == base.$2) return false;
+    return _deltaSnapshot() != _baselineDelta;
+  }
+
   bool get _hasChanges =>
       !_isLoading &&
       _loadError == null &&
       (_restoredRevision ||
-          _deltaSnapshot() != _baselineDelta ||
+          _bodyChanged ||
           _regionSnapshot() != _baselineRegions ||
           jsonEncode(_regionAttrs) != _baselineRegionAttrs ||
           _tableRevision != _baselineTableRevision ||
@@ -3035,6 +3094,15 @@ class _EditorWidgetState extends State<EditorWidget>
   /// how it is shown differs. [lineWidth] is a line's width in points, for
   /// the tab stops.
   Widget _bodyEditor({
+    required QuillPageGeometry? pages,
+    required double lineWidth,
+  }) => ListenableBuilder(
+    listenable: _marks,
+    builder: (context, _) =>
+        _quillEditor(pages: pages, lineWidth: lineWidth),
+  );
+
+  Widget _quillEditor({
     required QuillPageGeometry? pages,
     required double lineWidth,
   }) => QuillEditor.basic(
@@ -4594,9 +4662,7 @@ class _EditorWidgetState extends State<EditorWidget>
     _recovery.dispose();
     widget.draft?.detach();
     _editorFocus.dispose();
-    _spelling
-      ..removeListener(_spellingChanged)
-      ..dispose();
+    _spelling.dispose();
     _citations
       ..removeListener(_spellingChanged)
       ..dispose();

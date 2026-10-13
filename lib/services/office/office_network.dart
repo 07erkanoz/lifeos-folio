@@ -497,15 +497,22 @@ class OfficeNetwork extends ChangeNotifier {
           host: host,
           port: peer.port,
         );
-        unawaited(_metOwn(ch));
-        final reply = ch.messages.first.timeout(const Duration(seconds: 20));
-        await ch.send({
-          't': 'buro-parca',
-          'ad': e.key,
-          'veri': await e.value.export(peer.deviceId),
-        });
-        final m = await reply;
-        await ch.close();
+        final Map<String, Object?> m;
+        // Shut however it ends: a reply that never came or a send that
+        // failed would otherwise leave the socket open.
+        try {
+          unawaited(_metOwn(ch));
+          final reply = ch.messages.first.timeout(const Duration(seconds: 20))
+            ..ignore();
+          await ch.send({
+            't': 'buro-parca',
+            'ad': e.key,
+            'veri': await e.value.export(peer.deviceId),
+          });
+          m = await reply;
+        } finally {
+          await ch.close();
+        }
         if (m['veri'] != null &&
             await e.value.merge(m['veri'], peer.deviceId)) {
           notifyListeners();
@@ -644,11 +651,15 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
-      final reply = ch.messages.first.timeout(const Duration(seconds: 30));
-      await ch.send({...body, 't': 'buro-sor', 'tur': kind});
-      final answer = await reply;
-      await ch.close();
-      return answer['yok'] == true ? null : answer;
+      try {
+        final reply = ch.messages.first.timeout(const Duration(seconds: 30))
+          ..ignore();
+        await ch.send({...body, 't': 'buro-sor', 'tur': kind});
+        final answer = await reply;
+        return answer['yok'] == true ? null : answer;
+      } finally {
+        await ch.close();
+      }
     } catch (_) {
       return null;
     }
@@ -674,24 +685,22 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
-      if (!ch.vouched) {
+      try {
+        if (!ch.vouched) return null;
+        final reply = ch.messages.first.timeout(const Duration(seconds: 30))
+          ..ignore();
+        await ch.send({...body, 't': 'kendi', 'tur': kind});
+        final answer = await reply;
+        if (answer['yok'] == true) return null;
+        final word = then == null ? null : await then(answer);
+        if (word != null) {
+          await ch.send(word);
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        }
+        return answer;
+      } finally {
         await ch.close();
-        return null;
       }
-      final reply = ch.messages.first.timeout(const Duration(seconds: 30));
-      await ch.send({...body, 't': 'kendi', 'tur': kind});
-      final answer = await reply;
-      if (answer['yok'] == true) {
-        await ch.close();
-        return null;
-      }
-      final word = then == null ? null : await then(answer);
-      if (word != null) {
-        await ch.send(word);
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      }
-      await ch.close();
-      return answer;
     } catch (_) {
       return null;
     }
@@ -820,15 +829,17 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
-      unawaited(_metOwn(ch));
-      if (!ch.vouched) {
+      final Map<String, Object?> m;
+      try {
+        unawaited(_metOwn(ch));
+        if (!ch.vouched) return;
+        final reply = ch.messages.first.timeout(const Duration(seconds: 20))
+          ..ignore();
+        await ch.send({'t': 'senkron', 'parcalar': _pack(await _ownParts())});
+        m = await reply;
+      } finally {
         await ch.close();
-        return;
       }
-      final reply = ch.messages.first.timeout(const Duration(seconds: 20));
-      await ch.send({'t': 'senkron', 'parcalar': _pack(await _ownParts())});
-      final m = await reply;
-      await ch.close();
       await _ownCame(_unpack(m['parcalar']));
       synced[peer.deviceId] = DateTime.now();
       notifyListeners();

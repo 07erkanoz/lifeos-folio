@@ -80,6 +80,73 @@ void main() {
     expect(p.cooling, Duration.zero);
   });
 
+  test('a sync already in line when UYAP starts failing steps out, rather '
+      'than hold the lawyer behind it', () async {
+    final p = pace();
+    final failing = p
+        .run<void>(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          throw const SocketException('yok');
+        }, isUyapFault: UyapPace.fault)
+        .catchError((_) {});
+    // Queued behind the failing request, before the cool-off began.
+    final sync = UyapPace.background(() => p.run(() async {}));
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    final lawyer = timed(() => p.run(() async {}));
+    await failing;
+    expect(await lawyer, lessThan(const Duration(milliseconds: 200)));
+    await sync;
+  });
+
+  test('a sync holding a service’s line gives it up when UYAP is failing, '
+      'rather than sleep in it', () async {
+    final p = pace();
+    // A service's own serial line, as UyapWebService keeps.
+    var line = Future<void>.value();
+    Future<T> serial<T>(Future<T> Function() op) async {
+      await p.cooled();
+      final previous = line;
+      final done = Completer<void>();
+      line = done.future;
+      await previous;
+      try {
+        return await UyapPace.holding(op);
+      } finally {
+        done.complete();
+      }
+    }
+
+    final failing = serial(
+      () => p.run<void>(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        throw const SocketException('yok');
+      }, isUyapFault: UyapPace.fault),
+    ).catchError((_) {});
+    // A sync's request queued in the service's line behind the failing one.
+    final sync = UyapPace.background(
+      () => serial(() => p.run(() async => 'cevap')),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    final lawyer = timed(() => serial(() => p.run(() async {})));
+    await failing;
+    await expectLater(sync, throwsA(isA<UyapCooling>()));
+    expect(await lawyer, lessThan(const Duration(milliseconds: 200)));
+  });
+
+  test('cooled() holds only a sync, and only while UYAP is failing', () async {
+    final p = pace();
+    expect(await timed(p.cooled), lessThan(const Duration(milliseconds: 50)));
+    await p
+        .run<void>(
+          () => throw const SocketException('yok'),
+          isUyapFault: UyapPace.fault,
+        )
+        .catchError((_) {});
+    expect(await timed(p.cooled), lessThan(const Duration(milliseconds: 50)));
+    final sync = await timed(() => UyapPace.background(p.cooled));
+    expect(sync, greaterThanOrEqualTo(const Duration(milliseconds: 250)));
+  });
+
   test('UYAP’s faults: no answer, a server error, too many requests', () {
     expect(UyapPace.fault(const SocketException('x')), isTrue);
     expect(UyapPace.fault(TimeoutException('x')), isTrue);

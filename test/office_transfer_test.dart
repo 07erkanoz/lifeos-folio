@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -810,6 +811,58 @@ void main() {
         await sharedA.answer({'dosya': key, 'evrak': 'a'}, b.self!.deviceId),
         isNull,
       );
+      // Kept, but never theirs: an archive, labelled with who shared it,
+      // asked nothing of UYAP. Shared again, it is taken again.
+      expect(SharedCases.revoked(dbB, key), isTrue);
+      expect(dbB.revokedShare(key)?.name, 'Av. Deniz Kaya');
+      expect(dbB.revokedShares(), {key});
+      expect(
+        await PortalSync(database: () async => dbB).syncCase(key),
+        contains('arşivde'),
+      );
+      SharedCases.share(dbA, key, [b.me]);
+      await a.syncOffice();
+      await until(() => SharedCases.sourceOf(dbB, key) != null);
+      expect(SharedCases.revoked(dbB, key), isFalse);
+      expect(dbB.revokedShare(key), isNull);
+      // Unshared again, then found in their own portfolio: theirs now, and
+      // a later share does not make it the other's again.
+      SharedCases.share(dbA, key, const []);
+      await a.syncOffice();
+      await until(() => SharedCases.revoked(dbB, key));
+      final own = dbB.caseOf(key)!;
+      dbB.mergeCases([
+        PortalCase.create(number: own.number, court: own.court),
+      ], portfolio: true);
+      expect(SharedCases.revoked(dbB, key), isFalse);
+      SharedCases.share(dbA, key, [b.me]);
+      await a.syncOffice();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(SharedCases.sourceOf(dbB, key), isNull);
+      // A share still being kept when their own portfolio names the case:
+      // theirs, and not marked the other's once the keeping is done.
+      final dbC = PortalDatabase.memory();
+      addTearDown(dbC.dispose);
+      final gate = Completer<void>();
+      final sharedC = SharedCases(
+        network: b,
+        database: () async => dbC,
+        store: _HeldStore(gate, Directory('${dir.path}/c-uyap')),
+      );
+      final merging = sharedC.merge(
+        await sharedA.export(b.self!.deviceId),
+        a.self!.deviceId,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(gate.isCompleted, isFalse);
+      dbC.mergeCases([
+        PortalCase.create(number: '2024/318', court: court),
+      ], portfolio: true);
+      gate.complete();
+      await merging;
+      expect(dbC.caseOf(key), isNotNull);
+      expect(SharedCases.sourceOf(dbC, key), isNull);
+      expect(SharedCases.revoked(dbC, key), isFalse);
     },
   );
 
@@ -1248,6 +1301,26 @@ void main() {
       person,
     );
   });
+}
+
+/// A case store whose keeping of a received case waits on [gate].
+class _HeldStore extends UyapCaseStore {
+  _HeldStore(this.gate, Directory directory)
+    : super(
+        directory: directory,
+        settings: UyapSettings(directory: directory, home: directory.path),
+      );
+
+  final Completer<void> gate;
+
+  @override
+  Future<bool> adoptReceived(
+    Map<String, Object?> json,
+    Map<String, String> files,
+  ) async {
+    await gate.future;
+    return super.adoptReceived(json, files);
+  }
 }
 
 class _Sessions implements SessionHolder {

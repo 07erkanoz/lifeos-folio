@@ -134,17 +134,21 @@ class PhraseMemory extends ChangeNotifier {
              (SELECT count(*) FROM saved s WHERE s.key = p.key) AS saved
       FROM phrases p WHERE p.key NOT IN (SELECT key FROM blocked)''');
     final now = DateTime.now();
-    _phrases = [
+    // Each scored once, not again at each comparison of the sort.
+    final scored = [
       for (final r in rows)
-        LearnedPhrase(
-          key: r['key'] as String,
-          text: r['text'] as String,
-          archive: r['archive'] as int,
-          saved: r['saved'] as int,
-          accepted: r['accepted'] as int,
-          seen: DateTime.fromMillisecondsSinceEpoch(r['seen'] as int),
-        ),
-    ]..sort((a, b) => b.score(now).compareTo(a.score(now)));
+        if (LearnedPhrase(
+              key: r['key'] as String,
+              text: r['text'] as String,
+              archive: r['archive'] as int,
+              saved: r['saved'] as int,
+              accepted: r['accepted'] as int,
+              seen: DateTime.fromMillisecondsSinceEpoch(r['seen'] as int),
+            )
+            case final phrase)
+          (phrase: phrase, score: phrase.score(now)),
+    ]..sort((a, b) => b.score.compareTo(a.score));
+    _phrases = [for (final s in scored) s.phrase];
     _blocked = {
       for (final r in _db.select('SELECT key FROM blocked')) r['key'] as String,
     };

@@ -15,6 +15,7 @@ import 'services/portal/portal_sync.dart';
 import 'services/desktop/native_window.dart';
 import 'services/editor/document_history.dart';
 import 'services/editor/editor_drafts.dart';
+import 'services/editor/suggestions/phrase_memory.dart';
 import 'services/library/recent_documents.dart';
 import 'services/platform/document_launch.dart';
 import 'ui/theme/app_theme.dart';
@@ -66,8 +67,15 @@ Future<void> runEditorApp(List<String> arguments) async {
   }
   // The portals' sessions kept from before: UYAP Mobil ties a petition to
   // its case here too. Quiet: Folio's own window syncs, not each editor's.
-  PortalSync.begin(quiet: true);
+  // Taken up once the document is on screen, not before: opening the
+  // portal's database and the keystore held the window's first frame. A
+  // picker opened sooner starts it itself, quiet all the same.
+  PortalSync.quietHere = true;
   runApp(EditorApp(path: path, desktopChrome: chrome));
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(PhraseMemory.shared().then((_) {}, onError: (_) {}));
+    Timer(const Duration(milliseconds: 1500), PortalSync.begin);
+  });
   if (options != null) {
     await windowManager.waitUntilReadyToShow(options, () async {
       // A document is written across the whole screen: the editor always

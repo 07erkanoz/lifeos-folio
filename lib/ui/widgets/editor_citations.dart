@@ -107,6 +107,16 @@ class CitationMarks extends ChangeNotifier {
     _waiting = Timer(after, () => _scan(text));
   }
 
+  /// As [changed], the text read by [read] only once the typing settles.
+  void changedLater(String Function() read) {
+    if (_disposed) return;
+    _waiting?.cancel();
+    _waiting = Timer(after, () {
+      final text = read();
+      if (text != _scanned) _scan(text);
+    });
+  }
+
   /// Scans now rather than waiting, for a document that has just opened.
   void now(String text) => _scan(text);
 
@@ -141,8 +151,27 @@ class CitationMarks extends ChangeNotifier {
   List<DecisionCitation> get decisions => _cases;
 
   /// The marks as the text splitter wants them.
+  ///
+  /// The same list while neither the marks nor the colours change: asked
+  /// for by every run of every line each time the page is drawn.
   List<TextMark> textMarks(ColorScheme colors) {
     if (_marks.isEmpty && _cases.isEmpty) return const [];
+    final kept = _textMarks;
+    if (kept != null &&
+        identical(kept.$1, _marks) &&
+        identical(kept.$2, _cases) &&
+        identical(kept.$3, colors)) {
+      return kept.$4;
+    }
+    final made = _makeTextMarks(colors);
+    _textMarks = (_marks, _cases, colors, made);
+    return made;
+  }
+
+  (List<Citation>, List<DecisionCitation>, ColorScheme, List<TextMark>)?
+  _textMarks;
+
+  List<TextMark> _makeTextMarks(ColorScheme colors) {
     final law = citationStyle(colors);
     final case_ = decisionStyle(colors);
     return [

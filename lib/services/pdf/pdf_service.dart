@@ -63,27 +63,35 @@ class PdfService {
     )) {
       return (header: null, footer: null);
     }
-    final measured = _regionTrace = {};
-    try {
-      await _renderPdf(
-        await _request(
-          DocModel(
-            pageProperties: model.pageProperties,
-            styles: model.styles,
-            metadata: model.metadata,
-            pageRegions: regions,
-            blocks: const [],
-          ),
-          null,
-        ),
-      );
-    } finally {
-      _regionTrace = null;
-    }
+    final request = await _request(
+      DocModel(
+        pageProperties: model.pageProperties,
+        styles: model.styles,
+        metadata: model.metadata,
+        pageRegions: regions,
+        blocks: const [],
+      ),
+      null,
+    );
+    // Off the window's thread: measured after each pause in typing in a
+    // header, with every face of the document's fonts parsed for it. Not
+    // under the tests, whose fake clock an isolate's answer never reaches.
+    final measured = Platform.environment.containsKey('FLUTTER_TEST')
+        ? await _measureRegions(request)
+        : await compute(_measureRegions, request);
     return (header: measured['header'], footer: measured['footer']);
   }
 
-  static Map<String, double>? _regionTrace;
+  /// The header's and footer's heights, laid out and nothing more. The map
+  /// is each call's own: two measurings at once (a document opening while
+  /// its header is typed in) once wrote into each other's.
+  static Future<Map<String, double>> _measureRegions(
+    ({DocModel model, String? title, Map<String, ByteData> data}) request,
+  ) async {
+    final measured = <String, double>{};
+    await _renderPdf(request, regionTrace: measured);
+    return measured;
+  }
 
   static Future<({DocModel model, String? title, Map<String, ByteData> data})>
   _request(DocModel model, String? title) async {
@@ -103,8 +111,9 @@ class PdfService {
   }
 
   static Future<Uint8List> _renderPdf(
-    ({DocModel model, String? title, Map<String, ByteData> data}) request,
-  ) async {
+    ({DocModel model, String? title, Map<String, ByteData> data}) request, {
+    Map<String, double>? regionTrace,
+  }) async {
     final model = request.model;
     final title = request.title;
     final fonts = {
@@ -800,11 +809,11 @@ class PdfService {
 
     final hasHeader = model.pageRegions.keys.any((k) => k.endsWith('header'));
     final hasFooter = model.pageRegions.keys.any((k) => k.endsWith('footer'));
-    final regionTrace = _regionTrace;
     if (regionTrace != null) {
+      // Only the heights were asked for: nothing is written out.
       if (hasHeader) regionTrace['header'] = tallest('header');
       if (hasFooter) regionTrace['footer'] = tallest('footer');
-      return pdf.save();
+      return Uint8List(0);
     }
     final textTop = hasHeader
         ? math.max(p.marginTop, p.headerOffset + tallest('header'))

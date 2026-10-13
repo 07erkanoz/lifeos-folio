@@ -1471,17 +1471,39 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara',
   ];
 
+  /// Counted once at a time: asked again while counting, counted once more
+  /// after, not once for each time asked.
   Future<void> _countAgenda() async {
+    if (_counting) {
+      _countAgain = true;
+      return;
+    }
+    _counting = true;
+    try {
+      do {
+        _countAgain = false;
+        await _countAgendaNow();
+      } while (_countAgain && mounted);
+    } finally {
+      _counting = false;
+    }
+  }
+
+  bool _counting = false, _countAgain = false;
+
+  Future<void> _countAgendaNow() async {
     try {
       final db = await PortalDatabase.shared();
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final tomorrow = today.add(const Duration(days: 1));
-      final count = db.hearings(from: today, to: tomorrow).length;
-      final unread = db.notices().where((n) => n.unread).length;
-      final open = db
-          .cases()
-          .values
+      // Each read once: every one decodes what it reads, on this thread.
+      final todays = db.hearings(from: today, to: tomorrow);
+      final count = todays.length;
+      final kept = db.notices();
+      final cases = db.cases();
+      final unread = kept.where((n) => n.unread).length;
+      final open = cases.values
           .where(
             (c) =>
                 c.family == CaseFamily.court &&
@@ -1495,7 +1517,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final next = db
           .hearings(from: now, to: today.add(const Duration(days: 31)))
           .firstOrNull;
-      final notices = db.notices().where((n) => n.unread).toList()
+      final notices = kept.where((n) => n.unread).toList()
         ..sort(
           (a, b) => (b.message.sent ?? DateTime(0)).compareTo(
             a.message.sent ?? DateTime(0),
@@ -1505,7 +1527,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         for (final n in db.uyapNotices())
           if (!n.read) n,
       ];
-      final cases = db.cases();
       final office = DesktopHomeOffice(
         noticesUnread: unreadNotices.length,
         notices: [
@@ -1518,7 +1539,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               },
             ),
         ],
-        today: db.hearings(from: today, to: tomorrow),
+        today: todays,
         next: db
             .hearings(from: tomorrow, to: today.add(const Duration(days: 90)))
             .firstOrNull,

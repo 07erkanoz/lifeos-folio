@@ -228,12 +228,17 @@ class UyapWebService {
         ..connectionTimeout = const Duration(seconds: 25));
 
   Future<T> _serial<T>(Future<T> Function() operation) async {
+    // A sync waits out UYAP's failing before its turn here, not inside it:
+    // asleep in this line it would hold the lawyer's own requests too.
+    await UyapPace.instance.cooled();
     final previous = _queue;
     final done = Completer<void>();
     _queue = done.future;
     await previous;
     try {
-      return await operation();
+      // Holding this line: a sync's request in it does not sleep out UYAP's
+      // failing here (UyapPace.holding).
+      return await UyapPace.holding(operation);
     } finally {
       done.complete();
     }

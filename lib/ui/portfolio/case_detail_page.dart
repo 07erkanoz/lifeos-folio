@@ -150,6 +150,25 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   /// The office's people this person shares the case with.
   List<String> _sharedWith = const [];
 
+  /// Set when the case was shared with this person and no longer is: kept
+  /// as an archive, labelled with who shared it, its documents already
+  /// here opened; it is neither shared on nor asked of UYAP.
+  ({String name})? _archive;
+
+  /// Says why an archive is not asked of UYAP nor shared; true when it is
+  /// one, for the caller to stop.
+  bool _archived() {
+    if (_archive == null) return false;
+    showNotice(
+      context,
+      'Bu dosya arşivde',
+      detail:
+          'Paylaşımı kaldırıldı. Burada inmiş evraklar açılır; UYAP’tan '
+          'tazelenmez, evrak indirilmez ve paylaşılmaz.',
+    );
+    return true;
+  }
+
   /// An enforcement file's own account in Folio: what was paid outside
   /// the office and waived, for the debt Folio counts.
   List<LedgerEntry> _ledger = const [];
@@ -231,6 +250,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       return;
     }
     final link = linkOf(kase);
+    // Known before the case is attached: an archive is not refreshed.
+    final archive = db.revokedShare(kase.key);
+    _c.archived = archive != null;
     await _c.attach(link);
     _fresh.addAll(_c.record?.fresh ?? const {});
     final state = db.caseStates()[kase.key] ?? const CaseState();
@@ -249,6 +271,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _source = SharedCases.sourceOf(db, kase.key);
       _sharedBy = _sharedByOf(db, kase.key);
       _sharedWith = SharedCases.sharedWith(db, kase.key);
+      _archive = archive;
       _ledger = ledgerOf(db, kase.key);
       _state = state;
       _hearings = db.hearings(caseKey: kase.key)
@@ -340,6 +363,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _c.connected || await connectUyap(context, op: op, why: why);
 
   Future<void> _refresh() async {
+    if (_archived()) return;
     if (!await _connect(
       UyapOp.details,
       'Dosyayı UYAP’tan tazelemek için bağlanın.',
@@ -433,7 +457,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   /// hearings, and ask for a document when they open it.
   Future<void> _share() async {
     final kase = _kase;
-    if (kase == null) return;
+    if (kase == null || _archived()) return;
     final net = OfficeNetwork.instance;
     final people = [
       for (final m in net.ledger.people)
@@ -513,6 +537,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   }
 
   Future<void> _open(UyapCaseDocument d) async {
+    // An archive opens what is here and fetches nothing.
+    if (_c.store.fileOf(_c.record!, d.key) == null && _archived()) return;
     if (_c.store.fileOf(_c.record!, d.key) == null && _source != null) {
       await _fetchShared([d.key], open: true);
       return;
@@ -529,6 +555,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   }
 
   Future<void> _downloadFresh() async {
+    if (_archived()) return;
     if (_source != null) {
       await _fetchShared(_fresh.toList());
       return;
@@ -1477,20 +1504,24 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           icon: const Icon(Icons.edit_note_rounded, size: 18),
           label: const Text('Dilekçe yaz'),
         ),
-      OutlinedButton.icon(
-        key: const ValueKey('case-refresh'),
-        onPressed: _c.busy != null ? null : () => unawaited(_refresh()),
-        icon: const Icon(Icons.sync_rounded, size: 17),
-        label: const Text('UYAP’tan tazele'),
-      ),
-      if (_fresh.isNotEmpty)
+      // An archive is asked nothing of UYAP and shared with no one.
+      if (_archive == null)
+        OutlinedButton.icon(
+          key: const ValueKey('case-refresh'),
+          onPressed: _c.busy != null ? null : () => unawaited(_refresh()),
+          icon: const Icon(Icons.sync_rounded, size: 17),
+          label: const Text('UYAP’tan tazele'),
+        ),
+      if (_fresh.isNotEmpty && _archive == null)
         OutlinedButton.icon(
           key: const ValueKey('case-download-fresh'),
           onPressed: _c.busy != null ? null : () => unawaited(_downloadFresh()),
           icon: const Icon(Icons.download_rounded, size: 17),
           label: const Text('Yeni evrakları indir'),
         ),
-      if (_source == null && OfficeNetwork.instance.ledger.exists)
+      if (_source == null &&
+          _archive == null &&
+          OfficeNetwork.instance.ledger.exists)
         OutlinedButton.icon(
           key: const ValueKey('case-share'),
           onPressed: () => unawaited(_share()),
@@ -1503,6 +1534,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         tooltip: 'Diğer',
         icon: const Icon(Icons.more_horiz_rounded),
         onSelected: (v) async {
+          if (_archived()) return;
           if (v == 'all' && _source != null) {
             final record = _c.record;
             if (record == null) return;
@@ -1530,6 +1562,32 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     final info = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Shared once and no longer: an archive, said first.
+        if (_archive case final archive?)
+          Container(
+            key: const ValueKey('case-archived'),
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: tone(const Color(0xFFEEF0F3)),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              [
+                'Arşiv',
+                if (archive.name.isNotEmpty)
+                  '${archive.name} paylaşımı kaldırdı'
+                else
+                  'paylaşımı kaldırıldı',
+                'yalnız inmiş evraklar açılır',
+              ].join(' · '),
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: AgendaColors.muted,
+              ),
+            ),
+          ),
         // Shared by another member: said first, as a task's case is.
         if (_sharedBy.isNotEmpty)
           Container(
@@ -1772,6 +1830,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   /// The documents chosen fetched from UYAP, those not here yet.
   Future<void> _downloadPicked() async {
+    if (_archived()) return;
     if (_source != null) {
       await _fetchShared(_picked.toList());
       if (mounted) {

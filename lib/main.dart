@@ -30,6 +30,7 @@ import 'ui/security/app_lock_gate.dart';
 import 'ui/widgets/onboarding_gate.dart';
 import 'ui/widgets/folio_about_dialog.dart';
 import 'services/editor/editor_settings.dart';
+import 'services/fonts/system_font_catalog.dart';
 import 'services/editor/suggestions/phrase_memory.dart';
 import 'services/legal/legal_settings.dart';
 import 'ui/widgets/overlay_card.dart';
@@ -55,9 +56,13 @@ void main(List<String> arguments) async {
     return;
   }
   if (arguments.contains(editorFlag)) {
+    // The document waits for the computer's fonts: looked up while the
+    // window is made, not after.
+    unawaited(SystemFontCatalog.load().then((_) {}, onError: (_) {}));
     unawaited(LegalSettings.instance.load());
     unawaited(EditorSettings.instance.load());
-    unawaited(PhraseMemory.shared().then((_) {}, onError: (_) {}));
+    // What the suggestions learned opens once the document is on screen
+    // (runEditorApp): reading and ranking it held the first frame.
     await runEditorApp([
       for (final argument in arguments)
         if (argument != editorFlag) argument,

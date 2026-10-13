@@ -182,7 +182,10 @@ class PortfolioRow {
   final List<UyapParty> ours, others;
 
   String get key => kase.key;
-  CaseKind get kind => CaseKind.of(kase);
+
+  /// Worked out once a row, as [ourRole] and [place]: the filters and the
+  /// facet counts ask them of every row at each pass.
+  late final CaseKind kind = CaseKind.of(kase);
 
   String get status {
     final s = kase.status?.value ?? '';
@@ -225,10 +228,12 @@ class PortfolioRow {
       : state.fresh;
 
   /// "Davacı", "Alacaklı": the role the lawyer stands in.
-  String? get ourRole => ours.isEmpty ? null : titleName(ours.first.role);
+  late final String? ourRole = ours.isEmpty
+      ? null
+      : titleName(ours.first.role);
 
   /// "Antalya Adliyesi": the courthouse the court sits in.
-  String get place => courthouseOf(kase.court);
+  late final String place = courthouseOf(kase.court);
 
   /// When something last happened in it, for "Son gelişme önce".
   late final DateTime lastChange = _lastChange();

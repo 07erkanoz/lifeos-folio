@@ -12,6 +12,16 @@ import 'dart:math';
 /// thirty seconds to a quarter of an hour). What a lawyer asked for waits
 /// only a moment and never for the failing: they are looking at the screen.
 /// There is no daily limit: one would stop a lawyer's work.
+/// A sync's request not made because UYAP is failing and the sync was
+/// holding a line others wait in (see [UyapPace.holding]). Not UYAP's own
+/// fault: it slows nothing further.
+class UyapCooling implements Exception {
+  const UyapCooling();
+
+  @override
+  String toString() => 'UYAP şu an yanıt vermiyor; daha sonra yeniden denenecek.';
+}
+
 class UyapPace {
   UyapPace({
     this.gap = const Duration(milliseconds: 1000),
@@ -65,6 +75,15 @@ class UyapPace {
   /// Whether the request being made now is a sync's.
   static bool get inBackground => Zone.current[_backgroundKey] == true;
 
+  static final _holdingKey = Object();
+
+  /// Runs [work] holding a line of the caller's own (a service's serial
+  /// queue). A sync's request in it that finds UYAP failing is not slept on
+  /// there, with the lawyer's requests queued behind it: it fails with
+  /// [UyapCooling] instead, and the sync's next request waits outside.
+  static Future<T> holding<T>(Future<T> Function() work) =>
+      runZoned(work, zoneValues: {_holdingKey: true});
+
   Future<void> _queue = Future.value();
   DateTime _last = DateTime.fromMillisecondsSinceEpoch(0);
   Duration _cool = Duration.zero;
@@ -82,45 +101,66 @@ class UyapPace {
   }) async {
     if (!_queued) return request();
     final slow = inBackground;
-    // A sync waits out UYAP's failing before it takes its place in line:
-    // a lawyer's request behind it is not held for a quarter of an hour.
-    if (slow) {
-      final left = _coolUntil.difference(_now());
-      if (_cool > Duration.zero && left > Duration.zero) {
-        await Future<void>.delayed(left);
+    final holding = Zone.current[_holdingKey] == true;
+    while (true) {
+      // A sync waits out UYAP's failing before it takes its place in line:
+      // a lawyer's request behind it is not held for a quarter of an hour.
+      // Holding a line of its own, it does not wait there at all.
+      if (slow && holding && _coolingNow) throw const UyapCooling();
+      await cooled();
+      final previous = _queue;
+      final done = Completer<void>();
+      _queue = done.future;
+      try {
+        await previous;
+        // UYAP began failing while this sync stood in line: it steps out
+        // again rather than sleep at the front with the lawyer behind it.
+        // Held in a line of its own as well (a service's, see [holding]),
+        // it gives that up too: waiting here, it would hold it.
+        if (slow && _coolingNow) {
+          if (holding) throw const UyapCooling();
+          continue;
+        }
+        final wait = _waitFor(slow);
+        if (wait > Duration.zero) await Future<void>.delayed(wait);
+        try {
+          final result = await request();
+          _cool = Duration.zero;
+          return result;
+        } catch (e) {
+          if (isUyapFault?.call(e) ?? false) {
+            _cool = _cool == Duration.zero
+                ? firstCool
+                : Duration(
+                    milliseconds: min(
+                      _cool.inMilliseconds * 2,
+                      maxCool.inMilliseconds,
+                    ),
+                  );
+            _coolUntil = _now().add(_cool);
+          } else {
+            _cool = Duration.zero;
+          }
+          rethrow;
+        } finally {
+          _last = _now();
+        }
+      } finally {
+        done.complete();
       }
     }
-    final previous = _queue;
-    final done = Completer<void>();
-    _queue = done.future;
-    try {
-      await previous;
-      final wait = _waitFor(slow);
-      if (wait > Duration.zero) await Future<void>.delayed(wait);
-      try {
-        final result = await request();
-        _cool = Duration.zero;
-        return result;
-      } catch (e) {
-        if (isUyapFault?.call(e) ?? false) {
-          _cool = _cool == Duration.zero
-              ? firstCool
-              : Duration(
-                  milliseconds: min(
-                    _cool.inMilliseconds * 2,
-                    maxCool.inMilliseconds,
-                  ),
-                );
-          _coolUntil = _now().add(_cool);
-        } else {
-          _cool = Duration.zero;
-        }
-        rethrow;
-      } finally {
-        _last = _now();
-      }
-    } finally {
-      done.complete();
+  }
+
+  bool get _coolingNow =>
+      _cool > Duration.zero && _coolUntil.isAfter(_now());
+
+  /// For a sync, the wait until UYAP's failing is over; none for what a
+  /// lawyer asked. Awaited before taking a turn in any line (this one, or a
+  /// service's own), so a sync never sleeps holding a place others wait on.
+  Future<void> cooled() async {
+    if (!_queued || !inBackground) return;
+    while (_coolingNow) {
+      await Future<void>.delayed(_coolUntil.difference(_now()));
     }
   }
 
@@ -134,11 +174,7 @@ class UyapPace {
                     : _random.nextInt(spread.inMilliseconds + 1),
               )
         : quickGap;
-    var until = _last.add(breath);
-    if (slow && _cool > Duration.zero && _coolUntil.isAfter(until)) {
-      until = _coolUntil;
-    }
-    final wait = until.difference(now);
+    final wait = _last.add(breath).difference(now);
     return wait.isNegative ? Duration.zero : wait;
   }
 }

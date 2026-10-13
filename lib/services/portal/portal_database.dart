@@ -338,6 +338,11 @@ class PortalDatabase {
   }) {
     final added = <String>{};
     _transaction(() {
+      // The person's own portfolio naming a case makes it theirs: one once
+      // shared with them and no longer (SharedCases) is no longer marked so.
+      final owned = portfolio
+          ? _db.prepare('DELETE FROM meta WHERE key=?')
+          : null;
       final read = _db.prepare('SELECT json FROM cases WHERE key=?');
       final write = _db.prepare(
         'INSERT OR REPLACE INTO cases(key, json) VALUES(?, ?)',
@@ -348,12 +353,20 @@ class PortalDatabase {
       final now = DateTime.now().toUtc().toIso8601String();
       try {
         for (final one in incoming) {
+          owned?.execute([revokedShareKey(one.key)]);
           final rows = read.select([one.key]);
           final before = rows.isEmpty ? null : rows.first['json'] as String;
           final merged = before == null ? one : _case(before).merge(one);
           final json = jsonEncode(merged.toJson());
           if (json == before) continue;
           write.execute([merged.key, json]);
+          // Only the portals' ids differ: they change with every session,
+          // and kept as a hint they make nothing of the case new. Counted as
+          // changed, every case was each time the portfolio was read, and
+          // sent again to every own device.
+          if (before != null && withoutIds(json) == withoutIds(before)) {
+            continue;
+          }
           changed?.add(merged.key);
           if (before == null) {
             added.add(merged.key);
@@ -361,12 +374,45 @@ class PortalDatabase {
           }
         }
       } finally {
+        owned?.dispose();
         read.dispose();
         write.dispose();
         state.dispose();
       }
     });
     return added;
+  }
+
+  /// The meta key marking a case shared with this person and then no
+  /// longer: kept here, but someone else's (SharedCases.revoked).
+  static String revokedShareKey(String caseKey) =>
+      'paylasim-kaldirilan|$caseKey';
+
+  /// Who stopped sharing [caseKey] with this person, when someone did: the
+  /// case is kept as an archive, its documents here readable, UYAP asked
+  /// nothing of it. Null for any other case, and for one still arriving.
+  ({String name})? revokedShare(String caseKey) =>
+      _revokedFrom(meta(revokedShareKey(caseKey)));
+
+  /// The keys of every case kept as such an archive, read at once.
+  Set<String> revokedShares() => {
+    for (final r in _db.select(
+      "SELECT key, value FROM meta WHERE key LIKE 'paylasim-kaldirilan|%'",
+    ))
+      if (_revokedFrom(r['value'] as String?) != null)
+        (r['key'] as String).substring('paylasim-kaldirilan|'.length),
+  };
+
+  static ({String name})? _revokedFrom(String? raw) {
+    // Empty: not revoked. "*": a share still being kept (SharedCases).
+    if (raw == null || raw.isEmpty || raw == '*') return null;
+    try {
+      final j = jsonDecode(raw);
+      if (j is Map) return (name: '${j['ad'] ?? ''}');
+    } catch (_) {
+      /* Kept before the name was: who it was is not known. */
+    }
+    return (name: '');
   }
 
   // What Folio remembers beside the portals' answers.
@@ -376,10 +422,17 @@ class PortalDatabase {
 
   /// Each case kept, by key, with a short digest of what is kept of it:
   /// what another own device compares, before it asks for any.
+  /// The portals' ids left out, which are this device's session's alone.
   Map<String, String> caseDigests() => {
     for (final r in _db.select('SELECT key, json FROM cases'))
-      r['key'] as String: _digest(r['json'] as String),
+      r['key'] as String: _digest(withoutIds(r['json'] as String)),
   };
+
+  /// A kept case's JSON with its portals' ids emptied: they last a session
+  /// and are no part of what is known of the case.
+  static String withoutIds(String json) =>
+      json.replaceFirst(_idsField, '"ids":{}');
+  static final _idsField = RegExp(r'"ids":\{[^{}]*\}');
 
   /// The kept cases of [keys], as they are kept.
   List<Map<String, Object?>> casesOf(Iterable<String> keys) => [
@@ -390,10 +443,24 @@ class PortalDatabase {
 
   /// Cases another own device kept, taken in field by field as a portal's
   /// answer is: the newer of each wins, nothing is marked new.
+  ///
+  /// Without the other device's ids: they are its session's, and taken in
+  /// they would stand over this one's own.
   int adoptCases(Iterable<Map<String, Object?>> cases) {
     final changed = <String>{};
     mergeCases([
-      for (final c in cases) PortalCaseJson.fromJson(c),
+      for (final c in cases)
+        if (PortalCaseJson.fromJson(c) case final got)
+          PortalCase(
+            key: got.key,
+            number: got.number,
+            court: got.court,
+            family: got.family,
+            status: got.status,
+            parties: got.parties,
+            details: got.details,
+            documents: got.documents,
+          ),
     ], changed: changed);
     return changed.length;
   }

@@ -58,6 +58,21 @@ class SharedCases {
   static String markOf(String caseKey) => 'paylasim-gelen|$caseKey';
   static String _digestOf(String caseKey) => 'paylasim-ozet|$caseKey';
 
+  /// Who stopped sharing [caseKey] with this person, kept after the shared
+  /// mark goes: the case stays here, but it never became theirs. Their own
+  /// portfolio naming it later clears this (PortalDatabase.mergeCases).
+  static String _revokedOf(String caseKey) =>
+      PortalDatabase.revokedShareKey(caseKey);
+
+  /// Whether [caseKey] was shared with this person and is no longer: kept
+  /// here, but someone else's.
+  static bool revoked(PortalDatabase db, String caseKey) =>
+      (db.meta(_revokedOf(caseKey)) ?? '').isNotEmpty;
+
+  /// The mark a case shared with this person carries while it is being
+  /// kept (see [merge]).
+  static const _coming = '*';
+
   static Map<String, List<String>> _read(PortalDatabase db, String key) {
     try {
       final j = jsonDecode(db.meta(key) ?? '{}');
@@ -193,8 +208,12 @@ class SharedCases {
       final got = ReceivedCase(json, const []);
       if (got.court.isEmpty || got.number.isEmpty) continue;
       final key = caseKey(got.number, got.court);
-      // A case of this person's own is theirs, not the other's.
-      final mine = db.caseOf(key) != null && sourceOf(db, key) == null;
+      // A case of this person's own is theirs, not the other's. One shared
+      // before and no longer is not their own: shared again, it is taken.
+      final mine =
+          db.caseOf(key) != null &&
+          sourceOf(db, key) == null &&
+          !revoked(db, key);
       if (mine) continue;
       final digest = sha256.convert(utf8.encode(jsonEncode(json))).toString();
       final mark = jsonEncode({
@@ -205,16 +224,27 @@ class SharedCases {
       if (db.meta(_digestOf(key)) == digest && db.meta(markOf(key)) == mark) {
         continue;
       }
+      // Marked as coming while it is kept: the person's own portfolio
+      // naming the case meanwhile takes the mark away (mergeCases), and
+      // then the case is theirs, not marked the other's when this resumes.
+      db.setMeta(_revokedOf(key), _coming);
       await adopt(db, got);
+      changed = true;
+      if (!revoked(db, key)) continue;
       db.setMeta(markOf(key), mark);
       db.setMeta(_digestOf(key), digest);
-      changed = true;
+      db.setMeta(_revokedOf(key), '');
     }
     for (final key in theirs['kaldirilan'] as List? ?? const []) {
       final source = sourceOf(db, '$key');
       if (source == null || source.person != person) continue;
       db.setMeta(markOf('$key'), '');
       db.setMeta(_digestOf('$key'), '');
+      // Kept with who it was, for the archive's label (case page).
+      db.setMeta(
+        _revokedOf('$key'),
+        jsonEncode({'kisi': person, 'ad': source.name}),
+      );
       changed = true;
     }
     return changed;

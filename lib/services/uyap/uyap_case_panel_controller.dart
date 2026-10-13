@@ -83,6 +83,11 @@ class UyapCasePanelController extends ChangeNotifier {
   String? error;
   bool _disposed = false;
 
+  /// A case once shared with the lawyer and no longer: kept as an archive,
+  /// the documents already here opened, UYAP asked nothing of it (neither
+  /// refreshed nor downloaded from). Set by the page that shows it.
+  bool archived = false;
+
   UyapCaseLink? get link => _link;
   UyapCaseRecord? get record => _record;
   String get query => _query;
@@ -139,7 +144,7 @@ class UyapCasePanelController extends ChangeNotifier {
   Future<UyapCaseLink?> _caseOfFolder(String path) async {
     try {
       final folder = p.normalize(p.dirname(path)).toLowerCase();
-      for (final (record, _) in await store.cases()) {
+      for (final (record, _) in await store.cases(counted: false)) {
         if (p.normalize(store.folderOf(record)).toLowerCase() != folder) {
           continue;
         }
@@ -367,7 +372,7 @@ class UyapCasePanelController extends ChangeNotifier {
   /// and only that is asked for. Without the web portal the mobile API is
   /// asked for the parties and the documents.
   Future<void> refresh() async {
-    if (_link == null || !connected) return;
+    if (_link == null || !connected || archived) return;
     if (!background) _waiting++;
     try {
       await _refresh();
@@ -767,6 +772,7 @@ class UyapCasePanelController extends ChangeNotifier {
       _changed();
       return kept;
     }
+    if (archived) return null;
     return _doing('Evrak indiriliyor', () => _fetch(document));
   }
 
@@ -862,7 +868,7 @@ class UyapCasePanelController extends ChangeNotifier {
   /// another. What is on disk already is not fetched again.
   Future<int> download([Iterable<String>? keys]) async {
     final record = _record;
-    if (record == null) return 0;
+    if (record == null || archived) return 0;
     final wanted = {
       ...keys ??
           [

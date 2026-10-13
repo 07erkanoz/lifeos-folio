@@ -119,8 +119,16 @@ class _PortfolioPageState extends State<PortfolioPage> {
     // seconds, and once more when it ends.
     if (_wasRunning && !running) _reload();
     _wasRunning = running;
-    if (mounted) setState(() {});
+    // A line of progress alone is the progress bar's, which listens for it
+    // itself: the page, its two thousand rows' filters and counts with it,
+    // is made again only as a channel connects, starts or ends.
+    final stamp = _sync?.channelStamp;
+    if (!mounted || stamp == _syncStamp) return;
+    _syncStamp = stamp;
+    setState(() {});
   }
+
+  String? _syncStamp;
 
   /// A case came or changed while a sync runs: shown within a few seconds,
   /// a burst of them read once.
@@ -305,9 +313,16 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
   /// The search's words, folded; none when it is shorter than two letters.
   List<String> get _words {
-    final q = UyapWebService.fold(_search.text.trim());
-    return q.length < 2 ? const [] : q.split(' ');
+    // Folded once for each search, not once for every row it is held to.
+    final text = _search.text;
+    if (text == _wordsOf) return _wordsFolded;
+    final q = UyapWebService.fold(text.trim());
+    _wordsOf = text;
+    return _wordsFolded = q.length < 2 ? const [] : q.split(' ');
   }
+
+  String? _wordsOf;
+  List<String> _wordsFolded = const [];
 
   bool _matchesSearch(PortfolioRow r, [_Scope? scope]) {
     final words = _words;
@@ -1509,7 +1524,15 @@ class _PortfolioPageState extends State<PortfolioPage> {
     );
   }
 
-  Widget _progress(BuildContext context) {
+  Widget _progress(BuildContext context) => switch (_sync) {
+    null => const SizedBox.shrink(),
+    final sync => ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) => _progressNow(context),
+    ),
+  };
+
+  Widget _progressNow(BuildContext context) {
     final state = _sync?.portfolioState;
     if (state == null || !state.running) return const SizedBox.shrink();
     final text = state.progress ?? 'Hazırlanıyor';

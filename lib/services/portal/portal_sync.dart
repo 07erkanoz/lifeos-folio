@@ -77,7 +77,12 @@ class PortalSync extends ChangeNotifier {
        _database = database ?? PortalDatabase.shared;
 
   static PortalSync? _instance;
-  static PortalSync get instance => _instance ??= PortalSync()..start();
+  static PortalSync get instance =>
+      _instance ??= PortalSync(quiet: quietHere)..start();
+
+  /// Set by an editor window of its own: whatever first asks for the one
+  /// instance here (a page, a picker), it is [quiet].
+  static bool quietHere = false;
 
   /// The one started, if Folio started it: what only looks (a list, a
   /// listener) uses this, so that a test never wakes the lawyer's sessions.
@@ -87,7 +92,7 @@ class PortalSync extends ChangeNotifier {
   /// Folio's window and an editor window of its own call this at start;
   /// the editor's is [quiet].
   static void begin({bool quiet = false}) =>
-      _instance ??= PortalSync(quiet: quiet)..start();
+      _instance ??= PortalSync(quiet: quiet || quietHere)..start();
 
   /// An editor window's: it holds the sessions, to tie a petition to its
   /// case, but syncs nothing of itself and asks for no notifications.
@@ -536,11 +541,22 @@ class PortalSync extends ChangeNotifier {
         ),
       );
       // Every package's documents read, the ones kept before too, each
-      // notice's deadlines made again as its documents are read.
+      // notice's deadlines made again as its documents are read. The
+      // portfolio is read once for them all, and again only if it changed:
+      // by the database's own count of case writes, which every writer
+      // moves (a hearing's sync adds cases without telling the portfolio).
+      (int, Map<String, PortalCase>)? portfolio;
+      Map<String, PortalCase> cases() {
+        final version = db.casesRevision;
+        final kept = portfolio;
+        if (kept != null && kept.$1 == version) return kept.$2;
+        return (portfolio = (version, db.cases())).$2;
+      }
+
       await readNoticeDocuments(
         db,
         onRead: (id) {
-          tieByCaseFile(db, id);
+          tieByCaseFile(db, id, cases: cases());
           _keepPackageParties(db, id);
           refreshNoticeDeadlines(
             db,
@@ -626,7 +642,9 @@ class PortalSync extends ChangeNotifier {
     final parties = <String, List<TarafKaydi>>{};
     final fetched = <String, List<UyapParty>>{};
     try {
-      for (final (record, _) in await UyapCaseStore.instance.cases()) {
+      for (final (record, _) in await UyapCaseStore.instance.cases(
+        counted: false,
+      )) {
         if (record.parties.isEmpty) continue;
         final key = caseKey(record.number, record.court);
         fetched[key] = record.parties;
@@ -902,6 +920,19 @@ class PortalSync extends ChangeNotifier {
 
   /// Told each time the notifications kept change.
   final noticesVersion = ValueNotifier<int>(0);
+
+  /// Changes when a channel connects, starts, finishes or fails; a line of
+  /// progress alone leaves it as it was. A page that reads its data again
+  /// when told should compare this first: told twice a second while a sync
+  /// runs, a page reading everything each time held the window.
+  String get channelStamp => [
+    for (final c in PortalChannel.values)
+      '${state(c).running}/${state(c).finished?.microsecondsSinceEpoch}/'
+          '${state(c).problem}',
+    _web.connected,
+    _mobile.connected,
+    _uets.connected,
+  ].join('|');
 
   /// Told the notifications that came new and unread, each once, for the
   /// desktop's word of them; set by the window.
@@ -1284,10 +1315,15 @@ class PortalSync extends ChangeNotifier {
     }
   }
 
+  /// Why a case kept as an archive is not asked about.
+  static const _archiveWord =
+      'Paylaşımı kaldırılan dosya arşivde duruyor; UYAP’a sorulmaz.';
+
   Future<String?> syncCase(String key) async {
     final db = await _database();
     final kase = db.caseOf(key);
     if (kase == null) return 'Dosya henüz kayıtlı değil.';
+    if (db.revokedShare(key) != null) return _archiveWord;
     final connected = {
       if (_web.connected) PortalChannel.uyapWeb,
       if (_mobile.connected) PortalChannel.uyapMobile,
@@ -1529,11 +1565,15 @@ class PortalSync extends ChangeNotifier {
     final web = _web.connected;
     if (!web && !_mobile.connected) return const [];
     final now = DateTime.now();
-    // The closed ones too where the lawyer asked for them listed.
+    // The closed ones too where the lawyer asked for them listed. A case
+    // once shared with the lawyer and no longer is an archive: not theirs
+    // to ask UYAP about.
     final closedToo = db.meta(_closedKey) == '1';
+    final archived = db.revokedShares();
     return [
       for (final c in db.cases().values)
-        if ((closedToo || !isClosedStatus(c.status?.value)) &&
+        if (!archived.contains(c.key) &&
+            (closedToo || !isClosedStatus(c.status?.value)) &&
             // The prosecutors' and the Court of Cassation's are the web's
             // alone; UYAP Mobil lists the Council of State's itself.
             (web ||
@@ -1966,9 +2006,12 @@ class PortalSync extends ChangeNotifier {
     PortalChannel channel = PortalChannel.uyapMobile,
     bool Function()? keepGoing,
   }) async {
+    // An archive (a case shared and then no longer) is not asked about.
+    final archived = db.revokedShares();
     final all = [
       for (final c in db.cases().values)
-        if ((c.family == CaseFamily.court ||
+        if (!archived.contains(c.key) &&
+            (c.family == CaseFamily.court ||
                 channel == PortalChannel.uyapWeb) &&
             !isClosedStatus(c.status?.value))
           c,

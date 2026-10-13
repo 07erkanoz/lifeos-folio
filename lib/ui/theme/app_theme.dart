@@ -41,8 +41,14 @@ class AppTheme {
   /// Documents keep their own fonts (Liberation and the ones they name).
   static const uiFont = 'Inter';
 
-  static ThemeData get darkTheme => _build(true);
-  static ThemeData get lightTheme => _build(false);
+  /// Built once per platform and kept: a new ThemeData is never equal to the
+  /// last (its state callbacks are new closures), and MaterialApp animates
+  /// to every theme it is handed, rebuilding the whole app as it does.
+  static ThemeData get darkTheme => _cached(true);
+  static ThemeData get lightTheme => _cached(false);
+  static final _themes = <(bool, TargetPlatform), ThemeData>{};
+  static ThemeData _cached(bool dark) =>
+      _themes[(dark, defaultTargetPlatform)] ??= _build(dark);
   static bool get _desktop => const {
     TargetPlatform.windows,
     TargetPlatform.linux,

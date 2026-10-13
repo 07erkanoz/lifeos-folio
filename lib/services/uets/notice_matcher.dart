@@ -103,7 +103,15 @@ Future<void> matchNoticesGently(PortalDatabase db, {DateTime? now}) async {
 /// Ties notice [id], if untied, to the case its package's own description
 /// (dosyaBilgileri) names: the same number and UYAP's name of the same
 /// unit, word for word. The subject's words are a guess beside it.
-void tieByCaseFile(PortalDatabase db, String id) {
+///
+/// [cases], when given, is the portfolio already read: a sync ties many
+/// notices in a row, and read again for each, every case was decoded each
+/// time.
+void tieByCaseFile(
+  PortalDatabase db,
+  String id, {
+  Map<String, PortalCase>? cases,
+}) {
   final n = db.notice(id);
   if (n == null || n.link != null) return;
   final file = db
@@ -114,7 +122,7 @@ void tieByCaseFile(PortalDatabase db, String id) {
   if (file == null || file.number.isEmpty || file.unitName.isEmpty) return;
   final unit = _plain(file.unitName);
   final found = [
-    for (final c in db.cases().values)
+    for (final c in (cases ?? db.cases()).values)
       if (c.number.split(' - ').first.replaceAll(' ', '') ==
               file.number.replaceAll(' ', '') &&
           _plain(c.court) == unit)

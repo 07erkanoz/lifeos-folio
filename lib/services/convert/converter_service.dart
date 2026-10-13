@@ -197,7 +197,9 @@ class ConverterService {
             : compute(DocReader.readBytes, bytes);
 
       case EvrakFormat.docx:
-        return await DocxBridge.readBytes(bytes);
+        // Off the window's thread like the others: unzipped, patched,
+        // zipped and unzipped again, then parsed.
+        return compute(DocxBridge.readBytes, bytes);
 
       case EvrakFormat.image:
         final image = img.decodeImage(bytes);

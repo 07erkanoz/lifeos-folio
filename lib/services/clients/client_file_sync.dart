@@ -34,8 +34,9 @@ class ClientFileSync {
       if (r.removed || !may(r)) continue;
       for (final f in clientFilesOf(r)) {
         if (f.sha256 != sha) continue;
-        // Its content checked against its digest before it goes.
-        final file = await files.locate(r.clientId, f);
+        // Its content checked against its digest before it goes; once for
+        // the whole file, not again for each of its pieces.
+        final file = await files.locate(r.clientId, f, reuse: from > 0);
         if (file == null) continue;
         final size = await file.length();
         final raf = await file.open();

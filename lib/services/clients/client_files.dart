@@ -87,10 +87,46 @@ class ClientFiles {
   Future<ClientFile> keep(String clientId, String source) async =>
       keepBytes(clientId, p.basename(source), await File(source).readAsBytes());
 
+  /// Digests already read, by path, with the size and time of change they
+  /// were read at. A file sent to another device in pieces is located once
+  /// for each piece: read and digested whole each time, a twenty-megabyte
+  /// scan was digested forty times over.
+  ///
+  /// Only a transfer under way reuses one ([locate]'s `reuse`), and only for
+  /// a few minutes: a file replaced by one of the same size and time of
+  /// change would otherwise pass for what it was. Opening a file here always
+  /// reads it whole again.
+  static final _digests = <String, (int, DateTime, DateTime, String)>{};
+  static const _digestFor = Duration(minutes: 5);
+
+  static Future<String> _digestOf(File file, {required bool reuse}) async {
+    final stat = await file.stat();
+    final known = _digests[file.path];
+    final now = DateTime.now();
+    if (reuse &&
+        known != null &&
+        known.$1 == stat.size &&
+        known.$2 == stat.modified &&
+        now.difference(known.$3) < _digestFor) {
+      return known.$4;
+    }
+    final digest = sha256.convert(await file.readAsBytes()).toString();
+    if (_digests.length > 512) _digests.clear();
+    _digests[file.path] = (stat.size, stat.modified, now, digest);
+    return digest;
+  }
+
   /// Where [f] is on this device, in the client's folder, its content its
   /// digest's; null when it is not here (yet: it comes from the device it
   /// was kept on).
-  Future<File?> locate(String clientId, ClientFile f) async {
+  ///
+  /// [reuse] takes a digest read moments ago for the same file unchanged,
+  /// for a file sent to another device a piece at a time.
+  Future<File?> locate(
+    String clientId,
+    ClientFile f, {
+    bool reuse = false,
+  }) async {
     final File here;
     try {
       here = await placeFor(clientId, f);
@@ -101,8 +137,7 @@ class ClientFiles {
       if (!await file.exists() || FileSystemEntity.isLinkSync(file.path)) {
         continue;
       }
-      final digest = sha256.convert(await file.readAsBytes()).toString();
-      if (digest != f.sha256) continue;
+      if (await _digestOf(file, reuse: reuse) != f.sha256) continue;
       // An earlier Folio's file, moved to where it is kept now.
       if (file.path != here.path) {
         try {
