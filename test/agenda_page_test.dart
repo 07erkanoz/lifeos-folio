@@ -99,13 +99,13 @@ void main() {
       find.descendant(of: prep, matching: find.text(court)),
       findsOneWidget,
     );
-    expect(
-      find.descendant(
-        of: prep,
-        matching: find.text('Ayşe K. — B. İnşaat Ltd.'),
-      ),
-      findsOneWidget,
-    );
+    // Each party on a line of its own, not run together.
+    for (final party in ['Ayşe K.', 'B. İnşaat Ltd.']) {
+      expect(
+        find.descendant(of: prep, matching: find.text(party)),
+        findsOneWidget,
+      );
+    }
     expect(find.text('BUGÜN 09:20 · DURUŞMA · 2 SA SONRA'), findsOneWidget);
     // The deadline in the card of what is coming.
     expect(find.text('İstinaf süresi son gün'), findsOneWidget);
@@ -239,7 +239,7 @@ void main() {
       await tester.tap(hearing);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('agenda-prep')), findsOneWidget);
-      expect(find.text('Dilekçe başlat'), findsOneWidget);
+      expect(find.text('Dilekçe'), findsOneWidget);
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
     }
@@ -262,7 +262,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Dilekçe başlat'));
+    await tester.tap(find.text('Dilekçe'));
     await tester.pumpAndSettle();
     expect(begun, ['2025/412']);
     expect(find.byKey(const ValueKey('agenda-prep')), findsNothing);

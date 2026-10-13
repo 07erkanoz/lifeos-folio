@@ -31,6 +31,7 @@ import '../help/help_button.dart';
 import '../mobile/scroll_chrome.dart';
 import '../office/task_give_dialog.dart';
 import '../office/tasks_page.dart' show TaskDetail;
+import '../portfolio/portfolio_rows.dart' show splitParties, titleName;
 import 'channel_bar.dart';
 import 'deadline_review.dart';
 import '../widgets/folio_select.dart';
@@ -50,7 +51,12 @@ class AgendaPage extends StatefulWidget {
     this.onOpenNotice,
     this.showDay,
     this.showHearing,
+    this.lawyer = '',
   });
+
+  /// The lawyer's name, by which a hearing's parties are told apart: their
+  /// clients first, the other side under them.
+  final String lawyer;
 
   /// Opened at this day, and at this hearing in it: the home page's search
   /// sent here.
@@ -2110,10 +2116,7 @@ class _AgendaPageState extends State<AgendaPage> {
         ? '${until.inHours} SA SONRA'
         : '${until.inDays} GÜN SONRA';
     final kase = _cases[h.caseKey];
-    final parties = (h.parties ?? kase?.parties)?.value
-        .map((p) => '${p['adi'] ?? p['ad'] ?? p['isim'] ?? ''}'.trim())
-        .where((n) => n.isNotEmpty)
-        .join(' — ');
+    final (ours, others) = _sides(h, kase);
     final sources =
         {...h.seenBy}
             .where((c) => c != PortalChannel.uets)
@@ -2185,21 +2188,59 @@ class _AgendaPageState extends State<AgendaPage> {
           const SizedBox(height: 4),
           Text(
             h.court,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
+          const SizedBox(height: 2),
           Text(
-            '${h.number} Esas',
-            style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+            [
+              '${h.number} Esas',
+              if ('${details['davaTuru'] ?? details['dosyaTuru'] ?? ''}'
+                  .isNotEmpty)
+                '${details['davaTuru'] ?? details['dosyaTuru']}',
+            ].join(' · '),
+            style: TextStyle(fontSize: 12, color: AgendaColors.muted),
           ),
-          const SizedBox(height: 10),
+          // The parties, the lawyer's clients apart from the other side,
+          // each on a line of their own with what they are in the case.
+          if (ours.isNotEmpty) ...[
+            _heading('MÜVEKKİL'),
+            Container(
+              key: const ValueKey('agenda-prep-clients'),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              decoration: BoxDecoration(
+                color: tone(const Color(0xFFE6F4EC)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [for (final p in ours) _partyLine(p, client: true)],
+              ),
+            ),
+          ],
+          if (others.isNotEmpty) ...[
+            _heading(
+              ours.isEmpty ? 'TARAFLAR' : 'KARŞI TARAF · ${others.length}',
+            ),
+            for (final p
+                in _partiesOpen.contains(h.key) ? others : others.take(3))
+              _partyLine(p),
+            if (others.length > 3 && !_partiesOpen.contains(h.key))
+              TextButton(
+                key: const ValueKey('agenda-prep-more-parties'),
+                onPressed: () => setState(() => _partiesOpen.add(h.key)),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 12),
+                ),
+                child: Text('+ ${others.length - 3} taraf daha'),
+              ),
+          ],
+          _heading('DURUŞMA'),
           row(
             'Tarih',
             '${h.at.day} ${_months[h.at.month - 1]} ${h.at.year} '
                 '${_days[h.at.weekday - 1]} · ${_hm(h.at)}',
           ),
-          if (parties != null && parties.isNotEmpty) row('Taraflar', parties),
-          if ('${details['davaTuru'] ?? details['dosyaTuru'] ?? ''}'.isNotEmpty)
-            row('Dava türü', '${details['davaTuru'] ?? details['dosyaTuru']}'),
           if (h.kind != null) row('İşlem', h.kind!.value),
           if (h.result != null) row('Sonuç', h.result!.value),
           row('Kaynak', 'UYAP ${sources.join(' + ')}'),
@@ -2312,11 +2353,11 @@ class _AgendaPageState extends State<AgendaPage> {
               label: const Text('Görev ver'),
             ),
           const SizedBox(height: 8),
-          // The case first and wide; the petition and the excuse under it.
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          // The case first and widest; the petition and the excuse beside it.
+          Row(
             children: [
-              SizedBox(
+              Expanded(
+                flex: 2,
                 child: FilledButton(
                   onPressed: widget.onOpenCase == null
                       ? null
@@ -2341,62 +2382,165 @@ class _AgendaPageState extends State<AgendaPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
+              const SizedBox(width: 6),
+              ...[
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: widget.onPetition == null
+                        ? null
+                        : () {
+                            _leaveSheet(context);
+                            widget.onPetition!(
+                              kase ??
+                                  PortalCase.create(
+                                    number: h.number,
+                                    court: h.court,
+                                  ),
+                            );
+                          },
+                    style: _buttonStyle(),
+                    child: const Text(
+                      'Dilekçe',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.fade,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Tooltip(
+                    message: !_mobile.connected
+                        ? 'Mazeret UYAP Mobil ile gönderilir; önce UYAP Mobil’e '
+                              'bağlanın.'
+                        : h.at.isBefore(now)
+                        ? 'Geçmiş bir duruşma için mazeret gönderilemez.'
+                        : 'UYAP Mobil ile mazeret talebi gönderin.',
                     child: OutlinedButton(
-                      onPressed: widget.onPetition == null
-                          ? null
-                          : () {
-                              _leaveSheet(context);
-                              widget.onPetition!(
-                                kase ??
-                                    PortalCase.create(
-                                      number: h.number,
-                                      court: h.court,
-                                    ),
-                              );
-                            },
+                      key: const ValueKey('agenda-excuse'),
+                      // The mobile API alone takes excuses: whether the web
+                      // portal is connected too does not matter.
+                      onPressed: _mobile.connected && !h.at.isBefore(now)
+                          ? () => unawaited(_askExcuse(context, h))
+                          : null,
                       style: _buttonStyle(),
                       child: const Text(
-                        'Dilekçe başlat',
+                        'Mazeret',
                         maxLines: 1,
                         softWrap: false,
                         overflow: TextOverflow.fade,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Tooltip(
-                      message: !_mobile.connected
-                          ? 'Mazeret UYAP Mobil ile gönderilir; önce UYAP Mobil’e '
-                                'bağlanın.'
-                          : h.at.isBefore(now)
-                          ? 'Geçmiş bir duruşma için mazeret gönderilemez.'
-                          : 'UYAP Mobil ile mazeret talebi gönderin.',
-                      child: OutlinedButton(
-                        key: const ValueKey('agenda-excuse'),
-                        // The mobile API alone takes excuses: whether the web
-                        // portal is connected too does not matter.
-                        onPressed: _mobile.connected && !h.at.isBefore(now)
-                            ? () => unawaited(_askExcuse(context, h))
-                            : null,
-                        style: _buttonStyle(),
-                        child: const Text(
-                          'Mazeret',
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.fade,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Hearings whose whole list of parties was asked for.
+  final _partiesOpen = <String>{};
+
+  /// [h]'s parties, the lawyer's clients and the other side: from what was
+  /// kept of the case (whole names, roles, counsel), else from the
+  /// hearing's own list. With no client known, all are the other list.
+  (List<UyapParty>, List<UyapParty>) _sides(PortalHearing h, PortalCase? kase) {
+    var parties = _db?.caseParties(caseKey: h.caseKey)[h.caseKey] ?? const [];
+    if (parties.isEmpty) {
+      String field(Map<String, Object?> p, List<String> keys) => [
+        for (final k in keys)
+          if ('${p[k] ?? ''}'.trim() case final v when v.isNotEmpty) v,
+      ].join(' ');
+      parties = [
+        for (final p
+            in (h.parties ?? kase?.parties)?.value ??
+                const <Map<String, Object?>>[])
+          if (field(p, const ['adi', 'ad', 'isim', 'soyadi', 'soyad'])
+              case final name when name.isNotEmpty)
+            UyapParty(
+              name,
+              field(p, const [
+                'rol',
+                'rolAdi',
+                'sifat',
+                'sifatAdi',
+                'tarafRol',
+              ]),
+              field(p, const ['vekil', 'vekilAdi']),
+              '',
+            ),
+      ];
+    }
+    final said = _db?.representation(h.caseKey) ?? const [];
+    if (said.isEmpty && widget.lawyer.trim().isEmpty) {
+      return (const [], parties);
+    }
+    return splitParties(parties, widget.lawyer, said: said);
+  }
+
+  /// A party on a line: initials, the name whole, and their role.
+  Widget _partyLine(UyapParty p, {bool client = false}) {
+    final name = titleName(p.name);
+    final initials = [
+      for (final w in name.split(RegExp(r'\s+')))
+        if (w.isNotEmpty) w.characters.first,
+    ].take(2).join().toUpperCase();
+    final ink = client ? AgendaColors.ok : AgendaColors.muted;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: client
+                  ? Theme.of(context).colorScheme.surface
+                  : tone(const Color(0xFFF1F3F6)),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              initials,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: ink,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: client ? FontWeight.w600 : FontWeight.w400,
+                color: client ? ink : null,
+              ),
+            ),
+          ),
+          if (p.role.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: client
+                    ? Theme.of(context).colorScheme.surface
+                    : tone(const Color(0xFFF1F3F6)),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Text(
+                titleName(p.role),
+                style: TextStyle(fontSize: 11, color: ink),
+              ),
+            ),
+          ],
         ],
       ),
     );

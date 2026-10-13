@@ -1784,6 +1784,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     key: ValueKey('agenda-$_agendaDay-$_agendaHearing'),
     showDay: _agendaDay,
     showHearing: _agendaHearing,
+    lawyer: _lawyerName,
     onChanged: () => unawaited(_countAgenda()),
     onPetition: _agendaPetition,
     onOpenCase: _openPortalCase,
