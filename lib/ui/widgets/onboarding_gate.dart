@@ -13,6 +13,9 @@ import 'folio_about_dialog.dart';
 import '../theme/theme_controller.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../mobile/profile_from_uyap.dart';
+import '../agenda/mobile_connect.dart' show onPhone;
+import 'profile_from_card.dart';
+import '../sync/first_sync.dart';
 import '../mobile/settings_parts.dart';
 
 class OnboardingGate extends StatefulWidget {
@@ -85,6 +88,11 @@ class OnboardingScreen extends StatefulWidget {
   /// when not given.
   final Future<LawyerProfile> Function()? loadProfile;
   final Future<void> Function(LawyerProfile profile)? saveProfile;
+
+  /// A phone made one of the lawyer's devices with the computer's QR, and
+  /// given what the computer has; true when it was. [pairWithDesktop] when
+  /// not given.
+  final Future<bool> Function(BuildContext context)? pairDesktop;
   const OnboardingScreen({
     super.key,
     required this.library,
@@ -96,6 +104,7 @@ class OnboardingScreen extends StatefulWidget {
     this.pickFolder,
     this.loadProfile,
     this.saveProfile,
+    this.pairDesktop,
   });
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -181,19 +190,63 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       phone: _phone.text.trim(),
       email: _email.text.trim(),
       kep: _profile.kep,
+      officeName: _profile.officeName,
     );
   }
 
-  Future<void> _fillFromUyap() async {
+  /// What came from the computer: the profile it had, among the rest.
+  bool _paired = false;
+
+  Future<void> _pairDesktop() async {
     setState(() {
       _filling = true;
       _error = null;
     });
     try {
-      final filled = await profileFromUyap(context, _typed);
+      final ok = await (widget.pairDesktop ?? pairWithDesktop)(context);
+      if (!mounted || !ok) return;
+      final p = await (widget.loadProfile ?? LawyerProfile.reload)();
+      if (!mounted) return;
+      setState(() {
+        _showProfile(p);
+        _fromUyap = true;
+        _paired = true;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Eşleşme tamamlanamadı: $e');
+    } finally {
+      if (mounted) setState(() => _filling = false);
+    }
+  }
+
+  Future<void> _fillFromUyap() => _fillWith(
+    () => profileFromUyap(context, _typed),
+    'UYAP Mobil’den bilgi alınamadı.',
+  );
+
+  Future<void> _fillFromCard() =>
+      _fillWith(() => profileFromCard(context, _typed), null);
+
+  Future<void> _fillFromWeb() => _fillWith(
+    () => profileFromWeb(context, _typed),
+    'UYAP Web Portal’dan bilgi alınamadı.',
+  );
+
+  /// The form filled with what [fill] gives; [failed] said when it gives
+  /// nothing (null: given up, nothing to say).
+  Future<void> _fillWith(
+    Future<LawyerProfile?> Function() fill,
+    String? failed,
+  ) async {
+    setState(() {
+      _filling = true;
+      _error = null;
+    });
+    try {
+      final filled = await fill();
       if (!mounted) return;
       if (filled == null) {
-        setState(() => _error = 'UYAP Mobil’den bilgi alınamadı.');
+        if (failed != null) setState(() => _error = failed);
         return;
       }
       setState(() {
@@ -732,9 +785,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
           const SizedBox(height: 14),
+          // A phone first offered its computer: everything comes from there.
+          if (onPhone) ...[
+            UyapFillCard(
+              title: _paired
+                  ? 'Masaüstünüzden alındı'
+                  : 'Masaüstümdeki Folio’dan al',
+              subtitle: _paired
+                  ? 'Profil, ayarlar, ajanda ve dosyalar geldi; kontrol edip '
+                        'devam edin'
+                  : 'QR ile eşleşin; profil, ayarlar, ajanda ve dosyalar '
+                        'gelir',
+              button: _paired ? 'Yeniden' : 'Eşleş',
+              icon: Icons.devices_rounded,
+              buttonKey: const ValueKey('onboarding-pair'),
+              busy: _filling,
+              onTap: _busy ? null : _pairDesktop,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                'ya da yeni başlayın',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+              ),
+            ),
+          ],
+          // On a computer the card first: its certificate gives the name
+          // and the TC number, the web portal the same and the portfolio
+          // with it; UYAP Mobil the bar and its numbers too. A phone has
+          // no card, and UYAP Mobil alone.
+          if (!onPhone) ...[
+            UyapFillCard(
+              title: 'E-imza kartımdan doldur',
+              subtitle: 'Ad soyad ve TC kimlik no, kartınızdaki sertifikadan',
+              button: 'Doldur',
+              icon: Icons.credit_card_rounded,
+              buttonKey: const ValueKey('card-fill'),
+              busy: _filling,
+              onTap: _busy ? null : _fillFromCard,
+            ),
+            const SizedBox(height: 8),
+            UyapFillCard(
+              title: 'UYAP Web Portal ile doldur',
+              subtitle:
+                  'E-imzayla giriş; ad ve TC gelir, portföy dolmaya başlar',
+              button: 'Bağlan',
+              icon: Icons.account_balance_outlined,
+              buttonKey: const ValueKey('web-fill'),
+              busy: _filling,
+              onTap: _busy ? null : _fillFromWeb,
+            ),
+            const SizedBox(height: 8),
+          ],
           UyapFillCard(
             title: 'UYAP Mobil ile doldur',
-            subtitle: 'e-Devlet ile giriş; bilgiler UYAP’tan gelir',
+            subtitle: onPhone
+                ? 'e-Devlet ile giriş; bilgiler UYAP’tan gelir'
+                : 'e-Devlet ile; baro ve sicil numaraları da gelir',
             button: 'Doldur',
             busy: _filling,
             onTap: _busy ? null : _fillFromUyap,

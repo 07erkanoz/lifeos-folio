@@ -130,7 +130,10 @@ class _QrInviteDialogState extends State<QrInviteDialog> {
           const SizedBox(height: 14),
           const Text(
             'Telefonunuzda Folio’yu açın, Büro ağı’nda “QR okut”a dokunun ve '
-            'bu kodu okutun. Telefon bu bilgisayarla aynı ağda olmalı.',
+            'bu kodu okutun. Telefon bu bilgisayarla aynı ağda olmalı. '
+            'Yeni kurulan bir telefonda ilk kurulumdaki “Masaüstümdeki '
+            'Folio’dan al” da bu kodu okutur; profiliniz, ayarlarınız, '
+            'ajandanız ve dosyalarınız telefona geçer.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, height: 1.4),
           ),

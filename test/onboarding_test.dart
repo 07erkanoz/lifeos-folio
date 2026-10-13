@@ -7,6 +7,7 @@ import 'package:evrak_convert/services/editor/lawyer_profile.dart';
 import 'package:evrak_convert/services/platform/onboarding_store.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/ui/theme/theme_controller.dart';
+import 'package:evrak_convert/ui/agenda/mobile_connect.dart';
 import 'package:evrak_convert/ui/widgets/onboarding_gate.dart';
 
 class _Store extends OnboardingStore {
@@ -110,6 +111,13 @@ void main() {
       // The lawyer's profile: typed, kept, and on to the folders.
       expect(find.text('03 / AVUKAT PROFİLİ'), findsOneWidget);
       expect(find.text('UYAP Mobil ile doldur'), findsOneWidget);
+      // A computer is offered its card and the web portal first.
+      expect(find.text('E-imza kartımdan doldur'), findsOneWidget);
+      expect(find.text('UYAP Web Portal ile doldur'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('E-imza kartımdan doldur')).dy,
+        lessThan(tester.getTopLeft(find.text('UYAP Mobil ile doldur')).dy),
+      );
       await tester.enterText(
         find.widgetWithText(TextField, 'Ad soyad'),
         'Deniz Yılmaz',
@@ -151,6 +159,64 @@ void main() {
       await tester.runAsync(() => dir.delete(recursive: true));
     },
   );
+  testWidgets('a phone is offered its computer first, and the profile '
+      'that comes from there is shown; no e-imza on a phone', (tester) async {
+    phoneOverride = true;
+    addTearDown(() => phoneOverride = null);
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final dir = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('folio-onboard-phone-'),
+    ))!;
+    final appearance = ThemeController(settingsPath: '${dir.path}/theme.json');
+    final library = _Library();
+    var paired = 0;
+    var profile = const LawyerProfile();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OnboardingScreen(
+          library: library,
+          appearance: appearance,
+          store: _Store(),
+          status: const OnboardingStatus(licenseAccepted: true),
+          onDone: () {},
+          loadProfile: () async => profile,
+          saveProfile: (_) async {},
+          pairDesktop: (_) async {
+            paired++;
+            profile = const LawyerProfile(
+              lawyers: [Lawyer(name: 'Deniz Yılmaz', bar: 'Antalya Barosu')],
+            );
+            return true;
+          },
+        ),
+      ),
+    );
+    await _io(tester);
+    expect(find.text('Masaüstümdeki Folio’dan al'), findsOneWidget);
+    expect(find.text('E-imza kartımdan doldur'), findsNothing);
+    expect(find.text('UYAP Web Portal ile doldur'), findsNothing);
+    expect(find.text('UYAP Mobil ile doldur'), findsOneWidget);
+    await tester.runAsync(
+      () => tester.tap(find.byKey(const ValueKey('onboarding-pair'))),
+    );
+    await _io(tester);
+    expect(paired, 1);
+    expect(find.text('Masaüstünüzden alındı'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Ad soyad'))
+          .controller!
+          .text,
+      'Deniz Yılmaz',
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    appearance.dispose();
+    library.dispose();
+    await tester.runAsync(() => dir.delete(recursive: true));
+  });
   testWidgets(
     'external preview can defer folders after accepting the license',
     (tester) async {

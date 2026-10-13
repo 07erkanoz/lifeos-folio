@@ -14,6 +14,7 @@ import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
 import '../uets/notice_deadlines.dart';
 import '../uyap/uyap_case_store.dart';
+import 'settings_sync.dart';
 import 'uyap_own_sync.dart';
 
 /// Senkron (docs/buro.md): what one person's own devices keep alike when
@@ -45,6 +46,11 @@ class OwnSync extends ChangeNotifier {
 
   static const agenda = 'ajanda';
   static const sessionsPart = 'oturumlar';
+
+  /// The lawyer profile, and the snippets, letterheads and choices: one
+  /// person's, the same on each of their devices.
+  static const profilePart = 'profil';
+  static const settingsPart = 'ayarlar';
 
   /// What UYAP and UETS gave one own device, for the others: UYAP is
   /// asked once for all of them (lib/services/sync/uyap_own_sync.dart).
@@ -261,7 +267,22 @@ class OwnSync extends ChangeNotifier {
     if (on) unawaited(_net.syncOwn());
   }
 
+  final _settings = SettingsSync();
+
   Future<void> _apply() async {
+    for (final (part, files) in [
+      (profilePart, const [SettingsSync.profile]),
+      (settingsPart, SettingsSync.settings),
+    ]) {
+      if (isOn(part)) {
+        _net.ownParts[part] = OwnPart(
+          export: () => _settings.export(files),
+          merge: (theirs) => _settings.merge(theirs, files),
+        );
+      } else {
+        _net.ownParts.remove(part);
+      }
+    }
     if (isOn(uyapData)) {
       final uyap = UyapOwnSync(
         database: _database,

@@ -383,6 +383,36 @@ class _SyncPageState extends State<SyncPage> {
     child: Column(
       children: [
         SwitchListTile(
+          key: const ValueKey('sync-profile'),
+          secondary: const Icon(Icons.badge_outlined),
+          title: const Text(
+            'Avukat profili',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: const Text(
+            'Ad, baro, sicil, iletişim ve büro adı; birinde değiştirdiğiniz '
+            'öbüründe de değişir.',
+            style: TextStyle(fontSize: 12),
+          ),
+          value: _sync.isOn(OwnSync.profilePart),
+          onChanged: (on) => unawaited(_sync.turn(OwnSync.profilePart, on)),
+        ),
+        SwitchListTile(
+          key: const ValueKey('sync-settings'),
+          secondary: const Icon(Icons.tune_rounded),
+          title: const Text(
+            'Kalıplar ve ayarlar',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: const Text(
+            'Kalıp metinler, antetler, editör ve hukuk araçları seçimleri. '
+            'Görünüm ve kilit her cihazda ayrı kalır.',
+            style: TextStyle(fontSize: 12),
+          ),
+          value: _sync.isOn(OwnSync.settingsPart),
+          onChanged: (on) => unawaited(_sync.turn(OwnSync.settingsPart, on)),
+        ),
+        SwitchListTile(
           key: const ValueKey('sync-agenda'),
           secondary: const Icon(Icons.event_note_rounded),
           title: const Text(

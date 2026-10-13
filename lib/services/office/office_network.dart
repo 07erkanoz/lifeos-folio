@@ -766,11 +766,19 @@ class OfficeNetwork extends ChangeNotifier {
     if (theirs is! Map) return;
     for (final e in ownParts.entries) {
       if (!theirs.containsKey(e.key)) continue;
+      _ownMerging.add((part: e.key, done: false));
       try {
         await e.value.merge(theirs[e.key]);
       } catch (_) {}
+      _ownMerging.add((part: e.key, done: true));
     }
   }
+
+  final _ownMerging = StreamController<({String part, bool done})>.broadcast();
+
+  /// Each part another own device sent, as it is taken in here and when
+  /// it is: what a first sync shows as it goes.
+  Stream<({String part, bool done})> get ownMerging => _ownMerging.stream;
 
   Future<void> _syncOwnWith(OfficePeer peer, {bool now = false}) async {
     final identity = _identity, host = peer.host;

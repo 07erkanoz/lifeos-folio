@@ -99,6 +99,15 @@ class LetterheadStore extends ChangeNotifier {
     return _shared = store;
   }
 
+  /// The shared one read from its file again, when there is one: another
+  /// own device's copy was written there (Senkron).
+  static Future<void> reloadShared() async {
+    final store = _shared;
+    if (store == null) return;
+    store._loaded = false;
+    await store.load();
+  }
+
   @visibleForTesting
   static void useShared(LetterheadStore? store) => _shared = store;
 
