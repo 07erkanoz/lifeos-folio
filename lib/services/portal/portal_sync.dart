@@ -1720,6 +1720,7 @@ class PortalSync extends ChangeNotifier {
   Future<void> syncWeb({
     bool force = false,
     bool newCase = false,
+    bool closed = false,
   }) => _webSync ??= _run(PortalChannel.uyapWeb, (db) async {
     if (!_web.connected) return null;
     // With UYAP Mobil connected it reads the courts' cases; the web
@@ -1728,7 +1729,7 @@ class PortalSync extends ChangeNotifier {
     final (portfolioDue, rested) = _portfolioDue(
       db,
       full: force,
-      newCase: newCase,
+      newCase: newCase || closed,
       key: webOnly ? _webOnlyKey : _portfolioKey,
     );
     final hearingsDue = force || _hearingsDue(db, PortalChannel.uyapWeb);
@@ -1762,7 +1763,7 @@ class PortalSync extends ChangeNotifier {
         webOnly: webOnly,
         // A new case may be in a prosecutor's office not yet known.
         everyProvince: newCase,
-        includeClosed: db.meta(_closedKey) == '1',
+        includeClosed: closed,
         onChanged: () => portfolioVersion.value++,
         onProgress: (done, total) => _progress(
           PortalChannel.uyapWeb,
@@ -2021,52 +2022,61 @@ class PortalSync extends ChangeNotifier {
   /// The cases' documents are not asked for of themselves: a case's page
   /// asks when it is opened. A second call while one runs waits for that
   /// one.
-  Future<void> syncMobile({bool full = false, bool newCase = false}) =>
-      _mobileSync ??= _run(PortalChannel.uyapMobile, (db) async {
-        if (!_mobile.connected) return null;
-        if (!full && (deferToComputer?.call() ?? false)) return null;
-        var hearings = const HearingSyncResult(0, true, []);
-        if (full || _hearingsDue(db, PortalChannel.uyapMobile)) {
-          _progress(PortalChannel.uyapMobile, 'Duruşmalar');
-          hearings = await syncHearings(
-            PortalChannel.uyapMobile,
-            db,
-            _mobile.hearingRows,
-          );
-          if (hearings.complete) _hearingsRead(db, PortalChannel.uyapMobile);
-        }
-        final (due, rested) = _portfolioDue(db, full: full, newCase: newCase);
-        var cases = const PortfolioResult(0, true);
-        if (due) {
-          final session = _mobile.session.value;
-          final ids = <String, String>{};
-          cases = await syncMobilePortfolio(
-            _mobile,
-            db,
-            includeClosed: db.meta(_closedKey) == '1',
-            onChanged: () => portfolioVersion.value++,
-            onCaseId: (key, id) => ids[key] = id,
-            onProgress: (done, total) => _progress(
-              PortalChannel.uyapMobile,
-              total == 0 ? 'Portföy' : 'Portföy $done/$total',
-            ),
-          );
-          _sessionIds = ids;
-          _idsSession = session;
-          // Read whole, it is not read again until next week; read in
-          // part, it is tried again in two hours, the courts that failed
-          // with it.
-          db.setMeta(
-            cases.complete ? _portfolioKey : 'portfolio_try_at',
-            DateTime.now().toIso8601String(),
-          );
-        }
-        // No case is read of itself after the list (§2.3, §6).
-        if (!hearings.complete || !cases.complete) {
-          return 'Bazı kayıtlar alınamadı';
-        }
-        return rested;
-      }).whenComplete(() => _mobileSync = null);
+  Future<void> syncMobile({
+    bool full = false,
+    bool newCase = false,
+    bool closed = false,
+  }) => _mobileSync ??= _run(PortalChannel.uyapMobile, (db) async {
+    if (!_mobile.connected) return null;
+    if (!full && (deferToComputer?.call() ?? false)) return null;
+    var hearings = const HearingSyncResult(0, true, []);
+    if (full || _hearingsDue(db, PortalChannel.uyapMobile)) {
+      _progress(PortalChannel.uyapMobile, 'Duruşmalar');
+      hearings = await syncHearings(
+        PortalChannel.uyapMobile,
+        db,
+        _mobile.hearingRows,
+      );
+      if (hearings.complete) _hearingsRead(db, PortalChannel.uyapMobile);
+    }
+    final (due, rested) = _portfolioDue(
+      db,
+      full: full,
+      newCase: newCase || closed,
+    );
+    var cases = const PortfolioResult(0, true);
+    if (due) {
+      final session = _mobile.session.value;
+      final ids = <String, String>{};
+      cases = await syncMobilePortfolio(
+        _mobile,
+        db,
+        // A new case may be in a prosecutor's office not yet known.
+        everyProvince: newCase,
+        includeClosed: closed,
+        onChanged: () => portfolioVersion.value++,
+        onCaseId: (key, id) => ids[key] = id,
+        onProgress: (done, total) => _progress(
+          PortalChannel.uyapMobile,
+          total == 0 ? 'Portföy' : 'Portföy $done/$total',
+        ),
+      );
+      _sessionIds = ids;
+      _idsSession = session;
+      // Read whole, it is not read again until next week; read in
+      // part, it is tried again in two hours, the courts that failed
+      // with it.
+      db.setMeta(
+        cases.complete ? _portfolioKey : 'portfolio_try_at',
+        DateTime.now().toIso8601String(),
+      );
+    }
+    // No case is read of itself after the list (§2.3, §6).
+    if (!hearings.complete || !cases.complete) {
+      return 'Bazı kayıtlar alınamadı';
+    }
+    return rested;
+  }).whenComplete(() => _mobileSync = null);
 
   /// Monday's start of the week [at] falls in.
   static DateTime weekStart(DateTime at) =>
@@ -2118,7 +2128,6 @@ class PortalSync extends ChangeNotifier {
   final portfolioVersion = ValueNotifier<int>(0);
 
   static const _portfolioKey = 'portfolio_at';
-  static const _closedKey = 'portfolio_closed';
   static const _checkedKey = 'cases_checked_at';
 
   /// The mobile ids the last reading of the portfolio gave, valid while
@@ -2132,13 +2141,41 @@ class PortalSync extends ChangeNotifier {
   Future<DateTime?> casesCheckedAt() async =>
       DateTime.tryParse((await _database()).meta(_checkedKey) ?? '');
 
-  /// Whether the closed cases are read too (Kapalı dosyaları da indir).
-  Future<bool> includeClosed() async =>
-      (await _database()).meta(_closedKey) == '1';
-  Future<void> setIncludeClosed(bool value) async {
-    (await _database()).setMeta(_closedKey, value ? '1' : '0');
+  /// Whether the reading running now lists the closed cases too: only the
+  /// one the lawyer asks for in Dava Dosyalarım ([scanClosed]); no setting
+  /// keeps it on (docs/uyap-hedef-harita.md §8, §10.4). The setting kept
+  /// by an earlier Folio is let go of.
+  bool closedScan = false;
+
+  /// When the closed cases were last listed, at the lawyer's asking.
+  static const closedScanKey = 'closed_scan_at';
+
+  /// The closed cases listed once, from each portal connected: their list
+  /// alone, no case read. Not held back by [portfolioRest]: the lawyer
+  /// asked for it.
+  Future<void> scanClosed() async {
+    if (closedScan) return;
+    closedScan = true;
     notifyListeners();
+    try {
+      await _whenIdle();
+      await Future.wait([
+        if (_mobile.connected) syncMobile(full: true, closed: true),
+        if (_web.connected) syncWeb(force: true, closed: true),
+      ]);
+      (await _database()).setMeta(
+        closedScanKey,
+        DateTime.now().toIso8601String(),
+      );
+    } finally {
+      closedScan = false;
+      notifyListeners();
+    }
   }
+
+  /// When the closed cases were last listed.
+  Future<DateTime?> closedScannedAt() async =>
+      DateTime.tryParse((await _database()).meta(closedScanKey) ?? '');
 
   /// The open cases asked what is new in them: documents, parties, state,
   /// money. Not all of them each time, which wrote over hundreds of cases
@@ -2412,10 +2449,14 @@ class PortfolioResult {
   const PortfolioResult(this.cases, this.complete, [this.changed = const {}]);
 }
 
-/// The kinds of jurisdiction the mobile API lists cases for: ceza, hukuk,
-/// icra and idari. The Court of Cassation's and the prosecutors' are the
-/// web's alone (§9.2).
-const mobileJurisdictions = [1, 0, 2, 6];
+/// The kinds of jurisdiction the mobile API lists court cases for
+/// (measured live, 14 Ekim 2026; docs/uyap-hedef-harita.md §1): hukuk
+/// (with the regional courts' civil chambers), ceza (with their criminal
+/// ones), icra, idari, the Tazminat Komisyonu (26), satış memurluğu (11)
+/// and arabuluculuk (25). 12 and 13 are not asked: they give again cases
+/// 0 and 1 give. The Court of Cassation's are the web's alone; the
+/// prosecutors' come by their own lists ([_mobileProsecutors]).
+const mobileJurisdictions = [1, 0, 2, 6, 26, 11, 25];
 
 /// The kinds of jurisdiction the web portal lists cases for, court by
 /// court: the mobile API's four and satış and arabuluculuk, which it has
@@ -2735,6 +2776,7 @@ Future<PortfolioResult> syncMobilePortfolio(
   void Function()? onChanged,
   void Function(int done, int total)? onProgress,
   bool includeClosed = false,
+  bool everyProvince = false,
   void Function(String key, String mobileId)? onCaseId,
 }) async {
   // The first reading brings the portfolio as it is: nothing in it is news.
@@ -2851,6 +2893,15 @@ Future<PortfolioResult> syncMobilePortfolio(
   } catch (_) {
     complete = false;
   }
+  if (!await _mobileProsecutors(
+    api,
+    db,
+    includeClosed: includeClosed,
+    everyProvince: everyProvince,
+    add: (row) => add(row, CaseFamily.prosecutor),
+  )) {
+    complete = false;
+  }
   db.mergeCases(
     found.values,
     portfolio: true,
@@ -2858,6 +2909,84 @@ Future<PortfolioResult> syncMobilePortfolio(
     changed: changed,
   );
   return PortfolioResult(courts.length, complete, changed);
+}
+
+/// The prosecutors' offices where UYAP Mobil found the lawyer a case, kept
+/// so that a reading asks them alone and not every province's; and when
+/// every province was last asked.
+const _mobileOfficesKey = 'mobile_prosecutor_offices';
+const _mobileOfficesFullKey = 'mobile_prosecutor_full_at';
+
+/// The lawyer's investigations as UYAP Mobil lists them (measured live,
+/// 14 Ekim 2026; docs/uyap-hedef-harita.md §1): every province's offices
+/// the first time, when [everyProvince] or a month on; between, only the
+/// offices where a case was found. Their particulars stay the web's to
+/// read (§11.6): no unit code is kept with them, the web finds the office
+/// by its own list. False when a list did not come.
+Future<bool> _mobileProsecutors(
+  UyapMobileApi api,
+  PortalDatabase db, {
+  required bool includeClosed,
+  required bool everyProvince,
+  required void Function(Map<String, Object?> row) add,
+}) async {
+  var complete = true;
+  Map<String, String> kept;
+  try {
+    kept = (jsonDecode(db.meta(_mobileOfficesKey) ?? '{}') as Map).map(
+      (k, v) => MapEntry('$k', '$v'),
+    );
+  } catch (_) {
+    kept = {};
+  }
+  final last = DateTime.tryParse(db.meta(_mobileOfficesFullKey) ?? '');
+  final full =
+      everyProvince ||
+      last == null ||
+      DateTime.now().difference(last) > const Duration(days: 30);
+  final offices = <String, String>{if (!full) ...kept};
+  if (full) {
+    try {
+      for (final p in await api.provinces()) {
+        final code = '${p['il'] ?? ''}'.trim();
+        if (code.isEmpty) continue;
+        try {
+          for (final o in await api.prosecutorOffices(code)) {
+            final id = '${o['birimId'] ?? ''}'.trim();
+            if (id.isNotEmpty) offices[id] = '${o['birimAdi'] ?? ''}'.trim();
+          }
+        } catch (_) {
+          complete = false;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+  final withCases = <String, String>{};
+  for (final MapEntry(key: id, value: name) in offices.entries) {
+    for (final closed in [false, if (includeClosed) true]) {
+      try {
+        final rows = await api.prosecutorCases(id, closed: closed);
+        for (final row in rows) {
+          add(row);
+        }
+        if (rows.isNotEmpty) withCases[id] = name;
+      } catch (_) {
+        complete = false;
+      }
+    }
+  }
+  // An office once found stays known: a reading that failed does not
+  // forget it.
+  db.setMeta(
+    _mobileOfficesKey,
+    jsonEncode({if (!full || !complete) ...kept, ...withCases}),
+  );
+  if (full && complete) {
+    db.setMeta(_mobileOfficesFullKey, DateTime.now().toIso8601String());
+  }
+  return complete;
 }
 
 /// "Kapalı", "Kapalı (12.03.2025)", "Arşiv": a case closed for good.

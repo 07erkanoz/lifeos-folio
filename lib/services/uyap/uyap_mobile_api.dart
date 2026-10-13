@@ -430,6 +430,59 @@ class UyapMobileApi {
     return out;
   }
 
+  /// The 81 provinces, for the prosecutors' offices: `il` (its code) and
+  /// `ad` (measured live, 14 Ekim 2026).
+  Future<List<Map<String, Object?>>> provinces() async =>
+      _list(await _post('mobile/avukat/illerigetir', const {}), 'illerList');
+
+  /// The Cumhuriyet Başsavcılıkları of the province [code]: `birimId`,
+  /// `birimAdi`.
+  Future<List<Map<String, Object?>>> prosecutorOffices(String code) async =>
+      _list(
+        await _post('mobile/avukat/cbsbirimler', {
+          'ilKodu': int.tryParse(code) ?? code,
+        }),
+        'birimListesi',
+      );
+
+  /// The lawyer's investigations at the office [office] (its `birimId`),
+  /// open or [closed], page by page as [cases]. UYAP answers nothing
+  /// unless the office is given as the unit too, with the kind "3"
+  /// (measured live, 14 Ekim 2026: Manavgat's three, as the web's).
+  Future<List<Map<String, Object?>>> prosecutorCases(
+    String office, {
+    required bool closed,
+  }) async {
+    final out = <Map<String, Object?>>[];
+    final seen = <String>{};
+    for (var page = 1; page <= 20; page++) {
+      final rows = _list(
+        await _post('mobile/avukat/cbsdosya', {
+          'mahkeme': office,
+          'birimTuru2': office,
+          'birimTuru3': '3',
+          'dosyaKapaliMi': closed,
+          'pageCount': page,
+          'pageSize': 100,
+          'dosyaYil': '',
+          'dosyaSira': '',
+          'tarafTuru': 0,
+          'tcKimlikNo': '',
+          'adi': '',
+          'soyadi': '',
+          'kurumAdi': '',
+          'mersisNo': '',
+          'vergiNo': '',
+        }),
+        'dosyaList',
+      );
+      final fresh = rows.where((r) => seen.add('${r['dosyaId']}')).toList();
+      out.addAll(fresh);
+      if (rows.length < 100 || fresh.isEmpty) break;
+    }
+    return out;
+  }
+
   /// The case [year]/[sequence] at [court], as `dosya` lists it filtered:
   /// one request, not the court's whole list. Its ids are this session's.
   Future<List<Map<String, Object?>>> findCase(

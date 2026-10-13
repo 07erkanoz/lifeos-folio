@@ -275,9 +275,9 @@ void main() {
       database: () async => db,
     );
     addTearDown(sync.dispose);
-    db.setMeta('portfolio_closed', '1');
     expect(sync.portfolioChannel, PortalChannel.uyapWeb);
-    await sync.syncPortfolio(full: true);
+    // The closed ones too, as the lawyer asks for them once.
+    await sync.scanClosed();
     expect(web.asked, contains('cases w1 1'));
     expect(db.cases(), hasLength(5));
     // Read whole, the list alone: no case is opened after it.
@@ -560,9 +560,8 @@ void main() {
         database: () async => db,
       );
       addTearDown(sync.dispose);
-      db.setMeta('portfolio_closed', '1');
       expect(sync.portfolioChannel, PortalChannel.uyapMobile);
-      await sync.syncPortfolio(full: true);
+      await sync.scanClosed();
       expect(db.cases().keys, {
         caseKey('2025/412', _mobileCourt),
         caseKey('2026/12', _savcilik),

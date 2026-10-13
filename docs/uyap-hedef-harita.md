@@ -287,3 +287,10 @@ dosyasının ayrıntısı web bölümüdür.
 4. Kullanıcı işi (kurulum, web tamamlaması) ve kurulum ekranı.
 5. Mobil türler 26/11/25, mobil savcılık (11.6), kapalı tarama ayrı iş.
 6. Kesinti, iki kanal, iki cihaz, kısmi evrak, hesap/borçlu hata senaryolarının testleri.
+
+*Uygulandı (14 Ekim 2026):* 1–6 kodda. Mobil türler `[1, 0, 2, 6, 26, 11, 25]`; mobil savcılık
+listesi (`illerigetir` → `cbsbirimler` → `cbsdosya`; ilk seferde ve ayda bir bütün iller, arada yalnız
+dosya bulunan savcılıklar; birim kodu yazılmaz, ayrıntısı web bölümü kalır). Kalıcı
+`portfolio_closed` ayarı kaldırıldı; "Kapalı dosyaları getir" (`scanClosed`) tek seferlik, yalnız
+liste. Web yalnız-web okuması savcılıkları ve satış/arabuluculuğu da okumaya devam eder (birleşir,
+istek azdır); daraltmak canlı karşılaştırmadan sonra.

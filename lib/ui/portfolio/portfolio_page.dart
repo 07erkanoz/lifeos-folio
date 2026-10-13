@@ -65,7 +65,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
   Set<CaseKind> _kinds = const {};
   Set<String> _roles = const {}, _places = const {};
   int _shown = 100;
-  bool _includeClosed = false;
+
+  /// When the closed cases were last listed, at the lawyer's asking.
+  DateTime? _closedAt;
   DateTime? _portfolioAt, _checkedAt;
   bool _showFilters = false;
 
@@ -171,14 +173,14 @@ class _PortfolioPageState extends State<PortfolioPage> {
         store: widget.store,
       );
       final sync = _sync;
-      final include = await sync?.includeClosed() ?? false;
+      final scanned = await sync?.closedScannedAt();
       final at = await sync?.portfolioAt();
       final checked = await sync?.casesCheckedAt();
       if (!mounted) return;
       _lastShown = (widget.database, widget.store, rows);
       setState(() {
         _rows = rows;
-        _includeClosed = include;
+        _closedAt = scanned;
         _portfolioAt = at;
         _checkedAt = checked;
       });
@@ -265,12 +267,27 @@ class _PortfolioPageState extends State<PortfolioPage> {
     await _reload();
   }
 
-  Future<void> _setIncludeClosed(bool value) async {
+  /// The closed cases listed once, at the lawyer's asking: their list
+  /// alone (docs/uyap-hedef-harita.md §10.4); no setting keeps it on.
+  Future<void> _scanClosed() async {
     PortalSync.begin();
-    await PortalSync.instance.setIncludeClosed(value);
-    setState(() => _includeClosed = value);
-    if (value) unawaited(_refresh());
+    final sync = PortalSync.instance;
+    if (!await ensureUyap(
+      context,
+      UyapOp.caseList,
+      why: 'Kapalı dosyaları UYAP’tan getirmek için bağlanın.',
+      web: sync.web,
+      mobile: sync.mobile,
+    )) {
+      return;
+    }
+    await sync.scanClosed();
+    await _reload();
   }
+
+  String get _closedLabel => _closedAt == null
+      ? 'Kapalı dosyaları getir'
+      : 'Kapalı dosyaları getir · son ${whenText(_closedAt!, DateTime.now())}';
 
   // Filtering.
 
@@ -663,7 +680,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
             onSelected: (v) => switch (v) {
               'web' => unawaited(_refreshAllOnWeb()),
               'setup' => unawaited(UyapSetupDialog.show(context)),
-              _ => unawaited(_setIncludeClosed(!_includeClosed)),
+              _ => unawaited(_scanClosed()),
             },
             itemBuilder: (_) => [
               PopupMenuItem(
@@ -675,11 +692,11 @@ class _PortfolioPageState extends State<PortfolioPage> {
                       : 'UYAP kurulumu ve web tamamlaması',
                 ),
               ),
-              CheckedPopupMenuItem(
-                key: const ValueKey('portfolio-closed-switch'),
+              PopupMenuItem(
+                key: const ValueKey('portfolio-closed-scan'),
                 value: 'closed',
-                checked: _includeClosed,
-                child: const Text('Kapalı dosyaları da indir'),
+                enabled: !running,
+                child: Text(_closedLabel),
               ),
               PopupMenuItem(
                 key: const ValueKey('portfolio-web-all'),
@@ -1414,22 +1431,11 @@ class _PortfolioPageState extends State<PortfolioPage> {
         chips[1],
         const SizedBox(width: 12),
       ],
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Switch(
-            key: const ValueKey('portfolio-closed-switch'),
-            value: _includeClosed,
-            onChanged: (v) => unawaited(_setIncludeClosed(v)),
-          ),
-          const SizedBox(width: 4),
-          const Flexible(
-            child: Text(
-              'Kapalı dosyaları da indir',
-              style: TextStyle(fontSize: 12.5),
-            ),
-          ),
-        ],
+      TextButton.icon(
+        key: const ValueKey('portfolio-closed-scan'),
+        onPressed: () => unawaited(_scanClosed()),
+        icon: const Icon(Icons.inventory_2_outlined, size: 18),
+        label: const Text('Kapalı dosyaları getir'),
       ),
       const SizedBox(width: 12),
       FilledButton.icon(
@@ -1515,14 +1521,18 @@ class _PortfolioPageState extends State<PortfolioPage> {
                     PopupMenuButton<String>(
                       key: const ValueKey('portfolio-menu'),
                       tooltip: 'Diğer',
-                      onSelected: (_) =>
-                          unawaited(_setIncludeClosed(!_includeClosed)),
+                      onSelected: (v) => v == 'setup'
+                          ? unawaited(UyapSetupDialog.show(context))
+                          : unawaited(_scanClosed()),
                       itemBuilder: (_) => [
-                        CheckedPopupMenuItem(
-                          key: const ValueKey('portfolio-closed-switch'),
+                        const PopupMenuItem(
+                          value: 'setup',
+                          child: Text('UYAP kurulumu ve web tamamlaması'),
+                        ),
+                        PopupMenuItem(
+                          key: const ValueKey('portfolio-closed-scan'),
                           value: 'closed',
-                          checked: _includeClosed,
-                          child: const Text('Kapalı dosyaları da indir'),
+                          child: Text(_closedLabel),
                         ),
                       ],
                     ),
