@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:evrak_convert/services/portal/case_sections.dart';
 import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_enforcement.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
@@ -244,8 +247,12 @@ class _Mobile extends UyapMobileApi {
     ];
   }
 
+  /// The documents' answer: none, or (null) one without the list.
+  Map<String, Object?>? documents = const {'tumEvraklar': {}, 'son20Evrak': []};
+
   @override
-  Future<Map<String, Object?>> caseDocuments(String caseId) async => const {};
+  Future<Map<String, Object?>> caseDocuments(String caseId) async =>
+      documents ?? const {'hata': 'yok'};
 }
 
 void main() {
@@ -390,6 +397,120 @@ void main() {
       (await store.load(_icra, '2025/4410'))!.enforcement!.lines,
       isNotEmpty,
     );
+  });
+
+  Map<(CaseSection, PortalChannel), SectionState> sections(String key) => {
+    for (final s in db.sections(key)) (s.section, s.channel): s,
+  };
+
+  test('each reading leaves what came of each section on its channel: the '
+      'web\'s icra file whole, a failed sum asked again', () async {
+    final web = _Web()..moneyFails = true;
+    final sync = syncOf(web, _Mobile()..on = false);
+    await sync.syncPortfolio(full: true);
+    const w = PortalChannel.uyapWeb;
+    final file = sections(icra);
+    for (final s in [
+      CaseSection.parties,
+      CaseSection.money,
+      CaseSection.account,
+      CaseSection.debtors,
+    ]) {
+      expect(file[(s, w)]!.result, SectionResult.read, reason: s.name);
+      expect(file[(s, w)]!.complete, isTrue, reason: s.name);
+    }
+    expect(file[(CaseSection.documents, w)]!.result, SectionResult.empty);
+    final kase = sections(hukuk);
+    expect(kase[(CaseSection.money, w)]!.result, SectionResult.failed);
+    expect(kase[(CaseSection.money, w)]!.succeeded, isNull);
+    expect(kase[(CaseSection.money, w)]!.tries, 1);
+    // A court case's account and debtors: not shown, not asked again.
+    expect(kase[(CaseSection.account, w)]!.result, SectionResult.notShown);
+    expect(kase[(CaseSection.parties, w)]!.result, SectionResult.read);
+  });
+
+  test('UYAP Mobil\'s reading is its own: the web\'s sections stay unread, '
+      'and an answer without the documents is not "none"', () async {
+    final web = _Web()..on = false;
+    final mobile = _Mobile()..documents = null;
+    final sync = syncOf(web, mobile);
+    await syncWebPortfolio(_Web(), db);
+    db.setMeta('portfolio_at', DateTime.now().toIso8601String());
+    await sync.syncMobile();
+    const m = PortalChannel.uyapMobile;
+    final kase = sections(hukuk);
+    expect(kase[(CaseSection.parties, m)]!.result, SectionResult.read);
+    expect(kase[(CaseSection.documents, m)]!.result, SectionResult.failed);
+    expect(kase[(CaseSection.particulars, m)]!.partial, isTrue);
+    expect(kase.keys.where((k) => k.$2 == PortalChannel.uyapWeb), isEmpty);
+    expect(kase.containsKey((CaseSection.money, m)), isFalse);
+  });
+
+  group('reading chosen sections on a chosen channel', () {
+    const place = UyapCaseLink(
+      jurisdiction: '2',
+      courtType: 'ICRA',
+      courtId: 'i1',
+      court: _icra,
+      number: '2025/4410',
+    );
+
+    Future<UyapCasePanelController> panelOf(_Web web, _Mobile mobile) async {
+      final sync = syncOf(web, mobile);
+      final panel = UyapCasePanelController(
+        web: web,
+        mobile: mobile,
+        sync: sync,
+        store: store,
+        pause: Duration.zero,
+        background: true,
+      );
+      addTearDown(panel.dispose);
+      await panel.attach(place);
+      return panel;
+    }
+
+    test('UYAP Mobil\'s stays on UYAP Mobil though the web is connected, '
+        'and asks only what was asked', () async {
+      final web = _Web();
+      final mobile = _Mobile();
+      final panel = await panelOf(web, mobile);
+      await panel.readSections(PortalChannel.uyapMobile, {CaseSection.parties});
+      expect(panel.error, isNull);
+      expect(web.asked, isEmpty);
+      expect(mobile.asked, ['parties mid-2']);
+      expect(panel.usedWeb, isFalse);
+      expect(panel.outcomes.map((o) => o.section), [CaseSection.parties]);
+      expect(panel.record!.parties, isNotEmpty);
+    });
+
+    test('the web\'s asks only the money and the account, keeps the rest, '
+        'and does not go to UYAP Mobil when the web is gone', () async {
+      final web = _Web();
+      final mobile = _Mobile();
+      final panel = await panelOf(web, mobile);
+      await panel.readSections(PortalChannel.uyapMobile, {CaseSection.parties});
+      await panel.readSections(PortalChannel.uyapWeb, {
+        CaseSection.money,
+        CaseSection.account,
+      });
+      expect(panel.error, isNull);
+      expect(web.asked, isEmpty, reason: 'no particulars, no parties');
+      expect(panel.outcomes.map((o) => o.section).toSet(), {
+        CaseSection.money,
+        CaseSection.account,
+      });
+      final kept = panel.record!;
+      expect(kept.money, isNotNull);
+      expect(kept.enforcement!.lines, isNotEmpty);
+      expect(kept.parties, isNotEmpty, reason: 'kept as they were');
+      web.on = false;
+      mobile.asked.clear();
+      await panel.readSections(PortalChannel.uyapWeb, {CaseSection.money});
+      expect(panel.error, isNotNull);
+      expect(mobile.asked, isEmpty);
+      expect(panel.outcomes, isEmpty);
+    });
   });
 
   test('the parties of every case come first, a request each, before any '

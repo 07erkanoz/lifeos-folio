@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../platform/app_directories.dart';
+import 'case_sections.dart';
 import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_deadline.dart';
@@ -236,6 +237,12 @@ class PortalDatabase {
       CREATE INDEX IF NOT EXISTS uyap_notice_sent ON uyap_notice(sent);
       CREATE TABLE IF NOT EXISTS agenda_removed (
         id TEXT PRIMARY KEY, at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS case_section (
+        case_key TEXT NOT NULL, bolum TEXT NOT NULL, kanal TEXT NOT NULL,
+        sonuc TEXT NOT NULL, kismi INTEGER NOT NULL DEFAULT 0,
+        basari TEXT, deneme TEXT NOT NULL,
+        deneme_sayisi INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(case_key, bolum, kanal));
     ''');
     _db.execute(PortalClients._tables);
     // When the lawyer last decided on a deadline: for the newer to win
@@ -1645,11 +1652,10 @@ class PortalDatabase {
   }) {
     if (parties.isEmpty) return;
     int rank(Object? s) => partySources.indexOf('$s');
-    final keptSource = _db
-        .select('SELECT kaynak FROM case_party WHERE case_key=? LIMIT 1', [
-          caseKey,
-        ])
-        .firstOrNull?['kaynak'];
+    final keptSource = _db.select(
+      'SELECT kaynak FROM case_party WHERE case_key=? LIMIT 1',
+      [caseKey],
+    ).firstOrNull?['kaynak'];
     final kept = caseParties(caseKey: caseKey)[caseKey] ?? const [];
     final keptShort = kept.any((t) => isShortenedName(t.name));
     final comeShort = parties.any((t) => isShortenedName(t.name));
@@ -1696,6 +1702,126 @@ class PortalDatabase {
     } catch (_) {
       _db.execute('ROLLBACK');
       rethrow;
+    }
+  }
+
+  /// What [channel]'s reading of [caseKey] came to, section by section: a
+  /// section read (or found empty, or not shown) is counted done, with the
+  /// day; one that did not come keeps its last success and counts the
+  /// tries. Each channel's apart: UYAP Mobil's parties are not the web's
+  /// counsel.
+  void saveSections(
+    String caseKey,
+    PortalChannel channel,
+    Iterable<SectionOutcome> outcomes, {
+    DateTime? at,
+  }) {
+    if (outcomes.isEmpty) return;
+    final now = (at ?? DateTime.now()).toIso8601String();
+    _db.execute('BEGIN');
+    try {
+      for (final o in outcomes) {
+        final done = o.result.done;
+        _db.execute(
+          '''INSERT INTO case_section(case_key, bolum, kanal, sonuc, kismi,
+               basari, deneme, deneme_sayisi) VALUES(?,?,?,?,?,?,?,?)
+             ON CONFLICT(case_key, bolum, kanal) DO UPDATE SET
+               sonuc=excluded.sonuc,
+               kismi=CASE WHEN excluded.basari IS NULL
+                 THEN case_section.kismi ELSE excluded.kismi END,
+               basari=COALESCE(excluded.basari, case_section.basari),
+               deneme=excluded.deneme,
+               deneme_sayisi=CASE WHEN excluded.basari IS NULL
+                 THEN case_section.deneme_sayisi + 1 ELSE 0 END''',
+          [
+            caseKey,
+            o.section.name,
+            channel.name,
+            o.result.name,
+            o.partial ? 1 : 0,
+            done ? now : null,
+            now,
+            done ? 0 : 1,
+          ],
+        );
+      }
+      _db.execute('COMMIT');
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  /// [caseKey]'s sections as each channel last read them.
+  List<SectionState> sections(String caseKey) => [
+    for (final r in _db.select('SELECT * FROM case_section WHERE case_key=?', [
+      caseKey,
+    ]))
+      SectionState(
+        section: CaseSection.values.byName(r['bolum'] as String),
+        channel: PortalChannel.values.byName(r['kanal'] as String),
+        result: SectionResult.values.byName(r['sonuc'] as String),
+        partial: (r['kismi'] as int) == 1,
+        succeeded: DateTime.tryParse('${r['basari'] ?? ''}'),
+        tried: DateTime.parse(r['deneme'] as String),
+        tries: r['deneme_sayisi'] as int,
+      ),
+  ];
+
+  /// [caseKey]'s sections read done, for the person's other devices.
+  List<Map<String, Object?>> sectionsToShare(String caseKey) => [
+    for (final s in sections(caseKey))
+      if (s.succeeded case final at?)
+        {
+          'bolum': s.section.name,
+          'kanal': s.channel.name,
+          'sonuc': s.result.name,
+          'kismi': s.partial,
+          'basari': at.toIso8601String(),
+        },
+  ];
+
+  /// Sections another own device read done, taken where read later there
+  /// than here; what does not parse is passed over. Only what was said is
+  /// taken: nothing is told from the data a record holds.
+  void adoptSections(String caseKey, Object? shared) {
+    if (shared is! List) return;
+    final mine = {
+      for (final s in sections(caseKey)) (s.section, s.channel): s.succeeded,
+    };
+    for (final j in shared) {
+      if (j is! Map) continue;
+      final section = CaseSection.values.asNameMap()['${j['bolum']}'];
+      final channel = PortalChannel.values.asNameMap()['${j['kanal']}'];
+      final result = SectionResult.values.asNameMap()['${j['sonuc']}'];
+      final at = DateTime.tryParse('${j['basari'] ?? ''}');
+      if (section == null ||
+          channel == null ||
+          result == null ||
+          !result.done ||
+          at == null) {
+        continue;
+      }
+      if (mine[(section, channel)] case final have? when !at.isAfter(have)) {
+        continue;
+      }
+      _db.execute(
+        '''INSERT INTO case_section(case_key, bolum, kanal, sonuc, kismi,
+             basari, deneme, deneme_sayisi) VALUES(?,?,?,?,?,?,?,0)
+           ON CONFLICT(case_key, bolum, kanal) DO UPDATE SET
+             sonuc=excluded.sonuc, kismi=excluded.kismi,
+             basari=excluded.basari, deneme=excluded.deneme,
+             deneme_sayisi=0''',
+        [
+          caseKey,
+          section.name,
+          channel.name,
+          result.name,
+          j['kismi'] == true ? 1 : 0,
+          at.toIso8601String(),
+          at.toIso8601String(),
+        ],
+      );
     }
   }
 

@@ -208,6 +208,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('268.606,85 TL'), findsOneWidget);
+    // UYAP's money is under its own button, the payments shown first.
+    await tester.tap(find.text('UYAP hesabı'));
+    await tester.pumpAndSettle();
     // Postage paid out of the file is a cost, not the client's money.
     expect(find.textContaining('Posta Ücreti'), findsWidgets);
     expect(find.textContaining('reddiyatı (12,00 TL)'), findsNothing);

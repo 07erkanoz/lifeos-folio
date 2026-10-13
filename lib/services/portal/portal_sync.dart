@@ -30,6 +30,7 @@ import 'hearing_sync.dart';
 import 'observed.dart';
 import 'case_import.dart';
 import 'portal_case.dart';
+import 'case_sections.dart';
 import 'portal_channel.dart';
 import 'portal_database.dart';
 import 'portal_hearing.dart';
@@ -1765,7 +1766,14 @@ class PortalSync extends ChangeNotifier {
     if (record == null || panel.error != null) return;
     final db = await _database();
     final key = caseKey(record.number, record.court);
-    _keepRead(db, key, record, web: panel.usedWeb, whole: panel.whole);
+    _keepRead(
+      db,
+      key,
+      record,
+      web: panel.usedWeb,
+      whole: panel.whole,
+      outcomes: panel.outcomes,
+    );
     portfolioVersion.value++;
     // For the person's other devices too.
     uyapChanged?.call();
@@ -1797,8 +1805,14 @@ class PortalSync extends ChangeNotifier {
     UyapCaseRecord record, {
     required bool web,
     bool whole = true,
+    List<SectionOutcome> outcomes = const [],
   }) {
     final at = DateTime.now().toIso8601String();
+    db.saveSections(
+      key,
+      web ? PortalChannel.uyapWeb : PortalChannel.uyapMobile,
+      outcomes,
+    );
     if (record.parties.isNotEmpty) {
       db.saveCaseParties(
         key,
@@ -2152,7 +2166,14 @@ class PortalSync extends ChangeNotifier {
         }
         final after = panel.record!;
         // Asked, changed or not: it waits its turn again.
-        _keepRead(db, kase.key, after, web: panel.usedWeb, whole: panel.whole);
+        _keepRead(
+          db,
+          kase.key,
+          after,
+          web: panel.usedWeb,
+          whole: panel.whole,
+          outcomes: panel.outcomes,
+        );
         if (!panel.whole) {
           through = false;
           unawaited(

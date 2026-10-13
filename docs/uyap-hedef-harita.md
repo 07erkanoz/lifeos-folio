@@ -257,6 +257,8 @@ bütün oturum kayıpları (GET hata yolu dahil) tek ortak hata türüne çevril
 yalnız bunları kabul eder, para/icra varlığından "web'de okundu" çıkarmaz. Aynı kullanıcının iki
 cihazı aynı uzun işi aynı anda çalıştırmaz: işi başlatan cihaz iş kaydına kendini yazar, diğeri
 yalnız ilerlemeyi gösterir.
+*Uygulandı (14 Ekim 2026):* bölüm sonuçları dosya kaydıyla birlikte `bolumler` olarak gider; kayıt
+içeriği değişmeden yalnız bölüm sonucu değişirse henüz gitmez (özet, kayıt zamanına bakıyor).
 
 **11.5 Kimlik.** Dosya eşleşmesi `caseKey` (folded mahkeme + esas) üzerindedir; kanalların mahkeme
 adı farklıysa alias tablosu tutulur, kayıt dosyası anahtarı aynı normalizasyonu kullanır. Evrak

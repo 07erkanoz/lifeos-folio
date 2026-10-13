@@ -454,21 +454,29 @@ class UyapMobileApi {
   );
 
   /// A case's documents: `son20Evrak` and `tumEvraklar`, as UYAP gives them.
+  /// Any other answer is not "no documents".
   Future<Map<String, Object?>> caseDocuments(String caseId) async {
     final data = await _get('mobile/avukat/dosya/${_id(caseId)}/1');
-    return data is Map ? Map<String, Object?>.from(data) : const {};
+    if (data is! Map) {
+      throw const FormatException('UYAP Mobil evrak listesi vermedi.');
+    }
+    return Map<String, Object?>.from(data);
   }
 
   Future<List<Map<String, Object?>>> parties(
     String caseId, {
     String? caseType,
-  }) async => _list(
-    await _post('mobile/avukat/taraflar', {
+  }) async {
+    final data = await _post('mobile/avukat/taraflar', {
       'dosyaId': _id(caseId),
       if (caseType != null && caseType.isNotEmpty) 'dosyaTurKod': caseType,
-    }),
-    'tarafList',
-  );
+    });
+    // An answer without the list is not "no parties".
+    if (data is! List && !(data is Map && data.containsKey('tarafList'))) {
+      throw const FormatException('UYAP Mobil taraf listesi vermedi.');
+    }
+    return _list(data, 'tarafList');
+  }
 
   /// A document's bytes. Both ids must come from this session; UYAP
   /// sometimes answers 500 for a moment, so it is asked twice more.

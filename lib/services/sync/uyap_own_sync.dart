@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../portal/case_sections.dart';
 import '../portal/observed.dart' show caseKey;
 import '../portal/portal_channel.dart';
 import '../portal/portal_database.dart';
@@ -165,26 +166,26 @@ class UyapOwnSync {
           '${json['esas'] ?? ''}',
         );
         came.add(record);
-        switch (await store.adoptChecked(json)) {
+        final key = caseKey(
+          '${json['esas'] ?? ''}',
+          '${json['mahkeme'] ?? ''}',
+        );
+        final adopted = await store.adoptChecked(json);
+        if (adopted != AdoptResult.failed) {
+          db.adoptSections(key, json['bolumler']);
+        }
+        switch (adopted) {
           case AdoptResult.kept:
             changed = true;
-            // Read from the web there, as if here: its turn in the day's
-            // enrichment. A reading by UYAP Mobil, without the money, is
-            // none.
-            final fromWeb = json['para'] != null || json['icra'] != null;
-            final at = fromWeb
-                ? DateTime.tryParse('${json['cekildi'] ?? ''}')
-                : null;
-            final key = caseKey(
-              '${json['esas'] ?? ''}',
-              '${json['mahkeme'] ?? ''}',
-            );
+            // Read whole by the web there, as it says, as if here: not read
+            // again here for it. A device that does not say is not taken at
+            // its data's word (money kept from before is no new reading).
+            final at = _webReadWhole(db.sections(key));
             final mineAt = DateTime.tryParse(
-              db.meta('case_checked:$key') ?? '',
+              db.meta(PortalSync.webCheckedKey(key)) ?? '',
             );
             if (at != null && (mineAt == null || at.isAfter(mineAt))) {
               db.setMeta('case_checked:$key', at.toIso8601String());
-              // Read by the web there: not read again here for it.
               db.setMeta(PortalSync.webCheckedKey(key), at.toIso8601String());
             }
             // Its parties for the clients here too.
@@ -311,6 +312,23 @@ class UyapOwnSync {
     return changed;
   }
 
+  /// When the web last read every section of a case done, by [sections]:
+  /// the earliest of them; null while one is missing or failed last.
+  static DateTime? _webReadWhole(List<SectionState> sections) {
+    final web = {
+      for (final s in sections)
+        if (s.channel == PortalChannel.uyapWeb) s.section: s,
+    };
+    DateTime? at;
+    for (final section in CaseSection.values) {
+      final s = web[section];
+      final done = s?.succeeded;
+      if (s == null || done == null || !s.result.done) return null;
+      if (at == null || done.isBefore(at)) at = done;
+    }
+    return at;
+  }
+
   /// What another own device asked for: a part of what is kept here.
   Future<Map<String, Object?>> answer(Map<String, Object?> asked) async {
     final db = await database();
@@ -326,8 +344,15 @@ class UyapOwnSync {
         final out = <Map<String, Object?>>[];
         var size = 0;
         for (final k in keys.take(_recordsAtOnce)) {
-          final r = await store.recordToShare(k);
-          if (r == null) continue;
+          final shared = await store.recordToShare(k);
+          if (shared == null) continue;
+          // What each channel read of it there, said: not told from its data.
+          final r = {
+            ...shared,
+            'bolumler': db.sectionsToShare(
+              caseKey('${shared['esas'] ?? ''}', '${shared['mahkeme'] ?? ''}'),
+            ),
+          };
           final bytes = utf8.encode(jsonEncode(r)).length;
           if (out.isNotEmpty && size + bytes > _recordBytes) break;
           out.add(r);

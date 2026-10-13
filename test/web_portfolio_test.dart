@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:evrak_convert/services/portal/case_sections.dart';
 import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -405,6 +406,59 @@ void main() {
     await syncWebPortfolio(again, other, webOnly: true, includeClosed: true);
     expect(again.asked, isNot(contains('provinces')));
     expect(again.asked, contains('investigations s1 true'));
+  });
+
+  test('another own device\'s case counts read by the web here only where '
+      'it says the web read it whole: money kept from before is no web '
+      'reading', () async {
+    final root = await Directory.systemTemp.createTemp('folio-uyap-bolum-');
+    addTearDown(() => root.delete(recursive: true));
+    final other = PortalDatabase.memory();
+    addTearDown(other.dispose);
+    final storeA = UyapCaseStore(directory: Directory('${root.path}/a'));
+    final storeB = UyapCaseStore(directory: Directory('${root.path}/b'));
+    const court = 'Manavgat 1. İcra Dairesi';
+    final key = caseKey('2025/3311', court);
+    Future<void> read(double collected, DateTime at) => storeA.keep(
+      target: const UyapCase('x', '2025/3311', 'i7', court),
+      details: const UyapCaseDetails(),
+      parties: const [UyapParty('A', 'Alacaklı', '', '')],
+      documents: const UyapCaseDocuments([]),
+      money: UyapCaseMoney(collected: collected),
+      now: at,
+    );
+    // Read by UYAP Mobil there, its money kept from an older web reading.
+    await read(10, DateTime(2026, 10, 11, 9));
+    db.saveSections(key, PortalChannel.uyapMobile, const [
+      SectionOutcome(CaseSection.parties, SectionResult.read),
+    ], at: DateTime(2026, 10, 11, 9));
+    final a = UyapOwnSync(
+      database: () async => db,
+      store: storeA,
+      ask: (_, _) async => null,
+    );
+    final b = UyapOwnSync(
+      database: () async => other,
+      store: storeB,
+      ask: (_, body) => a.answer(body),
+    );
+    await b.merge(await a.summary('masaustu'));
+    expect(other.meta(PortalSync.webCheckedKey(key)), isNull);
+    expect(
+      other.sections(key).single.channel,
+      PortalChannel.uyapMobile,
+      reason: 'what it said came',
+    );
+    // Then read whole by the web there: counted here too.
+    final at = DateTime(2026, 10, 12, 9);
+    // The web brings this year's collections.
+    await read(25, at);
+    db.saveSections(key, PortalChannel.uyapWeb, [
+      for (final s in CaseSection.values)
+        SectionOutcome(s, SectionResult.read),
+    ], at: at);
+    await b.merge(await a.summary('masaustu'));
+    expect(other.meta(PortalSync.webCheckedKey(key)), at.toIso8601String());
   });
 
   test('a newer reading by UYAP Mobil on another own device keeps what '

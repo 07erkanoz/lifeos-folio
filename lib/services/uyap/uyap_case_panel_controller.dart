@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../portal/case_import.dart';
+import '../portal/case_sections.dart';
+import '../portal/portal_channel.dart';
 import '../portal/observed.dart' show caseKey;
 import '../portal/portal_sync.dart';
 import 'uyap_case_links.dart';
@@ -398,6 +400,43 @@ class UyapCasePanelController extends ChangeNotifier {
   /// counted read, and is asked again.
   bool whole = true;
 
+  /// What the last [refresh] came to, section by section, on the channel
+  /// it used ([usedWeb]); empty when it failed before anything was kept.
+  List<SectionOutcome> outcomes = const [];
+
+  /// Reads [only] these sections of the case, on [channel] and on no other
+  /// (docs/uyap-hedef-harita.md §2.4, §11.3): a job the lawyer began on
+  /// UYAP Mobil stays there though the web connects, and one on the web
+  /// stops when the web goes rather than reading on the mobile API. What
+  /// is not asked for is kept as it was. [outcomes] tells what came.
+  Future<void> readSections(
+    PortalChannel channel,
+    Set<CaseSection> only,
+  ) async {
+    outcomes = const [];
+    if (_link == null || archived || only.isEmpty) return;
+    final onWeb = channel == PortalChannel.uyapWeb;
+    if (!(onWeb ? web.connected : mobile.connected)) {
+      error = onWeb ? 'UYAP Web bağlı değil.' : 'UYAP Mobil bağlı değil.';
+      _changed();
+      return;
+    }
+    if (!background) _waiting++;
+    try {
+      usedWeb = onWeb;
+      whole = true;
+      if (!onWeb) return await _refreshMobile(only);
+      try {
+        await _placeOnWeb();
+      } catch (_) {}
+      await _refreshWeb(only);
+    } finally {
+      if (!background) _waiting--;
+    }
+  }
+
+  static final _all = CaseSection.values.toSet();
+
   Future<void> _refresh() async {
     try {
       await _placeOnWeb();
@@ -406,7 +445,13 @@ class UyapCasePanelController extends ChangeNotifier {
     }
     usedWeb = _useWeb;
     whole = true;
+    outcomes = const [];
     if (!usedWeb) return _refreshMobile();
+    await _refreshWeb();
+  }
+
+  Future<void> _refreshWeb([Set<CaseSection>? asked]) async {
+    final only = asked ?? _all;
     await _doing('Dosya UYAP’ta aranıyor', () async {
       final live = await _liveCase();
       busy = 'Dosya bilgileri çekiliyor';
@@ -426,16 +471,22 @@ class UyapCasePanelController extends ChangeNotifier {
       };
       // A high court's particulars come with its list; the court cases'
       // particulars call is not known to answer for it.
-      final details =
-          hidden.contains('ayrinti_bilgileri') ||
-              UyapWebService.isHighCourt(_link!.jurisdiction) ||
-              _link!.jurisdiction == UyapWebService.prosecution
+      final details = !only.contains(CaseSection.particulars)
+          ? _record?.details ?? const UyapCaseDetails()
+          : hidden.contains('ayrinti_bilgileri') ||
+                UyapWebService.isHighCourt(_link!.jurisdiction) ||
+                _link!.jurisdiction == UyapWebService.prosecution
           ? const UyapCaseDetails()
           : await web.caseDetails(live);
-      final parties = hidden.contains('taraf_bilgileri')
+      // Not asked for: none given, those kept stay (UyapCaseStore.keep).
+      final parties =
+          !only.contains(CaseSection.parties) ||
+              hidden.contains('taraf_bilgileri')
           ? const <UyapParty>[]
           : await web.parties(live);
-      final documents = hidden.contains('evrak_bilgileri')
+      final documents =
+          !only.contains(CaseSection.documents) ||
+              hidden.contains('evrak_bilgileri')
           ? const UyapCaseDocuments([])
           : await web.caseDocuments(
               live,
@@ -446,55 +497,130 @@ class UyapCasePanelController extends ChangeNotifier {
                 _changed();
               },
             );
+      // Not told what UYAP shows of the case: what it would have told is
+      // not "not shown" but "not had".
+      final told = permissions.allowed != null;
+      final sections = <SectionOutcome>[
+        SectionOutcome(
+          CaseSection.particulars,
+          hidden.contains('ayrinti_bilgileri')
+              ? SectionResult.notShown
+              : SectionResult.read,
+          partial: details == const UyapCaseDetails(),
+        ),
+        _outcome(
+          CaseSection.parties,
+          hidden.contains('taraf_bilgileri'),
+          parties.isEmpty,
+        ),
+        _outcome(
+          CaseSection.documents,
+          hidden.contains('evrak_bilgileri') || documents.withheld != null,
+          documents.documents.isEmpty,
+        ),
+      ];
       final typeCode = permissions.typeCode ?? live.listing?.typeCode;
       UyapCaseMoney? money;
-      if (typeCode != null &&
+      if (!only.contains(CaseSection.money)) {
+        // Not asked for: kept as it was.
+      } else if (typeCode != null &&
           permissions.allows('tahsilat_reddiyat_bilgileri')) {
         busy = 'Harç ve tahsilat bilgileri çekiliyor';
         _changed();
         try {
           money = await web.caseMoney(live, typeCode);
+          sections.add(
+            const SectionOutcome(CaseSection.money, SectionResult.read),
+          );
         } catch (_) {
           // The rest of the case stands without it.
           whole = false;
+          sections.add(
+            const SectionOutcome(CaseSection.money, SectionResult.failed),
+          );
         }
+      } else {
+        sections.add(
+          SectionOutcome(
+            CaseSection.money,
+            told || typeCode != null
+                ? SectionResult.notShown
+                : SectionResult.failed,
+          ),
+        );
       }
       // An enforcement file's account and debtors: asked only where UYAP
       // says it shows them, neither asks a quota.
       UyapEnforcement? enforcement;
-      final account = permissions.allowed?.contains('hesap_bilgileri') ?? false;
+      final account =
+          only.contains(CaseSection.account) &&
+          (permissions.allowed?.contains('hesap_bilgileri') ?? false);
       final debtorsShown =
-          permissions.allowed?.contains('borclu_bilgileri') ?? false;
+          only.contains(CaseSection.debtors) &&
+          (permissions.allowed?.contains('borclu_bilgileri') ?? false);
       if (account || debtorsShown) {
         busy = 'Borç hesabı ve borçlular çekiliyor';
         _changed();
-        // A part that did not come keeps what was had of it: the account
-        // read and the debtors not is not "no debtors".
+        // A part that did not come, or was not asked for, keeps what was had
+        // of it: the account read and the debtors not is not "no debtors".
         final had = _record?.enforcement;
-        var lines = const <UyapAccountLine>[];
-        var debtors = const <UyapDebtor>[];
+        var lines = account
+            ? const <UyapAccountLine>[]
+            : had?.lines ?? const <UyapAccountLine>[];
+        var debtors = debtorsShown
+            ? const <UyapDebtor>[]
+            : had?.debtors ?? const <UyapDebtor>[];
         try {
-          if (account) lines = await web.accountLines(live);
+          if (account) {
+            lines = await web.accountLines(live);
+            sections.add(_outcome(CaseSection.account, false, lines.isEmpty));
+          }
         } catch (_) {
           lines = had?.lines ?? const [];
           whole = false;
+          sections.add(
+            const SectionOutcome(CaseSection.account, SectionResult.failed),
+          );
         }
         try {
-          if (debtorsShown) debtors = await web.debtors(live);
+          if (debtorsShown) {
+            debtors = await web.debtors(live);
+            sections.add(_outcome(CaseSection.debtors, false, debtors.isEmpty));
+          }
         } catch (_) {
           debtors = had?.debtors ?? const [];
           whole = false;
+          sections.add(
+            const SectionOutcome(CaseSection.debtors, SectionResult.failed),
+          );
         }
         if (lines.isNotEmpty || debtors.isNotEmpty) {
           enforcement = UyapEnforcement(lines: lines, debtors: debtors);
         }
       }
-      _liveDocuments = {
-        for (final d in documents.documents) ...{
-          d.key: d,
-          for (final a in d.attachments) a.key: a,
-        },
-      };
+      // Not an icra file's, or not told: an icra file's account and debtors
+      // UYAP did not say whether it shows are asked again.
+      final icra = _link!.jurisdiction == '2';
+      for (final (section, shown) in [
+        (CaseSection.account, account),
+        (CaseSection.debtors, debtorsShown),
+      ]) {
+        if (shown) continue;
+        sections.add(
+          SectionOutcome(
+            section,
+            !told && icra ? SectionResult.failed : SectionResult.notShown,
+          ),
+        );
+      }
+      if (only.contains(CaseSection.documents)) {
+        _liveDocuments = {
+          for (final d in documents.documents) ...{
+            d.key: d,
+            for (final a in d.attachments) a.key: a,
+          },
+        };
+      }
       _record = await store.keep(
         target: live,
         details: details.withListing(live.listing),
@@ -505,8 +631,25 @@ class UyapCasePanelController extends ChangeNotifier {
         enforcement: enforcement,
         hidden: hidden,
       );
+      outcomes = [
+        for (final s in sections)
+          if (only.contains(s.section)) s,
+      ];
     });
   }
+
+  static SectionOutcome _outcome(
+    CaseSection section,
+    bool notShown,
+    bool empty,
+  ) => SectionOutcome(
+    section,
+    notShown
+        ? SectionResult.notShown
+        : empty
+        ? SectionResult.empty
+        : SectionResult.read,
+  );
 
   /// The case's id in this mobile session, the portfolio read for it first
   /// when need be.
@@ -534,16 +677,27 @@ class UyapCasePanelController extends ChangeNotifier {
     return _mobileCaseId = id;
   }
 
-  Future<void> _refreshMobile() => _doing(
-    'Dosya UYAP Mobil’den çekiliyor',
-    () async {
-      final id = await _mobileId();
-      final kept = await sync.portalCase(caseKey(_link!.number, _link!.court));
-      final details = kept?.details?.value ?? const <String, Object?>{};
-      busy = 'Taraflar çekiliyor';
-      _changed();
-      List<UyapParty> parties;
-      try {
+  Future<void> _refreshMobile([
+    Set<CaseSection>? asked,
+  ]) => _doing('Dosya UYAP Mobil’den çekiliyor', () async {
+    final only = asked ?? _all;
+    final id = await _mobileId();
+    final kept = await sync.portalCase(caseKey(_link!.number, _link!.court));
+    final details = kept?.details?.value ?? const <String, Object?>{};
+    busy = 'Taraflar çekiliyor';
+    _changed();
+    // UYAP Mobil tells a case's kind and state alone: its particulars,
+    // read in part.
+    final sections = <SectionOutcome>[
+      const SectionOutcome(
+        CaseSection.particulars,
+        SectionResult.read,
+        partial: true,
+      ),
+    ];
+    var parties = const <UyapParty>[];
+    try {
+      if (only.contains(CaseSection.parties)) {
         parties = [
           for (final p in await mobile.parties(
             id,
@@ -551,61 +705,106 @@ class UyapCasePanelController extends ChangeNotifier {
           ))
             UyapParty.fromMap(p),
         ];
-      } catch (_) {
-        parties = const [];
-        whole = false;
+        sections.add(_outcome(CaseSection.parties, false, parties.isEmpty));
       }
-      busy = 'Evrak listesi çekiliyor';
-      _changed();
-      final raw = Map<String, Object?>.from(await mobile.caseDocuments(id));
-      // The mobile API may give the full list as a list rather than grouped.
-      if (raw['tumEvraklar'] is List) {
-        raw['tumEvraklar'] = {'': raw['tumEvraklar']};
-      }
-      final aligned = alignKeys(
-        keyDocuments([UyapDocumentPage.fromJson(raw)]),
-        _record?.documents ?? const [],
+    } catch (_) {
+      parties = const [];
+      whole = false;
+      sections.add(
+        const SectionOutcome(CaseSection.parties, SectionResult.failed),
       );
-      final fetched = aligned.docs;
+    }
+    busy = 'Evrak listesi çekiliyor';
+    _changed();
+    // An answer that is not the documents is not "no documents": those
+    // kept stay, and it is asked again.
+    final readDocuments = only.contains(CaseSection.documents);
+    UyapDocumentPage? page;
+    try {
+      if (readDocuments) {
+        final raw = Map<String, Object?>.from(await mobile.caseDocuments(id));
+        if (!raw.containsKey('tumEvraklar') && !raw.containsKey('son20Evrak')) {
+          throw const FormatException('UYAP Mobil evrak listesi vermedi.');
+        }
+        // The mobile API may give the full list as a list rather than
+        // grouped.
+        if (raw['tumEvraklar'] is List) {
+          raw['tumEvraklar'] = {'': raw['tumEvraklar']};
+        }
+        page = UyapDocumentPage.fromJson(raw);
+      }
+    } on FormatException {
+      // UYAP unreachable, the session gone: the reading stops, as before.
+      whole = false;
+    }
+    if (readDocuments) {
+      sections.add(switch (page) {
+        null => const SectionOutcome(
+          CaseSection.documents,
+          SectionResult.failed,
+        ),
+        // Only the last twenty: read, but not whole.
+        UyapDocumentPage(grouped: [], latest: [_, ...]) => const SectionOutcome(
+          CaseSection.documents,
+          SectionResult.read,
+          partial: true,
+        ),
+        _ => _outcome(
+          CaseSection.documents,
+          page.message.isNotEmpty && page.grouped.isEmpty,
+          page.grouped.isEmpty,
+        ),
+      });
+    }
+    final aligned = alignKeys(
+      page == null ? const [] : keyDocuments([page]),
+      _record?.documents ?? const [],
+    );
+    final fetched = aligned.docs;
+    if (page != null) {
       _liveDocuments = {
         for (final d in fetched) ...{
           d.key: d,
           for (final a in d.attachments) a.key: a,
         },
       };
-      final before = _record;
-      final documents = enrichDocuments(fetched, [
-        for (final d in before?.documents ?? const <UyapCaseDocument>[])
-          if (!aligned.retired.contains(d.key)) d,
-      ]);
-      String text(String key) => '${details[key] ?? ''}'.trim();
-      // What the web gave before stays: the mobile API knows less of a case.
-      final d = before?.details;
-      final hasWeb =
-          d != null &&
-          (d.kind.isNotEmpty ||
-              d.opening.isNotEmpty ||
-              d.status.isNotEmpty ||
-              d.hearing != null ||
-              d.decision.isNotEmpty);
-      _record = await store.keep(
-        target: UyapCase(id, _link!.number, _link!.courtId, _link!.court),
-        details: hasWeb
-            ? d
-            : UyapCaseDetails(
-                kind: text('davaTuru'),
-                fileType: text('tur'),
-                state: kept?.status?.value ?? '',
-                hearing: before?.details.hearing,
-              ),
-        parties: mergeParties(before?.parties ?? const [], parties),
-        documents: UyapCaseDocuments(documents),
-        link: _link,
-        money: before?.money,
-        hidden: before?.hidden ?? const {},
-      );
-    },
-  );
+    }
+    final before = _record;
+    final documents = enrichDocuments(fetched, [
+      for (final d in before?.documents ?? const <UyapCaseDocument>[])
+        if (!aligned.retired.contains(d.key)) d,
+    ]);
+    String text(String key) => '${details[key] ?? ''}'.trim();
+    // What the web gave before stays: the mobile API knows less of a case.
+    final d = before?.details;
+    final hasWeb =
+        d != null &&
+        (d.kind.isNotEmpty ||
+            d.opening.isNotEmpty ||
+            d.status.isNotEmpty ||
+            d.hearing != null ||
+            d.decision.isNotEmpty);
+    _record = await store.keep(
+      target: UyapCase(id, _link!.number, _link!.courtId, _link!.court),
+      details: hasWeb
+          ? d
+          : UyapCaseDetails(
+              kind: text('davaTuru'),
+              fileType: text('tur'),
+              state: kept?.status?.value ?? '',
+              hearing: before?.details.hearing,
+            ),
+      parties: mergeParties(before?.parties ?? const [], parties),
+      documents: UyapCaseDocuments(documents),
+      link: _link,
+      money: before?.money,
+      hidden: before?.hidden ?? const {},
+    );
+    outcomes = [
+      for (final s in sections)
+        if (only.contains(s.section)) s,
+    ];
+  });
 
   /// The parties kept ([kept], the web's most often: whole names, roles and
   /// counsel) with what UYAP Mobil gave ([fetched]) added: a party it names
@@ -809,8 +1008,8 @@ class UyapCasePanelController extends ChangeNotifier {
     var live = _liveDocuments[document.key];
     if (live == null) {
       // A list kept from an earlier session: its ids are gone, so the list
-      // is fetched again first.
-      await refresh();
+      // is fetched again first; the list alone, not the money and account.
+      await _refreshWeb({CaseSection.documents});
       live = _liveDocuments[document.key];
       if (live == null) {
         throw StateError('${document.title} UYAP’taki listede bulunamadı.');
@@ -830,7 +1029,7 @@ class UyapCasePanelController extends ChangeNotifier {
     final id = await _mobileId();
     var live = _liveDocuments[document.key];
     if (live == null) {
-      await _refreshMobile();
+      await _refreshMobile({CaseSection.documents});
       live = _liveDocuments[document.key];
       if (live == null) {
         throw StateError('${document.title} UYAP Mobil’deki listede yok.');
