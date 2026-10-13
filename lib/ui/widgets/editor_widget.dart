@@ -82,6 +82,8 @@ import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 
+import '../../services/legal/decision_insert.dart';
+
 import '../../models/document_model.dart';
 import '../../models/evrak_file.dart';
 import '../../services/convert/converter_service.dart';
@@ -2366,6 +2368,62 @@ class _EditorWidgetState extends State<EditorWidget>
   }
 
   /// [text] in place of the selection, apart from the word before it.
+  /// Where the last decision written ends: one written right there next
+  /// is joined by "Aynı yönde, ".
+  int? _decisionEnd;
+
+  /// [decision] written as the filing cites one (GELISTIRME.md §5): at the
+  /// caret, or as a paragraph of its own before the SONUÇ heading; in one
+  /// step, undone in one.
+  void _insertDecision(
+    Decision decision, {
+    String quote = '',
+    bool beforeConclusion = false,
+  }) {
+    if (!mounted) return;
+    final controller = _quillController;
+    final plain = controller.document.toPlainText();
+    final last = controller.document.length - 1;
+    final heading = beforeConclusion
+        ? DecisionInsert.conclusionAt(plain)
+        : null;
+    final selection = controller.selection;
+    final at =
+        heading ?? (selection.isValid ? selection.start.clamp(0, last) : last);
+    final same = _decisionEnd != null && _decisionEnd == at;
+    final body = Delta();
+    var written = 0;
+    void put(String text, [Map<String, dynamic>? attributes]) {
+      body.insert(text, attributes);
+      written += text.length;
+    }
+
+    final before = at > 0 ? plain[at - 1] : '\n';
+    if (heading == null && !RegExp(r'\s').hasMatch(before)) put(' ');
+    for (final run in DecisionInsert.runs(decision, quote: quote, same: same)) {
+      put(
+        run.text,
+        run.bold || run.italic
+            ? {if (run.bold) 'bold': true, if (run.italic) 'italic': true}
+            : null,
+      );
+    }
+    // Before the heading: a paragraph of its own.
+    if (heading != null) put('\n');
+    // The way a snippet goes in (see _putSnippet), as a step of its own.
+    final history = controller.document.history;
+    history.lastRecorded = 0;
+    controller.replaceText(
+      at,
+      0,
+      body,
+      TextSelection.collapsed(offset: at + written),
+    );
+    history.lastRecorded = 0;
+    _decisionEnd = at + written;
+    setState(() {});
+  }
+
   void _writeHeard(String text) {
     if (!mounted) return;
     final controller = _active;
@@ -4216,6 +4274,8 @@ class _EditorWidgetState extends State<EditorWidget>
   @override
   void initState() {
     super.initState();
+    // A decision previewed is written into this petition.
+    DecisionInsert.target = _insertDecision;
     unawaited(
       SnippetStore.shared().then((store) {
         if (mounted) _snippetStore = store;
@@ -4301,6 +4361,7 @@ class _EditorWidgetState extends State<EditorWidget>
 
   @override
   void dispose() {
+    if (DecisionInsert.target == _insertDecision) DecisionInsert.target = null;
     _unwatchLive();
     unawaited(_live?.close());
     // A draft written while there were edits, and outlived by an undo, would

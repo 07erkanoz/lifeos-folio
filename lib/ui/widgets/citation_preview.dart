@@ -11,6 +11,7 @@ import '../../services/docx/docx_bridge.dart';
 import '../../services/legal/case_law.dart';
 import '../../services/legal/citation.dart';
 import '../../services/legal/decision.dart';
+import '../../services/legal/decision_insert.dart';
 import '../../services/legal/legislation.dart';
 import '../../services/legal/rich_text.dart';
 import '../../services/pdf/pdf_service.dart';
@@ -33,7 +34,11 @@ class PreviewData {
     this.loading,
     this.url = '',
     this.retry = false,
+    this.decision,
   });
+
+  /// The decision shown, when it is one: what "Dilekçeye ekle" writes.
+  final Decision? decision;
 
   /// "Yargıtay Hukuk Genel Kurulu E.2019/811 K.2022/642 17.05.2022".
   final String title;
@@ -227,6 +232,7 @@ PreviewData decisionFound(Decision decision, {String written = ''}) {
     reference: decision.reference,
     body: decision.paragraphs,
     url: decision.url.isEmpty ? decision.source.site : decision.url,
+    decision: decision,
   );
 }
 
@@ -419,6 +425,9 @@ class PreviewContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SelectionArea(
+      // What is chosen here, for "Dilekçeye ekle" to quote.
+      onSelectionChanged: (chosen) =>
+          PreviewActions.chosen = chosen?.plainText ?? '',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -491,6 +500,29 @@ class PreviewContent extends StatelessWidget {
 /// What a reader can do with what a preview shows.
 class PreviewActions {
   const PreviewActions._();
+
+  /// The words last chosen in a preview's text.
+  static String chosen = '';
+
+  /// The decision written into the open petition: with the passage chosen
+  /// in it quoted, or by its particulars alone.
+  static void insertDecision(
+    BuildContext context,
+    Decision decision, {
+    bool beforeConclusion = false,
+  }) {
+    final write = DecisionInsert.target;
+    if (write == null) return;
+    final quote = chosen.trim();
+    write(decision, quote: quote, beforeConclusion: beforeConclusion);
+    _say(
+      ScaffoldMessenger.maybeOf(context),
+      quote.isEmpty
+          ? 'Karar dilekçeye eklendi.'
+          : 'Karar seçilen bölümüyle dilekçeye eklendi.',
+      detail: 'Ctrl+Z ile geri alabilirsiniz.',
+    );
+  }
 
   static void _say(
     ScaffoldMessengerState? messenger,
@@ -590,7 +622,43 @@ class PreviewActions {
           ),
         );
 
+    final decision = data.decision;
     return [
+      // A petition open: the decision written into it, where the caret
+      // is or before its conclusion.
+      if (decision != null && DecisionInsert.target != null)
+        PopupMenuButton<bool>(
+          key: const ValueKey('preview-insert-decision'),
+          tooltip: 'Dilekçeye ekle',
+          onSelected: (before) =>
+              insertDecision(context, decision, beforeConclusion: before),
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: false, child: Text('İmlecin olduğu yere')),
+            PopupMenuItem(value: true, child: Text('Sonuç bölümünden önce')),
+          ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.post_add_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Dilekçeye ekle',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       if (data.reference.isNotEmpty)
         button(
           Icons.bookmark_border_rounded,

@@ -174,7 +174,7 @@ Kabul: "icra" → "İcra ve İflas Kanunu"; öneri açıkken Enter öneriyi alı
 
 ---
 
-## 5. Emsal kararı dilekçeye atıf olarak ekleme `[ ]` — 1 tur
+## 5. Emsal kararı dilekçeye atıf olarak ekleme `[x]` — 1 tur
 
 Yapay zekâ gerekmez; kararın bilgileri resmî bankadan zaten geliyor.
 
