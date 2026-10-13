@@ -528,7 +528,9 @@ class _UyapConnectViewState extends State<UyapConnectView> {
       children: [
         if (widget.heading)
           Text(
-            'UYAP Avukat Portalı’na bağlanın',
+            widget.channels.contains(PortalChannel.uyapMobile)
+                ? 'UYAP’a bağlanın'
+                : 'UYAP Avukat Portalı’na bağlanın',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),

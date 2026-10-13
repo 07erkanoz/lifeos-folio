@@ -15,8 +15,9 @@ import '../widgets/notice.dart';
 import 'portfolio_rows.dart';
 import '../theme/folio_palette.dart';
 
-final _green = tone(const Color(0xFF1B6B3A)),
-    _purple = tone(const Color(0xFF5B3B9A));
+// Getters, not finals: a final would keep the theme it was first read in.
+Color get _green => tone(const Color(0xFF1B6B3A));
+Color get _purple => tone(const Color(0xFF5B3B9A));
 
 /// "250.000,00" from lira.
 String _tl(double v) {

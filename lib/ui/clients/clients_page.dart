@@ -695,15 +695,13 @@ class _ClientsPageState extends State<ClientsPage> {
                 ),
               ),
               const HelpButton(Help.clients),
-              OutlinedButton.icon(
+              // Its icon alone: the list's title keeps its room.
+              IconButton.filledTonal(
                 key: const ValueKey('clients-new'),
-                style: OutlinedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                ),
+                tooltip: 'Yeni müvekkil',
+                visualDensity: VisualDensity.compact,
                 onPressed: _newClient,
                 icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-                label: const Text('Yeni'),
               ),
             ],
           ),

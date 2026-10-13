@@ -32,10 +32,11 @@ String _time(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
 /// "15.000" from kuruş: TL is the column's.
 String _plain(int kurus) => lira(kurus).replaceAll(' TL', '');
 
-final _green = tone(const Color(0xFF1B6B3A)),
-    _purple = tone(const Color(0xFF5B3B9A));
-final _trustFill = tone(const Color(0xFFF6F3FC)),
-    _trustLine = tone(const Color(0xFFE2DAF3));
+// Getters, not finals: a final would keep the theme it was first read in.
+Color get _green => tone(const Color(0xFF1B6B3A));
+Color get _purple => tone(const Color(0xFF5B3B9A));
+Color get _trustFill => tone(const Color(0xFFF6F3FC));
+Color get _trustLine => tone(const Color(0xFFE2DAF3));
 
 Color _sideColor(CashSide s) => switch (s) {
   CashSide.income => _green,
@@ -746,7 +747,10 @@ class _CashPageState extends State<CashPage> {
           SizedBox(
             width: _wDate,
             child: Text(
-              '${_day(l.at).substring(0, 5)} ${_time(l.at)}',
+              // A line written with no hour shows its day alone.
+              l.at.hour == 0 && l.at.minute == 0
+                  ? _day(l.at).substring(0, 5)
+                  : '${_day(l.at).substring(0, 5)} ${_time(l.at)}',
               style: base,
             ),
           ),

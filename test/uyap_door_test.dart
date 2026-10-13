@@ -9,13 +9,12 @@ import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/agenda/mobile_connect.dart';
 import 'package:evrak_convert/ui/widgets/uyap_connect_view.dart';
 
+/// The web portal, not connected.
 class _Web extends UyapWebService {
-  _Web({this.on = false}) : super.forTesting();
-
-  final bool on;
+  _Web() : super.forTesting();
 
   @override
-  bool get connected => on;
+  bool get connected => false;
 }
 
 class _Mobile extends UyapMobileApi {

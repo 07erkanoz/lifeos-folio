@@ -667,12 +667,12 @@ Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 | T11 | Sayfalar birbirinden haberli: ortak kanal çubuğu, UYAP Dosyalarım/editör UYAP Mobil ile, portföyden birim ya da tek tek ekleme, ajandadan dosya açınca ekleme | §9.2/§9.4 | Tamam |
 | T12 | Mobil dosya kimliği her seferinde dar sorguyla (birim türü → mahkeme → yıl/sıra), portföy taranmaz; mobil evrak listesi yalnız ekler | §9.3 | Tamam |
 | T13 | Telefonda Büro: Ajanda, UETS, UYAP (§13) | P11/P14 | Sırada |
-| T14 | Tek bağlantı kapısı: ekranlar kanal seçmez, `ensureUyap(işlem)` sorar; masaüstünde e-imza + Web Portal önerilir, telefonda UYAP Mobil; telefonda e-imza hiç görünmez | §3/§9.2 | Sırada ([değerlendirme §1](docs/degerlendirme-2026-10-13.md#1-uyapa-tek-bağlantı-sistemi)) |
-| T15 | Telefonun ilk kurulumunda masaüstüne QR ile eşleşme; profil ve ayarların da eşitlenmesi; bölüm bölüm ilerleme ekranı (önce `officeName` silinme hatası) | P14/§13 | Sırada ([değerlendirme §2](docs/degerlendirme-2026-10-13.md#2-telefonun-ilk-kurulumunda-masaüstüne-eşleşip-her-şeyi-almak)) |
-| T16 | Masaüstü ilk kurulumda profil: e-imza kartından (ad, TC) ve UYAP Web Portal (e-imza) ile doldurma; UYAP Mobil seçeneği kalır | P03 | Sırada ([değerlendirme §3](docs/degerlendirme-2026-10-13.md#3-masaüstü-ilk-kurulumda-profili-e-imzayla-doldurmak)) |
-| T17 | Dosya ilişkilendirme: Windows'ta Ayarlar düğmesinin kurulum kaydını bozması; Linux'ta UDF MIME tanımı, önizle/düzenle eylemleri | P15 | Sırada ([değerlendirme §4](docs/degerlendirme-2026-10-13.md#4-işletim-sisteminde-dosya-ilişkilendirme-udf-pdf-tiff)) |
-| T18 | Görev: seçilen evraklarla görev, inmemiş evrakın indirilip gitmesi (evrak başına ilerleme/yeniden deneme), pakette duruşma/süre/tebligat, alıcıda dosya detay; müvekkil ve ajandadan görev | buro.md | Sırada ([değerlendirme §5](docs/degerlendirme-2026-10-13.md#5-büro-ağı-üzerinden-dosya-ve-evrakla-görev-verme)) |
-| T19 | Müvekkiller ve Kasa sayfaları yeni görünüme (Inter, koyu tema, tablo düzeni) | — | Sırada |
+| T14 | Tek bağlantı kapısı: ekranlar kanal seçmez, `ensureUyap(işlem)` sorar; masaüstünde e-imza + Web Portal önerilir, telefonda UYAP Mobil; telefonda e-imza hiç görünmez | §3/§9.2 | Tamam (`ensureUyap`, `connectUyap`; `uyap_door_test`) |
+| T15 | Telefonun ilk kurulumunda masaüstüne QR ile eşleşme; profil ve ayarların da eşitlenmesi; bölüm bölüm ilerleme ekranı (önce `officeName` silinme hatası) | P14/§13 | Tamam (profil ve ayarlar eşitlenir; telefon kurulumunda "Masaüstümdeki Folio’dan al", `first_sync_test`) |
+| T16 | Masaüstü ilk kurulumda profil: e-imza kartından (ad, TC) ve UYAP Web Portal (e-imza) ile doldurma; UYAP Mobil seçeneği kalır | P03 | Tamam (kurulumda ve profil sayfasında e-imza kartı; kurulumda Web Portal; `profile_from_card_test`) |
+| T17 | Dosya ilişkilendirme: Windows'ta Ayarlar düğmesinin kurulum kaydını bozması; Linux'ta UDF MIME tanımı, önizle/düzenle eylemleri | P15 | Tamam (Windows betiği kurulumla aynı kaydı yazar; Linux’ta UDF MIME; önizlemede Düzenle). Gerçek Windows ve Linux masaüstünde denenmeli. |
+| T18 | Görev: seçilen evraklarla görev, inmemiş evrakın indirilip gitmesi (evrak başına ilerleme/yeniden deneme), pakette duruşma/süre/tebligat, alıcıda dosya detay; müvekkil ve ajandadan görev | buro.md | Tamam (çoklu seçim, tam evrak listesi, evrak başına indirme, pakette duruşma/süre/tebligat/not, müvekkil ve ajandadan görev; `task_package_test`) |
+| T19 | Müvekkiller ve Kasa sayfaları yeni görünüme (Inter, koyu tema, tablo düzeni) | — | Tamam (koyu temada Kasa ve icra renkleri, Müvekkiller başlığı) |
 
 ## 13. Telefonda Büro: Ajanda, UETS Tebligatlarım, UYAP Dosyalarım
 
