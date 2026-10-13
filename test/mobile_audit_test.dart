@@ -5,6 +5,7 @@ import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:evrak_convert/services/uyap/adalet_eimza.dart';
+import 'package:evrak_convert/ui/agenda/mobile_connect.dart';
 import 'package:evrak_convert/ui/agenda/uets_connect.dart';
 import 'package:evrak_convert/ui/mobile/lawyer_profile_page.dart';
 import 'package:evrak_convert/ui/settings/settings_page.dart';
@@ -27,6 +28,9 @@ void main() {
     final tray = AdaletEimza.check;
     AdaletEimza.check = () async => false;
     addTearDown(() => AdaletEimza.check = tray);
+    // A phone's own choices too: no card, UYAP Mobil first.
+    phoneOverride = true;
+    addTearDown(() => phoneOverride = null);
   }
 
   Future<void> open(
