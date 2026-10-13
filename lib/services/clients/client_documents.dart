@@ -511,3 +511,21 @@ Future<String> writeClientDocument(
   await file.writeAsBytes(bytes ?? UdfWriter.writeBytes(model!), flush: true);
   return file.path;
 }
+
+/// The papers' parts, for the papers made elsewhere (an enforcement file's).
+DocBlock paperParagraph(
+  String text, {
+  DocAlignment align = DocAlignment.justify,
+  bool indent = false,
+  double after = 6,
+  double? size,
+}) => _p(text, align: align, indent: indent, after: after, size: size);
+DocBlock paperTitle(String text) => _title(text);
+DocBlock paperGap() => _gap();
+DocBlock paperSignatures(
+  String left,
+  String leftName,
+  String right,
+  String rightName,
+) => _signatures(left, leftName, right, rightName);
+DocModel paperModel(List<DocBlock> blocks) => _model(blocks);

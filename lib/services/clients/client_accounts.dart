@@ -9,7 +9,20 @@ enum MovementKind {
   costFromAdvance('masrafAvans', 'Masraf (avanstan)', -1),
   costByLawyer('masrafAvukat', 'Masraf (avukat ödedi)', -1),
   costRepaid('masrafIade', 'Avukatın masrafı ödendi', 1),
-  counterFee('karsiVekalet', 'Karşı vekâlet ücreti', 1);
+  counterFee('karsiVekalet', 'Karşı vekâlet ücreti', 1),
+
+  /// What a debtor paid the lawyer outside the enforcement office: the
+  /// client's money, held for them.
+  collected('haricen', 'Haricen tahsilat', 1),
+
+  /// Money held for the client taken as the lawyer's fee, or as the fee
+  /// the court gave against the other side: out of what is held, into
+  /// the office's income.
+  toFee('mahsupUcret', 'Emanetten vekâlet ücretine', -1),
+  toCounterFee('mahsupKarsi', 'Emanetten karşı vekâlet ücretine', -1);
+
+  /// Money held taken as a fee: out of the client's, into the office's.
+  bool get isApplied => this == toFee || this == toCounterFee;
 
   const MovementKind(this.code, this.label, this.sign);
   final String code, label;
@@ -152,6 +165,14 @@ class CaseAccount {
           lawyerRepaid += m.amount;
         case MovementKind.counterFee:
           counterFee += m.amount;
+        case MovementKind.collected:
+          collectedIn += m.amount;
+        case MovementKind.toFee:
+          feeIn += m.amount;
+          applied += m.amount;
+        case MovementKind.toCounterFee:
+          counterFee += m.amount;
+          applied += m.amount;
         case null:
           break;
       }
@@ -175,6 +196,10 @@ class CaseAccount {
   int feeIn = 0, advanceIn = 0, advanceSpent = 0;
   int lawyerSpent = 0, lawyerRepaid = 0, counterFee = 0;
 
+  /// Paid by a debtor outside the office, and of what is held, taken as a
+  /// fee.
+  int collectedIn = 0, applied = 0;
+
   /// The fixed part of the fee agreed, in kuruş.
   int get feeAgreed =>
       fee?.data['tutar'] is int ? fee!.data['tutar'] as int : 0;
@@ -184,7 +209,10 @@ class CaseAccount {
 
   /// The fixed fee still owed; less than nothing when more was paid.
   int get feeOwed => feeAgreed - feeIn;
-  int get advanceLeft => advanceIn - advanceSpent;
+
+  /// What is held for the client: the advance left and what a debtor
+  /// paid, less what was taken as a fee.
+  int get advanceLeft => advanceIn + collectedIn - advanceSpent - applied;
 
   /// What the lawyer met of the costs and was not paid back yet.
   int get lawyerOwed => lawyerSpent - lawyerRepaid;

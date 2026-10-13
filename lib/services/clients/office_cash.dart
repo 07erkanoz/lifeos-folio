@@ -126,10 +126,40 @@ List<CashLine> cashLines(PortalDatabase db, {List<ClientEntry>? entries}) {
     if (kind == null) continue;
     final side = switch (kind) {
       MovementKind.feePaid || MovementKind.counterFee => CashSide.income,
-      MovementKind.advanceIn || MovementKind.costFromAdvance => CashSide.trust,
+      MovementKind.advanceIn ||
+      MovementKind.costFromAdvance ||
+      MovementKind.collected ||
+      MovementKind.toFee ||
+      MovementKind.toCounterFee => CashSide.trust,
       MovementKind.costByLawyer || MovementKind.costRepaid => CashSide.onBehalf,
     };
     final e = owner[r.clientId];
+    // Held money taken as a fee is two lines: out of what is held, and
+    // the office's income.
+    if (kind.isApplied) {
+      out.add(
+        CashLine(
+          record: r,
+          side: CashSide.income,
+          at: r.at,
+          title: [
+            kind == MovementKind.toFee
+                ? 'Vekâlet ücreti (emanetten)'
+                : 'Karşı vekâlet ücreti (emanetten)',
+            if (r.text('aciklama').isNotEmpty) r.text('aciklama'),
+            if (back) 'ters kayıt',
+          ].join(' · '),
+          amount: (back ? -1 : 1) * r.amount,
+          client: e?.name ?? db.clientCard(r.clientId)?.name ?? '',
+          clientKey: e?.key,
+          caseKey: r.text('dosya'),
+          way: 'Mahsup',
+          category: kind.label,
+          struck: struck,
+          currency: r.currency,
+        ),
+      );
+    }
     out.add(
       CashLine(
         record: r,

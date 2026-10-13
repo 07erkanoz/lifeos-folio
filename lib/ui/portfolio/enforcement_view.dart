@@ -1,9 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
+import '../../services/editor/lawyer_profile.dart';
+import '../../services/enforcement/enforcement_ledger.dart';
+import '../../services/enforcement/enforcement_papers.dart';
+import '../../services/udf/udf_writer.dart';
+import '../../services/uyap/uyap_case_links.dart';
+import '../../services/uyap/uyap_web_service.dart' show UyapWebService;
+import '../../models/document_model.dart';
 import '../../services/office/office_network.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_case_data.dart';
@@ -12,6 +21,8 @@ import '../../services/uyap/uyap_enforcement.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../tools/interest_page.dart';
 import '../widgets/notice.dart';
+import '../clients/client_accounts_view.dart' show appliedMovement;
+import 'enforcement_ledger_dialog.dart';
 import 'portfolio_rows.dart';
 import '../theme/folio_palette.dart';
 
@@ -56,12 +67,17 @@ class EnforcementView extends StatefulWidget {
     required this.database,
     this.lawyer = '',
     this.wide = true,
+    this.onOpen,
   });
 
   final UyapCaseRecord? record;
   final String caseKey, title, lawyer;
   final Future<PortalDatabase> Function() database;
   final bool wide;
+
+  /// A paper made here opened in the editor, to be read over, signed and
+  /// sent.
+  final ValueChanged<File>? onOpen;
 
   @override
   State<EnforcementView> createState() => _EnforcementViewState();
@@ -72,10 +88,21 @@ class _EnforcementViewState extends State<EnforcementView> {
   Set<String> _booked = const {};
   bool _allCourse = false;
 
+  /// The file's own account in Folio: payments made outside the office and
+  /// claims waived.
+  List<LedgerEntry> _ledger = const [];
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadBooked());
+  }
+
+  @override
+  void didUpdateWidget(EnforcementView old) {
+    super.didUpdateWidget(old);
+    // UYAP read anew: a payment it now shows is official.
+    if (old.record != widget.record) unawaited(_loadBooked());
   }
 
   Future<void> _loadBooked() async {
@@ -85,7 +112,354 @@ class _EnforcementViewState extends State<EnforcementView> {
         if (r.kind == ClientRecordKind.movement && !r.removed)
           if (r.text('kaynak').isNotEmpty) r.text('kaynak'),
     };
-    if (mounted) setState(() => _booked = booked);
+    var ledger = ledgerOf(db, widget.caseKey);
+    // What UYAP shows now of the payments made outside: official, on every
+    // device alike.
+    final found = officialMatches(
+      ledger,
+      widget.record?.money?.collections ?? const [],
+      uyapDay,
+    );
+    if (found.isNotEmpty) {
+      for (final e in ledger) {
+        final key = found[e.id];
+        if (key == null) continue;
+        db.saveClientRecord(
+          e.record.copyWith(data: {...e.record.data, 'resmi': key}),
+        );
+      }
+      ledger = ledgerOf(db, widget.caseKey);
+    }
+    if (mounted) {
+      setState(() {
+        _booked = booked;
+        _ledger = ledger;
+      });
+    }
+  }
+
+  /// The file's client: its entry in the list and its card, made when it
+  /// has none; null when no client of the lawyer's is in the file.
+  Future<(ClientEntry, Client)?> _client(PortalDatabase db) async {
+    final entry = db
+        .clientEntries(lawyer: widget.lawyer)
+        .where((e) => e.cases.any((c) => c.caseKey == widget.caseKey))
+        .firstOrNull;
+    if (entry == null) return null;
+    var card = entry.client;
+    if (card == null) {
+      card = Client(
+        id: Client.newId(),
+        name: entry.name,
+        updated: DateTime.now(),
+        person: OfficeNetwork.instance.me,
+      );
+      db.saveClient(card);
+    }
+    return (entry, card);
+  }
+
+  /// The debtors by name: UYAP's list of them, else the file's parties
+  /// who are debtors.
+  List<String> get _debtorNames {
+    final listed = [
+      for (final d
+          in widget.record?.enforcement?.debtors ?? const <UyapDebtor>[])
+        if (d.name.isNotEmpty) titleName(d.name),
+    ];
+    if (listed.isNotEmpty) return listed;
+    return [
+      for (final p in widget.record?.parties ?? const [])
+        if (UyapWebService.fold(p.role).contains('borclu')) titleName(p.name),
+    ];
+  }
+
+  /// UYAP's balance in kuruş, as the account page or the particulars give
+  /// it; null when neither does.
+  int? get _uyapLeft {
+    final record = widget.record;
+    if (record == null) return null;
+    final account = record.enforcement?.account ?? const UyapAccount();
+    final facts = {for (final (k, v) in record.details.enforcement) k: v};
+    final total = account.total ?? parseLira(facts['Alacak toplamı'] ?? '');
+    final paid =
+        account.paid ??
+        record.money?.collected ??
+        parseLira(facts['Yapılmış tahsilat'] ?? '');
+    final left =
+        account.left ?? (total != null && paid != null ? total - paid : null);
+    return left == null ? null : (left * 100).round();
+  }
+
+  /// A payment made outside the office, or a claim waived, written: in
+  /// the file's own account, the money in the client's (held, or taken as
+  /// a fee), and the papers made.
+  Future<void> _add(LedgerKind kind) async {
+    final uyap = _uyapLeft;
+    final left = folioLeft(uyap == null ? null : uyap / 100, _ledger);
+    final input = await showDialog<LedgerInput>(
+      context: context,
+      builder: (_) => LedgerDialog(
+        kind: kind,
+        debtors: _debtorNames,
+        left: left == null ? null : (left * 100).round(),
+      ),
+    );
+    if (input == null || !mounted) return;
+    final db = await widget.database();
+    final client = await _client(db);
+    final now = DateTime.now();
+    final me = OfficeNetwork.instance.me;
+    final entry = ClientRecord(
+      id: Client.newId(),
+      // A file with no client of the lawyer's keeps its account with the
+      // office's own book.
+      clientId: client?.$2.id ?? officeCashId,
+      kind: ClientRecordKind.enforcement,
+      data: {
+        'dosya': widget.caseKey,
+        'tur': input.kind.code,
+        'tutar': input.amount,
+        'zaman': input.at.toIso8601String(),
+        'borclu': input.debtor,
+        'odeme': input.way,
+        'aciklama': input.note,
+        'tamami': input.whole,
+        'uyapBakiye': ?uyap,
+      },
+      created: now,
+      by: widget.lawyer,
+      updated: now,
+      person: me,
+    );
+    db.saveClientRecord(entry);
+    var booked = false;
+    if (kind == LedgerKind.external && client != null) {
+      final held = ClientRecord(
+        id: Client.newId(),
+        clientId: client.$2.id,
+        kind: ClientRecordKind.movement,
+        data: {
+          'dosya': widget.caseKey,
+          'hesap': MovementKind.collected.code,
+          'tutar': input.amount,
+          'zaman': input.at.toIso8601String(),
+          'aciklama': [
+            'Haricen tahsilat',
+            if (input.debtor.isNotEmpty) input.debtor,
+          ].join(' · '),
+          'odeme': input.way,
+          'kaynak': 'icra:${entry.id}',
+        },
+        created: now,
+        by: widget.lawyer,
+        updated: now,
+        locked: true,
+        person: me,
+      );
+      db.saveClientRecord(held);
+      if (input.target case final target?) {
+        db.saveClientRecord(
+          appliedMovement(
+            held,
+            target,
+            input.amount,
+            lawyer: widget.lawyer,
+            person: me,
+            at: input.at,
+          ),
+        );
+      }
+      booked = true;
+    }
+    await _loadBooked();
+    if (!mounted) return;
+    final saved = LedgerEntry(entry);
+    File? request;
+    if (input.request) request = await _paper(saved, receipt: false);
+    if (input.receipt) await _paper(saved, receipt: true, open: false);
+    if (!mounted) return;
+    showNotice(
+      context,
+      kind == LedgerKind.external
+          ? 'Haricen tahsilat Folio hesabına yazıldı.'
+          : 'Feragat Folio hesabına yazıldı.',
+      detail: [
+        if (kind == LedgerKind.external && booked)
+          input.target == null
+              ? 'Müvekkilin hesabına ve Kasa\'ya emanet olarak işlendi.'
+              : 'Kasa\'ya ${input.target == MovementKind.toFee ? 'vekâlet ücreti' : 'karşı vekâlet ücreti'} olarak işlendi.',
+        if (kind == LedgerKind.external && !booked)
+          'Dosyanın müvekkili bulunamadığı için Kasa\'ya işlenmedi.',
+        if (request != null) 'Talep dilekçesi editörde açıldı.',
+        if (input.receipt) 'Borçlunun makbuzu dosyanın klasörüne yazıldı.',
+      ].join(' '),
+    );
+  }
+
+  /// Who the papers name: the office and the number, our side, the
+  /// lawyer, the debtors.
+  Future<EnforcementParties> _parties() async {
+    final record = widget.record;
+    final db = await widget.database();
+    final profile = await LawyerProfile.load().catchError(
+      (Object _) => const LawyerProfile(),
+    );
+    final lawyer = profile.lawyer?.titled.isNotEmpty ?? false
+        ? profile.lawyer!.titled
+        : widget.lawyer;
+    final (ours, _) = splitParties(
+      record?.parties ?? const [],
+      lawyer,
+      said: db.representation(widget.caseKey),
+    );
+    final client = await _client(db);
+    return EnforcementParties(
+      office: record?.court ?? '',
+      number: record?.number ?? '',
+      creditor: ours.isNotEmpty
+          ? ours.map((p) => titleName(p.name)).join(', ')
+          : titleName(client?.$1.name ?? ''),
+      lawyer: lawyer,
+      lawyerAddress: profile.address,
+      debtors: _debtorNames,
+    );
+  }
+
+  /// [e]'s request to the office, or the debtor's receipt, written as UDF
+  /// in the file's folder, tied to the file and opened in the editor.
+  Future<File?> _paper(
+    LedgerEntry e, {
+    required bool receipt,
+    bool open = true,
+  }) async {
+    final record = widget.record;
+    if (record == null) return null;
+    try {
+      final parties = await _parties();
+      final DocModel model = receipt
+          ? debtorReceipt(parties, e)
+          : e.kind == LedgerKind.external
+          ? externalPaymentRequest(parties, e)
+          : waiverRequest(parties, e);
+      await UyapSettings.instance.load();
+      final folder = Directory(
+        p.join(
+          UyapSettings.instance.folder,
+          UyapCaseStore.caseFolderName(record),
+        ),
+      );
+      await folder.create(recursive: true);
+      final d = e.at;
+      final day =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final name = receipt
+          ? '$day Borçlu makbuzu ve ibraname'
+          : e.kind == LedgerKind.external
+          ? '$day Haricen tahsil bildirimi'
+          : '$day Feragat dilekçesi';
+      var file = File(p.join(folder.path, '$name.udf'));
+      for (var i = 2; await file.exists(); i++) {
+        file = File(p.join(folder.path, '$name ($i).udf'));
+      }
+      await file.writeAsBytes(UdfWriter.writeBytes(model), flush: true);
+      if (!receipt) {
+        await UyapCaseLinks.instance.link(file.path, record.link);
+      }
+      if (open && mounted) widget.onOpen?.call(file);
+      return file;
+    } catch (error) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Belge hazırlanamadı: $error',
+          kind: NoticeKind.error,
+        );
+      }
+      return null;
+    }
+  }
+
+  /// [e] marked as UYAP shows it, or not yet.
+  Future<void> _markOfficial(LedgerEntry e, bool official) async {
+    final db = await widget.database();
+    db.saveClientRecord(
+      e.record.copyWith(
+        data: {...e.record.data, 'resmi': official ? 'elle' : ''},
+      ),
+    );
+    await _loadBooked();
+  }
+
+  /// [e] taken off the file's account, and the money it put in the
+  /// client's taken back by reversals that name it.
+  Future<void> _removeEntry(LedgerEntry e) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${e.kind.label} kaldırılsın mı?'),
+        content: const Text(
+          'Folio hesabından çıkar; müvekkil hesabına ve Kasa\'ya yazılan '
+          'tutarlar ters kayıtla düzeltilir.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('ledger-remove-ok'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Kaldır'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final db = await widget.database();
+    final now = DateTime.now();
+    final records = db.allClientRecords().toList();
+    final mine = [
+      for (final r in records)
+        if (!r.removed &&
+            r.kind == ClientRecordKind.movement &&
+            r.text('kaynak') == 'icra:${e.id}')
+          r,
+    ];
+    final also = [
+      for (final r in records)
+        if (!r.removed &&
+            r.kind == ClientRecordKind.movement &&
+            mine.any((m) => r.text('kaynak') == 'mahsup:${m.id}'))
+          r,
+    ];
+    final reversed = {
+      for (final r in records)
+        if (r.text('ters').isNotEmpty) r.text('ters'),
+    };
+    for (final m in [...also, ...mine]) {
+      if (reversed.contains(m.id)) continue;
+      db.saveClientRecord(
+        ClientRecord(
+          id: Client.newId(),
+          clientId: m.clientId,
+          kind: ClientRecordKind.movement,
+          data: {
+            ...m.data,
+            'ters': m.id,
+            'zaman': now.toIso8601String(),
+            'aciklama': 'Haricen tahsilat kaldırıldı',
+          }..remove('kaynak'),
+          created: now,
+          by: widget.lawyer,
+          updated: now,
+          locked: true,
+          person: OfficeNetwork.instance.me,
+        ),
+      );
+    }
+    db.saveClientRecord(e.record.copyWith(removed: true));
+    await _loadBooked();
   }
 
   /// Whether a payment out of [kind] passes the claim on (to the creditor
@@ -225,6 +599,10 @@ class _EnforcementViewState extends State<EnforcementView> {
         (total != null && total > 0 && paid != null
             ? (paid / total).clamp(0, 1).toDouble()
             : null);
+    final pending = [
+      for (final e in _ledger)
+        if (!e.isOfficial) e,
+    ];
     final debt = _box(
       'BORÇ DURUMU',
       right: e?.lines.isNotEmpty ?? false
@@ -237,7 +615,19 @@ class _EnforcementViewState extends State<EnforcementView> {
           children: [
             _big('Toplam alacak', total),
             _big('Tahsil edilen', paid, color: _green),
-            _big('Bakiye borç', left, color: AgendaColors.deadlineText),
+            if (pending.isEmpty)
+              _big('Bakiye borç', left, color: AgendaColors.deadlineText)
+            else ...[
+              _big("UYAP'a göre bakiye", left),
+              KeyedSubtree(
+                key: const ValueKey('enforcement-folio-left'),
+                child: _big(
+                  "Folio'ya göre kalan",
+                  folioLeft(left, _ledger),
+                  color: AgendaColors.deadlineText,
+                ),
+              ),
+            ],
           ],
         ),
         if (share != null) ...[
@@ -312,6 +702,7 @@ class _EnforcementViewState extends State<EnforcementView> {
       ],
     );
     final money = _money(record.money);
+    final ledger = _ledgerBox(pending);
     final debtors = _debtors(e?.debtors ?? const []);
     final course = _course(record);
     if (!widget.wide) {
@@ -321,6 +712,8 @@ class _EnforcementViewState extends State<EnforcementView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             debt,
+            const SizedBox(height: 10),
+            ledger,
             const SizedBox(height: 10),
             money,
             const SizedBox(height: 10),
@@ -339,7 +732,13 @@ class _EnforcementViewState extends State<EnforcementView> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(flex: 27, child: debt),
+              Expanded(
+                flex: 27,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [debt, const SizedBox(height: 10), ledger],
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(flex: 20, child: money),
             ],
@@ -356,6 +755,149 @@ class _EnforcementViewState extends State<EnforcementView> {
         ],
       ),
     );
+  }
+
+  /// The file's own account in Folio: what was paid outside the office
+  /// and what was waived, each waiting for UYAP or shown there.
+  Widget _ledgerBox(List<LedgerEntry> pending) {
+    final waiting = pending.fold<int>(0, (n, e) => n + e.amount);
+    Widget pill(LedgerEntry e) {
+      final (text, ink, fill) = e.isOfficial
+          ? (
+              e.official == 'elle' ? 'İşlendi' : "UYAP'ta",
+              _green,
+              tone(const Color(0xFFE6F4EC)),
+            )
+          : ('Bekliyor', AgendaColors.taskText, tone(const Color(0xFFFDF4E6)));
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: ink,
+          ),
+        ),
+      );
+    }
+
+    return _box('FOLIO HESABI', right: 'haricen tahsilat ve feragat', [
+      if (_ledger.isEmpty)
+        Text(
+          'Borçlu size doğrudan ödeme yaptığında ya da alacağın bir '
+          'kısmından feragat ettiğinizde buraya yazın: UYAP\'a işlenene '
+          'kadar Folio\'daki borçtan düşer, talep dilekçesi hazırlanır.',
+          style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+        ),
+      for (final e in _ledger.reversed)
+        Container(
+          key: ValueKey('ledger-${e.id}'),
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: tone(const Color(0xFFF0F1F5))),
+            ),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 82,
+                child: Text(
+                  dayText(e.at),
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  [
+                    e.kind.label,
+                    if (e.whole) 'tamamı',
+                    if (e.debtor.isNotEmpty) e.debtor,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              pill(e),
+              const SizedBox(width: 8),
+              Text(
+                _tl(e.amount / 100),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: e.kind == LedgerKind.external ? _green : _purple,
+                ),
+              ),
+              PopupMenuButton<String>(
+                key: ValueKey('ledger-menu-${e.id}'),
+                icon: const Icon(Icons.more_horiz_rounded, size: 18),
+                onSelected: (v) => switch (v) {
+                  'talep' => _paper(e, receipt: false),
+                  'makbuz' => _paper(e, receipt: true),
+                  'resmi' => _markOfficial(e, !e.isOfficial),
+                  _ => _removeEntry(e),
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'talep',
+                    child: Text(
+                      e.kind == LedgerKind.external
+                          ? 'Haricen tahsil bildirimi hazırla'
+                          : 'Feragat dilekçesi hazırla',
+                    ),
+                  ),
+                  if (e.kind == LedgerKind.external)
+                    const PopupMenuItem(
+                      value: 'makbuz',
+                      child: Text('Borçluya makbuz ve ibraname'),
+                    ),
+                  PopupMenuItem(
+                    value: 'resmi',
+                    child: Text(
+                      e.isOfficial
+                          ? "UYAP'a işlenmedi say"
+                          : "UYAP'a işlendi say",
+                    ),
+                  ),
+                  const PopupMenuItem(value: 'kaldir', child: Text('Kaldır')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      if (pending.isNotEmpty)
+        _row(
+          "UYAP'a işlenmeyi bekleyen",
+          _tl(waiting / 100),
+          bold: true,
+          color: AgendaColors.taskText,
+        ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          OutlinedButton.icon(
+            key: const ValueKey('ledger-add-external'),
+            onPressed: () => _add(LedgerKind.external),
+            icon: const Icon(Icons.payments_outlined, size: 18),
+            label: const Text('Haricen tahsilat'),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('ledger-add-waiver'),
+            onPressed: () => _add(LedgerKind.waiver),
+            icon: const Icon(Icons.remove_circle_outline_rounded, size: 18),
+            label: const Text('Feragat'),
+          ),
+        ],
+      ),
+    ]);
   }
 
   Widget _box(String title, List<Widget> children, {String? right}) =>

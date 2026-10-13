@@ -20,7 +20,7 @@ import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../clients/attachment_preview.dart';
 import '../clients/client_accounts_view.dart'
-    show CurrencyChoice, MovementDialog;
+    show CurrencyChoice, MovementDialog, askApplyHeld;
 import '../clients/clients_page.dart' show pickScan;
 import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
@@ -925,24 +925,94 @@ class _CashPageState extends State<CashPage> {
     );
   }
 
-  Widget? _menu(CashLine l) {
-    final items = <PopupMenuEntry<String>>[
-      if (l.fromClient && l.clientKey != null && widget.onOpenClient != null)
-        const PopupMenuItem(value: 'muvekkil', child: Text('Müvekkili aç')),
-      if (clientFilesOf(l.record).isNotEmpty)
-        const PopupMenuItem(value: 'belge', child: Text('Belgeyi göster')),
-      if (!l.fromClient && !l.struck)
-        const PopupMenuItem(value: 'ters', child: Text('Ters kayıtla düzelt')),
+  /// Whether [l] is money held for a client that may be taken as a fee.
+  static bool _held(CashLine l) =>
+      l.fromClient &&
+      !l.struck &&
+      l.side == CashSide.trust &&
+      l.amount > 0 &&
+      (l.record.movement == MovementKind.collected ||
+          l.record.movement == MovementKind.advanceIn);
+
+  List<PopupMenuEntry<String>> _items(CashLine l) => [
+    if (l.fromClient && l.clientKey != null && widget.onOpenClient != null)
+      const PopupMenuItem(value: 'muvekkil', child: Text('Müvekkili aç')),
+    if (clientFilesOf(l.record).isNotEmpty)
+      const PopupMenuItem(value: 'belge', child: Text('Belgeyi göster')),
+    if (_held(l)) ...[
+      const PopupMenuItem(
+        value: 'ucret',
+        child: Text('Vekâlet ücretine mahsup et'),
+      ),
+      const PopupMenuItem(
+        value: 'karsi',
+        child: Text('Karşı vekâlet ücretine mahsup et'),
+      ),
+    ],
+    if (!l.fromClient && !l.struck)
+      const PopupMenuItem(value: 'ters', child: Text('Ters kayıtla düzelt')),
+  ];
+
+  void _act(CashLine l, String v) => switch (v) {
+    'muvekkil' => widget.onOpenClient!(l.clientKey!),
+    'belge' => _receipt(l),
+    'ucret' => _apply(l, MovementKind.toFee),
+    'karsi' => _apply(l, MovementKind.toCounterFee),
+    _ => _reverse(l),
+  };
+
+  /// [l]'s line menu where it was right-clicked.
+  Future<void> _menuAt(CashLine l, Offset at) async {
+    final items = _items(l);
+    if (items.isEmpty) return;
+    final v = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
+      items: items,
+    );
+    if (v != null && mounted) _act(l, v);
+  }
+
+  /// Money held for a client taken as a fee: up to what is held for the
+  /// case in that currency.
+  Future<void> _apply(CashLine l, MovementKind kind) async {
+    final db = _db!;
+    final held = l.record;
+    final records = [
+      for (final r in db.allClientRecords())
+        if (!r.removed && r.kind.money && r.clientId == held.clientId) r,
     ];
+    final account = caseAccounts(records)[held.text('dosya')]?.all
+        .where((a) => a.currency == held.currency)
+        .firstOrNull;
+    final most = account?.advanceLeft ?? held.amount;
+    if (most <= 0) {
+      showNotice(context, 'Bu dosyada emanette para kalmamış.');
+      return;
+    }
+    final made = await askApplyHeld(
+      context,
+      held,
+      kind,
+      lawyer: widget.lawyer,
+      person: widget.person,
+      most: most,
+    );
+    if (made == null) return;
+    _keep(made);
+    await _load();
+  }
+
+  Widget? _menu(CashLine l) {
+    final items = _items(l);
     if (items.isEmpty) return null;
+    // A fee taken from what was held is two lines of one record.
+    final second =
+        l.side == CashSide.income && (l.record.movement?.isApplied ?? false);
     return PopupMenuButton<String>(
-      key: ValueKey('cash-line-${l.record.id}'),
+      key: ValueKey('cash-line-${l.record.id}${second ? '-gelir' : ''}'),
       icon: const Icon(Icons.more_horiz_rounded, size: 20),
-      onSelected: (v) => switch (v) {
-        'muvekkil' => widget.onOpenClient!(l.clientKey!),
-        'belge' => _receipt(l),
-        _ => _reverse(l),
-      },
+      onSelected: (v) => _act(l, v),
       itemBuilder: (_) => items,
     );
   }
@@ -954,7 +1024,13 @@ class _CashPageState extends State<CashPage> {
         )
       : s;
 
-  Widget _row(CashLine l) {
+  Widget _row(CashLine l) => GestureDetector(
+    onSecondaryTapUp: (d) => _menuAt(l, d.globalPosition),
+    onLongPressStart: (d) => _menuAt(l, d.globalPosition),
+    child: _rowOf(l),
+  );
+
+  Widget _rowOf(CashLine l) {
     const base = TextStyle(fontSize: 13);
     final who = [
       if (l.client.isNotEmpty) titleName(l.client),
@@ -1030,7 +1106,12 @@ class _CashPageState extends State<CashPage> {
     );
   }
 
-  Widget _tile(CashLine l) {
+  Widget _tile(CashLine l) => GestureDetector(
+    onLongPressStart: (d) => _menuAt(l, d.globalPosition),
+    child: _tileOf(l),
+  );
+
+  Widget _tileOf(CashLine l) {
     final sub = [
       _day(l.at).substring(0, 5),
       if (l.client.isNotEmpty) titleName(l.client),

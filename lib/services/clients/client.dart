@@ -440,6 +440,12 @@ enum ClientRecordKind {
   /// name, currency and balance as last told (office_cash.dart).
   bank('banka'),
 
+  /// A line of an enforcement file's own account in Folio: a payment the
+  /// debtor made outside the office (haricen), or a claim waived; until
+  /// UYAP shows it, the debt Folio counts is less by it
+  /// (lib/services/enforcement/enforcement_ledger.dart).
+  enforcement('icra'),
+
   /// A message written to the client (WhatsApp, SMS, e-mail) as the
   /// lawyer sent it: kept on their timeline.
   message('mesaj'),

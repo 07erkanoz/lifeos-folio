@@ -2181,6 +2181,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       database: () => _db,
       lawyer: widget.lawyer,
       wide: wide,
+      onOpen: widget.onOpen,
     ),
     _Tab.documents => _documentsTab(context, wide, entries: entries),
     _Tab.hearings => _hearingsTab(context),

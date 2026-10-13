@@ -1180,6 +1180,36 @@ class _ClientCardState extends State<ClientCard> {
     widget.onChanged?.call(card.id);
   }
 
+  /// Money held for the client taken as a fee, up to what is held for
+  /// its case in its currency.
+  Future<void> _apply(ClientRecord held, MovementKind kind) async {
+    final card = _card();
+    final account =
+        caseAccounts([
+              for (final r in _records())
+                if (r.kind.money) r,
+            ])[held.text('dosya')]?.all
+            .where((a) => a.currency == held.currency)
+            .firstOrNull;
+    final most = account?.advanceLeft ?? held.amount;
+    if (most <= 0) {
+      showNotice(context, 'Bu dosyada emanette para kalmamış.');
+      return;
+    }
+    final made = await askApplyHeld(
+      context,
+      held,
+      kind,
+      lawyer: widget.lawyer,
+      person: widget.person,
+      most: most,
+    );
+    if (made == null) return;
+    _keep(made);
+    if (mounted) setState(() {});
+    widget.onChanged?.call(card.id);
+  }
+
   Future<void> _fee(String caseKey, ClientRecord? kept) async {
     final card = _card();
     final saved = await showDialog<ClientRecord>(
@@ -1763,6 +1793,7 @@ class _ClientCardState extends State<ClientCard> {
       onMovement: _movement,
       onFee: _fee,
       onReverse: _reverse,
+      onApply: _apply,
       onOpen: (m) => _preview(m, 'Belge'),
       onStatement: _statement,
       titleOf: _caseTitle,
@@ -2410,7 +2441,7 @@ class _ClientCardState extends State<ClientCard> {
           child: tile(
             'ALACAK',
             owed.text,
-            'Avans ${sum((a) => a.advanceLeftAll).text} · '
+            'Emanet ${sum((a) => a.advanceLeftAll).text} · '
                 'Masraf ${sum((a) => a.lawyerOwedAll).text}',
           ),
         ),
@@ -2650,7 +2681,7 @@ class _ClientCardState extends State<ClientCard> {
           ),
         if (widget.seesMoney && a != null && a.fee != null)
           _pair(
-            'Avans',
+            'Emanet',
             a.advanceLeftAll.plain,
             color: a.advanceLeftAll.anyPositive
                 ? tone(const Color(0xFF1B6B3A))

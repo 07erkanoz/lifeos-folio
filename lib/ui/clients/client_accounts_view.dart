@@ -54,7 +54,12 @@ class ClientAccountsView extends StatelessWidget {
     this.onStatement,
     this.titleOf,
     this.onPaper,
+    this.onApply,
   });
+
+  /// Money held ([held]) taken as a fee: [kind] is the lawyer's own or the
+  /// one the court gave against the other side.
+  final void Function(ClientRecord held, MovementKind kind)? onApply;
 
   /// A paper made for a case and opened in the editor: 'sozlesme' (the
   /// fee agreement), 'ibra' (its release); for a movement, 'tahsilat'.
@@ -150,7 +155,7 @@ class ClientAccountsView extends StatelessWidget {
           children: [
             if (!secondary)
               _amount('Ücret kalan', a.feeOwed, a.currency, owed: true),
-            _amount('Avans', a.advanceLeft, a.currency),
+            _amount('Emanet', a.advanceLeft, a.currency),
             if (a.lawyerOwed != 0)
               _amount('Avukat masrafı', a.lawyerOwed, a.currency, owed: true),
             if (late > 0)
@@ -314,15 +319,33 @@ class ClientAccountsView extends StatelessWidget {
           ),
           if (!gone)
             PopupMenuButton<String>(
-              onSelected: (v) => v == 'tahsilat'
-                  ? onPaper?.call('tahsilat', m.text('dosya'), m)
-                  : onReverse(m),
+              onSelected: (v) => switch (v) {
+                'tahsilat' => onPaper?.call('tahsilat', m.text('dosya'), m),
+                'ucret' => onApply?.call(m, MovementKind.toFee),
+                'karsi' => onApply?.call(m, MovementKind.toCounterFee),
+                _ => onReverse(m),
+              },
               itemBuilder: (_) => [
-                if (onPaper != null && (kind?.sign ?? 0) > 0)
+                if (onPaper != null &&
+                    (kind?.sign ?? 0) > 0 &&
+                    !kind!.isApplied)
                   const PopupMenuItem(
                     value: 'tahsilat',
                     child: Text('Tahsilat belgesi'),
                   ),
+                if (onApply != null &&
+                    m.reverses.isEmpty &&
+                    (kind == MovementKind.collected ||
+                        kind == MovementKind.advanceIn)) ...[
+                  const PopupMenuItem(
+                    value: 'ucret',
+                    child: Text('Vekâlet ücretine mahsup et'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'karsi',
+                    child: Text('Karşı vekâlet ücretine mahsup et'),
+                  ),
+                ],
                 const PopupMenuItem(
                   value: 'ters',
                   child: Text('Ters kayıtla düzelt'),
@@ -460,7 +483,8 @@ class _MovementDialogState extends State<MovementDialog> {
               decoration: const InputDecoration(labelText: 'Ne'),
               items: [
                 for (final k in MovementKind.values)
-                  DropdownMenuItem(value: k, child: Text(k.label)),
+                  if (!k.isApplied)
+                    DropdownMenuItem(value: k, child: Text(k.label)),
               ],
               onChanged: (v) => setState(() => _kind = v ?? _kind),
             ),
@@ -768,5 +792,124 @@ class _FeeDialogState extends State<FeeDialog> {
         child: const Text('Kaydet'),
       ),
     ],
+  );
+}
+
+/// Money held for a client ([held]: a payment a debtor made, an advance)
+/// taken as the lawyer's fee or as the fee the court gave against the
+/// other side ([kind]): its sum asked, up to [most], and the movement made;
+/// null when backed out.
+Future<ClientRecord?> askApplyHeld(
+  BuildContext context,
+  ClientRecord held,
+  MovementKind kind, {
+  required String lawyer,
+  String person = '',
+  int? most,
+}) async {
+  final limit = most ?? held.amount;
+  final amount = TextEditingController(
+    text: plainMoney(limit, Currency.tl).replaceAll(' ', ''),
+  );
+  String? error;
+  final sum = await showDialog<int>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text(
+          kind == MovementKind.toFee
+              ? 'Vekâlet ücretine mahsup'
+              : 'Karşı vekâlet ücretine mahsup',
+        ),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Müvekkil adına tutulan paradan ücrete sayılan tutar emanetten '
+                'düşer, Kasa\'ya gelir olarak yazılır. Emanette en çok '
+                '${money(limit, held.currency)} var.',
+                style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                key: const ValueKey('apply-amount'),
+                controller: amount,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Tutar',
+                  suffixText: held.currency.sign,
+                  errorText: error,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('apply-save'),
+            onPressed: () {
+              final v = kurusOf(amount.text);
+              if (v == null || v <= 0) {
+                setState(() => error = 'Tutarı yazın.');
+              } else if (v > limit) {
+                setState(
+                  () => error =
+                      'Emanetteki tutardan (${money(limit, held.currency)}) '
+                      'fazla olamaz.',
+                );
+              } else {
+                Navigator.pop(context, v);
+              }
+            },
+            child: const Text('Mahsup et'),
+          ),
+        ],
+      ),
+    ),
+  );
+  amount.dispose();
+  if (sum == null) return null;
+  return appliedMovement(held, kind, sum, lawyer: lawyer, person: person);
+}
+
+/// The movement taking [sum] of [held] as a fee ([kind]).
+ClientRecord appliedMovement(
+  ClientRecord held,
+  MovementKind kind,
+  int sum, {
+  required String lawyer,
+  String person = '',
+  DateTime? at,
+}) {
+  final now = DateTime.now();
+  return ClientRecord(
+    id: Client.newId(),
+    clientId: held.clientId,
+    kind: ClientRecordKind.movement,
+    data: {
+      'dosya': held.text('dosya'),
+      'hesap': kind.code,
+      'tutar': sum,
+      'zaman': (at ?? now).toIso8601String(),
+      'para': ?held.data['para'],
+      'aciklama': held.movement?.label ?? '',
+      'odeme': 'Mahsup',
+      'kaynak': 'mahsup:${held.id}',
+    },
+    created: now,
+    by: lawyer,
+    updated: now,
+    locked: true,
+    person: person,
   );
 }
