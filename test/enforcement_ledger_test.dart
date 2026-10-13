@@ -336,14 +336,24 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // Looked for in the requests' window, by what it is for.
+    await tester.tap(find.byKey(const ValueKey('enforcement-requests')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('request-search')),
+      'maaş',
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('request-Taşınmaz haczi')), findsNothing);
     final chip = find.byKey(const ValueKey('request-Maaş haczi'));
-    await tester.ensureVisible(chip);
-    await tester.runAsync(() async {
-      await tester.tap(chip);
-      for (var i = 0; i < 50 && opened.isEmpty; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-    });
+    await tester.tap(chip);
+    // The window closes, then the request is written to disk.
+    for (var i = 0; i < 100 && opened.isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
     expect(opened, hasLength(1));
     final file = opened.single;
     expect(file.path, endsWith('Maaş haczi.udf'));

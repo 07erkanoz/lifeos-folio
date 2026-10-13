@@ -50,6 +50,17 @@ Future<void> _shot(WidgetTester tester, GlobalKey key, String name) async {
   });
 }
 
+Future<void> _shotScreen(WidgetTester tester, String name) async {
+  if (_out.isEmpty) return;
+  await tester.runAsync(() async {
+    final layer = tester.binding.renderViews.first.debugLayer! as OffsetLayer;
+    final image = await layer.toImage(Offset.zero & tester.view.physicalSize);
+    final bytes = await image.toByteData(format: ImageByteFormat.png);
+    await File('$_out/$name.png').writeAsBytes(bytes!.buffer.asUint8List());
+    image.dispose();
+  });
+}
+
 void main() {
   for (final (name, size, dark) in [
     ('wide', const Size(1400, 1250), false),
@@ -170,6 +181,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       await _shot(tester, key, 'enforcement-$name');
+      if (name != 'wide') return;
+      // The requests' window, over the page.
+      await tester.tap(find.byKey(const ValueKey('enforcement-requests')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('request-Maaş haczi')), findsOneWidget);
+      await _shotScreen(tester, 'enforcement-requests');
     });
   }
 

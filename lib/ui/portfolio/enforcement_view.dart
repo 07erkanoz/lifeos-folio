@@ -8,7 +8,7 @@ import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
 import '../../services/editor/lawyer_profile.dart';
 import '../../services/editor/petition_templates.dart'
-    show PetitionCase, PetitionTemplate, enforcementRequests;
+    show PetitionCase, PetitionTemplate, enforcementRequests, trUpper;
 import '../../services/enforcement/enforcement_ledger.dart';
 import '../../services/enforcement/enforcement_papers.dart';
 import '../../services/udf/udf_writer.dart';
@@ -24,6 +24,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../tools/interest_page.dart';
 import '../widgets/notice.dart';
 import '../clients/client_accounts_view.dart' show appliedMovement;
+import '../widgets/folio_dialog.dart';
 import 'enforcement_ledger_dialog.dart';
 import 'portfolio_rows.dart';
 import '../theme/folio_palette.dart';
@@ -57,6 +58,19 @@ DateTime? uyapDay(String raw) {
   return parseDay(raw);
 }
 
+/// UYAP's balance of an enforcement file, in lira: the account page's, else
+/// the particulars' total less what was collected; null when neither says.
+double? uyapLeftOf(UyapCaseRecord record) {
+  final account = record.enforcement?.account ?? const UyapAccount();
+  final facts = {for (final (k, v) in record.details.enforcement) k: v};
+  final total = account.total ?? parseLira(facts['Alacak toplamı'] ?? '');
+  final paid =
+      account.paid ??
+      record.money?.collected ??
+      parseLira(facts['Yapılmış tahsilat'] ?? '');
+  return account.left ?? (total != null && paid != null ? total - paid : null);
+}
+
 /// An enforcement file (icra) as the lawyer follows it: where the debt
 /// stands, its items, the money collected and paid out, its debtors and
 /// its course, from what UYAP gave (docs: banaozel uyapweb.md §10).
@@ -70,7 +84,11 @@ class EnforcementView extends StatefulWidget {
     this.lawyer = '',
     this.wide = true,
     this.onOpen,
+    this.onLedger,
   });
+
+  /// The file's own account read anew: for the page's heading.
+  final ValueChanged<List<LedgerEntry>>? onLedger;
 
   final UyapCaseRecord? record;
   final String caseKey, title, lawyer;
@@ -137,6 +155,7 @@ class _EnforcementViewState extends State<EnforcementView> {
         _booked = booked;
         _ledger = ledger;
       });
+      widget.onLedger?.call(ledger);
     }
   }
 
@@ -180,16 +199,7 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// it; null when neither does.
   int? get _uyapLeft {
     final record = widget.record;
-    if (record == null) return null;
-    final account = record.enforcement?.account ?? const UyapAccount();
-    final facts = {for (final (k, v) in record.details.enforcement) k: v};
-    final total = account.total ?? parseLira(facts['Alacak toplamı'] ?? '');
-    final paid =
-        account.paid ??
-        record.money?.collected ??
-        parseLira(facts['Yapılmış tahsilat'] ?? '');
-    final left =
-        account.left ?? (total != null && paid != null ? total - paid : null);
+    final left = record == null ? null : uyapLeftOf(record);
     return left == null ? null : (left * 100).round();
   }
 
@@ -494,15 +504,97 @@ class _EnforcementViewState extends State<EnforcementView> {
     ),
   ];
 
-  /// The ready requests, by what they are for: a tap writes one, filled
-  /// from the file, and opens it in the editor.
-  Widget _requests(bool wide) {
+  /// When each ready request is the one to make, in a few words.
+  static const _requestHints = {
+    'Takibin kesinleştirilmesi':
+        'Ödeme emri tebliğ edildi, süresinde itiraz yok.',
+    'Adres araştırması ve MERNİS adresine tebligat':
+        'Tebligat bila tebliğ döndü.',
+    'Tebligatın TK m.35’e göre yapılması':
+        'Borçlu adresini değiştirip bildirmedi.',
+    'Maaş haczi': 'Borçlu bir işyerinde çalışıyor (SGK).',
+    'Araç haczi ve yakalama şerhi': 'Borçlu adına kayıtlı araç var.',
+    'Taşınmaz haczi': 'Borçlu adına kayıtlı taşınmaz var.',
+    'Adreste menkul haczi': 'Borçlunun adresinde haczedilecek mal var.',
+    'Bankalara haciz ihbarnamesi (89/1)': 'Borçlunun bütün banka hesaplarına.',
+    'Üçüncü kişiye haciz ihbarnamesi (89/1)':
+        'Borçlunun bir kişide ya da şirkette alacağı var.',
+    'İkinci haciz ihbarnamesi (89/2)':
+        'Birinci ihbarnameye yedi günde cevap gelmedi.',
+    'Üçüncü haciz ihbarnamesi (89/3)': 'İkinci ihbarnameden sonra.',
+    'Muhafaza': 'Haczedilen mal yediemine teslim edilsin.',
+    'Kıymet takdiri': 'Haczedilen malın değeri belirlensin.',
+    'Satış talebi': 'Kıymet takdiri kesinleşti.',
+    'Dosya hesabı': 'Güncel borç dökümü istenir.',
+    'Paranın ödenmesi (reddiyat)': 'Dosyada tahsil edilen para var.',
+    'Takibin yenilenmesi': 'Dosya bir yıldır işlemsiz.',
+    'Aciz vesikası': 'Haczi kabil mal bulunamadı.',
+  };
+
+  /// The requests the file's state calls for, each with why, at most
+  /// three: money waiting in the file, a debtor not reached, a file left
+  /// idle; else the ones made most.
+  List<(PetitionTemplate, String)> _suggested() {
+    final record = widget.record;
+    final byName = {for (final t in enforcementRequests) t.name: t};
+    final out = <(PetitionTemplate, String)>[];
+    void add(String name, String why) {
+      final t = byName[name];
+      if (t != null && !out.any((x) => x.$1 == t)) out.add((t, why));
+    }
+
+    if (record != null) {
+      final m = record.money;
+      final waiting =
+          m?.remaining ??
+          (m?.collected != null && m?.paidOut != null
+              ? m!.collected! - m.paidOut!
+              : null);
+      if (waiting != null && waiting >= 1) {
+        add(
+          'Paranın ödenmesi (reddiyat)',
+          'Dosyada ${_tl(waiting)} TL bekliyor.',
+        );
+      }
+      final unreached =
+          (record.enforcement?.debtors ?? const <UyapDebtor>[]).any(
+            (d) => d.moved,
+          ) ||
+          record.documents.any((d) {
+            final f = UyapWebService.fold('${d.type} ${d.title}');
+            return f.contains('bila') || f.contains('teblig edilemedi');
+          });
+      if (unreached) {
+        add(
+          'Adres araştırması ve MERNİS adresine tebligat',
+          'Borçluya ulaşılamamış ya da adresi değişmiş.',
+        );
+      }
+      final last = [for (final d in record.documents) ?d.date]
+          .fold<DateTime?>(null, (a, b) => a == null || b.isAfter(a) ? b : a);
+      if (last != null && DateTime.now().difference(last).inDays > 330) {
+        add('Takibin yenilenmesi', 'Son işlem bir yıla yakın önce.');
+      }
+    }
+    for (final name in const [
+      'Bankalara haciz ihbarnamesi (89/1)',
+      'Maaş haczi',
+      'Araç haczi ve yakalama şerhi',
+    ]) {
+      if (out.length >= 3) break;
+      add(name, 'Sık kullanılan talep.');
+    }
+    return out.take(3).toList();
+  }
+
+  /// The ready requests in a window of their own: looked for by name or
+  /// by what they are for, by group, each with when it is the one.
+  Future<void> _pickRequest() async {
     final byName = {for (final t in enforcementRequests) t.name: t};
     final grouped = {for (final (_, _, names) in _requestGroups) ...names};
     final groups = [
       for (final (title, icon, names) in _requestGroups)
         (title, icon, [for (final n in names) ?byName[n]]),
-      // One added later and not yet placed: still offered.
       (
         'Diğer',
         Icons.description_outlined,
@@ -512,116 +604,113 @@ class _EnforcementViewState extends State<EnforcementView> {
         ],
       ),
     ].where((g) => g.$3.isNotEmpty).toList();
-    Widget item(PetitionTemplate t) => InkWell(
-      key: ValueKey('request-${t.name}'),
-      borderRadius: BorderRadius.circular(6),
-      onTap: () => _request(t),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        child: Row(
-          children: [
-            Icon(
-              Icons.add_circle_outline_rounded,
-              size: 15,
-              color: Theme.of(context).colorScheme.primary,
+    // The words typed: no controller to outlive the window's closing.
+    var typed = '';
+    final picked = await showDialog<PetitionTemplate>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          final q = UyapWebService.fold(typed.trim());
+          bool fits(PetitionTemplate t) =>
+              q.isEmpty ||
+              UyapWebService.fold('${t.name} ${_requestHints[t.name] ?? ''}')
+                  .contains(q);
+          final shown = [
+            for (final (title, icon, list) in groups)
+              if (list.where(fits).isNotEmpty)
+                (title, icon, list.where(fits).toList()),
+          ];
+          return FolioDialog(
+            title: 'Talep hazırla',
+            subtitle: widget.title,
+            icon: Icons.post_add_rounded,
+            width: 560,
+            onClose: () => Navigator.pop(context),
+            footerNote: Text(
+              'Daire, esas no, alacaklı, vekil ve borçlular dosyadan dolar; '
+              'köşeli parantezli yerleri editörde doldurup e-imzayla '
+              'UYAP’a gönderebilirsiniz.',
+              style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(t.name, style: const TextStyle(fontSize: 12.8)),
-            ),
-          ],
-        ),
-      ),
-    );
-    Widget heading(String title, IconData icon) => Padding(
-      padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 15, color: AgendaColors.muted),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AgendaColors.muted,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    final note = Text(
-      'Daire, esas no, alacaklı, vekil ve borçlular dosyadan dolar. Köşeli '
-      'parantezli yerleri editörde doldurup e-imzayla UYAP’a '
-      'gönderebilirsiniz.',
-      style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
-    );
-    if (!wide) {
-      return _box('HAZIR TALEPLER', [
-        for (final (title, icon, list) in groups)
-          Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              key: ValueKey('request-group-$title'),
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(bottom: 4),
-              dense: true,
-              visualDensity: VisualDensity.compact,
-              leading: Icon(icon, size: 18, color: AgendaColors.muted),
-              title: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              trailing: Text(
-                '${list.length}',
-                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
-              ),
-              children: [for (final t in list) item(t)],
-            ),
-          ),
-        const SizedBox(height: 4),
-        note,
-      ]);
-    }
-    return _box(
-      'HAZIR TALEPLER',
-      right: 'tıklayınca dosyanın bilgileriyle editörde açılır',
-      [
-        LayoutBuilder(
-          builder: (context, box) {
-            final across = box.maxWidth >= 1100 ? groups.length.clamp(1, 5) : 3;
-            const gap = 14.0;
-            final w = (box.maxWidth - gap * (across - 1)) / across;
-            return Wrap(
-              spacing: gap,
-              runSpacing: 10,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final (title, icon, list) in groups)
-                  SizedBox(
-                    width: w,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                TextField(
+                  key: const ValueKey('request-search'),
+                  autofocus: true,
+                  onChanged: (v) => setState(() => typed = v),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    prefixIcon: Icon(Icons.search_rounded, size: 20),
+                    hintText: 'Talep ara: maaş, banka, tebligat…',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (shown.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'Bu sözcükle bir talep yok.',
+                      style: TextStyle(color: AgendaColors.muted),
+                    ),
+                  ),
+                for (final (title, icon, list) in shown) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 10, 4, 2),
+                    child: Row(
                       children: [
-                        heading(title, icon),
-                        for (final t in list) item(t),
+                        Icon(icon, size: 15, color: AgendaColors.muted),
+                        const SizedBox(width: 6),
+                        Text(
+                          trUpper(title),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .5,
+                            color: AgendaColors.muted,
+                          ),
+                        ),
                       ],
                     ),
                   ),
+                  for (final t in list)
+                    ListTile(
+                      key: ValueKey('request-${t.name}'),
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      leading: Icon(
+                        Icons.description_outlined,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      title: Text(
+                        t.name,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: _requestHints[t.name] == null
+                          ? null
+                          : Text(_requestHints[t.name]!),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                      ),
+                      onTap: () => Navigator.pop(context, t),
+                    ),
+                ],
               ],
-            );
-          },
-        ),
-        const SizedBox(height: 6),
-        note,
-      ],
+            ),
+          );
+        },
+      ),
     );
+    if (picked != null) await _request(picked);
   }
 
   /// [e] marked as UYAP shows it, or not yet.
@@ -881,7 +970,6 @@ class _EnforcementViewState extends State<EnforcementView> {
     final money = _money(record.money);
     final debtors = _debtors(e?.debtors ?? const []);
     final course = _course(record);
-    final requests = _requests(widget.wide);
     const gap = SizedBox(height: 12, width: 12);
     if (!widget.wide) {
       return Padding(
@@ -893,7 +981,6 @@ class _EnforcementViewState extends State<EnforcementView> {
               summary,
               ?ledger,
               money,
-              requests,
               details,
               debtors,
               course,
@@ -934,8 +1021,6 @@ class _EnforcementViewState extends State<EnforcementView> {
               ),
             ],
           ),
-          gap,
-          requests,
         ],
       ),
     );
@@ -1124,8 +1209,41 @@ class _EnforcementViewState extends State<EnforcementView> {
           icon: const Icon(Icons.percent_rounded, size: 18),
           label: const Text('Güncel borcu hesapla'),
         ),
+        OutlinedButton.icon(
+          key: const ValueKey('enforcement-requests'),
+          onPressed: _pickRequest,
+          icon: const Icon(Icons.post_add_rounded, size: 18),
+          label: const Text('Talep hazırla'),
+        ),
       ],
     );
+    final suggested = _suggested();
+    final suggestions = suggested.isEmpty
+        ? null
+        : Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('Önerilen talepler', style: muted),
+              const SizedBox(width: 2),
+              for (final (t, why) in suggested)
+                Tooltip(
+                  message: why,
+                  child: ActionChip(
+                    key: ValueKey('request-suggest-${t.name}'),
+                    visualDensity: VisualDensity.compact,
+                    avatar: Icon(
+                      Icons.auto_awesome_outlined,
+                      size: 15,
+                      color: scheme.primary,
+                    ),
+                    label: Text(t.name, style: const TextStyle(fontSize: 12.5)),
+                    onPressed: () => _request(t),
+                  ),
+                ),
+            ],
+          );
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
       decoration: BoxDecoration(
@@ -1160,6 +1278,10 @@ class _EnforcementViewState extends State<EnforcementView> {
               bar,
               const SizedBox(height: 14),
               actions,
+              if (suggestions != null) ...[
+                const SizedBox(height: 10),
+                suggestions,
+              ],
             ],
           );
         },

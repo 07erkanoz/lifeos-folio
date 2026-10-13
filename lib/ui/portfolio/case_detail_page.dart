@@ -32,6 +32,7 @@ import '../office/task_give_dialog.dart';
 import '../office/tasks_page.dart' show TaskDetail, dueOf;
 import '../widgets/file_preview.dart';
 import '../widgets/share_as.dart';
+import '../../services/enforcement/enforcement_ledger.dart';
 import 'enforcement_view.dart';
 import 'portfolio_rows.dart';
 import '../theme/folio_palette.dart';
@@ -148,6 +149,10 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   /// The office's people this person shares the case with.
   List<String> _sharedWith = const [];
+
+  /// An enforcement file's own account in Folio: what was paid outside
+  /// the office and waived, for the debt Folio counts.
+  List<LedgerEntry> _ledger = const [];
   final _picked = <String>{};
   final _search = TextEditingController();
 
@@ -244,6 +249,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _source = SharedCases.sourceOf(db, kase.key);
       _sharedBy = _sharedByOf(db, kase.key);
       _sharedWith = SharedCases.sharedWith(db, kase.key);
+      _ledger = ledgerOf(db, kase.key);
       _state = state;
       _hearings = db.hearings(caseKey: kase.key)
         ..sort((a, b) => b.at.compareTo(a.at));
@@ -904,6 +910,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
     final hearingDays = hearing == null ? null : daysTo(hearing.at);
     final deadlineDays = deadline == null ? null : daysTo(deadline.at!);
+    // An enforcement file has no hearing: its debt stands where one would.
+    final debt = _debt();
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Wrap(
@@ -911,22 +919,37 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         spacing: 10,
         runSpacing: 8,
         children: [
-          tile(
-            'hearing',
-            Icons.event_rounded,
-            hearing == null
-                ? AgendaColors.muted
-                : hearing.isEHearing
-                ? AgendaColors.eHearing
-                : AgendaColors.hearing,
-            hearing?.isEHearing == true ? 'E-DURUŞMA' : 'DURUŞMA',
-            hearing == null
-                ? 'Yok'
-                : '${dayText(hearing.at)} ${clockText(hearing.at)}',
-            hearingDays == null ? '' : left(hearingDays),
-            opens: _Tab.hearings,
-            strong: hearingDays != null && hearingDays <= 7,
-          ),
+          if (debt != null)
+            tile(
+              'debt',
+              Icons.account_balance_wallet_outlined,
+              AgendaColors.deadlineText,
+              debt.pending ? 'KALAN BORÇ · FOLIO' : 'KALAN BORÇ',
+              debt.left == null ? '—' : formatTl(debt.left!),
+              debt.pending
+                  ? "UYAP'ta ${debt.uyap == null ? '—' : formatTl(debt.uyap!)}"
+                  : debt.share == null
+                  ? 'UYAP bakiyesi'
+                  : '%${(debt.share! * 100).round()} tahsil edildi',
+              opens: _Tab.enforcement,
+            )
+          else
+            tile(
+              'hearing',
+              Icons.event_rounded,
+              hearing == null
+                  ? AgendaColors.muted
+                  : hearing.isEHearing
+                  ? AgendaColors.eHearing
+                  : AgendaColors.hearing,
+              hearing?.isEHearing == true ? 'E-DURUŞMA' : 'DURUŞMA',
+              hearing == null
+                  ? 'Yok'
+                  : '${dayText(hearing.at)} ${clockText(hearing.at)}',
+              hearingDays == null ? '' : left(hearingDays),
+              opens: _Tab.hearings,
+              strong: hearingDays != null && hearingDays <= 7,
+            ),
           tile(
             'deadline',
             Icons.timer_outlined,
@@ -1858,10 +1881,12 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           (w) => w.isNotEmpty && RegExp(r'[A-Za-zÇĞİÖŞÜçğıöşü]').hasMatch(w[0]),
         )
         .toList();
-    final letters = [
-      if (words.isNotEmpty) words.first[0],
-      if (words.length > 1) words[1][0],
-    ].join().toUpperCase();
+    final letters = trUpper(
+      [
+        if (words.isNotEmpty) words.first[0],
+        if (words.length > 1) words[1][0],
+      ].join(),
+    );
     return Container(
       width: 24,
       height: 24,
@@ -2232,6 +2257,26 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   UyapCaseRecord? _sortedFor;
   List<UyapCaseDocument> _sorted = const [];
 
+  /// An enforcement file's debt as the heading shows it: what is left as
+  /// Folio counts it, UYAP's balance, and how much is collected; null for
+  /// a case of another kind, or one not read from UYAP yet.
+  ({double? left, double? uyap, bool pending, double? share})? _debt() {
+    final kase = _kase;
+    final record = _c.record;
+    if (kase == null || record == null || CaseKind.of(kase) != CaseKind.icra) {
+      return null;
+    }
+    final uyap = uyapLeftOf(record);
+    final pending = _ledger.any((e) => !e.isOfficial);
+    final account = record.enforcement?.account;
+    return (
+      left: folioLeft(uyap, _ledger),
+      uyap: uyap,
+      pending: pending,
+      share: account?.share,
+    );
+  }
+
   Widget _summaries(BuildContext context, bool wide) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -2332,26 +2377,38 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
             ? '—'
             : '${dayText(newest!.date!)}${_fresh.contains(newest.key) ? ' · yeni' : ''}',
       ),
-      box(
-        'DURUŞMA',
-        hearing == null
-            ? 'Yaklaşan duruşma yok'
-            : hearingDays == 0
-            ? 'Bugün ${clockText(hearing.at)}'
-            : '$hearingDays gün · ${dayText(hearing.at)}',
-        hearing == null
-            ? 'Ajanda UYAP’tan güncellenir'
-            : [
-                hearing.isEHearing ? 'E-duruşma' : 'Duruşma',
-                if ((hearing.kind?.value ?? '').trim().isNotEmpty)
-                  hearing.kind!.value.trim(),
-                clockText(hearing.at),
-              ].join(' · '),
-        valueColor: hearingDays != null && hearingDays <= 1
-            ? AgendaColors.deadline
-            : null,
-        warn: hearingDays != null && hearingDays <= 7,
-      ),
+      if (_debt() case final debt?)
+        box(
+          debt.pending ? 'KALAN BORÇ · FOLIO' : 'KALAN BORÇ',
+          debt.left == null ? '—' : formatTl(debt.left!),
+          debt.pending
+              ? "UYAP'ta ${debt.uyap == null ? '—' : formatTl(debt.uyap!)}"
+              : debt.share == null
+              ? 'UYAP bakiyesi'
+              : '%${(debt.share! * 100).round()} tahsil edildi',
+          valueColor: AgendaColors.deadlineText,
+        )
+      else
+        box(
+          'DURUŞMA',
+          hearing == null
+              ? 'Yaklaşan duruşma yok'
+              : hearingDays == 0
+              ? 'Bugün ${clockText(hearing.at)}'
+              : '$hearingDays gün · ${dayText(hearing.at)}',
+          hearing == null
+              ? 'Ajanda UYAP’tan güncellenir'
+              : [
+                  hearing.isEHearing ? 'E-duruşma' : 'Duruşma',
+                  if ((hearing.kind?.value ?? '').trim().isNotEmpty)
+                    hearing.kind!.value.trim(),
+                  clockText(hearing.at),
+                ].join(' · '),
+          valueColor: hearingDays != null && hearingDays <= 1
+              ? AgendaColors.deadline
+              : null,
+          warn: hearingDays != null && hearingDays <= 7,
+        ),
       box(
         'SÜRE',
         deadline == null
@@ -2436,6 +2493,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       lawyer: widget.lawyer,
       wide: wide,
       onOpen: widget.onOpen,
+      onLedger: (ledger) {
+        if (mounted) setState(() => _ledger = ledger);
+      },
     ),
     _Tab.documents => _documentsTab(context, wide, entries: entries),
     _Tab.hearings => _hearingsTab(context),
