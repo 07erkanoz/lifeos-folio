@@ -16,6 +16,7 @@ import 'services/desktop/native_window.dart';
 import 'services/editor/document_history.dart';
 import 'services/editor/editor_drafts.dart';
 import 'services/editor/suggestions/phrase_memory.dart';
+import 'services/preview/pdf_fonts.dart';
 import 'services/library/recent_documents.dart';
 import 'services/platform/document_launch.dart';
 import 'ui/theme/app_theme.dart';
@@ -74,6 +75,8 @@ Future<void> runEditorApp(List<String> arguments) async {
   runApp(EditorApp(path: path, desktopChrome: chrome));
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(PhraseMemory.shared().then((_) {}, onError: (_) {}));
+    // A PDF opened here draws its Turkish letters the first time too.
+    unawaited(preloadPdfFonts());
     Timer(const Duration(milliseconds: 1500), PortalSync.begin);
   });
   if (options != null) {

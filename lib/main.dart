@@ -31,6 +31,7 @@ import 'ui/widgets/onboarding_gate.dart';
 import 'ui/widgets/folio_about_dialog.dart';
 import 'services/editor/editor_settings.dart';
 import 'services/fonts/system_font_catalog.dart';
+import 'services/preview/pdf_fonts.dart';
 import 'services/editor/suggestions/phrase_memory.dart';
 import 'services/legal/legal_settings.dart';
 import 'ui/widgets/overlay_card.dart';
@@ -133,6 +134,10 @@ void main(List<String> arguments) async {
     ),
   );
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    // The fonts unembedded papers name, ready before the first is opened.
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      unawaited(preloadPdfFonts());
+    }
     if (Platform.environment['FOLIO_STARTUP_TRACE'] == '1') {
       stderr.writeln(
         'Folio first Flutter frame: ${startup.elapsedMilliseconds} ms',

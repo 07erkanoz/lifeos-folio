@@ -2160,7 +2160,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   // own heading; on a phone the menu button stays.
                                   // Dava Dosyalarım, a case's page and the
                                   // office's network bring their own bar on a
-                                  // phone.
+                                  // phone. On a computer too, Dava Dosyalarım
+                                  // and a case's page have their own heading:
+                                  // the library's bar is not theirs.
                                   if (_showLibrary &&
                                       !mobileHome &&
                                       (mobile
@@ -2172,7 +2174,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                 _group != 'muvekkiller' &&
                                                 _group != 'mesajlar' &&
                                                 !_isUyapGroup(_group)
-                                          : !_isFullPage(_group)))
+                                          : !_isFullPage(_group) &&
+                                                !_isUyapGroup(_group)))
                                     FoldingChrome(
                                       // On a phone the heading folds away while
                                       // a page's list is scrolled.

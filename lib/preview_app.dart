@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'models/evrak_file.dart';
 import 'services/platform/editor_window.dart';
+import 'services/preview/pdf_fonts.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
 import 'ui/widgets/desktop_frame.dart';
@@ -41,6 +42,8 @@ Future<void> runPreviewApp(List<String> arguments) async {
     }
   }
   runApp(PreviewApp(path: path, desktopChrome: chrome));
+  // The fonts unembedded papers name, before the document is drawn.
+  unawaited(preloadPdfFonts());
   if (options != null) {
     await windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.show();
