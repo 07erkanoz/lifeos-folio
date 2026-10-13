@@ -256,9 +256,14 @@ class OfficeNetwork extends ChangeNotifier {
         unawaited(packages.save());
       } else {
         unawaited(
-          packages
-              .came(taskId, caseKey, t.saved)
-              .then((_) => notifyListeners()),
+          packages.came(taskId, caseKey, t.saved).then((_) async {
+            // Kept as a case of this device's too: its page opens here.
+            final task = tasks.all.where((x) => x.id == taskId).firstOrNull;
+            await packages
+                .received(taskId, caseKey)
+                ?.adopt(task: task?.title ?? '', from: task?.byName ?? '');
+            notifyListeners();
+          }),
         );
       }
     }

@@ -392,6 +392,45 @@ class UyapCaseStore {
     return AdoptResult.kept;
   }
 
+  /// A case that came with a task: kept like one fetched here, newer than
+  /// this device's or not, and its documents that came with it named as
+  /// this case's ([files], document key → where it was saved), where this
+  /// device has none of its own for them. True when it was kept.
+  Future<bool> adoptReceived(
+    Map<String, Object?> json,
+    Map<String, String> files,
+  ) async {
+    final result = await adoptChecked({
+      ...json,
+      'dosyalar': const <String, String>{},
+      'onizlemeler': const <String, String>{},
+    });
+    if (result == AdoptResult.failed) return false;
+    final key = UyapCaseRecord.fromJson(json).key;
+    final kept = await recordJson(key);
+    if (kept == null) return false;
+    final own = <String, String>{
+      for (final e in ((kept['dosyalar'] as Map?) ?? const {}).entries)
+        '${e.key}': '${e.value}',
+    };
+    var added = false;
+    for (final e in files.entries) {
+      final mine = own[e.key];
+      if (mine != null && File(mine).existsSync()) continue;
+      if (!File(e.value).existsSync()) continue;
+      own[e.key] = e.value;
+      added = true;
+    }
+    if (added) {
+      try {
+        await _write(UyapCaseRecord.fromJson({...kept, 'dosyalar': own}));
+      } catch (_) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// The kept case of [key] as another own device is given it: without
   /// where this device keeps its documents, which name nothing there.
   Future<Map<String, Object?>?> recordToShare(String key) async {

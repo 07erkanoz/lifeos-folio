@@ -6,6 +6,7 @@ import '../../services/office/office_network.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/uyap/uyap_case_store.dart';
+import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_channel.dart';
 import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
@@ -1873,20 +1874,40 @@ class _PortfolioPageState extends State<PortfolioPage> {
                         fontSize: 13,
                       ),
                     ),
-                    Text(
-                      [
-                        '${t.byName} verdi',
-                        t.title,
-                        if (got != null) '${got.documents.length} evrak',
-                        if (got == null) 'evrak geliyor',
-                        if (c.items.isNotEmpty) '${c.items.length} iş',
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AgendaColors.muted,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            [
+                              '${t.byName} verdi',
+                              t.title,
+                              if (got != null) '${got.documents.length} evrak',
+                              if (got == null) 'evrak geliyor',
+                              if (c.items.isNotEmpty) '${c.items.length} iş',
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: AgendaColors.muted,
+                            ),
+                          ),
+                        ),
+                        // Kept here when it came: its page, as any case's.
+                        if (got != null)
+                          TextButton(
+                            key: ValueKey(
+                              'portfolio-tasked-open-${t.id}-${c.caseKey}',
+                            ),
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: () => widget.onShowCase(
+                              caseKey(got.number, got.court),
+                            ),
+                            child: const Text('Dosyayı aç'),
+                          ),
+                      ],
                     ),
                   ],
                 ),

@@ -77,38 +77,41 @@ void main() {
   });
   tearDown(() => dir.deleteSync(recursive: true));
 
-  test('the documents not here are fetched one at a time: one UYAP refuses '
-      'does not keep the others back, and each is told as it is fetched', () async {
-    final key = caseKey('2024/318', _court);
-    final c = TaskCase(
-      caseKey: key,
-      number: '2024/318',
-      court: _court,
-      docKeys: const ['b', 'c'],
-    );
-    expect(await TaskPackage.notHere(c, store: store), 2);
-    final uyap = _Uyap(store);
-    final told = <String>[];
-    final pack = await TaskPackage.pack(
-      c,
-      store: store,
-      controller: uyap,
-      temp: () async => Directory('${dir.path}/tmp'),
-      database: () async => null,
-      onProgress: told.add,
-    );
-    expect(uyap.asked, ['b', 'c']);
-    expect(pack.missing, ['Bilirkişi Raporu']);
-    // dosya.json and the one fetched.
-    expect(pack.paths, hasLength(2));
-    expect(File(pack.paths.last).readAsStringSync(), '%PDF c');
-    expect(told.first, contains('1/2'));
-    expect(told.first, contains('Bilirkişi Raporu'));
-    expect(told, contains(predicate<String>((t) => t.contains('2/2'))));
-    final json = jsonDecode(File(pack.paths.first).readAsStringSync()) as Map;
-    expect(json['secili'], ['b', 'c']);
-    expect((json['evrakAdlari'] as Map).keys, ['c']);
-  });
+  test(
+    'the documents not here are fetched one at a time: one UYAP refuses '
+    'does not keep the others back, and each is told as it is fetched',
+    () async {
+      final key = caseKey('2024/318', _court);
+      final c = TaskCase(
+        caseKey: key,
+        number: '2024/318',
+        court: _court,
+        docKeys: const ['b', 'c'],
+      );
+      expect(await TaskPackage.notHere(c, store: store), 2);
+      final uyap = _Uyap(store);
+      final told = <String>[];
+      final pack = await TaskPackage.pack(
+        c,
+        store: store,
+        controller: uyap,
+        temp: () async => Directory('${dir.path}/tmp'),
+        database: () async => null,
+        onProgress: told.add,
+      );
+      expect(uyap.asked, ['b', 'c']);
+      expect(pack.missing, ['Bilirkişi Raporu']);
+      // dosya.json and the one fetched.
+      expect(pack.paths, hasLength(2));
+      expect(File(pack.paths.last).readAsStringSync(), '%PDF c');
+      expect(told.first, contains('1/2'));
+      expect(told.first, contains('Bilirkişi Raporu'));
+      expect(told, contains(predicate<String>((t) => t.contains('2/2'))));
+      final json = jsonDecode(File(pack.paths.first).readAsStringSync()) as Map;
+      expect(json['secili'], ['b', 'c']);
+      expect((json['evrakAdlari'] as Map).keys, ['c']);
+    },
+  );
 
   test('the case goes with its hearings, deadlines, notices and notes, and '
       'the one it is given to reads them', () async {
@@ -166,5 +169,67 @@ void main() {
     expect(got.deadlines.single['baslik'], 'Bilirkişi raporuna itiraz');
     expect(got.notes.single['baslik'], 'Tanık listesi hazırlanacak');
     expect(got.notices, isEmpty);
+  });
+
+  test('the one it is given to keeps the case as theirs: in Dava '
+      'Dosyalarım with its hearings, its documents named, marked as come '
+      'with the task', () async {
+    final key = caseKey('2024/318', _court);
+    final giverDb = PortalDatabase.memory();
+    final at = DateTime(2026, 11, 20, 10, 30);
+    giverDb.mergeHearings(
+      PortalChannel.uyapWeb,
+      DateTime(2026, 11, 1),
+      DateTime(2026, 11, 30),
+      [PortalHearing.create(number: '2024/318', court: _court, at: at)],
+      complete: true,
+    );
+    final c = TaskCase(
+      caseKey: key,
+      number: '2024/318',
+      court: _court,
+      docKeys: const ['c'],
+    );
+    final pack = await TaskPackage.pack(
+      c,
+      store: store,
+      controller: _Uyap(store),
+      temp: () async => Directory('${dir.path}/tmp'),
+      database: () async => giverDb,
+    );
+    // As it lands on the other's disk.
+    final inbox = Directory('${dir.path}/gelenler')..createSync();
+    final saved = [
+      for (final path in pack.paths)
+        File(path).copySync('${inbox.path}/${path.split('/').last}').path,
+    ];
+    final got = ReceivedCase.fromPaths(saved)!;
+    final theirs = UyapCaseStore(
+      directory: Directory('${dir.path}/b-uyap'),
+      settings: UyapSettings(
+        directory: Directory('${dir.path}/b-uyap'),
+        home: '${dir.path}/b-ev',
+      ),
+    );
+    final db = PortalDatabase.memory();
+    expect(
+      await got.adopt(
+        task: 'Duruşmaya hazırlık',
+        from: 'Av. Deniz Kaya',
+        store: theirs,
+        database: () async => db,
+      ),
+      key,
+    );
+    expect(db.caseOf(key)?.number, '2024/318');
+    expect(db.hearings(caseKey: key).single.at, at);
+    expect(ReceivedCase.markIn(db, key), (
+      task: 'Duruşmaya hazırlık',
+      from: 'Av. Deniz Kaya',
+    ));
+    final record = (await theirs.load(_court, '2024/318'))!;
+    expect(record.documents.map((d) => d.key), ['a', 'b', 'c']);
+    expect(theirs.fileOf(record, 'c')?.readAsStringSync(), '%PDF c');
+    expect(theirs.fileOf(record, 'b'), isNull);
   });
 }

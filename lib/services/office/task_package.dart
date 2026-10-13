@@ -4,7 +4,11 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../platform/app_directories.dart';
+import '../portal/observed.dart';
+import '../portal/portal_case.dart';
+import '../portal/portal_channel.dart';
 import '../portal/portal_database.dart';
+import '../portal/portal_hearing.dart';
 import '../uyap/uyap_case_panel_controller.dart';
 import '../uyap/uyap_case_store.dart';
 import 'office_task.dart';
@@ -201,6 +205,88 @@ class TaskPackage {
 
 /// What came of a task's case on this device: its details and documents.
 class ReceivedCase {
+  /// The meta key under which a case that came with a task is marked.
+  static String markOf(String caseKey) => 'gorevle|$caseKey';
+
+  /// The case kept on this device as one that came with a task (docs/
+  /// buro.md, Görev): in Dava Dosyalarım with its hearings, its record
+  /// and documents beside it, so that its page opens here as any case's
+  /// does. Marked as such, by whom and with what task. Its key; null when
+  /// it could not be kept.
+  Future<String?> adopt({
+    required String task,
+    required String from,
+    UyapCaseStore? store,
+    Future<PortalDatabase?> Function()? database,
+  }) async {
+    if (store == null && Platform.environment.containsKey('FLUTTER_TEST')) {
+      return null;
+    }
+    if (court.isEmpty || number.isEmpty) return null;
+    final key = caseKey(number, court);
+    try {
+      final names = (details['evrakAdlari'] as Map? ?? const {});
+      final byName = {for (final d in documents) p.basename(d): d};
+      final files = <String, String>{
+        for (final e in names.entries)
+          '${e.key}': ?byName['${e.value}'],
+      };
+      await (store ?? UyapCaseStore.instance).adoptReceived(details, files);
+    } catch (_) {}
+    try {
+      final db = await (database ?? PortalDatabase.shared)();
+      if (db == null) return key;
+      db.mergeCases([PortalCase.create(number: number, court: court)]);
+      final now = DateTime.now();
+      final came = [
+        for (final h in hearings)
+          if (DateTime.tryParse('${h['tarih']}') case final at?)
+            PortalHearing.create(
+              number: number,
+              court: court,
+              at: at,
+              kind: '${h['tur'] ?? ''}'.isEmpty
+                  ? null
+                  : Observed(
+                      '${h['tur']}',
+                      PortalChannel.uyapWeb,
+                      now,
+                      complete: false,
+                    ),
+            ),
+      ];
+      if (came.isNotEmpty) {
+        final days = came.map((h) => h.at).toList()..sort();
+        db.mergeHearings(
+          PortalChannel.uyapWeb,
+          days.first,
+          days.last,
+          came,
+          complete: false,
+        );
+      }
+      db.setMeta(markOf(key), jsonEncode({'gorev': task, 'veren': from}));
+    } catch (_) {}
+    return key;
+  }
+
+  /// Whose task brought the case of [caseKey] here, and which; null for a
+  /// case of the lawyer's own.
+  static ({String task, String from})? markIn(
+    PortalDatabase db,
+    String caseKey,
+  ) {
+    final raw = db.meta(markOf(caseKey));
+    if (raw == null) return null;
+    try {
+      final j = jsonDecode(raw);
+      if (j is! Map) return null;
+      return (task: '${j['gorev'] ?? ''}', from: '${j['veren'] ?? ''}');
+    } catch (_) {
+      return null;
+    }
+  }
+
   const ReceivedCase(this.details, this.documents);
   final Map<String, Object?> details;
   final List<String> documents;

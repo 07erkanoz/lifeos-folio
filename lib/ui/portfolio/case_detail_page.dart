@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../../preview_app.dart' show openPreviewWindow;
 import '../../services/platform/editor_window.dart';
 import '../../services/office/office_network.dart';
+import '../../services/office/task_package.dart' show ReceivedCase;
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_database.dart';
@@ -126,6 +127,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   /// Documents being chosen, to be downloaded or given with a task
   /// together: a box before each row while [_selecting].
   bool _selecting = false;
+
+  /// Who gave this case with a task, and which: null for the lawyer's own.
+  ({String task, String from})? _tasked;
   final _picked = <String>{};
   final _search = TextEditingController();
 
@@ -217,6 +221,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     if (!mounted) return;
     setState(() {
       _kase = kase;
+      _tasked = ReceivedCase.markIn(db, kase.key);
       _state = state;
       _hearings = db.hearings(caseKey: kase.key)
         ..sort((a, b) => b.at.compareTo(a.at));
@@ -1286,9 +1291,33 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ],
       ),
     ];
+    final tasked = _tasked;
     final info = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Came with a task: said first, and why UYAP may not answer here.
+        if (tasked != null)
+          Container(
+            key: const ValueKey('case-tasked'),
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AgendaColors.taskFill,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              [
+                'Görevle geldi',
+                if (tasked.from.isNotEmpty) tasked.from,
+                if (tasked.task.isNotEmpty) tasked.task,
+              ].join(' · '),
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: AgendaColors.taskText,
+              ),
+            ),
+          ),
         Text.rich(
           TextSpan(
             children: [
