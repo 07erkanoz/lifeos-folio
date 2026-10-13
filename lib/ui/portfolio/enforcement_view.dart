@@ -445,32 +445,184 @@ class _EnforcementViewState extends State<EnforcementView> {
     }
   }
 
-  /// The ready requests: a tap writes one, filled from the file.
-  Widget _requests() => _box(
-    'HAZIR TALEPLER',
-    right: 'taraf bilgileriyle dolar, editörde açılır',
-    [
-      Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: [
+  /// The ready requests by what they are for, as the lawyer looks for
+  /// one.
+  static const _requestGroups = [
+    (
+      'Tebligat ve kesinleşme',
+      Icons.mark_email_read_outlined,
+      [
+        'Takibin kesinleştirilmesi',
+        'Adres araştırması ve MERNİS adresine tebligat',
+        'Tebligatın TK m.35’e göre yapılması',
+      ],
+    ),
+    (
+      'Haciz',
+      Icons.gavel_rounded,
+      [
+        'Maaş haczi',
+        'Araç haczi ve yakalama şerhi',
+        'Taşınmaz haczi',
+        'Adreste menkul haczi',
+      ],
+    ),
+    (
+      'Haciz ihbarnamesi',
+      Icons.account_balance_outlined,
+      [
+        'Bankalara haciz ihbarnamesi (89/1)',
+        'Üçüncü kişiye haciz ihbarnamesi (89/1)',
+        'İkinci haciz ihbarnamesi (89/2)',
+        'Üçüncü haciz ihbarnamesi (89/3)',
+      ],
+    ),
+    (
+      'Muhafaza ve satış',
+      Icons.inventory_2_outlined,
+      ['Muhafaza', 'Kıymet takdiri', 'Satış talebi'],
+    ),
+    (
+      'Para ve dosya',
+      Icons.request_quote_outlined,
+      [
+        'Dosya hesabı',
+        'Paranın ödenmesi (reddiyat)',
+        'Takibin yenilenmesi',
+        'Aciz vesikası',
+      ],
+    ),
+  ];
+
+  /// The ready requests, by what they are for: a tap writes one, filled
+  /// from the file, and opens it in the editor.
+  Widget _requests(bool wide) {
+    final byName = {for (final t in enforcementRequests) t.name: t};
+    final grouped = {for (final (_, _, names) in _requestGroups) ...names};
+    final groups = [
+      for (final (title, icon, names) in _requestGroups)
+        (title, icon, [for (final n in names) ?byName[n]]),
+      // One added later and not yet placed: still offered.
+      (
+        'Diğer',
+        Icons.description_outlined,
+        [
           for (final t in enforcementRequests)
-            ActionChip(
-              key: ValueKey('request-${t.name}'),
-              visualDensity: VisualDensity.compact,
-              label: Text(t.name, style: const TextStyle(fontSize: 12.5)),
-              onPressed: () => _request(t),
-            ),
+            if (!grouped.contains(t.name)) t,
         ],
       ),
-      const SizedBox(height: 6),
-      Text(
-        'Köşeli parantezli yerleri (üçüncü kişi, adres, IBAN) editörde '
-        'doldurun; e-imzalayıp editörden UYAP\'a gönderebilirsiniz.',
-        style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+    ].where((g) => g.$3.isNotEmpty).toList();
+    Widget item(PetitionTemplate t) => InkWell(
+      key: ValueKey('request-${t.name}'),
+      borderRadius: BorderRadius.circular(6),
+      onTap: () => _request(t),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          children: [
+            Icon(
+              Icons.add_circle_outline_rounded,
+              size: 15,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(t.name, style: const TextStyle(fontSize: 12.8)),
+            ),
+          ],
+        ),
       ),
-    ],
-  );
+    );
+    Widget heading(String title, IconData icon) => Padding(
+      padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: AgendaColors.muted),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AgendaColors.muted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final note = Text(
+      'Daire, esas no, alacaklı, vekil ve borçlular dosyadan dolar. Köşeli '
+      'parantezli yerleri editörde doldurup e-imzayla UYAP’a '
+      'gönderebilirsiniz.',
+      style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+    );
+    if (!wide) {
+      return _box('HAZIR TALEPLER', [
+        for (final (title, icon, list) in groups)
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              key: ValueKey('request-group-$title'),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 4),
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              leading: Icon(icon, size: 18, color: AgendaColors.muted),
+              title: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              trailing: Text(
+                '${list.length}',
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+              children: [for (final t in list) item(t)],
+            ),
+          ),
+        const SizedBox(height: 4),
+        note,
+      ]);
+    }
+    return _box(
+      'HAZIR TALEPLER',
+      right: 'tıklayınca dosyanın bilgileriyle editörde açılır',
+      [
+        LayoutBuilder(
+          builder: (context, box) {
+            final across = box.maxWidth >= 1100 ? groups.length.clamp(1, 5) : 3;
+            const gap = 14.0;
+            final w = (box.maxWidth - gap * (across - 1)) / across;
+            return Wrap(
+              spacing: gap,
+              runSpacing: 10,
+              children: [
+                for (final (title, icon, list) in groups)
+                  SizedBox(
+                    width: w,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        heading(title, icon),
+                        for (final t in list) item(t),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 6),
+        note,
+      ],
+    );
+  }
 
   /// [e] marked as UYAP shows it, or not yet.
   Future<void> _markOfficial(LedgerEntry e, bool official) async {
@@ -686,134 +838,66 @@ class _EnforcementViewState extends State<EnforcementView> {
         account.paid ?? record.money?.collected ?? fact('Yapılmış tahsilat');
     final left =
         account.left ?? (total != null && paid != null ? total - paid : null);
-    final share =
-        account.share ??
-        (total != null && total > 0 && paid != null
-            ? (paid / total).clamp(0, 1).toDouble()
-            : null);
     final pending = [
       for (final e in _ledger)
         if (!e.isOfficial) e,
     ];
-    final debt = _box(
-      'BORÇ DURUMU',
-      right: e?.lines.isNotEmpty ?? false
-          ? 'UYAP hesap bilgileri'
-          : 'UYAP künyesi',
-      [
-        Wrap(
-          spacing: 28,
-          runSpacing: 8,
-          children: [
-            _big('Toplam alacak', total),
-            _big('Tahsil edilen', paid, color: _green),
-            if (pending.isEmpty)
-              _big('Bakiye borç', left, color: AgendaColors.deadlineText)
-            else ...[
-              _big("UYAP'a göre bakiye", left),
-              KeyedSubtree(
-                key: const ValueKey('enforcement-folio-left'),
-                child: _big(
-                  "Folio'ya göre kalan",
-                  folioLeft(left, _ledger),
-                  color: AgendaColors.deadlineText,
-                ),
-              ),
-            ],
-          ],
-        ),
-        if (share != null) ...[
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(5),
-            child: LinearProgressIndicator(
-              value: share,
-              minHeight: 9,
-              color: tone(const Color(0xFF3E9C6B)),
-              backgroundColor: tone(const Color(0xFFEEF0F4)),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '%${(share * 100).toStringAsFixed(1).replaceAll('.', ',')} '
-            'tahsil edildi',
-            style: TextStyle(fontSize: 12, color: AgendaColors.muted),
-          ),
-        ],
-        const SizedBox(height: 8),
-        _columns([
-          _lines(
-            'ALACAK KALEMLERİ',
-            account.items.isNotEmpty
-                ? [for (final l in account.items) (l.title, l.amount)]
-                : [
-                    for (final k in const [
-                      'Faiz',
-                      'Takip sonrası masraf',
-                      'Vekâlet ücreti',
-                    ])
-                      if (fact(k) != null) (k, fact(k)),
-                  ],
-          ),
-          _lines(
-            'HARÇ VE VERGİLER',
-            account.fees.isNotEmpty
-                ? [for (final l in account.fees) (l.title, l.amount)]
-                : [
-                    if (fact('Tahsil harcı') != null)
-                      ('Tahsil harcı', fact('Tahsil harcı')),
-                  ],
-            total: true,
-          ),
-        ]),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.icon(
-            key: const ValueKey('enforcement-interest'),
-            onPressed: () {
-              final base = [
-                for (final l in account.items)
-                  if (RegExp(r'asil|kesinles')
-                      .hasMatch(l.label.toLowerCase().replaceAll('ı', 'i')))
-                    l,
-              ].firstOrNull;
-              InterestPage.open(
-                context,
-                title: widget.title,
-                principal: base?.amount == null
-                    ? null
-                    : (base!.amount! * 100).round(),
-                from: parseDay(record.details.openedOn),
-              );
-            },
-            icon: const Icon(Icons.percent_rounded, size: 18),
-            label: const Text('Güncel borcu hesapla'),
-          ),
-        ),
-      ],
+    final summary = _summary(
+      total: total,
+      paid: paid,
+      left: left,
+      pending: pending,
+      fromAccount: e?.lines.isNotEmpty ?? false,
+      fetchedAt: record.fetchedAt,
     );
+    final details = _box('ALACAK HESABI', right: 'UYAP', [
+      _columns([
+        _lines(
+          'ALACAK KALEMLERİ',
+          account.items.isNotEmpty
+              ? [for (final l in account.items) (l.title, l.amount)]
+              : [
+                  for (final k in const [
+                    'Faiz',
+                    'Takip sonrası masraf',
+                    'Vekâlet ücreti',
+                  ])
+                    if (fact(k) != null) (k, fact(k)),
+                ],
+        ),
+        _lines(
+          'HARÇ VE VERGİLER',
+          account.fees.isNotEmpty
+              ? [for (final l in account.fees) (l.title, l.amount)]
+              : [
+                  if (fact('Tahsil harcı') != null)
+                    ('Tahsil harcı', fact('Tahsil harcı')),
+                ],
+          total: true,
+        ),
+      ]),
+    ]);
+    final ledger = _ledger.isEmpty ? null : _ledgerBox(pending);
     final money = _money(record.money);
-    final ledger = _ledgerBox(pending);
     final debtors = _debtors(e?.debtors ?? const []);
     final course = _course(record);
+    final requests = _requests(widget.wide);
+    const gap = SizedBox(height: 12, width: 12);
     if (!widget.wide) {
       return Padding(
         padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            debt,
-            const SizedBox(height: 10),
-            ledger,
-            const SizedBox(height: 10),
-            _requests(),
-            const SizedBox(height: 10),
-            money,
-            const SizedBox(height: 10),
-            debtors,
-            const SizedBox(height: 10),
-            course,
+            for (final w in [
+              summary,
+              ?ledger,
+              money,
+              requests,
+              details,
+              debtors,
+              course,
+            ]) ...[w, gap],
           ],
         ),
       );
@@ -823,32 +907,262 @@ class _EnforcementViewState extends State<EnforcementView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          summary,
+          gap,
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                flex: 27,
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [debt, const SizedBox(height: 10), ledger],
+                  children: [
+                    details,
+                    if (ledger != null) ...[gap, ledger],
+                    gap,
+                    course,
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(flex: 20, child: money),
+              gap,
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [money, gap, debtors],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 27, child: course),
-              const SizedBox(width: 10),
-              Expanded(flex: 20, child: debtors),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _requests(),
+          gap,
+          requests,
         ],
+      ),
+    );
+  }
+
+  /// Where the debt stands, at the top: what is left as Folio counts it
+  /// first, UYAP's figures beside it; how much is collected, and what was
+  /// paid outside the office and waits for UYAP; and what is done most.
+  Widget _summary({
+    required double? total,
+    required double? paid,
+    required double? left,
+    required List<LedgerEntry> pending,
+    required bool fromAccount,
+    required DateTime fetchedAt,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final waiting = pending.fold<int>(0, (n, e) => n + e.amount) / 100;
+    final ours = folioLeft(left, _ledger);
+    final whole = total ?? ((paid ?? 0) + (left ?? 0));
+    final paidShare = whole > 0 && paid != null
+        ? (paid / whole).clamp(0.0, 1.0)
+        : null;
+    final waitShare = whole > 0
+        ? (waiting / whole).clamp(0.0, 1.0 - (paidShare ?? 0))
+        : 0.0;
+    String pct(double v) =>
+        '%${(v * 100).toStringAsFixed(1).replaceAll('.', ',')}';
+    final muted = TextStyle(fontSize: 12, color: AgendaColors.muted);
+
+    final hero = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          pending.isEmpty ? 'KALAN BORÇ' : "KALAN BORÇ · FOLIO'YA GÖRE",
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: .5,
+            color: AgendaColors.muted,
+          ),
+        ),
+        const SizedBox(height: 2),
+        KeyedSubtree(
+          key: pending.isEmpty
+              ? const ValueKey('enforcement-left')
+              : const ValueKey('enforcement-folio-left'),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              (pending.isEmpty ? left : ours) == null
+                  ? '—'
+                  : '${_tl((pending.isEmpty ? left : ours)!)} TL',
+              style: TextStyle(
+                fontSize: 30,
+                height: 1.15,
+                fontWeight: FontWeight.w800,
+                color: AgendaColors.deadlineText,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          pending.isEmpty
+              ? '${fromAccount ? 'UYAP hesap bilgileri' : 'UYAP künyesi'} · '
+                    '${dayText(fetchedAt)}'
+              : "UYAP'ta ${left == null ? '—' : '${_tl(left)} TL'} · "
+                    '${_tl(waiting)} TL UYAP\'a işlenmeyi bekliyor',
+          style: muted,
+        ),
+      ],
+    );
+    Widget stat(String label, double? v, Color? color) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: muted),
+        Text(
+          v == null ? '—' : '${_tl(v)} TL',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: v == null ? AgendaColors.muted : color,
+          ),
+        ),
+      ],
+    );
+    final stats = Wrap(
+      spacing: 28,
+      runSpacing: 10,
+      children: [
+        stat('Toplam alacak', total, null),
+        stat('Tahsil edilen', paid, _green),
+        if (pending.isNotEmpty)
+          stat('Haricen (bekliyor)', waiting, AgendaColors.taskText),
+      ],
+    );
+    final bar = paidShare == null
+        ? const SizedBox.shrink()
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: SizedBox(
+                  height: 10,
+                  child: Row(
+                    children: [
+                      if (paidShare > 0)
+                        Expanded(
+                          flex: (paidShare * 1000).round(),
+                          child: ColoredBox(
+                            color: tone(const Color(0xFF3E9C6B)),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      if (waitShare > 0)
+                        Expanded(
+                          flex: (waitShare * 1000).round(),
+                          child: ColoredBox(
+                            color: tone(const Color(0xFFE0A33A)),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      if (1 - paidShare - waitShare > 0)
+                        Expanded(
+                          flex: ((1 - paidShare - waitShare) * 1000).round(),
+                          child: ColoredBox(
+                            color: tone(const Color(0xFFEEF0F4)),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                [
+                  '${pct(paidShare)} tahsil edildi',
+                  if (waitShare > 0) '${pct(waitShare)} haricen (bekliyor)',
+                ].join(' · '),
+                style: muted,
+              ),
+            ],
+          );
+    final actions = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilledButton.icon(
+          key: const ValueKey('ledger-add-external'),
+          onPressed: () => _add(LedgerKind.external),
+          icon: const Icon(Icons.payments_outlined, size: 18),
+          label: const Text('Haricen tahsilat'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('ledger-add-waiver'),
+          onPressed: () => _add(LedgerKind.waiver),
+          icon: const Icon(Icons.remove_circle_outline_rounded, size: 18),
+          label: const Text('Feragat'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('enforcement-interest'),
+          onPressed: () {
+            final account =
+                widget.record?.enforcement?.account ?? const UyapAccount();
+            final base = [
+              for (final l in account.items)
+                if (RegExp(r'asil|kesinles')
+                    .hasMatch(l.label.toLowerCase().replaceAll('ı', 'i')))
+                  l,
+            ].firstOrNull;
+            InterestPage.open(
+              context,
+              title: widget.title,
+              principal: base?.amount == null
+                  ? null
+                  : (base!.amount! * 100).round(),
+              from: parseDay(widget.record?.details.openedOn),
+            );
+          },
+          icon: const Icon(Icons.percent_rounded, size: 18),
+          label: const Text('Güncel borcu hesapla'),
+        ),
+      ],
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AgendaColors.line),
+      ),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final roomy = box.maxWidth >= 760;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (roomy)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: hero),
+                    const SizedBox(width: 24),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 14),
+                      child: stats,
+                    ),
+                  ],
+                )
+              else ...[
+                hero,
+                const SizedBox(height: 12),
+                stats,
+              ],
+              const SizedBox(height: 14),
+              bar,
+              const SizedBox(height: 14),
+              actions,
+            ],
+          );
+        },
       ),
     );
   }
@@ -857,116 +1171,174 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// and what was waived, each waiting for UYAP or shown there.
   Widget _ledgerBox(List<LedgerEntry> pending) {
     final waiting = pending.fold<int>(0, (n, e) => n + e.amount);
-    Widget pill(LedgerEntry e) {
-      final (text, ink, fill) = e.isOfficial
-          ? (
-              e.official == 'elle' ? 'İşlendi' : "UYAP'ta",
-              _green,
-              tone(const Color(0xFFE6F4EC)),
-            )
-          : ('Bekliyor', AgendaColors.taskText, tone(const Color(0xFFFDF4E6)));
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        decoration: BoxDecoration(
-          color: fill,
-          borderRadius: BorderRadius.circular(5),
+    Widget tag(String text, Color ink, Color fill) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: ink,
         ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            color: ink,
+      ),
+    );
+    Widget status(LedgerEntry e) => e.isOfficial
+        ? tag(
+            e.official == 'elle' ? 'İşlendi' : "UYAP'ta",
+            _green,
+            tone(const Color(0xFFE6F4EC)),
+          )
+        : tag('Bekliyor', AgendaColors.taskText, tone(const Color(0xFFFDF4E6)));
+    final external = tone(const Color(0xFFE6F4EC));
+    final waiver = tone(const Color(0xFFEFE9FA));
+    Widget menu(LedgerEntry e) => PopupMenuButton<String>(
+      key: ValueKey('ledger-menu-${e.id}'),
+      tooltip: 'İşlemler',
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Icon(
+          Icons.more_horiz_rounded,
+          size: 18,
+          color: AgendaColors.muted,
+        ),
+      ),
+      onSelected: (v) => switch (v) {
+        'talep' => _paper(e, receipt: false),
+        'makbuz' => _paper(e, receipt: true),
+        'resmi' => _markOfficial(e, !e.isOfficial),
+        _ => _removeEntry(e),
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'talep',
+          child: Text(
+            e.kind == LedgerKind.external
+                ? 'Haricen tahsil bildirimi hazırla'
+                : 'Feragat dilekçesi hazırla',
           ),
         ),
-      );
-    }
-
-    return _box('FOLIO HESABI', right: 'haricen tahsilat ve feragat', [
-      if (_ledger.isEmpty)
-        Text(
-          'Borçlu size doğrudan ödeme yaptığında ya da alacağın bir '
-          'kısmından feragat ettiğinizde buraya yazın: UYAP\'a işlenene '
-          'kadar Folio\'daki borçtan düşer, talep dilekçesi hazırlanır.',
-          style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
-        ),
-      for (final e in _ledger.reversed)
-        Container(
-          key: ValueKey('ledger-${e.id}'),
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: tone(const Color(0xFFF0F1F5))),
-            ),
+        if (e.kind == LedgerKind.external)
+          const PopupMenuItem(
+            value: 'makbuz',
+            child: Text('Borçluya makbuz ve ibraname'),
           ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 82,
-                child: Text(
-                  dayText(e.at),
-                  style: const TextStyle(fontSize: 12.5),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  [
-                    e.kind.label,
-                    if (e.whole) 'tamamı',
-                    if (e.debtor.isNotEmpty) e.debtor,
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12.5),
-                ),
-              ),
-              pill(e),
-              const SizedBox(width: 8),
-              Text(
-                _tl(e.amount / 100),
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: e.kind == LedgerKind.external ? _green : _purple,
-                ),
-              ),
-              PopupMenuButton<String>(
-                key: ValueKey('ledger-menu-${e.id}'),
-                icon: const Icon(Icons.more_horiz_rounded, size: 18),
-                onSelected: (v) => switch (v) {
-                  'talep' => _paper(e, receipt: false),
-                  'makbuz' => _paper(e, receipt: true),
-                  'resmi' => _markOfficial(e, !e.isOfficial),
-                  _ => _removeEntry(e),
-                },
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 'talep',
+        PopupMenuItem(
+          value: 'resmi',
+          child: Text(
+            e.isOfficial ? "UYAP'a işlenmedi say" : "UYAP'a işlendi say",
+          ),
+        ),
+        const PopupMenuItem(value: 'kaldir', child: Text('Kaldır')),
+      ],
+    );
+    Widget kindTag(LedgerEntry e) => e.kind == LedgerKind.external
+        ? tag('Haricen', _green, external)
+        : tag('Feragat', _purple, waiver);
+    Widget amount(LedgerEntry e) => Text(
+      _tl(e.amount / 100),
+      style: TextStyle(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w600,
+        color: e.kind == LedgerKind.external ? _green : _purple,
+      ),
+    );
+    String who(LedgerEntry e) => [
+      if (e.debtor.isNotEmpty) e.debtor,
+      if (e.whole) 'tamamı',
+      if (e.way.isNotEmpty) e.way,
+    ].join(' · ');
+    // A row a line on a wide card; two on a narrow one, the name whole.
+    Widget row(LedgerEntry e) => Container(
+      key: ValueKey('ledger-${e.id}'),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: tone(const Color(0xFFF0F1F5))),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, box) => box.maxWidth >= 480
+            ? Row(
+                children: [
+                  SizedBox(
+                    width: 82,
                     child: Text(
-                      e.kind == LedgerKind.external
-                          ? 'Haricen tahsil bildirimi hazırla'
-                          : 'Feragat dilekçesi hazırla',
+                      dayText(e.at),
+                      style: const TextStyle(fontSize: 12.5),
                     ),
                   ),
-                  if (e.kind == LedgerKind.external)
-                    const PopupMenuItem(
-                      value: 'makbuz',
-                      child: Text('Borçluya makbuz ve ibraname'),
-                    ),
-                  PopupMenuItem(
-                    value: 'resmi',
-                    child: Text(
-                      e.isOfficial
-                          ? "UYAP'a işlenmedi say"
-                          : "UYAP'a işlendi say",
+                  SizedBox(
+                    width: 70,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: kindTag(e),
                     ),
                   ),
-                  const PopupMenuItem(value: 'kaldir', child: Text('Kaldır')),
+                  Expanded(
+                    child: Text(
+                      who(e),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                  ),
+                  status(e),
+                  const SizedBox(width: 10),
+                  amount(e),
+                  const SizedBox(width: 6),
+                  menu(e),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            kindTag(e),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                who(e),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          dayText(e.at),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AgendaColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [amount(e), const SizedBox(height: 2), status(e)],
+                  ),
+                  const SizedBox(width: 4),
+                  menu(e),
                 ],
               ),
-            ],
-          ),
-        ),
+      ),
+    );
+    return _box('FOLIO HESABI', right: 'UYAP dışında yazılanlar', [
+      for (final e in _ledger.reversed) row(e),
       if (pending.isNotEmpty)
         _row(
           "UYAP'a işlenmeyi bekleyen",
@@ -974,24 +1346,11 @@ class _EnforcementViewState extends State<EnforcementView> {
           bold: true,
           color: AgendaColors.taskText,
         ),
-      const SizedBox(height: 8),
-      Wrap(
-        spacing: 8,
-        runSpacing: 6,
-        children: [
-          OutlinedButton.icon(
-            key: const ValueKey('ledger-add-external'),
-            onPressed: () => _add(LedgerKind.external),
-            icon: const Icon(Icons.payments_outlined, size: 18),
-            label: const Text('Haricen tahsilat'),
-          ),
-          OutlinedButton.icon(
-            key: const ValueKey('ledger-add-waiver'),
-            onPressed: () => _add(LedgerKind.waiver),
-            icon: const Icon(Icons.remove_circle_outline_rounded, size: 18),
-            label: const Text('Feragat'),
-          ),
-        ],
+      const SizedBox(height: 6),
+      Text(
+        'UYAP\'ta aynı tutarda bir tahsilat görününce kayıt kendiliğinden '
+        '"UYAP\'ta" olur ve Folio\'daki borçtan bir daha düşülmez.',
+        style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
       ),
     ]);
   }
@@ -1032,22 +1391,6 @@ class _EnforcementViewState extends State<EnforcementView> {
           ],
         ),
       );
-
-  Widget _big(String label, double? v, {Color? color}) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(label, style: TextStyle(fontSize: 12, color: AgendaColors.muted)),
-      Text(
-        v == null ? '—' : '${_tl(v)} TL',
-        style: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-          color: v == null ? AgendaColors.muted : color,
-        ),
-      ),
-    ],
-  );
 
   Widget _columns(List<Widget> parts) => LayoutBuilder(
     builder: (context, box) => box.maxWidth < 460
