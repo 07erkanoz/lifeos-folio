@@ -7,6 +7,8 @@ import 'package:path/path.dart' as p;
 import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
 import '../../services/editor/lawyer_profile.dart';
+import '../../services/editor/petition_templates.dart'
+    show PetitionCase, PetitionTemplate, enforcementRequests;
 import '../../services/enforcement/enforcement_ledger.dart';
 import '../../services/enforcement/enforcement_papers.dart';
 import '../../services/udf/udf_writer.dart';
@@ -342,32 +344,19 @@ class _EnforcementViewState extends State<EnforcementView> {
           : e.kind == LedgerKind.external
           ? externalPaymentRequest(parties, e)
           : waiverRequest(parties, e);
-      await UyapSettings.instance.load();
-      final folder = Directory(
-        p.join(
-          UyapSettings.instance.folder,
-          UyapCaseStore.caseFolderName(record),
-        ),
-      );
-      await folder.create(recursive: true);
       final d = e.at;
       final day =
           '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      final name = receipt
-          ? '$day Borçlu makbuzu ve ibraname'
-          : e.kind == LedgerKind.external
-          ? '$day Haricen tahsil bildirimi'
-          : '$day Feragat dilekçesi';
-      var file = File(p.join(folder.path, '$name.udf'));
-      for (var i = 2; await file.exists(); i++) {
-        file = File(p.join(folder.path, '$name ($i).udf'));
-      }
-      await file.writeAsBytes(UdfWriter.writeBytes(model), flush: true);
-      if (!receipt) {
-        await UyapCaseLinks.instance.link(file.path, record.link);
-      }
-      if (open && mounted) widget.onOpen?.call(file);
-      return file;
+      return await _write(
+        receipt
+            ? '$day Borçlu makbuzu ve ibraname'
+            : e.kind == LedgerKind.external
+            ? '$day Haricen tahsil bildirimi'
+            : '$day Feragat dilekçesi',
+        model,
+        link: !receipt,
+        open: open,
+      );
     } catch (error) {
       if (mounted) {
         showNotice(
@@ -379,6 +368,109 @@ class _EnforcementViewState extends State<EnforcementView> {
       return null;
     }
   }
+
+  /// [model] written as [name].udf in the file's folder, tied to the file
+  /// when it goes to the office ([link]), and opened in the editor.
+  Future<File> _write(
+    String name,
+    DocModel model, {
+    bool link = true,
+    bool open = true,
+  }) async {
+    final record = widget.record!;
+    await UyapSettings.instance.load();
+    final folder = Directory(
+      p.join(
+        UyapSettings.instance.folder,
+        UyapCaseStore.caseFolderName(record),
+      ),
+    );
+    await folder.create(recursive: true);
+    final safe = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-');
+    var file = File(p.join(folder.path, '$safe.udf'));
+    for (var i = 2; await file.exists(); i++) {
+      file = File(p.join(folder.path, '$safe ($i).udf'));
+    }
+    await file.writeAsBytes(UdfWriter.writeBytes(model), flush: true);
+    if (link) await UyapCaseLinks.instance.link(file.path, record.link);
+    if (open && mounted) widget.onOpen?.call(file);
+    return file;
+  }
+
+  /// One of the ready requests, filled from the file and opened in the
+  /// editor.
+  Future<void> _request(PetitionTemplate t) async {
+    final record = widget.record;
+    if (record == null) return;
+    try {
+      final profile = await LawyerProfile.load().catchError(
+        (Object _) => const LawyerProfile(),
+      );
+      final lawyer = profile.lawyer?.titled.isNotEmpty ?? false
+          ? profile.lawyer!.titled
+          : widget.lawyer;
+      final parties = [
+        for (final party in record.parties) (party.role, party.name),
+      ];
+      // UYAP's debtors list when the parties name none.
+      if (!parties.any((x) => UyapWebService.fold(x.$1).contains('borclu'))) {
+        for (final d in _debtorNames) {
+          parties.add(('Borçlu', d));
+        }
+      }
+      final now = DateTime.now();
+      final model = t.build(
+        PetitionCase(
+          court: record.court,
+          number: record.number,
+          lawyer: lawyer.isEmpty ? null : lawyer,
+          parties: parties,
+        ),
+        now,
+      );
+      final day =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final file = await _write('$day ${t.name}', model);
+      if (mounted && widget.onOpen == null) {
+        showNotice(context, '${t.name} hazırlandı.', detail: file.path);
+      }
+    } catch (error) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Talep hazırlanamadı: $error',
+          kind: NoticeKind.error,
+        );
+      }
+    }
+  }
+
+  /// The ready requests: a tap writes one, filled from the file.
+  Widget _requests() => _box(
+    'HAZIR TALEPLER',
+    right: 'taraf bilgileriyle dolar, editörde açılır',
+    [
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final t in enforcementRequests)
+            ActionChip(
+              key: ValueKey('request-${t.name}'),
+              visualDensity: VisualDensity.compact,
+              label: Text(t.name, style: const TextStyle(fontSize: 12.5)),
+              onPressed: () => _request(t),
+            ),
+        ],
+      ),
+      const SizedBox(height: 6),
+      Text(
+        'Köşeli parantezli yerleri (üçüncü kişi, adres, IBAN) editörde '
+        'doldurun; e-imzalayıp editörden UYAP\'a gönderebilirsiniz.',
+        style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+      ),
+    ],
+  );
 
   /// [e] marked as UYAP shows it, or not yet.
   Future<void> _markOfficial(LedgerEntry e, bool official) async {
@@ -715,6 +807,8 @@ class _EnforcementViewState extends State<EnforcementView> {
             const SizedBox(height: 10),
             ledger,
             const SizedBox(height: 10),
+            _requests(),
+            const SizedBox(height: 10),
             money,
             const SizedBox(height: 10),
             debtors,
@@ -752,6 +846,8 @@ class _EnforcementViewState extends State<EnforcementView> {
               Expanded(flex: 20, child: debtors),
             ],
           ),
+          const SizedBox(height: 10),
+          _requests(),
         ],
       ),
     );

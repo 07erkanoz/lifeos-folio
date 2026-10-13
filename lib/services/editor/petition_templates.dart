@@ -664,6 +664,7 @@ final petitionTemplates = <PetitionTemplate>[
       ),
     ]),
   ),
+  ...enforcementRequests,
   // Any file.
   PetitionTemplate('Genel', 'Vekâletname sunma ve dosyaya katılma', (c, today) {
     final side = _side(c);
@@ -702,4 +703,288 @@ final petitionTemplates = <PetitionTemplate>[
       ),
     ]);
   }),
+];
+
+// The creditor's requests in an enforcement file.
+
+/// The heading of a creditor's request: the office, the number, the
+/// sides and what is asked.
+List<DocBlock> _creditorHead(PetitionCase? c, String subject) => [
+  _court(
+    c == null || !trLower(c.court).contains('icra')
+        ? '[…] İCRA DAİRESİ MÜDÜRLÜĞÜ’NE'
+        : courtTo(c.court),
+  ),
+  _blank(),
+  _field('Dosya No', _number(c)),
+  _field('Alacaklı', c?.of(['alacaklı']) ?? '[Ad Soyad / Unvan]'),
+  _field('Vekili', _lawyerOf(c)),
+  _field('Borçlu', c?.of(['borçlu']) ?? '[Ad Soyad / Unvan]'),
+  _field('Konu', subject),
+  _blank(),
+];
+
+PetitionTemplate _creditor(
+  String name,
+  String subject,
+  List<String> points,
+  String ask, {
+  List<String> attachments = const [],
+}) => PetitionTemplate(
+  'İcra',
+  name,
+  (c, today) => _page([
+    ..._creditorHead(c, subject),
+    _head('Açıklamalar'),
+    for (final (i, point) in points.indexed) _point('${i + 1}- $point'),
+    _head('Sonuç ve İstem'),
+    _body(ask),
+    ..._signature(c, today, 'Alacaklı Vekili', attachments: attachments),
+  ]),
+);
+
+const _filed =
+    'Müdürlüğünüzün yukarıda numarası yazılı dosyası ile borçlu aleyhine '
+    'icra takibi yapılmaktadır.';
+
+/// The requests a creditor's lawyer makes most in an enforcement file,
+/// each filled from the file it is made for: the office, the number, the
+/// creditor, the lawyer and the debtors.
+final enforcementRequests = <PetitionTemplate>[
+  _creditor(
+    'Takibin kesinleştirilmesi',
+    'Takibin kesinleştirilmesi talebidir.',
+    [
+      _filed,
+      'Ödeme emri borçluya usulüne uygun olarak tebliğ edilmiş, borçlu yasal '
+          'süresi içinde borca ya da imzaya itiraz etmemiş ve borcu '
+          'ödememiştir.',
+    ],
+    'Yukarıda açıklanan nedenlerle takibin borçlu yönünden '
+        'KESİNLEŞTİRİLMESİNE karar verilmesini saygılarımızla arz ve talep '
+        'ederiz.',
+  ),
+  _creditor(
+    'Adres araştırması ve MERNİS adresine tebligat',
+    'Borçlunun adresinin araştırılması ve MERNİS adresine tebligat '
+        'talebidir.',
+    [
+      _filed,
+      'Borçlunun takip talebinde bildirilen adresine yapılan tebligat '
+          'bila tebliğ dönmüştür.',
+      'Borçlunun adres kayıt sistemindeki (MERNİS) güncel yerleşim yeri '
+          'adresinin UYAP üzerinden araştırılması gerekmektedir.',
+    ],
+    'Yukarıda açıklanan nedenlerle borçlunun MERNİS adresinin '
+        'araştırılmasına ve ödeme emrinin bu adrese 7201 sayılı Tebligat '
+        'Kanunu m.21/2 uyarınca tebliğe çıkarılmasına karar verilmesini '
+        'saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Tebligatın TK m.35’e göre yapılması',
+    'Tebligatın Tebligat Kanunu m.35 uyarınca yapılması talebidir.',
+    [
+      _filed,
+      'Borçluya daha önce bildirdiği adreste usulüne uygun tebligat '
+          'yapılmış, borçlu adresini değiştirdiği hâlde yeni adresini '
+          'bildirmemiştir.',
+    ],
+    'Yukarıda açıklanan nedenlerle tebligatın borçlunun bilinen son '
+        'adresine 7201 sayılı Tebligat Kanunu m.35 uyarınca yapılmasına karar '
+        'verilmesini saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Maaş haczi',
+    'Borçlunun maaş ve ücretine haciz konulması talebidir.',
+    [
+      _filed,
+      'Takip kesinleşmiş, borçlu borcunu ödememiştir.',
+      'Borçlunun çalıştığı işyeri Sosyal Güvenlik Kurumu kayıtlarından '
+          'tespit edilebilmektedir.',
+    ],
+    'Yukarıda açıklanan nedenlerle borçlunun çalıştığı işyerinin SGK '
+        'kayıtlarından tespit edilerek borçlunun maaş ve ücretinin İİK m.83 '
+        'uyarınca dörtte biri oranında, ayrıca ikramiye, prim ve sair '
+        'alacaklarının dosya borcu ödeninceye kadar haczine; haciz '
+        'müzekkeresinin işverene gönderilmesine ve kesintilerin dosyaya '
+        'yatırılmasının istenmesine karar verilmesini saygılarımızla arz ve '
+        'talep ederiz.',
+  ),
+  _creditor(
+    'Araç haczi ve yakalama şerhi',
+    'Borçlu adına kayıtlı araçlara haciz ve yakalama şerhi konulması '
+        'talebidir.',
+    [
+      _filed,
+      'Takip kesinleşmiş, borçlu borcunu ödememiştir.',
+      'Borçlu adına kayıtlı motorlu araçlar Emniyet Genel Müdürlüğü '
+          'kayıtlarından UYAP üzerinden tespit edilebilmektedir.',
+    ],
+    'Yukarıda açıklanan nedenlerle borçlu adına kayıtlı tüm motorlu '
+        'araçların kayıtlarına UYAP üzerinden haciz ve yakalama şerhi '
+        'konulmasına, yakalanmaları hâlinde yediemine teslim edilerek muhafaza '
+        'altına alınmalarına karar verilmesini saygılarımızla arz ve talep '
+        'ederiz.',
+  ),
+  _creditor(
+    'Taşınmaz haczi',
+    'Borçlu adına kayıtlı taşınmazlara haciz konulması talebidir.',
+    [
+      _filed,
+      'Takip kesinleşmiş, borçlu borcunu ödememiştir.',
+      'Borçlu adına kayıtlı taşınmazlar TAKBİS kayıtlarından UYAP üzerinden '
+          'tespit edilebilmektedir.',
+    ],
+    'Yukarıda açıklanan nedenlerle borçlu adına kayıtlı tüm taşınmazların '
+        'tamamına, hisseli olanlarda borçlunun hissesine haciz şerhi '
+        'konulması için ilgili tapu müdürlüklerine UYAP üzerinden haciz '
+        'müzekkeresi yazılmasına karar verilmesini saygılarımızla arz ve '
+        'talep ederiz.',
+  ),
+  _creditor(
+    'Bankalara haciz ihbarnamesi (89/1)',
+    'Borçlunun banka hesaplarına İİK m.89/1 uyarınca haciz ihbarnamesi '
+        'gönderilmesi talebidir.',
+    [
+      _filed,
+      'Takip kesinleşmiş, borçlu borcunu ödememiştir.',
+      'Borçlunun bankalarda mevduat, alacak ve hakları bulunması '
+          'muhtemeldir.',
+    ],
+    'Yukarıda açıklanan nedenlerle borçlunun UYAP sistemine kayıtlı tüm '
+        'bankalardaki mevduat, hesap, alacak ve hakları üzerine İİK m.89/1 '
+        'uyarınca birinci haciz ihbarnamesi gönderilmesine karar verilmesini '
+        'saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Üçüncü kişiye haciz ihbarnamesi (89/1)',
+    'Borçlunun üçüncü kişideki alacağına İİK m.89/1 uyarınca haciz '
+        'ihbarnamesi gönderilmesi talebidir.',
+    [
+      _filed,
+      'Takip kesinleşmiş, borçlu borcunu ödememiştir.',
+      'Borçlunun [Üçüncü kişinin adı / unvanı ve adresi] nezdinde alacağı '
+          'bulunmaktadır.',
+    ],
+    'Yukarıda açıklanan nedenlerle borçlunun anılan üçüncü kişi '
+        'nezdindeki alacak ve hakları üzerine İİK m.89/1 uyarınca birinci '
+        'haciz ihbarnamesi gönderilmesine karar verilmesini saygılarımızla '
+        'arz ve talep ederiz.',
+  ),
+  _creditor(
+    'İkinci haciz ihbarnamesi (89/2)',
+    'İİK m.89/2 uyarınca ikinci haciz ihbarnamesi gönderilmesi talebidir.',
+    [
+      _filed,
+      '[Üçüncü kişi]’ye gönderilen birinci haciz ihbarnamesi …/…/20… '
+          'tarihinde tebliğ edilmiş, üçüncü kişi yedi günlük yasal süresi '
+          'içinde itiraz etmemiş ve borçluya ait parayı dosyaya '
+          'yatırmamıştır.',
+    ],
+    'Yukarıda açıklanan nedenlerle anılan üçüncü kişiye İİK m.89/2 '
+        'uyarınca ikinci haciz ihbarnamesi gönderilmesine karar verilmesini '
+        'saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Üçüncü haciz ihbarnamesi (89/3)',
+    'İİK m.89/3 uyarınca üçüncü haciz ihbarnamesi gönderilmesi talebidir.',
+    [
+      _filed,
+      '[Üçüncü kişi]’ye gönderilen ikinci haciz ihbarnamesi …/…/20… '
+          'tarihinde tebliğ edilmiş, üçüncü kişi yasal süresi içinde menfi '
+          'tespit davası açmamış ve parayı dosyaya yatırmamıştır.',
+    ],
+    'Yukarıda açıklanan nedenlerle anılan üçüncü kişiye İİK m.89/3 '
+        'uyarınca üçüncü haciz ihbarnamesi gönderilmesine karar verilmesini '
+        'saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Adreste menkul haczi',
+    'Borçlunun adresindeki menkul mallarının haczi talebidir.',
+    [
+      _filed,
+      'Takip kesinleşmiş, borçlu borcunu ödememiştir.',
+      'Borçlunun [adres] adresinde haczi kabil menkul malları '
+          'bulunmaktadır.',
+    ],
+    'Yukarıda açıklanan nedenlerle anılan adreste borçluya ait menkul '
+        'malların haczine, gerektiğinde kapalı yerlerin açtırılması ve kolluk '
+        'yardımı ile haczin yapılmasına, haciz masrafının hesaplanarak '
+        'tarafımıza bildirilmesine karar verilmesini saygılarımızla arz ve '
+        'talep ederiz.',
+  ),
+  _creditor(
+    'Muhafaza',
+    'Haczedilen malların muhafaza altına alınması talebidir.',
+    [
+      _filed,
+      'Dosyada borçluya ait [mal / araç] …/…/20… tarihinde haczedilmiştir.',
+    ],
+    'Yukarıda açıklanan nedenlerle haczedilen malların İİK m.88 uyarınca '
+        'yediemine teslim edilerek muhafaza altına alınmasına, muhafaza '
+        'masrafının hesaplanarak tarafımıza bildirilmesine karar verilmesini '
+        'saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Kıymet takdiri',
+    'Haczedilen malların kıymet takdiri talebidir.',
+    [_filed, 'Dosyada borçluya ait [mal / taşınmaz / araç] haczedilmiştir.'],
+    'Yukarıda açıklanan nedenlerle haczedilen malların İİK m.87 uyarınca '
+        'kıymetinin takdir edilmesine, kıymet takdiri raporunun taraflara '
+        'tebliğine karar verilmesini saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Satış talebi',
+    'Haczedilen malların satışı talebidir.',
+    [
+      _filed,
+      'Dosyada haczedilen [mal / taşınmaz / araç] için satış isteme süresi '
+          'içindeyiz; kıymet takdiri kesinleşmiştir.',
+    ],
+    'Yukarıda açıklanan nedenlerle haczedilen malların İİK m.106 vd. '
+        'uyarınca satışına, satış avansının hesaplanarak tarafımıza '
+        'bildirilmesine karar verilmesini saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Dosya hesabı',
+    'Dosya hesabının yapılması talebidir.',
+    [_filed],
+    'Dosyanın güncel hesabının (asıl alacak, işlemiş faiz, masraf, '
+        'vekâlet ücreti, harçlar ve tahsilatlar ayrı ayrı gösterilmek '
+        'suretiyle) yapılarak tarafımıza bildirilmesine karar verilmesini '
+        'saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Paranın ödenmesi (reddiyat)',
+    'Dosyada tahsil edilen paranın tarafımıza ödenmesi talebidir.',
+    [
+      _filed,
+      'Dosyaya borçludan tahsilat yapılmıştır. Vekâletnamemizde ahzu kabz '
+          'yetkisi bulunmaktadır.',
+    ],
+    'Yukarıda açıklanan nedenlerle dosyada tahsil edilen paranın '
+        'harç ve masraflar düşüldükten sonra [IBAN: TR…] numaralı hesaba '
+        'gönderilmesine karar verilmesini saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Takibin yenilenmesi',
+    'İşlemsiz kalan takibin yenilenmesi talebidir.',
+    [_filed, 'Dosya işlemsiz kalmış olup takibe devam edilmesi gerekmektedir.'],
+    'Yukarıda açıklanan nedenlerle takibin yenilenmesine, yenileme '
+        'harcının hesaplanarak tarafımıza bildirilmesine ve gerekiyorsa '
+        'borçluya yenileme emri gönderilmesine karar verilmesini '
+        'saygılarımızla arz ve talep ederiz.',
+  ),
+  _creditor(
+    'Aciz vesikası',
+    'Aciz vesikası verilmesi talebidir.',
+    [
+      _filed,
+      'Borçlu hakkında yapılan haciz işlemlerinde alacağı karşılayacak '
+          'haczi kabil mal bulunamamıştır.',
+    ],
+    'Yukarıda açıklanan nedenlerle alacağın tahsil edilemeyen kısmı için '
+        'İİK m.105 ve m.143 uyarınca tarafımıza aciz vesikası verilmesine '
+        'karar verilmesini saygılarımızla arz ve talep ederiz.',
+  ),
 ];

@@ -1,4 +1,9 @@
+import 'dart:io';
+
 import 'package:evrak_convert/models/document_model.dart';
+import 'package:evrak_convert/services/editor/petition_templates.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
+import 'package:path/path.dart' as p;
 import 'package:evrak_convert/services/clients/client.dart';
 import 'package:evrak_convert/services/clients/client_accounts.dart';
 import 'package:evrak_convert/services/clients/office_cash.dart';
@@ -243,5 +248,107 @@ void main() {
     expect(ledgerOf(db, 'k1').single.official, 'makbuz:M-9');
     expect(find.text("UYAP'ta"), findsOneWidget);
     expect(find.byKey(const ValueKey('enforcement-folio-left')), findsNothing);
+  });
+
+  test('the ready requests are filled from the file: the office, the '
+      'sides and the law they rest on', () {
+    final c = PetitionCase(
+      court: 'Manavgat İcra Dairesi',
+      number: '2026/1234',
+      lawyer: 'Av. Deniz Kaya',
+      parties: const [
+        ('Alacaklı', 'BORA YAPI A.Ş.'),
+        ('Borçlu', 'MEHMET TUNÇ'),
+      ],
+    );
+    String of(String name) => _text(
+      enforcementRequests.singleWhere((t) => t.name == name).build(c, _at),
+    );
+    expect(enforcementRequests.length, greaterThanOrEqualTo(15));
+    final salary = of('Maaş haczi');
+    expect(salary, contains('MANAVGAT İCRA DAİRESİ MÜDÜRLÜĞÜ’NE'));
+    expect(salary, contains('ALACAKLI\t: BORA YAPI A.Ş.'));
+    expect(salary, contains('BORÇLU\t: MEHMET TUNÇ'));
+    expect(salary, contains('İİK m.83'));
+    expect(salary, contains('Alacaklı Vekili'));
+    expect(of('Bankalara haciz ihbarnamesi (89/1)'), contains('İİK m.89/1'));
+    expect(
+      of('Adres araştırması ve MERNİS adresine tebligat'),
+      contains('Tebligat Kanunu m.21/2'),
+    );
+    // Every request is an enforcement one, and in the editor's list too.
+    for (final t in enforcementRequests) {
+      expect(t.group, 'İcra');
+      expect(petitionTemplates, contains(t));
+    }
+  });
+
+  testWidgets('a ready request is written in the file\'s folder, tied to '
+      'the file and opened in the editor', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final root = Directory.systemTemp.createTempSync('folio_requests_');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final kept = (UyapSettings.instance, UyapCaseLinks.instance);
+    final settings = UyapSettings(directory: root);
+    final links = UyapCaseLinks(directory: root);
+    await tester.runAsync(() => settings.update(folder: root.path));
+    UyapSettings.instance = settings;
+    UyapCaseLinks.instance = links;
+    addTearDown(() {
+      UyapSettings.instance = kept.$1;
+      UyapCaseLinks.instance = kept.$2;
+    });
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    const link = UyapCaseLink(
+      jurisdiction: '2',
+      courtType: '1',
+      courtId: '1001',
+      court: 'Manavgat İcra Dairesi',
+      number: '2026/1234',
+    );
+    final opened = <File>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: EnforcementView(
+              record: UyapCaseRecord(
+                court: 'Manavgat İcra Dairesi',
+                number: '2026/1234',
+                fetchedAt: DateTime(2026, 10, 9),
+                link: link,
+                enforcement: UyapEnforcement(
+                  lines: UyapEnforcement.linesFromJson(_account),
+                  debtors: const [UyapDebtor(id: '1', name: 'MEHMET TUNÇ')],
+                ),
+              ),
+              caseKey: 'k1',
+              title: '2026/1234 · Manavgat İcra Dairesi',
+              database: () async => db,
+              lawyer: 'Av. Deniz Kaya',
+              onOpen: opened.add,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final chip = find.byKey(const ValueKey('request-Maaş haczi'));
+    await tester.ensureVisible(chip);
+    await tester.runAsync(() async {
+      await tester.tap(chip);
+      for (var i = 0; i < 50 && opened.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    });
+    expect(opened, hasLength(1));
+    final file = opened.single;
+    expect(file.path, endsWith('Maaş haczi.udf'));
+    expect(p.isWithin(root.path, file.path), isTrue);
+    final tied = await tester.runAsync(() => links.of(file.path));
+    expect(tied?.number, '2026/1234');
   });
 }
