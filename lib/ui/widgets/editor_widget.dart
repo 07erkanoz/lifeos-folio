@@ -82,6 +82,7 @@ import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 
+import '../../services/editor/tab_stops.dart';
 import '../../services/legal/decision_insert.dart';
 
 import '../../models/document_model.dart';
@@ -2368,6 +2369,79 @@ class _EditorWidgetState extends State<EditorWidget>
   }
 
   /// [text] in place of the selection, apart from the word before it.
+  /// The caret's paragraph as the ruler shows it (GELISTIRME.md §6).
+  RulerParagraph? _rulerParagraph() {
+    final layout = _quillController
+        .getSelectionStyle()
+        .attributes['doc-layout']
+        ?.value;
+    final map = layout is Map ? layout : const {};
+    double n(String key) => (map[key] as num?)?.toDouble() ?? 0;
+    final left = n('left');
+    final word = map['rules'] == 'word';
+    return RulerParagraph(
+      firstRow: left + n('first'),
+      otherRows: left + n('hanging'),
+      right: n('right'),
+      stops: TabStops.parse(map['tabs'] as String?).stops,
+      origin: word ? 0 : left,
+    );
+  }
+
+  /// What the ruler changed, on every paragraph the selection touches, as
+  /// one step to undo.
+  void _applyRuler(RulerParagraph next) {
+    final controller = _quillController;
+    final selection = controller.selection;
+    if (!selection.isValid) return;
+    final start = selection.start, end = selection.end;
+    final (:left, :first, :hanging) = next.indents;
+    final history = controller.document.history;
+    history.lastRecorded = 0;
+    var offset = 0;
+    for (final line in _lines(controller.document.root)) {
+      final from = offset, to = offset + line.length;
+      offset = to;
+      if (to <= start) continue;
+      // A selection ending where a line begins leaves that line out.
+      if (end > start ? from >= end : from > end) break;
+      final had = line.style.attributes['doc-layout']?.value;
+      final map = <String, dynamic>{
+        ...(had is Map ? had.cast<String, dynamic>() : const {}),
+        'left': left,
+        'first': first,
+        'hanging': hanging,
+        'right': next.right,
+        'tabs': next.stops.isEmpty ? null : next.tabSet,
+      };
+      if (line.style.attributes[Attribute.list.key] == null) {
+        map['editorIndent'] = (left / 36).floor().clamp(0, 8);
+      }
+      controller.formatText(
+        from,
+        0,
+        Attribute('doc-layout', AttributeScope.block, map),
+      );
+    }
+    history.lastRecorded = 0;
+    setState(() {});
+  }
+
+  /// The document's lines in order, those inside blocks too.
+  static Iterable<Line> _lines(Node node) sync* {
+    if (node is Line) {
+      yield node;
+    } else if (node is Block) {
+      for (final child in node.children) {
+        yield* _lines(child);
+      }
+    } else if (node is Root) {
+      for (final child in node.children) {
+        yield* _lines(child);
+      }
+    }
+  }
+
   /// Where the last decision written ends: one written right there next
   /// is joined by "Aynı yönde, ".
   int? _decisionEnd;
@@ -5317,19 +5391,34 @@ class _EditorWidgetState extends State<EditorWidget>
                                                         : 0,
                                                     bottom: 6,
                                                   ),
-                                                  child: DocumentRuler(
-                                                    axis: Axis.horizontal,
-                                                    pagePoints: widthPoints,
-                                                    pixels: paperWidth,
-                                                    leading: _pageProperties
-                                                        .marginLeft,
-                                                    trailing: _pageProperties
-                                                        .marginRight,
-                                                    onChanged: (start, end) =>
-                                                        margins(
-                                                          true,
-                                                          start,
-                                                          end,
+                                                  // The caret's paragraph on
+                                                  // it, as the caret moves.
+                                                  child: ListenableBuilder(
+                                                    listenable:
+                                                        _quillController,
+                                                    builder: (context, _) =>
+                                                        DocumentRuler(
+                                                          axis: Axis.horizontal,
+                                                          pagePoints:
+                                                              widthPoints,
+                                                          pixels: paperWidth,
+                                                          leading:
+                                                              _pageProperties
+                                                                  .marginLeft,
+                                                          trailing:
+                                                              _pageProperties
+                                                                  .marginRight,
+                                                          onChanged:
+                                                              (start, end) =>
+                                                                  margins(
+                                                                    true,
+                                                                    start,
+                                                                    end,
+                                                                  ),
+                                                          paragraph:
+                                                              _rulerParagraph(),
+                                                          onParagraph:
+                                                              _applyRuler,
                                                         ),
                                                   ),
                                                 ),

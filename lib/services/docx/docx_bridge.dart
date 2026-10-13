@@ -11,6 +11,7 @@ import 'package:docx_creator/docx_creator.dart';
 import 'package:xml/xml.dart' show XmlBuilder;
 
 import '../../models/document_model.dart';
+import '../editor/tab_stops.dart';
 import '../layout/page_numbers.dart';
 
 class DocxBridge {
@@ -118,6 +119,9 @@ class DocxBridge {
   }
 
   static Future<Uint8List> writeBytes(DocModel model) async {
+    // A Word document's stops are counted from the margin; UYAP's from the
+    // paragraph's left indent (see TabStops).
+    _wordTabs = model.metadata['tabRules'] == 'word';
     final doc = _modelToDocx(model);
     final rawBytes = await DocxExporter().exportToBytes(doc);
     return _fixDocxPackage(rawBytes, model);
@@ -233,6 +237,75 @@ class DocxBridge {
         .codeUnits;
   }
 
+  static bool _wordTabs = false;
+
+  /// A paragraph's own tab stops, which the writer has no place for: left
+  /// as a mark inside the paragraph and put into its properties by
+  /// [_tabStops] once the package is written.
+  static _TabsMark? _tabsMark(DocBlock block) {
+    final set = block.tabSet;
+    if (set == null || set.trim().isEmpty) return null;
+    final stops = TabStops.parse(set).stops;
+    if (stops.isEmpty) return null;
+    final origin = _wordTabs ? 0.0 : block.leftIndent;
+    return _TabsMark(
+      [
+        for (final stop in stops)
+          '${switch (stop.align) {
+            TabAlign.right => 'right',
+            TabAlign.centre => 'center',
+            TabAlign.decimal => 'decimal',
+            TabAlign.bar => 'bar',
+            TabAlign.left => 'left',
+          }}@${((origin + stop.position) * 20).round()}',
+      ].join(','),
+    );
+  }
+
+  static final _tabsMarkPattern = RegExp(
+    r'(<w:p(?:\s[^>]*)?>)((?:(?!</w:p>).)*?)<!--folio-tabs:([a-z@0-9,]+)-->',
+    dotAll: true,
+  );
+
+  /// The marks [_tabsMark] left, made each paragraph's `w:tabs`, where the
+  /// schema has it: before its spacing, indent and alignment.
+  static List<int> _tabStops(List<int> content) {
+    final text = utf8.decode(content, allowMalformed: true);
+    if (!text.contains('<!--folio-tabs:')) return content;
+    final out = text.replaceAllMapped(_tabsMarkPattern, (m) {
+      final tabs = StringBuffer('<w:tabs>');
+      for (final one in m[3]!.split(',')) {
+        final bits = one.split('@');
+        if (bits.length != 2) continue;
+        tabs.write('<w:tab w:val="${bits[0]}" w:pos="${bits[1]}"/>');
+      }
+      tabs.write('</w:tabs>');
+      var inside = m[2]!;
+      final props = RegExp(
+        r'<w:pPr>(.*?)</w:pPr>',
+        dotAll: true,
+      ).firstMatch(inside);
+      if (props == null) {
+        inside = '<w:pPr>$tabs</w:pPr>$inside';
+      } else {
+        final body = props[1]!;
+        final at = RegExp(r'<w:(spacing|ind|jc|rPr|outlineLvl)\b')
+            .firstMatch(body)
+            ?.start;
+        final placed = at == null
+            ? '$body$tabs'
+            : '${body.substring(0, at)}$tabs${body.substring(at)}';
+        inside = inside.replaceRange(
+          props.start,
+          props.end,
+          '<w:pPr>$placed</w:pPr>',
+        );
+      }
+      return '${m[1]}$inside';
+    });
+    return utf8.encode(out);
+  }
+
   /// Writes a first line pulled out of the indent as OOXML spells it.
   ///
   /// The writer puts it down as a negative `w:firstLine`, which the schema
@@ -303,7 +376,7 @@ class DocxBridge {
         }
 
         if (file.name == 'word/document.xml') {
-          content = _hangingIndent(_canonicalJustify(content));
+          content = _tabStops(_hangingIndent(_canonicalJustify(content)));
           if (model != null) content = _regionPlacement(content, model);
         }
 
@@ -696,7 +769,7 @@ class DocxBridge {
       } else {
         out.add(
           DocxParagraph(
-            children: _buildDocxChildren(block),
+            children: [?_tabsMark(block), ..._buildDocxChildren(block)],
             align: _toDocxAlign(block.alignment),
             // Word's own way round: the rows after the first set in, and the
             // first pulled back out by the hanging indent.
@@ -899,6 +972,21 @@ class DocxBridge {
 
 /// A Word field — the page number, the page count — in the number's own
 /// font, with what it shows until Word works it out.
+/// Where a paragraph's tab stops go, until [DocxBridge._tabStops] moves
+/// them into its properties.
+class _TabsMark extends DocxInline {
+  const _TabsMark(this.stops);
+
+  /// "left@567,center@4535": the kind and the place in twips.
+  final String stops;
+
+  @override
+  void accept(DocxVisitor visitor) {}
+
+  @override
+  void buildXml(XmlBuilder builder) => builder.comment('folio-tabs:$stops');
+}
+
 class _DocxField extends DocxInline {
   const _DocxField(
     this.instruction,

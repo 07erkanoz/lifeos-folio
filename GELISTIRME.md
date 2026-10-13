@@ -191,7 +191,9 @@ Kabul: Seçimli ve seçimsiz iki biçim doğru; ilgi eki doğru; SONUÇ başlı�
 
 ---
 
-## 6. Cetvel: sekme durakları ve girintiler `[ ]` — 1 tur
+## 6. Cetvel: sekme durakları ve girintiler `[x]` — 1 tur
+
+Yapıldı (13 Ekim 2026). Not: DOCX'e yazılıyor; Word'den açılan bir DOCX'in kendi sekme durakları henüz okunmuyor.
 
 - Yatay cetvel imlecin bulunduğu paragrafın sekme duraklarını ve girintilerini gösterir (dosyadan okunanlar zaten çiziliyor).
 - **Sekme durağı:**
