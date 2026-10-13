@@ -170,4 +170,36 @@ void main() {
     await tester.pump();
     expect(runs, 2);
   });
+
+  testWidgets('once alike, the computer\'s documents are offered with their '
+      'count and size, and asked for on a press', (tester) async {
+    var asked = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FirstSyncDialog(
+            events: Stream.value((part: OwnSync.uyapData, done: true)),
+            run: () async {},
+            documents: () async => (count: 214, bytes: 350 << 20),
+            takeDocuments: () async {
+              asked++;
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.textContaining('indirilmiş 214 evrak var (350 MB)'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('first-sync-take-documents')));
+    await tester.pump();
+    await tester.pump();
+    expect(asked, 1);
+    expect(find.textContaining('Evraklar geliyor'), findsOneWidget);
+  });
 }

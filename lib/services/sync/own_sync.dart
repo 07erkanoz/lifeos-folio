@@ -15,6 +15,7 @@ import '../portal/portal_sync.dart';
 import '../uets/notice_deadlines.dart';
 import '../uyap/uyap_case_store.dart';
 import 'settings_sync.dart';
+import 'uyap_documents_sync.dart';
 import 'uyap_own_sync.dart';
 
 /// Senkron (docs/buro.md): what one person's own devices keep alike when
@@ -269,6 +270,9 @@ class OwnSync extends ChangeNotifier {
 
   final _settings = SettingsSync();
 
+  /// UYAP's downloaded documents, given to an own device that asks.
+  late final documents = UyapDocumentsSync(network: _net, store: uyapStore);
+
   Future<void> _apply() async {
     for (final (part, files) in [
       (profilePart, const [SettingsSync.profile]),
@@ -296,9 +300,18 @@ class OwnSync extends ChangeNotifier {
       );
       _net.ownAnswers[UyapOwnSync.kind] = (asked) async =>
           (await uyap.answer(asked), null);
+      // The documents themselves only when asked: a phone being set up.
+      final docs = documents;
+      _net.ownAnswers[UyapDocumentsSync.kind] = (asked) async =>
+          (await docs.answer(asked), null);
+      _net.ownFiles[UyapDocumentsSync.kind] = (t) async {
+        if (await docs.came(t) > 0) PortalSync.started?.notifyListeners();
+      };
     } else {
       _net.ownParts.remove(uyapData);
       _net.ownAnswers.remove(UyapOwnSync.kind);
+      _net.ownAnswers.remove(UyapDocumentsSync.kind);
+      _net.ownFiles.remove(UyapDocumentsSync.kind);
     }
     if (isOn(agenda)) {
       final db = await _database();

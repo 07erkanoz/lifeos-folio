@@ -33,13 +33,25 @@ Future<bool> pairWithDesktop(
   if (!paired && known.isEmpty) return false;
   await (sync ?? OwnSync.instance).start();
   if (!context.mounted) return false;
-  return FirstSyncDialog.show(context, net);
+  return FirstSyncDialog.show(context, net, sync: sync);
 }
 
 /// The first sync, part by part: each with its state, and the whole with
 /// how far it has come.
 class FirstSyncDialog extends StatefulWidget {
-  const FirstSyncDialog({super.key, required this.events, required this.run});
+  const FirstSyncDialog({
+    super.key,
+    required this.events,
+    required this.run,
+    this.documents,
+    this.takeDocuments,
+  });
+
+  /// How many documents the computer has downloaded, and their size.
+  final Future<({int count, int bytes})?> Function()? documents;
+
+  /// The computer asked to send them; true when it was.
+  final Future<bool> Function()? takeDocuments;
 
   /// Each part as it is taken in, and when it is.
   final Stream<({String part, bool done})> events;
@@ -47,14 +59,32 @@ class FirstSyncDialog extends StatefulWidget {
   /// What makes the devices alike.
   final Future<void> Function() run;
 
-  static Future<bool> show(BuildContext context, OfficeNetwork network) async =>
-      await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) =>
-            FirstSyncDialog(events: network.ownMerging, run: network.syncOwn),
-      ) ??
-      false;
+  static Future<bool> show(
+    BuildContext context,
+    OfficeNetwork network, {
+    OwnSync? sync,
+  }) async {
+    final docs = (sync ?? OwnSync.instance).documents;
+    // The computer it was set up from: the own device on the network.
+    String? computer() => network.ownOnline.firstOrNull?.deviceId;
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => FirstSyncDialog(
+            events: network.ownMerging,
+            run: network.syncOwn,
+            documents: () async {
+              final id = computer();
+              return id == null ? null : docs.count(id);
+            },
+            takeDocuments: () async {
+              final id = computer();
+              return id != null && await docs.ask(id);
+            },
+          ),
+        ) ??
+        false;
+  }
 
   /// The parts, in the order they are shown, by what the lawyer calls them.
   static const parts = [
@@ -80,6 +110,10 @@ class _FirstSyncDialogState extends State<FirstSyncDialog> {
   StreamSubscription<({String part, bool done})>? _heard;
   bool _finished = false;
   bool _failed = false;
+
+  /// The computer's documents: how many, and whether they were asked for.
+  ({int count, int bytes})? _docs;
+  bool _docsAsked = false;
 
   @override
   void initState() {
@@ -116,7 +150,22 @@ class _FirstSyncDialogState extends State<FirstSyncDialog> {
       _finished = true;
       _failed = _states.isEmpty;
     });
+    if (!_failed && widget.documents != null) {
+      final docs = await widget.documents!();
+      if (mounted) setState(() => _docs = docs);
+    }
   }
+
+  Future<void> _takeDocuments() async {
+    final ok = await (widget.takeDocuments?.call() ?? Future.value(false));
+    if (mounted) setState(() => _docsAsked = ok);
+  }
+
+  static String _size(int bytes) => bytes >= 1 << 30
+      ? '${(bytes / (1 << 30)).toStringAsFixed(1)} GB'
+      : bytes >= 1 << 20
+      ? '${(bytes / (1 << 20)).toStringAsFixed(0)} MB'
+      : '${(bytes / 1024).ceil()} KB';
 
   @override
   Widget build(BuildContext context) {
@@ -204,11 +253,47 @@ class _FirstSyncDialogState extends State<FirstSyncDialog> {
                 ],
               ),
             ),
+          if (_finished && !_failed && (_docs?.count ?? 0) > 0)
+            Container(
+              key: const ValueKey('first-sync-documents'),
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: .06),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: _docsAsked
+                  ? const Text(
+                      'Evraklar geliyor. İki cihaz aynı ağda kaldıkça arka '
+                      'planda tamamlanır; açtığınız evrak hemen iner.',
+                      style: TextStyle(fontSize: 12.5),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Bilgisayarınızda indirilmiş ${_docs!.count} evrak '
+                          'var (${_size(_docs!.bytes)}). Bu telefona da '
+                          'alınsın mı?',
+                          style: const TextStyle(fontSize: 12.5),
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            key: const ValueKey('first-sync-take-documents'),
+                            onPressed: () => unawaited(_takeDocuments()),
+                            icon: const Icon(Icons.download_rounded, size: 17),
+                            label: const Text('Evrakları da al'),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           if (_finished && !_failed)
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Text(
-                'Evrakın kendisi açtığınızda bu telefona indirilir. '
+                'Almadığınız evrak, açtığınızda bu telefona indirilir. '
                 'Bundan sonra iki cihaz aynı ağda oldukça kendiliğinden '
                 'eşitlenir.',
                 style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),

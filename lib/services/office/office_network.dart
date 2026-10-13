@@ -226,6 +226,11 @@ class OfficeNetwork extends ChangeNotifier {
   /// A folder's files another own device sent came whole (see FolderSync).
   void Function(OfficeTransfer t)? onOwnFiles;
 
+  /// Files another own device sent for a part of Senkron other than the
+  /// folders, by what the part names them (meta "senkron"): UYAP's
+  /// documents, say.
+  final ownFiles = <String, Future<void> Function(OfficeTransfer t)>{};
+
   /// Files that came whole on their own, not with a message, a task or a
   /// folder kept alike: in the inbox, for the user to be told where.
   final arrived = ValueNotifier<OfficeTransfer?>(null);
@@ -235,7 +240,12 @@ class OfficeNetwork extends ChangeNotifier {
     if (!t.outgoing &&
         t.state == TransferState.done &&
         t.meta['senkron'] is String) {
-      onOwnFiles?.call(t);
+      final part = ownFiles[t.meta['senkron']];
+      if (part != null) {
+        unawaited(part(t));
+      } else {
+        onOwnFiles?.call(t);
+      }
     }
     if (t.state == TransferState.done) unawaited(_metOwnDevice(t.talkedTo));
     if (!t.outgoing &&
