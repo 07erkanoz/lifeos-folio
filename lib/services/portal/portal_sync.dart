@@ -158,7 +158,7 @@ class PortalSync extends ChangeNotifier {
     // Whether UYAP is read of itself here, before the sessions come back:
     // a session taken up again asks UYAP nothing unless it is.
     unawaited(
-      _loadAuto().whenComplete(() {
+      _autoLoaded.whenComplete(() {
         unawaited(_restoreMobile());
         unawaited(_restoreKept());
       }),
@@ -450,15 +450,40 @@ class PortalSync extends ChangeNotifier {
     if (user.isNotEmpty && !_placeholder(user)) {
       _remember(() => rememberLawyer(name: user));
     }
-    if (_web.connected && !quiet && _readsNow) {
-      unawaited(syncWeb());
+    if (_web.connected && !quiet) unawaited(_connected(PortalChannel.uyapWeb));
+  }
+
+  /// A portal connected (by the lawyer, or a session taken up again). With
+  /// UYAP read of itself ([autoFetch]) what is due is read; without, only
+  /// the very first portfolio, once, when none was ever read: nothing else,
+  /// no case one by one, no notifications. A case is read when its page is
+  /// opened, everything else by the lawyer's Senkronize et. Connecting
+  /// started a reading every time, the setting off or not, and UYAP Mobil
+  /// read every case the web had not, one by one, with no money.
+  Future<void> _connected(PortalChannel channel) async {
+    await _autoLoaded;
+    if (_disposed || quiet) return;
+    final sync = channel == PortalChannel.uyapWeb ? syncWeb : syncMobile;
+    if (autoFetch) {
+      unawaited(sync());
       unawaited(syncNotices());
-    } else if (_web.connected && !quiet) {
-      // Taken up again with nothing read of itself: what the first
-      // reading left unread is still read, once.
-      unawaited(_fillOnly());
+      return;
+    }
+    final db = await _database();
+    final neverRead =
+        db.meta(_portfolioKey) == null && db.meta(_webOnlyKey) == null;
+    if (neverRead) {
+      unawaited(
+        SyncLog.note(
+          'İlk bağlantı: portföy bir kez okunuyor (kendiliğinden okuma kapalı)',
+        ),
+      );
+      unawaited(sync());
     }
   }
+
+  /// Done when whether UYAP is read of itself is known.
+  late final Future<void> _autoLoaded = _loadAuto();
 
   /// A name a portal gives when it has none: no lawyer's.
   static bool _placeholder(String name) {
@@ -881,11 +906,8 @@ class PortalSync extends ChangeNotifier {
         ),
       );
     }
-    if (_mobile.connected && !quiet && _readsNow) {
-      unawaited(syncMobile());
-      unawaited(syncNotices());
-    } else if (_mobile.connected && !quiet) {
-      unawaited(_fillOnly());
+    if (_mobile.connected && !quiet) {
+      unawaited(_connected(PortalChannel.uyapMobile));
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'observed.dart';
 import 'portal_channel.dart';
 
@@ -60,10 +62,40 @@ class PortalCase {
       ids: {...ids, ...other.ids},
       status: mergeObserved(status, other.status),
       parties: mergeObserved(parties, other.parties),
-      details: mergeObserved(details, other.details),
+      details: mergeDetails(details, other.details),
       documents: mergeObserved(documents, other.documents),
     );
   }
+}
+
+/// A case's particulars from the two portals, merged key by key: each says
+/// what it knows (the web the court's id on the web, `birimId`; UYAP Mobil
+/// its own codes), and neither wipes out what only the other said. The
+/// newer (or the complete) one's value wins a key both give; a key only one
+/// gives stays. Taken whole, the mobile API's reading erased the web's
+/// `birimId`, and the web could no longer find the case to read its money
+/// and account.
+Observed<Map<String, Object?>>? mergeDetails(
+  Observed<Map<String, Object?>>? current,
+  Observed<Map<String, Object?>>? incoming,
+) {
+  final winner = mergeObserved(current, incoming);
+  if (current == null || incoming == null || winner == null) return winner;
+  final other = identical(winner, current) ? incoming : current;
+  final merged = <String, Object?>{
+    ...{
+      for (final e in other.value.entries)
+        if (!isEmptyValue(e.value)) e.key: e.value,
+    },
+    for (final e in winner.value.entries)
+      if (!isEmptyValue(e.value)) e.key: e.value,
+  };
+  if (jsonEncode(merged) == jsonEncode(winner.value)) return winner;
+  if (identical(winner, current) &&
+      jsonEncode(merged) == jsonEncode(current.value)) {
+    return current;
+  }
+  return Observed(merged, winner.source, winner.at, complete: winner.complete);
 }
 
 extension PortalCaseJson on PortalCase {

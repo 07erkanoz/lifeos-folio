@@ -593,7 +593,7 @@ class UyapCasePanelController extends ChangeNotifier {
                 state: kept?.status?.value ?? '',
                 hearing: before?.details.hearing,
               ),
-        parties: parties.isEmpty ? before?.parties ?? const [] : parties,
+        parties: mergeParties(before?.parties ?? const [], parties),
         documents: UyapCaseDocuments(documents),
         link: _link,
         money: before?.money,
@@ -601,6 +601,38 @@ class UyapCasePanelController extends ChangeNotifier {
       );
     },
   );
+
+  /// The parties kept ([kept], the web's most often: whole names, roles and
+  /// counsel) with what UYAP Mobil gave ([fetched]) added: a party it names
+  /// that is not kept comes in, a kept one it names too keeps what it had
+  /// and takes only what it lacked (counsel, the kind). None is taken away.
+  /// Taken whole, the mobile API's list replaced the web's, and with it
+  /// went the counsel by which the lawyer's clients are known.
+  @visibleForTesting
+  static List<UyapParty> mergeParties(
+    List<UyapParty> kept,
+    List<UyapParty> fetched,
+  ) {
+    if (kept.isEmpty) return fetched;
+    if (fetched.isEmpty) return kept;
+    String who(UyapParty p) => UyapWebService.fold(p.name).trim();
+    final out = [...kept];
+    for (final p in fetched) {
+      final at = out.indexWhere((k) => who(k) == who(p));
+      if (at < 0) {
+        out.add(p);
+        continue;
+      }
+      final k = out[at];
+      out[at] = UyapParty(
+        k.name,
+        k.role.isNotEmpty ? k.role : p.role,
+        k.lawyer.isNotEmpty ? k.lawyer : p.lawyer,
+        k.kind.isNotEmpty ? k.kind : p.kind,
+      );
+    }
+    return out;
+  }
 
   /// [fetched] with the keys the kept list knows its documents by. The
   /// web and the mobile API key one document alike most of the time, by
