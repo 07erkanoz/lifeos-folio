@@ -666,7 +666,7 @@ Her madde bitince commit edilip GitHub'a gönderilir; durum burada güncellenir.
 | T10 | UETS girişi, Tebligatlarım ekranı ve dosya eşleştirme | P05/P08/P09 | Tamam (mobil imza ve kartla giriş, §9.8 eşleştirme, konudan kesin belge türünde süreler ajandaya; gerçek hesapla kabul P16'da) |
 | T11 | Sayfalar birbirinden haberli: ortak kanal çubuğu, UYAP Dosyalarım/editör UYAP Mobil ile, portföyden birim ya da tek tek ekleme, ajandadan dosya açınca ekleme | §9.2/§9.4 | Tamam |
 | T12 | Mobil dosya kimliği her seferinde dar sorguyla (birim türü → mahkeme → yıl/sıra), portföy taranmaz; mobil evrak listesi yalnız ekler | §9.3 | Tamam |
-| T13 | Telefonda Büro: Ajanda, UETS, UYAP (§13) | P11/P14 | Sırada |
+| T13 | Telefonda Büro: Ajanda, UETS, UYAP (§13) | P11/P14 | Tamam (çekmece rozetleri, dar ekranda Liste, tebligat ayrı sayfada, dosya → evrak önizleme; gerçek telefon kabulü P16'da) |
 | T14 | Tek bağlantı kapısı: ekranlar kanal seçmez, `ensureUyap(işlem)` sorar; masaüstünde e-imza + Web Portal önerilir, telefonda UYAP Mobil; telefonda e-imza hiç görünmez | §3/§9.2 | Tamam (`ensureUyap`, `connectUyap`; `uyap_door_test`) |
 | T15 | Telefonun ilk kurulumunda masaüstüne QR ile eşleşme; profil ve ayarların da eşitlenmesi; bölüm bölüm ilerleme ekranı (önce `officeName` silinme hatası) | P14/§13 | Tamam (profil ve ayarlar eşitlenir; telefon kurulumunda "Masaüstümdeki Folio’dan al", `first_sync_test`) |
 | T16 | Masaüstü ilk kurulumda profil: e-imza kartından (ad, TC) ve UYAP Web Portal (e-imza) ile doldurma; UYAP Mobil seçeneği kalır | P03 | Tamam (kurulumda ve profil sayfasında e-imza kartı; kurulumda Web Portal; `profile_from_card_test`) |
@@ -696,6 +696,8 @@ Aynı ekranlar, aynı veritabanı kuralları; telefonda yalnız telefonun yapabi
 **Veri**
 - Telefon kendi `portal.sqlite`'ını tutar; birleştirme kuralları (§9.4) aynı kod. Telefon `webview_flutter` ile UYAP Mobil'e ve mobil imzayla UETS'ye kendisi bağlanır; portal verisini kendisi çeker. Bu yüzden cihazlar arasında taşınacak olan yalnız avukatın kendi verisidir.
 - Portal oturumu hiçbir zaman aktarılmaz; her cihaz kendi girişini yapar.
+
+**Uygulanan senkron (13 Ekim 2026).** Aşağıdaki 6 Ekim kararı yerine `docs/buro.md`'deki büro ağı üzerine kuruldu: cihazlar aynı ağda mDNS ile bulunur, QR (telefon) ya da altı haneli kodla (bilgisayar) bir kez tanınır, kanal X25519 + ChaCha20-Poly1305 ile şifrelidir. Senkron bölümleri: avukat profili, kalıplar ve ayarlar, ajanda ve müvekkiller, UYAP verileri, portal oturumları (paylaşım kullanıcının seçimiyle). İndirilmiş evraklar yalnız istenince gelir (telefonun ilk kurulumunda "Evrakları da al"). Telefonun ilk kurulumunda "Masaüstümdeki Folio’dan al" bu yolu baştan sona yürütür. Aşağıdaki metin kararın geçmişi olarak duruyor.
 
 **Masaüstü ↔ telefon senkronu (karar: 6 Ekim 2026, LifeOs-Anywhere yöntemi)**
 
