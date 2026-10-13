@@ -208,7 +208,9 @@ Kabul: Eklenen/taşınan durak ve girinti kaydedip yeniden açınca yerinde; UYA
 
 ---
 
-## 7. Otomatik biçimlendirme `[ ]` — 1–2 tur
+## 7. Otomatik biçimlendirme `[x]` — 1–2 tur
+
+Yapıldı (13 Ekim 2026): Hukuk sekmesinde **Biçimlendir**, kısayolu Ctrl+Shift+F. Seçim varsa yalnızca seçili satırlar düzenlenir. Kurallar henüz ayarlanamıyor.
 
 "Biçimlendir" komutu (araç çubuğu ve kısayol) belgeyi ya da seçimi dilekçe kurallarına göre düzenler:
 

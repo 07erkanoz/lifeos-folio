@@ -82,6 +82,7 @@ import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 
+import '../../services/editor/petition_format.dart';
 import '../../services/editor/tab_stops.dart';
 import '../../services/legal/decision_insert.dart';
 
@@ -1550,6 +1551,7 @@ class _EditorWidgetState extends State<EditorWidget>
       (LogicalKeyboardKey.keyS, false): 'save',
       (LogicalKeyboardKey.keyS, true): 'saveAs',
       (LogicalKeyboardKey.keyF, false): 'find',
+      (LogicalKeyboardKey.keyF, true): 'format',
       (LogicalKeyboardKey.keyH, false): 'replace',
       (LogicalKeyboardKey.keyB, false): 'bold',
       (LogicalKeyboardKey.keyI, false): 'italic',
@@ -1618,6 +1620,8 @@ class _EditorWidgetState extends State<EditorWidget>
         if (!_isSaving) _fileMenu.open();
       case 'find':
         _find();
+      case 'format':
+        _formatPetition();
       case 'replace':
         _find(replace: true);
       case 'bold':
@@ -2369,6 +2373,124 @@ class _EditorWidgetState extends State<EditorWidget>
   }
 
   /// [text] in place of the selection, apart from the word before it.
+  /// "Biçimlendir" (GELISTIRME.md §7): the petition, or the paragraphs
+  /// chosen, set by the filing's rules; one step to undo.
+  void _formatPetition() {
+    final controller = _quillController;
+    final lines = _lines(controller.document.root).toList();
+    if (lines.isEmpty) return;
+    final texts = [
+      for (final line in lines)
+        line.toPlainText().replaceAll(RegExp(r'\n$'), ''),
+    ];
+    // Widths in the petition's own font, at a point a pixel.
+    String family = 'Times New Roman';
+    double size = 12;
+    for (final line in lines) {
+      final leaf = line.children.firstOrNull;
+      if (leaf is! Leaf) continue;
+      final font = leaf.style.attributes[Attribute.font.key]?.value;
+      if (font is String && font.isNotEmpty) family = font;
+      final px = leaf.style.attributes['size']?.value;
+      final points = switch (px) {
+        final num n => n.toDouble(),
+        final String t => double.tryParse(t),
+        _ => null,
+      };
+      if (points != null) size = points / EditorUnits.sizePixelsPerPoint;
+      break;
+    }
+    double measure(String text) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(fontFamily: family, fontSize: size),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      return painter.width;
+    }
+
+    final plan = PetitionFormat.plan(texts, measure: measure);
+    final selection = controller.selection;
+    final chosen = selection.isValid && !selection.isCollapsed;
+    final starts = <int>[];
+    var offset = 0;
+    for (final line in lines) {
+      starts.add(offset);
+      offset += line.length;
+    }
+    final history = controller.document.history;
+    history.lastRecorded = 0;
+    var changed = 0;
+    // From the last line up: a line's new words do not move those above.
+    for (var i = lines.length - 1; i >= 0; i--) {
+      final fix = plan[i];
+      if (fix.kind == PetitionLine.other) continue;
+      final start = starts[i];
+      if (chosen &&
+          (start + lines[i].length <= selection.start ||
+              start >= selection.end)) {
+        continue;
+      }
+      var length = texts[i].length;
+      final text = fix.text;
+      if (text != null && text != texts[i]) {
+        final leaf = lines[i].children.firstOrNull;
+        final style = leaf is Leaf ? leaf.style.toJson() : null;
+        controller.replaceText(
+          start,
+          length,
+          Delta()..insert(text, style == null || style.isEmpty ? null : style),
+          null,
+        );
+        length = text.length;
+      }
+      if (fix.bold && length > 0) {
+        controller.formatText(start, length, Attribute.bold);
+      }
+      final align = switch (fix.align) {
+        'center' => Attribute.centerAlignment,
+        'right' => Attribute.rightAlignment,
+        'justify' => Attribute.justifyAlignment,
+        'left' => Attribute.clone(Attribute.align, null),
+        _ => null,
+      };
+      if (align != null) controller.formatText(start, 0, align);
+      if (fix.left != null ||
+          fix.first != null ||
+          fix.hanging != null ||
+          fix.tabs != null) {
+        final line = _lines(controller.document.root).elementAt(i);
+        final had = line.style.attributes['doc-layout']?.value;
+        final map = <String, dynamic>{
+          ...(had is Map ? had.cast<String, dynamic>() : const {}),
+          'left': ?fix.left,
+          'first': ?fix.first,
+          'hanging': ?fix.hanging,
+          'tabs': ?fix.tabs,
+        };
+        if (fix.left != null &&
+            line.style.attributes[Attribute.list.key] == null) {
+          map['editorIndent'] = (fix.left! / 36).floor().clamp(0, 8);
+        }
+        controller.formatText(
+          start,
+          0,
+          Attribute('doc-layout', AttributeScope.block, map),
+        );
+      }
+      changed++;
+    }
+    history.lastRecorded = 0;
+    setState(() {});
+    showNotice(
+      context,
+      changed == 0 ? 'Biçimlendirilecek bir şey bulunamadı' : 'Biçimlendirildi',
+      detail: changed == 0 ? null : 'Ctrl+Z ile geri alabilirsiniz.',
+    );
+  }
+
   /// The caret's paragraph as the ruler shows it (GELISTIRME.md §6).
   RulerParagraph? _rulerParagraph() {
     final layout = _quillController
@@ -3674,6 +3796,11 @@ class _EditorWidgetState extends State<EditorWidget>
             leadingIcon: const Icon(Icons.edit_note_outlined, size: 18),
             child: const Text('İmza bloğu'),
           ),
+          MenuItemButton(
+            onPressed: _formatPetition,
+            leadingIcon: const Icon(Icons.auto_fix_high_rounded, size: 18),
+            child: const Text('Biçimlendir'),
+          ),
           const Divider(height: 8),
           MenuItemButton(
             onPressed: needsCase(() => unawaited(_tieToHearing())),
@@ -3725,6 +3852,16 @@ class _EditorWidgetState extends State<EditorWidget>
             Icons.edit_note_outlined,
             'İmza bloğu',
             signature,
+          ),
+          ribbonButton(
+            context,
+            Icons.auto_fix_high_rounded,
+            'Biçimlendir',
+            _formatPetition,
+            key: const ValueKey('legal-format'),
+            tooltip:
+                'Başlık, taraflar, gövde ve imza dilekçe kurallarıyla '
+                '· Ctrl+Shift+F',
           ),
         ],
       ]),
