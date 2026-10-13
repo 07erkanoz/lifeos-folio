@@ -59,6 +59,8 @@ class UdfSigningService {
   /// For the lock's "Şifremi unuttum"; no trust chain is checked.
   Future<String?> provenTckn(SigningCard card, String pin) =>
       _exclusive(_provenTckn, (card: card, pin: pin));
+  /// The card's certificates; with an empty [pin], those it shows without
+  /// one.
   Future<List<SigningCertificate>> certificates(SigningCard card, String pin) =>
       _exclusive(_certificates, (card: card, pin: pin));
 
@@ -234,7 +236,9 @@ List<SigningCertificate> _certificates(({SigningCard card, String pin}) args) {
   try {
     session.initialize();
     session.openSession(args.card.token.slotId);
-    session.login(args.pin);
+    // Without a PIN, what the card shows anyone: on most cards the
+    // certificate itself, which is all that is wanted to know whose it is.
+    if (args.pin.isNotEmpty) session.login(args.pin);
     return session
         .getCertificates()
         .map((cert) {

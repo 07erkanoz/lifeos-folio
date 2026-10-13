@@ -236,6 +236,13 @@ class LawyerProfile {
     _held = this;
   }
 
+  /// Read from the file again: another own device's profile was written
+  /// there (Senkron).
+  static Future<LawyerProfile> reload() async {
+    _held = null;
+    return load();
+  }
+
   /// For tests: the profile to answer with, or null to read the file again.
   @visibleForTesting
   static void use(LawyerProfile? profile) => _held = profile;

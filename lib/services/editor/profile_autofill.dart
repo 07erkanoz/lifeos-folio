@@ -67,6 +67,7 @@ LawyerProfile fillProfileBlanks(
     phone: keep(profile.phone, phone),
     email: keep(profile.email, email.contains('@') ? email : ''),
     kep: profile.kep,
+    officeName: profile.officeName,
   );
 }
 

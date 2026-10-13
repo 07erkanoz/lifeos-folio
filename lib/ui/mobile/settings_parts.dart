@@ -200,11 +200,17 @@ class UyapFillCard extends StatelessWidget {
     required this.button,
     required this.onTap,
     this.busy = false,
+    this.icon = Icons.gavel_rounded,
+    this.buttonKey = const ValueKey('uyap-fill'),
   });
 
   final String title, subtitle, button;
   final VoidCallback? onTap;
   final bool busy;
+
+  /// What the card fills from: UYAP's gavel, the e-imza card.
+  final IconData icon;
+  final Key buttonKey;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -216,7 +222,7 @@ class UyapFillCard extends StatelessWidget {
     ),
     child: Row(
       children: [
-        Icon(Icons.gavel_rounded, color: AgendaColors.eHearingText),
+        Icon(icon, color: AgendaColors.eHearingText),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -241,7 +247,7 @@ class UyapFillCard extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         FilledButton(
-          key: const ValueKey('uyap-fill'),
+          key: buttonKey,
           onPressed: busy ? null : onTap,
           style: FilledButton.styleFrom(
             backgroundColor: AgendaColors.eHearing,

@@ -4,6 +4,8 @@ import '../../services/editor/lawyer_profile.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/notice.dart';
 import 'profile_from_uyap.dart';
+import '../agenda/mobile_connect.dart' show onPhone;
+import '../widgets/profile_from_card.dart';
 import 'settings_parts.dart';
 import '../theme/folio_palette.dart';
 
@@ -117,6 +119,23 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
       showNotice(
         context,
         'Bilgiler UYAP Mobil’den alındı',
+        detail: 'Kontrol edip Kaydet’e dokunun.',
+      );
+    } finally {
+      if (mounted) setState(() => _filling = false);
+    }
+  }
+
+  /// The name and the TC number from the e-imza card's certificate.
+  Future<void> _fillFromCard() async {
+    setState(() => _filling = true);
+    try {
+      final filled = await profileFromCard(context, _profile);
+      if (!mounted || filled == null) return;
+      setState(() => _show(filled));
+      showNotice(
+        context,
+        'Ad ve TC kimlik no e-imza kartından alındı',
         detail: 'Kontrol edip Kaydet’e dokunun.',
       );
     } finally {
@@ -268,6 +287,18 @@ class _LawyerProfilePageState extends State<LawyerProfilePage> {
                 24 + MediaQuery.paddingOf(context).bottom,
               ),
               children: [
+                if (!onPhone) ...[
+                  UyapFillCard(
+                    title: 'E-imza kartımdan güncelle',
+                    subtitle: 'Ad soyad ve TC kimlik no',
+                    button: 'Oku',
+                    icon: Icons.credit_card_rounded,
+                    buttonKey: const ValueKey('card-fill'),
+                    busy: _filling,
+                    onTap: _fillFromCard,
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 UyapFillCard(
                   title: 'UYAP Mobil’den güncelle',
                   subtitle: 'Ad, baro, sicil, TBB no, iletişim',

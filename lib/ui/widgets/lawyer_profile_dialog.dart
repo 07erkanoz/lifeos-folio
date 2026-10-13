@@ -89,6 +89,8 @@ class _LawyerProfileDialogState extends State<LawyerProfileDialog> {
       phone: _phone.text.trim(),
       email: _email.text.trim(),
       kep: _kep.text.trim(),
+      // Not asked here: kept as it was.
+      officeName: widget.initial.officeName,
     );
     try {
       await profile.save();

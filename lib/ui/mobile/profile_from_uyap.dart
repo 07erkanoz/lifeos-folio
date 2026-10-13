@@ -64,5 +64,6 @@ LawyerProfile fillFromSession(LawyerProfile current, MobileSession s) {
         ? s.emails.first
         : current.email,
     kep: current.kep,
+    officeName: current.officeName,
   );
 }
