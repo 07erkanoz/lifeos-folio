@@ -561,18 +561,27 @@ class UyapCaseStore {
   }) async {
     final before = await load(target.courtName, target.number);
     final previousKeys = before == null ? null : _keys(before.documents);
-    final keys = _keys(documents.documents);
+    // Withheld is not "none", nor is an empty list where there were
+    // documents (not shown this time): the list kept from before stays.
+    final list =
+        before != null &&
+            (documents.withheld != null ||
+                (documents.documents.isEmpty && before.documents.isNotEmpty))
+        ? before.documents
+        : documents.documents;
+    final keys = _keys(list);
     final record = UyapCaseRecord(
       court: target.courtName,
       number: target.number,
       fetchedAt: now ?? DateTime.now(),
       previousFetchedAt: before?.fetchedAt,
       details: details,
-      parties: parties,
-      // Withheld is not "none": the list kept from before stays.
-      documents: documents.withheld != null && before != null
-          ? before.documents
-          : documents.documents,
+      // None this time (not shown, not asked) is not none: those kept stay.
+      // A list that came keeps the counsel and kind the kept one knew.
+      parties: parties.isEmpty
+          ? before?.parties ?? const []
+          : UyapParty.fill(parties, before?.parties ?? const []),
+      documents: list,
       withheld: documents.withheld,
       // The first time, nothing is new: everything is.
       fresh: previousKeys == null

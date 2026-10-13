@@ -1633,7 +1633,7 @@ class PortalSync extends ChangeNotifier {
       try {
         final parties = await _web.parties(c);
         if (parties.isNotEmpty) {
-          db.saveCaseParties(key, parties, source: 'uyap');
+          db.saveCaseParties(key, parties, source: 'uyap_web');
           got++;
           _partiesRead++;
           _progress(PortalChannel.uyapWeb, 'Taraflar · $_partiesRead dosya');
@@ -1694,7 +1694,7 @@ class PortalSync extends ChangeNotifier {
             UyapParty.fromMap(p),
         ];
         if (parties.isNotEmpty) {
-          db.saveCaseParties(c.key, parties, source: 'uyap');
+          db.saveCaseParties(c.key, parties, source: 'uyap_mobil');
           got++;
           portfolioVersion.value++;
         }
@@ -1800,7 +1800,11 @@ class PortalSync extends ChangeNotifier {
   }) {
     final at = DateTime.now().toIso8601String();
     if (record.parties.isNotEmpty) {
-      db.saveCaseParties(key, record.parties, source: 'uyap');
+      db.saveCaseParties(
+        key,
+        record.parties,
+        source: web ? 'uyap_web' : 'uyap_mobil',
+      );
     }
     // Its parties, money or account did not come: asked again.
     if (!whole) return;

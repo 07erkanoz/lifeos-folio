@@ -1616,55 +1616,67 @@ class PortalDatabase {
     }
   }
 
+  /// Where a case's parties may come from, the better last: a notice's
+  /// package, the parties read on their own, UYAP Mobil, a case reading
+  /// whose channel is not known (another device's, and those kept before
+  /// the channels were told apart), the web portal, which owns them.
+  static const partySources = [
+    'paket',
+    'taraflar',
+    'uyap_mobil',
+    'uyap',
+    'uyap_web',
+  ];
+
   /// A case's parties as UYAP gave them, one row each: name, role, its
-  /// lawyers, person or institution, and where they came from ('uyap', a
-  /// case fetched; 'taraflar', the parties read on their own; 'paket', a
-  /// notice's package). All of a case's at once, in place of those kept
-  /// before; a source no better than the one kept does not replace it.
-  /// Kept for whose a deadline is, and for the clients' own accounts to
-  /// come.
+  /// lawyers, person or institution, and where they came from (one of
+  /// [partySources]). A source as good as the one kept, or better, gives
+  /// the list, each party still keeping the counsel and kind the kept one
+  /// knew; a worse case reading only adds the parties not kept and fills
+  /// what the kept lack (UYAP Mobil never takes the web's counsel away); a
+  /// notice's package or the parties read on their own change nothing a
+  /// case reading gave. Names
+  /// shortened ("A** E**") never take the place of names whole. Kept for
+  /// whose a deadline is, and for the clients' own accounts.
   void saveCaseParties(
     String caseKey,
     List<UyapParty> parties, {
     required String source,
   }) {
     if (parties.isEmpty) return;
-    const rank = {'paket': 0, 'taraflar': 1, 'uyap': 2};
-    final kept = _db.select(
-      'SELECT kaynak FROM case_party WHERE case_key=? LIMIT 1',
-      [caseKey],
-    );
-    // Whole names come over shortened ones, from whatever source.
-    final keptShort = _db
-        .select('SELECT ad FROM case_party WHERE case_key=?', [caseKey])
-        .any((r) => isShortenedName('${r['ad']}'));
-    final comeWhole = !parties.any((t) => isShortenedName(t.name));
-    if (kept.isNotEmpty &&
-        !(keptShort && comeWhole) &&
-        (rank[kept.first['kaynak']] ?? 0) > (rank[source] ?? 0)) {
+    int rank(Object? s) => partySources.indexOf('$s');
+    final keptSource = _db
+        .select('SELECT kaynak FROM case_party WHERE case_key=? LIMIT 1', [
+          caseKey,
+        ])
+        .firstOrNull?['kaynak'];
+    final kept = caseParties(caseKey: caseKey)[caseKey] ?? const [];
+    final keptShort = kept.any((t) => isShortenedName(t.name));
+    final comeShort = parties.any((t) => isShortenedName(t.name));
+    final List<UyapParty> next;
+    final String nextSource;
+    if (kept.isEmpty ||
+        (keptShort && !comeShort) ||
+        (rank(source) >= rank(keptSource) && !(comeShort && !keptShort))) {
+      next = UyapParty.fill(parties, kept);
+      nextSource = source;
+    } else if (rank(source) < rank('uyap_mobil')) {
+      // A notice's package, the parties read on their own: a case read of
+      // UYAP knows better.
       return;
+    } else {
+      next = UyapParty.merge(kept, [
+        for (final t in parties)
+          if (!isShortenedName(t.name) || keptShort) t,
+      ]);
+      nextSource = '$keptSource';
     }
-    // The same parties from the same source: kept as they are, with the
-    // day they came.
-    final same = caseParties(caseKey: caseKey)[caseKey];
-    // Names shortened ("A** E**") never take the place of names whole,
-    // whatever their source.
-    if (same != null &&
-        same.isNotEmpty &&
-        parties.any((t) => isShortenedName(t.name)) &&
-        !same.any((t) => isShortenedName(t.name))) {
-      return;
-    }
-    if (kept.isNotEmpty &&
-        kept.first['kaynak'] == source &&
-        same != null &&
-        same.length == parties.length &&
+    // Nothing new: kept as they are, with the day they came.
+    if (keptSource == nextSource &&
+        kept.length == next.length &&
         [
-          for (var i = 0; i < same.length; i++)
-            same[i].name == parties[i].name &&
-                same[i].role == parties[i].role &&
-                same[i].lawyer == parties[i].lawyer &&
-                same[i].kind == parties[i].kind,
+          for (var i = 0; i < kept.length; i++)
+            kept[i].identity == next[i].identity,
         ].every((x) => x)) {
       return;
     }
@@ -1672,12 +1684,12 @@ class PortalDatabase {
     _db.execute('BEGIN');
     try {
       _db.execute('DELETE FROM case_party WHERE case_key=?', [caseKey]);
-      for (var i = 0; i < parties.length; i++) {
-        final t = parties[i];
+      for (var i = 0; i < next.length; i++) {
+        final t = next[i];
         _db.execute(
           'INSERT INTO case_party(case_key, seq, ad, rol, vekil, tur, kaynak, '
           'alindi) VALUES(?,?,?,?,?,?,?,?)',
-          [caseKey, i, t.name, t.role, t.lawyer, t.kind, source, at],
+          [caseKey, i, t.name, t.role, t.lawyer, t.kind, nextSource, at],
         );
       }
       _db.execute('COMMIT');

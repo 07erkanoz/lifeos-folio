@@ -1542,6 +1542,52 @@ class UyapParty {
   );
 
   String get identity => '$role|$name|$lawyer|$kind';
+
+  /// Whether [a] and [b] name one party: the same name, or one the other's
+  /// with more after it (UYAP Mobil at times gives a name the web gives
+  /// whole).
+  static bool same(UyapParty a, UyapParty b) {
+    final x = UyapWebService.fold(a.name).trim();
+    final y = UyapWebService.fold(b.name).trim();
+    if (x.isEmpty || y.isEmpty) return false;
+    return x == y || x.startsWith('$y ') || y.startsWith('$x ');
+  }
+
+  /// [kept] with [other]'s added: a party only [other] names comes in, one
+  /// both name keeps what [kept] had and takes only what it lacked (role,
+  /// counsel, kind). None is taken away, none named twice.
+  static List<UyapParty> merge(List<UyapParty> kept, List<UyapParty> other) {
+    if (kept.isEmpty) return other;
+    if (other.isEmpty) return kept;
+    final out = [...kept];
+    for (final p in other) {
+      final at = out.indexWhere((k) => same(k, p));
+      if (at < 0) {
+        out.add(p);
+        continue;
+      }
+      out[at] = out[at].filledFrom(p);
+    }
+    return out;
+  }
+
+  /// [winner] as it is, each party taking from [kept]'s same party only what
+  /// it lacks: a newer list from the source that owns the parties, which
+  /// still keeps counsel an older reading knew.
+  static List<UyapParty> fill(List<UyapParty> winner, List<UyapParty> kept) => [
+    for (final p in winner)
+      switch (kept.where((k) => same(k, p)).firstOrNull) {
+        final k? => p.filledFrom(k),
+        null => p,
+      },
+  ];
+
+  UyapParty filledFrom(UyapParty o) => UyapParty(
+    name.length >= o.name.length || !same(this, o) ? name : o.name,
+    role.isNotEmpty ? role : o.role,
+    lawyer.isNotEmpty ? lawyer : o.lawyer,
+    kind.isNotEmpty ? kind : o.kind,
+  );
 }
 
 class UyapOperation {

@@ -468,16 +468,21 @@ class UyapCasePanelController extends ChangeNotifier {
       if (account || debtorsShown) {
         busy = 'Borç hesabı ve borçlular çekiliyor';
         _changed();
+        // A part that did not come keeps what was had of it: the account
+        // read and the debtors not is not "no debtors".
+        final had = _record?.enforcement;
         var lines = const <UyapAccountLine>[];
         var debtors = const <UyapDebtor>[];
         try {
           if (account) lines = await web.accountLines(live);
         } catch (_) {
+          lines = had?.lines ?? const [];
           whole = false;
         }
         try {
           if (debtorsShown) debtors = await web.debtors(live);
         } catch (_) {
+          debtors = had?.debtors ?? const [];
           whole = false;
         }
         if (lines.isNotEmpty || debtors.isNotEmpty) {
@@ -612,27 +617,7 @@ class UyapCasePanelController extends ChangeNotifier {
   static List<UyapParty> mergeParties(
     List<UyapParty> kept,
     List<UyapParty> fetched,
-  ) {
-    if (kept.isEmpty) return fetched;
-    if (fetched.isEmpty) return kept;
-    String who(UyapParty p) => UyapWebService.fold(p.name).trim();
-    final out = [...kept];
-    for (final p in fetched) {
-      final at = out.indexWhere((k) => who(k) == who(p));
-      if (at < 0) {
-        out.add(p);
-        continue;
-      }
-      final k = out[at];
-      out[at] = UyapParty(
-        k.name,
-        k.role.isNotEmpty ? k.role : p.role,
-        k.lawyer.isNotEmpty ? k.lawyer : p.lawyer,
-        k.kind.isNotEmpty ? k.kind : p.kind,
-      );
-    }
-    return out;
-  }
+  ) => UyapParty.merge(kept, fetched);
 
   /// [fetched] with the keys the kept list knows its documents by. The
   /// web and the mobile API key one document alike most of the time, by

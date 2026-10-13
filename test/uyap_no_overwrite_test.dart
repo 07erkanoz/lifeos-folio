@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:evrak_convert/services/portal/observed.dart';
@@ -5,6 +7,7 @@ import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 
 void main() {
@@ -82,5 +85,125 @@ void main() {
     expect(merged[1].lawyer, 'Av. Karşı Vekil');
     expect(merged[2].name, 'YENİ BORÇLU');
     expect(UyapCasePanelController.mergeParties(webParties, const []), webParties);
+  });
+
+  group('the parties kept in the database', () {
+    const key = 'k';
+    const web = [
+      UyapParty('FATMA ÖZEN', 'Alacaklı', 'Av. Erkan Öz', 'Kişi'),
+      UyapParty('MUAMMER ÖZ', 'Borçlu', '', 'Kişi'),
+    ];
+
+    test('UYAP Mobil after the web adds, never takes counsel away', () {
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      db.saveCaseParties(key, web, source: 'uyap_web');
+      db.saveCaseParties(key, const [
+        UyapParty('FATMA ÖZEN', 'Alacaklı', '', ''),
+        UyapParty('MUAMMER', 'Borçlu', 'Av. Karşı', ''),
+        UyapParty('YENİ BORÇLU', 'Borçlu', '', ''),
+      ], source: 'uyap_mobil');
+      final kept = db.caseParties(caseKey: key)[key]!;
+      expect(kept.map((t) => t.name), [
+        'FATMA ÖZEN',
+        'MUAMMER ÖZ',
+        'YENİ BORÇLU',
+      ]);
+      expect(kept[0].lawyer, 'Av. Erkan Öz');
+      expect(kept[1].lawyer, 'Av. Karşı');
+      expect(db.clientsOf(key, lawyer: 'Erkan Öz').single.ad, 'FATMA ÖZEN');
+    });
+
+    test('the web after UYAP Mobil gives the list, keeping counsel the '
+        'mobile API knew', () {
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      db.saveCaseParties(key, const [
+        UyapParty('FATMA ÖZEN', 'Alacaklı', '', ''),
+        UyapParty('MUAMMER ÖZ', 'Borçlu', 'Av. Karşı', ''),
+      ], source: 'uyap_mobil');
+      db.saveCaseParties(key, web, source: 'uyap_web');
+      final kept = db.caseParties(caseKey: key)[key]!;
+      expect(kept.length, 2);
+      expect(kept[0].lawyer, 'Av. Erkan Öz');
+      expect(kept[1].lawyer, 'Av. Karşı');
+      expect(kept[1].kind, 'Kişi');
+    });
+
+    test('names shortened never take the place of names whole', () {
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      db.saveCaseParties(key, web, source: 'uyap_web');
+      db.saveCaseParties(key, const [
+        UyapParty('F**** Ö***', 'Alacaklı', '', ''),
+      ], source: 'uyap_web');
+      expect(db.caseParties(caseKey: key)[key]!.first.name, 'FATMA ÖZEN');
+      // And whole names take the place of shortened ones, whatever their
+      // source.
+      final other = PortalDatabase.memory();
+      addTearDown(other.dispose);
+      other.saveCaseParties(key, const [
+        UyapParty('F**** Ö***', 'Alacaklı', '', ''),
+      ], source: 'uyap_web');
+      other.saveCaseParties(key, web, source: 'paket');
+      expect(other.caseParties(caseKey: key)[key]!.first.name, 'FATMA ÖZEN');
+    });
+  });
+
+  group('a case\'s record', () {
+    late Directory dir;
+    late UyapCaseStore store;
+    const target = UyapCase('1', '2026/126', 'c', court);
+    UyapCaseDocument doc(String key) => UyapCaseDocument(
+      key: key,
+      documentId: key,
+      caseId: '1',
+      type: 'Karar',
+      number: key,
+      approved: '01.10.2026 10:00',
+      sender: 'Mahkeme',
+      description: '',
+    );
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('folio-no-overwrite-');
+      store = UyapCaseStore(
+        directory: dir,
+        settings: UyapSettings(directory: dir, home: dir.path),
+      );
+    });
+    tearDown(() {
+      try {
+        dir.deleteSync(recursive: true);
+      } catch (_) {}
+    });
+
+    test('a reading without parties or documents keeps those kept, and a '
+        'new party list keeps the counsel known', () async {
+      await store.keep(
+        target: target,
+        details: const UyapCaseDetails(),
+        parties: const [
+          UyapParty('FATMA ÖZEN', 'Alacaklı', 'Av. Erkan Öz', 'Kişi'),
+        ],
+        documents: UyapCaseDocuments([doc('a'), doc('b')]),
+      );
+      final next = await store.keep(
+        target: target,
+        details: const UyapCaseDetails(),
+        parties: const [],
+        documents: const UyapCaseDocuments([]),
+      );
+      expect(next.parties.single.lawyer, 'Av. Erkan Öz');
+      expect(next.documents.map((d) => d.key), ['a', 'b']);
+      final again = await store.keep(
+        target: target,
+        details: const UyapCaseDetails(),
+        parties: const [UyapParty('FATMA ÖZEN', 'Alacaklı', '', '')],
+        documents: UyapCaseDocuments([doc('a'), doc('b'), doc('c')]),
+      );
+      expect(again.parties.single.lawyer, 'Av. Erkan Öz');
+      expect(again.fresh, {'c'});
+    });
   });
 }
