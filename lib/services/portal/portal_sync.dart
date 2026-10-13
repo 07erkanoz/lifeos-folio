@@ -326,6 +326,8 @@ class PortalSync extends ChangeNotifier {
     unawaited(
       () async {
         final db = await _database();
+        // Turned off meanwhile, or let go of: nothing is started.
+        if (!autoFetch || _disposed) return;
         final now = DateTime.now();
         final read = DateTime.tryParse(db.meta(_portfolioKey) ?? '');
         final tried = DateTime.tryParse(db.meta('portfolio_try_at') ?? '');
@@ -464,7 +466,7 @@ class PortalSync extends ChangeNotifier {
     if (j != null &&
         !j.done &&
         j.channel == channel &&
-        j.stopped != UyapJobStop.user) {
+        (j.stopped == null || j.stopped == UyapJobStop.session)) {
       unawaited(SyncLog.note('Bağlandı: başlatılan iş kaldığı yerden sürüyor'));
       unawaited(_runJob());
       return;
@@ -495,7 +497,10 @@ class PortalSync extends ChangeNotifier {
 
   static const _jobKey = 'uyap_job';
   Future<void>? _jobRun;
-  bool _jobPaused = false;
+
+  /// Counted up when a job starts, is paused or let go of: a run of an
+  /// earlier count stops at its next step and writes nothing more.
+  int _jobGen = 0;
 
   Future<void> _loadJob() async {
     try {
@@ -512,56 +517,70 @@ class PortalSync extends ChangeNotifier {
   /// The first setup, on [channel]: its portfolio's list and hearings,
   /// then each open case's parties, then each one's documents' list. The
   /// lawyer starts it, so it runs with [autoFetch] off.
-  Future<void> startSetup(PortalChannel channel) async {
-    setupOffer.value = false;
-    await _keepJob(
-      UyapJob(
-        kind: UyapJobKind.setup,
-        channel: channel,
-        stage: UyapJobStage.list,
-        started: DateTime.now(),
-      ),
-    );
-    unawaited(SyncLog.note('Kurulum başladı (${_channelName(channel)})'));
-    await _runJob();
-  }
+  Future<void> startSetup(PortalChannel channel) => _startJob(
+    UyapJob(
+      kind: UyapJobKind.setup,
+      channel: channel,
+      stage: UyapJobStage.list,
+      started: DateTime.now(),
+    ),
+  );
 
   /// The web's completion: the Court of Cassation's cases, then each open
   /// case's particulars, parties with counsel, money, an icra file's
   /// account and debtors, and its documents' list where none came whole.
-  Future<void> startWebCompletion() async {
-    await _keepJob(
-      UyapJob(
-        kind: UyapJobKind.webCompletion,
-        channel: PortalChannel.uyapWeb,
-        stage: UyapJobStage.list,
-        started: DateTime.now(),
+  Future<void> startWebCompletion() => _startJob(
+    UyapJob(
+      kind: UyapJobKind.webCompletion,
+      channel: PortalChannel.uyapWeb,
+      stage: UyapJobStage.list,
+      started: DateTime.now(),
+    ),
+  );
+
+  Future<void> _startJob(UyapJob next) async {
+    setupOffer.value = false;
+    _jobGen++;
+    // A run of the job before stops first: one job at a time.
+    await _jobRun;
+    await _keepJob(next);
+    unawaited(
+      SyncLog.note(
+        '${next.kind == UyapJobKind.setup ? 'Kurulum' : 'Web tamamlaması'} '
+        'başladı (${_channelName(next.channel)})',
       ),
     );
-    unawaited(SyncLog.note('Web tamamlaması başladı'));
     await _runJob();
   }
 
   /// The running job paused by the lawyer: it waits for them
-  /// ([resumeJob]), the cases read kept.
+  /// ([resumeJob]), the cases read kept. The case being read when it is
+  /// paused is the last one.
   Future<void> pauseJob() async {
     final j = job.value;
     if (j == null || j.done) return;
-    _jobPaused = true;
+    _jobGen++;
     await _keepJob(j.copyWith(stage: j.stage, stopped: UyapJobStop.user));
   }
 
-  /// A paused job goes on, where its channel is connected.
+  /// A stopped job goes on, where its channel is connected; not connected,
+  /// it stays stopped, waiting for the channel.
   Future<void> resumeJob() async {
     final j = job.value;
     if (j == null || j.done) return;
+    _jobGen++;
+    await _jobRun;
+    if (!_jobConnected(j)) {
+      await _keepJob(j.copyWith(stage: j.stage, stopped: UyapJobStop.session));
+      return;
+    }
     await _keepJob(j.copyWith(stage: j.stage));
     await _runJob();
   }
 
   /// The job let go of: what it read stays.
   Future<void> dropJob() async {
-    _jobPaused = true;
+    _jobGen++;
     (await _database()).setMeta(_jobKey, '');
     job.value = null;
     jobProgress.value = null;
@@ -573,91 +592,120 @@ class PortalSync extends ChangeNotifier {
   bool _jobConnected(UyapJob j) =>
       j.channel == PortalChannel.uyapWeb ? _web.connected : _mobile.connected;
 
-  Future<void> _runJob() => _jobRun ??=
-      () async {
-            _jobPaused = false;
-            var j = job.value;
-            if (j == null || j.done || !_jobConnected(j)) return;
-            bool going() => !_disposed && !_jobPaused && _jobConnected(j!);
-            if (j.stage == UyapJobStage.list) {
-              jobProgress.value = const UyapJobProgress(
-                UyapJobStage.list,
-                0,
-                0,
-              );
-              // The setup on the web reads every list; the completion beside UYAP
-              // Mobil only what the web alone has (the Court of Cassation's).
-              if (j.channel == PortalChannel.uyapMobile) {
-                await syncMobile(full: true);
-              } else {
-                await syncWeb(force: true);
-              }
-              if (!going()) return _jobStopped(j);
-              j = await _keepJob(
-                j.copyWith(
-                  stage: j.kind == UyapJobKind.setup
-                      ? UyapJobStage.parties
-                      : UyapJobStage.web,
-                ),
-              );
-            }
-            for (final (stage, next) in [
-              (UyapJobStage.parties, UyapJobStage.documents),
-              (UyapJobStage.documents, UyapJobStage.done),
-              (UyapJobStage.web, UyapJobStage.done),
-            ]) {
-              if (j!.stage != stage) continue;
-              // A reading of the lawyer's own on the channel finishes first.
-              while (state(j.channel).running && going()) {
-                await Future<void>.delayed(const Duration(seconds: 1));
-              }
-              var through = false;
-              await _run(j.channel, (db) async {
-                through = await _jobCases(db, j!, going);
-                return null;
-              });
-              if (!through || !going()) return _jobStopped(j);
-              j = await _keepJob(j.copyWith(stage: next));
-            }
-            if (j!.done) {
-              jobProgress.value = null;
-              unawaited(SyncLog.note('İş bitti: ${j.kind.name}'));
-              uyapChanged?.call();
-            }
-          }()
-          .catchError((Object e) {
-            unawaited(SyncLog.note('İş durdu: $e'));
-          })
-          .whenComplete(() => _jobRun = null);
+  /// The list the job's first stage reads: the whole portfolio for the
+  /// setup on either channel; what only the web has for the completion.
+  String _jobListKey(UyapJob j) =>
+      j.kind == UyapJobKind.setup ? _portfolioKey : _webOnlyKey;
 
-  Future<void> _jobStopped(UyapJob j) async {
-    if (_disposed) return;
-    final why = _jobPaused ? UyapJobStop.user : UyapJobStop.session;
-    await _keepJob(j.copyWith(stage: j.stage, stopped: why));
-    unawaited(
-      SyncLog.note(
-        'İş durdu (${why == UyapJobStop.user ? 'kullanıcı' : 'oturum'}): '
-        '${j.stage.name}',
-      ),
-    );
+  Future<void> _runJob() => _jobRun ??= _jobSteps()
+      .catchError((Object e) {
+        unawaited(SyncLog.note('İş durdu: $e'));
+      })
+      .whenComplete(() => _jobRun = null);
+
+  Future<void> _jobSteps() async {
+    final gen = _jobGen;
+    var j = job.value;
+    if (j == null || j.done || !_jobConnected(j)) return;
+    bool going() => !_disposed && gen == _jobGen && _jobConnected(j!);
+    Future<void> stopped([UyapJobStop why = UyapJobStop.session]) async {
+      // A run let go of writes nothing: the job is another's now.
+      if (_disposed || gen != _jobGen) return;
+      await _keepJob(j!.copyWith(stage: j.stage, stopped: why));
+      unawaited(SyncLog.note('İş durdu (${why.name}): ${j!.stage.name}'));
+    }
+
+    // A reading of the lawyer's own on the channel finishes first: one
+    // started while it runs would be given that one.
+    Future<void> idle() async {
+      while (state(j!.channel).running && going()) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+    }
+
+    if (j.stage == UyapJobStage.list) {
+      jobProgress.value = const UyapJobProgress(UyapJobStage.list, 0, 0);
+      await idle();
+      if (!going()) return stopped();
+      final db = await _database();
+      final key = _jobListKey(j);
+      final before = db.meta(key);
+      if (j.channel == PortalChannel.uyapMobile) {
+        await syncMobile(full: true);
+      } else {
+        // The setup on the web reads every list, UYAP Mobil connected or
+        // not.
+        await syncWeb(force: true, whole: j.kind == UyapJobKind.setup);
+      }
+      if (!going()) return stopped();
+      // Read whole now, or within the rest before: the list is there. Else
+      // it is said, and the cases listed are read all the same.
+      final at = DateTime.tryParse(db.meta(key) ?? '');
+      final fresh =
+          at != null &&
+          (db.meta(key) != before ||
+              DateTime.now().difference(at) < portfolioRest);
+      j = await _keepJob(
+        j.copyWith(
+          stage: j.kind == UyapJobKind.setup
+              ? UyapJobStage.parties
+              : UyapJobStage.web,
+          listGaps: !fresh,
+        ),
+      );
+    }
+    for (final (stage, next) in [
+      (UyapJobStage.parties, UyapJobStage.documents),
+      (UyapJobStage.documents, UyapJobStage.done),
+      (UyapJobStage.web, UyapJobStage.done),
+    ]) {
+      if (j!.stage != stage) continue;
+      await idle();
+      if (!going()) return stopped();
+      var left = 0;
+      await _run(j.channel, (db) async {
+        left = await _jobCases(db, j!, going);
+        return left > 0 ? 'Bazı dosyalar okunamadı' : null;
+      });
+      if (!going()) return stopped();
+      // Cases left that would not be read: the job waits, to be tried
+      // again when the lawyer says.
+      if (left > 0) return stopped(UyapJobStop.incomplete);
+      j = await _keepJob(j.copyWith(stage: next));
+    }
+    if (j!.done) {
+      jobProgress.value = null;
+      unawaited(SyncLog.note('İş bitti: ${j.kind.name}'));
+      uyapChanged?.call();
+    }
   }
 
-  /// The sections [j]'s stage reads of a case, of those its channel did
-  /// not read yet; empty when none is left.
+  /// Tries at a section before a job gives it up: it stays failed, shown,
+  /// and is read when the case is opened.
+  static const _jobTries = 3;
+
+  /// The sections [j]'s stage reads of a case, of those its channel has
+  /// not read done as they last were; empty when none is left.
   Set<CaseSection> _jobWants(UyapJob j, List<SectionState> states) {
     SectionState? on(CaseSection s, PortalChannel c) =>
         states.where((x) => x.section == s && x.channel == c).firstOrNull;
-    bool done(CaseSection s, PortalChannel c) => on(s, c)?.succeeded != null;
+    bool wanted(CaseSection s, PortalChannel c) {
+      final x = on(s, c);
+      if (x == null) return true;
+      if (x.result.done && x.succeeded != null) return false;
+      return x.tries < _jobTries;
+    }
+
     return switch (j.stage) {
       UyapJobStage.parties => {
-        if (!done(CaseSection.parties, j.channel)) CaseSection.parties,
+        if (wanted(CaseSection.parties, j.channel)) CaseSection.parties,
       },
       UyapJobStage.documents => {
-        if (!done(CaseSection.documents, j.channel)) CaseSection.documents,
+        if (wanted(CaseSection.documents, j.channel)) CaseSection.documents,
       },
       UyapJobStage.web => {
         for (final s in CaseSection.values)
-          if (!done(s, PortalChannel.uyapWeb) &&
+          if (wanted(s, PortalChannel.uyapWeb) &&
               // The documents' list UYAP Mobil gave whole is not asked again.
               !(s == CaseSection.documents &&
                   (on(s, PortalChannel.uyapMobile)?.complete ?? false)))
@@ -669,9 +717,10 @@ class PortalSync extends ChangeNotifier {
 
   /// The open cases [j]'s stage has left, read one at a time on its
   /// channel alone: those with a hearing within a month first, then the
-  /// icra files, then the rest. True when every one was tried; false when
-  /// it stopped ([going]).
-  Future<bool> _jobCases(
+  /// icra files, then the rest. Each case's sections are counted again
+  /// just before it is read: what the lawyer read meanwhile is not asked
+  /// again. How many were left unread; on stopping ([going]) at least one.
+  Future<int> _jobCases(
     PortalDatabase db,
     UyapJob j,
     bool Function() going,
@@ -696,71 +745,103 @@ class PortalSync extends ChangeNotifier {
         if (!archived.contains(c.key) &&
             !isClosedStatus(c.status?.value) &&
             // UYAP Mobil does not open the prosecutors' and the Court of
-            // Cassation's: the web's completion does.
-            (!mobile ||
-                c.family == CaseFamily.court ||
-                c.family == CaseFamily.danistay))
+            // Cassation's: the web's completion does (§11.6).
+            (!mobile || mobileReads(c)))
           c,
     ]..sort((a, b) => rank(a).compareTo(rank(b)));
-    final todo = [
-      for (final c in open)
-        if (_jobWants(j, db.sections(c.key)) case final wants
-            when wants.isNotEmpty)
-          (c, wants),
-    ];
     final total = open.length;
-    var done = total - todo.length;
-    jobProgress.value = UyapJobProgress(j.stage, done, total);
+    var done = 0;
+    var left = 0;
     final label = switch (j.stage) {
       UyapJobStage.parties => 'Taraflar',
       UyapJobStage.documents => 'Evrak listeleri',
       _ => 'Web bilgileri',
     };
-    unawaited(
-      SyncLog.note('$label: ${todo.length} dosya okunacak ($total açık dosya)'),
-    );
-    for (final (kase, wants) in todo) {
-      if (!going()) return false;
-      while (UyapCasePanelController.lawyerWaiting) {
-        await Future<void>.delayed(const Duration(milliseconds: 400));
-      }
-      _progress(j.channel, '$label $done/$total');
-      final panel = UyapCasePanelController(
-        web: _web,
-        mobile: _mobile,
-        sync: this,
-        pause: Duration.zero,
-        background: true,
-      );
-      try {
-        await panel.attach(linkOf(kase));
-        await panel.readSections(j.channel, wants);
-        if (panel.record case final record?) {
-          _keepRead(
-            db,
-            kase.key,
-            record,
-            web: j.channel == PortalChannel.uyapWeb,
-            whole: panel.whole,
-            outcomes: panel.outcomes,
-          );
+    unawaited(SyncLog.note('$label: $total açık dosya'));
+    final changed = <String>{};
+    try {
+      for (final kase in open) {
+        if (!going()) return left + 1;
+        final wants = _jobWants(j, db.sections(kase.key));
+        if (wants.isEmpty) {
+          done++;
+          continue;
         }
-        if (panel.error != null) {
-          // The session gone: stopped, to go on when it is back.
-          if (!going()) return false;
-          unawaited(SyncLog.note('$label: ${kase.number} okunamadı'));
+        jobProgress.value = UyapJobProgress(j.stage, done, total);
+        while (UyapCasePanelController.lawyerWaiting && going()) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
         }
-        portfolioVersion.value++;
-      } catch (e) {
-        unawaited(SyncLog.note('$label: ${kase.number} hata: $e'));
-      } finally {
-        panel.dispose();
+        if (!going()) return left + 1;
+        _progress(j.channel, '$label $done/$total');
+        final panel = UyapCasePanelController(
+          web: _web,
+          mobile: _mobile,
+          sync: this,
+          pause: Duration.zero,
+          background: true,
+        );
+        try {
+          await panel.attach(linkOf(kase));
+          await panel.readSections(j.channel, wants);
+          if (panel.error == null && panel.outcomes.isNotEmpty) {
+            _keepRead(
+              db,
+              kase.key,
+              panel.record!,
+              web: j.channel == PortalChannel.uyapWeb,
+              whole: panel.whole,
+              outcomes: panel.outcomes,
+            );
+            if (wants.contains(CaseSection.parties)) changed.add(kase.key);
+          } else {
+            // The session gone: stopped, to go on when it is back.
+            if (!going()) return left + 1;
+            // Counted a try, so that it is not asked for without end.
+            db.saveSections(kase.key, j.channel, [
+              for (final s in wants) SectionOutcome(s, SectionResult.failed),
+            ]);
+            unawaited(SyncLog.note('$label: ${kase.number} okunamadı'));
+          }
+          portfolioVersion.value++;
+        } catch (e) {
+          unawaited(SyncLog.note('$label: ${kase.number} hata: $e'));
+        } finally {
+          panel.dispose();
+        }
+        if (_jobWants(j, db.sections(kase.key)).isNotEmpty) left++;
+        done++;
+        jobProgress.value = UyapJobProgress(j.stage, done, total);
+        await Future<void>.delayed(_caseGap);
       }
-      done++;
-      jobProgress.value = UyapJobProgress(j.stage, done, total);
-      await Future<void>.delayed(_caseGap);
+    } finally {
+      // Whose a deadline is, told again by the parties come.
+      if (changed.isNotEmpty) await _partiesChanged(db, changed);
     }
-    return true;
+    return left;
+  }
+
+  /// Whether UYAP Mobil reads [kase]'s sections: a court's or the Council
+  /// of State's. The prosecutors' and the Court of Cassation's are the
+  /// web's until their mobile ways are measured (§11.6).
+  static bool mobileReads(PortalCase kase) =>
+      kase.family == CaseFamily.court || kase.family == CaseFamily.danistay;
+
+  /// The deadlines of the notices of [keys]' cases made again, by the
+  /// parties now kept: nothing is asked of UYAP.
+  Future<void> _partiesChanged(PortalDatabase db, Set<String> keys) async {
+    try {
+      await _loadDeadlineContext();
+      refreshNoticeDeadlines(
+        db,
+        parties: NoticeDeadlineContext.parties,
+        lawyer: NoticeDeadlineContext.lawyer,
+        only: {
+          for (final n in db.notices())
+            if (keys.contains(n.caseKey)) n.message.id,
+        },
+      );
+      notifyListeners();
+    } catch (_) {}
   }
 
   /// Done when whether UYAP is read of itself is known.
@@ -976,7 +1057,11 @@ class PortalSync extends ChangeNotifier {
     // itself was not fetched.
     try {
       final db = await _database();
+      // Only where none are kept: a record's parties are not written again
+      // over those its readings kept, under another name.
+      final kept = db.caseParties();
       for (final e in fetched.entries) {
+        if (kept.containsKey(e.key)) continue;
         db.saveCaseParties(e.key, e.value, source: 'uyap');
       }
       for (final e in db.caseParties().entries) {
@@ -1232,7 +1317,7 @@ class PortalSync extends ChangeNotifier {
   /// When a notification last named a case the portfolio has not, with
   /// Folio not reading UYAP of itself: the lawyer is told, to read the
   /// portfolio again ("Portföyü yenile").
-  final newCaseNotice = ValueNotifier<DateTime?>(null);
+  static final newCaseNotice = ValueNotifier<DateTime?>(null);
 
   static const _mobileNoticesKey = 'uyap_notice_mobile';
   static const _webNoticesKey = 'uyap_notice_web';
@@ -1328,9 +1413,14 @@ class PortalSync extends ChangeNotifier {
           // it. Both the readings under way are waited for: a call while
           // one runs would only be given that one.
           unawaited(
-            _whenIdle().whenComplete(
-              () => syncPortfolio(full: true, newCase: true),
-            ),
+            _whenIdle().whenComplete(() {
+              // Turned off meanwhile, or let go of: told instead.
+              if (!autoFetch || _disposed) {
+                if (!_disposed) newCaseNotice.value = DateTime.now();
+                return;
+              }
+              unawaited(syncPortfolio(full: true, newCase: true));
+            }),
           );
         } else {
           newCaseNotice.value = DateTime.now();
@@ -1579,11 +1669,18 @@ class PortalSync extends ChangeNotifier {
       connected,
       kase.family,
     )) {
-      final id = kase.ids[channel];
-      // The web's ids are its session's: the case is found in this one by
-      // its court and number, even one known only from a hearing.
-      if (channel != PortalChannel.uyapWeb && (id == null || id.isEmpty)) {
-        continue;
+      // Ids are their session's: the case is found in this one by its
+      // court and number, even one known only from a hearing; on UYAP
+      // Mobil only a court's or the Council of State's (§11.6).
+      String? id;
+      if (channel != PortalChannel.uyapWeb) {
+        if (!mobileReads(kase)) continue;
+        try {
+          id = await mobileCaseId(court: kase.court, number: kase.number);
+        } catch (_) {}
+        // Not found anew: the id the list gave, which may still hold.
+        if (id == null || id.isEmpty) id = kase.ids[channel];
+        if (id == null || id.isEmpty) continue;
       }
       try {
         if (channel == PortalChannel.uyapWeb) {
@@ -1658,15 +1755,14 @@ class PortalSync extends ChangeNotifier {
     return null;
   });
 
-  /// The open cases enriched from the web of themselves while [autoFetch]
-  /// is on, once a day (the lawyer's choice, 11 Ekim 2026): the cases with
-  /// a hearing within a month, those never fetched, and a seventh of the
-  /// rest, so that each is fetched within the week. The money, the
-  /// enforcement account and the debtors are the web's alone; the
-  /// documents' list comes, the documents do not. Apart from [syncWeb], so
-  /// that the lawyer's Senkronize et is not held while it runs; in UYAP's
-  /// one queue, a lawyer opening a case going first (refreshCases), and it
-  /// stops when the web goes, at night or when [autoFetch] is turned off.
+  /// The open cases' web sections freshened of themselves while
+  /// [autoFetch] is on, once a day (docs/uyap-hedef-harita.md §7): only
+  /// sections the web read before and older than a week, or failed, those
+  /// with a hearing within a month first; at most [enrichPerDay] cases a
+  /// day, not at night. The first filling is the lawyer's (the web's
+  /// completion), never this. On the web alone; it stops when the web
+  /// goes, at night or when [autoFetch] is turned off, a lawyer opening a
+  /// case going first.
   Future<void> enrichOnWeb() => _enrichment ??= () async {
     bool keepGoing() =>
         !_disposed && _web.connected && autoFetch && !night(DateTime.now());
@@ -1694,14 +1790,7 @@ class PortalSync extends ChangeNotifier {
     if (!keepGoing()) return;
     // Nothing to enrich yet (the first portfolio still coming): not done.
     if (db.cases().isEmpty) return;
-    final done = await UyapPace.background(
-      () => refreshCases(
-        db,
-        changed: const {},
-        channel: PortalChannel.uyapWeb,
-        keepGoing: keepGoing,
-      ),
-    );
+    final done = await UyapPace.background(() => _enrichStale(db, keepGoing));
     if (done) {
       db.setMeta(enrichedKey, DateTime.now().toIso8601String());
       uyapChanged?.call();
@@ -1709,6 +1798,89 @@ class PortalSync extends ChangeNotifier {
   }().catchError((Object _) {}).whenComplete(() => _enrichment = null);
 
   Future<void>? _enrichment;
+
+  /// Cases freshened of themselves a day at most.
+  static const enrichPerDay = 500;
+
+  Future<bool> _enrichStale(PortalDatabase db, bool Function() going) async {
+    final now = DateTime.now();
+    final dayKey = 'web_enriched_count:${now.year}-${now.month}-${now.day}';
+    var count = int.tryParse(db.meta(dayKey) ?? '') ?? 0;
+    final archived = db.revokedShares();
+    final soon = {
+      for (final h in db.hearings(
+        from: now,
+        to: now.add(const Duration(days: 31)),
+      ))
+        h.caseKey,
+    };
+    final todo = <(PortalCase, Set<CaseSection>)>[];
+    for (final c in db.cases().values) {
+      if (archived.contains(c.key) || isClosedStatus(c.status?.value)) {
+        continue;
+      }
+      final web = [
+        for (final s in db.sections(c.key))
+          if (s.channel == PortalChannel.uyapWeb) s,
+      ];
+      // Never filled from the web: the lawyer's completion does it.
+      if (web.isEmpty) continue;
+      final stale = {
+        for (final s in web)
+          if ((!s.result.done && s.tries < _jobTries) ||
+              (s.succeeded != null &&
+                  now.difference(s.succeeded!) > const Duration(days: 7)))
+            s.section,
+      };
+      if (stale.isNotEmpty) todo.add((c, stale));
+    }
+    todo.sort(
+      (a, b) => (soon.contains(a.$1.key) ? 0 : 1).compareTo(
+        soon.contains(b.$1.key) ? 0 : 1,
+      ),
+    );
+    for (final (kase, wants) in todo) {
+      if (count >= enrichPerDay) break;
+      if (!going()) return false;
+      while (UyapCasePanelController.lawyerWaiting && going()) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      final panel = UyapCasePanelController(
+        web: _web,
+        mobile: _mobile,
+        sync: this,
+        pause: Duration.zero,
+        background: true,
+      );
+      try {
+        await panel.attach(linkOf(kase));
+        await panel.readSections(PortalChannel.uyapWeb, wants);
+        if (panel.error == null && panel.outcomes.isNotEmpty) {
+          _keepRead(
+            db,
+            kase.key,
+            panel.record!,
+            web: true,
+            whole: panel.whole,
+            outcomes: panel.outcomes,
+          );
+        } else {
+          if (!going()) return false;
+          db.saveSections(kase.key, PortalChannel.uyapWeb, [
+            for (final s in wants) SectionOutcome(s, SectionResult.failed),
+          ]);
+        }
+        portfolioVersion.value++;
+      } catch (_) {
+      } finally {
+        panel.dispose();
+      }
+      count++;
+      db.setMeta(dayKey, '$count');
+      await Future<void>.delayed(_caseGap);
+    }
+    return true;
+  }
 
   /// When the open cases were last enriched from the web of themselves.
   static const enrichedKey = 'web_enriched_at';
@@ -1721,11 +1893,13 @@ class PortalSync extends ChangeNotifier {
     bool force = false,
     bool newCase = false,
     bool closed = false,
+    bool whole = false,
   }) => _webSync ??= _run(PortalChannel.uyapWeb, (db) async {
     if (!_web.connected) return null;
     // With UYAP Mobil connected it reads the courts' cases; the web
     // reads only what it alone has, on its own clock.
-    final webOnly = _mobile.connected;
+    // [whole]: the setup on the web, which reads every list.
+    final webOnly = !whole && _mobile.connected;
     final (portfolioDue, rested) = _portfolioDue(
       db,
       full: force,
@@ -1762,7 +1936,7 @@ class PortalSync extends ChangeNotifier {
         db,
         webOnly: webOnly,
         // A new case may be in a prosecutor's office not yet known.
-        everyProvince: newCase,
+        everyProvince: newCase || closed,
         includeClosed: closed,
         onChanged: () => portfolioVersion.value++,
         onProgress: (done, total) => _progress(
@@ -1777,6 +1951,7 @@ class PortalSync extends ChangeNotifier {
           '${cases.complete ? 'eksiksiz' : 'bazı listeler alınamadı'}',
         ),
       );
+      _listWhole[PortalChannel.uyapWeb] = cases.complete;
       if (!cases.complete) {
         db.setMeta(_tryKey(webOnly ? _webOnlyKey : _portfolioKey), now);
       } else {
@@ -1823,6 +1998,8 @@ class PortalSync extends ChangeNotifier {
         when now.difference(last) < const Duration(minutes: 3)) {
       return;
     }
+    // Taken at once: a second opening meanwhile does not read it too.
+    _openedAt[key] = now;
     final db = await _database();
     Set<CaseSection> stale(PortalChannel channel) {
       final kept = {
@@ -1850,7 +2027,9 @@ class PortalSync extends ChangeNotifier {
       await panel.readSections(PortalChannel.uyapWeb, wanted);
       if (panel.error == null || !_mobile.connected) return;
     }
-    if (!_mobile.connected) return;
+    // The prosecutors' and the Court of Cassation's are the web's (§11.6).
+    final kase = db.caseOf(key);
+    if (!_mobile.connected || (kase != null && !mobileReads(kase))) return;
     final wanted = stale(PortalChannel.uyapMobile);
     if (wanted.isEmpty) return;
     _openedAt[key] = now;
@@ -1873,6 +2052,10 @@ class PortalSync extends ChangeNotifier {
       whole: panel.whole,
       outcomes: panel.outcomes,
     );
+    if (panel.outcomes.isEmpty ||
+        panel.outcomes.any((o) => o.section == CaseSection.parties)) {
+      unawaited(_partiesChanged(db, {key}));
+    }
     portfolioVersion.value++;
     // For the person's other devices too.
     uyapChanged?.call();
@@ -1892,7 +2075,16 @@ class PortalSync extends ChangeNotifier {
       web ? PortalChannel.uyapWeb : PortalChannel.uyapMobile,
       outcomes,
     );
-    if (record.parties.isNotEmpty) {
+    // The parties written under this channel's name only when this reading
+    // read them: those kept from before are not another channel's anew.
+    final partiesRead =
+        outcomes.isEmpty ||
+        outcomes.any(
+          (o) =>
+              o.section == CaseSection.parties &&
+              o.result == SectionResult.read,
+        );
+    if (record.parties.isNotEmpty && partiesRead) {
       db.saveCaseParties(
         key,
         record.parties,
@@ -2052,7 +2244,7 @@ class PortalSync extends ChangeNotifier {
         _mobile,
         db,
         // A new case may be in a prosecutor's office not yet known.
-        everyProvince: newCase,
+        everyProvince: newCase || closed,
         includeClosed: closed,
         onChanged: () => portfolioVersion.value++,
         onCaseId: (key, id) => ids[key] = id,
@@ -2063,6 +2255,7 @@ class PortalSync extends ChangeNotifier {
       );
       _sessionIds = ids;
       _idsSession = session;
+      _listWhole[PortalChannel.uyapMobile] = cases.complete;
       // Read whole, it is not read again until next week; read in
       // part, it is tried again in two hours, the courts that failed
       // with it.
@@ -2150,6 +2343,9 @@ class PortalSync extends ChangeNotifier {
   /// When the closed cases were last listed, at the lawyer's asking.
   static const closedScanKey = 'closed_scan_at';
 
+  /// Whether each channel's last portfolio reading listed every unit.
+  final _listWhole = <PortalChannel, bool>{};
+
   /// The closed cases listed once, from each portal connected: their list
   /// alone, no case read. Not held back by [portfolioRest]: the lawyer
   /// asked for it.
@@ -2159,14 +2355,24 @@ class PortalSync extends ChangeNotifier {
     notifyListeners();
     try {
       await _whenIdle();
+      final channels = [
+        if (_mobile.connected) PortalChannel.uyapMobile,
+        if (_web.connected) PortalChannel.uyapWeb,
+      ];
       await Future.wait([
-        if (_mobile.connected) syncMobile(full: true, closed: true),
-        if (_web.connected) syncWeb(force: true, closed: true),
+        for (final c in channels)
+          c == PortalChannel.uyapMobile
+              ? syncMobile(full: true, closed: true)
+              : syncWeb(force: true, closed: true),
       ]);
-      (await _database()).setMeta(
-        closedScanKey,
-        DateTime.now().toIso8601String(),
-      );
+      // Said scanned only when every channel read its lists whole.
+      if (channels.isNotEmpty &&
+          channels.every((c) => _listWhole[c] ?? false)) {
+        (await _database()).setMeta(
+          closedScanKey,
+          DateTime.now().toIso8601String(),
+        );
+      }
     } finally {
       closedScan = false;
       notifyListeners();
@@ -2297,7 +2503,13 @@ class PortalSync extends ChangeNotifier {
         );
         await panel.attach(linkOf(kase));
         final before = panel.record;
-        await panel.refresh();
+        // On [channel] alone, every section it gives (§2.4).
+        await panel.readSections(
+          channel,
+          channel == PortalChannel.uyapWeb
+              ? CaseSection.values.toSet()
+              : _mobileSections.toSet(),
+        );
         // Not answered: its turn comes again soon, not in a week, and the
         // day is not done.
         if (panel.error != null || panel.record == null) {
@@ -2381,6 +2593,14 @@ class PortalSync extends ChangeNotifier {
       unitKind: code(details['yargiBirimi']) ?? code(unitKind),
       closedFirst: (kept?.status?.value ?? '').contains('Kapal'),
     );
+  }
+
+  /// The mobile id the portfolio's reading gave for [key] forgotten: it
+  /// did not answer, and is looked up again.
+  void forgetMobileId(String key) {
+    if (_sessionIds.containsKey(key)) {
+      _sessionIds = {..._sessionIds}..remove(key);
+    }
   }
 
   /// The case kept as [key], if any.
@@ -2829,7 +3049,11 @@ Future<PortfolioResult> syncMobilePortfolio(
     );
     found[one.key] = found[one.key]?.merge(one) ?? one;
     final id = one.ids[mobile];
-    if (id != null) onCaseId?.call(one.key, id);
+    // A prosecutor's case's id is not given out: its sections are the
+    // web's until UYAP Mobil's ways are measured (§11.6).
+    if (id != null && family != CaseFamily.prosecutor) {
+      onCaseId?.call(one.key, id);
+    }
   }
 
   // The courts first, so that how far the reading has come can be said;
@@ -2863,7 +3087,15 @@ Future<PortfolioResult> syncMobilePortfolio(
   for (final (i, (type, kind, id, closed)) in courts.indexed) {
     onProgress?.call(i, courts.length);
     try {
-      for (final row in await api.cases(type, kind, id, closed: closed)) {
+      List<Map<String, Object?>> rows;
+      try {
+        rows = await api.cases(type, kind, id, closed: closed);
+      } on UyapListIncomplete catch (e) {
+        // What came is kept; the list is said to be incomplete.
+        rows = e.rows;
+        complete = false;
+      }
+      for (final row in rows) {
         add(row, CaseFamily.court, jurisdiction: type, unit: kind);
       }
       if (found.isNotEmpty) {
@@ -2967,7 +3199,13 @@ Future<bool> _mobileProsecutors(
   for (final MapEntry(key: id, value: name) in offices.entries) {
     for (final closed in [false, if (includeClosed) true]) {
       try {
-        final rows = await api.prosecutorCases(id, closed: closed);
+        List<Map<String, Object?>> rows;
+        try {
+          rows = await api.prosecutorCases(id, closed: closed);
+        } on UyapListIncomplete catch (e) {
+          rows = e.rows;
+          complete = false;
+        }
         for (final row in rows) {
           add(row);
         }

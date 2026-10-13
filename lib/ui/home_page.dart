@@ -799,6 +799,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     DocumentHistory.recoveryChanges.addListener(_checkRecovery);
     PortalSync.setupOffer.addListener(_offerSetup);
+    PortalSync.newCaseNotice.addListener(_newCaseTold);
     _library = widget.library ?? LibraryController();
     _library.addListener(_changed);
     _library.addListener(_archiveChanged);
@@ -1118,8 +1119,33 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     unawaited(UyapSetupDialog.show(context));
   }
 
+  /// UYAP told of a case not in the portfolio, with Folio not reading
+  /// UYAP of itself: the lawyer reads the portfolio again when they will.
+  void _newCaseTold() {
+    if (PortalSync.newCaseNotice.value == null || !mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 12),
+        content: const Text(
+          'UYAP yeni bir dosyada vekil kaydınızı bildirdi; dosya portföyde '
+          'yok.',
+        ),
+        action: SnackBarAction(
+          label: 'Portföyü yenile',
+          onPressed: () {
+            PortalSync.begin();
+            unawaited(
+              PortalSync.instance.syncPortfolio(full: true, newCase: true),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    PortalSync.newCaseNotice.removeListener(_newCaseTold);
     PortalSync.setupOffer.removeListener(_offerSetup);
     _keptSearch?.dispose();
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);

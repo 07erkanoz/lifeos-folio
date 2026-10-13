@@ -294,3 +294,32 @@ dosya bulunan savcılıklar; birim kodu yazılmaz, ayrıntısı web bölümü ka
 `portfolio_closed` ayarı kaldırıldı; "Kapalı dosyaları getir" (`scanClosed`) tek seferlik, yalnız
 liste. Web yalnız-web okuması savcılıkları ve satış/arabuluculuğu da okumaya devam eder (birleşir,
 istek azdır); daraltmak canlı karşılaştırmadan sonra.
+
+## 12. Codex uygulama denetimi (14 Ekim 2026)
+
+Codex (gpt-6.1-sol) uygulamayı denetledi (25 bulgu). Düzeltilenler: iş nesli (`_jobGen`) ile
+duraklat/sürdür/bırak yarışı; liste aşaması tazelik denetimi ve `listGaps`; okunamayan dosya kalınca
+iş `incomplete` durur (bölüm başına 3 deneme, sonra vazgeçilir, açılışta okunur); her dosyanın
+bölümleri okunmadan hemen önce yeniden hesaplanır; web kurulumu mobil bağlıyken de bütün listeyi
+okur; günlük zenginleştirme yalnız eskiyen web bölümleri, sabit kanal, günde en çok 500 dosya;
+"Tümünü tazele" kanalı sabit; taraf eşleşmesi rol uyumu ve tek eşleşme ister (belirsiz kısa adda
+vekil taşınmaz); mobil taraf yalnız ekler; taraflar yalnız okunduklarında kanal adıyla yazılır;
+web bölümleri birbirinden bağımsız sonuçlanır; mobil evrak/taraf cevap şeması sıkılaştı (yalnız
+son 20 → kısmi); 20 sayfayı aşan ya da tekrar eden mobil liste eksik sayılır; `complete` son
+sonucun başarısını ister; savcılık dosyalarının ayrıntısı mobilden okunmaz (kimliği verilmez);
+mobil indirme tekrarı yalnız evrak listesi ve kimliği yeniden çözer; taraf okumasından sonra süre
+aidiyeti yerelde yenilenir; Vekil Kaydı uyarısı ana ekranda ("Portföyü yenile"); otomatik okuma
+kapatılınca bekleyen okuma başlamaz; kapalı tarama yalnız listeler tam geldiyse damgalanır ve
+savcılıklarda bütün illere bakar; kurulum ekranında "Bağlan ve sürdür", mevcut portföy için
+"Yalnız UYAP Web ile tamamla"; "Şimdilik geç" eski okumayı başlatmaz; indirilmiş evrak yeni listede
+yoksa da listede kalır; ajandadaki dosya güncellemesi oturum kimliğini çözer.
+
+Ertelenenler (mimari değişiklik, canlı ölçüm ister):
+- İki cihazın aynı uzun işi çalıştırmasını önleyen sahiplik ve paylaşılan ilerleme (11.4).
+- Liste aşamasında birim/sayfa düzeyinde devam (bugün liste yeniden okunur ya da 3 saat içinde
+  okunduysa atlanır).
+- Bölüm sonuçlarının kayıttan bağımsız aktarımı (kayıt değişmezse bölüm sonucu diğer cihaza gitmez).
+- Mobil ve web birim kodlarının ayrı alanlarda tutulması (`yargiTuru/yargiBirimi` ortak; arabuluculuk
+  mobilde 25, web'de 13).
+- Başka cihazdan gelen kaydın alan alan, kanal/tarih sahipliğiyle birleştirilmesi (`adoptChecked`).
+- Ajandadaki "Dosyayı güncelle"nin bölüm okuyucusuna taşınması (bugün yalnız portföy özetini yazar).

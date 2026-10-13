@@ -84,7 +84,28 @@ void main() {
     expect(merged[0].kind, 'Kişi');
     expect(merged[1].lawyer, 'Av. Karşı Vekil');
     expect(merged[2].name, 'YENİ BORÇLU');
-    expect(UyapCasePanelController.mergeParties(webParties, const []), webParties);
+    expect(
+      UyapCasePanelController.mergeParties(webParties, const []),
+      webParties,
+    );
+  });
+
+  test('a short name that could be more than one party carries no counsel, '
+      'nor across roles', () {
+    const web = [
+      UyapParty('ALİ VELİ', 'Davacı', 'Av. Bir', 'Kişi'),
+      UyapParty('ALİ KAYA', 'Davacı', '', 'Kişi'),
+      UyapParty('AYŞE ÖZ', 'Davalı', '', 'Kişi'),
+    ];
+    final merged = UyapParty.merge(web, const [
+      UyapParty('ALİ', 'Davacı', 'Av. Karşı', ''),
+      UyapParty('AYŞE ÖZ', 'Tanık', 'Av. Üç', ''),
+    ]);
+    expect(merged[1].lawyer, isEmpty, reason: 'ALİ: which one?');
+    expect(merged.where((t) => t.name == 'ALİ'), isEmpty);
+    // Another role is another party.
+    expect(merged[2].lawyer, isEmpty);
+    expect(merged.last.role, 'Tanık');
   });
 
   group('the parties kept in the database', () {

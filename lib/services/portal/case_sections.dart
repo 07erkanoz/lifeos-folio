@@ -70,6 +70,6 @@ class SectionState {
   /// Tries failed since the last success.
   final int tries;
 
-  /// Read whole at some time.
-  bool get complete => succeeded != null && !partial;
+  /// Read whole, and not failed since.
+  bool get complete => succeeded != null && !partial && result.done;
 }

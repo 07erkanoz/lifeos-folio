@@ -480,52 +480,84 @@ class UyapCasePanelController extends ChangeNotifier {
       };
       // A high court's particulars come with its list; the court cases'
       // particulars call is not known to answer for it.
+      // Each section on its own: one that fails leaves the others read,
+      // and is kept failed. The web gone, the reading stops, as before.
+      final failed = <CaseSection>{};
+      Future<T?> part<T>(CaseSection section, Future<T> Function() read) async {
+        try {
+          return await read();
+        } catch (_) {
+          if (!web.connected) rethrow;
+          failed.add(section);
+          whole = false;
+          return null;
+        }
+      }
+
       final details = !only.contains(CaseSection.particulars)
           ? _record?.details ?? const UyapCaseDetails()
           : hidden.contains('ayrinti_bilgileri') ||
                 UyapWebService.isHighCourt(_link!.jurisdiction) ||
                 _link!.jurisdiction == UyapWebService.prosecution
           ? const UyapCaseDetails()
-          : await web.caseDetails(live);
+          : await part(CaseSection.particulars, () => web.caseDetails(live)) ??
+                _record?.details ??
+                const UyapCaseDetails();
       // Not asked for: none given, those kept stay (UyapCaseStore.keep).
       final parties =
           !only.contains(CaseSection.parties) ||
               hidden.contains('taraf_bilgileri')
           ? const <UyapParty>[]
-          : await web.parties(live);
+          : await part(CaseSection.parties, () => web.parties(live)) ??
+                const <UyapParty>[];
       final documents =
           !only.contains(CaseSection.documents) ||
               hidden.contains('evrak_bilgileri')
           ? const UyapCaseDocuments([])
-          : await web.caseDocuments(
-              live,
-              onPage: (page, pages) {
-                busy = pages > 1
-                    ? 'Evrak listesi çekiliyor · $page/$pages'
-                    : 'Evrak listesi çekiliyor';
-                _changed();
-              },
-            );
+          : await part(
+                  CaseSection.documents,
+                  () => web.caseDocuments(
+                    live,
+                    onPage: (page, pages) {
+                      busy = pages > 1
+                          ? 'Evrak listesi çekiliyor · $page/$pages'
+                          : 'Evrak listesi çekiliyor';
+                      _changed();
+                    },
+                  ),
+                ) ??
+                const UyapCaseDocuments([]);
+      SectionOutcome outcome(CaseSection s, SectionOutcome read) =>
+          failed.contains(s) ? SectionOutcome(s, SectionResult.failed) : read;
       // Not told what UYAP shows of the case: what it would have told is
       // not "not shown" but "not had".
       final told = permissions.allowed != null;
       final sections = <SectionOutcome>[
-        SectionOutcome(
+        outcome(
           CaseSection.particulars,
-          hidden.contains('ayrinti_bilgileri')
-              ? SectionResult.notShown
-              : SectionResult.read,
-          partial: details == const UyapCaseDetails(),
+          SectionOutcome(
+            CaseSection.particulars,
+            hidden.contains('ayrinti_bilgileri')
+                ? SectionResult.notShown
+                : SectionResult.read,
+            partial: details == const UyapCaseDetails(),
+          ),
         ),
-        _outcome(
+        outcome(
           CaseSection.parties,
-          hidden.contains('taraf_bilgileri'),
-          parties.isEmpty,
+          _outcome(
+            CaseSection.parties,
+            hidden.contains('taraf_bilgileri'),
+            parties.isEmpty,
+          ),
         ),
-        _outcome(
+        outcome(
           CaseSection.documents,
-          hidden.contains('evrak_bilgileri') || documents.withheld != null,
-          documents.documents.isEmpty,
+          _outcome(
+            CaseSection.documents,
+            hidden.contains('evrak_bilgileri') || documents.withheld != null,
+            documents.documents.isEmpty,
+          ),
         ),
       ];
       final typeCode = permissions.typeCode ?? live.listing?.typeCode;
@@ -729,21 +761,26 @@ class UyapCasePanelController extends ChangeNotifier {
     // kept stay, and it is asked again.
     final readDocuments = only.contains(CaseSection.documents);
     UyapDocumentPage? page;
+    // The full list not given, only the last twenty: read in part, though
+    // none came.
+    var lastOnly = false;
     try {
       if (readDocuments) {
         final raw = Map<String, Object?>.from(await mobile.caseDocuments(id));
-        if (!raw.containsKey('tumEvraklar') && !raw.containsKey('son20Evrak')) {
+        final all = raw['tumEvraklar'];
+        final latest = raw['son20Evrak'];
+        if (all is! Map && all is! List && latest is! List && latest is! Map) {
           throw const FormatException('UYAP Mobil evrak listesi vermedi.');
         }
+        lastOnly = all == null;
         // The mobile API may give the full list as a list rather than
         // grouped.
-        if (raw['tumEvraklar'] is List) {
-          raw['tumEvraklar'] = {'': raw['tumEvraklar']};
-        }
+        if (all is List) raw['tumEvraklar'] = {'': all};
         page = UyapDocumentPage.fromJson(raw);
       }
-    } on FormatException {
+    } catch (e) {
       // UYAP unreachable, the session gone: the reading stops, as before.
+      if (e is! FormatException && !mobile.connected) rethrow;
       whole = false;
     }
     if (readDocuments) {
@@ -753,11 +790,12 @@ class UyapCasePanelController extends ChangeNotifier {
           SectionResult.failed,
         ),
         // Only the last twenty: read, but not whole.
-        UyapDocumentPage(grouped: [], latest: [_, ...]) => const SectionOutcome(
-          CaseSection.documents,
-          SectionResult.read,
-          partial: true,
-        ),
+        _ when lastOnly || (page.grouped.isEmpty && page.latest.isNotEmpty) =>
+          SectionOutcome(
+            CaseSection.documents,
+            page.latest.isEmpty ? SectionResult.empty : SectionResult.read,
+            partial: true,
+          ),
         _ => _outcome(
           CaseSection.documents,
           page.message.isNotEmpty && page.grouped.isEmpty,
@@ -1052,9 +1090,11 @@ class UyapCasePanelController extends ChangeNotifier {
     try {
       bytes = _checked(await mobile.documentBytes(live.documentId, id));
     } catch (_) {
-      // Both ids are the session's: looked up again, once.
+      // Both ids are the session's: looked up again, once; the list
+      // alone, not the parties.
       _mobileCaseId = null;
-      await _refreshMobile();
+      sync.forgetMobileId(caseKey(_link!.number, _link!.court));
+      await _refreshMobile({CaseSection.documents});
       final again = _liveDocuments[document.key];
       if (again == null || _mobileCaseId == null) rethrow;
       bytes = _checked(

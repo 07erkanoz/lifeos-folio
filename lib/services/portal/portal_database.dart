@@ -1661,9 +1661,21 @@ class PortalDatabase {
     final comeShort = parties.any((t) => isShortenedName(t.name));
     final List<UyapParty> next;
     final String nextSource;
-    if (kept.isEmpty ||
-        (keptShort && !comeShort) ||
-        (rank(source) >= rank(keptSource) && !(comeShort && !keptShort))) {
+    final mobile = source == 'uyap_mobil';
+    if (kept.isEmpty) {
+      next = parties;
+      nextSource = source;
+    } else if (keptShort && !comeShort) {
+      // Whole names over shortened ones; the kept whole names stay.
+      next = UyapParty.merge(parties, [
+        for (final t in kept)
+          if (!isShortenedName(t.name)) t,
+      ]);
+      nextSource = rank(source) >= rank(keptSource) ? source : '$keptSource';
+    } else if (!mobile &&
+        rank(source) >= rank(keptSource) &&
+        !(comeShort && !keptShort)) {
+      // The web's (or a reading of no known channel) gives the list.
       next = UyapParty.fill(parties, kept);
       nextSource = source;
     } else if (rank(source) < rank('uyap_mobil')) {
@@ -1671,11 +1683,12 @@ class PortalDatabase {
       // UYAP knows better.
       return;
     } else {
+      // UYAP Mobil only adds and fills, never drops one kept.
       next = UyapParty.merge(kept, [
         for (final t in parties)
           if (!isShortenedName(t.name) || keptShort) t,
       ]);
-      nextSource = '$keptSource';
+      nextSource = rank(source) > rank(keptSource) ? source : '$keptSource';
     }
     // Nothing new: kept as they are, with the day they came.
     if (keptSource == nextSource &&

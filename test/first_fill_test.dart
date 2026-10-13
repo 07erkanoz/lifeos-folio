@@ -246,6 +246,7 @@ class _Mobile extends UyapMobileApi {
     String? caseType,
   }) async {
     asked.add('parties $caseId');
+    if (partiesFail) throw StateError('UYAP');
     // The session ending after this many answers.
     if (--answersLeft == 0) on = false;
     return [
@@ -256,6 +257,9 @@ class _Mobile extends UyapMobileApi {
 
   /// Parties' answers before the session ends; endless when below zero.
   int answersLeft = -1;
+
+  /// The parties never answered, the session staying.
+  bool partiesFail = false;
 
   /// UYAP's notifications: a Vekil Kaydı for a case not in the portfolio.
   bool vekilKaydi = false;
@@ -493,6 +497,7 @@ void main() {
       for (final auto in [false, true]) {
         db.dispose();
         db = PortalDatabase.memory();
+        PortalSync.newCaseNotice.value = null;
         final mobile = _Mobile()..vekilKaydi = true;
         final sync = syncOf(_Web()..on = false, mobile);
         await sync.setAutoFetch(auto);
@@ -503,7 +508,11 @@ void main() {
           await Future<void>.delayed(const Duration(milliseconds: 50));
         }
         expect(db.cases().isNotEmpty, auto, reason: 'auto $auto');
-        expect(sync.newCaseNotice.value != null, !auto, reason: 'auto $auto');
+        expect(
+          PortalSync.newCaseNotice.value != null,
+          !auto,
+          reason: 'auto $auto',
+        );
       }
     },
   );
@@ -553,6 +562,28 @@ void main() {
       expect(mobile.asked.where((a) => a.startsWith('parties')), [
         isNot(first),
       ]);
+    });
+
+    test('cases that would not be read leave the job waiting, not done; '
+        'tried three times, a case is given up', () async {
+      final mobile = _Mobile()..partiesFail = true;
+      final sync = syncOf(_Web()..on = false, mobile);
+      await sync.startSetup(PortalChannel.uyapMobile);
+      expect(sync.job.value!.done, isFalse);
+      expect(sync.job.value!.stopped, UyapJobStop.incomplete);
+      expect(sync.job.value!.stage, UyapJobStage.parties);
+      await sync.resumeJob();
+      expect(sync.job.value!.stopped, UyapJobStop.incomplete);
+      await sync.resumeJob();
+      // Three tries each: given up, shown failed; the documents read.
+      expect(sync.job.value!.done, isTrue);
+      expect(
+        sections(
+          hukuk,
+        )[(CaseSection.parties, PortalChannel.uyapMobile)]!.result,
+        SectionResult.failed,
+      );
+      expect(mobile.asked.where((a) => a.startsWith('parties')).length, 6);
     });
 
     test('paused by the lawyer it waits for them', () async {

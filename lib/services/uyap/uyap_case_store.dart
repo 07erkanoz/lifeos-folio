@@ -563,12 +563,23 @@ class UyapCaseStore {
     final previousKeys = before == null ? null : _keys(before.documents);
     // Withheld is not "none", nor is an empty list where there were
     // documents (not shown this time): the list kept from before stays.
-    final list =
+    var list =
         before != null &&
             (documents.withheld != null ||
                 (documents.documents.isEmpty && before.documents.isNotEmpty))
         ? before.documents
         : documents.documents;
+    // A document downloaded here that a new list no longer names stays
+    // listed: its file is the lawyer's, and a list given in part is no
+    // reason to lose it.
+    if (before != null && !identical(list, before.documents)) {
+      final named = _keys(list);
+      list = [
+        ...list,
+        for (final d in before.documents)
+          if (!named.contains(d.key) && before.files.containsKey(d.key)) d,
+      ];
+    }
     final keys = _keys(list);
     final record = UyapCaseRecord(
       court: target.courtName,

@@ -425,9 +425,12 @@ class UyapMobileApi {
       );
       final fresh = rows.where((r) => seen.add('${r['dosyaId']}')).toList();
       out.addAll(fresh);
-      if (rows.length < 100 || fresh.isEmpty) break;
+      if (rows.length < 100) return out;
+      // A full page that brings nothing new: UYAP gave one page again.
+      if (fresh.isEmpty) throw UyapListIncomplete(out);
     }
-    return out;
+    // Twenty full pages: there may be more, never cut short in silence.
+    throw UyapListIncomplete(out);
   }
 
   /// The 81 provinces, for the prosecutors' offices: `il` (its code) and
@@ -478,9 +481,12 @@ class UyapMobileApi {
       );
       final fresh = rows.where((r) => seen.add('${r['dosyaId']}')).toList();
       out.addAll(fresh);
-      if (rows.length < 100 || fresh.isEmpty) break;
+      if (rows.length < 100) return out;
+      // A full page that brings nothing new: UYAP gave one page again.
+      if (fresh.isEmpty) throw UyapListIncomplete(out);
     }
-    return out;
+    // Twenty full pages: there may be more, never cut short in silence.
+    throw UyapListIncomplete(out);
   }
 
   /// The case [year]/[sequence] at [court], as `dosya` lists it filtered:
@@ -525,7 +531,7 @@ class UyapMobileApi {
       if (caseType != null && caseType.isNotEmpty) 'dosyaTurKod': caseType,
     });
     // An answer without the list is not "no parties".
-    if (data is! List && !(data is Map && data.containsKey('tarafList'))) {
+    if (data is! List && !(data is Map && data['tarafList'] is List)) {
       throw const FormatException('UYAP Mobil taraf listesi vermedi.');
     }
     return _list(data, 'tarafList');
@@ -801,6 +807,16 @@ class _Refused implements Exception {
 
 /// UYAP Mobil could not be reached, so whether a kept session is still
 /// good is not known.
+/// A list UYAP Mobil gave in part: a page came again, or there were more
+/// pages than are asked. [rows] are those that came.
+class UyapListIncomplete implements Exception {
+  const UyapListIncomplete(this.rows);
+  final List<Map<String, Object?>> rows;
+
+  @override
+  String toString() => 'UYAP Mobil listesi eksik geldi (${rows.length} dosya)';
+}
+
 class UyapMobileUnreachable implements Exception {
   final String message;
   const UyapMobileUnreachable(this.message);

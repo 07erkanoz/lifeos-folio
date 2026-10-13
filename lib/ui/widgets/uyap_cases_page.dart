@@ -133,6 +133,8 @@ class _UyapCasesPageState extends State<UyapCasesPage> {
       if (!mounted) return;
       await UyapSetupDialog.show(context, sync: _sync);
       all = await _sync.portfolio();
+      // Put off ("Şimdilik geç") or closed: nothing is read.
+      if (all.isEmpty && _sync.job.value == null) return;
     }
     if (all.isEmpty && channel != null && _sync.job.value == null) {
       // The portfolio is read court by court; how far it has come is

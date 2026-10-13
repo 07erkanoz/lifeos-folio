@@ -18,6 +18,10 @@ enum UyapJobStop {
 
   /// The lawyer paused it: it waits for them.
   user,
+
+  /// Cases were left that would not be read: it waits for the lawyer to
+  /// try them again.
+  incomplete,
 }
 
 /// A job the lawyer started, kept so that it goes on where it was: on the
@@ -32,6 +36,7 @@ class UyapJob {
     required this.stage,
     required this.started,
     this.stopped,
+    this.listGaps = false,
   });
 
   final UyapJobKind kind;
@@ -40,14 +45,24 @@ class UyapJob {
   final DateTime started;
   final UyapJobStop? stopped;
 
+  /// Its list did not come whole: the cases listed were read, and the
+  /// lawyer is told to read the portfolio again.
+  final bool listGaps;
+
   bool get done => stage == UyapJobStage.done;
 
-  UyapJob copyWith({UyapJobStage? stage, UyapJobStop? stopped}) => UyapJob(
+  /// [stopped] is what is given: left out, the job runs.
+  UyapJob copyWith({
+    UyapJobStage? stage,
+    UyapJobStop? stopped,
+    bool? listGaps,
+  }) => UyapJob(
     kind: kind,
     channel: channel,
     stage: stage ?? this.stage,
     started: started,
     stopped: stopped,
+    listGaps: listGaps ?? this.listGaps,
   );
 
   String encode() => jsonEncode({
@@ -56,6 +71,7 @@ class UyapJob {
     'asama': stage.name,
     'basladi': started.toIso8601String(),
     'durdu': ?stopped?.name,
+    if (listGaps) 'listeEksik': true,
   });
 
   static UyapJob? decode(String? raw) {
@@ -70,6 +86,7 @@ class UyapJob {
         stopped: j['durdu'] == null
             ? null
             : UyapJobStop.values.byName('${j['durdu']}'),
+        listGaps: j['listeEksik'] == true,
       );
     } catch (_) {
       return null;

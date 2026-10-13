@@ -98,6 +98,28 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
     }
   }
 
+  bool _connected(UyapJob job) => job.channel == PortalChannel.uyapWeb
+      ? _sync.web.connected
+      : _sync.mobile.connected;
+
+  /// A stopped job goes on; its channel connected first when it is not.
+  Future<void> _resume(UyapJob job) async {
+    setState(() => _connecting = true);
+    try {
+      if (!_connected(job)) {
+        if (job.channel == PortalChannel.uyapWeb) {
+          await connectUyapWeb(context);
+        } else {
+          await connectUyapMobile(context, api: _sync.mobile);
+        }
+      }
+      if (!_connected(job)) return;
+      unawaited(_sync.resumeJob());
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
   Future<void> _completeOnWeb() async {
     setState(() => _connecting = true);
     try {
@@ -243,6 +265,14 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
         ],
       ),
       [
+        // A portfolio there already (read before the setup came): what only
+        // the web has, straight away.
+        if ((_cases ?? 0) > 0)
+          TextButton(
+            key: const ValueKey('uyap-setup-web-only'),
+            onPressed: _connecting ? null : () => unawaited(_completeOnWeb()),
+            child: const Text('Yalnız UYAP Web ile tamamla'),
+          ),
         TextButton(
           key: const ValueKey('uyap-setup-later'),
           onPressed: () {
@@ -333,6 +363,9 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
       UyapJobStop.session =>
         '$channelName oturumu kapandı. Yeniden bağlandığınızda kaldığı '
             'yerden sürer.',
+      UyapJobStop.incomplete =>
+        'Bazı dosyalar okunamadı; okunanlar kayıtlı. Sürdür ile yalnız '
+            'kalanlar yeniden denenir.',
       null =>
         '${left == null ? '' : 'Kalan yaklaşık ${_minutes(left * perCase)} · '}'
             'Folio’yu kullanmaya devam edebilirsiniz; kesilirse kaldığı '
@@ -361,14 +394,8 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
         if (paused)
           FilledButton(
             key: const ValueKey('uyap-setup-resume'),
-            onPressed:
-                job.stopped == UyapJobStop.session &&
-                    !(job.channel == PortalChannel.uyapWeb
-                        ? _sync.web.connected
-                        : _sync.mobile.connected)
-                ? null
-                : () => unawaited(_sync.resumeJob()),
-            child: const Text('Sürdür'),
+            onPressed: _connecting ? null : () => unawaited(_resume(job)),
+            child: Text(_connected(job) ? 'Sürdür' : 'Bağlan ve sürdür'),
           )
         else
           OutlinedButton(
@@ -401,6 +428,14 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
               'Tahmini süre: ${_minutes(n * perCase)}. Web oturumu kapanırsa '
               'sonraki girişte kaldığı yerden sürer.',
               style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          ],
+          if (_sync.job.value?.listGaps ?? false) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Portföy listesinin bir kısmı alınamadı. Dava Dosyalarım’da '
+              '“Portföyü yenile” ile yeniden deneyin.',
+              style: TextStyle(color: scheme.error),
             ),
           ],
         ],

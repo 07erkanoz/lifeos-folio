@@ -1543,30 +1543,59 @@ class UyapParty {
 
   String get identity => '$role|$name|$lawyer|$kind';
 
+  static String _who(UyapParty p) => UyapWebService.fold(p.name).trim();
+
+  /// Whether [a] and [b] can be one party by their roles: the same, or one
+  /// not told.
+  static bool _roles(UyapParty a, UyapParty b) {
+    final x = UyapWebService.fold(a.role).trim();
+    final y = UyapWebService.fold(b.role).trim();
+    return x.isEmpty || y.isEmpty || x == y;
+  }
+
   /// Whether [a] and [b] name one party: the same name, or one the other's
   /// with more after it (UYAP Mobil at times gives a name the web gives
-  /// whole).
+  /// whole), in roles that agree.
   static bool same(UyapParty a, UyapParty b) {
-    final x = UyapWebService.fold(a.name).trim();
-    final y = UyapWebService.fold(b.name).trim();
-    if (x.isEmpty || y.isEmpty) return false;
+    final x = _who(a), y = _who(b);
+    if (x.isEmpty || y.isEmpty || !_roles(a, b)) return false;
     return x == y || x.startsWith('$y ') || y.startsWith('$x ');
+  }
+
+  /// The one party of [among] that is [p]: the same name first; else the
+  /// one whose name begins as [p]'s does, when only one does. Null when
+  /// none is, or when more than one could be: counsel is never carried to
+  /// a party guessed.
+  static int? matchIn(List<UyapParty> among, UyapParty p) {
+    final exact = [
+      for (final (i, k) in among.indexed)
+        if (_who(k) == _who(p) && _roles(k, p)) i,
+    ];
+    if (exact.isNotEmpty) return exact.first;
+    final near = [
+      for (final (i, k) in among.indexed)
+        if (same(k, p)) i,
+    ];
+    return near.length == 1 ? near.single : null;
   }
 
   /// [kept] with [other]'s added: a party only [other] names comes in, one
   /// both name keeps what [kept] had and takes only what it lacked (role,
-  /// counsel, kind). None is taken away, none named twice.
+  /// counsel, kind). None is taken away, none named twice; one [other]
+  /// names that could be more than one kept is left out.
   static List<UyapParty> merge(List<UyapParty> kept, List<UyapParty> other) {
     if (kept.isEmpty) return other;
     if (other.isEmpty) return kept;
     final out = [...kept];
     for (final p in other) {
-      final at = out.indexWhere((k) => same(k, p));
-      if (at < 0) {
-        out.add(p);
+      final at = matchIn(out, p);
+      if (at != null) {
+        out[at] = out[at].filledFrom(p);
         continue;
       }
-      out[at] = out[at].filledFrom(p);
+      // Ambiguous ("ALİ" beside two ALİs): not added a third time.
+      if (out.any((k) => same(k, p))) continue;
+      out.add(p);
     }
     return out;
   }
@@ -1576,8 +1605,8 @@ class UyapParty {
   /// still keeps counsel an older reading knew.
   static List<UyapParty> fill(List<UyapParty> winner, List<UyapParty> kept) => [
     for (final p in winner)
-      switch (kept.where((k) => same(k, p)).firstOrNull) {
-        final k? => p.filledFrom(k),
+      switch (matchIn(kept, p)) {
+        final i? => p.filledFrom(kept[i]),
         null => p,
       },
   ];
