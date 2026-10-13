@@ -54,7 +54,7 @@ import 'search/global_search_page.dart';
 import 'desktop/desktop_home.dart';
 import 'help/help_button.dart';
 import 'widgets/editor_ribbon.dart';
-import 'widgets/desktop_frame.dart' show windowFullScreen;
+import 'widgets/desktop_frame.dart' show DesktopFrame, windowFullScreen;
 import 'library/search_controls.dart';
 import 'library/collapsing_overview.dart';
 
@@ -617,7 +617,78 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _showLibrary = true;
 
   /// Whether the panel is wide on the UYAP pages, where it is folded first.
-  bool _uyapPanelOpen = false;
+  /// The panel opened or folded by hand, by page, for this session: it
+  /// stays so on that page until the lawyer changes it again.
+  final _panelPinned = <String, bool>{};
+
+  /// The folded panel looked into: open over the page while the pointer is
+  /// on it.
+  bool _panelPeek = false;
+  Timer? _peekSoon;
+
+  /// The page the panel's choice is kept for: every case page is one.
+  String get _panelPage => _isUyapGroup(_group) ? 'uyap' : _group;
+
+  /// Whether the panel shows only its icons: by the lawyer's choice, else
+  /// by the window and the page. A narrow window, the editor and the pages
+  /// that want room (the cases, the clients, a wide book) fold it; one the
+  /// lawyer opened or folded here stays so.
+  bool _panelFolded(bool compact, double width) {
+    if (compact || !_showLibrary) return true;
+    switch (widget.appearance.panelMode) {
+      case PanelMode.open:
+        return false;
+      case PanelMode.folded:
+        return true;
+      case PanelMode.auto:
+        final pinned = _panelPinned[_panelPage];
+        if (pinned != null) return !pinned;
+        return _foldsPanel ||
+            (_group == 'kasa' && width < 1400) ||
+            width < 1200;
+    }
+  }
+
+  /// The panel, drawn over its room: folded to its icons, it opens over the
+  /// page while the pointer rests on it, and folds again when it leaves.
+  Widget _panel(bool folded) {
+    final peeking = folded && _panelPeek;
+    return MouseRegion(
+      onEnter: (_) {
+        if (!folded) return;
+        _peekSoon?.cancel();
+        _peekSoon = Timer(const Duration(milliseconds: 280), () {
+          if (mounted) setState(() => _panelPeek = true);
+        });
+      },
+      onExit: (_) {
+        _peekSoon?.cancel();
+        if (_panelPeek) setState(() => _panelPeek = false);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          boxShadow: peeking
+              ? const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 24,
+                    offset: Offset(4, 0),
+                  ),
+                ]
+              : const [],
+        ),
+        child: _sidebar(folded && !peeking, open: !folded),
+      ),
+    );
+  }
+
+  /// The panel opened or folded by hand on this page.
+  void _togglePanel(bool open) => setState(() {
+    _panelPinned[_panelPage] = !open;
+    _panelPeek = false;
+  });
   bool _previewExpanded = false;
 
   /// Text providers owned by the open PDFium viewers. This is the same text
@@ -1875,6 +1946,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           constraints.maxWidth < 700 ||
           (constraints.maxHeight < 500 && constraints.maxWidth < 1000);
       final editing = !_showLibrary && (_isNewDocument || _isEditorMode);
+      // Full screen means the page and nothing else, on a desktop as much
+      // as on a phone: in the editor the panel goes with its panels.
+      final hidePanel = editing
+          ? !_editorPanelsVisible
+          : (_fullScreen || (!_showLibrary && _previewExpanded));
+      final folded = _panelFolded(compact, constraints.maxWidth);
       final scheme = Theme.of(context).colorScheme;
       final mobileHome = mobile && !_mobileArchive;
       return PopScope<Object?>(
@@ -1971,615 +2048,636 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                   },
                   child: SafeArea(
-                    child: Row(
+                    child: Stack(
                       children: [
-                        if (!mobile)
-                          Offstage(
-                            // Full screen means the page and nothing else,
-                            // on a desktop as much as on a phone. It used to
-                            // hide only the preview's own header, because it
-                            // was written for a phone where there is nothing
-                            // else on screen anyway; here the sidebar and
-                            // the result list stayed and it was full screen
-                            // in name only.
-                            offstage: editing
-                                ? !_editorPanelsVisible
-                                : (_fullScreen ||
-                                      (!_showLibrary && _previewExpanded)),
-                            child: _sidebar(
-                              compact ||
-                                  !_showLibrary ||
-                                  (_foldsPanel && !_uyapPanelOpen),
-                              toggle: !compact && _showLibrary && _foldsPanel,
-                            ),
-                          ),
-                        Expanded(
-                          child: Column(
-                            children: [
-                              if (_showLibrary && mobileHome)
-                                FoldingChrome(
-                                  child: Container(
-                                    height: 56,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: scheme.surface,
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: scheme.outlineVariant,
+                        Row(
+                          children: [
+                            // The panel's room: it is drawn over it, and
+                            // over the page while it is looked into.
+                            if (!mobile && !hidePanel)
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 160),
+                                curve: Curves.easeOutCubic,
+                                width: folded
+                                    ? LibrarySidebar.foldedWidth
+                                    : LibrarySidebar.openWidth,
+                              ),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  if (_showLibrary && mobileHome)
+                                    FoldingChrome(
+                                      child: Container(
+                                        height: 56,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
                                         ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Builder(
-                                          builder: (context) => IconButton(
-                                            key: const ValueKey('mobile-menu'),
-                                            tooltip: 'Menü',
-                                            onPressed: () =>
-                                                Scaffold.of(context)
-                                                    .openDrawer(),
-                                            icon: const Icon(
-                                              Icons.menu_rounded,
+                                        decoration: BoxDecoration(
+                                          color: scheme.surface,
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: scheme.outlineVariant,
                                             ),
                                           ),
                                         ),
-                                        const Expanded(
-                                          child: Text(
-                                            'LifeOS Folio',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 17,
-                                            ),
-                                          ),
-                                        ),
-                                        IconButton(
-                                          key: const ValueKey(
-                                            'phone-search-open',
-                                          ),
-                                          tooltip: 'Ara',
-                                          onPressed: () =>
-                                              unawaited(_searchOnPhone()),
-                                          icon: const Icon(
-                                            Icons.search_rounded,
-                                          ),
-                                        ),
-                                        IconButton(
-                                          tooltip: 'Kurtarılabilir taslaklar',
-                                          onPressed: _openRecovery,
-                                          icon: const Icon(
-                                            Icons.restore_rounded,
-                                          ),
-                                        ),
-                                        IconButton(
-                                          tooltip: 'Ayarlar',
-                                          onPressed: _pickFolder,
-                                          icon: const Icon(
-                                            Icons.settings_outlined,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              // The agenda and UETS fill the page with their
-                              // own heading; on a phone the menu button stays.
-                              // Dava Dosyalarım, a case's page and the
-                              // office's network bring their own bar on a
-                              // phone.
-                              if (_showLibrary &&
-                                  !mobileHome &&
-                                  (mobile
-                                      ? _group != 'images' &&
-                                            _group != 'buro' &&
-                                            _group != 'senkron' &&
-                                            _group != 'gelenler' &&
-                                            _group != 'gorevler' &&
-                                            _group != 'muvekkiller' &&
-                                            _group != 'mesajlar' &&
-                                            !_isUyapGroup(_group)
-                                      : !_isFullPage(_group)))
-                                FoldingChrome(
-                                  // On a phone the heading folds away while
-                                  // a page's list is scrolled.
-                                  enabled: mobile,
-                                  child: Container(
-                                    height: 72,
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: mobile ? 8 : 24,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: scheme.surface,
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: scheme.outlineVariant,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        if (mobile)
-                                          Builder(
-                                            builder: (context) => IconButton(
-                                              tooltip: 'Menü',
-                                              onPressed: () =>
-                                                  Scaffold.of(context)
-                                                      .openDrawer(),
-                                              icon: const Icon(
-                                                Icons.menu_rounded,
+                                        child: Row(
+                                          children: [
+                                            Builder(
+                                              builder: (context) => IconButton(
+                                                key: const ValueKey(
+                                                  'mobile-menu',
+                                                ),
+                                                tooltip: 'Menü',
+                                                onPressed: () =>
+                                                    Scaffold.of(context)
+                                                        .openDrawer(),
+                                                icon: const Icon(
+                                                  Icons.menu_rounded,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        Text(
-                                          compact
-                                              ? 'LifeOS Folio'
-                                              : 'Kütüphane',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        SizedBox(width: mobile ? 4 : 12),
-                                        if (!compact)
-                                          Text(
-                                            '/  ${_showLibrary
-                                                ? _isUyapGroup(_group)
-                                                      ? 'Dava Dosyalarım'
-                                                      : 'Evrak arşivi'
-                                                : _isNewDocument
-                                                ? _newTitle
-                                                : 'Önizleme'}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: scheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        const Spacer(),
-                                        // On a phone the bar is full; the
-                                        // pages under it have their own.
-                                        if (!mobile)
-                                          HelpButton(
-                                            _showLibrary && _isUyapGroup(_group)
-                                                ? Help.portfolio
-                                                : Help.library,
-                                          ),
-                                        if (_files.isNotEmpty)
-                                          PopupMenuButton<int>(
-                                            tooltip: 'Açık evraklar',
-                                            icon: const Icon(
-                                              Icons.tab_outlined,
-                                              size: 20,
-                                            ),
-                                            onSelected: (i) =>
-                                                _selectFile(_files[i]),
-                                            itemBuilder: (_) => [
-                                              for (
-                                                var i = 0;
-                                                i < _files.length;
-                                                i++
-                                              )
-                                                PopupMenuItem(
-                                                  value: i,
-                                                  child: Text(_files[i].name),
+                                            const Expanded(
+                                              child: Text(
+                                                'LifeOS Folio',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 17,
                                                 ),
-                                            ],
-                                          ),
-                                        if (mobile)
-                                          IconButton(
-                                            tooltip: 'Dosya aç',
-                                            onPressed: _pickFiles,
-                                            icon: const Icon(
-                                              Icons.upload_file_outlined,
+                                              ),
                                             ),
-                                          ),
-                                        if (!mobile &&
-                                            (Platform.isLinux ||
-                                                Platform.isWindows))
-                                          IconButton(
-                                            tooltip: 'UYAP Devam Eden İşlemler',
-                                            onPressed: () => showDialog<void>(
-                                              context: context,
-                                              builder: (_) =>
-                                                  const UyapOperationsDialog(),
+                                            IconButton(
+                                              key: const ValueKey(
+                                                'phone-search-open',
+                                              ),
+                                              tooltip: 'Ara',
+                                              onPressed: () =>
+                                                  unawaited(_searchOnPhone()),
+                                              icon: const Icon(
+                                                Icons.search_rounded,
+                                              ),
                                             ),
-                                            icon: const Icon(
-                                              Icons.pending_actions_outlined,
+                                            IconButton(
+                                              tooltip:
+                                                  'Kurtarılabilir taslaklar',
+                                              onPressed: _openRecovery,
+                                              icon: const Icon(
+                                                Icons.restore_rounded,
+                                              ),
                                             ),
-                                          ),
-                                        IconButton(
-                                          tooltip: 'Kurtarılabilir taslaklar',
-                                          onPressed: _openRecovery,
-                                          icon: Badge(
-                                            isLabelVisible: _recoveryCount > 0,
-                                            label: Text('$_recoveryCount'),
-                                            child: const Icon(
-                                              Icons.restore_rounded,
+                                            IconButton(
+                                              tooltip: 'Ayarlar',
+                                              onPressed: _pickFolder,
+                                              icon: const Icon(
+                                                Icons.settings_outlined,
+                                              ),
                                             ),
-                                          ),
+                                          ],
                                         ),
-                                        if (!mobile)
-                                          IconButton(
-                                            tooltip: 'İndeksi güncelle',
-                                            onPressed: _library.ready
-                                                ? () => _library.refresh()
-                                                : null,
-                                            icon: const Icon(
-                                              Icons.refresh_rounded,
-                                              size: 20,
-                                            ),
-                                          ),
-                                        SizedBox(width: mobile ? 0 : 12),
-                                        if (!mobile)
-                                          FilledButton.icon(
-                                            onPressed: _newDocument,
-                                            icon: const Icon(
-                                              Icons.note_add_outlined,
-                                              size: 16,
-                                            ),
-                                            label: const Text(
-                                              'Yeni belge oluştur',
-                                              style: TextStyle(fontSize: 12),
-                                            ),
-                                          ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              // The gallery and the UYAP cases bring their own
-                              // headings; the archive's search field and type
-                              // filters have nothing to offer either.
-                              if (_showLibrary &&
-                                  !mobileHome &&
-                                  _group != 'images' &&
-                                  !_isUyapGroup(_group) &&
-                                  !_isFullPage(_group))
-                                FoldingChrome(
-                                  enabled: mobile,
-                                  child: _searchArea(compact),
-                                ),
-                              if (_showLibrary &&
-                                  !mobileHome &&
-                                  _library.error != null)
-                                Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                  ),
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: scheme.error.withValues(alpha: .08),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.info_outline,
-                                        color: scheme.error,
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          _library.error!,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: scheme.error,
+                                  // The agenda and UETS fill the page with their
+                                  // own heading; on a phone the menu button stays.
+                                  // Dava Dosyalarım, a case's page and the
+                                  // office's network bring their own bar on a
+                                  // phone.
+                                  if (_showLibrary &&
+                                      !mobileHome &&
+                                      (mobile
+                                          ? _group != 'images' &&
+                                                _group != 'buro' &&
+                                                _group != 'senkron' &&
+                                                _group != 'gelenler' &&
+                                                _group != 'gorevler' &&
+                                                _group != 'muvekkiller' &&
+                                                _group != 'mesajlar' &&
+                                                !_isUyapGroup(_group)
+                                          : !_isFullPage(_group)))
+                                    FoldingChrome(
+                                      // On a phone the heading folds away while
+                                      // a page's list is scrolled.
+                                      enabled: mobile,
+                                      child: Container(
+                                        height: 72,
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: mobile ? 8 : 24,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: scheme.surface,
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: scheme.outlineVariant,
+                                            ),
                                           ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ),
-                                      TextButton(
-                                        onPressed: _showStatus,
-                                        child: const Text('Ayrıntılar'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              Expanded(
-                                key: const ValueKey('workspace-area'),
-                                child: ChromeScrollWatcher(
-                                  enabled: mobile,
-                                  child: LayoutBuilder(
-                                    builder: (context, box) => Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        TransitionPane(
-                                          visible: _showLibrary,
-                                          child: mobileHome
-                                              ? _mobileHome()
-                                              : _group == 'images'
-                                              ? _gallery(mobile)
-                                              : _isUyapGroup(_group)
-                                              ? _uyapPage()
-                                              : _group == 'home'
-                                              ? _desktopHome()
-                                              : _group == 'agenda'
-                                              ? _agendaPage()
-                                              : _group == 'uets'
-                                              ? _uetsPage()
-                                              : _group == 'bildirim'
-                                              ? _noticesPage()
-                                              : _group == 'buro'
-                                              ? const OfficeNetworkPage()
-                                              : _group == 'gelenler'
-                                              ? InboxPage(
-                                                  onOpenFolder: (dir) =>
-                                                      unawaited(
-                                                        _addFiles([dir]),
+                                        child: Row(
+                                          children: [
+                                            if (mobile)
+                                              Builder(
+                                                builder: (context) =>
+                                                    IconButton(
+                                                      tooltip: 'Menü',
+                                                      onPressed: () =>
+                                                          Scaffold.of(context)
+                                                              .openDrawer(),
+                                                      icon: const Icon(
+                                                        Icons.menu_rounded,
                                                       ),
-                                                  onSearchable:
-                                                      _inboxSearchable,
-                                                  onOpen: (path) => unawaited(
-                                                    _openRecent(
-                                                      EvrakFile.fromPath(path),
                                                     ),
-                                                  ),
-                                                )
-                                              : _group == 'senkron'
-                                              ? SyncPage(
-                                                  archiveFolders: () => [
-                                                    for (final s
-                                                        in _library.sources)
-                                                      if (s.folder) s.path,
-                                                  ],
-                                                )
-                                              : _group == 'gorevler'
-                                              ? const TasksPage()
-                                              : _group == 'kasa' &&
-                                                    !OfficeNetwork
-                                                        .instance
-                                                        .seesMoney
-                                              ? const Center(
-                                                  child: Text(
-                                                    'Kasayı büroda yöneticiler '
-                                                    've yetki verilenler görür.',
-                                                  ),
-                                                )
-                                              : _group == 'kasa'
-                                              ? CashPage(
-                                                  lawyer: _lawyerName,
-                                                  person:
-                                                      OfficeNetwork.instance.me,
-                                                  onOpenClient: (key) {
-                                                    _clientAsked = key;
-                                                    unawaited(
-                                                      _selectGroup(
-                                                        'muvekkiller',
+                                              ),
+                                            Text(
+                                              compact
+                                                  ? 'LifeOS Folio'
+                                                  : 'Kütüphane',
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            SizedBox(width: mobile ? 4 : 12),
+                                            if (!compact)
+                                              Text(
+                                                '/  ${_showLibrary
+                                                    ? _isUyapGroup(_group)
+                                                          ? 'Dava Dosyalarım'
+                                                          : 'Evrak arşivi'
+                                                    : _isNewDocument
+                                                    ? _newTitle
+                                                    : 'Önizleme'}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color:
+                                                      scheme.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            const Spacer(),
+                                            // On a phone the bar is full; the
+                                            // pages under it have their own.
+                                            if (!mobile)
+                                              HelpButton(
+                                                _showLibrary &&
+                                                        _isUyapGroup(_group)
+                                                    ? Help.portfolio
+                                                    : Help.library,
+                                              ),
+                                            if (_files.isNotEmpty)
+                                              PopupMenuButton<int>(
+                                                tooltip: 'Açık evraklar',
+                                                icon: const Icon(
+                                                  Icons.tab_outlined,
+                                                  size: 20,
+                                                ),
+                                                onSelected: (i) =>
+                                                    _selectFile(_files[i]),
+                                                itemBuilder: (_) => [
+                                                  for (
+                                                    var i = 0;
+                                                    i < _files.length;
+                                                    i++
+                                                  )
+                                                    PopupMenuItem(
+                                                      value: i,
+                                                      child: Text(
+                                                        _files[i].name,
                                                       ),
-                                                    );
-                                                  },
-                                                )
-                                              : _group == 'muvekkiller'
-                                              ? ClientsPage(
-                                                  key: ValueKey(
-                                                    'clients-$_clientAsked',
-                                                  ),
-                                                  open: _clientAsked,
-                                                  lawyer: _lawyerName,
-                                                  onEdit: (path) => unawaited(
-                                                    _addFiles(
-                                                      [path],
-                                                      index: false,
-                                                      external: true,
-                                                      edit: true,
                                                     ),
-                                                  ),
-                                                  person:
-                                                      OfficeNetwork.instance.me,
-                                                  seesMoney: OfficeNetwork
-                                                      .instance
-                                                      .seesMoney,
-                                                  inOffice:
-                                                      OfficeNetwork
-                                                          .instance
-                                                          .ledger
-                                                          .officeId !=
-                                                      null,
-                                                  onOpenCase: (key, client) =>
-                                                      unawaited(
-                                                        _selectGroup(
-                                                          'uyap:$key',
-                                                        ).then((_) {
-                                                          if (_group ==
-                                                              'uyap:$key') {
-                                                            _caseFromClient =
-                                                                client;
-                                                          }
-                                                        }),
-                                                      ),
-                                                )
-                                              : _group == 'mesajlar'
-                                              ? const MessagesPage()
-                                              : _group == 'ayarlar'
-                                              ? _settingsPage()
-                                              : _overview(),
-                                        ),
-                                        TransitionPane(
-                                          visible: !_showLibrary,
-                                          child: Row(
-                                            children: [
-                                              if (box.maxWidth >= 800 &&
-                                                  !_fullScreen &&
-                                                  (editing
-                                                      ? _editorPanelsVisible
-                                                      : !_previewExpanded))
-                                                SizedBox(
-                                                  width: 300,
-                                                  child: Column(
-                                                    children: [
-                                                      _previewSearch(),
-                                                      _resultHeading(true),
-                                                      Expanded(
-                                                        child: _results(true),
-                                                      ),
-                                                    ],
+                                                ],
+                                              ),
+                                            if (mobile)
+                                              IconButton(
+                                                tooltip: 'Dosya aç',
+                                                onPressed: _pickFiles,
+                                                icon: const Icon(
+                                                  Icons.upload_file_outlined,
+                                                ),
+                                              ),
+                                            if (!mobile &&
+                                                (Platform.isLinux ||
+                                                    Platform.isWindows))
+                                              IconButton(
+                                                tooltip:
+                                                    'UYAP Devam Eden İşlemler',
+                                                onPressed: () => showDialog<void>(
+                                                  context: context,
+                                                  builder: (_) =>
+                                                      const UyapOperationsDialog(),
+                                                ),
+                                                icon: const Icon(
+                                                  Icons
+                                                      .pending_actions_outlined,
+                                                ),
+                                              ),
+                                            IconButton(
+                                              tooltip:
+                                                  'Kurtarılabilir taslaklar',
+                                              onPressed: _openRecovery,
+                                              icon: Badge(
+                                                isLabelVisible:
+                                                    _recoveryCount > 0,
+                                                label: Text('$_recoveryCount'),
+                                                child: const Icon(
+                                                  Icons.restore_rounded,
+                                                ),
+                                              ),
+                                            ),
+                                            if (!mobile)
+                                              IconButton(
+                                                tooltip: 'İndeksi güncelle',
+                                                onPressed: _library.ready
+                                                    ? () => _library.refresh()
+                                                    : null,
+                                                icon: const Icon(
+                                                  Icons.refresh_rounded,
+                                                  size: 20,
+                                                ),
+                                              ),
+                                            SizedBox(width: mobile ? 0 : 12),
+                                            if (!mobile)
+                                              FilledButton.icon(
+                                                onPressed: _newDocument,
+                                                icon: const Icon(
+                                                  Icons.note_add_outlined,
+                                                  size: 16,
+                                                ),
+                                                label: const Text(
+                                                  'Yeni belge oluştur',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
                                                   ),
                                                 ),
-                                              if (box.maxWidth >= 800 &&
-                                                  !_fullScreen &&
-                                                  (editing
-                                                      ? _editorPanelsVisible
-                                                      : !_previewExpanded))
-                                                VerticalDivider(
-                                                  width: 1,
-                                                  color: scheme.outlineVariant,
-                                                ),
-                                              Expanded(
-                                                child: Stack(
-                                                  fit: StackFit.expand,
-                                                  children: [
-                                                    Offstage(
-                                                      offstage: _isNewDocument,
-                                                      child:
-                                                          _selectedFile == null
-                                                          ? const SizedBox.shrink()
-                                                          : _buildWorkspace(
-                                                              context,
-                                                              _selectedFile!,
-                                                            ),
-                                                    ),
-                                                    if (_newEditorOpened)
-                                                      Offstage(
-                                                        offstage:
-                                                            !_isNewDocument,
-                                                        child: Column(
-                                                          children: [
-                                                            Padding(
-                                                              padding:
-                                                                  const EdgeInsets.symmetric(
-                                                                    horizontal:
-                                                                        18,
-                                                                    vertical:
-                                                                        10,
-                                                                  ),
-                                                              child: Row(
-                                                                children: [
-                                                                  Text(
-                                                                    _newTitle,
-                                                                    style: const TextStyle(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w700,
-                                                                    ),
-                                                                  ),
-                                                                  const Spacer(),
-                                                                  if (!mobile)
-                                                                    _editorPanelButton(),
-                                                                  IconButton(
-                                                                    tooltip: 'Arşive dön',
-                                                                    onPressed:
-                                                                        _goLibrary,
-                                                                    icon: const Icon(
-                                                                      Icons
-                                                                          .close,
-                                                                      size: 18,
-                                                                    ),
-                                                                  ),
-                                                                ],
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  // The gallery and the UYAP cases bring their own
+                                  // headings; the archive's search field and type
+                                  // filters have nothing to offer either.
+                                  if (_showLibrary &&
+                                      !mobileHome &&
+                                      _group != 'images' &&
+                                      !_isUyapGroup(_group) &&
+                                      !_isFullPage(_group))
+                                    FoldingChrome(
+                                      enabled: mobile,
+                                      child: _searchArea(compact),
+                                    ),
+                                  if (_showLibrary &&
+                                      !mobileHome &&
+                                      _library.error != null)
+                                    Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                      ),
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: scheme.error.withValues(
+                                          alpha: .08,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.info_outline,
+                                            color: scheme.error,
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _library.error!,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: scheme.error,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          TextButton(
+                                            onPressed: _showStatus,
+                                            child: const Text('Ayrıntılar'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  Expanded(
+                                    key: const ValueKey('workspace-area'),
+                                    child: ChromeScrollWatcher(
+                                      enabled: mobile,
+                                      child: LayoutBuilder(
+                                        builder: (context, box) => Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            TransitionPane(
+                                              visible: _showLibrary,
+                                              child: mobileHome
+                                                  ? _mobileHome()
+                                                  : _group == 'images'
+                                                  ? _gallery(mobile)
+                                                  : _isUyapGroup(_group)
+                                                  ? _uyapPage()
+                                                  : _group == 'home'
+                                                  ? _desktopHome()
+                                                  : _group == 'agenda'
+                                                  ? _agendaPage()
+                                                  : _group == 'uets'
+                                                  ? _uetsPage()
+                                                  : _group == 'bildirim'
+                                                  ? _noticesPage()
+                                                  : _group == 'buro'
+                                                  ? const OfficeNetworkPage()
+                                                  : _group == 'gelenler'
+                                                  ? InboxPage(
+                                                      onOpenFolder: (dir) =>
+                                                          unawaited(
+                                                            _addFiles([dir]),
+                                                          ),
+                                                      onSearchable:
+                                                          _inboxSearchable,
+                                                      onOpen: (path) =>
+                                                          unawaited(
+                                                            _openRecent(
+                                                              EvrakFile.fromPath(
+                                                                path,
                                                               ),
                                                             ),
-                                                            Expanded(
-                                                              child:
-                                                                  _newRecovery?.format ==
-                                                                          'spreadsheet-draft' ||
-                                                                      _newRecovery
-                                                                              ?.format ==
-                                                                          'xlsx'
-                                                                  ? SpreadsheetEditor(
-                                                                      path:
-                                                                          _recoverySource,
-                                                                      recovery:
-                                                                          _newRecovery,
-                                                                      draft:
-                                                                          _newDraft,
-                                                                      onSaved:
-                                                                          _saved,
-                                                                      key: ValueKey(
-                                                                        'new-sheet_$_newDocumentVersion',
-                                                                      ),
-                                                                    )
-                                                                  : _newRecovery
-                                                                            ?.format ==
-                                                                        'text-draft'
-                                                                  ? PlainTextEditor(
-                                                                      key: ValueKey(
-                                                                        'new-text_$_newDocumentVersion',
-                                                                      ),
-                                                                      path:
-                                                                          _recoverySource ??
-                                                                          _newRecovery!
-                                                                              .sourcePath ??
-                                                                          'Kurtarılan belge.txt',
-                                                                      recovery:
-                                                                          _newRecovery,
-                                                                      draft:
-                                                                          _newDraft,
-                                                                      onSaved:
-                                                                          _saved,
-                                                                    )
-                                                                  : EditorWidget(
-                                                                      hostTabs:
-                                                                          MediaQuery.sizeOf(
-                                                                            context,
-                                                                          ).width >=
-                                                                          700,
-                                                                      fileHost:
-                                                                          _editorFileHost,
-                                                                      library:
-                                                                          _library,
-                                                                      onSigned:
-                                                                          _signed,
-                                                                      recovery:
-                                                                          _newRecovery,
-                                                                      initialFilePath:
-                                                                          _recoverySource,
-                                                                      initialFormat:
-                                                                          _recoverySource ==
-                                                                              null
-                                                                          ? (_newRecovery == null
-                                                                                ? _newFormat
-                                                                                : null)
-                                                                          : EvrakFormat.fromExtension(
-                                                                              _recoverySource!.split('.').last,
-                                                                            ),
-                                                                      draft:
-                                                                          _newDraft,
-                                                                      onSaved:
-                                                                          _saved,
-                                                                      uyapCase:
-                                                                          _newCase,
-                                                                      isActive:
-                                                                          !_showLibrary &&
-                                                                          _isNewDocument,
-                                                                      key: ValueKey(
-                                                                        'new-document_$_newDocumentVersion',
-                                                                      ),
-                                                                    ),
-                                                            ),
-                                                          ],
-                                                        ),
+                                                          ),
+                                                    )
+                                                  : _group == 'senkron'
+                                                  ? SyncPage(
+                                                      archiveFolders: () => [
+                                                        for (final s
+                                                            in _library.sources)
+                                                          if (s.folder) s.path,
+                                                      ],
+                                                    )
+                                                  : _group == 'gorevler'
+                                                  ? const TasksPage()
+                                                  : _group == 'kasa' &&
+                                                        !OfficeNetwork
+                                                            .instance
+                                                            .seesMoney
+                                                  ? const Center(
+                                                      child: Text(
+                                                        'Kasayı büroda yöneticiler '
+                                                        've yetki verilenler görür.',
                                                       ),
-                                                  ],
-                                                ),
+                                                    )
+                                                  : _group == 'kasa'
+                                                  ? CashPage(
+                                                      lawyer: _lawyerName,
+                                                      person: OfficeNetwork
+                                                          .instance
+                                                          .me,
+                                                      onOpenClient: (key) {
+                                                        _clientAsked = key;
+                                                        unawaited(
+                                                          _selectGroup(
+                                                            'muvekkiller',
+                                                          ),
+                                                        );
+                                                      },
+                                                    )
+                                                  : _group == 'muvekkiller'
+                                                  ? ClientsPage(
+                                                      key: ValueKey(
+                                                        'clients-$_clientAsked',
+                                                      ),
+                                                      open: _clientAsked,
+                                                      lawyer: _lawyerName,
+                                                      onEdit: (path) =>
+                                                          unawaited(
+                                                            _addFiles(
+                                                              [path],
+                                                              index: false,
+                                                              external: true,
+                                                              edit: true,
+                                                            ),
+                                                          ),
+                                                      person: OfficeNetwork
+                                                          .instance
+                                                          .me,
+                                                      seesMoney: OfficeNetwork
+                                                          .instance
+                                                          .seesMoney,
+                                                      inOffice:
+                                                          OfficeNetwork
+                                                              .instance
+                                                              .ledger
+                                                              .officeId !=
+                                                          null,
+                                                      onOpenCase:
+                                                          (
+                                                            key,
+                                                            client,
+                                                          ) => unawaited(
+                                                            _selectGroup(
+                                                              'uyap:$key',
+                                                            ).then((_) {
+                                                              if (_group ==
+                                                                  'uyap:$key') {
+                                                                _caseFromClient =
+                                                                    client;
+                                                              }
+                                                            }),
+                                                          ),
+                                                    )
+                                                  : _group == 'mesajlar'
+                                                  ? const MessagesPage()
+                                                  : _group == 'ayarlar'
+                                                  ? _settingsPage()
+                                                  : _overview(),
+                                            ),
+                                            TransitionPane(
+                                              visible: !_showLibrary,
+                                              child: Row(
+                                                children: [
+                                                  if (box.maxWidth >= 800 &&
+                                                      !_fullScreen &&
+                                                      (editing
+                                                          ? _editorPanelsVisible
+                                                          : !_previewExpanded))
+                                                    SizedBox(
+                                                      width: 300,
+                                                      child: Column(
+                                                        children: [
+                                                          _previewSearch(),
+                                                          _resultHeading(true),
+                                                          Expanded(
+                                                            child: _results(
+                                                              true,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  if (box.maxWidth >= 800 &&
+                                                      !_fullScreen &&
+                                                      (editing
+                                                          ? _editorPanelsVisible
+                                                          : !_previewExpanded))
+                                                    VerticalDivider(
+                                                      width: 1,
+                                                      color:
+                                                          scheme.outlineVariant,
+                                                    ),
+                                                  Expanded(
+                                                    child: Stack(
+                                                      fit: StackFit.expand,
+                                                      children: [
+                                                        Offstage(
+                                                          offstage:
+                                                              _isNewDocument,
+                                                          child:
+                                                              _selectedFile ==
+                                                                  null
+                                                              ? const SizedBox.shrink()
+                                                              : _buildWorkspace(
+                                                                  context,
+                                                                  _selectedFile!,
+                                                                ),
+                                                        ),
+                                                        if (_newEditorOpened)
+                                                          Offstage(
+                                                            offstage:
+                                                                !_isNewDocument,
+                                                            child: Column(
+                                                              children: [
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            18,
+                                                                        vertical:
+                                                                            10,
+                                                                      ),
+                                                                  child: Row(
+                                                                    children: [
+                                                                      Text(
+                                                                        _newTitle,
+                                                                        style: const TextStyle(
+                                                                          fontWeight:
+                                                                              FontWeight.w700,
+                                                                        ),
+                                                                      ),
+                                                                      const Spacer(),
+                                                                      if (!mobile)
+                                                                        _editorPanelButton(),
+                                                                      IconButton(
+                                                                        tooltip: 'Arşive dön',
+                                                                        onPressed:
+                                                                            _goLibrary,
+                                                                        icon: const Icon(
+                                                                          Icons
+                                                                              .close,
+                                                                          size:
+                                                                              18,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                                Expanded(
+                                                                  child:
+                                                                      _newRecovery?.format ==
+                                                                              'spreadsheet-draft' ||
+                                                                          _newRecovery?.format == 'xlsx'
+                                                                      ? SpreadsheetEditor(
+                                                                          path:
+                                                                              _recoverySource,
+                                                                          recovery:
+                                                                              _newRecovery,
+                                                                          draft:
+                                                                              _newDraft,
+                                                                          onSaved:
+                                                                              _saved,
+                                                                          key: ValueKey(
+                                                                            'new-sheet_$_newDocumentVersion',
+                                                                          ),
+                                                                        )
+                                                                      : _newRecovery?.format == 'text-draft'
+                                                                      ? PlainTextEditor(
+                                                                          key: ValueKey(
+                                                                            'new-text_$_newDocumentVersion',
+                                                                          ),
+                                                                          path:
+                                                                              _recoverySource ??
+                                                                              _newRecovery!.sourcePath ??
+                                                                              'Kurtarılan belge.txt',
+                                                                          recovery:
+                                                                              _newRecovery,
+                                                                          draft:
+                                                                              _newDraft,
+                                                                          onSaved:
+                                                                              _saved,
+                                                                        )
+                                                                      : EditorWidget(
+                                                                          hostTabs:
+                                                                              MediaQuery.sizeOf(
+                                                                                context,
+                                                                              ).width >=
+                                                                              700,
+                                                                          fileHost:
+                                                                              _editorFileHost,
+                                                                          library:
+                                                                              _library,
+                                                                          onSigned:
+                                                                              _signed,
+                                                                          recovery:
+                                                                              _newRecovery,
+                                                                          initialFilePath:
+                                                                              _recoverySource,
+                                                                          initialFormat:
+                                                                              _recoverySource == null
+                                                                              ? (_newRecovery == null ? _newFormat : null)
+                                                                              : EvrakFormat.fromExtension(_recoverySource!.split('.').last),
+                                                                          draft:
+                                                                              _newDraft,
+                                                                          onSaved:
+                                                                              _saved,
+                                                                          uyapCase:
+                                                                              _newCase,
+                                                                          isActive:
+                                                                              !_showLibrary &&
+                                                                              _isNewDocument,
+                                                                          key: ValueKey(
+                                                                            'new-document_$_newDocumentVersion',
+                                                                          ),
+                                                                        ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ),
-                                ),
+                                  // The archive's line is the archive's; on a
+                                  // phone the office's pages have the screen.
+                                  if (_showLibrary &&
+                                      !mobileHome &&
+                                      !(mobile && _isOfficePage(_group)))
+                                    _statusBar(),
+                                ],
                               ),
-                              // The archive's line is the archive's; on a
-                              // phone the office's pages have the screen.
-                              if (_showLibrary &&
-                                  !mobileHome &&
-                                  !(mobile && _isOfficePage(_group)))
-                                _statusBar(),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
+                        if (!mobile && !hidePanel)
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            child: _panel(folded),
+                          ),
                       ],
                     ),
                   ),
@@ -2606,10 +2704,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// The panel folded to its icons on the UYAP pages, for the documents'
   /// room; [toggle] gives the button that widens it there.
-  Widget _sidebar(bool compact, {bool toggle = false}) => LibrarySidebar(
-    onTogglePanel: toggle
-        ? () => setState(() => _uyapPanelOpen = !_uyapPanelOpen)
-        : null,
+  Widget _sidebar(bool compact, {bool open = true}) => LibrarySidebar(
+    onTogglePanel: () => _togglePanel(open),
+    panelOpen: open,
+    showBrand: !DesktopFrame.shown,
     library: _library,
     appearance: widget.appearance,
     compact: compact,

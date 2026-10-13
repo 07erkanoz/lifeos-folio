@@ -1102,6 +1102,30 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           if (_desktop)
             _Entry(
+              'sol panel kenar çubuğu otomatik açık dar',
+              SettingsRow(
+                key: const ValueKey('settings-panel-mode'),
+                icon: Icons.view_sidebar_outlined,
+                title: 'Sol panel',
+                subtitle:
+                    'Otomatik: dar pencerede, editörde ve dosya sayfalarında '
+                    'daralır; üstüne gelince açılır',
+                trailing: DropdownButton<PanelMode>(
+                  value: widget.appearance.panelMode,
+                  underline: const SizedBox(),
+                  items: [
+                    for (final m in PanelMode.values)
+                      DropdownMenuItem(value: m, child: Text(m.label)),
+                  ],
+                  onChanged: (m) {
+                    if (m != null) widget.appearance.setPanelMode(m);
+                    setState(() {});
+                  },
+                ),
+              ),
+            ),
+          if (_desktop && widget.appearance.panelMode == PanelMode.auto)
+            _Entry(
               'sol panel daralt uyap',
               SettingsRow(
                 key: const ValueKey('settings-fold-panel'),

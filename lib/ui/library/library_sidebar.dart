@@ -62,9 +62,21 @@ class LibrarySidebar extends StatelessWidget {
   /// Gelenler's unopened count; null while nothing has come.
   final int? inbox;
 
-  /// Widens the panel folded on the UYAP pages, or folds it again; null
-  /// where the window's width decides alone.
+  /// Opens the folded panel on this page, or folds it; null where the
+  /// window's width decides alone.
   final VoidCallback? onTogglePanel;
+
+  /// Whether the panel is open on the page, not only looked into while
+  /// folded: what its button does follows it.
+  final bool panelOpen;
+
+  /// Whether the panel names Folio at its top: not where the window's bar
+  /// does already.
+  final bool showBrand;
+
+  /// The panel's widths, open and folded to its icons.
+  static const openWidth = 236.0, foldedWidth = 76.0;
+
   const LibrarySidebar({
     super.key,
     required this.library,
@@ -92,6 +104,8 @@ class LibrarySidebar extends StatelessWidget {
     this.inbox,
     this.tasksOpen = 0,
     this.onTogglePanel,
+    this.panelOpen = true,
+    this.showBrand = true,
   });
 
   /// Whether the Kasa is shown: alone always; in an office to those who
@@ -138,7 +152,7 @@ class LibrarySidebar extends StatelessWidget {
     return Material(
       color: scheme.surface,
       child: Container(
-        width: compact ? 76 : 236,
+        width: compact ? foldedWidth : openWidth,
         decoration: BoxDecoration(
           border: Border(right: BorderSide(color: scheme.outlineVariant)),
         ),
@@ -148,15 +162,18 @@ class LibrarySidebar extends StatelessWidget {
           slivers: [
             SliverList.list(
               children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    compact ? 0 : 20,
-                    18,
-                    compact ? 0 : 16,
-                    16,
-                  ),
-                  child: _brand(context),
-                ),
+                if (showBrand)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 0 : 20,
+                      18,
+                      compact ? 0 : 16,
+                      16,
+                    ),
+                    child: _brand(context),
+                  )
+                else
+                  const SizedBox(height: 14),
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 16),
                   child: compact
@@ -558,12 +575,18 @@ class LibrarySidebar extends StatelessWidget {
                       if (onTogglePanel != null)
                         IconButton(
                           key: const ValueKey('sidebar-toggle'),
-                          tooltip: compact ? 'Paneli aç' : 'Paneli daralt',
+                          tooltip: panelOpen
+                              ? 'Paneli bu sayfada daralt'
+                              : compact
+                              ? 'Paneli bu sayfada açık tut'
+                              : 'Açık tut (üstünden çekilince daralmasın)',
                           onPressed: onTogglePanel,
                           icon: Icon(
-                            compact
+                            panelOpen
+                                ? Icons.keyboard_double_arrow_left_rounded
+                                : compact
                                 ? Icons.keyboard_double_arrow_right_rounded
-                                : Icons.keyboard_double_arrow_left_rounded,
+                                : Icons.push_pin_outlined,
                             size: 18,
                           ),
                         ),

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:evrak_convert/ui/library/library_sidebar.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:evrak_convert/ui/settings/settings_page.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -189,6 +190,70 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Arşiv klasörleri'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('the panel opens and folds by the window and the page, opens '
+      'while the pointer rests on it, and keeps what was chosen by hand', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const EvrakConvertApp());
+    await tester.pump();
+    bool folded() =>
+        tester.widget<LibrarySidebar>(find.byType(LibrarySidebar)).compact;
+    expect(folded(), isFalse);
+    // Folded by hand on this page: stays so.
+    await tester.tap(find.byKey(const ValueKey('sidebar-toggle')));
+    await tester.pumpAndSettle();
+    expect(folded(), isTrue);
+    // Looked into: open over the page while the pointer rests on it.
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: const Offset(1300, 400));
+    await tester.pump();
+    await mouse.moveTo(const Offset(30, 400));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    expect(folded(), isFalse);
+    await mouse.moveTo(const Offset(900, 400));
+    await tester.pumpAndSettle();
+    expect(folded(), isTrue);
+    // A narrow window folds it of itself.
+    await tester.tap(find.byKey(const ValueKey('sidebar-toggle')));
+    await tester.pumpAndSettle();
+    expect(folded(), isFalse);
+    tester.view.physicalSize = const Size(1120, 900);
+    await tester.pumpAndSettle();
+    expect(folded(), isFalse, reason: 'opened by hand on this page');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('the panel does not name Folio where the window\'s bar does', (
+    tester,
+  ) async {
+    Widget sidebar() => MaterialApp(
+      home: Scaffold(
+        body: LibrarySidebar(
+          library: LibraryController(databasePath: ':memory:'),
+          appearance: ThemeController(settingsPath: '/nonexistent/a.json'),
+          compact: false,
+          group: 'all',
+          pickFiles: () {},
+          pickFolder: () {},
+          showStatus: () {},
+          selectGroup: (_) {},
+          selectFolder: (_) {},
+          showBrand: false,
+        ),
+      ),
+    );
+    await tester.pumpWidget(sidebar());
+    expect(find.textContaining('LifeOS'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

@@ -4,6 +4,10 @@ import 'package:window_manager/window_manager.dart';
 
 /// Application chrome stays outside the Navigator, including on license pages.
 class DesktopFrame extends StatefulWidget {
+  /// Whether the window's own bar is Folio's, with its name and mark: the
+  /// panel then need not say them again.
+  static bool shown = false;
+
   final Widget child;
   final bool closeToTray;
   final VoidCallback onAbout;
@@ -61,6 +65,7 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
   @override
   void initState() {
     super.initState();
+    DesktopFrame.shown = true;
     windowManager.addListener(this);
     _sync();
   }
@@ -103,6 +108,7 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
   );
   @override
   void dispose() {
+    DesktopFrame.shown = false;
     windowManager.removeListener(this);
     super.dispose();
   }

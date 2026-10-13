@@ -6,6 +6,17 @@ import 'package:path/path.dart' as p;
 
 import '../../services/platform/app_directories.dart';
 
+/// How the library's panel opens: by the window and the page, or always
+/// open, or always folded to its icons.
+enum PanelMode {
+  auto('Otomatik'),
+  open('Hep açık'),
+  folded('Hep dar');
+
+  const PanelMode(this.label);
+  final String label;
+}
+
 class ThemeController extends ChangeNotifier {
   final String? settingsPath;
   ThemeMode mode;
@@ -14,6 +25,9 @@ class ThemeController extends ChangeNotifier {
   /// Whether the library's panel folds to its icons on the UYAP pages,
   /// for the cases' and documents' room.
   bool foldPanelOnUyap = true;
+
+  /// How the panel opens; see [PanelMode].
+  PanelMode panelMode = PanelMode.auto;
 
   /// How large Folio's own words are, against the system's: the documents'
   /// pages keep their own size.
@@ -45,6 +59,10 @@ class ThemeController extends ChangeNotifier {
         if (!_disposed && revision == _revision) {
           hoverPreview = settings['hoverPreview'] != false;
           foldPanelOnUyap = settings['foldPanelOnUyap'] != false;
+          panelMode = PanelMode.values.firstWhere(
+            (m) => m.name == settings['panel'],
+            orElse: () => PanelMode.auto,
+          );
           final scale = settings['textScale'];
           if (scale is num && scale >= 0.8 && scale <= 1.2) {
             textScale = scale.toDouble();
@@ -93,8 +111,17 @@ class ThemeController extends ChangeNotifier {
     _persist();
   }
 
+  void setPanelMode(PanelMode next) {
+    if (_disposed) return;
+    _revision++;
+    panelMode = next;
+    notifyListeners();
+    _persist();
+  }
+
   void _persist() {
     final settings = {
+      'panel': panelMode.name,
       'theme': mode.name,
       'hoverPreview': hoverPreview,
       'foldPanelOnUyap': foldPanelOnUyap,
