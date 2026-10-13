@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../../preview_app.dart' show openPreviewWindow;
+import '../../services/editor/petition_templates.dart' show trUpper;
 import '../../services/platform/editor_window.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/task_package.dart' show ReceivedCase;
@@ -130,6 +131,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   /// Who gave this case with a task, and which: null for the lawyer's own.
   ({String task, String from})? _tasked;
+
+  /// The parties the lawyer said they act for here, if they said.
+  List<({String ad, String rol})> _said = const [];
   final _picked = <String>{};
   final _search = TextEditingController();
 
@@ -222,6 +226,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     setState(() {
       _kase = kase;
       _tasked = ReceivedCase.markIn(db, kase.key);
+      _said = db.representation(kase.key);
       _state = state;
       _hearings = db.hearings(caseKey: kase.key)
         ..sort((a, b) => b.at.compareTo(a.at));
@@ -1232,8 +1237,8 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           : record?.details.status ?? '',
     );
     final degree = UyapWebService.isHighCourt(linkOf(kase).jurisdiction)
-        ? 'İSTİNAF / TEMYİZ'
-        : 'İLK DERECE';
+        ? 'Temyiz'
+        : courtLevel(kase.court);
     final type = record?.details.kind.isNotEmpty == true
         ? record!.details.kind
         : '${kase.details?.value['tur'] ?? ''}';
@@ -1355,7 +1360,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                '${kind.label.toUpperCase()} · $degree',
+                trUpper([kind.label, ?degree].join(' · ')),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -1633,6 +1638,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     final (ours, others) = splitParties(
       _c.record?.parties ?? const <UyapParty>[],
       lawyer,
+      said: _said,
     );
     if (ours.isEmpty && others.isEmpty) return const SizedBox.shrink();
     // Our side's counsel is the reader; the other side's is worth naming.
@@ -1796,7 +1802,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     final lawyer = widget.lawyer.isNotEmpty
         ? widget.lawyer
         : UyapMobileApi.instance.session.value?.user ?? '';
-    final (ours, others) = splitParties(parties, lawyer);
+    final (ours, others) = splitParties(parties, lawyer, said: _said);
     Widget person(UyapParty party, {required bool mine}) {
       final name = titleName(party.name);
       final institution = party.kind.toLowerCase().contains('kurum');

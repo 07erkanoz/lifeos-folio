@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../services/legal/deadlines/aidiyet.dart'
+    show tekYanda, vekilOlarakGeciyor;
 import '../../services/portal/observed.dart';
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
@@ -52,6 +54,43 @@ enum CaseKind {
     }
     return CaseKind.diger;
   }
+}
+
+/// Where a case stands among the courts, from its court's name: "İstinaf",
+/// "Yargıtay", "Danıştay", "Soruşturma"; null for a court of first instance
+/// and an enforcement office, which need no word.
+String? courtLevel(String court) {
+  final c = UyapWebService.fold(court);
+  if (c.contains('yargitay')) return 'Yargıtay';
+  if (c.contains('danistay')) return 'Danıştay';
+  if (c.contains('anayasa mahkemesi')) return 'Anayasa Mahkemesi';
+  if (c.contains('bolge adliye') || c.contains('bolge idare')) {
+    return 'İstinaf';
+  }
+  if (c.contains('savcilig')) return 'Soruşturma';
+  return null;
+}
+
+/// The courthouse a court sits in, as the lawyer goes to it: "Antalya
+/// Adliyesi", "İstanbul Anadolu Adliyesi". The high courts and the
+/// regional courts of appeal sit in no courthouse: "Yargıtay", "Antalya
+/// Bölge Adliye Mahkemesi".
+String courthouseOf(String court) {
+  final words = court.trim().split(RegExp(r'\s+'));
+  final first = words.first;
+  if (first.isEmpty) return 'Diğer';
+  final c = UyapWebService.fold(court);
+  if (c.contains('yargitay')) return 'Yargıtay';
+  if (c.contains('danistay')) return 'Danıştay';
+  if (c.contains('anayasa mahkemesi')) return 'Anayasa Mahkemesi';
+  if (c.contains('bolge adliye')) return '$first Bölge Adliye Mahkemesi';
+  if (c.contains('bolge idare')) return '$first Bölge İdare Mahkemesi';
+  // The cities with more than one courthouse name it in their second word.
+  const sides = {'anadolu', 'bati', 'kuzey', 'guney', 'dogu'};
+  if (words.length > 1 && sides.contains(UyapWebService.fold(words[1]))) {
+    return '$first ${words[1]} Adliyesi';
+  }
+  return '$first Adliyesi';
 }
 
 /// A case's state, in three tones: open green, closed grey, the rest
@@ -188,11 +227,8 @@ class PortfolioRow {
   /// "Davacı", "Alacaklı": the role the lawyer stands in.
   String? get ourRole => ours.isEmpty ? null : titleName(ours.first.role);
 
-  /// "Antalya Adliyesi": the city the court sits in.
-  String get place {
-    final first = kase.court.trim().split(RegExp(r'\s+')).first;
-    return first.isEmpty ? 'Diğer' : '$first Adliyesi';
-  }
+  /// "Antalya Adliyesi": the courthouse the court sits in.
+  String get place => courthouseOf(kase.court);
 
   /// When something last happened in it, for "Son gelişme önce".
   late final DateTime lastChange = _lastChange();
@@ -229,22 +265,45 @@ class PortfolioRow {
   late final String courtHaystack = UyapWebService.fold(kase.court);
 }
 
-/// The lawyer's own side of a case: the parties whose lawyer is [lawyer],
-/// by surname. When none is known, the parties a lawyer of the same
-/// surname stands for are taken; failing that, none.
+/// The lawyer's own side of a case, the way the clients' list finds it:
+/// the parties the lawyer said they act for ([said]) first; else those whose
+/// counsel names the lawyer in full (every word of their name); only then,
+/// those whose counsel has the lawyer's surname as a word of its own, and
+/// only when they all stand on one side. A surname alone is no proof: the
+/// other side's counsel may share it.
 (List<UyapParty>, List<UyapParty>) splitParties(
   List<UyapParty> parties,
-  String lawyer,
-) {
-  final words = UyapWebService.fold(lawyer)
-      .replaceAll(RegExp(r'^av\.?\s*'), '')
-      .split(RegExp(r'\s+'));
-  final surname = words.where((w) => w.length > 1).lastOrNull;
-  if (surname == null) return (const [], parties);
-  final ours = [
-    for (final p in parties)
-      if (UyapWebService.fold(p.lawyer).contains(surname)) p,
-  ];
+  String lawyer, {
+  List<({String ad, String rol})> said = const [],
+}) {
+  List<UyapParty> ours;
+  if (said.isNotEmpty) {
+    final names = {for (final t in said) UyapWebService.fold(t.ad)};
+    ours = [
+      for (final p in parties)
+        if (names.contains(UyapWebService.fold(p.name))) p,
+    ];
+  } else {
+    ours = [
+      for (final p in parties)
+        if (vekilOlarakGeciyor(p.lawyer, lawyer)) p,
+    ];
+    if (ours.isEmpty) {
+      final words = UyapWebService.fold(lawyer)
+          .replaceAll(RegExp(r'^av\.?\s*'), '')
+          .split(RegExp(r'[^a-z0-9]+'));
+      final surname = words.where((w) => w.length > 1).lastOrNull;
+      if (surname == null) return (const [], parties);
+      final found = [
+        for (final p in parties)
+          if (UyapWebService.fold(p.lawyer)
+              .split(RegExp(r'[^a-z0-9]+'))
+              .contains(surname))
+            p,
+      ];
+      ours = tekYanda([for (final p in found) p.role]) ? found : const [];
+    }
+  }
   return (
     ours,
     [
@@ -292,6 +351,7 @@ Future<List<PortfolioRow>> loadPortfolio({
         final (ours, others) = splitParties(
           record?.parties ?? const [],
           lawyer,
+          said: db.representation(kase.key),
         );
         return PortfolioRow(
           kase: kase,
