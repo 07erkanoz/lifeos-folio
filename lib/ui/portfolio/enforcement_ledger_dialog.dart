@@ -33,6 +33,8 @@ class LedgerDialog extends StatefulWidget {
     required this.kind,
     this.debtors = const [],
     this.left,
+    this.editing,
+    this.target,
   });
 
   final LedgerKind kind;
@@ -41,24 +43,52 @@ class LedgerDialog extends StatefulWidget {
   /// The debt as Folio counts it, in kuruş; null while not known.
   final int? left;
 
+  /// The line being corrected, its values filled in; null for a new one.
+  /// Corrected, no papers are offered: they are made from its menu.
+  final LedgerEntry? editing;
+
+  /// Where [editing]'s money was written: null for held for the client.
+  final MovementKind? target;
+
   @override
   State<LedgerDialog> createState() => _LedgerDialogState();
 }
 
 class _LedgerDialogState extends State<LedgerDialog> {
   static const _ways = ['Nakit', 'Havale / EFT', 'Kredi kartı'];
-  final _amount = TextEditingController();
-  final _note = TextEditingController();
-  DateTime _at = DateTime.now();
-  late String _debtor = widget.debtors.length == 1 ? widget.debtors.first : '';
-  String _way = _ways.first;
-  bool _whole = false;
-  MovementKind? _target;
-  bool _request = true;
+  late final _amount = TextEditingController(
+    text: switch (widget.editing) {
+      final e? => plainMoney(e.amount, Currency.tl).replaceAll(' ', ''),
+      null => '',
+    },
+  );
+  late final _note = TextEditingController(text: widget.editing?.note ?? '');
+  late DateTime _at = widget.editing?.at ?? DateTime.now();
+  late String _debtor =
+      widget.editing?.debtor ??
+      (widget.debtors.length == 1 ? widget.debtors.first : '');
+  late String _way = switch (widget.editing?.way) {
+    final w? when w.isNotEmpty => w,
+    _ => _ways.first,
+  };
+  late bool _whole = widget.editing?.whole ?? false;
+  late MovementKind? _target = widget.target;
+  late bool _request = widget.editing == null;
   bool _receipt = false;
   String? _error;
 
   bool get _external => widget.kind == LedgerKind.external;
+  bool get _editing => widget.editing != null;
+
+  /// The debtors offered: the file's, and one written before that the file
+  /// no longer lists.
+  List<String> get _debtors => [
+    ...widget.debtors,
+    if (_debtor.isNotEmpty && !widget.debtors.contains(_debtor)) _debtor,
+  ];
+
+  /// The ways offered, with one written before that is not among them.
+  List<String> get _wayChoices => [..._ways, if (!_ways.contains(_way)) _way];
 
   @override
   void dispose() {
@@ -109,8 +139,9 @@ class _LedgerDialogState extends State<LedgerDialog> {
   Widget build(BuildContext context) {
     final left = widget.left;
     final muted = TextStyle(fontSize: 12, color: AgendaColors.muted);
+    final debtors = _debtors;
     return FolioDialog(
-      title: widget.kind.label,
+      title: _editing ? '${widget.kind.label} düzelt' : widget.kind.label,
       subtitle: _external
           ? 'Borçlunun büroya doğrudan yaptığı ödeme'
           : 'Alacağın bir kısmından ya da tamamından feragat',
@@ -194,7 +225,7 @@ class _LedgerDialogState extends State<LedgerDialog> {
                 DropdownButton<String>(
                   value: _way,
                   items: [
-                    for (final w in _ways)
+                    for (final w in _wayChoices)
                       DropdownMenuItem(value: w, child: Text(w)),
                   ],
                   onChanged: (v) => setState(() => _way = v ?? _way),
@@ -202,7 +233,7 @@ class _LedgerDialogState extends State<LedgerDialog> {
               ],
             ],
           ),
-          if (widget.debtors.isNotEmpty) ...[
+          if (debtors.isNotEmpty) ...[
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               key: const ValueKey('ledger-debtor'),
@@ -211,12 +242,12 @@ class _LedgerDialogState extends State<LedgerDialog> {
                 labelText: _external ? 'Ödeyen borçlu' : 'Borçlu',
               ),
               items: [
-                if (widget.debtors.length > 1)
+                if (debtors.length > 1 || _debtor.isEmpty)
                   const DropdownMenuItem(
                     value: '',
                     child: Text('Bütün borçlular'),
                   ),
-                for (final d in widget.debtors)
+                for (final d in debtors)
                   DropdownMenuItem(value: d, child: Text(d)),
               ],
               onChanged: (v) => setState(() => _debtor = v ?? ''),
@@ -283,20 +314,21 @@ class _LedgerDialogState extends State<LedgerDialog> {
               ),
             ),
           const SizedBox(height: 6),
-          CheckboxListTile(
-            key: const ValueKey('ledger-request'),
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: Text(
-              _external
-                  ? 'Haricen tahsil bildirimi hazırla (UDF)'
-                  : 'Feragat dilekçesi hazırla (UDF)',
+          if (!_editing)
+            CheckboxListTile(
+              key: const ValueKey('ledger-request'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(
+                _external
+                    ? 'Haricen tahsil bildirimi hazırla (UDF)'
+                    : 'Feragat dilekçesi hazırla (UDF)',
+              ),
+              value: _request,
+              onChanged: (v) => setState(() => _request = v ?? false),
             ),
-            value: _request,
-            onChanged: (v) => setState(() => _request = v ?? false),
-          ),
-          if (_external)
+          if (_external && !_editing)
             CheckboxListTile(
               key: const ValueKey('ledger-receipt'),
               dense: true,
@@ -306,14 +338,25 @@ class _LedgerDialogState extends State<LedgerDialog> {
               value: _receipt,
               onChanged: (v) => setState(() => _receipt = v ?? false),
             ),
-          Text(
-            _external
-                ? 'Vekâletnamede ahzu kabz ve ibra yetkisi bulunmalıdır. '
-                      'Ödeme, UYAP\'ta tahsilat olarak görününce '
-                      'kendiliğinden resmîleşir.'
-                : 'Vekâletnamede feragat yetkisi bulunmalıdır.',
-            style: muted,
-          ),
+          if (_editing && _external)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                'Tutar, tarih ya da paranın yazıldığı yer değişirse '
+                'Kasa\'daki eski kayıt ters kayıtla düzeltilir ve yenisi '
+                'yazılır.',
+                style: muted,
+              ),
+            ),
+          if (!_editing)
+            Text(
+              _external
+                  ? 'Vekâletnamede ahzu kabz ve ibra yetkisi bulunmalıdır. '
+                        'Ödeme, UYAP\'ta tahsilat olarak görününce '
+                        'kendiliğinden resmîleşir.'
+                  : 'Vekâletnamede feragat yetkisi bulunmalıdır.',
+              style: muted,
+            ),
         ],
       ),
     );

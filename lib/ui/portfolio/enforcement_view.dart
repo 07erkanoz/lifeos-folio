@@ -245,45 +245,10 @@ class _EnforcementViewState extends State<EnforcementView> {
       person: me,
     );
     db.saveClientRecord(entry);
-    var booked = false;
-    if (kind == LedgerKind.external && client != null) {
-      final held = ClientRecord(
-        id: Client.newId(),
-        clientId: client.$2.id,
-        kind: ClientRecordKind.movement,
-        data: {
-          'dosya': widget.caseKey,
-          'hesap': MovementKind.collected.code,
-          'tutar': input.amount,
-          'zaman': input.at.toIso8601String(),
-          'aciklama': [
-            'Haricen tahsilat',
-            if (input.debtor.isNotEmpty) input.debtor,
-          ].join(' · '),
-          'odeme': input.way,
-          'kaynak': 'icra:${entry.id}',
-        },
-        created: now,
-        by: widget.lawyer,
-        updated: now,
-        locked: true,
-        person: me,
-      );
-      db.saveClientRecord(held);
-      if (input.target case final target?) {
-        db.saveClientRecord(
-          appliedMovement(
-            held,
-            target,
-            input.amount,
-            lawyer: widget.lawyer,
-            person: me,
-            at: input.at,
-          ),
-        );
-      }
-      booked = true;
-    }
+    final booked =
+        kind == LedgerKind.external &&
+        client != null &&
+        _bookLedger(db, entry.id, client.$2, input);
     await _loadBooked();
     if (!mounted) return;
     final saved = LedgerEntry(entry);
@@ -306,6 +271,173 @@ class _EnforcementViewState extends State<EnforcementView> {
         if (request != null) 'Talep dilekçesi editörde açıldı.',
         if (input.receipt) 'Borçlunun makbuzu dosyanın klasörüne yazıldı.',
       ].join(' '),
+    );
+  }
+
+  /// The money of payment [entryId] written to [client]'s account and to
+  /// Kasa: held for them, and taken as [input]'s target when it names one.
+  bool _bookLedger(
+    PortalDatabase db,
+    String entryId,
+    Client client,
+    LedgerInput input,
+  ) {
+    final now = DateTime.now();
+    final me = OfficeNetwork.instance.me;
+    final held = ClientRecord(
+      id: Client.newId(),
+      clientId: client.id,
+      kind: ClientRecordKind.movement,
+      data: {
+        'dosya': widget.caseKey,
+        'hesap': MovementKind.collected.code,
+        'tutar': input.amount,
+        'zaman': input.at.toIso8601String(),
+        'aciklama': [
+          'Haricen tahsilat',
+          if (input.debtor.isNotEmpty) input.debtor,
+        ].join(' · '),
+        'odeme': input.way,
+        'kaynak': 'icra:$entryId',
+      },
+      created: now,
+      by: widget.lawyer,
+      updated: now,
+      locked: true,
+      person: me,
+    );
+    db.saveClientRecord(held);
+    if (input.target case final target?) {
+      db.saveClientRecord(
+        appliedMovement(
+          held,
+          target,
+          input.amount,
+          lawyer: widget.lawyer,
+          person: me,
+          at: input.at,
+        ),
+      );
+    }
+    return true;
+  }
+
+  /// The movements [e] put in the client's account and Kasa, still
+  /// standing: the money held, and what of it was taken as a fee (then or
+  /// later, from Kasa).
+  ({List<ClientRecord> held, List<ClientRecord> applied}) _movementsOf(
+    PortalDatabase db,
+    LedgerEntry e,
+  ) {
+    final records = db.allClientRecords().toList();
+    final reversed = {
+      for (final r in records)
+        if (r.text('ters').isNotEmpty) r.text('ters'),
+    };
+    bool standing(ClientRecord r) =>
+        !r.removed &&
+        r.kind == ClientRecordKind.movement &&
+        !reversed.contains(r.id);
+    final held = [
+      for (final r in records)
+        if (standing(r) && r.text('kaynak') == 'icra:${e.id}') r,
+    ];
+    final applied = [
+      for (final r in records)
+        if (standing(r) &&
+            held.any((m) => r.text('kaynak') == 'mahsup:${m.id}'))
+          r,
+    ];
+    return (held: held, applied: applied);
+  }
+
+  /// Where [e]'s money was written: null for held for the client.
+  MovementKind? _targetOf(PortalDatabase db, LedgerEntry e) {
+    final applied = _movementsOf(db, e).applied.firstOrNull;
+    return applied == null ? null : MovementKind.of(applied.data['hesap']);
+  }
+
+  /// [e]'s movements taken back by reversals that name them, saying [why];
+  /// whether there were any.
+  bool _unbook(PortalDatabase db, LedgerEntry e, String why) {
+    final (:held, :applied) = _movementsOf(db, e);
+    final now = DateTime.now();
+    for (final m in [...applied, ...held]) {
+      db.saveClientRecord(
+        ClientRecord(
+          id: Client.newId(),
+          clientId: m.clientId,
+          kind: ClientRecordKind.movement,
+          data: {
+            ...m.data,
+            'ters': m.id,
+            'zaman': now.toIso8601String(),
+            'aciklama': why,
+          }..remove('kaynak'),
+          created: now,
+          by: widget.lawyer,
+          updated: now,
+          locked: true,
+          person: OfficeNetwork.instance.me,
+        ),
+      );
+    }
+    return held.isNotEmpty;
+  }
+
+  /// [e] corrected: its sum, day, debtor, way and note. A change of sum,
+  /// day or where the money went takes back what it wrote in the client's
+  /// account and Kasa, and writes it anew.
+  Future<void> _edit(LedgerEntry e) async {
+    final db = await widget.database();
+    final target = _targetOf(db, e);
+    final uyap = _uyapLeft;
+    final left = folioLeft(uyap == null ? null : uyap / 100, [
+      for (final x in _ledger)
+        if (x.id != e.id) x,
+    ]);
+    if (!mounted) return;
+    final input = await showDialog<LedgerInput>(
+      context: context,
+      builder: (_) => LedgerDialog(
+        kind: e.kind,
+        debtors: _debtorNames,
+        left: left == null ? null : (left * 100).round(),
+        editing: e,
+        target: target,
+      ),
+    );
+    if (input == null || !mounted) return;
+    final sum = input.amount != e.amount;
+    final money = sum || input.at != e.at || input.target != target;
+    final data = {
+      ...e.record.data,
+      'tutar': input.amount,
+      'zaman': input.at.toIso8601String(),
+      'borclu': input.debtor,
+      'odeme': input.way,
+      'aciklama': input.note,
+      'tamami': input.whole,
+    };
+    // A collection UYAP showed for the old sum is not this one's any more;
+    // one the lawyer marked stays marked.
+    if (sum && e.isOfficial && e.official != 'elle') data['resmi'] = '';
+    db.saveClientRecord(e.record.copyWith(data: data));
+    var rebooked = false;
+    if (e.kind == LedgerKind.external && money) {
+      if (_unbook(db, e, 'Haricen tahsilat düzeltildi')) {
+        final client = await _client(db);
+        if (client != null) rebooked = _bookLedger(db, e.id, client.$2, input);
+      }
+    }
+    await _loadBooked();
+    if (!mounted) return;
+    showNotice(
+      context,
+      '${e.kind.label} düzeltildi.',
+      detail: rebooked
+          ? 'Kasa\'daki eski kayıt ters kayıtla düzeltildi, yenisi yazıldı.'
+          : null,
     );
   }
 
@@ -750,49 +882,10 @@ class _EnforcementViewState extends State<EnforcementView> {
     );
     if (ok != true) return;
     final db = await widget.database();
-    final now = DateTime.now();
-    final records = db.allClientRecords().toList();
-    final mine = [
-      for (final r in records)
-        if (!r.removed &&
-            r.kind == ClientRecordKind.movement &&
-            r.text('kaynak') == 'icra:${e.id}')
-          r,
-    ];
-    final also = [
-      for (final r in records)
-        if (!r.removed &&
-            r.kind == ClientRecordKind.movement &&
-            mine.any((m) => r.text('kaynak') == 'mahsup:${m.id}'))
-          r,
-    ];
-    final reversed = {
-      for (final r in records)
-        if (r.text('ters').isNotEmpty) r.text('ters'),
-    };
-    for (final m in [...also, ...mine]) {
-      if (reversed.contains(m.id)) continue;
-      db.saveClientRecord(
-        ClientRecord(
-          id: Client.newId(),
-          clientId: m.clientId,
-          kind: ClientRecordKind.movement,
-          data: {
-            ...m.data,
-            'ters': m.id,
-            'zaman': now.toIso8601String(),
-            'aciklama': 'Haricen tahsilat kaldırıldı',
-          }..remove('kaynak'),
-          created: now,
-          by: widget.lawyer,
-          updated: now,
-          locked: true,
-          person: OfficeNetwork.instance.me,
-        ),
-      );
-    }
+    _unbook(db, e, '${e.kind.label} kaldırıldı');
     db.saveClientRecord(e.record.copyWith(removed: true));
     await _loadBooked();
+    if (mounted) showNotice(context, '${e.kind.label} kaldırıldı.');
   }
 
   /// Whether a payment out of [kind] passes the claim on (to the creditor
@@ -908,12 +1001,24 @@ class _EnforcementViewState extends State<EnforcementView> {
   Widget build(BuildContext context) {
     final record = widget.record;
     if (record == null) {
+      // Not read from UYAP yet: what was paid outside or waived is the
+      // office's own, written and corrected all the same.
       return Padding(
-        padding: const EdgeInsets.all(18),
-        child: Text(
-          'Dosya henüz UYAP\'tan çekilmedi. "UYAP\'tan tazele" ile borç '
-          'hesabı, tahsilatlar ve borçlular gelir.',
-          style: TextStyle(color: AgendaColors.muted),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Dosya henüz UYAP\'tan çekilmedi. "UYAP\'tan tazele" ile borç '
+              'hesabı, tahsilatlar ve borçlular gelir.',
+              style: TextStyle(color: AgendaColors.muted),
+            ),
+            const SizedBox(height: 12),
+            _ledgerBox([
+              for (final e in _ledger)
+                if (!e.isOfficial) e,
+            ]),
+          ],
         ),
       );
     }
@@ -966,7 +1071,9 @@ class _EnforcementViewState extends State<EnforcementView> {
         ),
       ]),
     ]);
-    final ledger = _ledger.isEmpty ? null : _ledgerBox(pending);
+    // Always there, right under the summary: what the office wrote itself
+    // is what it most needs to find, correct and take off.
+    final ledger = _ledgerBox(pending);
     final money = _money(record.money);
     final debtors = _debtors(e?.debtors ?? const []);
     final course = _course(record);
@@ -979,7 +1086,7 @@ class _EnforcementViewState extends State<EnforcementView> {
           children: [
             for (final w in [
               summary,
-              ?ledger,
+              ledger,
               money,
               details,
               debtors,
@@ -996,6 +1103,8 @@ class _EnforcementViewState extends State<EnforcementView> {
         children: [
           summary,
           gap,
+          ledger,
+          gap,
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1003,12 +1112,7 @@ class _EnforcementViewState extends State<EnforcementView> {
                 flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    details,
-                    if (ledger != null) ...[gap, ledger],
-                    gap,
-                    course,
-                  ],
+                  children: [details, gap, course],
                 ),
               ),
               gap,
@@ -1290,22 +1394,25 @@ class _EnforcementViewState extends State<EnforcementView> {
   }
 
   /// The file's own account in Folio: what was paid outside the office
-  /// and what was waived, each waiting for UYAP or shown there.
+  /// and what was waived, each waiting for UYAP or shown there. A table of
+  /// its own, each line corrected or taken off from its own buttons.
   Widget _ledgerBox(List<LedgerEntry> pending) {
     final waiting = pending.fold<int>(0, (n, e) => n + e.amount);
+    final head = TextStyle(
+      fontSize: 10.5,
+      fontWeight: FontWeight.w700,
+      letterSpacing: .4,
+      color: AgendaColors.muted,
+    );
     Widget tag(String text, Color ink, Color fill) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: fill,
         borderRadius: BorderRadius.circular(5),
       ),
       child: Text(
         text,
-        style: TextStyle(
-          fontSize: 10.5,
-          fontWeight: FontWeight.w700,
-          color: ink,
-        ),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ink),
       ),
     );
     Widget status(LedgerEntry e) => e.isOfficial
@@ -1315,166 +1422,259 @@ class _EnforcementViewState extends State<EnforcementView> {
             tone(const Color(0xFFE6F4EC)),
           )
         : tag('Bekliyor', AgendaColors.taskText, tone(const Color(0xFFFDF4E6)));
-    final external = tone(const Color(0xFFE6F4EC));
-    final waiver = tone(const Color(0xFFEFE9FA));
-    Widget menu(LedgerEntry e) => PopupMenuButton<String>(
-      key: ValueKey('ledger-menu-${e.id}'),
-      tooltip: 'İşlemler',
-      child: Padding(
-        padding: const EdgeInsets.all(5),
-        child: Icon(
-          Icons.more_horiz_rounded,
-          size: 18,
-          color: AgendaColors.muted,
-        ),
-      ),
-      onSelected: (v) => switch (v) {
-        'talep' => _paper(e, receipt: false),
-        'makbuz' => _paper(e, receipt: true),
-        'resmi' => _markOfficial(e, !e.isOfficial),
-        _ => _removeEntry(e),
-      },
-      itemBuilder: (_) => [
-        PopupMenuItem(
-          value: 'talep',
-          child: Text(
-            e.kind == LedgerKind.external
-                ? 'Haricen tahsil bildirimi hazırla'
-                : 'Feragat dilekçesi hazırla',
-          ),
-        ),
-        if (e.kind == LedgerKind.external)
-          const PopupMenuItem(
-            value: 'makbuz',
-            child: Text('Borçluya makbuz ve ibraname'),
-          ),
-        PopupMenuItem(
-          value: 'resmi',
-          child: Text(
-            e.isOfficial ? "UYAP'a işlenmedi say" : "UYAP'a işlendi say",
-          ),
-        ),
-        const PopupMenuItem(value: 'kaldir', child: Text('Kaldır')),
-      ],
-    );
     Widget kindTag(LedgerEntry e) => e.kind == LedgerKind.external
-        ? tag('Haricen', _green, external)
-        : tag('Feragat', _purple, waiver);
+        ? tag('Haricen', _green, tone(const Color(0xFFE6F4EC)))
+        : tag('Feragat', _purple, tone(const Color(0xFFEFE9FA)));
     Widget amount(LedgerEntry e) => Text(
       _tl(e.amount / 100),
+      textAlign: TextAlign.right,
       style: TextStyle(
-        fontSize: 12.5,
-        fontWeight: FontWeight.w600,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w700,
         color: e.kind == LedgerKind.external ? _green : _purple,
       ),
     );
     String who(LedgerEntry e) => [
-      if (e.debtor.isNotEmpty) e.debtor,
+      e.debtor.isNotEmpty ? e.debtor : 'Bütün borçlular',
       if (e.whole) 'tamamı',
       if (e.way.isNotEmpty) e.way,
+      if (e.note.isNotEmpty) e.note,
     ].join(' · ');
-    // A row a line on a wide card; two on a narrow one, the name whole.
-    Widget row(LedgerEntry e) => Container(
-      key: ValueKey('ledger-${e.id}'),
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: tone(const Color(0xFFF0F1F5))),
+    // Correcting and taking off, in sight on every line; the papers and
+    // UYAP's word behind the menu.
+    Widget actions(LedgerEntry e) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          key: ValueKey('ledger-edit-${e.id}'),
+          tooltip: 'Düzenle',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.edit_outlined, size: 18),
+          onPressed: () => unawaited(_edit(e)),
         ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, box) => box.maxWidth >= 480
-            ? Row(
-                children: [
-                  SizedBox(
-                    width: 82,
-                    child: Text(
-                      dayText(e.at),
-                      style: const TextStyle(fontSize: 12.5),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 70,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: kindTag(e),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      who(e),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12.5),
-                    ),
-                  ),
-                  status(e),
-                  const SizedBox(width: 10),
-                  amount(e),
-                  const SizedBox(width: 6),
-                  menu(e),
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            kindTag(e),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                who(e),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          dayText(e.at),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AgendaColors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [amount(e), const SizedBox(height: 2), status(e)],
-                  ),
-                  const SizedBox(width: 4),
-                  menu(e),
-                ],
+        IconButton(
+          key: ValueKey('ledger-remove-${e.id}'),
+          tooltip: 'Sil',
+          visualDensity: VisualDensity.compact,
+          icon: Icon(
+            Icons.delete_outline_rounded,
+            size: 18,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          onPressed: () => unawaited(_removeEntry(e)),
+        ),
+        PopupMenuButton<String>(
+          key: ValueKey('ledger-menu-${e.id}'),
+          tooltip: 'Belgeler ve UYAP',
+          icon: const Icon(Icons.more_vert_rounded, size: 18),
+          onSelected: (v) => switch (v) {
+            'talep' => _paper(e, receipt: false),
+            'makbuz' => _paper(e, receipt: true),
+            _ => _markOfficial(e, !e.isOfficial),
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'talep',
+              child: Text(
+                e.kind == LedgerKind.external
+                    ? 'Haricen tahsil bildirimi hazırla'
+                    : 'Feragat dilekçesi hazırla',
               ),
-      ),
-    );
-    return _box('FOLIO HESABI', right: 'UYAP dışında yazılanlar', [
-      for (final e in _ledger.reversed) row(e),
-      if (pending.isNotEmpty)
-        _row(
-          "UYAP'a işlenmeyi bekleyen",
-          _tl(waiting / 100),
-          bold: true,
-          color: AgendaColors.taskText,
+            ),
+            if (e.kind == LedgerKind.external)
+              const PopupMenuItem(
+                value: 'makbuz',
+                child: Text('Borçluya makbuz ve ibraname'),
+              ),
+            PopupMenuItem(
+              value: 'resmi',
+              child: Text(
+                e.isOfficial ? "UYAP'a işlenmedi say" : "UYAP'a işlendi say",
+              ),
+            ),
+          ],
         ),
-      const SizedBox(height: 6),
-      Text(
-        'UYAP\'ta aynı tutarda bir tahsilat görününce kayıt kendiliğinden '
-        '"UYAP\'ta" olur ve Folio\'daki borçtan bir daha düşülmez.',
-        style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+      ],
+    );
+    final line = tone(const Color(0xFFE9EBF0));
+    Widget row(LedgerEntry e, bool wide) => Container(
+      key: ValueKey('ledger-${e.id}'),
+      padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: line)),
       ),
-    ]);
+      child: wide
+          ? Row(
+              children: [
+                SizedBox(
+                  width: 92,
+                  child: Text(
+                    dayText(e.at),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                SizedBox(
+                  width: 78,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: kindTag(e),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    who(e),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                SizedBox(
+                  width: 84,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: status(e),
+                  ),
+                ),
+                SizedBox(width: 110, child: amount(e)),
+                const SizedBox(width: 4),
+                actions(e),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    kindTag(e),
+                    const SizedBox(width: 8),
+                    Text(
+                      dayText(e.at),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
+                    const Spacer(),
+                    amount(e),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  who(e),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Row(children: [status(e), const Spacer(), actions(e)]),
+              ],
+            ),
+    );
+    Widget heading(bool wide) => !wide
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 0, 6),
+            child: Row(
+              children: [
+                SizedBox(width: 92, child: Text('TARİH', style: head)),
+                SizedBox(width: 78, child: Text('TÜR', style: head)),
+                Expanded(child: Text('BORÇLU · ÖDEME', style: head)),
+                SizedBox(width: 84, child: Text('DURUM', style: head)),
+                SizedBox(
+                  width: 110,
+                  child: Text('TUTAR', textAlign: TextAlign.right, style: head),
+                ),
+                // The buttons' room: two icons and the menu.
+                const SizedBox(width: 4 + 3 * 40),
+              ],
+            ),
+          );
+    final add = Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        FilledButton.tonalIcon(
+          key: const ValueKey('ledger-box-add-external'),
+          onPressed: () => _add(LedgerKind.external),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Haricen tahsilat ekle'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('ledger-box-add-waiver'),
+          onPressed: () => _add(LedgerKind.waiver),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Feragat ekle'),
+        ),
+      ],
+    );
+    return _box(
+      'HARİCEN TAHSİLAT VE FERAGAT',
+      right: 'UYAP dışında yazılanlar',
+      [
+        if (_ledger.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Büroya doğrudan yapılan ödemeler ve feragatler burada '
+              'listelenir; her biri düzenlenir ya da silinir. İcra '
+              'müdürlüğüne bildirilene kadar borçtan Folio düşer.',
+              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+            ),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, box) {
+              final wide = box.maxWidth >= 620;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  heading(wide),
+                  for (final e in _ledger.reversed) row(e, wide),
+                ],
+              );
+            },
+          ),
+        if (pending.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: tone(const Color(0xFFFDF4E6)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    "UYAP'a işlenmeyi bekleyen (${pending.length})",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AgendaColors.taskText,
+                    ),
+                  ),
+                ),
+                Text(
+                  _tl(waiting / 100),
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: AgendaColors.taskText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 10),
+        add,
+        const SizedBox(height: 8),
+        Text(
+          'UYAP\'ta aynı tutarda bir tahsilat görününce kayıt kendiliğinden '
+          '"UYAP\'ta" olur ve Folio\'daki borçtan bir daha düşülmez.',
+          style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+        ),
+      ],
+    );
   }
 
   Widget _box(String title, List<Widget> children, {String? right}) =>
@@ -1491,21 +1691,32 @@ class _EnforcementViewState extends State<EnforcementView> {
           children: [
             Row(
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: .5,
-                    color: AgendaColors.muted,
+                Flexible(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .5,
+                      color: AgendaColors.muted,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                if (right != null)
-                  Text(
-                    right,
-                    style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
+                if (right != null) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      right,
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AgendaColors.muted,
+                      ),
+                    ),
                   ),
+                ],
               ],
             ),
             const SizedBox(height: 6),

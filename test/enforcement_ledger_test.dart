@@ -250,6 +250,87 @@ void main() {
     expect(find.byKey(const ValueKey('enforcement-folio-left')), findsNothing);
   });
 
+  testWidgets('a payment made outside is corrected and taken off from its '
+      'own line: what it wrote in Kasa is reversed and written anew', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    db.setRepresentation('k1', const [(ad: 'BORA YAPI', rol: 'Alacaklı')]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: EnforcementView(
+              record: UyapCaseRecord(
+                court: 'Manavgat İcra Dairesi',
+                number: '2026/1234',
+                fetchedAt: DateTime(2026, 10, 9),
+                enforcement: UyapEnforcement(
+                  lines: UyapEnforcement.linesFromJson(_account),
+                  debtors: const [UyapDebtor(id: '1', name: 'MEHMET TUNÇ')],
+                ),
+              ),
+              caseKey: 'k1',
+              title: '2026/1234 · Manavgat İcra Dairesi',
+              database: () async => db,
+              lawyer: 'Av. Deniz Kaya',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The table is there before anything is written, with its own buttons.
+    expect(
+      find.byKey(const ValueKey('ledger-box-add-external')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('ledger-box-add-external')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('ledger-amount')),
+      '10.000',
+    );
+    await tester.tap(find.byKey(const ValueKey('ledger-target-fee')));
+    await tester.tap(find.byKey(const ValueKey('ledger-request')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('ledger-save')));
+    await tester.pumpAndSettle();
+    final id = ledgerOf(db, 'k1').single.id;
+
+    // Corrected: the sum changes, the fee it went to stays.
+    await tester.tap(find.byKey(ValueKey('ledger-edit-$id')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('ledger-request')), findsNothing);
+    await tester.enterText(
+      find.byKey(const ValueKey('ledger-amount')),
+      '12.500',
+    );
+    await tester.tap(find.byKey(const ValueKey('ledger-save')));
+    await tester.pumpAndSettle();
+    final edited = ledgerOf(db, 'k1').single;
+    expect(edited.id, id);
+    expect(edited.amount, 1250000);
+    var account = caseAccounts(db.allClientRecords())['k1']!;
+    expect(account.feeIn, 1250000);
+    expect(account.advanceLeft, 0);
+
+    // Taken off: the line goes, and what it wrote in Kasa is reversed.
+    await tester.tap(find.byKey(ValueKey('ledger-remove-$id')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ledger-remove-ok')));
+    await tester.pumpAndSettle();
+    expect(ledgerOf(db, 'k1'), isEmpty);
+    account = caseAccounts(db.allClientRecords())['k1']!;
+    expect(account.feeIn, 0);
+    expect(account.advanceLeft, 0);
+    expect(find.byKey(ValueKey('ledger-$id')), findsNothing);
+  });
+
   test('the ready requests are filled from the file: the office, the '
       'sides and the law they rest on', () {
     final c = PetitionCase(

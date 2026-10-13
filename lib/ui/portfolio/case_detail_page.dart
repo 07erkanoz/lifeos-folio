@@ -200,6 +200,10 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   static bool _detailsWanted = false;
   bool _scrolledUp = false;
 
+  /// The list scrolled down with no document beside it: the heading
+  /// folded to a line, to give the list the room; open again scrolled up.
+  bool _scrolledDown = false;
+
   bool _closePreview() {
     if (!mounted || !_previewShowing) return false;
     setState(() => _previewOpen = false);
@@ -688,10 +692,17 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         // A document open beside the list: the heading in a line, the
         // document given its room; the whole of it again when asked for
         // or when the list is scrolled up, as the app's other pages do.
+        // Without a document beside the list, the heading folds as the
+        // list is scrolled down, to give it the room, and opens again as
+        // it is scrolled back up.
         AnimatedSize(
           duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
-          child: _previewShowing && !_detailsWanted && !_scrolledUp
+          child:
+              (_previewShowing
+                  ? !_detailsWanted && !_scrolledUp
+                  : _scrolledDown)
               ? _foldedHeader(context, kase)
               : _header(context, kase, true, facts: true),
         ),
@@ -703,16 +714,27 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         Expanded(
           child: NotificationListener<ScrollUpdateNotification>(
             onNotification: (n) {
-              if (!_previewShowing || n.metrics.axis != Axis.vertical) {
-                return false;
-              }
+              if (n.metrics.axis != Axis.vertical) return false;
               final delta = n.scrollDelta ?? 0;
               final up = delta < -6 || n.metrics.pixels <= 0;
               final down = delta > 6 && n.metrics.pixels > 0;
-              if (up && !_scrolledUp) {
-                setState(() => _scrolledUp = true);
-              } else if (down && _scrolledUp) {
-                setState(() => _scrolledUp = false);
+              if (_previewShowing) {
+                if (up && !_scrolledUp) {
+                  setState(() => _scrolledUp = true);
+                } else if (down && _scrolledUp) {
+                  setState(() => _scrolledUp = false);
+                }
+                return false;
+              }
+              // Folded only where there is more than the heading's height
+              // to scroll: a short list would fold and unfold by turns.
+              if (down &&
+                  !_scrolledDown &&
+                  n.metrics.pixels > 40 &&
+                  n.metrics.maxScrollExtent > 220) {
+                setState(() => _scrolledDown = true);
+              } else if (up && _scrolledDown) {
+                setState(() => _scrolledDown = false);
               }
               return false;
             },
@@ -803,7 +825,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           const HelpButton(Help.caseDetail),
           TextButton.icon(
             key: const ValueKey('case-header-details'),
-            onPressed: () => setState(() => _detailsWanted = true),
+            onPressed: () => setState(() {
+              if (_previewShowing) {
+                _detailsWanted = true;
+              } else {
+                _scrolledDown = false;
+              }
+            }),
             icon: const Icon(Icons.expand_more_rounded, size: 18),
             label: const Text('Ayrıntılar'),
           ),
@@ -2635,7 +2663,11 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     final parties = _c.record?.parties.length ?? 0;
     Widget tab(_Tab t, String label, int? count, {int fresh = 0}) => InkWell(
       key: ValueKey('case-tab-${t.name}'),
-      onTap: () => setState(() => _tab = t),
+      // Another tab starts at its top: the heading open again.
+      onTap: () => setState(() {
+        _tab = t;
+        _scrolledDown = false;
+      }),
       child: Container(
         padding: const EdgeInsets.fromLTRB(0, 12, 0, 10),
         margin: const EdgeInsets.only(right: 22),
