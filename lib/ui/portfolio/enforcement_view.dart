@@ -16,6 +16,8 @@ import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_web_service.dart' show UyapWebService;
 import '../../models/document_model.dart';
 import '../../services/office/office_network.dart';
+import '../../services/pdf/pdf_service.dart';
+import '../../services/print/print_job.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_case_data.dart';
 import '../../services/uyap/uyap_case_store.dart';
@@ -71,6 +73,17 @@ double? uyapLeftOf(UyapCaseRecord record) {
   return account.left ?? (total != null && paid != null ? total - paid : null);
 }
 
+/// The parts of an enforcement file shown under its summary, one at a time.
+enum _Section {
+  payments('Ödemeler'),
+  account('UYAP hesabı'),
+  debtors('Borçlular'),
+  course('Dosya seyri');
+
+  const _Section(this.label);
+  final String label;
+}
+
 /// An enforcement file (icra) as the lawyer follows it: where the debt
 /// stands, its items, the money collected and paid out, its debtors and
 /// its course, from what UYAP gave (docs: banaozel uyapweb.md §10).
@@ -112,6 +125,14 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// claims waived.
   List<LedgerEntry> _ledger = const [];
 
+  /// Where each payment's money went, by its id: written to the client's
+  /// account or not, and taken as a fee or held.
+  Map<String, ({bool booked, MovementKind? target})> _bookings = const {};
+
+  /// The part of the file shown under the summary, one at a time: the
+  /// boxes side by side and one under another ran into each other.
+  _Section _section = _Section.payments;
+
   @override
   void initState() {
     super.initState();
@@ -150,10 +171,21 @@ class _EnforcementViewState extends State<EnforcementView> {
       }
       ledger = ledgerOf(db, widget.caseKey);
     }
+    final bookings = {
+      for (final e in ledger)
+        if (_movementsOf(db, e) case (:final held, :final applied))
+          e.id: (
+            booked: held.isNotEmpty,
+            target: applied.isEmpty
+                ? null
+                : MovementKind.of(applied.first.data['hesap']),
+          ),
+    };
     if (mounted) {
       setState(() {
         _booked = booked;
         _ledger = ledger;
+        _bookings = bookings;
       });
       widget.onLedger?.call(ledger);
     }
@@ -251,11 +283,9 @@ class _EnforcementViewState extends State<EnforcementView> {
         _bookLedger(db, entry.id, client.$2, input);
     await _loadBooked();
     if (!mounted) return;
-    final saved = LedgerEntry(entry);
-    File? request;
-    if (input.request) request = await _paper(saved, receipt: false);
-    if (input.receipt) await _paper(saved, receipt: true, open: false);
-    if (!mounted) return;
+    // Its papers are printed from its card when wanted ("Yazdır"); nothing
+    // opens in the editor of itself.
+    setState(() => _section = _Section.payments);
     showNotice(
       context,
       kind == LedgerKind.external
@@ -268,8 +298,7 @@ class _EnforcementViewState extends State<EnforcementView> {
               : 'Kasa\'ya ${input.target == MovementKind.toFee ? 'vekâlet ücreti' : 'karşı vekâlet ücreti'} olarak işlendi.',
         if (kind == LedgerKind.external && !booked)
           'Dosyanın müvekkili bulunamadığı için Kasa\'ya işlenmedi.',
-        if (request != null) 'Talep dilekçesi editörde açıldı.',
-        if (input.receipt) 'Borçlunun makbuzu dosyanın klasörüne yazıldı.',
+        'Belgeleri ödemenin "Yazdır" düğmesinden yazdırabilirsiniz.',
       ].join(' '),
     );
   }
@@ -470,6 +499,47 @@ class _EnforcementViewState extends State<EnforcementView> {
     );
   }
 
+  /// [e]'s request to the office, or the debtor's receipt: its name and
+  /// its pages, filled from the file and the payment.
+  Future<(String, DocModel)> _paperOf(
+    LedgerEntry e, {
+    required bool receipt,
+  }) async {
+    final parties = await _parties();
+    final DocModel model = receipt
+        ? debtorReceipt(parties, e)
+        : e.kind == LedgerKind.external
+        ? externalPaymentRequest(parties, e)
+        : waiverRequest(parties, e);
+    final d = e.at;
+    final day =
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final name = receipt
+        ? '$day Borçlu makbuzu ve ibraname'
+        : e.kind == LedgerKind.external
+        ? '$day Haricen tahsil bildirimi'
+        : '$day Feragat dilekçesi';
+    return (name, model);
+  }
+
+  /// [e]'s paper sent to the printer through the system's print screen,
+  /// where it can be saved as PDF too; nothing opens in the editor.
+  Future<void> _print(LedgerEntry e, {required bool receipt}) async {
+    try {
+      final (name, model) = await _paperOf(e, receipt: receipt);
+      final bytes = await PdfService.modelToPdfBytes(model, title: name);
+      await PrintJob.send(bytes, name: name);
+    } catch (error) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Belge yazdırılamadı: $error',
+          kind: NoticeKind.error,
+        );
+      }
+    }
+  }
+
   /// [e]'s request to the office, or the debtor's receipt, written as UDF
   /// in the file's folder, tied to the file and opened in the editor.
   Future<File?> _paper(
@@ -480,25 +550,8 @@ class _EnforcementViewState extends State<EnforcementView> {
     final record = widget.record;
     if (record == null) return null;
     try {
-      final parties = await _parties();
-      final DocModel model = receipt
-          ? debtorReceipt(parties, e)
-          : e.kind == LedgerKind.external
-          ? externalPaymentRequest(parties, e)
-          : waiverRequest(parties, e);
-      final d = e.at;
-      final day =
-          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      return await _write(
-        receipt
-            ? '$day Borçlu makbuzu ve ibraname'
-            : e.kind == LedgerKind.external
-            ? '$day Haricen tahsil bildirimi'
-            : '$day Feragat dilekçesi',
-        model,
-        link: !receipt,
-        open: open,
-      );
+      final (name, model) = await _paperOf(e, receipt: receipt);
+      return await _write(name, model, link: !receipt, open: open);
     } catch (error) {
       if (mounted) {
         showNotice(
@@ -845,6 +898,20 @@ class _EnforcementViewState extends State<EnforcementView> {
     if (picked != null) await _request(picked);
   }
 
+  /// [e] marked as told to the office (icra müdürlüğü) today, or not yet.
+  Future<void> _markReported(LedgerEntry e, bool reported) async {
+    final db = await widget.database();
+    db.saveClientRecord(
+      e.record.copyWith(
+        data: {
+          ...e.record.data,
+          'bildirildi': reported ? DateTime.now().toIso8601String() : '',
+        },
+      ),
+    );
+    await _loadBooked();
+  }
+
   /// [e] marked as UYAP shows it, or not yet.
   Future<void> _markOfficial(LedgerEntry e, bool official) async {
     final db = await widget.database();
@@ -1014,10 +1081,10 @@ class _EnforcementViewState extends State<EnforcementView> {
               style: TextStyle(color: AgendaColors.muted),
             ),
             const SizedBox(height: 12),
-            _ledgerBox([
+            _payments([
               for (final e in _ledger)
                 if (!e.isOfficial) e,
-            ]),
+            ], adding: true),
           ],
         ),
       );
@@ -1071,60 +1138,95 @@ class _EnforcementViewState extends State<EnforcementView> {
         ),
       ]),
     ]);
-    // Always there, right under the summary: what the office wrote itself
-    // is what it most needs to find, correct and take off.
-    final ledger = _ledgerBox(pending);
-    final money = _money(record.money);
-    final debtors = _debtors(e?.debtors ?? const []);
-    final course = _course(record);
     const gap = SizedBox(height: 12, width: 12);
-    if (!widget.wide) {
-      return Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final w in [
-              summary,
-              ledger,
-              money,
-              details,
-              debtors,
-              course,
-            ]) ...[w, gap],
-          ],
-        ),
-      );
-    }
+    final debtorList = e?.debtors ?? const <UyapDebtor>[];
+    // One part at a time under the summary, chosen by its button; the
+    // payments first, which the office writes and follows itself.
+    final shown = switch (_section) {
+      _Section.payments => _payments(pending),
+      _Section.account =>
+        widget.wide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: details),
+                  gap,
+                  Expanded(flex: 2, child: _money(record.money)),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [details, gap, _money(record.money)],
+              ),
+      _Section.debtors => _debtors(debtorList),
+      _Section.course => _course(record),
+    };
     return Padding(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(widget.wide ? 14 : 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           summary,
           gap,
-          ledger,
+          _sections({
+            _Section.payments: _ledger.length,
+            _Section.debtors: debtorList.length,
+          }),
           gap,
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [details, gap, course],
+          shown,
+        ],
+      ),
+    );
+  }
+
+  /// The buttons the parts are chosen by, each with how many it holds.
+  Widget _sections(Map<_Section, int> counts) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('enforcement-sections'),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: tone(const Color(0xFFF1F3F6)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          for (final s in _Section.values)
+            Expanded(
+              child: Material(
+                color: s == _section ? scheme.surface : Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: s == _section
+                      ? BorderSide(color: AgendaColors.line)
+                      : BorderSide.none,
+                ),
+                child: InkWell(
+                  key: ValueKey('enforcement-section-${s.name}'),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => setState(() => _section = s),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    child: Text(
+                      [
+                        s.label,
+                        if ((counts[s] ?? 0) > 0) '${counts[s]}',
+                      ].join(' · '),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: s == _section
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: s == _section ? null : AgendaColors.muted,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              gap,
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [money, gap, debtors],
-                ),
-              ),
-            ],
-          ),
+            ),
         ],
       ),
     );
@@ -1393,287 +1495,383 @@ class _EnforcementViewState extends State<EnforcementView> {
     );
   }
 
-  /// The file's own account in Folio: what was paid outside the office
-  /// and what was waived, each waiting for UYAP or shown there. A table of
-  /// its own, each line corrected or taken off from its own buttons.
-  Widget _ledgerBox(List<LedgerEntry> pending) {
-    final waiting = pending.fold<int>(0, (n, e) => n + e.amount);
-    final head = TextStyle(
-      fontSize: 10.5,
-      fontWeight: FontWeight.w700,
-      letterSpacing: .4,
-      color: AgendaColors.muted,
-    );
-    Widget tag(String text, Color ink, Color fill) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: fill,
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ink),
-      ),
-    );
-    Widget status(LedgerEntry e) => e.isOfficial
-        ? tag(
-            e.official == 'elle' ? 'İşlendi' : "UYAP'ta",
-            _green,
-            tone(const Color(0xFFE6F4EC)),
-          )
-        : tag('Bekliyor', AgendaColors.taskText, tone(const Color(0xFFFDF4E6)));
-    Widget kindTag(LedgerEntry e) => e.kind == LedgerKind.external
-        ? tag('Haricen', _green, tone(const Color(0xFFE6F4EC)))
-        : tag('Feragat', _purple, tone(const Color(0xFFEFE9FA)));
-    Widget amount(LedgerEntry e) => Text(
-      _tl(e.amount / 100),
-      textAlign: TextAlign.right,
-      style: TextStyle(
-        fontSize: 13.5,
-        fontWeight: FontWeight.w700,
-        color: e.kind == LedgerKind.external ? _green : _purple,
-      ),
-    );
-    String who(LedgerEntry e) => [
-      e.debtor.isNotEmpty ? e.debtor : 'Bütün borçlular',
-      if (e.whole) 'tamamı',
-      if (e.way.isNotEmpty) e.way,
-      if (e.note.isNotEmpty) e.note,
-    ].join(' · ');
-    // Correcting and taking off, in sight on every line; the papers and
-    // UYAP's word behind the menu.
-    Widget actions(LedgerEntry e) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          key: ValueKey('ledger-edit-${e.id}'),
-          tooltip: 'Düzenle',
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          onPressed: () => unawaited(_edit(e)),
-        ),
-        IconButton(
-          key: ValueKey('ledger-remove-${e.id}'),
-          tooltip: 'Sil',
-          visualDensity: VisualDensity.compact,
-          icon: Icon(
-            Icons.delete_outline_rounded,
-            size: 18,
-            color: Theme.of(context).colorScheme.error,
+  /// The payments made outside the office and the claims waived, each on a
+  /// card of its own: what it was, where it stands (written in Folio, told
+  /// to the office, shown by UYAP), and its papers printed, it corrected or
+  /// taken off from its own buttons. [adding] puts the buttons that write a
+  /// new one here too, for a file with no summary above.
+  Widget _payments(List<LedgerEntry> pending, {bool adding = false}) {
+    final unreported = [
+      for (final e in pending)
+        if (!e.isReported) e,
+    ];
+    int sum(Iterable<LedgerEntry> list) =>
+        list.fold<int>(0, (n, e) => n + e.amount);
+    Widget total(String label, int kurus, Color ink, Color fill, Key key) =>
+        Container(
+          key: key,
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(10),
           ),
-          onPressed: () => unawaited(_removeEntry(e)),
-        ),
-        PopupMenuButton<String>(
-          key: ValueKey('ledger-menu-${e.id}'),
-          tooltip: 'Belgeler ve UYAP',
-          icon: const Icon(Icons.more_vert_rounded, size: 18),
-          onSelected: (v) => switch (v) {
-            'talep' => _paper(e, receipt: false),
-            'makbuz' => _paper(e, receipt: true),
-            _ => _markOfficial(e, !e.isOfficial),
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'talep',
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label, style: TextStyle(fontSize: 13, color: ink)),
+              ),
+              Text(
+                '${_tl(kurus / 100)} TL',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: ink,
+                ),
+              ),
+            ],
+          ),
+        );
+    return Column(
+      key: const ValueKey('enforcement-payments'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
               child: Text(
-                e.kind == LedgerKind.external
-                    ? 'Haricen tahsil bildirimi hazırla'
-                    : 'Feragat dilekçesi hazırla',
+                'Büroya yapılan ödemeler ve feragat',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ),
-            if (e.kind == LedgerKind.external)
-              const PopupMenuItem(
-                value: 'makbuz',
-                child: Text('Borçluya makbuz ve ibraname'),
+            if (adding || _ledger.isEmpty) ...[
+              OutlinedButton.icon(
+                key: const ValueKey('ledger-box-add-external'),
+                onPressed: () => _add(LedgerKind.external),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Haricen tahsilat'),
               ),
-            PopupMenuItem(
-              value: 'resmi',
-              child: Text(
-                e.isOfficial ? "UYAP'a işlenmedi say" : "UYAP'a işlendi say",
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                key: const ValueKey('ledger-box-add-waiver'),
+                onPressed: () => _add(LedgerKind.waiver),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Feragat'),
               ),
-            ),
+            ],
           ],
         ),
-      ],
-    );
-    final line = tone(const Color(0xFFE9EBF0));
-    Widget row(LedgerEntry e, bool wide) => Container(
-      key: ValueKey('ledger-${e.id}'),
-      padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: line)),
-      ),
-      child: wide
-          ? Row(
-              children: [
-                SizedBox(
-                  width: 92,
-                  child: Text(
-                    dayText(e.at),
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ),
-                SizedBox(
-                  width: 78,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: kindTag(e),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    who(e),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ),
-                SizedBox(
-                  width: 84,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: status(e),
-                  ),
-                ),
-                SizedBox(width: 110, child: amount(e)),
-                const SizedBox(width: 4),
-                actions(e),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    kindTag(e),
-                    const SizedBox(width: 8),
-                    Text(
-                      dayText(e.at),
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AgendaColors.muted,
-                      ),
-                    ),
-                    const Spacer(),
-                    amount(e),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  who(e),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Row(children: [status(e), const Spacer(), actions(e)]),
-              ],
-            ),
-    );
-    Widget heading(bool wide) => !wide
-        ? const SizedBox.shrink()
-        : Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 0, 6),
-            child: Row(
-              children: [
-                SizedBox(width: 92, child: Text('TARİH', style: head)),
-                SizedBox(width: 78, child: Text('TÜR', style: head)),
-                Expanded(child: Text('BORÇLU · ÖDEME', style: head)),
-                SizedBox(width: 84, child: Text('DURUM', style: head)),
-                SizedBox(
-                  width: 110,
-                  child: Text('TUTAR', textAlign: TextAlign.right, style: head),
-                ),
-                // The buttons' room: two icons and the menu.
-                const SizedBox(width: 4 + 3 * 40),
-              ],
-            ),
-          );
-    final add = Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      children: [
-        FilledButton.tonalIcon(
-          key: const ValueKey('ledger-box-add-external'),
-          onPressed: () => _add(LedgerKind.external),
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: const Text('Haricen tahsilat ekle'),
-        ),
-        OutlinedButton.icon(
-          key: const ValueKey('ledger-box-add-waiver'),
-          onPressed: () => _add(LedgerKind.waiver),
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: const Text('Feragat ekle'),
-        ),
-      ],
-    );
-    return _box(
-      'HARİCEN TAHSİLAT VE FERAGAT',
-      right: 'UYAP dışında yazılanlar',
-      [
+        const SizedBox(height: 10),
         if (_ledger.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AgendaColors.line),
+            ),
             child: Text(
-              'Büroya doğrudan yapılan ödemeler ve feragatler burada '
-              'listelenir; her biri düzenlenir ya da silinir. İcra '
-              'müdürlüğüne bildirilene kadar borçtan Folio düşer.',
-              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              'Borçlunun büroya doğrudan yaptığı ödemeler ve feragatler '
+              'burada, her biri kendi kartında durur: icra müdürlüğüne '
+              'bildirilip bildirilmediği izlenir, belgeleri yazdırılır, '
+              'düzenlenir ya da silinir.',
+              style: TextStyle(fontSize: 13, color: AgendaColors.muted),
             ),
           )
         else
-          LayoutBuilder(
-            builder: (context, box) {
-              final wide = box.maxWidth >= 620;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  heading(wide),
-                  for (final e in _ledger.reversed) row(e, wide),
-                ],
-              );
-            },
+          for (final e in _ledger.reversed) ...[
+            _paymentCard(e),
+            const SizedBox(height: 10),
+          ],
+        if (unreported.isNotEmpty)
+          total(
+            "Müdürlüğe bildirilmeyi bekleyen (${unreported.length})",
+            sum(unreported),
+            AgendaColors.taskText,
+            tone(const Color(0xFFFDF4E6)),
+            const ValueKey('ledger-unreported'),
           ),
-        if (pending.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: tone(const Color(0xFFFDF4E6)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    "UYAP'a işlenmeyi bekleyen (${pending.length})",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AgendaColors.taskText,
-                    ),
-                  ),
-                ),
-                Text(
-                  _tl(waiting / 100),
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: AgendaColors.taskText,
-                  ),
-                ),
-              ],
-            ),
+        if (pending.length > unreported.length)
+          total(
+            "Bildirildi, UYAP'ta görünmeyi bekleyen "
+            "(${pending.length - unreported.length})",
+            sum(pending) - sum(unreported),
+            AgendaColors.muted,
+            tone(const Color(0xFFF1F3F6)),
+            const ValueKey('ledger-reported-waiting'),
           ),
-        const SizedBox(height: 10),
-        add,
         const SizedBox(height: 8),
         Text(
-          'UYAP\'ta aynı tutarda bir tahsilat görününce kayıt kendiliğinden '
-          '"UYAP\'ta" olur ve Folio\'daki borçtan bir daha düşülmez.',
+          'Ödeme UYAP\'ta aynı tutarda bir tahsilat olarak görününce '
+          'kendiliğinden "UYAP\'ta" olur ve Folio\'daki borçtan bir daha '
+          'düşülmez.',
           style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
         ),
       ],
+    );
+  }
+
+  /// One payment or waiver: its sum and what it was, where it stands, and
+  /// its buttons.
+  Widget _paymentCard(LedgerEntry e) {
+    final scheme = Theme.of(context).colorScheme;
+    final external = e.kind == LedgerKind.external;
+    final ink = external ? _green : _purple;
+    final fill = external
+        ? tone(const Color(0xFFE6F4EC))
+        : tone(const Color(0xFFEFE9FA));
+    final booking = _bookings[e.id];
+    final where = !external || booking == null || !booking.booked
+        ? null
+        : switch (booking.target) {
+            MovementKind.toFee => 'vekâlet ücretine mahsup',
+            MovementKind.toCounterFee => 'karşı vekâlet ücretine mahsup',
+            _ => 'emanete yazıldı',
+          };
+    final line = [
+      dayText(e.at),
+      e.debtor.isNotEmpty ? e.debtor : 'Bütün borçlular',
+      if (e.way.isNotEmpty) e.way,
+      if (e.whole) 'borcun tamamı',
+      ?where,
+      if (e.note.isNotEmpty) e.note,
+    ].join(' · ');
+    final reported = e.reported;
+    Widget step(String text, Color dot, {Color? color, Key? key}) => Row(
+      key: key,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(text, style: TextStyle(fontSize: 12.5, color: color)),
+      ],
+    );
+    Widget arrow() => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Icon(
+        Icons.chevron_right_rounded,
+        size: 16,
+        color: AgendaColors.muted,
+      ),
+    );
+    Widget small(String text, VoidCallback onPressed, Key key) => TextButton(
+      key: key,
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        textStyle: const TextStyle(fontSize: 12.5),
+      ),
+      child: Text(text),
+    );
+    final print = PopupMenuButton<String>(
+      key: ValueKey('ledger-print-${e.id}'),
+      tooltip: 'Belgeyi yazdır',
+      onSelected: (v) => switch (v) {
+        'makbuz' => _print(e, receipt: true),
+        'editor' => _paper(e, receipt: false),
+        _ => _print(e, receipt: false),
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'talep',
+          child: Text(
+            external ? 'Haricen tahsil bildirimi' : 'Feragat dilekçesi',
+          ),
+        ),
+        if (external)
+          const PopupMenuItem(
+            value: 'makbuz',
+            child: Text('Borçluya makbuz ve ibraname'),
+          ),
+        if (widget.record != null) ...[
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'editor',
+            child: Text(
+              external
+                  ? 'Bildirimi editörde düzenleyerek aç'
+                  : 'Dilekçeyi editörde düzenleyerek aç',
+            ),
+          ),
+        ],
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: scheme.outline),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.print_outlined, size: 17),
+            SizedBox(width: 6),
+            Text('Yazdır', style: TextStyle(fontSize: 13)),
+            Icon(Icons.arrow_drop_down_rounded, size: 18),
+          ],
+        ),
+      ),
+    );
+    return Container(
+      key: ValueKey('ledger-${e.id}'),
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AgendaColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
+                child: Icon(
+                  external
+                      ? Icons.payments_outlined
+                      : Icons.remove_circle_outline_rounded,
+                  size: 20,
+                  color: ink,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          '${_tl(e.amount / 100)} TL',
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            color: ink,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: fill,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            e.kind.label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      line,
+                      style: TextStyle(fontSize: 13, color: AgendaColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              print,
+              IconButton(
+                key: ValueKey('ledger-edit-${e.id}'),
+                tooltip: 'Düzenle',
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                onPressed: () => unawaited(_edit(e)),
+              ),
+              IconButton(
+                key: ValueKey('ledger-remove-${e.id}'),
+                tooltip: 'Sil',
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 20,
+                  color: scheme.error,
+                ),
+                onPressed: () => unawaited(_removeEntry(e)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Divider(height: 1, color: AgendaColors.line),
+          const SizedBox(height: 6),
+          // Where it stands: written here, told to the office, shown by
+          // UYAP; the lawyer marks the second, UYAP (or the lawyer, for a
+          // waiver UYAP does not list) the third.
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 4,
+            children: [
+              step("Folio'ya yazıldı", _green),
+              arrow(),
+              if (reported != null) ...[
+                step(
+                  'Müdürlüğe bildirildi · ${dayText(reported)}',
+                  _green,
+                  key: ValueKey('ledger-reported-${e.id}'),
+                ),
+                if (!e.isOfficial)
+                  small(
+                    'Geri al',
+                    () => unawaited(_markReported(e, false)),
+                    ValueKey('ledger-unreport-${e.id}'),
+                  ),
+              ] else ...[
+                step(
+                  'Müdürlüğe bildirilmedi',
+                  AgendaColors.taskText,
+                  color: AgendaColors.taskText,
+                  key: ValueKey('ledger-not-reported-${e.id}'),
+                ),
+                small(
+                  'Bildirildi işaretle',
+                  () => unawaited(_markReported(e, true)),
+                  ValueKey('ledger-report-${e.id}'),
+                ),
+              ],
+              arrow(),
+              if (e.isOfficial) ...[
+                step(
+                  e.official == 'elle' ? "UYAP'a işlendi" : "UYAP'ta görüldü",
+                  _green,
+                ),
+                if (e.official == 'elle')
+                  small(
+                    'Geri al',
+                    () => unawaited(_markOfficial(e, false)),
+                    ValueKey('ledger-unofficial-${e.id}'),
+                  ),
+              ] else ...[
+                step(
+                  "UYAP'ta görülmedi",
+                  tone(const Color(0xFFC4C9D2)),
+                  color: AgendaColors.muted,
+                ),
+                small(
+                  "İşlendi say",
+                  () => unawaited(_markOfficial(e, true)),
+                  ValueKey('ledger-official-${e.id}'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 

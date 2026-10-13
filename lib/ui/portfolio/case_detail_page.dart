@@ -822,6 +822,43 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
           ),
+          // An enforcement file's debt stays in sight while its heading is
+          // folded: what is left, and what was paid outside and waits.
+          if (_debt() case final debt? when debt.left != null) ...[
+            Text(
+              'Kalan borç',
+              style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              formatTl(debt.left!),
+              key: const ValueKey('case-header-folded-debt'),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: tone(const Color(0xFFB42318)),
+              ),
+            ),
+            if (_waitingOutside() case final waiting when waiting > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: tone(const Color(0xFFFDF4E6)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${formatTl(waiting)} bekliyor',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AgendaColors.taskText,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(width: 8),
+          ],
           const HelpButton(Help.caseDetail),
           TextButton.icon(
             key: const ValueKey('case-header-details'),
@@ -2347,6 +2384,12 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   /// An enforcement file's debt as the heading shows it: what is left as
   /// Folio counts it, UYAP's balance, and how much is collected; null for
   /// a case of another kind, or one not read from UYAP yet.
+  /// What was paid outside the office or waived and UYAP does not show yet,
+  /// in lira.
+  double _waitingOutside() =>
+      _ledger.where((e) => !e.isOfficial).fold<int>(0, (n, e) => n + e.amount) /
+      100;
+
   ({double? left, double? uyap, bool pending, double? share})? _debt() {
     final kase = _kase;
     final record = _c.record;

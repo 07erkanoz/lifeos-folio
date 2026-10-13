@@ -205,8 +205,9 @@ void main() {
       '10.000',
     );
     await tester.tap(find.byKey(const ValueKey('ledger-target-fee')));
-    // No paper in a test: the UYAP folder is the machine's.
-    await tester.tap(find.byKey(const ValueKey('ledger-request')));
+    // Saving makes no paper and opens nothing: they are printed from the
+    // payment's card.
+    expect(find.byKey(const ValueKey('ledger-request')), findsNothing);
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('ledger-save')));
     await tester.pumpAndSettle();
@@ -229,7 +230,22 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Bekliyor'), findsOneWidget);
+    // Not told to the office yet: said so, and marked once it is.
+    expect(
+      find.byKey(ValueKey('ledger-not-reported-${entry.id}')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('ledger-unreported')), findsOneWidget);
+    await tester.tap(find.byKey(ValueKey('ledger-report-${entry.id}')));
+    await tester.pumpAndSettle();
+    expect(ledgerOf(db, 'k1').single.isReported, isTrue);
+    expect(find.byKey(ValueKey('ledger-reported-${entry.id}')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ledger-unreported')), findsNothing);
+    // Told, but still not shown by UYAP: still taken off Folio's debt.
+    expect(
+      find.byKey(const ValueKey('ledger-reported-waiting')),
+      findsOneWidget,
+    );
 
     // UYAP read anew shows it.
     await tester.pumpWidget(
@@ -246,7 +262,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(ledgerOf(db, 'k1').single.official, 'makbuz:M-9');
-    expect(find.text("UYAP'ta"), findsOneWidget);
+    expect(find.text("UYAP'ta görüldü"), findsOneWidget);
     expect(find.byKey(const ValueKey('enforcement-folio-left')), findsNothing);
   });
 
@@ -296,16 +312,16 @@ void main() {
       '10.000',
     );
     await tester.tap(find.byKey(const ValueKey('ledger-target-fee')));
-    await tester.tap(find.byKey(const ValueKey('ledger-request')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('ledger-save')));
     await tester.pumpAndSettle();
     final id = ledgerOf(db, 'k1').single.id;
+    // On its card, where the money went is said.
+    expect(find.textContaining('vekâlet ücretine mahsup'), findsOneWidget);
 
     // Corrected: the sum changes, the fee it went to stays.
     await tester.tap(find.byKey(ValueKey('ledger-edit-$id')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('ledger-request')), findsNothing);
     await tester.enterText(
       find.byKey(const ValueKey('ledger-amount')),
       '12.500',

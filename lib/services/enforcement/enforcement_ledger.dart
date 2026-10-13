@@ -50,6 +50,12 @@ class LedgerEntry {
   /// Whether it settled the whole debt (or waived the whole claim).
   bool get whole => record.data['tamami'] == true;
 
+  /// When the office (icra müdürlüğü) was told of it, by the lawyer's
+  /// word; null while it was not. A payment told and not yet shown by UYAP
+  /// still counts against the debt Folio shows.
+  DateTime? get reported => DateTime.tryParse(record.text('bildirildi'));
+  bool get isReported => reported != null;
+
   /// What UYAP showed it as (a collection's receipt, or the lawyer's word
   /// "elle"); empty while UYAP does not show it.
   String get official => record.text('resmi');

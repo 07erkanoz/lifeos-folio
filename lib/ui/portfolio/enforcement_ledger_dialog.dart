@@ -9,9 +9,8 @@ String _two(int v) => v.toString().padLeft(2, '0');
 String _day(DateTime t) => '${_two(t.day)}.${_two(t.month)}.${t.year}';
 
 /// What the lawyer wrote of a payment made outside the office or a claim
-/// waived, and what is to be made of it: where the money goes ([target]:
-/// held for the client when null, else taken as that fee), the request to
-/// the office and the debtor's receipt.
+/// waived, and where the money goes ([target]: held for the client when
+/// null, else taken as that fee).
 typedef LedgerInput = ({
   LedgerKind kind,
   int amount,
@@ -21,8 +20,6 @@ typedef LedgerInput = ({
   bool whole,
   String note,
   MovementKind? target,
-  bool request,
-  bool receipt,
 });
 
 /// A payment made outside the office, or a claim waived, written in the
@@ -73,8 +70,6 @@ class _LedgerDialogState extends State<LedgerDialog> {
   };
   late bool _whole = widget.editing?.whole ?? false;
   late MovementKind? _target = widget.target;
-  late bool _request = widget.editing == null;
-  bool _receipt = false;
   String? _error;
 
   bool get _external => widget.kind == LedgerKind.external;
@@ -130,8 +125,6 @@ class _LedgerDialogState extends State<LedgerDialog> {
       whole: _whole,
       note: _note.text.trim(),
       target: _external ? _target : null,
-      request: _request,
-      receipt: _external && _receipt,
     ));
   }
 
@@ -313,31 +306,9 @@ class _LedgerDialogState extends State<LedgerDialog> {
                 labelText: 'Açıklama (isteğe bağlı)',
               ),
             ),
-          const SizedBox(height: 6),
-          if (!_editing)
-            CheckboxListTile(
-              key: const ValueKey('ledger-request'),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: Text(
-                _external
-                    ? 'Haricen tahsil bildirimi hazırla (UDF)'
-                    : 'Feragat dilekçesi hazırla (UDF)',
-              ),
-              value: _request,
-              onChanged: (v) => setState(() => _request = v ?? false),
-            ),
-          if (_external && !_editing)
-            CheckboxListTile(
-              key: const ValueKey('ledger-receipt'),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Borçluya makbuz ve ibraname hazırla'),
-              value: _receipt,
-              onChanged: (v) => setState(() => _receipt = v ?? false),
-            ),
+          // The papers are printed from the payment's card ("Yazdır"),
+          // when wanted: none is made, nor opened, on saving.
+          const SizedBox(height: 10),
           if (_editing && _external)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
