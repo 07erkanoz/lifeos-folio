@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../preview_app.dart' show openPreviewWindow;
 import '../../services/editor/petition_templates.dart' show trUpper;
 import '../../services/platform/editor_window.dart';
 import '../../services/office/office_network.dart';
+import '../../services/office/shared_cases.dart';
 import '../../services/office/task_package.dart' show ReceivedCase;
 import '../../services/portal/portal_case.dart';
 import '../../services/portal/portal_channel.dart';
@@ -25,6 +27,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/uyap_connect_view.dart';
 import '../help/help_button.dart';
 import '../office/send_to_office.dart';
+import '../widgets/notice.dart';
 import '../office/task_give_dialog.dart';
 import '../office/tasks_page.dart' show TaskDetail, dueOf;
 import '../widgets/file_preview.dart';
@@ -134,6 +137,17 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   /// The parties the lawyer said they act for here, if they said.
   List<({String ad, String rol})> _said = const [];
+
+  /// Where the case came from when another member shared it or gave it
+  /// with a task: its documents are asked of their device. Null for one of
+  /// the lawyer's own.
+  CaseSource? _source;
+
+  /// Who shared it with this person; empty when no one did.
+  String _sharedBy = '';
+
+  /// The office's people this person shares the case with.
+  List<String> _sharedWith = const [];
   final _picked = <String>{};
   final _search = TextEditingController();
 
@@ -227,6 +241,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _kase = kase;
       _tasked = ReceivedCase.markIn(db, kase.key);
       _said = db.representation(kase.key);
+      _source = SharedCases.sourceOf(db, kase.key);
+      _sharedBy = _sharedByOf(db, kase.key);
+      _sharedWith = SharedCases.sharedWith(db, kase.key);
       _state = state;
       _hearings = db.hearings(caseKey: kase.key)
         ..sort((a, b) => b.at.compareTo(a.at));
@@ -326,7 +343,174 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     await _c.refresh();
   }
 
+  static String _sharedByOf(PortalDatabase db, String key) {
+    final raw = db.meta(SharedCases.markOf(key));
+    if (raw == null || raw.isEmpty) return '';
+    try {
+      final j = jsonDecode(raw);
+      return j is Map ? '${j['ad'] ?? ''}' : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  SharedCases get _shared => SharedCases(
+    network: OfficeNetwork.instance,
+    database: () => _db,
+    store: _c.store,
+  );
+
+  /// Why a document asked of another member's device waits, in words.
+  String _waitWord(String why) {
+    final who = _source?.name.isNotEmpty ?? false
+        ? _source!.name
+        : 'Dosyanın sahibi';
+    return switch (why) {
+      'indiriliyor' => '$who bilgisayarında UYAP’tan indiriliyor…',
+      'uyap' =>
+        '$who bilgisayarında UYAP oturumu açık değil; açılınca gelecek.',
+      _ => '$who bilgisayarı şu an ağda değil.',
+    };
+  }
+
+  /// [keys] of a case another member shared or gave, brought from their
+  /// device one after another; how many came.
+  Future<int> _fetchShared(Iterable<String> keys, {bool open = false}) async {
+    final kase = _kase;
+    if (kase == null) return 0;
+    var came = 0;
+    String? told;
+    File? last;
+    for (final key in keys) {
+      if (!mounted) break;
+      setState(() => _fetching = 'Evrak isteniyor…');
+      final file = await _shared.fetch(
+        kase.key,
+        key,
+        onWait: (why) {
+          if (!mounted) return;
+          setState(() => _fetching = _waitWord(why));
+          if (told != why) {
+            told = why;
+            showNotice(context, _waitWord(why));
+          }
+        },
+      );
+      if (file != null) {
+        came++;
+        last = file;
+      }
+    }
+    if (!mounted) return came;
+    setState(() => _fetching = null);
+    final record = await _c.store.load(kase.court, kase.number);
+    if (record != null) await _c.show(record);
+    if (!mounted) return came;
+    if (came == 0) {
+      showNotice(
+        context,
+        'Evrak gelmedi.',
+        detail: told == null ? null : _waitWord(told!),
+        kind: NoticeKind.error,
+      );
+    } else if (open && last != null) {
+      widget.onOpen(last);
+    }
+    return came;
+  }
+
+  /// What is being asked of another member's device, while it is.
+  String? _fetching;
+
+  /// The case shared with the office's people the lawyer picks, or with
+  /// fewer: they see its particulars, parties, documents' list and
+  /// hearings, and ask for a document when they open it.
+  Future<void> _share() async {
+    final kase = _kase;
+    if (kase == null) return;
+    final net = OfficeNetwork.instance;
+    final people = [
+      for (final m in net.ledger.people)
+        if (m.person != net.me) m,
+    ];
+    if (people.isEmpty) {
+      showNotice(context, 'Büroda paylaşılacak başka kimse yok.');
+      return;
+    }
+    final chosen = {..._sharedWith};
+    final picked = await showDialog<Set<String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Dosyayı paylaş'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Seçtiğiniz kişiler dosyanın künyesini, taraflarını, evrak '
+                  'listesini ve duruşmalarını görür; UYAP’tan yeni bir şey '
+                  'geldikçe onlarda da güncellenir. Evrak toplu gitmez: '
+                  'açmak istediklerinde sizin bilgisayarınızdan gelir, '
+                  'sizde yoksa önce UYAP’tan indirilir.',
+                  style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+                ),
+                const SizedBox(height: 8),
+                for (final m in people)
+                  CheckboxListTile(
+                    key: ValueKey('share-${m.person}'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(m.name),
+                    value: chosen.contains(m.person),
+                    onChanged: (v) => setState(
+                      () => v == true
+                          ? chosen.add(m.person)
+                          : chosen.remove(m.person),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('share-save'),
+              onPressed: () => Navigator.pop(context, chosen),
+              child: const Text('Kaydet'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    final db = await _db;
+    SharedCases.share(db, kase.key, picked);
+    net.officeChanged();
+    if (!mounted) return;
+    setState(() => _sharedWith = SharedCases.sharedWith(db, kase.key));
+    showNotice(
+      context,
+      picked.isEmpty
+          ? 'Dosya artık paylaşılmıyor.'
+          : 'Dosya ${picked.length} kişiyle paylaşıldı.',
+      detail: picked.isEmpty
+          ? null
+          : 'Ağda olduklarında onlara gider; evrak istendikçe gönderilir.',
+    );
+  }
+
   Future<void> _open(UyapCaseDocument d) async {
+    if (_c.store.fileOf(_c.record!, d.key) == null && _source != null) {
+      await _fetchShared([d.key], open: true);
+      return;
+    }
     if (_c.store.fileOf(_c.record!, d.key) == null &&
         !await _connect(
           UyapOp.documentDownload,
@@ -339,6 +523,10 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   }
 
   Future<void> _downloadFresh() async {
+    if (_source != null) {
+      await _fetchShared(_fresh.toList());
+      return;
+    }
     if (!await _connect(
       UyapOp.documentDownload,
       'Yeni evrakları indirmek için bağlanın.',
@@ -1279,10 +1467,29 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           icon: const Icon(Icons.download_rounded, size: 17),
           label: const Text('Yeni evrakları indir'),
         ),
+      if (_source == null && OfficeNetwork.instance.ledger.exists)
+        OutlinedButton.icon(
+          key: const ValueKey('case-share'),
+          onPressed: () => unawaited(_share()),
+          icon: const Icon(Icons.group_add_outlined, size: 17),
+          label: Text(
+            _sharedWith.isEmpty ? 'Paylaş' : '${_sharedWith.length} kişiyle',
+          ),
+        ),
       PopupMenuButton<String>(
         tooltip: 'Diğer',
         icon: const Icon(Icons.more_horiz_rounded),
         onSelected: (v) async {
+          if (v == 'all' && _source != null) {
+            final record = _c.record;
+            if (record == null) return;
+            await _fetchShared([
+              for (final d in record.documents)
+                for (final x in [d, ...d.attachments])
+                  if (_c.store.fileOf(record, x.key) == null) x.key,
+            ]);
+            return;
+          }
           if (v == 'all') {
             final n = await _c.download();
             if (mounted) {
@@ -1300,6 +1507,43 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     final info = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Shared by another member: said first, as a task's case is.
+        if (_sharedBy.isNotEmpty)
+          Container(
+            key: const ValueKey('case-shared-in'),
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AgendaColors.hearingFill,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'Paylaşıldı · $_sharedBy · evrak açınca onun bilgisayarından '
+              'gelir',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: AgendaColors.hearingText,
+              ),
+            ),
+          ),
+        if (_fetching case final doing?)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              key: const ValueKey('case-fetching'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(doing, style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
         // Came with a task: said first, and why UYAP may not answer here.
         if (tasked != null)
           Container(
@@ -1505,6 +1749,16 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   /// The documents chosen fetched from UYAP, those not here yet.
   Future<void> _downloadPicked() async {
+    if (_source != null) {
+      await _fetchShared(_picked.toList());
+      if (mounted) {
+        setState(() {
+          _selecting = false;
+          _picked.clear();
+        });
+      }
+      return;
+    }
     if (!await _connect(
       UyapOp.documentDownload,
       'Seçilen evrakı indirmek için bağlanın.',

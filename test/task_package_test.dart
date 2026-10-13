@@ -98,6 +98,7 @@ void main() {
         temp: () async => Directory('${dir.path}/tmp'),
         database: () async => null,
         onProgress: told.add,
+        fetch: true,
       );
       expect(uyap.asked, ['b', 'c']);
       expect(pack.missing, ['Bilirkişi Raporu']);
@@ -196,6 +197,7 @@ void main() {
       controller: _Uyap(store),
       temp: () async => Directory('${dir.path}/tmp'),
       database: () async => giverDb,
+      fetch: true,
     );
     // As it lands on the other's disk.
     final inbox = Directory('${dir.path}/gelenler')..createSync();

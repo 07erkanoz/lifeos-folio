@@ -9,6 +9,7 @@ import '../clients/client.dart';
 import '../clients/client_file_sync.dart';
 import '../clients/client_files.dart';
 import '../office/office_network.dart';
+import '../office/shared_cases.dart';
 import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
@@ -115,6 +116,9 @@ class OwnSync extends ChangeNotifier {
     // Read anew here: the others are given it a moment later.
     PortalSync.uyapChanged = () {
       if (isOn(uyapData)) _net.ownChanged();
+      // A case shared with the office read anew: to those it is shared
+      // with too.
+      _net.officeChanged();
     };
     // An own device found before these were set is made alike now.
     unawaited(_net.syncOwn());
@@ -273,7 +277,22 @@ class OwnSync extends ChangeNotifier {
   /// UYAP's downloaded documents, given to an own device that asks.
   late final documents = UyapDocumentsSync(network: _net, store: uyapStore);
 
+  /// The cases shared with the office's members, person by person; what
+  /// they ask of them, answered.
+  late final shared = SharedCases(
+    network: _net,
+    database: _database,
+    store: uyapStore,
+  );
+
   Future<void> _apply() async {
+    // Only what the lawyer chose to share goes: on wherever there is an
+    // office.
+    _net.officeParts[SharedCases.part] = OfficePart(
+      export: shared.export,
+      merge: shared.merge,
+    );
+    _net.officeAnswers[SharedCases.documentKind] = shared.answer;
     for (final (part, files) in [
       (profilePart, const [SettingsSync.profile]),
       (settingsPart, SettingsSync.settings),

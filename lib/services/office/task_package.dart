@@ -16,8 +16,11 @@ import 'office_task.dart';
 /// A task's case as it goes to those it is given to (docs/buro.md, Görev):
 /// they cannot open it in UYAP, so its particulars, parties, list of
 /// documents and money go with it, its hearings, deadlines, UETS notices
-/// and the agenda's notes on it, and the documents chosen, those not yet
-/// here fetched from UYAP first, one at a time.
+/// and the agenda's notes on it, and the documents chosen that are here.
+/// One chosen and not yet here is not fetched from UYAP to go: the one
+/// given the task asks for it when they open it, and it is fetched then
+/// (lib/services/office/shared_cases.dart). UYAP is asked for what is
+/// read, not for everything that might be.
 class TaskPackage {
   const TaskPackage(this.paths, this.missing);
 
@@ -67,6 +70,7 @@ class TaskPackage {
     Future<Directory> Function()? temp,
     Future<PortalDatabase?> Function()? database,
     void Function(String doing)? onProgress,
+    bool fetch = false,
   }) async {
     final keep = store ?? UyapCaseStore.instance;
     final record = await keep.load(c.court, c.number);
@@ -83,7 +87,7 @@ class TaskPackage {
       for (final k in wanted)
         if (keep.fileOf(current, k) == null) k,
     ];
-    if (notHere.isNotEmpty) {
+    if (fetch && notHere.isNotEmpty) {
       final panel = controller ?? UyapCasePanelController(store: keep);
       if (panel.connected) {
         try {
@@ -137,11 +141,12 @@ class TaskPackage {
     final missing = <String>[];
     for (final k in wanted) {
       final f = keep.fileOf(current, k);
-      if (f == null) {
+      if (f != null) {
+        paths.add(f.path);
+      } else if (fetch) {
+        // Asked for and not fetched; else it is asked for when opened.
         final d = all[k]!;
         missing.add(d.type.isNotEmpty ? d.type : d.title);
-      } else {
-        paths.add(f.path);
       }
     }
     return TaskPackage(paths, missing);
@@ -216,6 +221,8 @@ class ReceivedCase {
   Future<String?> adopt({
     required String task,
     required String from,
+    String fromDevice = '',
+    String fromPerson = '',
     UyapCaseStore? store,
     Future<PortalDatabase?> Function()? database,
   }) async {
@@ -264,7 +271,17 @@ class ReceivedCase {
           complete: false,
         );
       }
-      db.setMeta(markOf(key), jsonEncode({'gorev': task, 'veren': from}));
+      // Who gave it, and the device that has it: a document not sent with
+      // it is asked of that device when it is opened.
+      db.setMeta(
+        markOf(key),
+        jsonEncode({
+          'gorev': task,
+          'veren': from,
+          if (fromDevice.isNotEmpty) 'cihaz': fromDevice,
+          if (fromPerson.isNotEmpty) 'kisi': fromPerson,
+        }),
+      );
     } catch (_) {}
     return key;
   }

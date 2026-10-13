@@ -22,6 +22,7 @@ import 'package:flutter/foundation.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/office_transfer.dart';
+import 'package:evrak_convert/services/office/shared_cases.dart';
 import 'package:evrak_convert/services/office/task_package.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
@@ -661,8 +662,9 @@ void main() {
         ),
         temp: () async => Directory('${dir.path}/tmp'),
       );
-      // UYAP not connected: the one not here is said, not sent.
-      expect(pack.missing, ['Bilirkişi Raporu']);
+      // The one not here is not fetched to go: the assignee asks for it
+      // when they open it.
+      expect(pack.missing, isEmpty);
       expect(pack.paths, hasLength(2));
       await a.giveTask(
         title: 'İncele',
@@ -689,6 +691,125 @@ void main() {
       await inbox.start();
       await until(() => inbox.items.isNotEmpty);
       expect(inbox.items.single.task, 'İncele');
+    },
+  );
+
+  test(
+    'a case shared with a member: its particulars and documents\' list '
+    'kept alike with them, a document brought when they open it, one '
+    'the owner has not fetched from UYAP first; unshared, forgotten',
+    () async {
+      b.seenForTesting(a.self!);
+      await a.foundOffice('Kaya Hukuk Bürosu');
+      await a.admit(b.self!.deviceId, OfficeRole.lawyer);
+      await until(() => b.ledger.members.length == 2);
+      const court = 'Antalya 3. Asliye Hukuk Mahkemesi';
+      UyapCaseStore storeOf(String who) => UyapCaseStore(
+        directory: Directory('${dir.path}/$who-uyap'),
+        settings: UyapSettings(
+          directory: Directory('${dir.path}/$who-uyap'),
+          home: '${dir.path}/$who-ev',
+        ),
+      );
+      final storeA = storeOf('a'), storeB = storeOf('b');
+      UyapCaseDocument doc(String key, String type) => UyapCaseDocument(
+        key: key,
+        documentId: key,
+        caseId: '1',
+        type: type,
+        number: key,
+        approved: '01.10.2026 10:00',
+        sender: 'Mahkeme',
+        description: '',
+      );
+      var record = await storeA.keep(
+        target: const UyapCase('1', '2024/318', '', court),
+        details: const UyapCaseDetails(kind: 'Alacak', status: 'Açık'),
+        parties: const [
+          UyapParty('AYŞE KARACA', 'Davacı', 'Av. Deniz Kaya', 'Kişi'),
+        ],
+        documents: UyapCaseDocuments([
+          doc('a', 'Ara Karar'),
+          doc('b', 'Bilirkişi Raporu'),
+        ]),
+      );
+      final bytes = utf8.encode('%PDF-1.4 ara karar');
+      (record, _) = await storeA.save(
+        record,
+        record.documents.first,
+        Uint8List.fromList(bytes),
+      );
+      final key = caseKey('2024/318', court);
+      final dbA = PortalDatabase.memory(), dbB = PortalDatabase.memory();
+      addTearDown(dbA.dispose);
+      addTearDown(dbB.dispose);
+      dbA.mergeCases([PortalCase.create(number: '2024/318', court: court)]);
+      final sharedA = SharedCases(
+        network: a,
+        database: () async => dbA,
+        store: storeA,
+        // The owner's UYAP is not connected here.
+        panel: (s) => UyapCasePanelController(
+          web: UyapWebService.forTesting(),
+          mobile: UyapMobileApi.forTesting(Uri.parse('http://127.0.0.1:9/')),
+          store: s,
+        ),
+      );
+      final sharedB = SharedCases(
+        network: b,
+        database: () async => dbB,
+        store: storeB,
+      );
+      for (final (net, shared) in [(a, sharedA), (b, sharedB)]) {
+        net.officeParts[SharedCases.part] = OfficePart(
+          export: shared.export,
+          merge: shared.merge,
+        );
+        net.officeAnswers[SharedCases.documentKind] = shared.answer;
+      }
+      // Shared with no one: nothing goes, and a document asked is refused.
+      expect(
+        await sharedA.answer({'dosya': key, 'evrak': 'a'}, b.self!.deviceId),
+        isNull,
+      );
+      SharedCases.share(dbA, key, [b.me]);
+      await a.syncOffice();
+      await until(() => dbB.caseOf(key) != null);
+      expect(SharedCases.sourceOf(dbB, key)?.device, a.self!.deviceId);
+      expect(SharedCases.sourceOf(dbB, key)?.name, 'Av. Deniz Kaya');
+      final theirs = (await storeB.load(court, '2024/318'))!;
+      expect(theirs.documents.map((d) => d.key), ['a', 'b']);
+      expect(theirs.parties.single.name, 'AYŞE KARACA');
+      expect(storeB.fileOf(theirs, 'a'), isNull);
+      // Opened: brought from the owner's device.
+      final came = await sharedB.fetch(key, 'a');
+      expect(came!.readAsBytesSync(), bytes);
+      expect(
+        storeB.fileOf((await storeB.load(court, '2024/318'))!, 'a'),
+        isNotNull,
+      );
+      // Not on the owner's either, and its UYAP closed: it waits, and says
+      // why.
+      final why = <String>[];
+      expect(
+        await sharedB.fetch(
+          key,
+          'b',
+          onWait: why.add,
+          patience: const Duration(milliseconds: 400),
+          every: const Duration(milliseconds: 100),
+        ),
+        isNull,
+      );
+      expect(why, contains('uyap'));
+      // Unshared: forgotten as shared.
+      SharedCases.share(dbA, key, const []);
+      await a.syncOffice();
+      await until(() => SharedCases.sourceOf(dbB, key) == null);
+      expect(
+        await sharedA.answer({'dosya': key, 'evrak': 'a'}, b.self!.deviceId),
+        isNull,
+      );
     },
   );
 

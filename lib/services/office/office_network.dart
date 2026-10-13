@@ -271,7 +271,12 @@ class OfficeNetwork extends ChangeNotifier {
             final task = tasks.all.where((x) => x.id == taskId).firstOrNull;
             await packages
                 .received(taskId, caseKey)
-                ?.adopt(task: task?.title ?? '', from: task?.byName ?? '');
+                ?.adopt(
+                  task: task?.title ?? '',
+                  from: task?.byName ?? '',
+                  fromDevice: t.peer.deviceId,
+                  fromPerson: ledger.personOf(t.peer.deviceId),
+                );
             notifyListeners();
           }),
         );

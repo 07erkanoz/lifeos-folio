@@ -225,26 +225,8 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
           docKeys: c.chosen.toList(),
         ),
     ];
-    // The cases' details and documents, those not here fetched from UYAP:
-    // the assignee cannot open them there. UYAP's door first when some
-    // are to be fetched and no portal is there to fetch them.
-    var toFetch = 0;
-    for (final c in cases) {
-      toFetch += await TaskPackage.notHere(c);
-    }
-    if (!mounted) return;
-    if (toFetch > 0 &&
-        !UyapWebService.instance.connected &&
-        !UyapMobileApi.instance.connected) {
-      await connectUyap(
-        context,
-        op: UyapOp.documentDownload,
-        why:
-            'Seçilen evraktan $toFetch tanesi bu cihazda yok. Görevi alan '
-            'kişiye gidebilmeleri için önce UYAP’tan indirilecek.',
-      );
-      if (!mounted) return;
-    }
+    // The cases' details and the documents chosen that are here; one not
+    // here is fetched from UYAP by this device when the assignee opens it.
     Map<String, TaskPackage> packed;
     while (true) {
       final (got, missing) = await _pack(cases);
