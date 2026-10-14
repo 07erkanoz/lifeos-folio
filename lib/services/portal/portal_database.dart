@@ -299,6 +299,9 @@ class PortalDatabase {
       ('task_note_clean', 'surum', 'TEXT'),
       ('agenda', 'gizli_not', 'INTEGER NOT NULL DEFAULT 0'),
       ('deadline_user', 'govde_gizli', 'INTEGER NOT NULL DEFAULT 0'),
+      // When the lawyer said a notification read or unread: the later word
+      // stands on their other devices, not whichever device asked last.
+      ('uyap_notice', 'okundu_an', 'TEXT'),
     ]) {
       final has = _db
           .select('PRAGMA table_info($table)')
@@ -610,7 +613,20 @@ class PortalDatabase {
       if (r.body.isNotEmpty && r.source == UyapNoticeSource.mobile) {
         setUyapNoticeBody(r.id, r.body);
       }
-      if (r.localRead != null) setUyapNoticeRead([r], r.localRead!);
+      final read = r.localRead;
+      if (read == null) continue;
+      final mine = _db.select(
+        'SELECT local_read, okundu_an FROM uyap_notice WHERE source=? AND id=?',
+        [r.source.name, r.id],
+      ).firstOrNull;
+      final mineAt = mine?['okundu_an'] as String?;
+      final theirAt = r.localReadAt;
+      // The later word: one with no time (an older Folio's) only where
+      // this one's has none either.
+      final take = theirAt == null
+          ? mineAt == null
+          : mineAt == null || theirAt.compareTo(mineAt) > 0;
+      if (take) setUyapNoticeRead([r], read, at: theirAt);
     }
     return added.length;
   }
@@ -778,16 +794,24 @@ class PortalDatabase {
   ];
 
   /// The lawyer's read or unread, on every row of a notification: both
-  /// channels' rows of one say the same.
-  void setUyapNoticeRead(Iterable<UyapNoticeRow> rows, bool read) =>
-      _transaction(() {
-        for (final r in rows) {
-          _db.execute(
-            'UPDATE uyap_notice SET local_read=? WHERE source=? AND id=?',
-            [read ? 1 : 0, r.source.name, r.id],
-          );
-        }
-      });
+  /// channels' rows of one say the same. [at]: when it was said, another
+  /// device's time for its word; now for this one's.
+  void setUyapNoticeRead(
+    Iterable<UyapNoticeRow> rows,
+    bool read, {
+    String? at,
+  }) {
+    final when = at ?? DateTime.now().toUtc().toIso8601String();
+    _transaction(() {
+      for (final r in rows) {
+        _db.execute(
+          'UPDATE uyap_notice SET local_read=?, okundu_an=? '
+          'WHERE source=? AND id=?',
+          [read ? 1 : 0, when, r.source.name, r.id],
+        );
+      }
+    });
+  }
 
   UyapNoticeRow _noticeRow(Row row) {
     bool? flag(Object? v) => v == null ? null : v == 1;
@@ -802,6 +826,7 @@ class PortalDatabase {
           : DateTime.tryParse(row['sent'] as String),
       remoteRead: flag(row['remote_read']),
       localRead: flag(row['local_read']),
+      localReadAt: row['okundu_an'] as String?,
     );
   }
 

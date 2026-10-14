@@ -62,6 +62,9 @@ List<CalendarEvent> agendaEvents(
           client: names ? (whose[h.caseKey] ?? const []) : const [],
         ),
   ];
+  // A deadline written out as one is not again as the agenda's row of it:
+  // two events, two alarms.
+  final told = <String>{};
   if (deadlines) {
     for (final d in db.deadlines(decidedOnly: true)) {
       if (!d.onAgenda || (d.user?.done ?? false)) continue;
@@ -69,6 +72,7 @@ List<CalendarEvent> agendaEvents(
       if (day == null || day.isBefore(from) || day.isAfter(to)) continue;
       final key = d.record.caseKey ?? '';
       final kase = key.isEmpty ? null : db.caseOf(key);
+      told.add(d.record.id);
       out.add(
         CalendarEvent(
           uid: 'folio-sure-${d.record.id}',
@@ -84,7 +88,7 @@ List<CalendarEvent> agendaEvents(
   }
   for (final i in db.agenda(from: from, to: to)) {
     final at = i.at;
-    if (at == null || i.done) continue;
+    if (at == null || i.done || told.contains(i.id)) continue;
     // A secret note is not written out of the lawyer's devices (R7).
     if (SecretNotes.rowHidden(db, i)) continue;
     if (i.kind == 'deadline' ? !deadlines : !tasks) continue;

@@ -97,6 +97,16 @@ void main() {
     // Asked again: nothing new to tell.
     await sync.syncNotices(force: true);
     expect(told, hasLength(1));
+    // Two of one title in the same minute, of two cases: both told.
+    rows = [
+      row('c', 'Evrak Eklendi', now(1)),
+      row('d', 'Evrak Eklendi', now(1)),
+      row('b', 'Bilirkişi Raporu Kaydedilmesi', now(2)),
+      row('a', 'Gerekçeli Karar', now(30)),
+    ];
+    await sync.syncNotices(force: true);
+    expect(told, hasLength(2));
+    expect(told.last, hasLength(2));
     // Within a minute and not forced: UYAP is not asked again.
     asked.clear();
     await sync.syncNotices();

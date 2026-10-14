@@ -31,6 +31,9 @@ class UyapNoticeRow {
   /// The lawyer's own word in Folio: read, unread, or null to follow UYAP.
   final bool? localRead;
 
+  /// When [localRead] was said (UTC, ISO 8601); null from an older Folio.
+  final String? localReadAt;
+
   const UyapNoticeRow({
     required this.source,
     required this.id,
@@ -40,6 +43,7 @@ class UyapNoticeRow {
     this.sentAt,
     this.remoteRead,
     this.localRead,
+    this.localReadAt,
   });
 
   /// A row of UYAP Mobil's list; null when it has no id.

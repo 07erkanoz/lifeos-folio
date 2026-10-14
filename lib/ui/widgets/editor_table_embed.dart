@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/quill_delta.dart';
 
 import '../../models/document_model.dart';
 import '../../services/editor/doc_delta_map.dart';
@@ -155,6 +156,10 @@ class _Cell {
   DocTableCell original;
   _Cell(this.original, {this.controller, this.focus});
 
+  /// The cell's text as last handed back, and what it was read as: a key in
+  /// one cell turns that cell alone back into the model, not every one.
+  (Delta, List<DocBlock>)? made;
+
   bool get editable => controller != null;
 
   void dispose() {
@@ -212,9 +217,11 @@ class _EditorTableViewState extends State<EditorTableView> {
   @override
   void didUpdateWidget(covariant EditorTableView old) {
     super.didUpdateWidget(old);
+    if (old.word != widget.word || old.readOnly != widget.readOnly) _stamp++;
     if (identical(widget.table, _reported) || identical(widget.table, _table)) {
       return;
     }
+    _stamp++;
     _disposeCells();
     _table = widget.table;
     _build();
@@ -418,9 +425,17 @@ class _EditorTableViewState extends State<EditorTableView> {
       rowspan: cell.original.rowspan,
       backgroundColor: cell.original.backgroundColor,
       width: cell.original.width,
-      blocks: DocDeltaMap.deltadanModel(cell.controller!.document.toDelta())
-          .blocks,
+      blocks: _blocksOf(cell),
     );
+  }
+
+  static List<DocBlock> _blocksOf(_Cell cell) {
+    final delta = cell.controller!.document.toDelta();
+    final made = cell.made;
+    if (made != null && made.$1 == delta) return made.$2;
+    final blocks = DocDeltaMap.deltadanModel(delta).blocks;
+    cell.made = (delta, blocks);
+    return blocks;
   }
 
   /// The colour a cell is filled with, if the document gave it one.
@@ -559,16 +574,44 @@ class _EditorTableViewState extends State<EditorTableView> {
   final _link = LayerLink();
   final _portal = OverlayPortalController();
 
+  /// What was drawn, for the width and the state it was drawn at: the body
+  /// builds every line again at each key, a table in it too, and the same
+  /// table is handed back as it was, its cells' editors not built anew.
+  (double, int, Widget)? _drawnAt;
+  int _stamp = 0;
+
+  @override
+  void setState(VoidCallback fn) {
+    _stamp++;
+    super.setState(fn);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _stamp++;
+  }
+
   @override
   Widget build(BuildContext context) {
     final columns = _columnCount;
     if (columns == 0) return const SizedBox.shrink();
     return LayoutBuilder(
-      builder: (context, constraints) => _drawn(
-        columns,
-        _widths(columns, constraints.maxWidth),
-        constraints.maxWidth,
-      ),
+      builder: (context, constraints) {
+        final kept = _drawnAt;
+        if (kept != null &&
+            kept.$1 == constraints.maxWidth &&
+            kept.$2 == _stamp) {
+          return kept.$3;
+        }
+        final drawn = _drawn(
+          columns,
+          _widths(columns, constraints.maxWidth),
+          constraints.maxWidth,
+        );
+        _drawnAt = (constraints.maxWidth, _stamp, drawn);
+        return drawn;
+      },
     );
   }
 
@@ -825,7 +868,7 @@ class _EditorTableViewState extends State<EditorTableView> {
     onOpened: () => setState(() => _menuOpen = true),
     onCanceled: () => setState(() => _menuOpen = false),
     onSelected: (i) {
-      _menuOpen = false;
+      setState(() => _menuOpen = false);
       _shade(_shades[i].$2);
     },
     itemBuilder: (_) => [

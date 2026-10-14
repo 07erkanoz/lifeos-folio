@@ -1,6 +1,7 @@
 import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/uyap_notice.dart';
+import 'package:evrak_convert/services/sync/uyap_own_sync.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // UYAP's notifications from both channels: kept apart, shown as one, tied
@@ -246,5 +247,32 @@ void main() {
       )!,
     ]);
     expect(db.uyapNotices().single.read, isFalse);
+  });
+
+  test('read and unread on two own devices: the later word stands on both, '
+      'whichever asks', () {
+    final a = PortalDatabase.memory(), b = PortalDatabase.memory();
+    addTearDown(a.dispose);
+    addTearDown(b.dispose);
+    const row = UyapNoticeRow(
+      source: UyapNoticeSource.mobile,
+      id: 'n1',
+      title: 'Gerekçeli Karar',
+    );
+    a.saveUyapNotices([row]);
+    b.saveUyapNotices([row]);
+    // Unread on the phone, then read on the computer.
+    b.setUyapNoticeRead([row], false, at: '2026-10-14T09:00:00.000Z');
+    a.setUyapNoticeRead([row], true, at: '2026-10-14T10:00:00.000Z');
+    List<UyapNoticeRow> of(PortalDatabase db) => [
+      for (final r in db.uyapNoticesOf(['mobile|n1']))
+        UyapOwnSync.noticeFromJson(UyapOwnSync.noticeToJson(r))!,
+    ];
+    // The phone's older word does not undo the computer's, either way.
+    a.adoptUyapNotices(of(b));
+    b.adoptUyapNotices(of(a));
+    a.adoptUyapNotices(of(b));
+    expect(a.uyapNoticesOf(['mobile|n1']).single.localRead, isTrue);
+    expect(b.uyapNoticesOf(['mobile|n1']).single.localRead, isTrue);
   });
 }

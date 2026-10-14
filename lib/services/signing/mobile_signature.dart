@@ -292,10 +292,14 @@ class MobileUdfSigner {
       bytes: bytes,
       kind: kind,
     );
-    await keep(
-      request.original,
-      request.alreadySigned ? 'signed' : 'before-sign',
-    );
+    // The lawyer signed on the phone already: the history's copy is no
+    // reason to lose that signature (a full disk, the history's limit).
+    try {
+      await keep(
+        request.original,
+        request.alreadySigned ? 'signed' : 'before-sign',
+      );
+    } catch (_) {}
     final path = UdfSigningService.saveSigned(
       request.path,
       request.original,

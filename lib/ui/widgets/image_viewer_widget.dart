@@ -139,20 +139,25 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
   /// Reads how big the picture is without decoding it. A twelve megapixel
   /// photograph costs nothing to measure this way and some 48 MB to decode.
   Future<void> _measure(String from, String of) async {
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? described;
     try {
-      final buffer = await ui.ImmutableBuffer.fromFilePath(from);
-      final described = await ui.ImageDescriptor.encoded(buffer);
+      buffer = await ui.ImmutableBuffer.fromFilePath(from);
+      described = await ui.ImageDescriptor.encoded(buffer);
       final size = Size(
         described.width.toDouble(),
         described.height.toDouble(),
       );
-      described.dispose();
-      buffer.dispose();
       if (mounted && widget.filePath == of) {
         setState(() => _intrinsic = size);
       }
     } on Object {
       // Unmeasurable is not unshowable. Only the crop button waits on this.
+    } finally {
+      // Let go of whether it could be read or not: native memory, not the
+      // collector's.
+      described?.dispose();
+      buffer?.dispose();
     }
   }
 

@@ -264,8 +264,12 @@ class UyapMobileApi {
         kept = await keptTokens?.call();
       } catch (_) {}
       final now = DateTime.now();
+      // Renewed elsewhere only when the kept ones are newer than these: a
+      // keystore behind (a write not yet done) would bring an older refresh
+      // token back, one UYAP may refuse.
       if (kept != null &&
           kept.refresh != had.refresh &&
+          kept.accessExpires.isAfter(had.accessExpires) &&
           kept.refreshExpires.isAfter(now)) {
         if (generation != _generation || !identical(_tokens, had)) return;
         // Renewed elsewhere: those are taken up, already kept.
@@ -297,8 +301,9 @@ class UyapMobileApi {
       _setTokens(had.renewed(data, DateTime.now()));
       log?.call('UYAP Mobil erişim jetonu yenilendi');
     } on _HttpError catch (e) {
-      // A server error is not a refusal: the session may well be good.
-      if (e.status >= 500) {
+      // A server error is not a refusal: the session may well be good; nor
+      // too many asked (429) or too long waited (408).
+      if (e.status >= 500 || e.status == 429 || e.status == 408) {
         log?.call('UYAP Mobil yenilemesi sunucu hatası verdi: ${e.status}');
         throw _Unreachable('$e');
       }

@@ -466,6 +466,7 @@ class UyapOwnSync {
     'gonderildi': r.sentAt?.toIso8601String(),
     'uyapOkundu': r.remoteRead,
     'okundu': r.localRead,
+    'okunduAn': r.localReadAt,
   };
 
   static UyapNoticeRow? noticeFromJson(Map<String, Object?> j) {
@@ -483,6 +484,7 @@ class UyapOwnSync {
       sentAt: DateTime.tryParse('${j['gonderildi'] ?? ''}'),
       remoteRead: j['uyapOkundu'] is bool ? j['uyapOkundu'] as bool : null,
       localRead: j['okundu'] is bool ? j['okundu'] as bool : null,
+      localReadAt: j['okunduAn'] is String ? j['okunduAn'] as String : null,
     );
   }
 }

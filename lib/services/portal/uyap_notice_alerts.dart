@@ -123,7 +123,11 @@ Future<void> tellUyapNotices(
   }
   for (final n in told) {
     await SystemNotices.instance.show(
-      id: n.signature.hashCode & 0x7fffffff,
+      // Its own, not its title's: another of the same title in the same
+      // minute would put this one out.
+      id:
+          '${n.rows.first.source.name}:${n.rows.first.id}'.hashCode &
+          0x7fffffff,
       title: n.title.isEmpty ? 'UYAP bildirimi' : n.title,
       body: line(n),
       payload: 'notice:${n.signature}',

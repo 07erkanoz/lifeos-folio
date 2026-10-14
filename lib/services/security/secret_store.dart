@@ -51,8 +51,23 @@ class SecretStore {
     return File(p.join(dir.path, '$name.secret'));
   }
 
+  /// Each name's writes and removals, one after another: two close together
+  /// (a renewal, then a logout) could otherwise end in either order, the
+  /// token gone written back, or a newer one lost.
+  static final _turns = <String, Future<void>>{};
+
+  Future<T> _inTurn<T>(String name, Future<T> Function() f) {
+    final before = _turns[name] ?? Future<void>.value();
+    final next = before.then((_) => f());
+    _turns[name] = next.then<void>((_) {}, onError: (Object _) {});
+    return next;
+  }
+
   /// Keeps [value] under [name]; false where it cannot be kept safely.
-  Future<bool> write(String name, Map<String, Object?> value) async {
+  Future<bool> write(String name, Map<String, Object?> value) =>
+      _inTurn(name, () => _write(name, value));
+
+  Future<bool> _write(String name, Map<String, Object?> value) async {
     if (!available) return false;
     if (_phone) {
       try {
@@ -97,7 +112,9 @@ class SecretStore {
     }
   }
 
-  Future<void> remove(String name) async {
+  Future<void> remove(String name) => _inTurn(name, () => _remove(name));
+
+  Future<void> _remove(String name) async {
     if (_phone) {
       try {
         await _keychain.delete(key: _key(name));

@@ -884,6 +884,25 @@ void main() {
     expect(view.table.rows.length, 2);
     expect(view.table.rows.first.cells.length, 3);
 
+    // Typing in the body leaves the table's cells' editors as they were.
+    final body = tester
+        .widgetList<QuillEditor>(find.byType(QuillEditor))
+        .firstWhere((e) => e.focusNode.debugLabel == 'document-editor')
+        .controller;
+    var cellsBuilt = 0;
+    debugOnRebuildDirtyWidget = (element, _) {
+      if (element.widget is QuillEditor &&
+          (element.widget as QuillEditor).controller != body) {
+        cellsBuilt++;
+      }
+    };
+    body.replaceText(0, 0, 'X', const TextSelection.collapsed(offset: 1));
+    await tester.pump();
+    body.replaceText(1, 0, 'Y', const TextSelection.collapsed(offset: 2));
+    await tester.pump();
+    debugOnRebuildDirtyWidget = null;
+    expect(cellsBuilt, 0);
+
     tester
         .widgetList<QuillEditor>(find.byType(QuillEditor))
         .firstWhere((e) => e.focusNode.debugLabel == 'document-editor')

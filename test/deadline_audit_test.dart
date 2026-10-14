@@ -18,6 +18,7 @@ import 'package:evrak_convert/services/uets/notice_matcher.dart';
 import 'package:evrak_convert/services/uets/uets_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/agenda/deadline_review.dart';
+import 'package:evrak_convert/services/portal/agenda_ics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // What the audit of 8 October 2026 found wrong in the deadline engine
@@ -369,6 +370,23 @@ void main() {
       isEmpty,
     );
     expect(AgendaReminders.due(db, last).single.title, 'Bugün son gün');
+  });
+
+  test('a deadline followed is written to the calendar once', () {
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    final r = records(
+      'Tebliğden itibaren iki hafta içinde beyanlarınızı sununuz.',
+    ).single;
+    db.replaceNoticeDeadlines(r.noticeId, [r]);
+    db.confirmDeadline(r.id);
+    final last = DateTime.parse(r.dueDay!);
+    final events = agendaEvents(
+      db,
+      from: last.subtract(const Duration(days: 30)),
+      to: last.add(const Duration(days: 30)),
+    );
+    expect(events.where((e) => e.title.startsWith('Süre')), hasLength(1));
   });
 
   test('B22: the day confirmed is read back from the history', () {

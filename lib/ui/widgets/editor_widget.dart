@@ -723,7 +723,11 @@ class _EditorWidgetState extends State<EditorWidget>
   void _cellsGone() {
     if (!mounted || _focusedCell == null) return;
     _quillController.cellHasCursor = false;
-    setState(() => _focusedCell = null);
+    // Told as a table goes, which may be while the tree is being built or
+    // taken down: the ribbon is told after.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _focusedCell = null);
+    });
   }
 
   /// Takes a table out of the document. The block itself stays in the list
@@ -1673,6 +1677,13 @@ class _EditorWidgetState extends State<EditorWidget>
       );
     }
     if (!widget.isActive || _isLoading || _loadError != null) return;
+    // A document this window only reads (held in another, the pen away) is
+    // not changed by a key either: Quill's own keys are held back, these
+    // go to the controller past it.
+    if (_active.readOnly && _changes.contains(command)) {
+      if (_heldElsewhere) _showHeldElsewhere();
+      return;
+    }
     switch (command) {
       case 'save':
         _save();
@@ -1720,10 +1731,31 @@ class _EditorWidgetState extends State<EditorWidget>
         _toggle(Attribute.ul);
       case 'snippets':
         unawaited(_snippets());
-      case final hotkey when hotkey.startsWith('hotkey:'):
+      case final hotkey when hotkey.startsWith('hotkey:') && !_active.readOnly:
         unawaited(_hotkey(int.parse(hotkey.substring('hotkey:'.length))));
     }
   }
+
+  /// The commands that change the text.
+  static const _changes = {
+    'format',
+    'replace',
+    'bold',
+    'italic',
+    'underline',
+    'paste',
+    'undo',
+    'redo',
+    'indent',
+    'outdent',
+    'left',
+    'center',
+    'right',
+    'justify',
+    'number',
+    'bullet',
+    'snippets',
+  };
 
   /// The kept passages, loaded once so that Tab can decide at once whether
   /// the word before it is a keyword.
@@ -1753,7 +1785,7 @@ class _EditorWidgetState extends State<EditorWidget>
     if (store == null || !selection.isValid || !selection.isCollapsed) {
       return null;
     }
-    final text = controller.document.toPlainText();
+    final text = _plainText();
     final at = selection.baseOffset;
     final letter = RegExp(r'[\p{L}\p{N}_]', unicode: true);
     // Only at the end of a word: Tab inside one is a tab.
@@ -1820,7 +1852,7 @@ class _EditorWidgetState extends State<EditorWidget>
     if (!selection.isValid || !selection.isCollapsed) {
       return _hideSuggestions();
     }
-    final text = controller.document.toPlainText();
+    final text = _plainText();
     final at = selection.baseOffset;
     if (at > text.length ||
         (at < text.length &&
@@ -1859,7 +1891,7 @@ class _EditorWidgetState extends State<EditorWidget>
     final selection = _quillController.selection;
     if (!selection.isValid) return;
     final at = selection.baseOffset;
-    final text = _quillController.document.toPlainText();
+    final text = _plainText();
     final word = _wordEnd.firstMatch(text.substring(0, at))?.group(0);
     _suppressedWord = word == null ? null : at - word.length;
   }
@@ -2198,8 +2230,11 @@ class _EditorWidgetState extends State<EditorWidget>
 
   Future<void> _find({bool replace = false}) => showDialog<void>(
     context: context,
-    builder: (_) =>
-        EditorFindReplace(controller: _quillController, replace: replace),
+    builder: (_) => EditorFindReplace(
+      controller: _quillController,
+      // Found, not replaced, in a document this window only reads.
+      replace: replace && !_quillController.readOnly,
+    ),
   );
 
   /// The claim on the document this window edits, so that no other window
@@ -5291,63 +5326,69 @@ class _EditorWidgetState extends State<EditorWidget>
                                       context,
                                       expanded,
                                     ),
-                                    RibbonTab.insert => _insertRibbon(
-                                      context,
-                                      expanded,
+                                    RibbonTab.insert => AbsorbPointer(
+                                      absorbing: _active.readOnly,
+                                      child: _insertRibbon(context, expanded),
                                     ),
                                     _ => _viewRibbon(context, expanded),
                                   };
                                 },
                               ),
-                            RibbonTab.home: EditorToolbar(
-                              controller: _active,
-                              onFind: _find,
-                              onHistory: _history,
-                              onSnippets: () => unawaited(_snippets()),
-                              onReadAloud: speechAvailable
-                                  ? () => unawaited(_readAloud())
-                                  : null,
-                              onDictate: speechAvailable
-                                  ? () => unawaited(_dictate())
-                                  : null,
-                              onReplace: () => _find(replace: true),
-                              onPrint: _print,
-                              onInsertImage: _insertImage,
-                              onInsertTable: _insertTable,
-                              hasHeader: _regions.containsKey('header'),
-                              hasFooter: _regions.containsKey('footer'),
-                              onToggleRegion: (key) => switch (key) {
-                                'page-numbers' => _pageNumbers(),
-                                'letterheads' => _letterheads(),
-                                _ => _toggleRegion(key),
-                              },
-                              onHelp: _showShortcuts,
-                              onHorizontalRuler: () => setState(
-                                () => _showHorizontalRuler =
-                                    !_showHorizontalRuler,
-                              ),
-                              onVerticalRuler: () => setState(
-                                () => _showVerticalRuler = !_showVerticalRuler,
-                              ),
-                              showHorizontalRuler: _showHorizontalRuler,
-                              showVerticalRuler: _showVerticalRuler,
-                              onFontSelected: (name) async {
-                                try {
-                                  await DocumentFonts.loadEditorFamilies([
-                                    name,
-                                  ]);
-                                  if (mounted) setState(() {});
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    showNotice(
-                                      context,
-                                      'Yazı tipi yüklenemedi',
-                                      detail: '$e',
-                                      kind: NoticeKind.error,
-                                    );
+                            // Its tools change the text: none of them where
+                            // this window only reads it.
+                            RibbonTab.home: AbsorbPointer(
+                              absorbing: _active.readOnly,
+                              child: EditorToolbar(
+                                controller: _active,
+                                onFind: _find,
+                                onHistory: _history,
+                                onSnippets: () => unawaited(_snippets()),
+                                onReadAloud: speechAvailable
+                                    ? () => unawaited(_readAloud())
+                                    : null,
+                                onDictate: speechAvailable
+                                    ? () => unawaited(_dictate())
+                                    : null,
+                                onReplace: () => _find(replace: true),
+                                onPrint: _print,
+                                onInsertImage: _insertImage,
+                                onInsertTable: _insertTable,
+                                hasHeader: _regions.containsKey('header'),
+                                hasFooter: _regions.containsKey('footer'),
+                                onToggleRegion: (key) => switch (key) {
+                                  'page-numbers' => _pageNumbers(),
+                                  'letterheads' => _letterheads(),
+                                  _ => _toggleRegion(key),
+                                },
+                                onHelp: _showShortcuts,
+                                onHorizontalRuler: () => setState(
+                                  () => _showHorizontalRuler =
+                                      !_showHorizontalRuler,
+                                ),
+                                onVerticalRuler: () => setState(
+                                  () =>
+                                      _showVerticalRuler = !_showVerticalRuler,
+                                ),
+                                showHorizontalRuler: _showHorizontalRuler,
+                                showVerticalRuler: _showVerticalRuler,
+                                onFontSelected: (name) async {
+                                  try {
+                                    await DocumentFonts.loadEditorFamilies([
+                                      name,
+                                    ]);
+                                    if (mounted) setState(() {});
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      showNotice(
+                                        context,
+                                        'Yazı tipi yüklenemedi',
+                                        detail: '$e',
+                                        kind: NoticeKind.error,
+                                      );
+                                    }
                                   }
-                                }
-                              },
+                                },
+                              ),
                             ),
                           },
                         ),

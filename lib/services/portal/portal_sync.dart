@@ -210,6 +210,9 @@ class PortalSync extends ChangeNotifier {
       case 'mobil':
         final tokens = MobileTokens.fromJson(data);
         if (tokens == null) return false;
+        // One here already stays, as the web's and UETS's do: written over
+        // by the one given, refused, it would be lost with it.
+        if (_mobile.connected) return true;
         // Kept first: renewed later here, it is these that renew.
         if (!await _secrets.write(_mobileSecret, tokens.toJson())) {
           return false;
@@ -404,8 +407,11 @@ class PortalSync extends ChangeNotifier {
     try {
       await _quietly(() => _mobile.restore(kept));
     } on UyapMobileUnreachable {
-      if (attempt >= 8 || _disposed) return;
-      final wait = Duration(seconds: 15 * (1 << attempt).clamp(1, 16));
+      // No end but UYAP's word or the session's own: a Folio in the tray
+      // since before the network stays tied to UYAP Mobil, each try at most
+      // four minutes after the last.
+      if (_disposed || kept.refreshExpires.isBefore(DateTime.now())) return;
+      final wait = Duration(seconds: 15 * (1 << attempt.clamp(0, 4)));
       _restoreRetry?.cancel();
       _restoreRetry = Timer(
         wait,
@@ -1057,6 +1063,15 @@ class PortalSync extends ChangeNotifier {
         db.saveManifest(due[i], [
           for (final p in parts) (id: p.id, name: p.name, mime: p.mime),
         ]);
+      } on SocketException {
+        // The line, not UETS: these wait for the next sync, not a day.
+        return;
+      } on TimeoutException {
+        return;
+      } on HttpException {
+        return;
+      } on HandshakeException {
+        return;
       } catch (e) {
         db.saveManifest(due[i], null, error: '$e');
       }
@@ -1143,6 +1158,9 @@ class PortalSync extends ChangeNotifier {
     final tckn = _uets.session.value?.tckn ?? '';
     if (tckn.isEmpty) return null;
     final (:id, :keyLost) = await _uetsAccountId(db, tckn);
+    // Not to be told now: the keystore its digest was made with could not
+    // be read (locked for a moment). No other box is taken for this one.
+    if (id == null) return null;
     final kept = db.meta('uets_account');
     if (kept == null || kept == id) {
       if (kept == null) db.setMeta('uets_account', id);
@@ -1171,12 +1189,13 @@ class PortalSync extends ChangeNotifier {
 
   /// The box's digest, and whether the keystore's key had to be made anew
   /// though a box was kept before with one: the old digest cannot be had.
-  Future<({String id, bool keyLost})> _uetsAccountId(
+  Future<({String? id, bool keyLost})> _uetsAccountId(
     PortalDatabase db,
     String tckn,
   ) async {
     var key = (await _secrets.read(_uetsAccountKey))?['k'] as String?;
     var keyLost = false;
+    final keyed = db.meta('uets_account')?.startsWith('h:') ?? false;
     if (key == null && db.meta('uets_account_salt') == null) {
       final fresh = base64Encode(
         List<int>.generate(32, (_) => Random.secure().nextInt(256)),
@@ -1191,6 +1210,12 @@ class PortalSync extends ChangeNotifier {
       }
     }
     keyLost = db.meta('uets_account_rekey') == '1';
+    // A box told by the keystore's key, the keystore not read now and no
+    // new key kept in it either: not told otherwise, by a salt, which would
+    // never be the same digest.
+    if (key == null && keyed) {
+      return (id: null, keyLost: false);
+    }
     if (key != null) {
       return (
         id: 'h:${Hmac(sha256, base64Decode(key)).convert(utf8.encode(tckn))}',
@@ -1511,8 +1536,14 @@ class PortalSync extends ChangeNotifier {
       if (!n.rows.any((r) => ids.contains('${r.source.name}:${r.id}'))) {
         continue;
       }
-      if (told.containsKey(n.signature)) continue;
-      told[n.signature] = now.toIso8601String();
+      // Told by its rows, not its title and minute: two notifications of
+      // one title in one minute (documents added to two cases) are both
+      // told; a channel's twin coming later is one of them, told already.
+      final rows = [for (final r in n.rows) '${r.source.name}:${r.id}'];
+      if (rows.any(told.containsKey)) continue;
+      for (final r in rows) {
+        told[r] = now.toIso8601String();
+      }
       out.add(n);
     }
     db.setMeta(_toldNoticesKey, jsonEncode(told));
@@ -2017,7 +2048,7 @@ class PortalSync extends ChangeNotifier {
         db,
         _web.hearingRows,
       );
-      if (hearings.complete) _hearingsRead(db, PortalChannel.uyapWeb);
+      _hearingsTried(db, PortalChannel.uyapWeb, complete: hearings.complete);
     }
     var cases = const PortfolioResult(0, true);
     unawaited(
@@ -2345,7 +2376,7 @@ class PortalSync extends ChangeNotifier {
         db,
         _mobile.hearingRows,
       );
-      if (hearings.complete) _hearingsRead(db, PortalChannel.uyapMobile);
+      _hearingsTried(db, PortalChannel.uyapMobile, complete: hearings.complete);
     }
     final (due, rested) = _portfolioDue(
       db,
@@ -2402,6 +2433,14 @@ class PortalSync extends ChangeNotifier {
   bool _hearingsDue(PortalDatabase db, PortalChannel channel) {
     final at = DateTime.tryParse(db.meta('hearings_at:${channel.name}') ?? '');
     final now = DateTime.now();
+    // One that could not be read whole is tried again two hours on, as the
+    // portfolio is: not at every turn of the clock till evening.
+    final tried = DateTime.tryParse(
+      db.meta('hearings_try:${channel.name}') ?? '',
+    );
+    if (tried != null && now.difference(tried) < const Duration(hours: 2)) {
+      return false;
+    }
     return at == null ||
         at.year != now.year ||
         at.month != now.month ||
@@ -2412,6 +2451,24 @@ class PortalSync extends ChangeNotifier {
     'hearings_at:${channel.name}',
     DateTime.now().toIso8601String(),
   );
+
+  /// The hearings [channel] gave, read or not whole: a whole reading is
+  /// today's, one in part is tried again later.
+  void _hearingsTried(
+    PortalDatabase db,
+    PortalChannel channel, {
+    required bool complete,
+  }) {
+    if (complete) {
+      _hearingsRead(db, channel);
+      db.setMeta('hearings_try:${channel.name}', '');
+    } else {
+      db.setMeta(
+        'hearings_try:${channel.name}',
+        DateTime.now().toIso8601String(),
+      );
+    }
+  }
 
   /// The hearings alone, now, from each portal connected: the agenda's
   /// "Duruşmaları yenile" (§5 D). No portfolio, no case is read.
