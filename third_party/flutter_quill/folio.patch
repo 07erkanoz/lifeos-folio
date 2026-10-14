@@ -406,7 +406,7 @@ index d795362..325cb8d 100644
    }
  }
 diff --git a/lib/src/editor/raw_editor/raw_editor_state.dart b/lib/src/editor/raw_editor/raw_editor_state.dart
-index 98905c2..aa32b01 100644
+index 98905c2..e842858 100644
 --- a/lib/src/editor/raw_editor/raw_editor_state.dart
 +++ b/lib/src/editor/raw_editor/raw_editor_state.dart
 @@ -4,7 +4,8 @@ import 'dart:math' as math;
@@ -533,7 +533,7 @@ index 98905c2..aa32b01 100644
            linkActionPicker: _linkActionPicker,
            onLaunchUrl: widget.config.onLaunchUrl,
            cursorCont: _cursorCont,
-@@ -639,9 +677,82 @@ class QuillRawEditorState extends EditorState
+@@ -639,29 +677,73 @@ class QuillRawEditorState extends EditorState
      return result;
    }
  
@@ -547,17 +547,28 @@ index 98905c2..aa32b01 100644
 +  /// (a list's mark) is built as ever.
 +  final _keptText = Expando<(List<Object?>, TextLine)>();
 +
-+  List<Object?>? _textKey(Line node, QuillLineLayout? layout, int start) {
-+    if (node.hasEmbed || layout?.leading != null) return null;
++  /// The composing word, when it is in the line from [start]: else none,
++  /// so that a line kept is not drawn with one gone by.
++  TextRange _composingIn(Line node, int start) {
 +    final composing = composingRange.value;
-+    final end = start + node.length;
++    return composing.isValid &&
++            composing.start < start + node.length &&
++            composing.end > start
++        ? composing
++        : TextRange.empty;
++  }
++
++  List<Object?>? _textKey(Line node, QuillLineLayout? layout, int start) {
++    if (layout?.leading != null) return null;
++    final composing = _composingIn(node, start);
 +    return [
 +      widget.config,
++      controller,
 +      _styles,
 +      _textDirection,
-+      // The composing word only where it is.
-+      if (composing.isValid && composing.start < end && composing.end > start)
-+        composing,
++      // The composing word only where it is, and where the line is then:
++      // the line's text marks it by the document's offsets.
++      if (composing.isValid) ...[composing, start],
 +      node.style,
 +      for (final leaf in node.children) ...[
 +        leaf,
@@ -575,6 +586,21 @@ index 98905c2..aa32b01 100644
 +
    EditableTextLine _getEditableTextLineFromNode(
 -      Line node, BuildContext context, Map<String, Attribute<dynamic>> attrs) {
+-    final textLine = TextLine(
+-      line: node,
+-      textDirection: _textDirection,
+-      embedBuilder: widget.config.embedBuilder,
+-      textSpanBuilder: widget.config.textSpanBuilder,
+-      customStyleBuilder: widget.config.customStyleBuilder,
+-      customRecognizerBuilder: widget.config.customRecognizerBuilder,
+-      styles: _styles!,
+-      readOnly: widget.config.readOnly,
+-      controller: controller,
+-      linkActionPicker: _linkActionPicker,
+-      onLaunchUrl: widget.config.onLaunchUrl,
+-      customLinkPrefixes: widget.config.customLinkPrefixes,
+-      composingRange: composingRange.value,
+-    );
 +      Line node, BuildContext context, Map<String, Attribute<dynamic>> attrs,
 +      [int start = 0]) {
 +    // FOLIO PATCH: the line's own indents and spacing, when it carries any.
@@ -584,65 +610,56 @@ index 98905c2..aa32b01 100644
 +    final kept = _keptText[node];
 +    final textLine = key != null && kept != null && listEquals(kept.$1, key)
 +        ? kept.$2
-+        : _newTextLine(node, layout, key);
-+    final editableTextLine = EditableTextLine(
-+        node,
-+        null,
-+        textLine,
++        : _newTextLine(node, layout, key, start);
+     final editableTextLine = EditableTextLine(
+         node,
+         null,
+         textLine,
+-        _getHorizontalSpacingForLine(node, _styles),
+-        _getVerticalSpacingForLine(node, _styles),
 +        layout?.horizontal ?? _getHorizontalSpacingForLine(node, _styles),
 +        layout == null
 +            ? vertical
 +            : VerticalSpacing(
 +                vertical.top + layout.top, vertical.bottom + layout.bottom),
-+        _textDirection,
-+        controller.selection,
-+        widget.config.selectionColor,
-+        widget.config.enableInteractiveSelection,
-+        _hasFocus,
-+        MediaQuery.devicePixelRatioOf(context),
-+        _cursorCont,
-+        _styles!.inlineCode!,
-+        _getDecoration(node, _styles, attrs));
-+    return editableTextLine;
-+  }
-+
+         _textDirection,
+         controller.selection,
+         widget.config.selectionColor,
+@@ -674,6 +756,33 @@ class QuillRawEditorState extends EditorState
+     return editableTextLine;
+   }
+ 
 +  TextLine _newTextLine(
-+      Line node, QuillLineLayout? layout, List<Object?>? key) {
-     final textLine = TextLine(
++      Line node, QuillLineLayout? layout, List<Object?>? key, int start) {
++    final textLine = TextLine(
 +      firstLineIndent: layout?.firstLine ?? 0,
 +      hangingIndent: layout?.hanging ?? 0,
 +      layoutWidth: layout?.width,
 +      rowStarts: layout?.rows,
 +      rowHeight: layout?.rowHeight,
-       line: node,
-       textDirection: _textDirection,
-       embedBuilder: widget.config.embedBuilder,
-@@ -656,22 +767,8 @@ class QuillRawEditorState extends EditorState
-       customLinkPrefixes: widget.config.customLinkPrefixes,
-       composingRange: composingRange.value,
-     );
--    final editableTextLine = EditableTextLine(
--        node,
--        null,
--        textLine,
--        _getHorizontalSpacingForLine(node, _styles),
--        _getVerticalSpacingForLine(node, _styles),
--        _textDirection,
--        controller.selection,
--        widget.config.selectionColor,
--        widget.config.enableInteractiveSelection,
--        _hasFocus,
--        MediaQuery.devicePixelRatioOf(context),
--        _cursorCont,
--        _styles!.inlineCode!,
--        _getDecoration(node, _styles, attrs));
--    return editableTextLine;
++      line: node,
++      textDirection: _textDirection,
++      embedBuilder: widget.config.embedBuilder,
++      textSpanBuilder: widget.config.textSpanBuilder,
++      customStyleBuilder: widget.config.customStyleBuilder,
++      customRecognizerBuilder: widget.config.customRecognizerBuilder,
++      styles: _styles!,
++      readOnly: widget.config.readOnly,
++      controller: controller,
++      linkActionPicker: _linkActionPicker,
++      onLaunchUrl: widget.config.onLaunchUrl,
++      customLinkPrefixes: widget.config.customLinkPrefixes,
++      composingRange:
++          key == null ? composingRange.value : _composingIn(node, start),
++    );
 +    if (key != null) _keptText[node] = (key, textLine);
 +    return textLine;
-   }
- 
++  }
++
    HorizontalSpacing _getHorizontalSpacingForLine(
-@@ -1136,6 +1233,34 @@ class QuillRawEditorState extends EditorState
+     Line line,
+     DefaultStyles? defaultStyles,
+@@ -1136,6 +1245,34 @@ class QuillRawEditorState extends EditorState
  
      _showCaretOnScreenScheduled = true;
      SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -677,7 +694,7 @@ index 98905c2..aa32b01 100644
        if (widget.config.scrollable || _scrollController.hasClients) {
          _showCaretOnScreenScheduled = false;
  
-@@ -1231,6 +1356,10 @@ class QuillRawEditorState extends EditorState
+@@ -1231,6 +1368,10 @@ class QuillRawEditorState extends EditorState
        return false;
      }
  
@@ -1656,7 +1673,7 @@ index 0000000..4fd2759
 +  }
 +}
 diff --git a/lib/src/editor/widgets/text/text_block.dart b/lib/src/editor/widgets/text/text_block.dart
-index 47b5e01..8e3d93d 100644
+index 47b5e01..156d4f9 100644
 --- a/lib/src/editor/widgets/text/text_block.dart
 +++ b/lib/src/editor/widgets/text/text_block.dart
 @@ -1,3 +1,4 @@
@@ -1690,7 +1707,7 @@ index 47b5e01..8e3d93d 100644
    final LinkActionPicker linkActionPicker;
    final ValueChanged<String>? onLaunchUrl;
    final CustomRecognizerBuilder? customRecognizerBuilder;
-@@ -158,6 +164,59 @@ class EditableTextBlock extends StatelessWidget {
+@@ -158,6 +164,62 @@ class EditableTextBlock extends StatelessWidget {
      return null;
    }
  
@@ -1706,11 +1723,17 @@ index 47b5e01..8e3d93d 100644
 +  TextLine _keptText(
 +    Line line,
 +    QuillLineLayout? layout,
-+    TextLine Function() make,
++    TextLine Function(TextRange composing) make,
 +  ) {
-+    if (line.hasEmbed) return make();
-+    final composing = composingRange;
-+    final start = composing.isValid ? line.documentOffset : 0;
++    final start = composingRange.isValid ? line.documentOffset : 0;
++    // The composing word only where it is, and where the line is then (the
++    // line's text marks it by the document's offsets); else none, so that
++    // a line kept is not drawn with one gone by.
++    final composing = composingRange.isValid &&
++            composingRange.start < start + line.length &&
++            composingRange.end > start
++        ? composingRange
++        : TextRange.empty;
 +    final key = <Object?>[
 +      textSpanBuilder,
 +      embedBuilder,
@@ -1722,11 +1745,8 @@ index 47b5e01..8e3d93d 100644
 +      textDirection,
 +      linkActionPicker,
 +      onLaunchUrl,
-+      // The composing word only where it is.
-+      if (composing.isValid &&
-+          composing.start < start + line.length &&
-+          composing.end > start)
-+        composing,
++      if (composing.isValid) ...[composing, start],
++      ...customLinkPrefixes,
 +      line.style,
 +      for (final leaf in line.children) ...[
 +        leaf,
@@ -1742,7 +1762,7 @@ index 47b5e01..8e3d93d 100644
 +    ];
 +    final kept = _kept[line];
 +    if (kept != null && listEquals(kept.$1, key)) return kept.$2;
-+    final made = make();
++    final made = make(composing);
 +    _kept[line] = (key, made);
 +    return made;
 +  }
@@ -1750,7 +1770,7 @@ index 47b5e01..8e3d93d 100644
    List<Widget> _buildChildren(BuildContext context,
        Map<int, int> indentLevelCounts, bool clearIndents) {
      final defaultStyles = QuillStyles.getStyles(context, false);
-@@ -175,17 +234,26 @@ class EditableTextBlock extends StatelessWidget {
+@@ -175,17 +237,26 @@ class EditableTextBlock extends StatelessWidget {
      var index = 0;
      for (final line in Iterable.castFrom<dynamic, Line>(block.children)) {
        index++;
@@ -1775,7 +1795,7 @@ index 47b5e01..8e3d93d 100644
 +                indentLevelCounts: indentLevelCounts,
 +                count: count,
 +              ),
-+          _keptText(line, layout, () => TextLine(
++          _keptText(line, layout, (composing) => TextLine(
              line: line,
 +            firstLineIndent: layout?.firstLine ?? 0,
 +            hangingIndent: layout?.hanging ?? 0,
@@ -1785,13 +1805,15 @@ index 47b5e01..8e3d93d 100644
              textDirection: textDirection,
              embedBuilder: embedBuilder,
              textSpanBuilder: textSpanBuilder,
-@@ -198,9 +266,14 @@ class EditableTextBlock extends StatelessWidget {
+@@ -197,10 +268,15 @@ class EditableTextBlock extends StatelessWidget {
+             onLaunchUrl: onLaunchUrl,
              customLinkPrefixes: customLinkPrefixes,
              customRecognizerBuilder: customRecognizerBuilder,
-             composingRange: composingRange,
+-            composingRange: composingRange,
 -          ),
 -          indentWidthBuilder(block, context, count, numberPointWidthBuilder),
 -          _getSpacingForLine(line, index, count, defaultStyles),
++            composingRange: composing,
 +          )),
 +          layout?.horizontal ??
 +              indentWidthBuilder(
@@ -1803,8 +1825,60 @@ index 47b5e01..8e3d93d 100644
            textDirection,
            textSelection,
            color,
+@@ -228,33 +304,33 @@ class EditableTextBlock extends StatelessWidget {
+     required Map<int, int> indentLevelCounts,
+     required int count,
+   }) {
++    final attrs = line.style.attributes;
++    // FOLIO PATCH: none for a line of no list or code block, asked at once:
++    // its whole delta was made four times over for every indented
++    // paragraph of every block at each key, to be thrown away.
++    if ((attrs[Attribute.list.key] ?? attrs[Attribute.codeBlock.key]) ==
++        null) {
++      return null;
++    }
+     final defaultStyles = QuillStyles.getStyles(context, false)!;
+     final fontSize = defaultStyles.paragraph?.style.fontSize ?? 16;
+-    final attrs = line.style.attributes;
+     final numberPointWidthBuilder =
+         defaultStyles.lists?.numberPointWidthBuilder ??
+             TextBlockUtils.defaultNumberPointWidthBuilder;
++    final first = line.toDelta().operations.first.attributes;
+ 
+     // Of the color button
+-    final fontColor =
+-        line.toDelta().operations.first.attributes?[Attribute.color.key] != null
+-            ? hexToColor(
+-                line
+-                    .toDelta()
+-                    .operations
+-                    .first
+-                    .attributes?[Attribute.color.key],
+-              )
+-            : null;
++    final fontColor = first?[Attribute.color.key] != null
++        ? hexToColor(first?[Attribute.color.key])
++        : null;
+ 
+     // Of the size button
+-    final size =
+-        line.toDelta().operations.first.attributes?[Attribute.size.key] != null
+-            ? getFontSizeAsDouble(
+-                line.toDelta().operations.first.attributes?[Attribute.size.key],
+-                defaultStyles: defaultStyles,
+-              )
+-            : null;
++    final size = first?[Attribute.size.key] != null
++        ? getFontSizeAsDouble(
++            first?[Attribute.size.key],
++            defaultStyles: defaultStyles,
++          )
++        : null;
+ 
+     // Of the alignment buttons
+     // final textAlign = line.style.attributes[Attribute.align.key]?.value != null
 diff --git a/lib/src/editor/widgets/text/text_line.dart b/lib/src/editor/widgets/text/text_line.dart
-index ee09dcc..1e72586 100644
+index ee09dcc..2520ddd 100644
 --- a/lib/src/editor/widgets/text/text_line.dart
 +++ b/lib/src/editor/widgets/text/text_line.dart
 @@ -18,7 +18,9 @@ import '../../../document/nodes/leaf.dart' as leaf;
@@ -1964,8 +2038,21 @@ index ee09dcc..1e72586 100644
    /// Creates new editable paragraph render box.
    RenderEditableTextLine(
      this.line,
-@@ -1089,13 +1192,18 @@ class RenderEditableTextLine extends RenderEditableBox {
+@@ -1087,15 +1190,31 @@ class RenderEditableTextLine extends RenderEditableBox {
+   @override
+   bool get isRepaintBoundary => true;
  
++  /// FOLIO PATCH: each line its own place in the accessibility tree, as it
++  /// is its own layer: one line changed gathers its own text again, not
++  /// every line of the document's (half of a long document's keystroke
++  /// where the platform keeps the tree: a screen reader, UI Automation).
++  /// What it says is as before, its paragraph's text.
++  @override
++  void describeSemanticsConfiguration(SemanticsConfiguration config) {
++    super.describeSemanticsConfiguration(config);
++    config.isSemanticBoundary = true;
++  }
++
    TextPosition? _getPosition(TextPosition textPosition, double dyScale) {
      assert(textPosition.offset < line.length);
 -    final offset = getOffsetForCaret(textPosition)
@@ -1990,7 +2077,7 @@ index ee09dcc..1e72586 100644
    }
  
    @override
-@@ -1276,6 +1384,71 @@ class RenderEditableTextLine extends RenderEditableBox {
+@@ -1276,6 +1395,71 @@ class RenderEditableTextLine extends RenderEditableBox {
          _resolvedPadding!.top;
    }
  
@@ -2062,7 +2149,7 @@ index ee09dcc..1e72586 100644
    @override
    void performLayout() {
      final constraints = this.constraints;
-@@ -1297,9 +1470,20 @@ class RenderEditableTextLine extends RenderEditableBox {
+@@ -1297,9 +1481,20 @@ class RenderEditableTextLine extends RenderEditableBox {
          ? _resolvedPadding!.left
          : _resolvedPadding!.right;
  
@@ -2084,7 +2171,7 @@ index ee09dcc..1e72586 100644
  
      if (_leading != null) {
        final leadingConstraints = innerConstraints.copyWith(
-@@ -1308,12 +1492,16 @@ class RenderEditableTextLine extends RenderEditableBox {
+@@ -1308,12 +1503,16 @@ class RenderEditableTextLine extends RenderEditableBox {
            maxHeight: _body!.size.height);
        _leading!.layout(leadingConstraints, parentUsesSize: true);
        (_leading!.parentData as BoxParentData).offset =

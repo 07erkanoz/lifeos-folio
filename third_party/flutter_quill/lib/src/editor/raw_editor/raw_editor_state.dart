@@ -687,17 +687,28 @@ class QuillRawEditorState extends EditorState
   /// (a list's mark) is built as ever.
   final _keptText = Expando<(List<Object?>, TextLine)>();
 
-  List<Object?>? _textKey(Line node, QuillLineLayout? layout, int start) {
-    if (node.hasEmbed || layout?.leading != null) return null;
+  /// The composing word, when it is in the line from [start]: else none,
+  /// so that a line kept is not drawn with one gone by.
+  TextRange _composingIn(Line node, int start) {
     final composing = composingRange.value;
-    final end = start + node.length;
+    return composing.isValid &&
+            composing.start < start + node.length &&
+            composing.end > start
+        ? composing
+        : TextRange.empty;
+  }
+
+  List<Object?>? _textKey(Line node, QuillLineLayout? layout, int start) {
+    if (layout?.leading != null) return null;
+    final composing = _composingIn(node, start);
     return [
       widget.config,
+      controller,
       _styles,
       _textDirection,
-      // The composing word only where it is.
-      if (composing.isValid && composing.start < end && composing.end > start)
-        composing,
+      // The composing word only where it is, and where the line is then:
+      // the line's text marks it by the document's offsets.
+      if (composing.isValid) ...[composing, start],
       node.style,
       for (final leaf in node.children) ...[
         leaf,
@@ -723,7 +734,7 @@ class QuillRawEditorState extends EditorState
     final kept = _keptText[node];
     final textLine = key != null && kept != null && listEquals(kept.$1, key)
         ? kept.$2
-        : _newTextLine(node, layout, key);
+        : _newTextLine(node, layout, key, start);
     final editableTextLine = EditableTextLine(
         node,
         null,
@@ -746,7 +757,7 @@ class QuillRawEditorState extends EditorState
   }
 
   TextLine _newTextLine(
-      Line node, QuillLineLayout? layout, List<Object?>? key) {
+      Line node, QuillLineLayout? layout, List<Object?>? key, int start) {
     final textLine = TextLine(
       firstLineIndent: layout?.firstLine ?? 0,
       hangingIndent: layout?.hanging ?? 0,
@@ -765,7 +776,8 @@ class QuillRawEditorState extends EditorState
       linkActionPicker: _linkActionPicker,
       onLaunchUrl: widget.config.onLaunchUrl,
       customLinkPrefixes: widget.config.customLinkPrefixes,
-      composingRange: composingRange.value,
+      composingRange:
+          key == null ? composingRange.value : _composingIn(node, start),
     );
     if (key != null) _keptText[node] = (key, textLine);
     return textLine;

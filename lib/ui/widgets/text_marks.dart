@@ -54,9 +54,15 @@ List<InlineSpan>? markedSpans(
       : (_indexes[marks] ??= _MarkIndex(marks)).touching(marks, start, end);
   if (here.isEmpty) return null;
 
-  // Stable: marks offered earlier win a tie, which is how a citation keeps
-  // its ground against a misspelling that begins in the same place.
-  final ordered = [...here]..sort((a, b) => a.start.compareTo(b.start));
+  // Marks offered earlier win a tie, which is how a citation keeps its
+  // ground against a misspelling that begins in the same place: by their
+  // places as the second key, Dart's sort keeping no order of its own.
+  final places = {for (var i = 0; i < here.length; i++) here[i]: i};
+  final ordered = [...here]
+    ..sort((a, b) {
+      final by = a.start.compareTo(b.start);
+      return by != 0 ? by : places[a]!.compareTo(places[b]!);
+    });
 
   final spans = <InlineSpan>[];
   var at = 0;

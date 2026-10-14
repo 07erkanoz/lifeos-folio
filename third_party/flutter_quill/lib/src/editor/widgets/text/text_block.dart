@@ -176,11 +176,17 @@ class EditableTextBlock extends StatelessWidget {
   TextLine _keptText(
     Line line,
     QuillLineLayout? layout,
-    TextLine Function() make,
+    TextLine Function(TextRange composing) make,
   ) {
-    if (line.hasEmbed) return make();
-    final composing = composingRange;
-    final start = composing.isValid ? line.documentOffset : 0;
+    final start = composingRange.isValid ? line.documentOffset : 0;
+    // The composing word only where it is, and where the line is then (the
+    // line's text marks it by the document's offsets); else none, so that
+    // a line kept is not drawn with one gone by.
+    final composing = composingRange.isValid &&
+            composingRange.start < start + line.length &&
+            composingRange.end > start
+        ? composingRange
+        : TextRange.empty;
     final key = <Object?>[
       textSpanBuilder,
       embedBuilder,
@@ -192,11 +198,8 @@ class EditableTextBlock extends StatelessWidget {
       textDirection,
       linkActionPicker,
       onLaunchUrl,
-      // The composing word only where it is.
-      if (composing.isValid &&
-          composing.start < start + line.length &&
-          composing.end > start)
-        composing,
+      if (composing.isValid) ...[composing, start],
+      ...customLinkPrefixes,
       line.style,
       for (final leaf in line.children) ...[
         leaf,
@@ -212,7 +215,7 @@ class EditableTextBlock extends StatelessWidget {
     ];
     final kept = _kept[line];
     if (kept != null && listEquals(kept.$1, key)) return kept.$2;
-    final made = make();
+    final made = make(composing);
     _kept[line] = (key, made);
     return made;
   }
@@ -247,7 +250,7 @@ class EditableTextBlock extends StatelessWidget {
                 indentLevelCounts: indentLevelCounts,
                 count: count,
               ),
-          _keptText(line, layout, () => TextLine(
+          _keptText(line, layout, (composing) => TextLine(
             line: line,
             firstLineIndent: layout?.firstLine ?? 0,
             hangingIndent: layout?.hanging ?? 0,
@@ -265,7 +268,7 @@ class EditableTextBlock extends StatelessWidget {
             onLaunchUrl: onLaunchUrl,
             customLinkPrefixes: customLinkPrefixes,
             customRecognizerBuilder: customRecognizerBuilder,
-            composingRange: composingRange,
+            composingRange: composing,
           )),
           layout?.horizontal ??
               indentWidthBuilder(
@@ -301,33 +304,33 @@ class EditableTextBlock extends StatelessWidget {
     required Map<int, int> indentLevelCounts,
     required int count,
   }) {
+    final attrs = line.style.attributes;
+    // FOLIO PATCH: none for a line of no list or code block, asked at once:
+    // its whole delta was made four times over for every indented
+    // paragraph of every block at each key, to be thrown away.
+    if ((attrs[Attribute.list.key] ?? attrs[Attribute.codeBlock.key]) ==
+        null) {
+      return null;
+    }
     final defaultStyles = QuillStyles.getStyles(context, false)!;
     final fontSize = defaultStyles.paragraph?.style.fontSize ?? 16;
-    final attrs = line.style.attributes;
     final numberPointWidthBuilder =
         defaultStyles.lists?.numberPointWidthBuilder ??
             TextBlockUtils.defaultNumberPointWidthBuilder;
+    final first = line.toDelta().operations.first.attributes;
 
     // Of the color button
-    final fontColor =
-        line.toDelta().operations.first.attributes?[Attribute.color.key] != null
-            ? hexToColor(
-                line
-                    .toDelta()
-                    .operations
-                    .first
-                    .attributes?[Attribute.color.key],
-              )
-            : null;
+    final fontColor = first?[Attribute.color.key] != null
+        ? hexToColor(first?[Attribute.color.key])
+        : null;
 
     // Of the size button
-    final size =
-        line.toDelta().operations.first.attributes?[Attribute.size.key] != null
-            ? getFontSizeAsDouble(
-                line.toDelta().operations.first.attributes?[Attribute.size.key],
-                defaultStyles: defaultStyles,
-              )
-            : null;
+    final size = first?[Attribute.size.key] != null
+        ? getFontSizeAsDouble(
+            first?[Attribute.size.key],
+            defaultStyles: defaultStyles,
+          )
+        : null;
 
     // Of the alignment buttons
     // final textAlign = line.style.attributes[Attribute.align.key]?.value != null

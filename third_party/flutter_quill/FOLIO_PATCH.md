@@ -124,6 +124,18 @@ girintisi var.
   metnin büyük kısmı bloklarda. 1890 paragraflık bir docx'te gerçek
   derlemede (profile, `tool/typing_bench.dart`) tuş başına arayüz karesi,
   `text_marks.dart` dizini ile birlikte 235 ms'den 51 ms'ye indi.
+  Anahtar denetleyiciyi, bağlantı öneklerini ve (satırda ise) bileşik
+  yazma aralığını satırın konumuyla birlikte tutar; saklanan satıra başka
+  satırın bileşik yazma aralığı verilmez. Gömülü öğeli satırlar (tablolar)
+  da saklanıyor: 29 tablolu belgede her tuşta 29 tablo yeniden kurulup
+  ölçülüp çiziliyordu; tablo görünümü kendi durumunu kendisi tutuyor.
+- Liste ya da kod bloğu olmayan satırda `_buildLeading` hemen döner
+  (`text_block.dart`); önce satırın bütün delta'sını dört kez üretiyordu.
+- Her satır ayrı bir erişilebilirlik sınırı (`text_line.dart`,
+  `describeSemanticsConfiguration`): bir satırın değişmesi bütün satırların
+  erişilebilirlik birleşimini yeniden toplatmıyor. Okunan metin aynı;
+  madde işareti artık maddesinin metniyle tek düğümde.
+  Bunlarla aynı docx'te tuş başına arayüz karesi 27 ms.
 
 Uygulama tarafı: `lib/ui/widgets/editor_line_layout.dart`,
 `lib/ui/widgets/editor_tab_spans.dart`, `lib/ui/widgets/editor_pages.dart`;

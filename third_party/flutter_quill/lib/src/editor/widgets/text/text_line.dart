@@ -1190,6 +1190,17 @@ class RenderEditableTextLine extends RenderEditableBox with QuillPagedHost {
   @override
   bool get isRepaintBoundary => true;
 
+  /// FOLIO PATCH: each line its own place in the accessibility tree, as it
+  /// is its own layer: one line changed gathers its own text again, not
+  /// every line of the document's (half of a long document's keystroke
+  /// where the platform keeps the tree: a screen reader, UI Automation).
+  /// What it says is as before, its paragraph's text.
+  @override
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+    config.isSemanticBoundary = true;
+  }
+
   TextPosition? _getPosition(TextPosition textPosition, double dyScale) {
     assert(textPosition.offset < line.length);
     // FOLIO PATCH: pages. Moved a row at a time as the paragraph is laid

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -20,6 +21,17 @@ class EditorPagedCell {
   final double x;
   final double width;
   final Color? fill;
+
+  @override
+  bool operator ==(Object other) =>
+      other is EditorPagedCell &&
+      other.row == row &&
+      other.x == x &&
+      other.width == width &&
+      other.fill == fill;
+
+  @override
+  int get hashCode => Object.hash(row, x, width, fill);
 }
 
 /// A table laid out the way UYAP lays one out on its pages: row under row,
@@ -75,6 +87,10 @@ class RenderEditorPagedTable extends RenderBox
 
   List<EditorPagedCell> _cells;
   set cells(List<EditorPagedCell> value) {
+    // The same cells built again (each key in the body builds the table's
+    // row again) lay nothing out again; the cells' own changes reach the
+    // layout through them.
+    if (listEquals(_cells, value)) return;
     _cells = value;
     markNeedsLayout();
   }

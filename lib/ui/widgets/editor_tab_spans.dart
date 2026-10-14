@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -264,7 +265,7 @@ class EditorTabSpans {
 class _LineTabs {
   _LineTabs(this.key, this.widths, this.rows, this.holds);
 
-  final String key;
+  final List<Object?> key;
 
   /// Width in points of the tab at each offset within the line.
   final Map<int, double> widths;
@@ -318,18 +319,21 @@ class _LineTabs {
   static bool _frameClearing = false;
 
   static _LineTabs _keyed(Line line, TextStyle base, double? pageWidth) {
-    String attributes(Style style) =>
-        style.attributes.values.map((a) => '${a.key}=${a.value}').join(';');
     // Everything the widths depend on, so an edit anywhere in the line lays
-    // it out again and nothing else does.
-    final key = [
+    // it out again and nothing else does: each leaf, its text and its style
+    // as they are, not written out into one string at every frame (every
+    // line of a long document, each key).
+    final key = <Object?>[
       pageWidth,
-      attributes(line.style),
-      for (final leaf in line.children)
-        '${leaf.toPlainText()}|${attributes(leaf.style)}',
-    ].join('\u0000');
+      line.style,
+      for (final leaf in line.children) ...[
+        leaf,
+        leaf is Leaf ? leaf.value : null,
+        leaf.style,
+      ],
+    ];
     final cached = _cache[line];
-    if (cached != null && cached.key == key) return cached;
+    if (cached != null && listEquals(cached.key, key)) return cached;
     final laid = _lay(line, base, pageWidth, key);
     _cache[line] = laid;
     return laid;
@@ -339,7 +343,7 @@ class _LineTabs {
     Line line,
     TextStyle base,
     double? pageWidth,
-    String key,
+    List<Object?> key,
   ) {
     // Each leaf laid out once; a stretch of it is then the distance between
     // two caret positions, which with kerning off is the sum of its letters.
