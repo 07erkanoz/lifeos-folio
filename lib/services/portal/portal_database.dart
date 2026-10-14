@@ -19,6 +19,8 @@ import 'uyap_notice.dart';
 import '../legal/deadlines/aidiyet.dart' show vekilOlarakGeciyor;
 import '../uyap/uyap_web_service.dart' show UyapParty, UyapWebService;
 import '../clients/client.dart';
+import '../sync/sync_generation.dart';
+import '../sync/sync_migration.dart';
 
 part 'portal_clients.dart';
 
@@ -290,10 +292,31 @@ class PortalDatabase {
       p.join((await folioSupportDirectory()).path, 'portal'),
     );
     await dir.create(recursive: true);
-    return _shared = open(p.join(dir.path, 'portal.sqlite'));
+    final db = open(p.join(dir.path, 'portal.sqlite'));
+    // The sync's schema made current, a copy put aside first; and this
+    // opening counted, for the generation its versions are written in
+    // (docs/senkron-plan.md R0, R2).
+    try {
+      SyncMigration.run(db, backups: Directory(p.join(dir.path, 'yedek')));
+    } catch (_) {}
+    try {
+      await SyncGeneration.count(
+        db,
+        File(
+          p.join((await folioSupportDirectory()).path, 'senkron-nesil.json'),
+        ),
+      );
+    } catch (_) {}
+    return _shared = db;
   }
 
   void dispose() => _db.dispose();
+
+  /// A copy of the whole database at [path], made while it is open.
+  void backupTo(String path) => _db.execute('VACUUM INTO ?', [path]);
+
+  /// [action] in one transaction: all of it or none.
+  void inTransaction(void Function() action) => _transaction(action);
 
   void _transaction(void Function() action) {
     _db.execute('BEGIN IMMEDIATE');

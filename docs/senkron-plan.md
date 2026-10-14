@@ -16,7 +16,21 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
   - Dördüncü denetim (aynı gün): **REVISE**, 2 kritik bulgu (§7).
   - Beşinci denetim (aynı gün): **REVISE**, 1 kritik bulgu (§7).
   - Altıncı denetim (aynı gün): **APPROVED** (§7).
-  - Sıradaki adım: §5 sırasıyla uygulamak; ilk adım protokol, yetenek matrisi, HLC ve göç.
+  - **§5 adım 1 bitti (14 Ekim):** `lib/services/sync/hlc.dart`, `sync_generation.dart`,
+    `sync_caps.dart`, `sync_migration.dart`; testleri `test/sync_protocol_test.dart`.
+    - Uygulamada plana eklenenler:
+      - **İki adımlı alışveriş:** Senkron (`senkron` → `senkron-ek`) ve büro (`buro-parca` →
+        `buro-parca-ek`). Yetenek gerektiren parça, karşı taraf yeteneğini **aynı alışverişte**
+        söyledikten sonra gider; eski bilgiye güvenilmez.
+      - **Saatin yüksek su işareti:** veritabanı dışındaki dosyada (`senkron-nesil.json`) tutulur.
+        Uygulama açıkken alınmış bir yedeğe dönüş de böyle fark edilir.
+    - Ertelenenler:
+      - Ekranda duran parçanın gösterilmesi (`OfficeNetwork.stoppedParts` hazır) ilk kez bir
+        parçanın durabildiği adıma, maketle.
+      - Görev paketi, dosya isteği ve soru kanalının biçim sürümleri, o biçimleri değiştiren
+        adımlara.
+    - Bu adımda hiçbir parçanın biçimi değişmedi (`SyncCaps.active` boş). Yalnız `hlc` ilan ediliyor.
+  - Sıradaki adım: §5 adım 2, bugünkü açıkları kapatmak.
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,
