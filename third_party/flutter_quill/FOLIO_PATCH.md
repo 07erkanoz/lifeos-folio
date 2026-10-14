@@ -118,7 +118,12 @@ girintisi var.
   Gömülü öğesi (tablo, resim) ya da çizilmiş liste işareti olan satırlar
   eskisi gibi her seferinde kuruluyor. 600 paragraflık belgede, test
   ortamında tuş başına Dart işi yaklaşık %35 azaldı
-  (`tool/profile_typing_test.dart`).
+  (`tool/profile_typing_test.dart`). Blok içindeki satırlar da
+  (`text_block.dart`, `_keptText`; girintili paragraflar, listeler) aynı
+  biçimde saklanıyor: docx'lerin paragraflarının çoğu girintili olduğu için
+  metnin büyük kısmı bloklarda. 1890 paragraflık bir docx'te gerçek
+  derlemede (profile, `tool/typing_bench.dart`) tuş başına arayüz karesi,
+  `text_marks.dart` dizini ile birlikte 235 ms'den 51 ms'ye indi.
 
 Uygulama tarafı: `lib/ui/widgets/editor_line_layout.dart`,
 `lib/ui/widgets/editor_tab_spans.dart`, `lib/ui/widgets/editor_pages.dart`;

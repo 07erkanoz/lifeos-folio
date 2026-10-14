@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -8,6 +9,7 @@ import '../../../controller/quill_controller.dart';
 import '../../../delta/delta_diff.dart';
 import '../../../document/attribute.dart';
 import '../../../document/nodes/block.dart';
+import '../../../document/nodes/leaf.dart';
 import '../../../document/nodes/line.dart';
 import '../../../editor_toolbar_shared/color.dart';
 import '../../editor.dart';
@@ -162,6 +164,59 @@ class EditableTextBlock extends StatelessWidget {
     return null;
   }
 
+  /// FOLIO PATCH: a line's text in a block kept as last built while
+  /// nothing it is built of changed, as the editor's lines outside blocks
+  /// are (raw_editor_state.dart, _keptText): every line of every block was
+  /// built again at each key, its text laid out and drawn anew — most of a
+  /// long docx's text, its paragraphs being indented. Only the frame, the
+  /// selection and the caret, is made again. A line with an embed is built
+  /// as ever.
+  static final _kept = Expando<(List<Object?>, TextLine)>();
+
+  TextLine _keptText(
+    Line line,
+    QuillLineLayout? layout,
+    TextLine Function() make,
+  ) {
+    if (line.hasEmbed) return make();
+    final composing = composingRange;
+    final start = composing.isValid ? line.documentOffset : 0;
+    final key = <Object?>[
+      textSpanBuilder,
+      embedBuilder,
+      customStyleBuilder,
+      customRecognizerBuilder,
+      styles,
+      readOnly,
+      controller,
+      textDirection,
+      linkActionPicker,
+      onLaunchUrl,
+      // The composing word only where it is.
+      if (composing.isValid &&
+          composing.start < start + line.length &&
+          composing.end > start)
+        composing,
+      line.style,
+      for (final leaf in line.children) ...[
+        leaf,
+        (leaf as Leaf).value,
+        leaf.style,
+      ],
+      layout?.firstLine,
+      layout?.hanging,
+      layout?.width,
+      layout?.rowHeight,
+      layout?.rows?.length,
+      ...?layout?.rows,
+    ];
+    final kept = _kept[line];
+    if (kept != null && listEquals(kept.$1, key)) return kept.$2;
+    final made = make();
+    _kept[line] = (key, made);
+    return made;
+  }
+
   List<Widget> _buildChildren(BuildContext context,
       Map<int, int> indentLevelCounts, bool clearIndents) {
     final defaultStyles = QuillStyles.getStyles(context, false);
@@ -192,7 +247,7 @@ class EditableTextBlock extends StatelessWidget {
                 indentLevelCounts: indentLevelCounts,
                 count: count,
               ),
-          TextLine(
+          _keptText(line, layout, () => TextLine(
             line: line,
             firstLineIndent: layout?.firstLine ?? 0,
             hangingIndent: layout?.hanging ?? 0,
@@ -211,7 +266,7 @@ class EditableTextBlock extends StatelessWidget {
             customLinkPrefixes: customLinkPrefixes,
             customRecognizerBuilder: customRecognizerBuilder,
             composingRange: composingRange,
-          ),
+          )),
           layout?.horizontal ??
               indentWidthBuilder(
                   block, context, count, numberPointWidthBuilder),

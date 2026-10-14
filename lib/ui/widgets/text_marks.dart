@@ -46,10 +46,12 @@ List<InlineSpan>? markedSpans(
 ) {
   if (text.isEmpty || marks.isEmpty) return null;
   final end = start + text.length;
-  final here = [
-    for (final mark in marks)
-      if (mark.end > start && mark.start < end) mark,
-  ];
+  final here = marks.length < 32
+      ? [
+          for (final mark in marks)
+            if (mark.end > start && mark.start < end) mark,
+        ]
+      : (_indexes[marks] ??= _MarkIndex(marks)).touching(marks, start, end);
   if (here.isEmpty) return null;
 
   // Stable: marks offered earlier win a tie, which is how a citation keeps
@@ -79,4 +81,49 @@ List<InlineSpan>? markedSpans(
     spans.add(TextSpan(text: text.substring(at), style: style));
   }
   return spans;
+}
+
+/// Each list of marks by where its marks start, made once for the list: a
+/// run asks only the marks near it. Every run held against every mark of
+/// the document made a long one's keystroke cost the runs times the marks
+/// (an English text the spelling checker marks every word of: a quarter of
+/// a second a key in 50 pages).
+final _indexes = Expando<_MarkIndex>();
+
+class _MarkIndex {
+  _MarkIndex(List<TextMark> marks)
+    : order = [for (var i = 0; i < marks.length; i++) i]
+        ..sort((a, b) {
+          final by = marks[a].start.compareTo(marks[b].start);
+          return by != 0 ? by : a.compareTo(b);
+        }),
+      longest = marks.fold(0, (n, m) => m.length > n ? m.length : n);
+
+  /// The marks' places in their list, by where they start.
+  final List<int> order;
+
+  /// The longest mark: none starting further back than this reaches here.
+  final int longest;
+
+  /// The marks reaching into [start]..[end], in the order they were given.
+  List<TextMark> touching(List<TextMark> marks, int start, int end) {
+    // The first that may reach here: starting no more than [longest] back.
+    var lo = 0, hi = order.length;
+    final from = start - longest;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (marks[order[mid]].start < from) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    final found = <int>[];
+    for (var k = lo; k < order.length; k++) {
+      final mark = marks[order[k]];
+      if (mark.start >= end) break;
+      if (mark.end > start) found.add(order[k]);
+    }
+    return [for (final i in found..sort()) marks[i]];
+  }
 }

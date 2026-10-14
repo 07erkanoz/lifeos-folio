@@ -78,4 +78,51 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
   });
+
+  testWidgets('the lines of a block too: an indented paragraph typed in, its '
+      'neighbours in the block not built again', (tester) async {
+    final controller = QuillController(
+      document: Document.fromDelta(
+        Delta()
+          ..insert('Birinci girintili')
+          ..insert('\n', {'indent': 1})
+          ..insert('İkinci girintili')
+          ..insert('\n', {'indent': 1})
+          ..insert('Üçüncü girintili')
+          ..insert('\n', {'indent': 1}),
+      ),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: QuillEditor.basic(
+            controller: controller,
+            config: const QuillEditorConfig(autoFocus: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final built = <String>[];
+    debugOnRebuildDirtyWidget = (element, _) {
+      if (element.widget is TextLine) {
+        built.add((element.widget as TextLine).line.toPlainText().trim());
+      }
+    };
+    addTearDown(() => debugOnRebuildDirtyWidget = null);
+    controller.replaceText(7, 0, 'x', const TextSelection.collapsed(offset: 8));
+    await tester.pump();
+    expect(built, ['Birincix girintili']);
+    // Made bold, drawn bold.
+    built.clear();
+    final third = controller.document.toPlainText().indexOf('Üçüncü');
+    controller.formatText(third, 6, Attribute.bold);
+    await tester.pump();
+    expect(built, ['Üçüncü girintili']);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+  });
 }
