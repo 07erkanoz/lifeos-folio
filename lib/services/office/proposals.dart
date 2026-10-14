@@ -114,9 +114,24 @@ class ProposalService {
 
   /// The device on which [owner]'s proposals are decided: as chosen, else
   /// their first device (the one the office knows them by).
-  DecisionDevice deciding(String owner) =>
-      db.decisionDevice(owner) ??
-      DecisionDevice(device: owner, generation: 0, at: DateTime(2000));
+  DecisionDevice deciding(String owner) {
+    final kept = db.decisionDevice(owner);
+    if (kept == null) {
+      return DecisionDevice(device: owner, generation: 0, at: DateTime(2000));
+    }
+    // The first generation's device, before any was chosen: their first.
+    return kept.winners.containsKey(0) || kept.generation == 0
+        ? kept
+        : DecisionDevice(
+            device: kept.device,
+            generation: kept.generation,
+            at: kept.at,
+            lost: kept.lost,
+            lostAt: kept.lostAt,
+            known: kept.known,
+            winners: {0: owner, ...kept.winners},
+          );
+  }
 
   /// Whether this device decides this person's proposals.
   bool get decidesHere => kept && deciding(me).device == device;
@@ -131,11 +146,20 @@ class ProposalService {
   /// changed again since: to be looked at.
   List<ProposalDecision> get conflicts => [
     for (final d in db.decisions)
-      if (d.owner == me && d.conflict) d,
+      if (d.owner == me &&
+          (d.conflict ||
+              (db.blockedOf(d.proposal)['_catisma']?.isNotEmpty ?? false)) &&
+          db.meta('oneri_catisma_goruldu:${d.proposal}') != '1')
+        d,
   ];
+
+  /// [proposal]'s conflict looked at, on this device: not shown here again.
+  void conflictSeen(String proposal) =>
+      db.setMeta('oneri_catisma_goruldu:$proposal', '1');
 
   /// Whether [p] was made seeing what its record says now.
   bool current(Proposal p) {
+    if (p.scrubbed) return false;
     final now = versionsOf(db, p.kind, p.target, caseKey: p.caseKey);
     return now.isNotEmpty &&
         Hlc.canonical(now) == Hlc.canonical(p.seen) &&
@@ -229,22 +253,46 @@ class ProposalService {
   /// nothing changed it since, and kept from coming here after (else a
   /// conflict, to be looked at). True when anything here changed.
   bool takeOwn(ProposalDecision d) {
+    final choice = deciding(me);
     final had = db.decisionOf(d.proposal);
-    if (deciding(me).holds(d) || d.void_) {
+    if (choice.holds(d) && !d.void_) {
       if (had != null && !d.supersedes(had)) return false;
+      // Never over one that holds by the device chosen, of after it.
+      if (had != null &&
+          !had.void_ &&
+          choice.holds(had) &&
+          had.generation > d.generation) {
+        return false;
+      }
       db.deleteDecision(d.proposal);
       db.putDecision(d);
       return true;
     }
-    // One that does not hold: never over one that stands after it.
-    if (had != null && !had.void_ && had.supersedes(d)) return false;
-    if (had != null && had.void_ && !d.supersedes(had)) return false;
+    // One that does not hold: what it changed taken back, once, whatever
+    // decision stands now; that one kept as it is.
     var changed = false;
     db.inTransaction(() {
-      final undone = _undo(d);
-      db.deleteDecision(d.proposal);
-      db.putDecision(d.voided(conflict: !undone));
-      changed = true;
+      final mark = '${d.device}|${d.generation}|${d.at.toIso8601String()}';
+      final handled =
+          db.blockedOf(d.proposal)['_karar']?.contains(mark) ?? false;
+      var conflict = false;
+      if (!handled) {
+        conflict = !_undo(d);
+        db.blockOutput(d.proposal, '_karar', mark);
+        if (conflict) db.blockOutput(d.proposal, '_catisma', mark);
+        changed = true;
+      }
+      final sameOne =
+          had != null &&
+          had.device == d.device &&
+          had.generation == d.generation &&
+          had.at == d.at;
+      final stands = had != null && !had.void_ && choice.holds(had) && !sameOne;
+      if (!stands && (had == null || d.supersedes(had) || !had.void_)) {
+        db.deleteDecision(d.proposal);
+        db.putDecision(d.voided(conflict: conflict || d.conflict));
+        changed = true;
+      }
     });
     return changed;
   }
@@ -279,8 +327,26 @@ class ProposalService {
             clean = false;
           }
         }
+        // The set-offs it changed, each by its own version.
+        final wasS = {for (final x in LedgerBook.setOffsOf(was)) x.id: x};
+        final leftS = {for (final x in LedgerBook.setOffsOf(left)) x.id: x};
+        final nowRecord = db.clientRecord(p.target);
+        final nowS = {
+          for (final x in LedgerBook.setOffsOf(nowRecord ?? left)) x.id: x,
+        };
+        final backS = <String>[];
+        for (final x in leftS.values) {
+          if (wasS[x.id]?.version == x.version) continue;
+          db.blockOutput(p.target, 'mahsup:${x.id}', '${x.version}');
+          final v = nowS[x.id]?.version;
+          if (v == x.version) {
+            backS.add(x.id);
+          } else if (v != null && v > x.version) {
+            clean = false;
+          }
+        }
         final now = db.clientRecord(p.target);
-        if (back.isNotEmpty && now != null) {
+        if ((back.isNotEmpty || backS.isNotEmpty) && now != null) {
           final clock = SyncClock.of(db);
           final versions = LedgerBook.versionsOf(now);
           final data = {...now.data};
@@ -301,11 +367,27 @@ class ProposalService {
             }
             if (g == 'finans') clientId = was.clientId;
           }
+          // The lawyer's word that UYAP has it, given for the sum it had,
+          // given again for that sum as it is back (R4).
+          if (back.contains('finans') &&
+              '${data['resmiKararSurum'] ?? ''}' == '${wasV['finans']}') {
+            data['resmiKararSurum'] = '${versions['finans']}';
+          }
+          final setOffs = [
+            for (final x in LedgerBook.setOffsOf(now))
+              if (backS.contains(x.id))
+                switch (wasS[x.id]) {
+                  final w? => w.copyWith(version: clock.tick()),
+                  null => x.copyWith(removed: true, version: clock.tick()),
+                }
+              else
+                x,
+          ];
           db.saveClientRecord(
             LedgerBook.write(
               now,
               versions: versions,
-              setOffs: LedgerBook.setOffsOf(now),
+              setOffs: setOffs,
               data: data,
               clientId: clientId,
               removed: removed,
@@ -368,6 +450,7 @@ class ProposalService {
       at: DateTime.now(),
       lostAt: was.lostAt,
       known: {...was.known, ..._decided},
+      winners: was.allWinners,
     );
     db.putDecisionDevice(me, d);
     PortalDatabase.changed?.call();
@@ -387,6 +470,7 @@ class ProposalService {
       lost: true,
       lostAt: was.generation + 1,
       known: {...was.known, ..._decided},
+      winners: was.allWinners,
     );
     db.putDecisionDevice(me, d);
     PortalDatabase.changed?.call();

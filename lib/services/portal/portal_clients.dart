@@ -168,11 +168,25 @@ extension PortalClients on PortalDatabase {
       }
       if (g == 'finans') clientId = kept.clientId;
     }
+    // Its set-offs likewise, each by its own version.
+    final keptS = {for (final x in LedgerBook.setOffsOf(kept)) x.id: x};
+    final setOffs = [
+      for (final x in LedgerBook.setOffsOf(r))
+        if (blocked['mahsup:${x.id}']?.contains('${x.version}') ?? false)
+          ?keptS[x.id]
+        else
+          x,
+    ];
+    for (final x in LedgerBook.setOffsOf(r)) {
+      if (blocked['mahsup:${x.id}']?.contains('${x.version}') ?? false) {
+        changed = true;
+      }
+    }
     if (!changed) return r;
     return LedgerBook.write(
       r,
       versions: versions,
-      setOffs: LedgerBook.setOffsOf(r),
+      setOffs: setOffs,
       data: data,
       clientId: clientId,
       removed: removed,

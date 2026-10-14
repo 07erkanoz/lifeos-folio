@@ -284,7 +284,7 @@ Future<void> showProposals(
                             db: db,
                             proposal: p,
                             onSeen: () =>
-                                set(() => db.clearDecisionConflict(p.id)),
+                                set(() => service.conflictSeen(p.id)),
                           ),
                       for (final p in waiting)
                         _ProposalItem(

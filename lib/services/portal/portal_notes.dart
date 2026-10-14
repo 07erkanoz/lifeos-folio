@@ -37,13 +37,16 @@ extension PortalNotes on PortalDatabase {
       'INSERT OR IGNORE INTO note_hide(not_key, kapsam, surum) VALUES(?,?,?)',
       [noteKey, scope, '$version'],
     );
-    _scrubProposalsOf(noteKey);
+    _scrubProposalsOf(noteKey, version);
   }
 
-  /// The text of the proposals of [noteKey]'s note gone: it is secret now.
-  void _scrubProposalsOf(String noteKey) {
+  /// The text of the proposals of [noteKey]'s note made seeing it as it was
+  /// till [version] gone: it is secret now.
+  void _scrubProposalsOf(String noteKey, Hlc version) {
     final of = PortalProposals.proposalOfNote(noteKey);
-    if (of != null) scrubProposals(of.kind, of.target, caseKey: of.caseKey);
+    if (of != null) {
+      scrubProposals(of.kind, of.target, caseKey: of.caseKey, upTo: version);
+    }
   }
 
   /// Every note made secret, by its key: the latest version it was.
@@ -290,7 +293,7 @@ extension PortalNotes on PortalDatabase {
       'VALUES(?,?,?)',
       [owner, noteKey, '$version'],
     );
-    _scrubProposalsOf(noteKey);
+    _scrubProposalsOf(noteKey, version);
   }
 
   /// What [owner] took back of their cards' notes, as kept here: each

@@ -1021,3 +1021,14 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
   - Not gizlenince ilgili önerilerin metni silinir (sahipte ve önerende); sonradan gelen öneri de.
   - Öneri, ekranın gösterdiği sürümlerle yapılır.
   - Kalıcı kimliği olmayan cihaz karar veremez, seçilemez.
+- **Adım 7 kod denetimi, 2. tur (14 Ekim, REVISE: 6 kapandı, 4 kısmen, 4 yeni kritik):** işlenenler:
+  - Geçerli olmayan kararın değişikliği, hangi karar duruyor olursa olsun bir kez geri alınır ve
+    engellenir (`_karar` işareti); duran geçerli karar silinmez.
+  - Her neslin seçilen cihazı (`kazananlar`) saklanır ve birleşir; o nesilde başka cihazın kararı,
+    sonraki devirden sonra da geçerli değildir.
+  - Not gizlenince yalnız gizlenen sürümü görerek yapılmış önerilerin metni silinir; silinen öneri
+    uygulanamaz (`temizlendi`); yeniden açılan notun yeni önerisi korunur.
+  - Geri alma kararın değiştirdiği mahsupları da sürümleriyle geri alır ve engeller; "UYAP'ta var"
+    bağı geri dönen finansal sürüme taşınır.
+  - Çatışmanın "Tamam"ı cihazda yerel; gelen kayıt onu yeniden açmaz.
+  - Açık kalan uyarılar: devrin hedefte alındığının onayı ve devir hedefinin kalıcı kimliği.

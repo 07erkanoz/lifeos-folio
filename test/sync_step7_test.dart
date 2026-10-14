@@ -1,5 +1,6 @@
 import 'package:evrak_convert/services/clients/client.dart';
 import 'package:evrak_convert/services/clients/client_accounts.dart';
+import 'package:evrak_convert/services/enforcement/ledger_book.dart';
 import 'package:evrak_convert/services/enforcement/ledger_service.dart';
 import 'package:evrak_convert/services/office/proposals.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -336,7 +337,7 @@ void main() {
       expect((d.void_, d.conflict), (true, true));
       expect(a2.clientRecord(r.id)!.amount, 1300000);
       expect(as(a2, 'deniz', 'a2').conflicts, isNotEmpty);
-      a2.clearDecisionConflict(p.id);
+      as(a2, 'deniz', 'a2').conflictSeen(p.id);
       expect(as(a2, 'deniz', 'a2').conflicts, isEmpty);
     });
 
@@ -360,6 +361,156 @@ void main() {
       final s = ProposalService(a, me: 'deniz', device: 'deniz', kept: false);
       expect(s.decidesHere, isFalse);
       expect(s.lost(), isNull);
+    });
+  });
+
+  group('Codex\'s second review of step 7', () {
+    Proposal ask(ClientRecord r, Map<String, Object?> fields) {
+      final p = as(
+        b,
+        'selin',
+        'b1',
+      ).propose(kind: 'icra', target: r.id, fields: fields)!;
+      send(b, 'selin', a, 'deniz');
+      send(b, 'selin', a2, 'deniz');
+      return p;
+    }
+
+    test('refused anew after the lost one took it: what the lost one wrote, '
+        'come after, is not taken; the refusal stands', () {
+      final r = payment();
+      a2.clientsMerge(a.clientsExport());
+      final p = ask(r, {'tutar': 1250000});
+      as(a, 'deniz', 'deniz').decide(p.id, approve: true);
+      as(a2, 'deniz', 'a2').lost();
+      as(a2, 'deniz', 'a2').decide(p.id, approve: false);
+      as(a2, 'deniz', 'a2').ownMerge(as(a, 'deniz', 'deniz').ownExport());
+      a2.clientsMerge(a.clientsExport());
+      expect(a2.clientRecord(r.id)!.amount, 1500000);
+      final d = a2.decisionOf(p.id)!;
+      expect((d.approved, d.void_), (false, false));
+    });
+
+    test('of two chosen at once, the one not chosen never decides, even '
+        'after the next one is given over', () {
+      final a3 = PortalDatabase.memory(), a4 = PortalDatabase.memory();
+      addTearDown(a3.dispose);
+      addTearDown(a4.dispose);
+      final r = payment();
+      for (final db in [a2, a3, a4]) {
+        db.clientsMerge(a.clientsExport());
+      }
+      final p = as(
+        b,
+        'selin',
+        'b1',
+      ).propose(kind: 'icra', target: r.id, fields: {'tutar': 1})!;
+      for (final db in [a2, a3, a4]) {
+        send(b, 'selin', db, 'deniz');
+      }
+      as(a2, 'deniz', 'a2').lost();
+      as(a3, 'deniz', 'a3').lost();
+      // a2 decides, thinking it is chosen.
+      as(a2, 'deniz', 'a2').decide(p.id, approve: true);
+      as(a3, 'deniz', 'a3').ownMerge(as(a2, 'deniz', 'a2').ownExport());
+      // a3 is chosen (its id the greater), and gives it to a4.
+      expect(as(a3, 'deniz', 'a3').decidesHere, isTrue);
+      as(a3, 'deniz', 'a3').giveTo('a4');
+      as(a4, 'deniz', 'a4').ownMerge(as(a3, 'deniz', 'a3').ownExport());
+      as(a4, 'deniz', 'a4').ownMerge(as(a2, 'deniz', 'a2').ownExport());
+      expect(a4.decisionOf(p.id)!.void_, isTrue);
+    });
+
+    test('a note made open again after it was secret: a proposal of the open '
+        'one keeps its text; one of the secret one is never taken', () {
+      PortalDatabase.clientPerson = () => 'deniz';
+      a.saveClient(
+        Client(
+          id: 'k2',
+          name: 'Ayşe Karaca',
+          note: 'Açık not',
+          updated: DateTime(2026, 10, 1),
+          person: 'deniz',
+        ).copyWith(office: true),
+      );
+      b.clientsMerge(a.clientsExport());
+      final old = as(b, 'selin', 'b1').propose(
+        kind: 'kartNotu',
+        target: 'k2',
+        fields: {'metin': 'Eski öneri'},
+      )!;
+      send(b, 'selin', a, 'deniz', money: false);
+      PortalDatabase.clientPerson = () => 'deniz';
+      a.saveClient(a.clientCard('k2')!.copyWith(noteSecret: true));
+      PortalDatabase.clientPerson = () => 'deniz';
+      a.saveClient(a.clientCard('k2')!.copyWith(noteSecret: false));
+      b.clientsMerge(a.clientsExport());
+      final fresh = as(b, 'selin', 'b1').propose(
+        kind: 'kartNotu',
+        target: 'k2',
+        fields: {'metin': 'Yeni öneri'},
+      )!;
+      send(b, 'selin', a, 'deniz', money: false);
+      expect(a.proposal(fresh.id)!.fields['metin'], 'Yeni öneri');
+      expect(a.proposal(old.id)!.scrubbed, isTrue);
+      expect(as(a, 'deniz', 'deniz').current(a.proposal(old.id)!), isFalse);
+    });
+
+    test('a decision not holding: the set-off it changed and the word that '
+        'UYAP has it come back as they were', () {
+      PortalDatabase.clientPerson = () => 'deniz';
+      final r = LedgerService(a).add(
+        clientId: 'k',
+        caseKey: 'dava',
+        kind: 'haricen',
+        amount: 1500000,
+        at: DateTime(2026, 10, 10),
+        by: 'Av. Deniz Kaya',
+        person: 'deniz',
+        target: MovementKind.toFee,
+      );
+      LedgerService(a).setOfficial(a.clientRecord(r.id)!, true);
+      b.clientsMerge(a.clientsExport());
+      a2.clientsMerge(a.clientsExport());
+      final p = ask(r, {'tutar': 1250000});
+      as(a, 'deniz', 'deniz').decide(p.id, approve: true);
+      a2.clientsMerge(a.clientsExport());
+      as(a2, 'deniz', 'a2').lost();
+      as(a2, 'deniz', 'a2').ownMerge(as(a, 'deniz', 'deniz').ownExport());
+      final back = a2.clientRecord(r.id)!;
+      expect(back.amount, 1500000);
+      expect(
+        LedgerBook.setOffsOf(back).where((x) => !x.removed).single.amount,
+        1500000,
+      );
+      expect(LedgerBook.officialByHand(back), isTrue);
+    });
+
+    test('a conflict looked at stays looked at here, whatever comes', () {
+      final r = payment();
+      a2.clientsMerge(a.clientsExport());
+      final p = ask(r, {'tutar': 1250000});
+      as(a, 'deniz', 'deniz').decide(p.id, approve: true);
+      a2.clientsMerge(a.clientsExport());
+      as(a2, 'deniz', 'a2').lost();
+      PortalDatabase.clientPerson = () => 'deniz';
+      LedgerService(a2).setRemoved(a2.clientRecord(r.id)!, false);
+      LedgerService(a2).edit(
+        a2.clientRecord(r.id)!,
+        amount: 1300000,
+        at: DateTime(2026, 10, 10),
+        debtor: '',
+        way: '',
+        note: '',
+        whole: false,
+        target: null,
+      );
+      as(a2, 'deniz', 'a2').ownMerge(as(a, 'deniz', 'deniz').ownExport());
+      final s = as(a2, 'deniz', 'a2');
+      expect(s.conflicts, isNotEmpty);
+      s.conflictSeen(p.id);
+      s.ownMerge(as(a2, 'deniz', 'a2').ownExport());
+      expect(s.conflicts, isEmpty);
     });
   });
 }

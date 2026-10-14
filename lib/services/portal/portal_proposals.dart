@@ -48,7 +48,12 @@ extension PortalProposals on PortalDatabase {
   /// The text of the proposals of [kind] [target] (and [caseKey]) taken
   /// out, its note made secret (R7): their ids and decisions stay. True
   /// when one was.
-  bool scrubProposals(String kind, String target, {String caseKey = ''}) {
+  bool scrubProposals(
+    String kind,
+    String target, {
+    String caseKey = '',
+    Hlc? upTo,
+  }) {
     var changed = false;
     for (final r in _db.select('SELECT id, json FROM proposal')) {
       final j = PortalAgendaVersions._map(r['json']);
@@ -58,6 +63,11 @@ extension PortalProposals on PortalDatabase {
           '${j['dosya'] ?? ''}' != caseKey) {
         continue;
       }
+      // Only one made seeing a version taken back: not one of after it,
+      // its note made open again.
+      final seen = j['gorulen'] is Map ? j['gorulen'] as Map : const {};
+      final saw = Hlc.tryParse(seen[kind == 'icra' ? 'bilgi' : 'not']);
+      if (upTo != null && saw != null && saw > upTo) continue;
       final fields = Map<String, Object?>.from(j['alanlar'] as Map? ?? {});
       var scrubbed = false;
       for (final f in const ['metin', 'aciklama']) {
@@ -67,8 +77,9 @@ extension PortalProposals on PortalDatabase {
         }
       }
       if (!scrubbed) continue;
+      // Its text gone, it is never taken: it would write the note empty.
       _db.execute('UPDATE proposal SET json=? WHERE id=?', [
-        jsonEncode({...j, 'alanlar': fields}),
+        jsonEncode({...j, 'alanlar': fields, 'temizlendi': true}),
         r['id'],
       ]);
       changed = true;
@@ -110,16 +121,15 @@ extension PortalProposals on PortalDatabase {
       'dosyaNotu' => 'dosyaNotu:${p.target}:${p.caseKey}',
       _ => 'aciklama:${p.target}',
     };
-    if (hideOf(key) != null || _takenHideOfAny(key)) {
-      scrubProposals(p.kind, p.target, caseKey: p.caseKey);
+    final hide = [
+      ?hideOf(key),
+      ?takenNoteHide(p.owner, key),
+    ].fold<Hlc?>(null, (a, b) => a == null || b > a ? b : a);
+    if (hide != null) {
+      scrubProposals(p.kind, p.target, caseKey: p.caseKey, upTo: hide);
     }
     return true;
   }
-
-  bool _takenHideOfAny(String key) => _db.select(
-    'SELECT 1 FROM taken_note_hide WHERE not_key=?',
-    [key],
-  ).isNotEmpty;
 
   Proposal? proposal(String id) {
     final r = _db.select('SELECT json FROM proposal WHERE id=?', [id]);
@@ -156,16 +166,6 @@ extension PortalProposals on PortalDatabase {
     return true;
   }
 
-  /// [proposal]'s decision's conflict looked at: no longer shown.
-  void clearDecisionConflict(String proposal) {
-    final d = decisionOf(proposal);
-    if (d == null || !d.conflict) return;
-    _db.execute('UPDATE proposal_decision SET json=? WHERE oneri=?', [
-      jsonEncode({...d.toJson()}..remove('catisma')),
-      proposal,
-    ]);
-  }
-
   void deleteDecision(String proposal) =>
       _db.execute('DELETE FROM proposal_decision WHERE oneri=?', [proposal]);
 
@@ -198,14 +198,35 @@ extension PortalProposals on PortalDatabase {
   /// was.
   bool putDecisionDevice(String owner, DecisionDevice d) {
     final kept = decisionDevice(owner);
-    // The later generation; two chosen at once of the same one: the same
-    // one on every device, by the device's id.
+    // Each generation's device: of two chosen at once, the same one on
+    // every device, by the device's id.
+    final winners = <int, String>{...?kept?.allWinners};
+    for (final e in d.allWinners.entries) {
+      final w = winners[e.key];
+      if (w == null || e.value.compareTo(w) > 0) winners[e.key] = e.value;
+    }
+    // The later generation's choice, with every generation's device.
+    final top =
+        kept == null ||
+            d.generation > kept.generation ||
+            (d.generation == kept.generation &&
+                d.device.compareTo(kept.device) > 0)
+        ? d
+        : kept;
+    final next = DecisionDevice(
+      device: top.device,
+      generation: top.generation,
+      at: top.at,
+      lost: top.lost,
+      lostAt: [d.lostAt, ?kept?.lostAt].reduce((a, b) => a > b ? a : b),
+      known: {...d.known, ...?kept?.known},
+      winners: winners,
+    );
     if (kept != null &&
-        (kept.generation > d.generation ||
-            (kept.generation == d.generation &&
-                kept.device.compareTo(d.device) >= 0))) {
+        Hlc.canonical(kept.toJson()) == Hlc.canonical(next.toJson())) {
       return false;
     }
+    d = next;
     _db.execute(
       'INSERT OR REPLACE INTO decision_device(sahip, json) VALUES(?,?)',
       [owner, jsonEncode(d.toJson())],
@@ -230,9 +251,13 @@ class Proposal {
     this.caseKey = '',
     this.remove = false,
     this.reason = '',
+    this.scrubbed = false,
   });
 
   final String id, owner, by, byName;
+
+  /// Its text taken out, its note made secret since (R7): never taken.
+  final bool scrubbed;
 
   /// What it is of: `icra` (an enforcement payment), `kartNotu` (a
   /// card's note), `dosyaNotu` (a case's note on a card).
@@ -269,6 +294,7 @@ class Proposal {
     'alanlar': fields,
     if (remove) 'sil': true,
     if (reason.isNotEmpty) 'neden': reason,
+    if (scrubbed) 'temizlendi': true,
     'zaman': at.toIso8601String(),
   };
 
@@ -302,6 +328,7 @@ class Proposal {
       },
       remove: j['sil'] == true,
       reason: '${j['neden'] ?? ''}',
+      scrubbed: j['temizlendi'] == true,
       at: at,
     );
   }
@@ -429,9 +456,17 @@ class DecisionDevice {
     this.lost = false,
     this.known = const {},
     this.lostAt = 0,
+    this.winners = const {},
   });
 
   final String device;
+
+  /// The device chosen for each generation of before, and this one's: a
+  /// decision of a generation by another device does not hold.
+  final Map<int, String> winners;
+
+  /// [winners] with this choice in it.
+  Map<int, String> get allWinners => {...winners, generation: device};
 
   /// The generation of the last choice made of a device lost: decisions of
   /// before it hold only when [known] then.
@@ -453,12 +488,16 @@ class DecisionDevice {
     if (lost) 'kayip': true,
     if (lostAt > 0) 'kayipNesil': lostAt,
     if (known.isNotEmpty) 'bilinen': (known.toList()..sort()),
+    'kazananlar': {
+      for (final e in allWinners.entries) '${e.key}': e.value,
+    },
   };
 
   /// Whether [d] holds by this choice: made by the device chosen for its
   /// generation, and not of before a device lost unless known then.
   bool holds(ProposalDecision d) {
-    if (d.generation == generation && d.device != device) return false;
+    final winner = allWinners[d.generation];
+    if (winner != null && winner != d.device) return false;
     return d.generation >= lostAt || known.contains(d.proposal);
   }
 
@@ -470,6 +509,12 @@ class DecisionDevice {
       at: DateTime.tryParse('${j['zaman']}') ?? DateTime(2000),
       lost: j['kayip'] == true,
       lostAt: j['kayipNesil'] is int ? j['kayipNesil'] as int : 0,
+      winners: {
+        if (j['kazananlar'] is Map)
+          for (final e in (j['kazananlar'] as Map).entries)
+            if (int.tryParse('${e.key}') case final g? when e.value is String)
+              g: e.value as String,
+      },
       known: {
         if (j['bilinen'] is List)
           for (final x in j['bilinen'] as List)
