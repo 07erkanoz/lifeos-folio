@@ -413,7 +413,9 @@ class FolderSync extends ChangeNotifier {
       final mineNow = index[rel];
       // Unchanged here since alike: by contents, not by the two clocks.
       if (at is! int || mineNow == null || base[rel] != mineNow.$3) continue;
-      await _toBin(f, rel);
+      // Not moved (held open, not allowed): left as it was, to be tried
+      // again next time, not taken for gone and so sent back as new.
+      if (!await _toBin(f, rel)) continue;
       index.remove(rel);
       base.remove(rel);
       removedHere[rel] = at;
@@ -576,9 +578,10 @@ class FolderSync extends ChangeNotifier {
     return name;
   }
 
-  Future<void> _toBin(SyncedFolder f, String rel) async {
+  /// Whether [rel] went to the bin.
+  Future<bool> _toBin(SyncedFolder f, String rel) async {
     final from = _inside(f.path, rel);
-    if (from == null) return;
+    if (from == null) return false;
     try {
       final now = DateTime.now();
       final day =
@@ -598,9 +601,20 @@ class FolderSync extends ChangeNotifier {
         await File(from).rename(to);
       } on FileSystemException {
         await File(from).copy(to);
-        await File(from).delete();
+        try {
+          await File(from).delete();
+        } catch (_) {
+          // Still there: no copy of it left in the bin each time it is tried.
+          try {
+            await File(to).delete();
+          } catch (_) {}
+          rethrow;
+        }
       }
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// What went to the bin more than thirty days ago is gone.

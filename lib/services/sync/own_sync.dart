@@ -599,8 +599,9 @@ class OwnSync extends ChangeNotifier {
   Future<bool> _withoutNotes(
     PortalDatabase db,
     List<String> paths,
-    String caseKey,
-  ) async {
+    String caseKey, {
+    bool again = false,
+  }) async {
     var ok = true;
     for (final path in paths) {
       final name = p.basename(path);
@@ -610,7 +611,9 @@ class OwnSync extends ChangeNotifier {
         if (!await file.exists()) continue;
         final j = jsonDecode(await file.readAsString());
         if (j is! Map || !j.containsKey('evrakAdlari')) continue;
-        if (j[TaskNotes.format] != null && !j.containsKey('notlar')) continue;
+        if (!again && j[TaskNotes.format] != null && !j.containsKey('notlar')) {
+          continue;
+        }
         j
           ..remove('notlar')
           ..addAll(TaskPackage.caseExtras(db, caseKey));
@@ -629,8 +632,12 @@ class OwnSync extends ChangeNotifier {
   /// device they went to taken as holding them; those that came here, to
   /// be cleaned of their giver's notes once they come apart.
   Future<void> _carryTaskNotes(PortalDatabase db, TaskPackages packages) async {
-    const done = 'gorev_notlari_gocu';
+    // Twice: the first was done with the case's key cut at its '|', each
+    // package's hearings, deadlines and notices written for no case. The
+    // packages are made again with the whole key.
+    const done = 'gorev_notlari_gocu_2';
     if (db.meta(done) == '1') return;
+    final again = db.meta('gorev_notlari_gocu') == '1';
     for (final key in {...packages.delivered, ...packages.pending.keys}) {
       final parts = taskDeliveryOf(key);
       if (parts == null) continue;
@@ -644,12 +651,16 @@ class OwnSync extends ChangeNotifier {
     for (final e in packages.sources.entries) {
       final caseKey = taskScopeOf(e.key)?.$2;
       if (caseKey == null) continue;
-      if (!await _withoutNotes(db, e.value, caseKey)) all = false;
+      if (!await _withoutNotes(db, e.value, caseKey, again: again)) {
+        all = false;
+      }
     }
     for (final e in packages.pending.entries) {
       final caseKey = taskDeliveryOf(e.key)?.$2;
       if (caseKey == null) continue;
-      if (!await _withoutNotes(db, e.value, caseKey)) all = false;
+      if (!await _withoutNotes(db, e.value, caseKey, again: again)) {
+        all = false;
+      }
     }
     for (final key in packages.receivedKeys) {
       final scope = taskScopeOf(key);

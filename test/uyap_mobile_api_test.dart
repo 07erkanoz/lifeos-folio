@@ -38,6 +38,7 @@ class _Fake {
           'refreshTokenLifetime': 604800,
         };
       } else if (path == 'auth/refresh' && refuseRefresh) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
         status = 401;
       } else if (path == 'auth/refresh') {
         refreshes++;
@@ -150,6 +151,27 @@ void main() {
     await api.login('kod');
     fake.access = 'baska-2';
     expect(await api.documentBytes('e1', 'd1'), [1, 2, 3]);
+  });
+
+  test('tokens another device renewed while an old renewal waits are not '
+      'dropped for its refusal', () async {
+    await api.login('kod');
+    fake
+      ..access = 'baska'
+      ..refuseRefresh = true;
+    final asked = api.documentBytes('e1', 'd1');
+    // While the old refresh token is refused, the other device's come.
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    api.adopt(
+      MobileTokens(
+        access: 'baska',
+        refresh: 'r9',
+        accessExpires: DateTime.now().add(const Duration(minutes: 50)),
+        refreshExpires: DateTime.now().add(const Duration(days: 6)),
+      ),
+    );
+    expect(await asked, [1, 2, 3]);
+    expect(api.connected, isTrue);
   });
 
   test('a login sends the code with the device fields and reads who', () async {

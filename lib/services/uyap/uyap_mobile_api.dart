@@ -287,6 +287,9 @@ class UyapMobileApi {
         _setTokens(there);
         return;
       }
+      // Renewed or signed in again while this waited: those stand, and
+      // the old refresh token is not spent on UYAP.
+      if (generation != _generation || !identical(_tokens, had)) return;
       final data = await _send('POST', 'auth/refresh', {
         'refreshToken': had.refresh,
       }, authorized: false);
@@ -303,10 +306,12 @@ class UyapMobileApi {
         'UYAP Mobil yenileme jetonunu reddetti: HTTP ${e.status} '
         '${e.message}',
       );
-      if (generation == _generation) {
-        _setTokens(null);
-        session.value = null;
-      }
+      // Tokens taken up meanwhile (another device renewed, a new sign-in)
+      // are not dropped for the old one's refusal: the request goes on
+      // with them.
+      if (generation != _generation || !identical(_tokens, had)) return;
+      _setTokens(null);
+      session.value = null;
       throw const _Expired();
     }
   }

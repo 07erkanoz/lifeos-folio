@@ -123,6 +123,24 @@ void main() {
       }
       expect(File('${shared.path}/2026/Cevap.udf').existsSync(), isTrue);
       expect(File('$there/2026/Cevap.udf').existsSync(), isTrue);
+      // Taken off on the computer, the phone's not to be moved now (its
+      // folder not written to): not sent back, and gone once it can be.
+      if (Platform.isLinux || Platform.isMacOS) {
+        File('${shared.path}/2026/Cevap.udf').deleteSync();
+        Process.runSync('chmod', ['555', '$there/2026']);
+        for (var i = 0; i < 2; i++) {
+          await pc.syncOwn();
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          await phone.syncOwn();
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
+        expect(File('$there/2026/Cevap.udf').existsSync(), isTrue);
+        expect(File('${shared.path}/2026/Cevap.udf').existsSync(), isFalse);
+        Process.runSync('chmod', ['755', '$there/2026']);
+        await pc.syncOwn();
+        await until(() => !File('$there/2026/Cevap.udf').existsSync());
+        expect(File('${shared.path}/2026/Cevap.udf').existsSync(), isFalse);
+      }
       // Changed on both before they met: both kept.
       File('${shared.path}/İtiraz.pdf').writeAsStringSync('masaüstünde');
       File('$there/İtiraz.pdf').writeAsStringSync('telefonda');
