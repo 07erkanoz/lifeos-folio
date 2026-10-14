@@ -519,6 +519,7 @@ extension PortalClients on PortalDatabase {
     // that waited (R11).
     _dropLedgerLeftovers();
     forgetSharedLedgers();
+    forgetFinancialProposals(keepPerson);
     for (final r in _db.select('SELECT id, json FROM client_record_pending')) {
       final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
       if (rec == null || (rec.kind.financial && rec.person != keepPerson)) {

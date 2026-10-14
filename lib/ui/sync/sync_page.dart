@@ -356,6 +356,9 @@ class _SyncPageState extends State<SyncPage> {
       OwnSync.settingsPart: 'Kalıplar ve ayarlar',
       OwnSync.uyapData: 'UYAP',
       OwnSync.officeClients: 'Büroyla paylaşılan müvekkiller',
+      OwnSync.noteTracking: 'Gizli notlar',
+      OwnSync.ownProposals: 'Öneriler',
+      OwnSync.ownShares: 'Dosya paylaşımları',
     };
     final what = [for (final p in parts.keys) names[p] ?? p];
     return '${what.join(', ')} bu cihazla eşitlenmiyor. Bu cihazdaki Folio '

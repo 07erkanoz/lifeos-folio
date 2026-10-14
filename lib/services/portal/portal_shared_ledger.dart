@@ -25,6 +25,13 @@ extension PortalSharedLedger on PortalDatabase {
     (PortalAgendaVersions._map(meta(_shareVersions)) ?? const {})[caseKey],
   );
 
+  /// [caseKey]'s share's version, as another own device's word had it.
+  void setCaseShareVersion(String caseKey, Hlc version) {
+    final all = {...?PortalAgendaVersions._map(meta(_shareVersions))};
+    all[caseKey] = '$version';
+    setMeta(_shareVersions, jsonEncode(all));
+  }
+
   /// Whom [caseKey] is shared with changed: a new version of that word.
   void tickCaseShare(String caseKey) {
     final all = {...?PortalAgendaVersions._map(meta(_shareVersions))};
@@ -56,6 +63,7 @@ extension PortalSharedLedger on PortalDatabase {
     List<ClientRecord> records = const [],
     bool closed = false,
     String ownerName = '',
+    bool fromOwner = true,
   }) {
     final kept = _db.select(
       'SELECT surum, acik FROM shared_ledger_state WHERE sahip=? AND dosya=?',
@@ -63,6 +71,16 @@ extension PortalSharedLedger on PortalDatabase {
     );
     final was = kept.isEmpty ? null : Hlc.tryParse(kept.first['surum']);
     if (was != null && version < was) return false;
+    // Closed here (the money no longer let, or the share taken off): opened
+    // again at the same version only by its owner's word as it is now, not
+    // by a copy another own device kept of before.
+    if (!closed &&
+        !fromOwner &&
+        was != null &&
+        version == was &&
+        kept.first['acik'] != 1) {
+      return false;
+    }
     var changed = false;
     _transaction(() {
       if (closed) {
@@ -274,6 +292,7 @@ extension PortalSharedLedger on PortalDatabase {
         s['dosya'] as String,
         v,
         closed: s['acik'] != 1,
+        fromOwner: false,
         records: byShare['${s['sahip']}|${s['dosya']}'] ?? const [],
       )) {
         changed = true;

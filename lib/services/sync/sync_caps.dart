@@ -86,6 +86,7 @@ abstract final class SyncCaps {
     'not-takibi': {hlc, secretNotes, recall},
     'oneri': {proposals, hlc},
     'oneriler': {proposals, hlc},
+    'paylasimlar': {sharedLedger},
   };
 
   /// The capabilities [part] needs now: its row's that are in use here.

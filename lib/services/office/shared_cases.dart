@@ -99,6 +99,64 @@ class SharedCases {
   static List<String> sharedWith(PortalDatabase db, String caseKey) =>
       shares(db)[caseKey] ?? const [];
 
+  /// What the person's other devices take of whom each case is shared
+  /// with, and since when (docs/senkron-plan.md R8): a case shared from one
+  /// device is shared from all, and taken back from all.
+  static Map<String, Object?> ownExport(PortalDatabase db) => {
+    'paylasim': shares(db),
+    'gecmis': _read(db, _everKey),
+    'surum': {
+      for (final k in {...shares(db).keys, ..._read(db, _everKey).keys})
+        if (db.caseShareVersion(k) case final v?) k: '$v',
+    },
+  };
+
+  /// Another own device's [ownExport]: of each case, the word of the later
+  /// version; whom it went to ever, both. True when anything changed.
+  static bool ownMerge(PortalDatabase db, Object? theirs) {
+    if (theirs is! Map) return false;
+    var changed = false;
+    final all = shares(db), ever = _read(db, _everKey);
+    List<String> list(Object? v) => [
+      if (v is List)
+        for (final x in v) '$x',
+    ];
+    final theirShares = theirs['paylasim'] is Map
+        ? theirs['paylasim'] as Map
+        : const {};
+    final theirEver = theirs['gecmis'] is Map
+        ? theirs['gecmis'] as Map
+        : const {};
+    final versions = theirs['surum'] is Map ? theirs['surum'] as Map : const {};
+    for (final e in theirEver.entries) {
+      final now = {...?ever['${e.key}'], ...list(e.value)}.toList()..sort();
+      if (now.join('|') != (ever['${e.key}'] ?? const []).join('|')) {
+        ever['${e.key}'] = now;
+        changed = true;
+      }
+    }
+    for (final e in versions.entries) {
+      final key = '${e.key}';
+      final v = Hlc.tryParse(e.value);
+      final mine = db.caseShareVersion(key);
+      if (v == null || (mine != null && v <= mine)) continue;
+      SyncClock.observe(db, v);
+      final people = list(theirShares[key])..sort();
+      if (people.isEmpty) {
+        all.remove(key);
+      } else {
+        all[key] = people;
+      }
+      db.setCaseShareVersion(key, v);
+      changed = true;
+    }
+    if (changed) {
+      db.setMeta(_sharesKey, jsonEncode(all));
+      db.setMeta(_everKey, jsonEncode(ever));
+    }
+    return changed;
+  }
+
   /// [caseKey] shared with [people] and no one else; none unshares it.
   /// Those it no longer goes to are told, to forget it.
   static void share(
@@ -197,8 +255,13 @@ class SharedCases {
     // longer goes. No word to set: whom the case is shared with, and who
     // may see the money, say it.
     final money = network.seesMoney && network.seesMoneyOf(toDevice);
-    final keeps =
-        network.peerCaps[toDevice]?.contains(SyncCaps.sharedLedger) ?? false;
+    // Only to a Folio that keeps it as its record is kept (R0, §4.1).
+    final keeps = {
+      SyncCaps.sharedLedger,
+      SyncCaps.ledgerOps,
+      SyncCaps.fieldVersions,
+      SyncCaps.hlc,
+    }.difference(network.peerCaps[toDevice] ?? const <String>{}).isEmpty;
     final ledgers = <Object?>[];
     if (keeps) {
       for (final e in _read(db, _everKey).entries) {

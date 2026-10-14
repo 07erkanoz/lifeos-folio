@@ -537,8 +537,14 @@ class ProposalService {
   /// What this person's other devices take: the proposals, the decisions
   /// with what they changed, and the device for deciding.
   Map<String, Object?> ownExport() => {
-    'oneriler': [for (final p in db.proposals()) p.toJson()],
-    'kararlar': [for (final d in db.decisions) d.toJson()],
+    'oneriler': [
+      for (final p in db.proposals())
+        if (_mayKeep(p)) p.toJson(),
+    ],
+    'kararlar': [
+      for (final d in db.decisions)
+        if (db.proposal(d.proposal) case final p? when _mayKeep(p)) d.toJson(),
+    ],
     'kararCihazi': ?db.decisionDevice(me)?.toJson(),
     'engellenen': db.blockedOutputs,
   };
@@ -562,11 +568,13 @@ class ProposalService {
       }
       for (final j in theirs['oneriler'] as List? ?? const []) {
         final p = Proposal.fromJson(j);
-        if (p != null && db.putProposal(p)) changed = true;
+        if (p != null && _mayKeep(p) && db.putProposal(p)) changed = true;
       }
       for (final j in theirs['kararlar'] as List? ?? const []) {
         final d = ProposalDecision.fromJson(j);
         if (d == null) continue;
+        final of = db.proposal(d.proposal);
+        if (of != null && !_mayKeep(of)) continue;
         if (d.owner == me) {
           if (takeOwn(d)) changed = true;
           continue;
@@ -589,6 +597,13 @@ class ProposalService {
     });
     return changed;
   }
+
+  /// Whether [p] may be kept here: one of money only while this person may
+  /// see it, but for one of their own records (R11).
+  bool _mayKeep(Proposal p) =>
+      !p.financial ||
+      p.owner == me ||
+      (PortalDatabase.clientMoneyAllowed?.call() ?? true);
 
   /// Whether [d] holds by the device for deciding as chosen now.
   bool takeOwnHolds(ProposalDecision d) => deciding(me).holds(d);

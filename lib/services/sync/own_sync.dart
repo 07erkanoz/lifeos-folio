@@ -20,6 +20,7 @@ import '../portal/portal_sync.dart';
 import '../uets/notice_deadlines.dart';
 import '../uyap/uyap_case_store.dart';
 import 'settings_sync.dart';
+import 'sync_caps.dart';
 import 'uyap_documents_sync.dart';
 import 'uyap_own_sync.dart';
 
@@ -76,6 +77,10 @@ class OwnSync extends ChangeNotifier {
   /// with the office's members and between the person's own devices
   /// (docs/senkron-plan.md R6).
   static const proposalsPart = 'oneri', ownProposals = 'oneriler';
+
+  /// Whom each case is shared with, between the person's own devices: on
+  /// always (R8).
+  static const ownShares = 'paylasimlar';
   static const _optIn = {officeClients};
   final _on = <String>{};
 
@@ -528,11 +533,24 @@ class OwnSync extends ChangeNotifier {
       device: _net.self?.deviceId ?? '',
       myName: _net.self?.name ?? '',
     );
+    _net.ownParts[ownShares] = OwnPart(
+      export: () async => SharedCases.ownExport(db),
+      merge: (theirs) async {
+        final changed = SharedCases.ownMerge(db, theirs);
+        // Shared, or no longer, from another own device: the office told.
+        if (changed) _net.officeChanged();
+        return changed;
+      },
+    );
     _net.officeParts[proposalsPart] = OfficePart(
-      // Of money only between two who may both see it (R11).
+      // Of money only between two who may both see it (R11), and to a
+      // Folio that keeps a ledger's record as it is kept here.
       export: (to) async => proposals().officeExport(
         _personOf(to),
-        money: _net.seesMoney && _net.seesMoneyOf(to),
+        money:
+            _net.seesMoney &&
+            _net.seesMoneyOf(to) &&
+            (_net.peerCaps[to]?.contains(SyncCaps.ledgerOps) ?? false),
       ),
       merge: (theirs, from) async {
         final changed = proposals().officeMerge(

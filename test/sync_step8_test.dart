@@ -214,4 +214,60 @@ void main() {
       expect(b2.sharedLedgersOf('dava'), isEmpty);
     });
   });
+
+  group('the last review', () {
+    test('whom a case is shared with goes to the person\'s other devices, '
+        'a later word over an earlier', () {
+      final a2 = PortalDatabase.memory();
+      addTearDown(a2.dispose);
+      SharedCases.share(a, 'dava', ['selin']);
+      expect(SharedCases.ownMerge(a2, SharedCases.ownExport(a)), isTrue);
+      expect(SharedCases.sharedWith(a2, 'dava'), ['selin']);
+      final before = SharedCases.ownExport(a);
+      SharedCases.share(a, 'dava', const []);
+      SharedCases.ownMerge(a2, SharedCases.ownExport(a));
+      expect(SharedCases.sharedWith(a2, 'dava'), isEmpty);
+      // The word of before, come late: nothing.
+      expect(SharedCases.ownMerge(a2, before), isFalse);
+      expect(SharedCases.sharedWith(a2, 'dava'), isEmpty);
+    });
+
+    test('closed for the money, a copy another own device kept of before '
+        'does not open it again; its owner\'s word does', () {
+      payment();
+      SharedCases.share(a, 'dava', ['selin']);
+      send();
+      final b2 = PortalDatabase.memory();
+      addTearDown(b2.dispose);
+      b2.noteTrackingMerge(b.noteTrackingExport());
+      b.forgetClientMoney(keepPerson: 'selin');
+      expect(b.sharedLedgersOf('dava'), isEmpty);
+      // The money let again: b2's copy of before, same version.
+      b.noteTrackingMerge(b2.noteTrackingExport());
+      expect(b.sharedLedgersOf('dava'), isEmpty);
+      // The owner's word as it is now opens it.
+      PortalDatabase.clientPerson = () => 'deniz';
+      expect(send(), isTrue);
+      expect(b.sharedLedgersOf('dava'), isNotEmpty);
+    });
+
+    test('the money no longer let: proposals of others\' payments go, and '
+        'are not taken from another own device', () {
+      final r = payment();
+      SharedCases.share(a, 'dava', ['selin']);
+      send();
+      PortalDatabase.clientPerson = () => 'selin';
+      final s = ProposalService(b, me: 'selin', device: 'b1');
+      s.propose(kind: 'icra', target: r.id, fields: {'tutar': 1});
+      final copy = s.ownExport();
+      expect(b.proposals(by: 'selin'), isNotEmpty);
+      final allowed = PortalDatabase.clientMoneyAllowed;
+      addTearDown(() => PortalDatabase.clientMoneyAllowed = allowed);
+      PortalDatabase.clientMoneyAllowed = () => false;
+      b.forgetClientMoney(keepPerson: 'selin');
+      expect(b.proposals(by: 'selin'), isEmpty);
+      s.ownMerge(copy);
+      expect(b.proposals(by: 'selin'), isEmpty);
+    });
+  });
 }

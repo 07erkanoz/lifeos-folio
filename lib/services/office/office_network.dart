@@ -1296,13 +1296,17 @@ class OfficeNetwork extends ChangeNotifier {
           }
           final head = {'t': 'buro-parca', ..._said, 'ad': name};
           final _Next then;
-          if (_splits(said) && jsonEncode(mine).length > pieceSize) {
+          if (!old &&
+              said.protocol >= SyncCaps.protocol &&
+              jsonEncode(mine).length > pieceSize) {
+            // Too large for one message: in pieces, or put off for one
+            // that cannot take them (R10), never cut by the line's limit.
             then = (await _sendPacked(
               ch,
               head,
               'veriPaket',
               _pack({'veri': mine}),
-              canSplit: true,
+              canSplit: _splits(said),
             )).then;
           } else {
             then = _next(ch);
@@ -1318,7 +1322,12 @@ class OfficeNetwork extends ChangeNotifier {
               if (may && theirs != null && await part.merge(theirs, from)) {
                 notifyListeners();
               }
-              await ch.send({'t': 'buro-parca-ek', 'ad': name, 'tamam': true});
+              // Whole, or not said to be.
+              await ch.send({
+                't': 'buro-parca-ek',
+                'ad': name,
+                'tamam': theirs != null || !may,
+              });
             }
           }
         } catch (_) {

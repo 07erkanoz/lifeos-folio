@@ -1076,3 +1076,16 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
   - Güncellemeden önce paylaşılmış dosya ilk gönderimde sürüm alır.
   - Açık kalan: gönderenin paylaşım listesi kendi cihazları arasında eşitlenmiyor (dosya
     paylaşımının bugünkü hâli; ayrı iş).
+- **Son denetim (adım 9, 14 Ekim, REVISE, 3 kritik, 2 yüksek):** işlenenler:
+  - Dosya paylaşım listesi, geçmişi ve sürümü kendi cihazlar arasında eşitlenir (`paylasimlar`,
+    her zaman açık); bir cihazda kaldırılan paylaşım diğerinden de kalkar; eski söz geri getirmez.
+  - Para yetkisiyle kapanan paylaşılan hesap, kendi cihazın eski kopyasıyla aynı sürümde
+    açılmaz; yalnız sahibin güncel sözüyle açılır.
+  - Başkasının kaydına para önerileri, para yetkisi yokken saklanmaz, kendi cihazlara gitmez,
+    alınmaz; yetki kalkınca silinir (kişinin kendi kayıtlarına gelenler kalır).
+  - Paylaşılan hesap ve para önerileri yalnız `defterPaylasimi`, `defterIslemi`, `alanSurumu`,
+    `hlc` ilan eden eşe gider.
+  - Büro yanıtı bölünemeyen eşe büyükse ertelenir; eksik gelen yük "tamam" diye onaylanmaz.
+  - Senkron sayfasında yeni kanalların adları.
+  - Açık kalanlar (uyarı): gerçek ağ katmanıyla ayrı bir uçtan uca test; icra ekranındaki tekrar
+    okumalar (performans); büro eşlerinin duran parçalarının sayfada gösterilmesi.

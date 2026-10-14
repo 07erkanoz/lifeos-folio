@@ -166,6 +166,18 @@ extension PortalProposals on PortalDatabase {
     return true;
   }
 
+  /// The proposals of money of others' records forgotten, with their
+  /// decisions: this person may no longer see the money (R11). Those of
+  /// [keepOwner]'s own records stay.
+  void forgetFinancialProposals(String keepOwner) {
+    for (final r in _db.select('SELECT id, sahip, json FROM proposal')) {
+      final j = PortalAgendaVersions._map(r['json']);
+      if (j == null || j['tur'] != 'icra' || r['sahip'] == keepOwner) continue;
+      _db.execute('DELETE FROM proposal WHERE id=?', [r['id']]);
+      _db.execute('DELETE FROM proposal_decision WHERE oneri=?', [r['id']]);
+    }
+  }
+
   void deleteDecision(String proposal) =>
       _db.execute('DELETE FROM proposal_decision WHERE oneri=?', [proposal]);
 
