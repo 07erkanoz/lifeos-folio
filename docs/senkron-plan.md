@@ -184,8 +184,23 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
       (şimdi → önerilen, Onayla / Reddet, eskiyse Kapat; karar cihazı dışında yalnız görünür);
       meslektaşın kartında "Not öner"; Senkron sayfasında karar cihazı kutusu.
     - Testler: `test/sync_step7_test.dart`, `test/sync_step7_screens_test.dart`.
-  - Sıradaki adım: adım 7'nin Codex kod denetimi, sonra §5 adım 8 (paylaşılan dosyada defter;
-    önce maket).
+  - Sıradaki adım: §5 adım 9 (uçtan uca denetim).
+  - **§5 adım 8 bitti (paylaşılan dosyada Folio hesabı, R8):**
+    - **Karar 4 değişti (kullanıcı, 14 Ekim):** ayrı "Folio hesabını da paylaş" tercihi yok. Dosya
+      paylaşılınca, alıcılardan para görme yetkisi olanlar o dosyanın icra ödemelerini
+      kendiliğinden, salt okunur görür. Müvekkilin kimlik ve iletişim bilgisi ve genel hesabı
+      gitmez.
+    - Gönderen (`SharedCases.export`): `defterler`, yalnız kendi kayıtları (`kisi` kendisi),
+      gizli açıklama boş; paylaşım listesi değişince yeni sürüm (`paylasim-surum`); kaldırılan ya
+      da para yetkisi olmayan alıcıya `kapali`. Yalnız `defterPaylasimi` ilan eden eşe gider.
+    - Alıcı (`lib/services/portal/portal_shared_ledger.dart`): ayrı `shared_ledger`, kayıt kayıt
+      grup birleşimi; eski sürümlü paket bir şey değiştirmez; `kapali` hepsini siler ve "artık
+      paylaşmıyor" der; para yetkisi gidince hepsi silinir; kart paylaşımıyla da gelen kayıt bir
+      kez (kartınki) gösterilir; yeniden başkasına aktarılmaz.
+    - Ekran: icra sekmesinde "Folio hesabı · ad · salt okunur", kartlar meslektaşın kaydı gibi
+      ("Değişiklik öner"), "Folio'ya göre kalan" alıcının kendi UYAP kaydıyla; paylaşım
+      penceresinde her kişinin altında "ödemeleri de görür" / "para yetkisi yok".
+    - Testler: `test/sync_step8_test.dart`.
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,

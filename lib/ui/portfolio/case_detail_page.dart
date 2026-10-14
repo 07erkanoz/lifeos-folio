@@ -478,7 +478,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                   'listesini ve duruşmalarını görür; UYAP’tan yeni bir şey '
                   'geldikçe onlarda da güncellenir. Evrak toplu gitmez: '
                   'açmak istediklerinde sizin bilgisayarınızdan gelir, '
-                  'sizde yoksa önce UYAP’tan indirilir.',
+                  'sizde yoksa önce UYAP’tan indirilir. Para görme yetkisi '
+                  'olanlar dosyanın Folio’daki ödemelerini de salt okunur '
+                  'görür.',
                   style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
                 ),
                 const SizedBox(height: 8),
@@ -489,6 +491,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                     contentPadding: EdgeInsets.zero,
                     controlAffinity: ListTileControlAffinity.leading,
                     title: Text(m.name),
+                    // Whether they see its payments too (R8).
+                    subtitle: Text(
+                      net.ledger.seesMoney(m.person)
+                          ? 'ödemeleri de görür'
+                          : 'para yetkisi yok',
+                      style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                    ),
                     value: chosen.contains(m.person),
                     onChanged: (v) => setState(
                       () => v == true

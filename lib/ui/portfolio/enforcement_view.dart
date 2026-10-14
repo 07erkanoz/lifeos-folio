@@ -17,6 +17,7 @@ import '../../services/udf/udf_writer.dart';
 import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_web_service.dart' show UyapWebService;
 import '../../models/document_model.dart';
+import '../../services/notes/secret_notes.dart';
 import '../../services/office/office_network.dart';
 import '../../services/pdf/pdf_service.dart';
 import '../../services/print/print_job.dart';
@@ -169,9 +170,23 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// The database, once read: for what was proposed of a colleague's.
   PortalDatabase? _proposalsDb;
 
+  /// The case's accounts shared with this person, by their owner: read
+  /// only, in no account of theirs (R8); and who stopped sharing one.
+  Map<String, List<LedgerEntry>> _shared = const {};
+  String? _sharedRemoved;
+
   Future<void> _loadBooked() async {
     final db = await widget.database();
     _proposalsDb = db;
+    _shared = {
+      for (final e in db.sharedLedgersOf(widget.caseKey).entries)
+        e.key: [
+          for (final r in e.value)
+            if (!r.removed)
+              LedgerEntry(r, noteHidden: SecretNotes.descriptionHidden(db, r)),
+        ]..sort((a, b) => a.at.compareTo(b.at)),
+    };
+    _sharedRemoved = db.sharedLedgerRemoved(widget.caseKey);
     final booked = {
       for (final r in db.allClientRecords())
         if (r.kind == ClientRecordKind.movement && !r.removed)
@@ -1649,6 +1664,67 @@ class _EnforcementViewState extends State<EnforcementView> {
           'düşülmez.',
           style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
         ),
+        // A colleague's account of this case, the case shared with this
+        // person who may see the money (R8): apart, read only.
+        for (final MapEntry(key: owner, value: entries) in _shared.entries)
+          if (entries.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Row(
+              key: ValueKey('shared-ledger-$owner'),
+              children: [
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 16,
+                  color: AgendaColors.muted,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Folio hesabı · ${ledgerNameOf(owner)}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Text(
+                  'salt okunur',
+                  style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 8),
+              child: Text(
+                'Kasanıza ve müvekkil hesaplarınıza katılmaz. Bir yanlış '
+                'görürseniz önerin.',
+                style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+              ),
+            ),
+            for (final e in entries.reversed) ...[
+              _paymentCard(e),
+              const SizedBox(height: 10),
+            ],
+            if (folioLeft(_uyapLeft == null ? null : _uyapLeft! / 100, entries)
+                case final left?)
+              total(
+                "Folio'ya göre kalan",
+                (left * 100).round(),
+                AgendaColors.hearingText,
+                AgendaColors.hearingFill,
+                ValueKey('shared-ledger-left-$owner'),
+              ),
+          ],
+        if (_sharedRemoved case final who?)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Text(
+              '$who bu dosyanın Folio hesabını artık paylaşmıyor; hesap bu '
+              'cihazdan silindi.',
+              key: const ValueKey('shared-ledger-removed'),
+              style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
+            ),
+          ),
       ],
     );
   }

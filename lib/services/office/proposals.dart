@@ -55,7 +55,7 @@ class ProposalService {
   }) {
     switch (kind) {
       case 'icra':
-        final r = db.clientRecord(target);
+        final r = enforcementRecord(db, target);
         if (r == null || r.kind != ClientRecordKind.enforcement) return {};
         return {
           for (final e in LedgerBook.versionsOf(r).entries) e.key: '${e.value}',
@@ -70,10 +70,15 @@ class ProposalService {
     return {};
   }
 
+  /// Enforcement payment [id] as known here: one's own or a card's, else
+  /// of a case's account shared with this person (R8).
+  static ClientRecord? enforcementRecord(PortalDatabase db, String id) =>
+      db.clientRecord(id) ?? db.sharedLedgerRecord(id);
+
   /// The person whose [kind] [target] is; empty for none known.
   static String ownerOf(PortalDatabase db, String kind, String target) =>
       switch (kind) {
-        'icra' => db.clientRecord(target)?.person ?? '',
+        'icra' => enforcementRecord(db, target)?.person ?? '',
         _ => db.clientCard(target)?.person ?? '',
       };
 
@@ -163,7 +168,7 @@ class ProposalService {
     final now = versionsOf(db, p.kind, p.target, caseKey: p.caseKey);
     return now.isNotEmpty &&
         Hlc.canonical(now) == Hlc.canonical(p.seen) &&
-        (p.kind != 'icra' || db.clientRecord(p.target) != null);
+        (p.kind != 'icra' || enforcementRecord(db, p.target) != null);
   }
 
   /// This person's word on [proposalId], on their device for deciding:

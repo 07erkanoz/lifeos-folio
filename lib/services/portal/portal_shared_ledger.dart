@@ -15,30 +15,33 @@ extension PortalSharedLedger on PortalDatabase {
       json TEXT NOT NULL, PRIMARY KEY(sahip, dosya, id));
   ''';
 
-  // The owner's word.
+  // The owner's side.
 
-  static const _ledgerShares = 'paylasim-defter';
+  static const _shareVersions = 'paylasim-surum';
 
-  /// Whether this person's [caseKey]'s account goes with it, and the
-  /// version of that word.
-  ({bool on, Hlc version})? ledgerShare(String caseKey) {
-    final all = PortalAgendaVersions._map(meta(_ledgerShares)) ?? const {};
-    final j = all[caseKey];
-    if (j is! Map) return null;
-    final v = Hlc.tryParse(j['surum']);
-    return v == null ? null : (on: j['acik'] == true, version: v);
+  /// The version of the word of whom [caseKey] is shared with: each change
+  /// of it a later one, for one of before to bring nothing back.
+  Hlc? caseShareVersion(String caseKey) => Hlc.tryParse(
+    (PortalAgendaVersions._map(meta(_shareVersions)) ?? const {})[caseKey],
+  );
+
+  /// Whom [caseKey] is shared with changed: a new version of that word.
+  void tickCaseShare(String caseKey) {
+    final all = {...?PortalAgendaVersions._map(meta(_shareVersions))};
+    all[caseKey] = '${SyncClock.of(this).tick()}';
+    setMeta(_shareVersions, jsonEncode(all));
   }
 
-  /// This person's [caseKey]'s account shared with it, or no longer: a
-  /// new version of the word either way.
-  void setLedgerShare(String caseKey, bool on) {
-    final all = {...?PortalAgendaVersions._map(meta(_ledgerShares))};
-    final was = ledgerShare(caseKey);
-    if (was != null && was.on == on) return;
-    all[caseKey] = {'acik': on, 'surum': '${SyncClock.of(this).tick()}'};
-    setMeta(_ledgerShares, jsonEncode(all));
-    PortalDatabase.changed?.call();
-  }
+  /// This person's own enforcement payments of [caseKey], as the ones it
+  /// is shared with who may see the money take them: its secret
+  /// descriptions empty (R7), never a colleague's that came here.
+  List<Map<String, Object?>> caseLedgerForOffice(String caseKey, String me) => [
+    for (final r in allClientRecords())
+      if (r.kind == ClientRecordKind.enforcement &&
+          r.text('dosya') == caseKey &&
+          (r.person == me || r.person.isEmpty))
+        {...SecretNotes.recordForOffice(this, r), 'kisi': me},
+  ];
 
   // The one it is shared with.
 

@@ -43,7 +43,7 @@ List<({String label, String now, String then})> proposalChanges(
   };
   switch (p.kind) {
     case 'icra':
-      final r = db.clientRecord(p.target);
+      final r = ProposalService.enforcementRecord(db, p.target);
       if (r == null) return const [];
       if (p.remove) {
         return [(label: 'Kayıt', now: 'duruyor', then: 'silinsin')];
@@ -82,7 +82,7 @@ List<({String label, String now, String then})> proposalChanges(
 String proposalTitle(PortalDatabase db, Proposal p) {
   switch (p.kind) {
     case 'icra':
-      final r = db.clientRecord(p.target);
+      final r = ProposalService.enforcementRecord(db, p.target);
       final what = r?.data['tur'] == 'feragat' ? 'Feragat' : 'Haricen tahsilat';
       return '$what · ${r?.text('dosya') ?? ''}';
     case 'kartNotu':

@@ -8,7 +8,11 @@ import 'package:crypto/crypto.dart';
 import '../portal/observed.dart';
 import '../portal/portal_case.dart';
 import '../portal/portal_channel.dart';
+import '../clients/client.dart';
 import '../portal/portal_database.dart';
+import '../sync/hlc.dart';
+import '../sync/sync_caps.dart';
+import '../sync/sync_generation.dart';
 import '../portal/portal_hearing.dart';
 import '../uyap/uyap_case_panel_controller.dart';
 import '../uyap/uyap_case_store.dart';
@@ -111,8 +115,14 @@ class SharedCases {
       all[caseKey] = now;
     }
     ever[caseKey] = {...?ever[caseKey], ...now}.toList()..sort();
+    final was = shares(db)[caseKey] ?? const [];
     db.setMeta(_sharesKey, jsonEncode(all));
     db.setMeta(_everKey, jsonEncode(ever));
+    // Whom it goes to changed: its account's word anew (R8).
+    if (was.join('|') != now.join('|') ||
+        db.caseShareVersion(caseKey) == null) {
+      db.tickCaseShare(caseKey);
+    }
   }
 
   /// Where [caseKey] came from when it is not this person's own: shared
@@ -182,8 +192,33 @@ class SharedCases {
       json.addAll(TaskPackage.caseExtras(db, e.key));
       cases.add(json);
     }
+    // The case's account in Folio, to one who may see the money and whose
+    // Folio keeps it apart (R8); to the others it went to, that it no
+    // longer goes. No word to set: whom the case is shared with, and who
+    // may see the money, say it.
+    final money = network.seesMoney && network.seesMoneyOf(toDevice);
+    final keeps =
+        network.peerCaps[toDevice]?.contains(SyncCaps.sharedLedger) ?? false;
+    final ledgers = <Object?>[];
+    if (keeps) {
+      for (final e in _read(db, _everKey).entries) {
+        if (!e.value.contains(person)) continue;
+        final version = db.caseShareVersion(e.key);
+        if (version == null) continue;
+        final open = money && (shared[e.key]?.contains(person) ?? false);
+        ledgers.add({
+          'dosya': e.key,
+          'surum': '$version',
+          if (open)
+            'kayitlar': db.caseLedgerForOffice(e.key, network.me)
+          else
+            'kapali': true,
+        });
+      }
+    }
     return {
       'dosyalar': cases,
+      if (ledgers.isNotEmpty) 'defterler': ledgers,
       'kaldirilan': [
         for (final e in _read(db, _everKey).entries)
           if (e.value.contains(person) &&
@@ -234,6 +269,28 @@ class SharedCases {
       db.setMeta(markOf(key), mark);
       db.setMeta(_digestOf(key), digest);
       db.setMeta(_revokedOf(key), '');
+    }
+    // Their account of each case shared, kept apart, read only; none to one
+    // who may not see the money (R8, R11).
+    final money = network.seesMoney && network.seesMoneyOf(fromDevice);
+    for (final raw in theirs['defterler'] as List? ?? const []) {
+      if (raw is! Map || raw['dosya'] is! String) continue;
+      final version = Hlc.tryParse(raw['surum']);
+      if (version == null || person.isEmpty) continue;
+      SyncClock.observe(db, version);
+      if (db.takeSharedLedger(
+        person,
+        raw['dosya'] as String,
+        version,
+        closed: raw['kapali'] == true || !money,
+        ownerName: name,
+        records: [
+          for (final j in raw['kayitlar'] as List? ?? const [])
+            ?ClientRecord.fromJson(j),
+        ],
+      )) {
+        changed = true;
+      }
     }
     for (final key in theirs['kaldirilan'] as List? ?? const []) {
       final source = sourceOf(db, '$key');

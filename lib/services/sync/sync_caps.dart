@@ -33,6 +33,7 @@ abstract final class SyncCaps {
     secretNotes,
     recall,
     proposals,
+    sharedLedger,
   };
 
   /// The capabilities this Folio's own formats use now: a part needs of
