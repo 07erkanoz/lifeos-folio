@@ -551,18 +551,24 @@ class OfficeNetwork extends ChangeNotifier {
         );
         // Shut however it ends: a reply that never came or a send that
         // failed would otherwise leave the socket open. A part whose
-        // format needs something of the other goes in a second step, once
-        // the other has said in this exchange that it has it (R0).
+        // format needs something of the other, or too large for one
+        // message, goes in a second step, once the other has said in this
+        // exchange that it has what it needs (R0, R10).
         try {
           unawaited(_metOwn(ch));
           final old = actsOldForTesting;
           final plain = SyncCaps.needs(e.key).isEmpty;
+          final mine = old || plain
+              ? await e.value.export(peer.deviceId)
+              : null;
+          final fits =
+              mine == null || jsonEncode(mine).length <= pieceSize || old;
           final reply = _next(ch);
           await ch.send({
             't': 'buro-parca',
             ..._said,
             'ad': e.key,
-            'veri': old || plain ? await e.value.export(peer.deviceId) : null,
+            'veri': fits ? mine : null,
           });
           final m = await reply.within(const Duration(seconds: 20));
           // Only the answer to this part's: of its kind, and of this part
@@ -574,27 +580,43 @@ class OfficeNetwork extends ChangeNotifier {
           }
           final said = _heard(peer.deviceId, m);
           final may = old || _partWith(peer.deviceId, e.key, said);
+          final theirs = await _officeLoad(ch, m);
           if (may &&
-              m['veri'] != null &&
-              await e.value.merge(m['veri'], peer.deviceId)) {
+              theirs != null &&
+              await e.value.merge(theirs, peer.deviceId)) {
             notifyListeners();
           }
           if (!old && said.protocol >= SyncCaps.protocol) {
-            final done = _next(ch);
-            await ch.send({
-              't': 'buro-parca-ek',
-              'ad': e.key,
-              'veri': !plain && may
-                  ? await e.value.export(peer.deviceId)
-                  : null,
-            });
-            await done.within(const Duration(seconds: 40));
+            final later = !may
+                ? null
+                : !plain
+                ? await e.value.export(peer.deviceId)
+                : fits
+                ? null
+                : mine;
+            final second = await _sendPacked(
+              ch,
+              {'t': 'buro-parca-ek', 'ad': e.key},
+              'veriPaket',
+              _pack({'veri': later}),
+              canSplit: _splits(said),
+            );
+            await second.then.within(const Duration(seconds: 40));
           }
         } finally {
           await ch.close();
         }
       } catch (_) {}
     }
+  }
+
+  /// An office part's load in [m]: as it is (`veri`), or packed, whole or
+  /// in pieces (`veriPaket`).
+  Future<Object?> _officeLoad(OfficeChannel ch, Map<String, Object?> m) async {
+    if (!m.containsKey('veriPaket')) return m['veri'];
+    final packed = await _receivePacked(ch, m, 'veriPaket');
+    final load = _unpack(packed);
+    return load is Map ? load['veri'] : null;
   }
 
   /// Channels kept open for a kind ("canli": a document shared live): the
@@ -856,6 +878,108 @@ class OfficeNetwork extends ChangeNotifier {
     }
   }
 
+  /// The largest piece of a packed load sent in one message: well under
+  /// [OfficeLink.maxLine] once sealed (docs/senkron-plan.md R10).
+  @visibleForTesting
+  static int pieceSize = 512 * 1024;
+
+  /// [packed] sent under [key] with [head]: whole when it fits, else in
+  /// pieces, each after the other side asked for it, so that none comes
+  /// before it is listened for. Split only when [canSplit] (the other said
+  /// [SyncCaps.split] in this exchange); a load too large for one message
+  /// and not to be split is not sent, and false is given. The message
+  /// that follows the load is listened for before its last piece goes:
+  /// [then].
+  Future<({bool sent, _Next then})> _sendPacked(
+    OfficeChannel ch,
+    Map<String, Object?> head,
+    String key,
+    String packed, {
+    required bool canSplit,
+  }) async {
+    if (packed.length <= pieceSize) {
+      final then = _next(ch);
+      await ch.send({...head, key: packed});
+      return (sent: true, then: then);
+    }
+    if (!canSplit) {
+      final then = _next(ch);
+      await ch.send({...head, key: _pack(const {}), 'ertelendi': true});
+      return (sent: false, then: then);
+    }
+    final pieces = [
+      for (var i = 0; i < packed.length; i += pieceSize)
+        packed.substring(
+          i,
+          i + pieceSize > packed.length ? packed.length : i + pieceSize,
+        ),
+    ];
+    final id = '${DateTime.now().microsecondsSinceEpoch}';
+    var then = _next(ch);
+    await ch.send({
+      ...head,
+      'bolum': {'kimlik': id, 'toplam': pieces.length},
+      key: pieces.first,
+    });
+    for (var i = 1; i < pieces.length; i++) {
+      final asked = await then.within(const Duration(seconds: 30));
+      if (asked == null ||
+          asked['t'] != 'bolum-iste' ||
+          asked['kimlik'] != id ||
+          asked['sira'] != i) {
+        return (sent: false, then: _Next.none());
+      }
+      then = _next(ch);
+      await ch.send({'t': 'bolum', 'kimlik': id, 'sira': i, 'veri': pieces[i]});
+    }
+    return (sent: true, then: then);
+  }
+
+  /// The load under [key] of [first], the message that began it: whole, or
+  /// its pieces asked for one by one and joined. Null when a piece did not
+  /// come; nothing of it is to be taken then.
+  Future<String?> _receivePacked(
+    OfficeChannel ch,
+    Map<String, Object?> first,
+    String key,
+  ) async {
+    final head = first['bolum'];
+    final firstPiece = first[key];
+    if (firstPiece is! String) return null;
+    if (head is! Map) return firstPiece;
+    final id = head['kimlik'], total = head['toplam'];
+    if (id is! String || total is! int || total < 1 || total > 4096) {
+      return null;
+    }
+    final out = StringBuffer(firstPiece);
+    for (var i = 1; i < total; i++) {
+      final piece = _next(ch);
+      await ch.send({'t': 'bolum-iste', 'kimlik': id, 'sira': i});
+      final m = await piece.within(const Duration(seconds: 30));
+      if (m == null ||
+          m['t'] != 'bolum' ||
+          m['kimlik'] != id ||
+          m['sira'] != i ||
+          m['veri'] is! String) {
+        return null;
+      }
+      out.write(m['veri'] as String);
+    }
+    return out.toString();
+  }
+
+  /// Whether [said] lets a load be sent to it in pieces.
+  bool _splits(SyncSaid said) =>
+      !actsOldForTesting &&
+      said.protocol >= SyncCaps.protocol &&
+      said.caps.contains(SyncCaps.split);
+
+  /// Something came from another own device and changed here: told on to
+  /// the others (A→B→C), only when it did, so that nothing goes round.
+  void _cameChanged(bool changed) {
+    if (changed) ownChanged();
+  }
+
   /// The own parts that may go to [to], by what it said in this exchange
   /// ([said]). [plain]: only those whose format needs nothing of the other
   /// (true), only those that do (false), all (null). What needs something
@@ -879,18 +1003,22 @@ class OfficeNetwork extends ChangeNotifier {
         ),
   };
 
-  Future<void> _ownCame(Object? theirs, String from, SyncSaid said) async {
-    if (theirs is! Map) return;
+  /// What [theirs] brings of each part, taken here; true when anything
+  /// changed.
+  Future<bool> _ownCame(Object? theirs, String from, SyncSaid said) async {
+    if (theirs is! Map) return false;
+    var changed = false;
     for (final e in ownParts.entries) {
       if (!theirs.containsKey(e.key)) continue;
       // Not taken from a device whose Folio lacks what its format needs.
       if (!actsOldForTesting && !_partWith(from, e.key, said)) continue;
       _ownMerging.add((part: e.key, done: false));
       try {
-        await e.value.merge(theirs[e.key]);
+        if (await e.value.merge(theirs[e.key])) changed = true;
       } catch (_) {}
       _ownMerging.add((part: e.key, done: true));
     }
+    return changed;
   }
 
   final _ownMerging = StreamController<({String part, bool done})>.broadcast();
@@ -919,44 +1047,60 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
-      // Two steps (docs/senkron-plan.md R0): what needs nothing of the
-      // other goes first, with what this Folio can do; what needs
+      // Two steps (docs/senkron-plan.md R0, R10): what needs nothing of
+      // the other goes first, with what this Folio can do; what needs
       // something goes only after the other has said, in this exchange,
-      // that it has it. A Folio from before capabilities says nothing and
-      // is sent no second step. Kept alike only when every step came.
+      // that it has it, and with it what was too large for the first
+      // message (not to be split before the other says it can join). A
+      // Folio from before capabilities says nothing and is sent no second
+      // step. Kept alike only when every step came.
       var whole = false;
+      var changed = false;
       try {
         unawaited(_metOwn(ch));
         if (!ch.vouched) return;
         final old = actsOldForTesting;
-        final reply = _next(ch);
-        await ch.send({
-          't': 'senkron',
-          ..._said,
-          'parcalar': _pack(
-            await _ownParts(peer.deviceId, SyncCaps.nothing, plain: true),
-          ),
-        });
-        final m = await reply.within(const Duration(seconds: 20));
+        final plain = await _ownParts(
+          peer.deviceId,
+          SyncCaps.nothing,
+          plain: true,
+        );
+        final first = await _sendPacked(
+          ch,
+          {'t': 'senkron', ..._said},
+          'parcalar',
+          _pack(plain),
+          canSplit: false,
+        );
+        final m = await first.then.within(const Duration(seconds: 20));
         if (m == null || m['t'] != 'senkron') return;
         final said = _heard(peer.deviceId, m);
-        await _ownCame(_unpack(m['parcalar']), peer.deviceId, said);
-        whole = true;
+        final theirs = await _receivePacked(ch, m, 'parcalar');
+        if (theirs == null) return;
+        changed = await _ownCame(_unpack(theirs), peer.deviceId, said);
+        whole = first.sent;
         if (!old && said.protocol >= SyncCaps.protocol) {
-          final done = _next(ch);
-          await ch.send({
-            't': 'senkron-ek',
-            'parcalar': _pack(
-              await _ownParts(peer.deviceId, said, plain: false),
-            ),
-          });
-          final ack = await done.within(const Duration(seconds: 40));
+          final more = await _ownParts(peer.deviceId, said, plain: false);
+          // What did not fit the first message goes now.
+          if (!first.sent) more.addAll(plain);
+          final second = await _sendPacked(
+            ch,
+            {'t': 'senkron-ek'},
+            'parcalar',
+            _pack(more),
+            canSplit: _splits(said),
+          );
+          final ack = await second.then.within(const Duration(seconds: 40));
           whole =
-              ack != null && ack['t'] == 'senkron-ek' && ack['tamam'] == true;
+              second.sent &&
+              ack != null &&
+              ack['t'] == 'senkron-ek' &&
+              ack['tamam'] == true;
         }
       } finally {
         await ch.close();
       }
+      _cameChanged(changed);
       if (!whole) return;
       synced[peer.deviceId] = DateTime.now();
       notifyListeners();
@@ -1112,16 +1256,16 @@ class OfficeNetwork extends ChangeNotifier {
       }
       if (m['t'] == 'buro-parca') {
         // An office part another member sends: taken where it is on here,
-        // and this one's sent back, made for them; what needs something
-        // of the other in a second step (R0).
+        // and this one's sent back, made for them, in pieces when the
+        // other said it can join them; what needs something of the other,
+        // or was too large for its first message, in a second step (R0,
+        // R10).
         final from = ch.peer.deviceId;
         final said = _heard(from, m);
         final name = '${m['ad']}';
         final part = officeParts[name];
         final old = actsOldForTesting;
-        final next = !old && said.protocol >= SyncCaps.protocol
-            ? _next(ch)
-            : null;
+        _Next? next;
         try {
           final may =
               part != null &&
@@ -1134,20 +1278,28 @@ class OfficeNetwork extends ChangeNotifier {
             }
             mine = await part.export(from);
           }
-          await ch.send({
-            't': 'buro-parca',
-            ..._said,
-            'ad': name,
-            'veri': mine,
-          });
-          if (next != null) {
-            final more = await next.within(const Duration(seconds: 40));
+          final head = {'t': 'buro-parca', ..._said, 'ad': name};
+          final _Next then;
+          if (_splits(said) && jsonEncode(mine).length > pieceSize) {
+            then = (await _sendPacked(
+              ch,
+              head,
+              'veriPaket',
+              _pack({'veri': mine}),
+              canSplit: true,
+            )).then;
+          } else {
+            then = _next(ch);
+            await ch.send({...head, 'veri': mine});
+          }
+          next = then;
+          if (!old && said.protocol >= SyncCaps.protocol) {
+            final more = await then.within(const Duration(seconds: 40));
             if (more != null &&
                 more['t'] == 'buro-parca-ek' &&
                 more['ad'] == name) {
-              if (may &&
-                  more['veri'] != null &&
-                  await part.merge(more['veri'], from)) {
+              final theirs = await _officeLoad(ch, more);
+              if (may && theirs != null && await part.merge(theirs, from)) {
                 notifyListeners();
               }
               await ch.send({'t': 'buro-parca-ek', 'ad': name, 'tamam': true});
@@ -1208,27 +1360,38 @@ class OfficeNetwork extends ChangeNotifier {
         final from = ch.peer.deviceId;
         final said = _heard(from, m);
         final old = actsOldForTesting;
-        // The second step comes when both said what they can do; listened
-        // for before the answer goes, which it follows.
-        final next = !old && said.protocol >= SyncCaps.protocol
-            ? _next(ch)
-            : null;
+        var changed = false;
+        _Next? next;
         try {
-          await _ownCame(_unpack(m['parcalar']), from, said);
-          // What it said it can do is known now: all that may go.
-          await ch.send({
-            't': 'senkron',
-            ..._said,
-            'parcalar': _pack(await _ownParts(from, said)),
-          });
-          var whole = true;
-          if (next != null) {
-            final more = await next.within(const Duration(seconds: 40));
-            whole = more != null && more['t'] == 'senkron-ek';
-            if (whole) {
-              await _ownCame(_unpack(more['parcalar']), from, said);
+          final theirs = await _receivePacked(ch, m, 'parcalar');
+          if (theirs == null) return;
+          changed = await _ownCame(_unpack(theirs), from, said);
+          // What it said it can do is known now: all that may go, in
+          // pieces when it said it can join them. The second step comes
+          // when both said what they can do; it follows the answer, and is
+          // listened for before the answer's last piece goes.
+          final answer = await _sendPacked(
+            ch,
+            {'t': 'senkron', ..._said},
+            'parcalar',
+            _pack(await _ownParts(from, said)),
+            canSplit: _splits(said),
+          );
+          var whole = answer.sent;
+          if (!old && said.protocol >= SyncCaps.protocol) {
+            next = answer.then;
+            final more = await answer.then.within(const Duration(seconds: 40));
+            final packed = more != null && more['t'] == 'senkron-ek'
+                ? await _receivePacked(ch, more, 'parcalar')
+                : null;
+            if (packed == null) {
+              whole = false;
+            } else {
+              if (await _ownCame(_unpack(packed), from, said)) changed = true;
               await ch.send({'t': 'senkron-ek', 'tamam': true});
             }
+          } else {
+            answer.then.cancel();
           }
           if (whole) {
             synced[from] = DateTime.now();
@@ -1238,6 +1401,7 @@ class OfficeNetwork extends ChangeNotifier {
           // Not kept alike this time; the channel is shut all the same.
         } finally {
           next?.cancel();
+          _cameChanged(changed);
           await Future<void>.delayed(const Duration(milliseconds: 200));
           await ch.close();
         }
@@ -3118,17 +3282,25 @@ class _Next {
     });
   }
 
+  /// One that never comes.
+  _Next.none() {
+    _sub = null;
+  }
+
   final _got = Completer<Map<String, Object?>>();
-  late final StreamSubscription<Map<String, Object?>> _sub;
+  StreamSubscription<Map<String, Object?>>? _sub;
 
-  void cancel() => unawaited(_sub.cancel());
+  void cancel() => unawaited(_sub?.cancel());
 
-  /// The message, or null when none came in [time].
-  Future<Map<String, Object?>?> within(Duration time) => _got.future
-      .timeout(time)
-      .then<Map<String, Object?>?>((m) => m)
-      .catchError((Object _) {
-        cancel();
-        return null;
-      });
+  /// The message, or null when none came in [time]; at once for one that
+  /// never comes.
+  Future<Map<String, Object?>?> within(Duration time) => _sub == null
+      ? Future.value(null)
+      : _got.future
+            .timeout(time)
+            .then<Map<String, Object?>?>((m) => m)
+            .catchError((Object _) {
+              cancel();
+              return null;
+            });
 }

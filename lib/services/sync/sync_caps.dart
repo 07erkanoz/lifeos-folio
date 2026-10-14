@@ -24,7 +24,7 @@ abstract final class SyncCaps {
 
   /// What this Folio knows and says it has: each only once the feature
   /// using it is whole here (§5).
-  static const known = {hlc};
+  static const known = {hlc, split};
 
   /// The capabilities this Folio's own formats use now: a part needs of
   /// another device only those of its row in [matrix] that are here.

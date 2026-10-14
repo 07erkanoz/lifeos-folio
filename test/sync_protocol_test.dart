@@ -543,5 +543,127 @@ void main() {
         expect(laptop.stoppedParts[phone.self!.deviceId], isEmpty);
       },
     );
+
+    Future<List<OfficeNetwork>> ownDevices(int n) async {
+      final first = await folio('Av. Deniz Yılmaz', 'cihaz0');
+      final all = [first];
+      for (var i = 1; i < n; i++) {
+        final next = await folio('Av. Deniz Yılmaz', 'cihaz$i');
+        first.seenForTesting(next.self!);
+        next.seenForTesting(first.self!);
+        final asking = first.pair(next.self!)!;
+        await until(
+          () => next.incoming.value?.code != null && asking.code != null,
+        );
+        next.incoming.value!.confirm();
+        asking.confirm();
+        await until(() => first.self!.userId == next.self!.userId);
+        all.add(next);
+      }
+      // Each sees each, as the network would show them.
+      for (final a in all) {
+        for (final b in all) {
+          if (!identical(a, b)) a.seenForTesting(b.self!);
+        }
+      }
+      return all;
+    }
+
+    test('a load larger than a message goes in pieces, each asked for, and '
+        'is taken whole', () async {
+      final size = OfficeNetwork.pieceSize;
+      addTearDown(() => OfficeNetwork.pieceSize = size);
+      OfficeNetwork.pieceSize = 2000;
+      final [laptop, phone] = await ownDevices(2);
+      // Words that do not pack small: a load of some pieces.
+      final big = [for (var i = 0; i < 400; i++) '${i * 7919 % 10007}-$i'];
+      Object? came;
+      laptop.ownParts['ajanda'] = OwnPart(
+        export: () async => {'satirlar': big},
+        merge: (_) async => false,
+      );
+      phone.ownParts['ajanda'] = OwnPart(
+        export: () async => {'satirlar': const []},
+        merge: (theirs) async {
+          came = theirs;
+          return true;
+        },
+      );
+      await laptop.syncOwn();
+      expect((came as Map?)?['satirlar'], big);
+      expect(laptop.synced.containsKey(phone.self!.deviceId), isTrue);
+      // And the other way, the answer in pieces.
+      came = null;
+      Object? back;
+      laptop.ownParts['ajanda'] = OwnPart(
+        export: () async => {'satirlar': const []},
+        merge: (theirs) async {
+          back = theirs;
+          return true;
+        },
+      );
+      phone.ownParts['ajanda'] = OwnPart(
+        export: () async => {'satirlar': big},
+        merge: (_) async => false,
+      );
+      await laptop.syncOwn();
+      expect((back as Map?)?['satirlar'], big);
+    });
+
+    test('a load too large for one message is not sent to a Folio that cannot '
+        'join pieces, and that is not taken for kept alike', () async {
+      final size = OfficeNetwork.pieceSize;
+      addTearDown(() => OfficeNetwork.pieceSize = size);
+      OfficeNetwork.pieceSize = 2000;
+      final [laptop, phone] = await ownDevices(2);
+      phone.actsOldForTesting = true;
+      final big = [for (var i = 0; i < 400; i++) '${i * 7919 % 10007}-$i'];
+      Object? came;
+      laptop.ownParts['ajanda'] = OwnPart(
+        export: () async => {'satirlar': big},
+        merge: (_) async => false,
+      );
+      phone.ownParts['ajanda'] = OwnPart(
+        export: () async => {'satirlar': const []},
+        merge: (theirs) async {
+          came = theirs;
+          return false;
+        },
+      );
+      await laptop.syncOwn();
+      expect(came, isNull);
+      expect(laptop.synced.containsKey(phone.self!.deviceId), isFalse);
+    });
+
+    test('what one own device takes from another goes on to the third, '
+        'without waiting for a change of its own (A→B→C)', () async {
+      final [a, b, c] = await ownDevices(3);
+      final kept = <OfficeNetwork, List<String>>{a: [], b: [], c: []};
+      for (final net in [a, b, c]) {
+        net.ownParts['ajanda'] = OwnPart(
+          export: () async => {'satirlar': kept[net]},
+          merge: (theirs) async {
+            final rows = [
+              for (final r in ((theirs as Map)['satirlar'] as List)) '$r',
+            ];
+            final next = {...kept[net]!, ...rows}.toList()..sort();
+            if (next.length == kept[net]!.length) return false;
+            kept[net] = next;
+            return true;
+          },
+        );
+      }
+      // A does not reach C: only B is between them.
+      a.lostForTesting(c.self!.deviceId);
+      expect(a.ownOnline.map((p) => p.deviceId), [b.self!.deviceId]);
+      kept[a] = ['itiraz'];
+      await a.syncOwn();
+      expect(kept[b], ['itiraz']);
+      expect(kept[c], isEmpty, reason: 'not from A');
+      // B tells C of itself, having taken something new.
+      await until(() => kept[c]!.contains('itiraz'));
+      // And it stops there: nothing new, nothing sent round.
+      expect(kept[a], ['itiraz']);
+    }, timeout: const Timeout(Duration(seconds: 60)));
   });
 }

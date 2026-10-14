@@ -46,9 +46,25 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
       girmiyor.
     - R4: UYAP eşleşmesi kaydedilmiyor, her açılışta hesaplanıyor (`ledgerOf(collections:)`).
       Avukatın sözü `resmiKarar`'da. Eski `resmi: elle` okunuyor, eski otomatik anahtar okunmuyor.
-    - Kalan: başkasının defter kaydında Düzenle/Sil/Bildirildi/Resmi'nin kapanması (ekran; maket
-      onayı bekliyor).
-  - Sıradaki adım: adım 2'nin ekran kısmı, sonra §5 adım 3.
+    - Ekran (`1cbf25a`): meslektaşın icra kaydında "Yazan: …" rozeti; Düzenle, Sil, Bildirildi,
+      İşlendi say ve Geri al yok; "Bu kaydı yalnız … değiştirebilir.".
+  - Ara iş (`65516df`): UYAP Mobil oturumu açılışta yalnız UYAP reddederse düşer. Gövdedeki
+    `status: 401` yenilenir. Oturum olayları `uyap-senkron.log`'a yazılır.
+  - **§5 adım 3 bitti:**
+    - **Parçalı aktarım:** `OfficeNetwork._sendPacked` / `_receivePacked`. Yük `pieceSize`'ı
+      (512 KB) aşarsa parçalar, alıcı her birini istedikçe (`bolum-iste` → `bolum`) gider; hiçbir
+      parça dinlenmeden gelmez.
+      - Bölme yalnız karşı taraf `paketBolme`'yi aynı alışverişte söylediyse yapılır.
+      - İlk mesaja sığmayan yük ikinci adıma ertelenir (`ertelendi`).
+      - Büro parçalarında `veriPaket`.
+      - Alıcı bütün parçalar gelince tek seferde uygular; eksik parçada hiçbir şey alınmaz.
+      - Onay gelmezse eşitleme başarılı sayılmaz, sonraki turda yeniden denenir.
+    - **Yayılım (A→B→C):** `_ownCame` bir şey değiştirdiyse `ownChanged()` tetiklenir; değişiklik
+      yoksa tetiklenmez, döngü olmaz.
+    - İlan edilenler: `hlc`, `paketBolme`.
+    - Test edilmeyen: büro parçalarının parçalı aktarımı (büro üyeliği kurulumu uçtan uca testte,
+      adım 8).
+  - Sıradaki adım: §5 adım 4, finansal işlem modeli.
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,
