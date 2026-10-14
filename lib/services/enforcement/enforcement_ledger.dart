@@ -53,6 +53,9 @@ class LedgerEntry {
   String get way => record.text('odeme');
   String get note => record.text('aciklama');
 
+  /// [note] a secret note (R7): never in the office's copy nor a document.
+  bool get noteSecret => record.data['aciklamaGizli'] == true;
+
   /// Whether it settled the whole debt (or waived the whole claim).
   bool get whole => record.data['tamami'] == true;
 

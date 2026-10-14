@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:evrak_convert/services/notes/task_notes.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:evrak_convert/services/office/office_task.dart';
@@ -114,8 +115,9 @@ void main() {
     },
   );
 
-  test('the case goes with its hearings, deadlines, notices and notes, and '
-      'the one it is given to reads them', () async {
+  test('the case goes with its hearings and notices, and the one it is '
+      'given to reads them; the agenda\'s own notes and deadlines are not '
+      'in it: they go apart, as they are now (R7)', () async {
     final key = caseKey('2024/318', _court);
     final db = PortalDatabase.memory();
     final at = DateTime(2026, 11, 20, 10, 30);
@@ -167,9 +169,14 @@ void main() {
     final got = ReceivedCase.fromPaths(pack.paths)!;
     expect(got.hearings.single['tur'], 'Ön inceleme duruşması');
     expect(DateTime.parse('${got.hearings.single['tarih']}'), at);
-    expect(got.deadlines.single['baslik'], 'Bilirkişi raporuna itiraz');
-    expect(got.notes.single['baslik'], 'Tanık listesi hazırlanacak');
+    expect(got.deadlines, isEmpty);
+    expect(got.notes, isEmpty);
     expect(got.notices, isEmpty);
+    expect(got.details[TaskNotes.format], 2);
+    expect([for (final r in db.taskNoteRows(key).rows) r['title']]..sort(), [
+      'Bilirkişi raporuna itiraz',
+      'Tanık listesi hazırlanacak',
+    ]);
   });
 
   test('the one it is given to keeps the case as theirs: in Dava '

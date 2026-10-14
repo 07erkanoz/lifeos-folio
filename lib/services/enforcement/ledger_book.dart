@@ -106,7 +106,8 @@ abstract final class LedgerBook {
       'tamami',
       'uyapBakiye',
     ],
-    'bilgi': ['borclu', 'aciklama'],
+    // The description and whether it is secret, together (R7).
+    'bilgi': ['borclu', 'aciklama', 'aciklamaGizli'],
     'bildirildi': ['bildirildi'],
     // The word and the sum and day it was given for, together (R4).
     'resmiKarar': ['resmiKarar', 'resmi', 'resmiKararSurum'],

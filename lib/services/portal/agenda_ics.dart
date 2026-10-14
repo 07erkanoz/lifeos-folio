@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../notes/secret_notes.dart';
 import 'portal_database.dart';
 import 'portal_hearing.dart';
 
@@ -84,6 +85,8 @@ List<CalendarEvent> agendaEvents(
   for (final i in db.agenda(from: from, to: to)) {
     final at = i.at;
     if (at == null || i.done) continue;
+    // A secret note is not written out of the lawyer's devices (R7).
+    if (SecretNotes.rowHidden(db, i)) continue;
     if (i.kind == 'deadline' ? !deadlines : !tasks) continue;
     final kase = i.caseKey == null ? null : db.caseOf(i.caseKey!);
     out.add(
@@ -96,7 +99,7 @@ List<CalendarEvent> agendaEvents(
         start: at,
         allDay: i.allDay,
         minutes: 30,
-        detail: i.body,
+        detail: SecretNotes.bodyHidden(i) ? '' : i.body,
       ),
     );
   }

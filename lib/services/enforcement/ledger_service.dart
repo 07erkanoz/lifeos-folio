@@ -121,6 +121,7 @@ class LedgerService {
     String debtor = '',
     String way = '',
     String note = '',
+    bool noteSecret = false,
     bool whole = false,
     int? uyapLeft,
     MovementKind? target,
@@ -140,6 +141,7 @@ class LedgerService {
           'borclu': debtor,
           'odeme': way,
           'aciklama': note,
+          if (noteSecret) 'aciklamaGizli': true,
           'tamami': whole,
           'uyapBakiye': ?uyapLeft,
         },
@@ -189,6 +191,7 @@ class LedgerService {
     required bool whole,
     required MovementKind? target,
     MovementKind? shown,
+    bool? noteSecret,
   }) {
     late ClientRecord made;
     db.inTransaction(() {
@@ -203,12 +206,18 @@ class LedgerService {
         'borclu': debtor,
         'aciklama': note,
       };
+      if (noteSecret == true) data['aciklamaGizli'] = true;
+      if (noteSecret == false) data.remove('aciklamaGizli');
       final money =
           amount != r.amount ||
           at != r.at ||
           way != r.text('odeme') ||
           whole != (r.data['tamami'] == true);
-      final words = debtor != r.text('borclu') || note != r.text('aciklama');
+      final words =
+          debtor != r.text('borclu') ||
+          note != r.text('aciklama') ||
+          (noteSecret != null &&
+              noteSecret != (r.data['aciklamaGizli'] == true));
       if (money) {
         // The lawyer's word that UYAP has it was for the sum and day it
         // had: not for these (R4).
@@ -251,6 +260,15 @@ class LedgerService {
                   : x,
           ];
         }
+      }
+      // Its description made secret: kept for good, for every copy of
+      // before to be taken back (R7).
+      if (noteSecret == true && r.data['aciklamaGizli'] != true) {
+        db.recordHide(
+          'aciklama:${r.id}',
+          'kart:${r.clientId}',
+          versions['bilgi']!,
+        );
       }
       made = _write(
         r,

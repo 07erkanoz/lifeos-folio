@@ -18,6 +18,7 @@ class Client {
     this.email = '',
     this.address = '',
     this.note = '',
+    this.noteSecret = false,
     this.messages = false,
     this.names = const [],
     required this.updated,
@@ -104,6 +105,10 @@ class Client {
   final String idNo;
   final String phone, phone2, email, address, note;
 
+  /// [note] a secret note (docs/senkron-plan.md R7): on the lawyer's own
+  /// devices only, never sent to the office. Versioned with [note], as one.
+  final bool noteSecret;
+
   /// Wishes to be told by message (WhatsApp, SMS, e-mail) of their
   /// hearings and instalments: the day's list asks for them only then.
   final bool messages;
@@ -134,6 +139,7 @@ class Client {
     String? email,
     String? address,
     String? note,
+    bool? noteSecret,
     bool? messages,
     List<String>? names,
     DateTime? updated,
@@ -156,6 +162,7 @@ class Client {
       email: email ?? this.email,
       address: address ?? this.address,
       note: note ?? this.note,
+      noteSecret: noteSecret ?? this.noteSecret,
       messages: messages ?? this.messages,
       names: names ?? this.names,
       updated: now,
@@ -188,6 +195,7 @@ class Client {
     email: email,
     address: address,
     note: note,
+    noteSecret: noteSecret,
     messages: messages,
     names: names,
     updated: updated,
@@ -349,7 +357,8 @@ class Client {
     phone2: pick['telefon2']! as String,
     email: pick['eposta']! as String,
     address: pick['adres']! as String,
-    note: pick['not']! as String,
+    note: (pick['not']! as (String, bool)).$1,
+    noteSecret: (pick['not']! as (String, bool)).$2,
     messages: pick['mesajIzni']! as bool,
     names: names,
     updated: updated,
@@ -366,6 +375,11 @@ class Client {
     hidden: pick['gizli']! as bool,
   );
 
+  static bool _secretOf(Object? v) => v is (String, bool) && v.$2;
+
+  /// [v] as JSON can write it.
+  static Object? _plain(Object? v) => v is (String, bool) ? [v.$1, v.$2] : v;
+
   Map<String, Object> get _values => {
     'ad': name,
     'kurum': body,
@@ -374,7 +388,8 @@ class Client {
     'telefon2': phone2,
     'eposta': email,
     'adres': address,
-    'not': note,
+    // The note and whether it is secret: one field, one version (R7).
+    'not': (note, noteSecret),
     'silindi': removed,
     'buro': office,
     'mesajIzni': messages,
@@ -402,8 +417,11 @@ class Client {
     final versions = <String, Hlc>{};
     for (final k in fields) {
       final va = mine.versionOf(k), vb = theirs.versionOf(k);
-      // The later version; for the same, the same value on every device.
-      final later = Hlc.decide(vb, b[k], va, a[k]) > 0;
+      // The later version; for the same, the same value on every device,
+      // a secret note before an open one (R7).
+      final later = k == 'not' && va == vb && _secretOf(a[k]) != _secretOf(b[k])
+          ? _secretOf(b[k])
+          : Hlc.decide(vb, _plain(b[k]), va, _plain(a[k])) > 0;
       pick[k] = later ? b[k]! : a[k]!;
       stamps[k] = later ? theirs.stampOf(k) : mine.stampOf(k);
       versions[k] = later ? vb : va;
@@ -420,7 +438,10 @@ class Client {
     theirs.caseNotes.forEach((k, n) {
       final kept = notes[k];
       if (kept == null ||
-          Hlc.decide(n.versionOf, n.value, kept.versionOf, kept.value) > 0) {
+          (n.versionOf == kept.versionOf && n.secret != kept.secret
+              ? n.secret
+              : Hlc.decide(n.versionOf, n.value, kept.versionOf, kept.value) >
+                    0)) {
         notes[k] = n;
       }
     });
@@ -450,6 +471,7 @@ class Client {
     'eposta': email,
     'adres': address,
     'not': note,
+    if (noteSecret) 'notGizli': true,
     'mesajIzni': messages,
     'adlar': names,
     'guncelleme': updated.toIso8601String(),
@@ -492,6 +514,7 @@ class Client {
       email: s('eposta'),
       address: s('adres'),
       note: s('not'),
+      noteSecret: j['notGizli'] == true,
       messages: j['mesajIzni'] == true,
       names: [
         for (final n in j['adlar'] is List ? j['adlar'] as List : const [])
@@ -581,9 +604,19 @@ class CaseLink {
 /// The lawyer's note on one of the client's cases: [by] wrote it at [at];
 /// the later note wins on every device.
 class CaseNote {
-  const CaseNote(this.text, this.at, {this.by = '', this.version});
+  const CaseNote(
+    this.text,
+    this.at, {
+    this.by = '',
+    this.version,
+    this.secret = false,
+  });
   final String text, by;
   final DateTime at;
+
+  /// A secret note (R7): on the lawyer's own devices only. Versioned with
+  /// its text, as one.
+  final bool secret;
 
   /// Its version (R1); null for one written before versions.
   final Hlc? version;
@@ -593,14 +626,17 @@ class CaseNote {
   /// What it says, for choosing between two of the same version.
   Map<String, Object?> get value => {...toJson()}..remove('surum');
 
-  bool sameAs(CaseNote o) => text == o.text && by == o.by && at == o.at;
+  bool sameAs(CaseNote o) =>
+      text == o.text && by == o.by && at == o.at && secret == o.secret;
 
-  CaseNote withVersion(Hlc v) => CaseNote(text, at, by: by, version: v);
+  CaseNote withVersion(Hlc v) =>
+      CaseNote(text, at, by: by, version: v, secret: secret);
 
   Map<String, Object?> toJson() => {
     'metin': text,
     'yazan': by,
     'zaman': at.toIso8601String(),
+    if (secret) 'gizliNot': true,
     if (version != null) 'surum': '$version',
   };
 
@@ -613,6 +649,7 @@ class CaseNote {
       at,
       by: j['yazan'] is String ? j['yazan'] as String : '',
       version: Hlc.tryParse(j['surum']),
+      secret: j['gizliNot'] == true,
     );
   }
 }

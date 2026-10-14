@@ -268,6 +268,7 @@ class OfficeNetwork extends ChangeNotifier {
       } else {
         unawaited(
           packages.came(taskId, caseKey, t.saved).then((_) async {
+            await packageCame?.call(taskId, caseKey, t.saved);
             // Kept as a case of this device's too: its page opens here.
             final task = tasks.all.where((x) => x.id == taskId).firstOrNull;
             await packages
@@ -471,6 +472,11 @@ class OfficeNetwork extends ChangeNotifier {
   /// name: the agenda, the sessions. Given only over a channel the
   /// person's key vouched for.
   final ownParts = <String, OwnPart>{};
+
+  /// Told of each task's case that came whole here, after it is kept: an
+  /// older Folio's notes taken out of it (R7).
+  Future<void> Function(String task, String caseKey, List<String> saved)?
+  packageCame;
 
   /// What the office's members keep alike, by name, each part on only
   /// where its user turned it on (the clients). What goes is made for the

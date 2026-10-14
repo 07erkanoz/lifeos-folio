@@ -53,7 +53,50 @@ extension PortalClients on PortalDatabase {
   /// Keeps [c] as the lawyer wrote it here: what they changed given a new
   /// version (R1), what came from another device since kept ([Client.written]).
   void saveClient(Client c) {
-    _putClient(c.written(clientCard(c.id), SyncClock.of(this)));
+    final before = clientCard(c.id);
+    var made = c.written(before, SyncClock.of(this));
+    // A colleague's card: its notes are theirs to write, as they wrote
+    // them (R6); a change of them here is not taken.
+    final me = PortalDatabase.clientPerson?.call() ?? '';
+    if (before != null &&
+        before.person.isNotEmpty &&
+        me.isNotEmpty &&
+        before.person != me) {
+      final j = made.toJson();
+      j['not'] = before.note;
+      j.remove('notGizli');
+      if (before.noteSecret) j['notGizli'] = true;
+      j['alanSurumu'] = {
+        ...?(j['alanSurumu'] as Map?),
+        'not': '${before.versionOf('not')}',
+      };
+      j['alanZamani'] = {
+        ...?(j['alanZamani'] as Map?),
+        'not': before.stampOf('not').toIso8601String(),
+      };
+      j['dosyaNotlari'] = {
+        for (final e in before.caseNotes.entries) e.key: e.value.toJson(),
+      };
+      made = Client.fromJson(j) ?? made;
+    }
+    _putClient(made);
+    // A note made secret here: kept for good, for every copy of before to
+    // be taken back (R7).
+    if (before != null) {
+      if (!before.noteSecret && made.noteSecret) {
+        recordHide('kartNotu:${c.id}', 'kart:${c.id}', made.versionOf('not'));
+      }
+      for (final e in made.caseNotes.entries) {
+        final was = before.caseNotes[e.key];
+        if (e.value.secret && was != null && !was.secret) {
+          recordHide(
+            'dosyaNotu:${c.id}:${e.key}',
+            'kart:${c.id}',
+            e.value.versionOf,
+          );
+        }
+      }
+    }
     PortalDatabase.changed?.call();
   }
 
@@ -623,7 +666,8 @@ extension PortalClients on PortalDatabase {
         for (final c in cards)
           if (c.sharedOnce && mine(c.person))
             c.office && !c.removed
-                ? {...c.toJson(), 'kisi': me}
+                // A secret note goes empty, with its version (R7).
+                ? {...SecretNotes.cardForOffice(this, c), 'kisi': me}
                 : {
                     'id': c.id,
                     'ad': '',
@@ -641,7 +685,7 @@ extension PortalClients on PortalDatabase {
                       (rec.clientId == officeCashId && money)) &&
                   mine(rec.person) &&
                   (money || !rec.kind.financial))
-            {...rec.toJson(), 'kisi': me},
+            {...SecretNotes.recordForOffice(this, rec), 'kisi': me},
       ],
       if (money)
         'defterEski': _legacyMap(
@@ -900,6 +944,9 @@ extension PortalClients on PortalDatabase {
           if (_unshared(c, me)) _forgetOthersOf(c.id, me);
         }
       }
+      // What a colleague took back of their notes stays taken back, whatever
+      // copy of before came (R7).
+      if (applyTakenNoteHides()) changed = true;
       _dropOrphanProjection();
     });
     return changed;

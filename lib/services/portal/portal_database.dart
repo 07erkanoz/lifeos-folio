@@ -22,6 +22,7 @@ import '../uyap/uyap_web_service.dart' show UyapParty, UyapWebService;
 import '../clients/client.dart';
 import '../clients/client_accounts.dart' show Movement, MovementKind;
 import '../enforcement/ledger_book.dart';
+import '../notes/secret_notes.dart';
 import '../sync/field_versions.dart';
 import '../sync/hlc.dart';
 import '../sync/sync_generation.dart';
@@ -29,6 +30,7 @@ import '../sync/sync_migration.dart';
 
 part 'portal_agenda_versions.dart';
 part 'portal_clients.dart';
+part 'portal_notes.dart';
 
 /// A UETS notification as kept, with the case it is tied to.
 class KeptNotice {
@@ -68,6 +70,11 @@ class AgendaItem {
   final String? hearingKey;
   final DateTime updated;
 
+  /// A secret note (docs/senkron-plan.md R7): kept on the lawyer's own
+  /// devices, never in the office's tasks, a shared case, the calendar
+  /// written out or a document. For a notice's deadline, its body alone.
+  final bool secret;
+
   /// The row as it was read, that this one was changed from ([copyWith]):
   /// what the lawyer changed is told apart from what came from another
   /// device since (docs/senkron-plan.md R1). Never kept.
@@ -84,6 +91,7 @@ class AgendaItem {
     this.caseKey,
     this.hearingKey,
     required this.updated,
+    this.secret = false,
     this.base,
   });
 
@@ -100,6 +108,7 @@ class AgendaItem {
     String? body,
     DateTime? at,
     bool? done,
+    bool? secret,
     DateTime? updated,
   }) => AgendaItem(
     id: id,
@@ -109,6 +118,7 @@ class AgendaItem {
     at: at ?? this.at,
     allDay: allDay,
     done: done ?? this.done,
+    secret: secret ?? this.secret,
     caseKey: caseKey,
     hearingKey: hearingKey,
     updated: updated ?? DateTime.now(),
@@ -260,6 +270,7 @@ class PortalDatabase {
         PRIMARY KEY(case_key, bolum, kanal));
     ''');
     _db.execute(PortalClients._tables);
+    _db.execute(PortalNotes._tables);
     // When the lawyer last decided on a deadline: for the newer to win
     // between their own devices.
     final columns = {
@@ -273,18 +284,21 @@ class PortalDatabase {
     if (!columns.contains('confirmed_day')) {
       _db.execute('ALTER TABLE deadline_user ADD COLUMN confirmed_day TEXT');
     }
-    // Each group's version (docs/senkron-plan.md R1, R5).
-    for (final (table, column) in const [
-      ('agenda', 'surumler'),
-      ('agenda_removed', 'surum'),
-      ('agenda_removed', 'satir'),
-      ('deadline_user', 'surumler'),
-      ('case_representation', 'surum'),
+    // Each group's version (docs/senkron-plan.md R1, R5), and whether a
+    // note is secret (R7).
+    for (final (table, column, type) in const [
+      ('agenda', 'surumler', 'TEXT'),
+      ('agenda_removed', 'surum', 'TEXT'),
+      ('agenda_removed', 'satir', 'TEXT'),
+      ('deadline_user', 'surumler', 'TEXT'),
+      ('case_representation', 'surum', 'TEXT'),
+      ('agenda', 'gizli_not', 'INTEGER NOT NULL DEFAULT 0'),
+      ('deadline_user', 'govde_gizli', 'INTEGER NOT NULL DEFAULT 0'),
     ]) {
       final has = _db
           .select('PRAGMA table_info($table)')
           .any((r) => r['name'] == column);
-      if (!has) _db.execute('ALTER TABLE $table ADD COLUMN $column TEXT');
+      if (!has) _db.execute('ALTER TABLE $table ADD COLUMN $column $type');
     }
     _fillConfirmedDays();
   }
@@ -1178,6 +1192,7 @@ class PortalDatabase {
       done: d.user?.done ?? false,
       caseKey: r.caseKey,
       updated: r.updated,
+      secret: d.user?.bodySecret ?? false,
     );
   }
 
@@ -1194,6 +1209,7 @@ class PortalDatabase {
         caseKey: r['case_key'] as String?,
         hearingKey: r['hearing_key'] as String?,
         updated: DateTime.parse(r['updated'] as String),
+        secret: r['gizli_not'] == 1,
       ),
   ];
 
@@ -1222,6 +1238,9 @@ class PortalDatabase {
               : null,
           bodyOverride: from != null && item.body != from.body
               ? item.body
+              : null,
+          bodySecret: from == null || item.secret != from.secret
+              ? item.secret
               : null,
         ),
       );
@@ -1267,6 +1286,7 @@ class PortalDatabase {
           caseKey: item.caseKey,
           hearingKey: item.hearingKey,
           updated: item.updated,
+          secret: item.secret,
           base: item.base,
         ),
       );
@@ -1910,7 +1930,7 @@ class PortalDatabase {
             ? _db.select(
                 'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
                 'u.title_override, u.body_override, u.confirmed_inputs, '
-                'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, '
+                'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, u.govde_gizli, '
                 '$_confirmedDay FROM deadline d '
                 '${decidedOnly ? 'JOIN' : 'LEFT JOIN'} '
                 'deadline_user u ON u.deadline_id = d.id ORDER BY d.due_day',
@@ -1918,7 +1938,7 @@ class PortalDatabase {
             : _db.select(
                 'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
                 'u.title_override, u.body_override, u.confirmed_inputs, '
-                'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, '
+                'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, u.govde_gizli, '
                 '$_confirmedDay FROM deadline d LEFT JOIN '
                 'deadline_user u ON u.deadline_id = d.id WHERE d.notice_id=? '
                 'ORDER BY d.due_day',
@@ -1931,7 +1951,7 @@ class PortalDatabase {
     final rows = _db.select(
       'SELECT d.*, u.deadline_id AS u_id, u.done, u.manual_day, '
       'u.title_override, u.body_override, u.confirmed_inputs, '
-      'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, '
+      'u.confirmed_at, u.dismissed, u.confirmed_day AS u_day, u.govde_gizli, '
       '$_confirmedDay FROM deadline d LEFT JOIN deadline_user u '
       'ON u.deadline_id = d.id WHERE d.id=?',
       [id],
@@ -1986,6 +2006,7 @@ class PortalDatabase {
                 : DateTime.parse(r['confirmed_at'] as String),
             dismissed: r['dismissed'] == 1,
             confirmedDay: r['u_day'] as String?,
+            bodySecret: r['govde_gizli'] == 1,
           );
     return KeptDeadline(
       record,

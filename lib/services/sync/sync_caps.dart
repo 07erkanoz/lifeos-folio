@@ -24,7 +24,15 @@ abstract final class SyncCaps {
 
   /// What this Folio knows and says it has: each only once the feature
   /// using it is whole here (§5).
-  static const known = {hlc, split, ledgerOps, fieldVersions, lifecycle};
+  static const known = {
+    hlc,
+    split,
+    ledgerOps,
+    fieldVersions,
+    lifecycle,
+    secretNotes,
+    recall,
+  };
 
   /// The capabilities this Folio's own formats use now: a part needs of
   /// another device only those of its row in [matrix] that are here.
@@ -40,6 +48,10 @@ abstract final class SyncCaps {
     // whole and bring back what was taken off.
     fieldVersions,
     lifecycle,
+    // A note may be secret, and what was made secret is taken back
+    // (§5 step 6): an older Folio would send it on as it came.
+    secretNotes,
+    recall,
   };
 
   /// What each part and channel needs when its format uses it (§4.1).
@@ -63,7 +75,10 @@ abstract final class SyncCaps {
       lifecycle,
       ledgerOps,
     },
-    'gorev': {secretNotes, recall},
+    // A task's package carries no notes now; the notes go apart.
+    'gorev': {},
+    'gorev-notlari': {hlc, secretNotes, recall},
+    'not-takibi': {hlc, secretNotes, recall},
     'oneri': {proposals, hlc},
   };
 

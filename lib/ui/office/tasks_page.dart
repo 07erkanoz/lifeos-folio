@@ -589,10 +589,15 @@ class TaskDetail extends StatefulWidget {
     required this.network,
     required this.task,
     this.now,
+    this.database,
   });
   final OfficeNetwork network;
   final OfficeTask task;
   final DateTime Function()? now;
+
+  /// Where the task's notes that came apart are kept; the shared one when
+  /// not given (none in tests).
+  final PortalDatabase? database;
 
   static Future<void> show(
     BuildContext context,
@@ -617,11 +622,57 @@ class _TaskDetailState extends State<TaskDetail> {
   final _say = TextEditingController();
 
   OfficeNetwork get _net => widget.network;
+  PortalDatabase? _db;
+
+  @override
+  void initState() {
+    super.initState();
+    _db = widget.database;
+    if (_db == null && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      unawaited(
+        PortalDatabase.shared().then((db) {
+          if (mounted) setState(() => _db = db);
+        }),
+      );
+    }
+  }
 
   @override
   void dispose() {
     _say.dispose();
     super.dispose();
+  }
+
+  /// [t]'s case [c]'s notes from its giver, as they are now (R7): those that
+  /// came apart, and an older Folio's that came in its package.
+  ({List<Map<String, Object?>> notes, List<Map<String, Object?>> deadlines})
+  _notesOf(OfficeTask t, TaskCase c, ReceivedCase got) {
+    final rows = _db?.taskNotes(t.by, t.id, c.caseKey) ?? const [];
+    String? day(Object? at) => at is String ? at : null;
+    return (
+      notes: [
+        ...got.notes,
+        for (final r in rows)
+          if (r['kind'] != 'deadline')
+            {
+              'tur': r['kind'],
+              'baslik': r['title'],
+              'metin': r['body'],
+              'tarih': day(r['at']),
+              'tamam': r['done'] == 1,
+            },
+      ],
+      deadlines: [
+        ...got.deadlines,
+        for (final r in rows)
+          if (r['kind'] == 'deadline')
+            {
+              'baslik': r['title'],
+              'gun': day(r['at']),
+              'tamam': r['done'] == 1,
+            },
+      ]..sort((a, b) => '${a['gun']}'.compareTo('${b['gun']}')),
+    );
   }
 
   Future<void> _do(
@@ -1006,6 +1057,7 @@ class _TaskDetailState extends State<TaskDetail> {
       );
     }
     final k = got.particulars;
+    final extra = _notesOf(t, c, got);
     String v(String key) => '${k[key] ?? ''}'.trim();
     final facts = [
       if (v('kind').isNotEmpty) 'Dava türü: ${v('kind')}',
@@ -1042,7 +1094,7 @@ class _TaskDetailState extends State<TaskDetail> {
               '${'${party['vekil'] ?? ''}'.isEmpty ? '' : ' · vekil ${party['vekil']}'}',
               style: const TextStyle(fontSize: 12),
             ),
-          ..._receivedFacts(got),
+          ..._receivedFacts(got, extra),
           const SizedBox(height: 4),
           for (final path in got.documents)
             Row(
@@ -1082,7 +1134,11 @@ class _TaskDetailState extends State<TaskDetail> {
 
   /// The hearings, deadlines, notices and notes that came with the case,
   /// under a heading each: what the one doing the work goes by.
-  List<Widget> _receivedFacts(ReceivedCase got) {
+  List<Widget> _receivedFacts(
+    ReceivedCase got,
+    ({List<Map<String, Object?>> notes, List<Map<String, Object?>> deadlines})
+    extra,
+  ) {
     String day(Object? iso) {
       final at = DateTime.tryParse('${iso ?? ''}');
       if (at == null) return '${iso ?? ''}';
@@ -1127,9 +1183,9 @@ class _TaskDetailState extends State<TaskDetail> {
             key: const ValueKey('task-received-hearing'),
           ),
       ],
-      if (got.deadlines.isNotEmpty) ...[
+      if (extra.deadlines.isNotEmpty) ...[
         heading('SÜRELER'),
-        for (final d in got.deadlines)
+        for (final d in extra.deadlines)
           line(
             '${day(d['gun'])} · ${d['baslik'] ?? ''}',
             key: const ValueKey('task-received-deadline'),
@@ -1147,9 +1203,9 @@ class _TaskDetailState extends State<TaskDetail> {
             ].join(' · '),
           ),
       ],
-      if (got.notes.isNotEmpty) ...[
+      if (extra.notes.isNotEmpty) ...[
         heading('NOTLAR'),
-        for (final n in got.notes)
+        for (final n in extra.notes)
           line(
             [
               if ('${n['tarih'] ?? ''}'.isNotEmpty) day(n['tarih']),

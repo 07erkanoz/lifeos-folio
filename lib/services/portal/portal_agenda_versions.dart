@@ -9,7 +9,8 @@ extension PortalAgendaVersions on PortalDatabase {
   static const _agendaGroups = FieldGroups({
     'tur': ['kind'],
     'baslik': ['title'],
-    'govde': ['body'],
+    // The text and whether it is secret, together (R7).
+    'govde': ['body', 'gizli_not'],
     'zaman': ['at', 'all_day'],
     'tamam': ['done'],
     'bag': ['case_key', 'hearing_key'],
@@ -21,7 +22,7 @@ extension PortalAgendaVersions on PortalDatabase {
     'tamam': ['done'],
     'gun': ['manual_day'],
     'baslik': ['title_override'],
-    'govde': ['body_override'],
+    'govde': ['body_override', 'govde_gizli'],
     'onay': ['confirmed_inputs', 'confirmed_at', 'confirmed_day'],
     'kaldir': ['dismissed'],
   });
@@ -69,6 +70,7 @@ extension PortalAgendaVersions on PortalDatabase {
     'at': _text(r['at']),
     'all_day': _flag(r['all_day']),
     'done': _flag(r['done']),
+    'gizli_not': _flag(r['gizli_not']),
     'case_key': _text(r['case_key']),
     'hearing_key': _text(r['hearing_key']),
   };
@@ -131,7 +133,7 @@ extension PortalAgendaVersions on PortalDatabase {
       _db.execute(
         '''INSERT OR REPLACE INTO agenda
            (id, kind, title, body, at, all_day, done, case_key, hearing_key,
-            updated, surumler) VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
+            updated, surumler, gizli_not) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
         [
           id,
           r['kind'],
@@ -144,6 +146,7 @@ extension PortalAgendaVersions on PortalDatabase {
           r['hearing_key'],
           c.updated,
           versions,
+          r['gizli_not'],
         ],
       );
       _db.execute('DELETE FROM agenda_removed WHERE id=?', [id]);
@@ -182,6 +185,7 @@ extension PortalAgendaVersions on PortalDatabase {
       'at': i.at?.toIso8601String(),
       'all_day': i.allDay,
       'done': i.done,
+      'gizli_not': i.secret,
       'case_key': i.caseKey,
       'hearing_key': i.hearingKey,
     });
@@ -211,8 +215,16 @@ extension PortalAgendaVersions on PortalDatabase {
         updated: item.updated.toIso8601String(),
       ),
     );
+    // Made secret here: kept for good, for every copy of before to be
+    // taken back (R7).
+    if (here != null && here.row!['gizli_not'] != 1 && row['gizli_not'] == 1) {
+      recordHide('ajanda:${item.id}', item.caseKey ?? '', versions['govde']!);
+    }
     return true;
   }
+
+  /// The version of agenda row [id]'s text and whether it is secret.
+  Hlc? agendaBodyVersion(String id) => _agendaHere(id)?.versions?['govde'];
 
   /// [id] taken off: kept with what it said and a new lifecycle version,
   /// for "Geri al" and for the lawyer's other devices.
@@ -252,6 +264,63 @@ extension PortalAgendaVersions on PortalDatabase {
     );
     PortalDatabase.changed?.call();
     return true;
+  }
+
+  /// The version of what a copy of agenda row [id] says, as the office's
+  /// tasks carry it: the latest of its groups the copy has (R7).
+  Hlc? agendaCopyVersion(String id) {
+    final here = _agendaHere(id);
+    if (here == null || here.versions == null) return null;
+    return [
+      for (final g in const ['tur', 'baslik', 'govde', 'zaman', 'tamam'])
+        here.versions![g]!,
+    ].reduce((a, b) => a.compareTo(b) >= 0 ? a : b);
+  }
+
+  /// [caseKey]'s agenda notes, tasks and deadlines of the lawyer's own as
+  /// the office's tasks carry them (R7): each with its groups' versions,
+  /// none secret; those taken back and those taken off, by their versions.
+  ({
+    List<Map<String, Object?>> rows,
+    Map<String, Hlc> hidden,
+    Map<String, Hlc> removed,
+  })
+  taskNoteRows(String caseKey) {
+    final rows = <Map<String, Object?>>[];
+    final hidden = <String, Hlc>{};
+    final hides = noteHides;
+    for (final r in _db.select('SELECT * FROM agenda WHERE case_key=?', [
+      caseKey,
+    ])) {
+      final copy = _live(r);
+      final id = copy.row!['id'] as String;
+      // A notice's deadline's old row stays on this device.
+      if (_db.select('SELECT 1 FROM deadline_legacy WHERE legacy_id=?', [
+        id,
+      ]).isNotEmpty) {
+        continue;
+      }
+      final hide = hides['ajanda:$id']?.version;
+      final body = copy.versions!['govde']!;
+      if (copy.row!['gizli_not'] == 1 || (hide != null && body <= hide)) {
+        if (hide != null) hidden[id] = hide;
+        continue;
+      }
+      if (hide != null) hidden[id] = hide;
+      rows.add({
+        ...copy.row!,
+        'surumler': FieldGroups.encode({...copy.versions!, _life: copy.life}),
+      });
+    }
+    final removed = <String, Hlc>{};
+    for (final r in _db.select(
+      'SELECT id, at, surum, satir FROM agenda_removed',
+    )) {
+      final c = _removed(r['id'], r['at'], r['surum'], r['satir']);
+      if (c.row?['case_key'] != caseKey) continue;
+      removed['${r['id']}'] = c.life;
+    }
+    return (rows: rows, hidden: hidden, removed: removed);
   }
 
   /// The rows taken off, as another device takes them.
@@ -315,6 +384,7 @@ extension PortalAgendaVersions on PortalDatabase {
     'confirmed_at': _text(r['confirmed_at']),
     'confirmed_day': _text(r['confirmed_day']),
     'dismissed': _flag(r['dismissed']),
+    'govde_gizli': _flag(r['govde_gizli']),
   };
 
   void _decisionWrite(
@@ -324,8 +394,8 @@ extension PortalAgendaVersions on PortalDatabase {
   ) => _db.execute(
     '''INSERT OR REPLACE INTO deadline_user(deadline_id, done, manual_day,
        title_override, body_override, confirmed_inputs, confirmed_at,
-       dismissed, updated, confirmed_day, surumler)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
+       dismissed, updated, confirmed_day, surumler, govde_gizli)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
     [
       r['deadline_id'],
       r['done'],
@@ -338,6 +408,7 @@ extension PortalAgendaVersions on PortalDatabase {
       updated,
       r['confirmed_day'],
       FieldGroups.encode(versions),
+      r['govde_gizli'],
     ],
   );
 
@@ -355,6 +426,7 @@ extension PortalAgendaVersions on PortalDatabase {
       'confirmed_at': d.confirmedAt?.toIso8601String(),
       'confirmed_day': d.confirmedDay,
       'dismissed': d.dismissed,
+      'govde_gizli': d.bodySecret,
     });
     final here = _db.select('SELECT * FROM deadline_user WHERE deadline_id=?', [
       u.deadlineId,

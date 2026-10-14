@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../notes/task_notes.dart';
 import '../platform/app_directories.dart';
 import '../portal/observed.dart';
 import '../portal/portal_case.dart';
@@ -159,9 +160,9 @@ class TaskPackage {
       ? null
       : PortalDatabase.shared();
 
-  /// What the portals and the lawyer keep of the case beside its record:
-  /// its hearings, the deadlines followed, its UETS notices and the
-  /// agenda's notes and tasks on it. Plain words, as the other reads them.
+  /// What the portals keep of the case beside its record: its hearings,
+  /// the notices' deadlines followed and its UETS notices. Plain words, as
+  /// the other reads them.
   static Map<String, Object?> caseExtras(PortalDatabase db, String caseKey) {
     String? day(DateTime? at) => at?.toIso8601String();
     return {
@@ -181,9 +182,6 @@ class TaskPackage {
               'gun': d.day,
               'tamam': d.user?.done ?? false,
             },
-        for (final a in db.agenda(caseKey: caseKey))
-          if (a.kind == 'deadline')
-            {'baslik': a.title, 'gun': day(a.at), 'tamam': a.done},
       ],
       'tebligatlar': [
         for (final n in db.notices(caseKey: caseKey))
@@ -193,17 +191,9 @@ class TaskPackage {
             'tarih': day(n.message.sent),
           },
       ],
-      'notlar': [
-        for (final a in db.agenda(caseKey: caseKey))
-          if (a.kind != 'deadline')
-            {
-              'tur': a.kind,
-              'baslik': a.title,
-              'metin': a.body,
-              'tarih': day(a.at),
-              'tamam': a.done,
-            },
-      ],
+      // The agenda's own notes, tasks and deadlines are not in it: they
+      // go apart, as they are now ([TaskNotes], R7), a secret one never.
+      TaskNotes.format: 2,
     };
   }
 }
@@ -375,6 +365,13 @@ class TaskPackages {
   /// "task|case" → the files that came.
   final _received = <String, List<String>>{};
   bool _loaded = false;
+
+  /// The files of [task]'s case that came here; null for none.
+  List<String>? receivedPaths(String task, String caseKey) =>
+      _received['$task|$caseKey'];
+
+  /// Every "task|case" that came here.
+  Iterable<String> get receivedKeys => _received.keys;
 
   ReceivedCase? received(String task, String caseKey) {
     final saved = _received['$task|$caseKey'];

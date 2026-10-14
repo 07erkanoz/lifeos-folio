@@ -127,6 +127,10 @@ class DeadlineUser {
   /// Taken off the agenda by the lawyer; still shown on its notice.
   final bool dismissed;
 
+  /// The lawyer's body a secret note (docs/senkron-plan.md R7): never
+  /// written out of their own devices.
+  final bool bodySecret;
+
   /// The decisions as they were read, that these were changed from
   /// ([copyWith]); none for ones made anew, weighed against no decision.
   /// What the lawyer changed is told apart from what came from another
@@ -143,6 +147,7 @@ class DeadlineUser {
     this.confirmedAt,
     this.dismissed = false,
     this.confirmedDay,
+    this.bodySecret = false,
     this.base,
   });
 
@@ -157,6 +162,7 @@ class DeadlineUser {
     String? confirmedDay,
     bool clearConfirmation = false,
     bool? dismissed,
+    bool? bodySecret,
   }) => DeadlineUser(
     deadlineId: deadlineId,
     done: done ?? this.done,
@@ -169,6 +175,7 @@ class DeadlineUser {
     confirmedAt: clearConfirmation ? null : confirmedAt ?? this.confirmedAt,
     confirmedDay: clearConfirmation ? null : confirmedDay ?? this.confirmedDay,
     dismissed: dismissed ?? this.dismissed,
+    bodySecret: bodySecret ?? this.bodySecret,
     base: base ?? this,
   );
 }

@@ -9,7 +9,10 @@ import '../clients/client.dart';
 import '../clients/client_file_sync.dart';
 import '../clients/client_files.dart';
 import '../office/office_network.dart';
+import '../notes/secret_notes.dart';
+import '../notes/task_notes.dart';
 import '../office/shared_cases.dart';
+import '../office/task_package.dart';
 import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
@@ -62,6 +65,11 @@ class OwnSync extends ChangeNotifier {
   /// their money with those who may see it. Off until the user turns it
   /// on: what goes to the office is theirs to choose.
   static const officeClients = 'muvekkil-buro';
+
+  /// What was made secret and who in the office holds what of it: on
+  /// always, whatever else is, for the taking back to be done from every
+  /// own device (docs/senkron-plan.md R7).
+  static const noteTracking = 'not-takibi';
   static const _optIn = {officeClients};
   final _on = <String>{};
 
@@ -364,10 +372,15 @@ class OwnSync extends ChangeNotifier {
       final db = await _database();
       _net.officeParts[officeClients] = OfficePart(
         // Money only between two who may both see it.
-        export: (to) async => db.clientsOfficeExport(
-          money: _net.seesMoney && _net.seesMoneyOf(to),
-          me: _net.me,
-        ),
+        export: (to) async {
+          final sent = db.clientsOfficeExport(
+            money: _net.seesMoney && _net.seesMoneyOf(to),
+            me: _net.me,
+          );
+          // Who may hold each note from now on, for its taking back.
+          SecretNotes.recordCardHolds(db, sent, to, _personOf(to));
+          return sent;
+        },
         merge: (theirs, from) async {
           if (theirs is! Map) return false;
           final money = _net.seesMoney && _net.seesMoneyOf(from);
@@ -424,17 +437,103 @@ class OwnSync extends ChangeNotifier {
         null,
       );
     };
+    await _noteParts();
     // The money others wrote comes from own devices only while it may.
     PortalDatabase.clientMoneyAllowed = () => _net.seesMoney;
     PortalDatabase.clientPerson = () => _net.me;
-    final own = isOn(agenda), office = isOn(officeClients);
-    PortalDatabase.changed = !own && !office
-        ? null
-        : () {
-            if (own) _net.ownChanged();
-            if (office) _net.officeChanged();
-          };
+    // The notes' tracking and the tasks' notes are on always: every change
+    // is told to both.
+    PortalDatabase.changed = () {
+      _net.ownChanged();
+      _net.officeChanged();
+    };
     _watchMoney();
+  }
+
+  /// The office person of [device], by the office's ledger; empty for one
+  /// not of it.
+  String _personOf(String device) =>
+      _net.ledger.member(device) == null ? '' : _net.ledger.personOf(device);
+
+  /// The tasks' notes with the office's members, and the notes' tracking
+  /// with the person's own devices (R7).
+  Future<void> _noteParts() async {
+    final db = await _database();
+    final notes = TaskNotes(
+      db: db,
+      me: () => _net.me,
+      tasks: () => _net.tasks.all,
+      personOf: _personOf,
+      received: _net.packages.receivedPaths,
+    );
+    _net.officeParts[TaskNotes.part] = OfficePart(
+      export: (to) async => notes.export(to),
+      merge: (theirs, from) async {
+        final changed = await notes.merge(theirs, from);
+        if (changed) PortalSync.started?.notifyListeners();
+        return changed;
+      },
+    );
+    _net.packageCame = notes.came;
+    _net.ownParts[noteTracking] = OwnPart(
+      export: () async => db.noteTrackingExport(),
+      merge: (theirs) async => db.noteTrackingMerge(theirs),
+    );
+    await _net.packages.load();
+    await _carryTaskNotes(db, _net.packages);
+  }
+
+  /// Once, from a Folio before the tasks' notes went apart: the packages
+  /// given here, made without their notes before they go again, and each
+  /// device they went to taken as holding them; those that came here, to
+  /// be cleaned of their giver's notes once they come apart.
+  Future<void> _carryTaskNotes(PortalDatabase db, TaskPackages packages) async {
+    const done = 'gorev_notlari_gocu';
+    if (db.meta(done) == '1') return;
+    for (final key in {...packages.delivered, ...packages.pending.keys}) {
+      final parts = key.split('|');
+      if (parts.length != 3) continue;
+      final scope = '${parts[0]}|${parts[1]}';
+      db.recordHold(
+        'eski:$scope',
+        parts[2],
+        _personOf(parts[2]),
+        'gorev:$scope',
+      );
+    }
+    final files = {
+      for (final e in packages.sources.entries)
+        for (final path in e.value) path: e.key.split('|').last,
+      for (final e in packages.pending.entries)
+        for (final path in e.value) path: e.key.split('|')[1],
+    };
+    for (final MapEntry(key: path, value: caseKey) in files.entries) {
+      final name = p.basename(path);
+      if (!name.startsWith('dosya') || !name.endsWith('.json')) continue;
+      try {
+        final file = File(path);
+        if (!await file.exists()) continue;
+        final j = jsonDecode(await file.readAsString());
+        if (j is! Map || !j.containsKey('evrakAdlari')) continue;
+        j
+          ..remove('notlar')
+          ..addAll(TaskPackage.caseExtras(db, caseKey));
+        final part = File('$path.yeni');
+        await part.writeAsString(jsonEncode(j), flush: true);
+        await part.rename(path);
+      } catch (_) {
+        // Tried again at the next start.
+        return;
+      }
+    }
+    for (final key in packages.receivedKeys) {
+      final parts = key.split('|');
+      if (parts.length != 2) continue;
+      if (db.taskNotesCleaning(parts[0], parts[1]) == null) {
+        db.setTaskNotesCleaning(parts[0], parts[1], 'bekliyor');
+      }
+    }
+    db.setMeta(done, '1');
   }
 
   Future<void> _fetchOwnFiles(PortalDatabase db) async {

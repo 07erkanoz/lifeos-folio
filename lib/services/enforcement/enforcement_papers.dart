@@ -171,7 +171,9 @@ DocModel waiverRequest(EnforcementParties p, LedgerEntry e, {DateTime? now}) {
                 'kısmından feragat ediyoruz.',
       indent: true,
     ),
-    if (e.note.isNotEmpty) paperParagraph('3- ${e.note}', indent: true),
+    // A secret description stays the lawyer's own (R7).
+    if (e.note.isNotEmpty && !e.noteSecret)
+      paperParagraph('3- ${e.note}', indent: true),
     paperGap(),
     _heading('SONUÇ VE İSTEM'),
     paperParagraph(
