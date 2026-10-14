@@ -32,10 +32,19 @@ extension PortalNotes on PortalDatabase {
   /// [noteKey] made secret at [version], of [scope] (a case's key, a
   /// card's id): kept for good, its text never in it. Made open again, it
   /// stays: what was taken back stays taken back.
-  void recordHide(String noteKey, String scope, Hlc version) => _db.execute(
-    'INSERT OR IGNORE INTO note_hide(not_key, kapsam, surum) VALUES(?,?,?)',
-    [noteKey, scope, '$version'],
-  );
+  void recordHide(String noteKey, String scope, Hlc version) {
+    _db.execute(
+      'INSERT OR IGNORE INTO note_hide(not_key, kapsam, surum) VALUES(?,?,?)',
+      [noteKey, scope, '$version'],
+    );
+    _scrubProposalsOf(noteKey);
+  }
+
+  /// The text of the proposals of [noteKey]'s note gone: it is secret now.
+  void _scrubProposalsOf(String noteKey) {
+    final of = PortalProposals.proposalOfNote(noteKey);
+    if (of != null) scrubProposals(of.kind, of.target, caseKey: of.caseKey);
+  }
 
   /// Every note made secret, by its key: the latest version it was.
   Map<String, ({String scope, Hlc version})> get noteHides {
@@ -275,11 +284,14 @@ extension PortalNotes on PortalDatabase {
 
   /// That [owner] took back [noteKey] at [version]: kept for good, so that
   /// no copy of it of before comes back here.
-  void takeNoteHide(String owner, String noteKey, Hlc version) => _db.execute(
-    'INSERT OR IGNORE INTO taken_note_hide(sahip, not_key, surum) '
-    'VALUES(?,?,?)',
-    [owner, noteKey, '$version'],
-  );
+  void takeNoteHide(String owner, String noteKey, Hlc version) {
+    _db.execute(
+      'INSERT OR IGNORE INTO taken_note_hide(sahip, not_key, surum) '
+      'VALUES(?,?,?)',
+      [owner, noteKey, '$version'],
+    );
+    _scrubProposalsOf(noteKey);
+  }
 
   /// What [owner] took back of their cards' notes, as kept here: each
   /// applied to the copies here as it came ([applyTakenNoteHides]).

@@ -6,6 +6,7 @@ import '../enforcement/ledger_book.dart';
 import '../enforcement/ledger_service.dart';
 import '../portal/portal_database.dart';
 import '../sync/hlc.dart';
+import '../sync/sync_generation.dart';
 
 /// A colleague's proposals of another's records, and the owner's decisions
 /// on them (docs/senkron-plan.md R6, §3 decision 2): an enforcement
@@ -25,8 +26,13 @@ class ProposalService {
     required this.me,
     required this.device,
     this.myName = '',
+    this.kept = true,
     Random? random,
   }) : _random = random ?? Random.secure();
+
+  /// Whether this device's keys are kept: one whose are this run's only
+  /// is seen anew at its next start, and never decides (R6).
+  final bool kept;
 
   final PortalDatabase db;
 
@@ -81,6 +87,7 @@ class ProposalService {
     Map<String, Object?> fields = const {},
     bool remove = false,
     String reason = '',
+    Map<String, String>? seen,
     DateTime? now,
   }) {
     final owner = ownerOf(db, kind, target);
@@ -93,7 +100,8 @@ class ProposalService {
       kind: kind,
       target: target,
       caseKey: caseKey,
-      seen: versionsOf(db, kind, target, caseKey: caseKey),
+      // What it was made seeing: as the screen showed it, not as it is now.
+      seen: seen ?? versionsOf(db, kind, target, caseKey: caseKey),
       fields: fields,
       remove: remove,
       reason: reason,
@@ -111,12 +119,19 @@ class ProposalService {
       DecisionDevice(device: owner, generation: 0, at: DateTime(2000));
 
   /// Whether this device decides this person's proposals.
-  bool get decidesHere => deciding(me).device == device;
+  bool get decidesHere => kept && deciding(me).device == device;
 
   /// The proposals made to this person not yet decided, the oldest first.
   List<Proposal> get waiting => [
     for (final p in db.proposals(owner: me).reversed)
       if (db.decisionOf(p.id) case final d when d == null || d.void_) p,
+  ];
+
+  /// The decisions of this person's that did not hold and whose change was
+  /// changed again since: to be looked at.
+  List<ProposalDecision> get conflicts => [
+    for (final d in db.decisions)
+      if (d.owner == me && d.conflict) d,
   ];
 
   /// Whether [p] was made seeing what its record says now.
@@ -208,103 +223,151 @@ class ProposalService {
   }
 
   /// [d], a decision of this person's that came from another of their
-  /// devices: kept; one of a device given up as lost before it came does
-  /// not hold, and what it changed is put back where nothing changed it
-  /// since (else marked a conflict, to be looked at). True when anything
-  /// here changed.
+  /// devices: kept when it stands over the one here; one that does not
+  /// hold by the device for deciding as chosen ([DecisionDevice.holds]) is
+  /// kept as not holding, what it changed put back group by group where
+  /// nothing changed it since, and kept from coming here after (else a
+  /// conflict, to be looked at). True when anything here changed.
   bool takeOwn(ProposalDecision d) {
-    final choice = deciding(me);
-    final holds =
-        d.generation >= choice.generation || choice.known.contains(d.proposal);
-    if (holds) return db.putDecision(d);
-    // Its proposal decided anew here meanwhile: that one stands.
-    final mine = db.decisionOf(d.proposal);
-    if (mine != null && !mine.void_ && mine.generation >= choice.generation) {
-      return false;
-    }
     final had = db.decisionOf(d.proposal);
-    if (had != null && had.void_) return false;
+    if (deciding(me).holds(d) || d.void_) {
+      if (had != null && !d.supersedes(had)) return false;
+      db.deleteDecision(d.proposal);
+      db.putDecision(d);
+      return true;
+    }
+    // One that does not hold: never over one that stands after it.
+    if (had != null && !had.void_ && had.supersedes(d)) return false;
+    if (had != null && had.void_ && !d.supersedes(had)) return false;
     var changed = false;
     db.inTransaction(() {
       final undone = _undo(d);
       db.deleteDecision(d.proposal);
-      db.putDecision(
-        ProposalDecision.fromJson({
-          ...d.voided().toJson(),
-          if (!undone) 'catisma': true,
-        })!,
-      );
+      db.putDecision(d.voided(conflict: !undone));
       changed = true;
     });
     return changed;
   }
 
-  /// What [d] changed, put back where it is as [d] left it. False when it
-  /// was changed since (a conflict).
+  /// What [d] changed, group by group, put back where it is as [d] left it
+  /// (its version that one), and that version kept from coming here after;
+  /// one not come yet only kept from coming. False when one was changed
+  /// since (a conflict).
   bool _undo(ProposalDecision d) {
     final before = d.outputs['once'], after = d.outputs['sonra'];
     if (before is! Map || after is! Map) return true;
     final p = db.proposal(d.proposal);
     if (p == null) return true;
+    var clean = true;
     switch (p.kind) {
       case 'icra':
-        final now = db.clientRecord(p.target);
         final was = ClientRecord.fromJson(before);
         final left = ClientRecord.fromJson(after);
-        if (now == null || was == null || left == null) return true;
-        if (LedgerBook.contentOf(now) != LedgerBook.contentOf(left)) {
-          return false;
+        if (was == null || left == null) return true;
+        final wasV = LedgerBook.versionsOf(was),
+            leftV = LedgerBook.versionsOf(left);
+        final back = <String>[];
+        for (final g in [...LedgerBook.groups.keys, LedgerBook.lifecycle]) {
+          if (wasV[g] == leftV[g]) continue;
+          db.blockOutput(p.target, g, '${leftV[g]}');
+          final now = db.clientRecord(p.target);
+          if (now == null) continue;
+          final v = LedgerBook.versionOf(now, g);
+          if (v == leftV[g]) {
+            back.add(g);
+          } else if (v > leftV[g]!) {
+            clean = false;
+          }
         }
-        final book = LedgerService(db);
-        if (now.removed != was.removed) {
-          book.setRemoved(now, was.removed);
-        } else {
-          book.edit(
-            now,
-            amount: was.amount,
-            at: was.at,
-            debtor: was.text('borclu'),
-            way: was.text('odeme'),
-            note: was.text('aciklama'),
-            whole: was.data['tamami'] == true,
-            target: null,
-            shown: null,
-          );
-        }
-        return true;
-      case 'kartNotu' || 'dosyaNotu':
-        final now = db.clientCard(p.target);
-        final was = Client.fromJson(before), left = Client.fromJson(after);
-        if (now == null || was == null || left == null) return true;
-        if (p.kind == 'kartNotu') {
-          if (now.note != left.note) return false;
-          db.saveClient(now.copyWith(note: was.note));
-        } else {
-          final n = now.caseNotes[p.caseKey];
-          if (n?.text != left.caseNotes[p.caseKey]?.text) return false;
-          final back = was.caseNotes[p.caseKey];
-          db.saveClient(
-            now.copyWith(
-              caseNotes: {
-                ...now.caseNotes,
-                p.caseKey: CaseNote(back?.text ?? '', DateTime.now()),
-              },
+        final now = db.clientRecord(p.target);
+        if (back.isNotEmpty && now != null) {
+          final clock = SyncClock.of(db);
+          final versions = LedgerBook.versionsOf(now);
+          final data = {...now.data};
+          var removed = now.removed;
+          var clientId = now.clientId;
+          for (final g in back) {
+            versions[g] = clock.tick();
+            if (g == LedgerBook.lifecycle) {
+              removed = was.removed;
+              continue;
+            }
+            for (final f in LedgerBook.groups[g]!) {
+              if (was.data.containsKey(f)) {
+                data[f] = was.data[f];
+              } else {
+                data.remove(f);
+              }
+            }
+            if (g == 'finans') clientId = was.clientId;
+          }
+          db.saveClientRecord(
+            LedgerBook.write(
+              now,
+              versions: versions,
+              setOffs: LedgerBook.setOffsOf(now),
+              data: data,
+              clientId: clientId,
+              removed: removed,
+              updated: DateTime.now(),
             ),
           );
         }
-        return true;
+      case 'kartNotu' || 'dosyaNotu':
+        final was = Client.fromJson(before), left = Client.fromJson(after);
+        if (was == null || left == null) return true;
+        final group = p.kind == 'kartNotu' ? 'not' : 'dosyaNotu:${p.caseKey}';
+        Hlc? version(Client c) => p.kind == 'kartNotu'
+            ? c.versionOf('not')
+            : c.caseNotes[p.caseKey]?.versionOf;
+        final leftV = version(left);
+        if (leftV == null || leftV == version(was)) return true;
+        db.blockOutput(p.target, group, '$leftV');
+        final now = db.clientCard(p.target);
+        final nowV = now == null ? null : version(now);
+        if (now == null || nowV == null || nowV < leftV) return true;
+        if (nowV > leftV) return false;
+        // As it was, its secrecy and writer too.
+        db.saveClient(
+          p.kind == 'kartNotu'
+              ? now.copyWith(note: was.note, noteSecret: was.noteSecret)
+              : now.copyWith(
+                  caseNotes: {
+                    ...now.caseNotes,
+                    p.caseKey: switch (was.caseNotes[p.caseKey]) {
+                      final n? => CaseNote(
+                        n.text,
+                        DateTime.now(),
+                        by: n.by,
+                        secret: n.secret,
+                      ),
+                      null => CaseNote('', DateTime.now()),
+                    },
+                  },
+                ),
+        );
     }
-    return true;
+    return clean;
   }
+
+  /// The proposals this person's decisions known here stand on.
+  Set<String> get _decided => {
+    for (final x in db.decisions)
+      if (x.owner == me && !x.void_) x.proposal,
+  };
 
   /// The device for deciding given from this one to [other], another of
   /// this person's own, both on: the next generation.
   DecisionDevice? giveTo(String other) {
     if (!decidesHere || other == device) return null;
+    final was = deciding(me);
+    // Given over: every decision made before stands.
     final d = DecisionDevice(
       device: other,
-      generation: deciding(me).generation + 1,
+      generation: was.generation + 1,
       at: DateTime.now(),
+      lostAt: was.lostAt,
+      known: {...was.known, ..._decided},
     );
     db.putDecisionDevice(me, d);
     PortalDatabase.changed?.call();
@@ -314,16 +377,16 @@ class ProposalService {
   /// The device for deciding lost: this one chosen anew, the next
   /// generation; the decisions known here now hold, any other of before
   /// does not when it comes, its proposal open again.
-  DecisionDevice lost() {
+  DecisionDevice? lost() {
+    if (!kept) return null;
+    final was = deciding(me);
     final d = DecisionDevice(
       device: device,
-      generation: deciding(me).generation + 1,
+      generation: was.generation + 1,
       at: DateTime.now(),
       lost: true,
-      known: {
-        for (final x in db.decisions)
-          if (x.owner == me && !x.void_) x.proposal,
-      },
+      lostAt: was.generation + 1,
+      known: {...was.known, ..._decided},
     );
     db.putDecisionDevice(me, d);
     PortalDatabase.changed?.call();
@@ -373,15 +436,10 @@ class ProposalService {
         final p = db.proposal(d.proposal);
         if (p == null || p.by != me || p.owner != from) continue;
         final had = db.decisionOf(d.proposal);
-        if (had != null &&
-            Hlc.canonical(had.toJson()) == Hlc.canonical(d.toJson())) {
-          continue;
-        }
-        if (had == null || had.void_ || d.void_) {
-          db.deleteDecision(d.proposal);
-          db.putDecision(d);
-          changed = true;
-        }
+        if (had != null && !d.supersedes(had)) continue;
+        db.deleteDecision(d.proposal);
+        db.putDecision(d);
+        changed = true;
       }
     });
     return changed;
@@ -393,6 +451,7 @@ class ProposalService {
     'oneriler': [for (final p in db.proposals()) p.toJson()],
     'kararlar': [for (final d in db.decisions) d.toJson()],
     'kararCihazi': ?db.decisionDevice(me)?.toJson(),
+    'engellenen': db.blockedOutputs,
   };
 
   /// Another own device's [ownExport]: the device for deciding first, so
@@ -404,10 +463,9 @@ class ProposalService {
       if (DecisionDevice.fromJson(theirs['kararCihazi']) case final c?) {
         if (db.putDecisionDevice(me, c)) {
           changed = true;
-          // Decisions known here of a generation now given up, that the
-          // new choice did not know: they do not hold.
+          // Decisions known here that no longer hold by the new choice.
           for (final d in db.decisions) {
-            if (d.owner == me && !d.void_ && !takeOwnHolds(d)) {
+            if (d.owner == me && !d.void_ && !deciding(me).holds(d)) {
               if (takeOwn(d)) changed = true;
             }
           }
@@ -420,24 +478,23 @@ class ProposalService {
       for (final j in theirs['kararlar'] as List? ?? const []) {
         final d = ProposalDecision.fromJson(j);
         if (d == null) continue;
-        final had = db.decisionOf(d.proposal);
-        if (had != null &&
-            Hlc.canonical(had.toJson()) == Hlc.canonical(d.toJson())) {
+        if (d.owner == me) {
+          if (takeOwn(d)) changed = true;
           continue;
         }
-        if (d.owner == me) {
-          if (had != null && !had.void_ && !d.void_) continue;
-          if (d.void_) {
-            db.deleteDecision(d.proposal);
-            db.putDecision(d);
-            changed = true;
-          } else if (takeOwn(d)) {
-            changed = true;
-          }
-        } else if (had == null || had.void_ || d.void_) {
-          db.deleteDecision(d.proposal);
-          db.putDecision(d);
-          changed = true;
+        final had = db.decisionOf(d.proposal);
+        if (had != null && !d.supersedes(had)) continue;
+        db.deleteDecision(d.proposal);
+        db.putDecision(d);
+        changed = true;
+      }
+      for (final b in theirs['engellenen'] as List? ?? const []) {
+        if (b is Map && b['kayit'] is String && b['grup'] is String) {
+          db.blockOutput(
+            b['kayit'] as String,
+            b['grup'] as String,
+            '${b['surum']}',
+          );
         }
       }
     });
@@ -445,9 +502,5 @@ class ProposalService {
   }
 
   /// Whether [d] holds by the device for deciding as chosen now.
-  bool takeOwnHolds(ProposalDecision d) {
-    final choice = deciding(me);
-    return d.generation >= choice.generation ||
-        choice.known.contains(d.proposal);
-  }
+  bool takeOwnHolds(ProposalDecision d) => deciding(me).holds(d);
 }

@@ -14,7 +14,86 @@ extension PortalProposals on PortalDatabase {
       oneri TEXT PRIMARY KEY, sahip TEXT NOT NULL, json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS decision_device (
       sahip TEXT PRIMARY KEY, json TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS blocked_output (
+      kayit TEXT NOT NULL, grup TEXT NOT NULL, surum TEXT NOT NULL,
+      PRIMARY KEY(kayit, grup, surum));
   ''';
+
+  /// What a decision that did not hold changed: that version of that
+  /// group of [record] ("not", `dosyaNotu:` and its case, a ledger's group) is
+  /// never taken from another device (R6).
+  void blockOutput(String record, String group, String version) => _db.execute(
+    'INSERT OR IGNORE INTO blocked_output(kayit, grup, surum) '
+    'VALUES(?,?,?)',
+    [record, group, version],
+  );
+
+  /// The versions of [record]'s groups not to be taken: group → versions.
+  Map<String, Set<String>> blockedOf(String record) {
+    final out = <String, Set<String>>{};
+    for (final r in _db.select(
+      'SELECT grup, surum FROM blocked_output WHERE kayit=?',
+      [record],
+    )) {
+      out.putIfAbsent(r['grup'] as String, () => {}).add(r['surum'] as String);
+    }
+    return out;
+  }
+
+  List<Map<String, Object?>> get blockedOutputs => [
+    for (final r in _db.select('SELECT * FROM blocked_output'))
+      {for (final c in r.keys) c: r[c]},
+  ];
+
+  /// The text of the proposals of [kind] [target] (and [caseKey]) taken
+  /// out, its note made secret (R7): their ids and decisions stay. True
+  /// when one was.
+  bool scrubProposals(String kind, String target, {String caseKey = ''}) {
+    var changed = false;
+    for (final r in _db.select('SELECT id, json FROM proposal')) {
+      final j = PortalAgendaVersions._map(r['json']);
+      if (j == null ||
+          j['tur'] != kind ||
+          j['hedef'] != target ||
+          '${j['dosya'] ?? ''}' != caseKey) {
+        continue;
+      }
+      final fields = Map<String, Object?>.from(j['alanlar'] as Map? ?? {});
+      var scrubbed = false;
+      for (final f in const ['metin', 'aciklama']) {
+        if ('${fields[f] ?? ''}'.isNotEmpty) {
+          fields[f] = '';
+          scrubbed = true;
+        }
+      }
+      if (!scrubbed) continue;
+      _db.execute('UPDATE proposal SET json=? WHERE id=?', [
+        jsonEncode({...j, 'alanlar': fields}),
+        r['id'],
+      ]);
+      changed = true;
+    }
+    return changed;
+  }
+
+  /// A note's key ("kartNotu:", "dosyaNotu:", "aciklama:") as what its
+  /// proposals are of; null for another.
+  static ({String kind, String target, String caseKey})? proposalOfNote(
+    String key,
+  ) {
+    final parts = key.split(':');
+    if (parts.length < 2) return null;
+    return switch (parts.first) {
+      'kartNotu' => (kind: 'kartNotu', target: parts[1], caseKey: ''),
+      'dosyaNotu' when parts.length >= 3 => (
+        kind: 'dosyaNotu',
+        target: parts[1],
+        caseKey: parts.sublist(2).join(':'),
+      ),
+      'aciklama' => (kind: 'icra', target: parts[1], caseKey: ''),
+      _ => null,
+    };
+  }
 
   /// [p] kept as it came, once: a proposal is never changed. False when it
   /// was here already.
@@ -25,8 +104,22 @@ extension PortalProposals on PortalDatabase {
       'INSERT INTO proposal(id, sahip, oneren, json, at) VALUES(?,?,?,?,?)',
       [p.id, p.owner, p.by, jsonEncode(p.toJson()), p.at.toIso8601String()],
     );
+    // Of a note made secret since: its text not kept (R7).
+    final key = switch (p.kind) {
+      'kartNotu' => 'kartNotu:${p.target}',
+      'dosyaNotu' => 'dosyaNotu:${p.target}:${p.caseKey}',
+      _ => 'aciklama:${p.target}',
+    };
+    if (hideOf(key) != null || _takenHideOfAny(key)) {
+      scrubProposals(p.kind, p.target, caseKey: p.caseKey);
+    }
     return true;
   }
+
+  bool _takenHideOfAny(String key) => _db.select(
+    'SELECT 1 FROM taken_note_hide WHERE not_key=?',
+    [key],
+  ).isNotEmpty;
 
   Proposal? proposal(String id) {
     final r = _db.select('SELECT json FROM proposal WHERE id=?', [id]);
@@ -54,13 +147,23 @@ extension PortalProposals on PortalDatabase {
   /// one was here already.
   bool putDecision(ProposalDecision d) {
     final had = decisionOf(d.proposal);
-    if (had != null && !had.void_) return false;
+    if (had != null && !d.supersedes(had)) return false;
     _db.execute(
       'INSERT OR REPLACE INTO proposal_decision(oneri, sahip, json) '
       'VALUES(?,?,?)',
       [d.proposal, d.owner, jsonEncode(d.toJson())],
     );
     return true;
+  }
+
+  /// [proposal]'s decision's conflict looked at: no longer shown.
+  void clearDecisionConflict(String proposal) {
+    final d = decisionOf(proposal);
+    if (d == null || !d.conflict) return;
+    _db.execute('UPDATE proposal_decision SET json=? WHERE oneri=?', [
+      jsonEncode({...d.toJson()}..remove('catisma')),
+      proposal,
+    ]);
   }
 
   void deleteDecision(String proposal) =>
@@ -95,7 +198,14 @@ extension PortalProposals on PortalDatabase {
   /// was.
   bool putDecisionDevice(String owner, DecisionDevice d) {
     final kept = decisionDevice(owner);
-    if (kept != null && kept.generation >= d.generation) return false;
+    // The later generation; two chosen at once of the same one: the same
+    // one on every device, by the device's id.
+    if (kept != null &&
+        (kept.generation > d.generation ||
+            (kept.generation == d.generation &&
+                kept.device.compareTo(d.device) >= 0))) {
+      return false;
+    }
     _db.execute(
       'INSERT OR REPLACE INTO decision_device(sahip, json) VALUES(?,?)',
       [owner, jsonEncode(d.toJson())],
@@ -213,9 +323,32 @@ class ProposalDecision {
     this.outputs = const {},
     this.stale = false,
     this.void_ = false,
+    this.conflict = false,
   });
 
   final String proposal, owner, device, reason;
+
+  /// Not holding, and what it changed changed again since: left as it is,
+  /// for the owner to look at.
+  final bool conflict;
+
+  /// Whether this one stands over [other], of the same proposal: the same
+  /// decision found not to hold, or a later decision (by its device's
+  /// generation, then when, then the device); never an older one marked
+  /// not holding over a newer one.
+  bool supersedes(ProposalDecision other) {
+    final same =
+        device == other.device &&
+        generation == other.generation &&
+        at == other.at;
+    if (same) {
+      return (void_ && !other.void_) || (conflict && !other.conflict);
+    }
+    if (generation != other.generation) return generation > other.generation;
+    if (at != other.at) return at.isAfter(other.at);
+    return device.compareTo(other.device) > 0;
+  }
+
   final bool approved;
 
   /// Not taken: the record changed since it was made.
@@ -228,7 +361,7 @@ class ProposalDecision {
   /// the proposal open again.
   final bool void_;
 
-  ProposalDecision voided() => ProposalDecision(
+  ProposalDecision voided({bool conflict = false}) => ProposalDecision(
     proposal: proposal,
     owner: owner,
     approved: approved,
@@ -239,6 +372,7 @@ class ProposalDecision {
     outputs: outputs,
     stale: stale,
     void_: true,
+    conflict: conflict,
   );
 
   Map<String, Object?> toJson() => {
@@ -252,6 +386,7 @@ class ProposalDecision {
     if (outputs.isNotEmpty) 'ciktilar': outputs,
     if (stale) 'eski': true,
     if (void_) 'gecersiz': true,
+    if (conflict) 'catisma': true,
   };
 
   static ProposalDecision? fromJson(Object? j) {
@@ -277,6 +412,7 @@ class ProposalDecision {
       },
       stale: j['eski'] == true,
       void_: j['gecersiz'] == true,
+      conflict: j['catisma'] == true,
     );
   }
 }
@@ -292,9 +428,14 @@ class DecisionDevice {
     required this.at,
     this.lost = false,
     this.known = const {},
+    this.lostAt = 0,
   });
 
   final String device;
+
+  /// The generation of the last choice made of a device lost: decisions of
+  /// before it hold only when [known] then.
+  final int lostAt;
   final int generation;
   final DateTime at;
 
@@ -310,8 +451,16 @@ class DecisionDevice {
     'nesil': generation,
     'zaman': at.toIso8601String(),
     if (lost) 'kayip': true,
+    if (lostAt > 0) 'kayipNesil': lostAt,
     if (known.isNotEmpty) 'bilinen': (known.toList()..sort()),
   };
+
+  /// Whether [d] holds by this choice: made by the device chosen for its
+  /// generation, and not of before a device lost unless known then.
+  bool holds(ProposalDecision d) {
+    if (d.generation == generation && d.device != device) return false;
+    return d.generation >= lostAt || known.contains(d.proposal);
+  }
 
   static DecisionDevice? fromJson(Object? j) {
     if (j is! Map || j['cihaz'] is! String || j['nesil'] is! int) return null;
@@ -320,6 +469,7 @@ class DecisionDevice {
       generation: j['nesil'] as int,
       at: DateTime.tryParse('${j['zaman']}') ?? DateTime(2000),
       lost: j['kayip'] == true,
+      lostAt: j['kayipNesil'] is int ? j['kayipNesil'] as int : 0,
       known: {
         if (j['bilinen'] is List)
           for (final x in j['bilinen'] as List)

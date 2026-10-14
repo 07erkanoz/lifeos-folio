@@ -105,6 +105,80 @@ extension PortalClients on PortalDatabase {
     }
   }
 
+  /// [c] as it came, what a decision that did not hold wrote of its notes
+  /// left as [kept] has it.
+  Client _withoutBlocked(Client c, Client kept) {
+    final blocked = blockedOf(c.id);
+    if (blocked.isEmpty) return c;
+    final j = c.toJson();
+    if (blocked['not']?.contains('${c.versionOf('not')}') ?? false) {
+      j['not'] = kept.note;
+      j.remove('notGizli');
+      if (kept.noteSecret) j['notGizli'] = true;
+      j['alanSurumu'] = {
+        ...?(j['alanSurumu'] as Map?),
+        'not': '${kept.versionOf('not')}',
+      };
+      j['alanZamani'] = {
+        ...?(j['alanZamani'] as Map?),
+        'not': kept.stampOf('not').toIso8601String(),
+      };
+    }
+    final notes = Map<String, Object?>.from(j['dosyaNotlari'] as Map? ?? {});
+    for (final e in c.caseNotes.entries) {
+      if (blocked['dosyaNotu:${e.key}']?.contains('${e.value.versionOf}') ??
+          false) {
+        final k = kept.caseNotes[e.key];
+        if (k == null) {
+          notes.remove(e.key);
+        } else {
+          notes[e.key] = k.toJson();
+        }
+      }
+    }
+    j['dosyaNotlari'] = notes;
+    return Client.fromJson(j) ?? c;
+  }
+
+  /// [r] as it came, what a decision that did not hold wrote of its groups
+  /// left as [kept] has them.
+  ClientRecord _recordWithoutBlocked(ClientRecord r, ClientRecord kept) {
+    final blocked = blockedOf(r.id);
+    if (blocked.isEmpty) return r;
+    final versions = LedgerBook.versionsOf(r);
+    final keptV = LedgerBook.versionsOf(kept);
+    final data = {...r.data};
+    var removed = r.removed;
+    var clientId = r.clientId;
+    var changed = false;
+    for (final g in [...LedgerBook.groups.keys, LedgerBook.lifecycle]) {
+      if (!(blocked[g]?.contains('${versions[g]}') ?? false)) continue;
+      changed = true;
+      versions[g] = keptV[g]!;
+      if (g == LedgerBook.lifecycle) {
+        removed = kept.removed;
+        continue;
+      }
+      for (final f in LedgerBook.groups[g]!) {
+        if (kept.data.containsKey(f)) {
+          data[f] = kept.data[f];
+        } else {
+          data.remove(f);
+        }
+      }
+      if (g == 'finans') clientId = kept.clientId;
+    }
+    if (!changed) return r;
+    return LedgerBook.write(
+      r,
+      versions: versions,
+      setOffs: LedgerBook.setOffsOf(r),
+      data: data,
+      clientId: clientId,
+      removed: removed,
+    );
+  }
+
   /// Every version of [c] taken into the clock (R2).
   void _observeCard(Client c) {
     for (final v in c.allVersions) {
@@ -820,10 +894,12 @@ extension PortalClients on PortalDatabase {
     var changed = false;
     _transaction(() {
       for (final j in theirs['muvekkiller'] as List? ?? const []) {
-        final c = Client.fromJson(j);
+        var c = Client.fromJson(j);
         if (c == null) continue;
         _observeCard(c);
         final kept = clientCard(c.id);
+        // What a decision that did not hold wrote of it is not taken (R6).
+        if (kept != null) c = _withoutBlocked(c, kept);
         final merged = kept == null ? c : Client.merge(kept, c);
         if (kept != null && merged.encode() == kept.encode()) continue;
         _putClient(merged);
@@ -841,7 +917,7 @@ extension PortalClients on PortalDatabase {
       // Ledgers kept here in their old form that came in their new one.
       final mended = <String>{};
       for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {
-        final r = ClientRecord.fromJson(j);
+        var r = ClientRecord.fromJson(j);
         // Money from, or for, one who may not see it is not taken.
         if (r == null || (!money && r.kind.financial)) continue;
         // A ledger's movements are made here of its record, never taken.
@@ -884,6 +960,10 @@ extension PortalClients on PortalDatabase {
           }
         }
         final kept = clientRecord(r.id);
+        // What a decision that did not hold wrote of it is not taken (R6).
+        if (kept != null && r.kind == ClientRecordKind.enforcement) {
+          r = _recordWithoutBlocked(r, kept);
+        }
         // A ledger's record, group by group: what each device changed of it
         // stands (R1).
         if (r.kind == ClientRecordKind.enforcement &&

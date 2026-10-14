@@ -135,7 +135,7 @@ void main() {
     send(b, 'selin', a2, 'deniz');
     // a1 decides, but is lost before it is heard of.
     as(a, 'deniz', 'deniz').decide(p.id, approve: true);
-    final second = as(a2, 'deniz', 'a2').lost();
+    final second = as(a2, 'deniz', 'a2').lost()!;
     expect(second.generation, 1);
     // What a1 did comes to a2 after all: the change, then the decision.
     a2.clientsMerge(a.clientsExport());
@@ -193,5 +193,173 @@ void main() {
     final r = payment();
     expect(as(a, 'deniz', 'deniz').propose(kind: 'icra', target: r.id), isNull);
     expect(r.amount, 1500000);
+  });
+
+  group('Codex\'s review of step 7', () {
+    Proposal ask(ClientRecord r, Map<String, Object?> fields) {
+      final p = as(
+        b,
+        'selin',
+        'b1',
+      ).propose(kind: 'icra', target: r.id, fields: fields)!;
+      send(b, 'selin', a, 'deniz');
+      send(b, 'selin', a2, 'deniz');
+      return p;
+    }
+
+    test('given over, every decision of before stands', () {
+      final r = payment();
+      a2.clientsMerge(a.clientsExport());
+      final p = ask(r, {'tutar': 1250000});
+      as(a, 'deniz', 'deniz').decide(p.id, approve: true);
+      a2.clientsMerge(a.clientsExport());
+      as(a, 'deniz', 'deniz').giveTo('a2');
+      as(a2, 'deniz', 'a2').ownMerge(as(a, 'deniz', 'deniz').ownExport());
+      expect(a2.decisionOf(p.id)!.void_, isFalse);
+      expect(a2.clientRecord(r.id)!.amount, 1250000);
+      expect(as(a2, 'deniz', 'a2').decidesHere, isTrue);
+      expect(as(a, 'deniz', 'deniz').decidesHere, isFalse);
+    });
+
+    test('two devices that each took the lost one\'s place at once end '
+        'with one, the same on both', () {
+      final a3 = PortalDatabase.memory();
+      addTearDown(a3.dispose);
+      as(a2, 'deniz', 'a2').lost();
+      as(a3, 'deniz', 'a3').lost();
+      as(a2, 'deniz', 'a2').ownMerge(as(a3, 'deniz', 'a3').ownExport());
+      as(a3, 'deniz', 'a3').ownMerge(as(a2, 'deniz', 'a2').ownExport());
+      final one = as(a2, 'deniz', 'a2').decidesHere;
+      final other = as(a3, 'deniz', 'a3').decidesHere;
+      expect(one != other, isTrue);
+    });
+
+    test('a later decision stands over an earlier one, whatever came '
+        'first; an earlier one not holding never over a later', () {
+      final r = payment();
+      final p = ask(r, {'tutar': 1});
+      final first = ProposalDecision(
+        proposal: p.id,
+        owner: 'deniz',
+        approved: true,
+        device: 'deniz',
+        generation: 0,
+        at: DateTime(2026, 10, 14, 10),
+      );
+      final later = ProposalDecision(
+        proposal: p.id,
+        owner: 'deniz',
+        approved: false,
+        device: 'a2',
+        generation: 1,
+        at: DateTime(2026, 10, 14, 11),
+      );
+      b.putDecision(first);
+      expect(b.putDecision(later), isTrue);
+      expect(b.decisionOf(p.id)!.approved, isFalse);
+      expect(b.putDecision(first.voided()), isFalse);
+      expect(b.decisionOf(p.id)!.generation, 1);
+    });
+
+    test('a note made secret: its text goes from the proposals of it', () {
+      PortalDatabase.clientPerson = () => 'deniz';
+      a.saveClient(
+        Client(
+          id: 'k2',
+          name: 'Ayşe Karaca',
+          updated: DateTime(2026, 10, 1),
+          person: 'deniz',
+          caseNotes: {'dava': CaseNote('Açık not', DateTime(2026, 10, 1))},
+        ).copyWith(office: true),
+      );
+      b.clientsMerge(a.clientsExport());
+      as(b, 'selin', 'b1').propose(
+        kind: 'dosyaNotu',
+        target: 'k2',
+        caseKey: 'dava',
+        fields: {'metin': 'Açık not, sınır 50.000'},
+      );
+      send(b, 'selin', a, 'deniz', money: false);
+      PortalDatabase.clientPerson = () => 'deniz';
+      final card = a.clientCard('k2')!;
+      a.saveClient(
+        card.copyWith(
+          caseNotes: {
+            'dava': CaseNote('Açık not', DateTime(2026, 10, 2), secret: true),
+          },
+        ),
+      );
+      expect(a.proposals(owner: 'deniz').single.fields['metin'], isEmpty);
+    });
+
+    test('a decision not holding: its sum put back though the record was '
+        'marked told since; what it wrote never taken after', () {
+      final r = payment();
+      a2.clientsMerge(a.clientsExport());
+      final p = ask(r, {'tutar': 1250000});
+      as(a, 'deniz', 'deniz').decide(p.id, approve: true);
+      as(a2, 'deniz', 'a2').lost();
+      // a2 marks it told, before anything of a1 comes.
+      PortalDatabase.clientPerson = () => 'deniz';
+      LedgerService(a2)
+          .setReported(a2.clientRecord(r.id)!, DateTime(2026, 10, 12));
+      // The decision comes first, then what it wrote.
+      as(a2, 'deniz', 'a2').ownMerge(as(a, 'deniz', 'deniz').ownExport());
+      expect(a2.decisionOf(p.id)!.void_, isTrue);
+      a2.clientsMerge(a.clientsExport());
+      final now = a2.clientRecord(r.id)!;
+      expect(now.amount, 1500000);
+      expect(now.text('bildirildi'), isNotEmpty);
+    });
+
+    test('a conflict is kept, and shown till looked at', () {
+      final r = payment();
+      a2.clientsMerge(a.clientsExport());
+      final p = ask(r, {'tutar': 1250000});
+      as(a, 'deniz', 'deniz').decide(p.id, approve: true);
+      a2.clientsMerge(a.clientsExport());
+      as(a2, 'deniz', 'a2').lost();
+      // Changed again on a2 after the decision's change came.
+      PortalDatabase.clientPerson = () => 'deniz';
+      LedgerService(a2).edit(
+        a2.clientRecord(r.id)!,
+        amount: 1300000,
+        at: DateTime(2026, 10, 10),
+        debtor: '',
+        way: '',
+        note: '',
+        whole: false,
+        target: null,
+      );
+      as(a2, 'deniz', 'a2').ownMerge(as(a, 'deniz', 'deniz').ownExport());
+      final d = a2.decisionOf(p.id)!;
+      expect((d.void_, d.conflict), (true, true));
+      expect(a2.clientRecord(r.id)!.amount, 1300000);
+      expect(as(a2, 'deniz', 'a2').conflicts, isNotEmpty);
+      a2.clearDecisionConflict(p.id);
+      expect(as(a2, 'deniz', 'a2').conflicts, isEmpty);
+    });
+
+    test('made seeing what was shown: changed since, it is old', () {
+      final r = payment();
+      final shown = ProposalService.versionsOf(b, 'icra', r.id);
+      PortalDatabase.clientPerson = () => 'deniz';
+      LedgerService(a)
+          .setReported(a.clientRecord(r.id)!, DateTime(2026, 10, 12));
+      b.clientsMerge(a.clientsExport());
+      final p = as(
+        b,
+        'selin',
+        'b1',
+      ).propose(kind: 'icra', target: r.id, fields: {'tutar': 1}, seen: shown)!;
+      send(b, 'selin', a, 'deniz');
+      expect(as(a, 'deniz', 'deniz').current(p), isFalse);
+    });
+
+    test('a device whose keys are not kept never decides', () {
+      final s = ProposalService(a, me: 'deniz', device: 'deniz', kept: false);
+      expect(s.decidesHere, isFalse);
+      expect(s.lost(), isNull);
+    });
   });
 }

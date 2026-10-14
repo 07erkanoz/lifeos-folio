@@ -3511,6 +3511,15 @@ class _ClientCardState extends State<ClientCard> {
     String caseKey = '',
     String now = '',
   }) async {
+    // What it is made seeing: the note as this screen shows it.
+    final seen = {
+      'not': caseKey.isEmpty
+          ? '${card.versionOf('not')}'
+          : switch (card.caseNotes[caseKey]) {
+              final n? => '${n.versionOf}',
+              null => '',
+            },
+    };
     final note = await showDialog<({String text, bool secret})>(
       context: context,
       builder: (_) => _NoteDialog(
@@ -3531,6 +3540,7 @@ class _ClientCardState extends State<ClientCard> {
       target: card.id,
       caseKey: caseKey,
       fields: {'metin': note.text.trim()},
+      seen: seen,
     );
     if (!mounted) return;
     setState(() {});

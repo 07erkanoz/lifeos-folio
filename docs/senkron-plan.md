@@ -1006,3 +1006,18 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
   - Kendi cihazdan gelen görev notları, oradaki eski paketin temizliğini başlatır (`cleanKnown`).
   - Bir kişiye gönderilen not, o kişinin büro defterindeki bütün cihazlarında "olası" sayılır;
     kişi ancak bütün cihazları uygulayınca tamamlanır.
+- **Adım 7 kod denetimi (14 Ekim, REVISE, 9 kritik, 1 uyarı):** Bu sürümde işlenenler:
+  - Normal devir ile kayıp cihaz ayrı: devirde bütün önceki kararlar geçerli kalır (`known`
+    birikir); yalnız kayıp seçimden (`lostAt`) önceki, o an bilinmeyen kararlar geçersizdir.
+  - Eşit nesilli iki seçimde her cihazda aynı kazanan (cihaz kimliği); kazanandan başka cihazın o
+    nesildeki kararı geçersiz.
+  - Kararlar arasında `supersedes`: aynı kararın geçersiz/çatışmalı hâli, yoksa daha yeni nesil ve
+    zaman kazanır; eski geçersizlik yenisini ezmez. Büroda ve kendi cihazlarda aynı kural.
+  - Geçersiz kararın çıktısı grup grup, sürümüyle geri alınır; ilgisiz grup değişikliği engellemez;
+    henüz gelmemiş çıktı ve sonradan gelen çıktı `blocked_output` ile hiç alınmaz (kart notu, dosya
+    notu, defter grupları). Not geri alınırken gizliliği ve yazanı korunur.
+  - Çatışma kalıcı (`catisma`), eşitlenir ve "Bekleyen öneriler"de "kayda elle bakın" olarak
+    görünür.
+  - Not gizlenince ilgili önerilerin metni silinir (sahipte ve önerende); sonradan gelen öneri de.
+  - Öneri, ekranın gösterdiği sürümlerle yapılır.
+  - Kalıcı kimliği olmayan cihaz karar veremez, seçilemez.

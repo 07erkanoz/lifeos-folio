@@ -351,6 +351,11 @@ class _EnforcementViewState extends State<EnforcementView> {
     final db = await widget.database();
     if (!mounted) return;
     final owner = _ownerOf(e);
+    // What it is made seeing: the record as this screen shows it.
+    final seen = {
+      for (final x in LedgerBook.versionsOf(e.record).entries)
+        x.key: '${x.value}',
+    };
     final Map<String, Object?> fields;
     var reason = '';
     if (remove) {
@@ -408,6 +413,7 @@ class _EnforcementViewState extends State<EnforcementView> {
       fields: fields,
       remove: remove,
       reason: reason,
+      seen: seen,
     );
     if (!mounted) return;
     setState(() {});

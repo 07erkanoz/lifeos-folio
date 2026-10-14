@@ -21,6 +21,7 @@ ProposalService Function(PortalDatabase db) proposalsFor = (db) {
     me: net.me,
     device: net.self?.deviceId ?? '',
     myName: net.self?.name ?? '',
+    kept: net.kept,
   );
 };
 
@@ -186,8 +187,8 @@ class ProposalsStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final service = proposalsHere(db);
-    final waiting = service.waiting;
-    if (waiting.isEmpty) return const SizedBox.shrink();
+    final waiting = service.waiting.length + service.conflicts.length;
+    if (waiting == 0) return const SizedBox.shrink();
     return Material(
       key: const ValueKey('proposals-strip'),
       color: Theme.of(context).colorScheme.surface,
@@ -209,7 +210,7 @@ class ProposalsStrip extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Bekleyen öneriler · ${waiting.length}',
+                  'Bekleyen öneriler · $waiting',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -236,6 +237,7 @@ Future<void> showProposals(
     builder: (context, set) {
       final service = proposalsHere(db);
       final waiting = service.waiting;
+      final conflicts = service.conflicts;
       final here = service.decidesHere;
       final deciding = service.deciding(service.me).device;
       final where =
@@ -255,10 +257,10 @@ Future<void> showProposals(
       }
 
       return AlertDialog(
-        title: Text('Bekleyen öneriler · ${waiting.length}'),
+        title: Text('Bekleyen öneriler · ${waiting.length + conflicts.length}'),
         content: SizedBox(
           width: 520,
-          child: waiting.isEmpty
+          child: waiting.isEmpty && conflicts.isEmpty
               ? const Text('Bekleyen öneri yok.')
               : SingleChildScrollView(
                   child: Column(
@@ -276,6 +278,14 @@ Future<void> showProposals(
                             ),
                           ),
                         ),
+                      for (final d in conflicts)
+                        if (db.proposal(d.proposal) case final p?)
+                          _ConflictItem(
+                            db: db,
+                            proposal: p,
+                            onSeen: () =>
+                                set(() => db.clearDecisionConflict(p.id)),
+                          ),
                       for (final p in waiting)
                         _ProposalItem(
                           db: db,
@@ -433,6 +443,49 @@ class _ProposalItem extends StatelessWidget {
   }
 }
 
+/// A decision that did not hold whose change was changed again since: the
+/// record left as it is now, for the owner to look at.
+class _ConflictItem extends StatelessWidget {
+  const _ConflictItem({
+    required this.db,
+    required this.proposal,
+    required this.onSeen,
+  });
+
+  final PortalDatabase db;
+  final Proposal proposal;
+  final VoidCallback onSeen;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: ValueKey('proposal-conflict-${proposal.id}'),
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: AgendaColors.line)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          proposalTitle(db, proposal),
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Kaybolan cihazın bu öneriye verdiği karar geçersiz sayıldı. '
+          'Kararın yaptığı değişiklik sonra yeniden değiştiği için geri '
+          'alınmadı; kayda elle bakın.',
+          style: TextStyle(fontSize: 12.5, color: AgendaColors.taskText),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(onPressed: onSeen, child: const Text('Tamam')),
+        ),
+      ],
+    ),
+  );
+}
+
 /// The card of a colleague's [c], for the notice of what is theirs.
 bool othersCard(Client c) {
   final me = OfficeNetwork.instance.me;
@@ -475,6 +528,7 @@ class _DecisionDeviceBoxState extends State<DecisionDeviceBox> {
       db,
       me: net.me,
       device: net.self?.deviceId ?? '',
+      kept: net.kept,
     );
     final deciding = service.deciding(net.me).device;
     final here = service.decidesHere;
@@ -538,7 +592,8 @@ class _DecisionDeviceBoxState extends State<DecisionDeviceBox> {
                       '${d.device.isEmpty ? d.name : d.device} cihazına devret',
                     ),
                   ),
-              if (!here)
+              // A device seen anew at each start never decides.
+              if (!here && net.kept)
                 OutlinedButton(
                   key: const ValueKey('decision-lost'),
                   onPressed: () async {
