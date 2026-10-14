@@ -102,7 +102,15 @@ class SharedCases {
   /// What the person's other devices take of whom each case is shared
   /// with, and since when (docs/senkron-plan.md R8): a case shared from one
   /// device is shared from all, and taken back from all.
-  static Map<String, Object?> ownExport(PortalDatabase db) => {
+  static Map<String, Object?> ownExport(PortalDatabase db) {
+    // Shared before its word had a version: versioned once, to go.
+    for (final k in {...shares(db).keys, ..._read(db, _everKey).keys}) {
+      if (db.caseShareVersion(k) == null) db.tickCaseShare(k);
+    }
+    return _ownExport(db);
+  }
+
+  static Map<String, Object?> _ownExport(PortalDatabase db) => {
     'paylasim': shares(db),
     'gecmis': _read(db, _everKey),
     'surum': {
@@ -268,9 +276,10 @@ class SharedCases {
         if (!e.value.contains(person)) continue;
         // Shared before its account went with it: its word versioned once.
         if (db.caseShareVersion(e.key) == null) db.tickCaseShare(e.key);
-        final version = db.caseShareVersion(e.key);
-        if (version == null) continue;
         final open = money && (shared[e.key]?.contains(person) ?? false);
+        // Each time it opens or closes for this person, a later version:
+        // a copy of before, open or closed, is always behind (R8).
+        final version = db.accessVersion(e.key, person, open);
         ledgers.add({
           'dosya': e.key,
           'surum': '$version',

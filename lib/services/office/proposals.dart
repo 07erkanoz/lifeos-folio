@@ -573,8 +573,10 @@ class ProposalService {
       for (final j in theirs['kararlar'] as List? ?? const []) {
         final d = ProposalDecision.fromJson(j);
         if (d == null) continue;
+        // Never one whose proposal is not here to be weighed (its money
+        // perhaps not this person's to see).
         final of = db.proposal(d.proposal);
-        if (of != null && !_mayKeep(of)) continue;
+        if (of == null || !_mayKeep(of)) continue;
         if (d.owner == me) {
           if (takeOwn(d)) changed = true;
           continue;

@@ -25,6 +25,26 @@ extension PortalSharedLedger on PortalDatabase {
     (PortalAgendaVersions._map(meta(_shareVersions)) ?? const {})[caseKey],
   );
 
+  /// The version of [caseKey]'s account for [person]: a later one each
+  /// time it opens or closes for them, at least the share's own.
+  Hlc accessVersion(String caseKey, String person, bool open) {
+    final all = {...?PortalAgendaVersions._map(meta('paylasim-erisim'))};
+    final key = '$caseKey|$person';
+    final kept = all[key] is Map ? all[key] as Map : null;
+    final share = caseShareVersion(caseKey);
+    final was = Hlc.tryParse(kept?['surum']);
+    if (kept != null &&
+        kept['acik'] == open &&
+        was != null &&
+        (share == null || was >= share)) {
+      return was;
+    }
+    final now = SyncClock.of(this).tick();
+    all[key] = {'acik': open, 'surum': '$now'};
+    setMeta('paylasim-erisim', jsonEncode(all));
+    return now;
+  }
+
   /// [caseKey]'s share's version, as another own device's word had it.
   void setCaseShareVersion(String caseKey, Hlc version) {
     final all = {...?PortalAgendaVersions._map(meta(_shareVersions))};

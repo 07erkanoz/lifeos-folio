@@ -1089,3 +1089,13 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
   - Senkron sayfasında yeni kanalların adları.
   - Açık kalanlar (uyarı): gerçek ağ katmanıyla ayrı bir uçtan uca test; icra ekranındaki tekrar
     okumalar (performans); büro eşlerinin duran parçalarının sayfada gösterilmesi.
+- **Son düzeltmelerin denetimi (14 Ekim, REVISE: 1 kapandı, 4 kısmen):** işlenenler:
+  - Önerisi burada olmayan karar kendi cihaz kanalından alınmaz; yetim kararlar silinir.
+  - Paylaşım değişikliği kendi cihazlara da hemen duyurulur; sürümsüz eski paylaşım kendi
+    cihazlara gitmeden bir kez sürüm alır.
+  - Gönderen her alıcı için erişim açıldıkça ya da kapandıkça yeni sürüm verir
+    (`paylasim-erisim`): eski açık ya da kapalı kopya hep geride kalır.
+  - `hlc` ve `defterPaylasimi` etkin; `paylasimlar` `hlc` ister; para önerisi gönderme ve almada
+    `defterIslemi`, `alanSurumu`, `hlc` aranır.
+  - Açık kalanlar değişmedi: gerçek ağla uçtan uca test, icra ekranında tekrar okumalar, büro
+    eşinin duran parçaları.

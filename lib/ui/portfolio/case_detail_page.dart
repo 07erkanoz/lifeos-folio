@@ -525,7 +525,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     if (picked == null) return;
     final db = await _db;
     SharedCases.share(db, kase.key, picked);
+    // To the office, and to this person's other devices at once.
     net.officeChanged();
+    net.ownChanged();
     if (!mounted) return;
     setState(() => _sharedWith = SharedCases.sharedWith(db, kase.key));
     showNotice(

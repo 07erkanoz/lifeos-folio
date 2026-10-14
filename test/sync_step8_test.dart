@@ -270,4 +270,48 @@ void main() {
       expect(b.proposals(by: 'selin'), isEmpty);
     });
   });
+
+  group('the last review, again', () {
+    test('a decision whose proposal is not here is not taken', () {
+      final r = payment();
+      SharedCases.share(a, 'dava', ['selin']);
+      send();
+      PortalDatabase.clientPerson = () => 'selin';
+      final s = ProposalService(b, me: 'selin', device: 'b1');
+      final p = s.propose(kind: 'icra', target: r.id, fields: {'tutar': 1})!;
+      final decision = ProposalDecision(
+        proposal: p.id,
+        owner: 'deniz',
+        approved: false,
+        device: 'deniz',
+        generation: 0,
+        at: DateTime(2026, 10, 14),
+        reason: 'Makbuz 15.000',
+      ).toJson();
+      final allowed = PortalDatabase.clientMoneyAllowed;
+      addTearDown(() => PortalDatabase.clientMoneyAllowed = allowed);
+      PortalDatabase.clientMoneyAllowed = () => false;
+      b.forgetClientMoney(keepPerson: 'selin');
+      s.ownMerge({
+        'oneriler': [p.toJson()],
+        'kararlar': [decision],
+      });
+      expect(b.decisionOf(p.id), isNull);
+    });
+
+    test('closed, then open again: a closed copy of before is behind', () {
+      payment();
+      SharedCases.share(a, 'dava', ['selin']);
+      final closedAt = a.accessVersion('dava', 'selin', false);
+      final openAt = a.accessVersion('dava', 'selin', true);
+      expect(openAt > closedAt, isTrue);
+      expect(send(version: openAt), isTrue);
+      // Another own device of hers still had it closed, of before.
+      final b2 = PortalDatabase.memory();
+      addTearDown(b2.dispose);
+      b2.takeSharedLedger('deniz', 'dava', closedAt, closed: true);
+      b.noteTrackingMerge(b2.noteTrackingExport());
+      expect(b.sharedLedgersOf('dava'), isNotEmpty);
+    });
+  });
 }

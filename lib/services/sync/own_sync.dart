@@ -480,6 +480,14 @@ class OwnSync extends ChangeNotifier {
     _watchMoney();
   }
 
+  /// Whether [device] said it keeps a ledger's record as it is kept here:
+  /// money of one goes to it, and comes from it, only then (R0, §4.1).
+  bool _keepsLedgers(String device) => {
+    SyncCaps.ledgerOps,
+    SyncCaps.fieldVersions,
+    SyncCaps.hlc,
+  }.difference(_net.peerCaps[device] ?? const <String>{}).isEmpty;
+
   /// The office person of [device], by the office's ledger; empty for one
   /// not of it.
   String _personOf(String device) =>
@@ -547,16 +555,14 @@ class OwnSync extends ChangeNotifier {
       // Folio that keeps a ledger's record as it is kept here.
       export: (to) async => proposals().officeExport(
         _personOf(to),
-        money:
-            _net.seesMoney &&
-            _net.seesMoneyOf(to) &&
-            (_net.peerCaps[to]?.contains(SyncCaps.ledgerOps) ?? false),
+        money: _net.seesMoney && _net.seesMoneyOf(to) && _keepsLedgers(to),
       ),
       merge: (theirs, from) async {
         final changed = proposals().officeMerge(
           theirs,
           _personOf(from),
-          money: _net.seesMoney && _net.seesMoneyOf(from),
+          money:
+              _net.seesMoney && _net.seesMoneyOf(from) && _keepsLedgers(from),
         );
         if (changed) {
           _net.ownChanged();

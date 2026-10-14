@@ -176,6 +176,10 @@ extension PortalProposals on PortalDatabase {
       _db.execute('DELETE FROM proposal WHERE id=?', [r['id']]);
       _db.execute('DELETE FROM proposal_decision WHERE oneri=?', [r['id']]);
     }
+    // A decision with no proposal here left: gone too.
+    _db.execute(
+      'DELETE FROM proposal_decision WHERE oneri NOT IN (SELECT id FROM proposal)',
+    );
   }
 
   void deleteDecision(String proposal) =>

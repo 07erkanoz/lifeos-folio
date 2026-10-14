@@ -57,6 +57,9 @@ abstract final class SyncCaps {
     // A colleague's change of another's record is a proposal, decided by
     // its owner (§5 step 7).
     proposals,
+    // The versions themselves, and a case's account shared (§5 step 8).
+    hlc,
+    sharedLedger,
   };
 
   /// What each part and channel needs when its format uses it (§4.1).
@@ -86,7 +89,7 @@ abstract final class SyncCaps {
     'not-takibi': {hlc, secretNotes, recall},
     'oneri': {proposals, hlc},
     'oneriler': {proposals, hlc},
-    'paylasimlar': {sharedLedger},
+    'paylasimlar': {sharedLedger, hlc},
   };
 
   /// The capabilities [part] needs now: its row's that are in use here.
