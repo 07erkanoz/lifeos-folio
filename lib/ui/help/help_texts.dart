@@ -75,8 +75,10 @@ abstract final class Help {
             'imzanızla girin.',
         'İsterseniz UYAP Mobil kartından e-Devlet ile de bağlanın. Biri '
             'yeter; ikisi de bağlıysa Folio her işi en uygun olanla yapar.',
-        'Bağlandıktan sonra dava dosyalarınız, duruşmalarınız ve '
-            'bildirimleriniz kendiliğinden gelir.',
+        'İlk bağlantıda kurulum ekranı açılır. UYAP Mobil ile başlamanız '
+            'önerilir: dosya listeniz, müvekkilleriniz ve evrak listeleri '
+            'gelir. Ardından UYAP Web ile tamamla, para, icra hesabı ve '
+            'Yargıtay dosyalarını getirir.',
       ]),
       HelpPart('Güncel tutmak', [
         'Senkronize et, UYAP’taki son durumu hemen getirir.',
@@ -95,10 +97,12 @@ abstract final class Help {
         'bağlı olan UYAP bağlantısından gelir.',
     [
       HelpPart('Dosyaları getirmek', [
-        'UYAP Web’e ya da UYAP Mobil’e bağlanın; portföyünüz birim birim '
-            'gelir.',
-        'Yeni açılan bir dava için ayrıca bir şey yapmanız gerekmez: '
-            'Vekil Kaydı bildirimi gelince dosya hemen eklenir.',
+        'UYAP Web’e ya da UYAP Mobil’e bağlanın; kurulum ekranından '
+            'başlatınca portföyünüz birim birim gelir. Ekran sonradan '
+            'sağ üstteki ⋯ menüsünden de açılır.',
+        'Yeni açılan bir davada Vekil Kaydı bildirimi gelince Folio sizi '
+            'uyarır; Portföyü yenile ile dosya eklenir. UYAP’ın kendiliğinden '
+            'okunması açıksa dosya kendiliğinden eklenir.',
         'Senkronize et ile listeyi elle yenileyebilirsiniz. UYAP’ı yormamak '
             'için üç saatte bir defadan sık yenilenmez.',
       ]),
@@ -106,7 +110,7 @@ abstract final class Help {
         'Listeden dosyaya dokunun. Evraklar, taraflar, duruşmalar, süreler '
             've para bilgileri dosyanın sayfasında görünür.',
         'Kapalı dosyaları da görmek için sağ üstteki ⋯ menüsünden Kapalı '
-            'dosyaları da indir’i seçin.',
+            'dosyaları getir’i seçin; liste bir kez okunur.',
       ]),
     ],
     'Arama kutusuna dosya numarası, taraf adı ya da mahkeme yazarak '
@@ -120,7 +124,7 @@ abstract final class Help {
         'hesabı.',
     [
       HelpPart('Güncel bilgiyi almak', [
-        'Sayfa açılınca bilgiler kendiliğinden tazelenir.',
+        'Sayfa açılınca bir günden eski bilgiler kendiliğinden tazelenir.',
         'UYAP’tan tazele ile hemen yeniletebilirsiniz. Para girişleri, '
             'tahsilat ve icra hesabı UYAP Web’den gelir; bu yüzden UYAP '
             'Web bağlıyken tazelemek en eksiksiz bilgiyi verir.',

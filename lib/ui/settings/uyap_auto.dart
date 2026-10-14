@@ -26,9 +26,10 @@ class UyapAutoRow extends StatelessWidget {
           title: 'UYAP verilerini kendiliğinden al',
           subtitle: sync.autoFetch
               ? 'Açık. Bildirimler saatte bir, duruşmalar günde bir, dosya '
-                    'listeniz haftada bir, her açık dosyanız haftada bir alınır.'
-              : 'Kapalı. Folio UYAP’a yalnız siz bir şey yaptığınızda, bir '
-                    'tarayıcı gibi sorar.',
+                    'listeniz haftada bir; dosyalarınızın web bilgileri her '
+                    'gün yedide biri olmak üzere haftada bir tazelenir.'
+              : 'Kapalı. Folio UYAP’a yalnız siz bir düğmeye bastığınızda '
+                    'ya da bir dosyayı açtığınızda, bir tarayıcı gibi sorar.',
           trailing: settingsSwitch(sync.autoFetch, (on) async {
             if (on && !await askUyapAuto(context)) return;
             await sync.setAutoFetch(on);
@@ -85,9 +86,11 @@ class _UyapAutoDialogState extends State<_UyapAutoDialog> {
               'Bildirimlerinizi saatte bir; gece sormaz.',
               'Duruşmalarınızı günde bir.',
               'Dosya listenizi haftada bir, pazartesi günleri.',
-              'UYAP Web bağlıyken açık dosyalarınızın ayrıntılarını, '
-                  'tarafları, evrak listesini, harç, tahsilat ve icra '
-                  'bilgilerini: her gün bir kısmını, her dosyayı haftada bir.',
+              'UYAP Web bağlıyken, web’den bir kez tamamlanmış açık '
+                  'dosyalarınızın ayrıntılarını, taraflarını, evrak '
+                  'listesini, harç, tahsilat ve icra bilgilerini: her gün '
+                  'dosyaların yedide birini, böylece her dosyayı haftada '
+                  'bir. İlk tamamlamayı her zaman siz başlatırsınız.',
             ])
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 4),
@@ -98,8 +101,9 @@ class _UyapAutoDialogState extends State<_UyapAutoDialog> {
               'Bu istekler sizin adınıza ve yalnız sizin görme yetkiniz olan '
               'dosyalar için yapılır. Folio istekleri aralıklı ve tek sıradan '
               'gönderir; UYAP yanıt vermezse bekler. Kapalı bıraktığınızda '
-              'Folio UYAP’a yalnız siz giriş yaptığınızda, Yenile’ye '
-              'bastığınızda ya da bir dosyayı açtığınızda sorar.',
+              'Folio UYAP’a yalnız siz Yenile, Senkronize et ya da kurulum '
+              'gibi bir düğmeye bastığınızda ya da bir dosyayı açtığınızda '
+              'sorar; giriş yapmak tek başına hiçbir şey okumaz.',
             ),
             const SizedBox(height: 8),
             const Text(
@@ -155,18 +159,24 @@ class UyapHelpPage extends StatelessWidget {
     ),
     (
       'UYAP’a ne zaman sorulur',
-      'Siz giriş yaptığınızda, Yenile ya da Senkronize et’e bastığınızda, bir '
-          'dosyayı ya da bildirimler sayfasını açtığınızda. “UYAP verilerini '
-          'kendiliğinden al” ayarını açarsanız bunlara ek olarak bildirimler '
-          'saatte bir, duruşmalar günde bir ve dosya listeniz haftada bir '
-          'alınır. UYAP Web bağlıysa açık dosyalarınızın ayrıntıları, '
-          'tahsilat ve icra bilgileri de her gün bir kısmı olmak üzere '
-          'haftada bir yenilenir; evrakın kendisi indirilmez. Gece hiçbir '
-          'şey sorulmaz.',
+      'Yalnız siz Yenile, Senkronize et ya da kurulum gibi bir düğmeye '
+          'bastığınızda ve bir dosyanın sayfasını açtığınızda; dosyanın '
+          'sayfası yalnız bir günden eski bilgileri yeniden sorar. Giriş '
+          'yapmak, ajandayı ya da bildirimleri açmak tek başına UYAP’a '
+          'sormaz. İlk girişte kurulum ekranı açılır: dosya listenizi, '
+          'müvekkillerinizi ve evrak listelerini siz başlatınca getirir; '
+          'para, icra hesabı ve Yargıtay dosyaları için UYAP Web ile '
+          'tamamlamayı da siz başlatırsınız. “UYAP verilerini kendiliğinden '
+          'al” ayarını açarsanız bunlara ek olarak bildirimler saatte bir, '
+          'duruşmalar günde bir ve dosya listeniz haftada bir alınır; UYAP '
+          'Web bağlıysa dosyalarınızın web bilgileri her gün yedide biri '
+          'olmak üzere haftada bir yenilenir. Evrakın kendisi kendiliğinden '
+          'indirilmez. Gece hiçbir şey sorulmaz.',
     ),
     (
       'UYAP’ı yormamak için',
-      'İstekler tek sıradan, birer ikişer saniye arayla gider. UYAP yanıt '
+      'İstekler tek sıradan, birer ikişer saniye arayla gider; iki evrak '
+          'indirmesi arasında en az üç saniye beklenir. UYAP yanıt '
           'vermediğinde Folio bekler ve bekleme süresini uzatır. Kendi '
           'cihazlarınızdan biri bir bilgiyi aldıysa öbürü onu UYAP’a yeniden '
           'sormaz; telefonunuz, aynı ağdaki bilgisayarınız sorarken kendisi '

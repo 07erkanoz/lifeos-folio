@@ -1623,8 +1623,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            'UYAP Web’e ya da UYAP Mobil’e bağlanınca açık dosyalarınızın '
-            'tamamı buraya kendiliğinden gelir; seçip eklemeniz gerekmez.',
+            'UYAP Web’e ya da UYAP Mobil’e bağlanınca kurulum ekranı açılır; '
+            'başlatınca açık dosyalarınızın tamamı buraya gelir, seçip '
+            'eklemeniz gerekmez.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AgendaColors.muted),
           ),
