@@ -538,6 +538,14 @@ class OwnSync extends ChangeNotifier {
         return changed;
       },
     );
+    // The device deciding forgotten as lost: this one decides now, with no
+    // word asked of the lawyer.
+    _net.forgotten = (deviceId) async {
+      final here = proposals();
+      if (here.deciding(here.me).device == deviceId && here.lost() != null) {
+        _net.ownChanged();
+      }
+    };
     _net.ownParts[ownProposals] = OwnPart(
       export: () async => proposals().ownExport(),
       merge: (theirs) async {

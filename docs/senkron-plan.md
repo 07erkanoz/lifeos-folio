@@ -1032,3 +1032,13 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
     bağı geri dönen finansal sürüme taşınır.
   - Çatışmanın "Tamam"ı cihazda yerel; gelen kayıt onu yeniden açmaz.
   - Açık kalan uyarılar: devrin hedefte alındığının onayı ve devir hedefinin kalıcı kimliği.
+- **Sadeleştirme (14 Ekim, kullanıcı: "avukat bu kadar çok işten anlar mı"):**
+  - Senkron sayfasındaki karar cihazı kutusu kaldırıldı. Kararlar ilk bilgisayardan verilir; o cihaz
+    kendi cihaz listesinden kaldırılınca görev kendiliğinden kaldıran cihaza geçer (kayıp seçimi).
+  - Gizli notun durum satırı iki hâlli: "Büro kopyalarından siliniyor…" / "silindi"; sayı ve isim
+    yok.
+  - Gizlerken onay penceresi tek cümle ("Bu not büroda n kişide var (…). Gizli yaparsanız
+    onlardan da silinir."), düğme "Gizli yap".
+  - Çakışma metni sade.
+  - Adım 8'in veri katmanı (`portal_shared_ledger.dart`) eklendi; ekran ve gönderim, "Folio
+    hesabını da paylaş" anahtarı mı yoksa para yetkilisine kendiliğinden mi kararı bekliyor.

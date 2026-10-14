@@ -14,7 +14,6 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../help/help_button.dart';
 import '../office/office_pairing_dialog.dart';
 import '../office/qr_pairing.dart';
-import '../widgets/proposals_view.dart';
 import '../widgets/drop_zone.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 
@@ -291,11 +290,6 @@ class _SyncPageState extends State<SyncPage> {
                   style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
                 ),
               ],
-              // In an office: which device decides on the colleagues'
-              // proposals (R6).
-              if (_net.ledger.exists &&
-                  !Platform.environment.containsKey('FLUTTER_TEST'))
-                DecisionDeviceBox(network: _net),
               if (_walled) ...[
                 const SizedBox(height: 10),
                 FirewallNote(at: _net.listeningPort),

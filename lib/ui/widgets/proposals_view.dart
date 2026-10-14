@@ -283,8 +283,7 @@ Future<void> showProposals(
                           _ConflictItem(
                             db: db,
                             proposal: p,
-                            onSeen: () =>
-                                set(() => service.conflictSeen(p.id)),
+                            onSeen: () => set(() => service.conflictSeen(p.id)),
                           ),
                       for (final p in waiting)
                         _ProposalItem(
@@ -472,9 +471,9 @@ class _ConflictItem extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Kaybolan cihazın bu öneriye verdiği karar geçersiz sayıldı. '
-          'Kararın yaptığı değişiklik sonra yeniden değiştiği için geri '
-          'alınmadı; kayda elle bakın.',
+          'Bu öneriye kaldırılan bir cihazda verilen karar geçersiz '
+          'sayıldı. Kayıt o arada değiştiği için olduğu gibi bırakıldı; '
+          'kaydı bir kontrol edin.',
           style: TextStyle(fontSize: 12.5, color: AgendaColors.taskText),
         ),
         Align(
@@ -490,157 +489,4 @@ class _ConflictItem extends StatelessWidget {
 bool othersCard(Client c) {
   final me = OfficeNetwork.instance.me;
   return c.person.isNotEmpty && me.isNotEmpty && c.person != me;
-}
-
-/// Which of this person's devices decides on the colleagues' proposals
-/// (R6): given over from it to another of theirs, both on; or, it lost,
-/// this one chosen anew.
-class DecisionDeviceBox extends StatefulWidget {
-  const DecisionDeviceBox({super.key, required this.network, this.database});
-
-  final OfficeNetwork network;
-  final PortalDatabase? database;
-
-  @override
-  State<DecisionDeviceBox> createState() => _DecisionDeviceBoxState();
-}
-
-class _DecisionDeviceBoxState extends State<DecisionDeviceBox> {
-  PortalDatabase? _db;
-
-  @override
-  void initState() {
-    super.initState();
-    _db = widget.database;
-    if (_db == null) {
-      PortalDatabase.shared().then((db) {
-        if (mounted) setState(() => _db = db);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final db = _db;
-    final net = widget.network;
-    if (db == null || !net.ledger.exists) return const SizedBox.shrink();
-    final service = ProposalService(
-      db,
-      me: net.me,
-      device: net.self?.deviceId ?? '',
-      kept: net.kept,
-    );
-    final deciding = service.deciding(net.me).device;
-    final here = service.decidesHere;
-    final name = here
-        ? 'bu cihaz'
-        : net.ledger.member(deciding)?.device ??
-              net.ownKnown
-                  .where((d) => d.deviceId == deciding)
-                  .firstOrNull
-                  ?.device ??
-              'ilk cihazınız';
-    final muted = TextStyle(fontSize: 12.5, color: AgendaColors.muted);
-    return Container(
-      key: const ValueKey('decision-device'),
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        border: Border.all(color: AgendaColors.line),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.gavel_rounded, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Meslektaşların önerileri $name'
-                  '${here ? 'da' : ' cihazınızda'} karara bağlanır.',
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Diğer cihazlarınızda öneriler görünür; onay ve red buradan '
-            'verilir.',
-            style: muted,
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (here)
-                for (final d in net.ownOnline)
-                  OutlinedButton(
-                    key: ValueKey('decision-give-${d.deviceId}'),
-                    onPressed: () {
-                      service.giveTo(d.deviceId);
-                      net.ownChanged();
-                      setState(() {});
-                    },
-                    child: Text(
-                      '${d.device.isEmpty ? d.name : d.device} cihazına devret',
-                    ),
-                  ),
-              // A device seen anew at each start never decides.
-              if (!here && net.kept)
-                OutlinedButton(
-                  key: const ValueKey('decision-lost'),
-                  onPressed: () async {
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text('$name kayboldu mu?'),
-                        content: const Text(
-                          'Öneriler bundan sonra bu cihazda karara bağlanır. '
-                          'Kaybolan cihazın verip henüz diğer cihazlarınıza '
-                          'ulaşmamış kararları geçersiz olur; o öneriler '
-                          'yeniden karara açılır.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Vazgeç'),
-                          ),
-                          FilledButton(
-                            key: const ValueKey('decision-lost-ok'),
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text(
-                              'Kayboldu, bu cihaz karar versin',
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (ok != true) return;
-                    service.lost();
-                    net.ownChanged();
-                    if (mounted) setState(() {});
-                  },
-                  child: Text('$name kayboldu'),
-                ),
-            ],
-          ),
-          if (here && net.ownOnline.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Devretmek için diğer cihazınız da açık olmalı.',
-                style: muted,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }

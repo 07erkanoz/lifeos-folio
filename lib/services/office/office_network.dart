@@ -1138,8 +1138,13 @@ class OfficeNetwork extends ChangeNotifier {
   Future<void> forget(String deviceId) async {
     await _known.forget(deviceId);
     await _loadKnown();
+    await forgotten?.call(deviceId);
     notifyListeners();
   }
+
+  /// Told of a known device forgotten here: the colleagues' proposals
+  /// decided here from then on when it was the one deciding (R6).
+  Future<void> Function(String deviceId)? forgotten;
 
   /// A known device's encrypted talk: an offer of files, for now.
   Future<void> _talk(

@@ -515,8 +515,10 @@ extension PortalClients on PortalDatabase {
       removedClientRecords.add(rec);
     }
     // What was kept of the ledgers gone, their history and repair reports
-    // too, and the money others sent that waited (R11).
+    // too, the accounts shared with this person, and the money others sent
+    // that waited (R11).
     _dropLedgerLeftovers();
+    forgetSharedLedgers();
     for (final r in _db.select('SELECT id, json FROM client_record_pending')) {
       final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
       if (rec == null || (rec.kind.financial && rec.person != keepPerson)) {

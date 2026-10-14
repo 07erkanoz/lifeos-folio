@@ -143,11 +143,11 @@ class SecretNoteStatus extends StatelessWidget {
     );
     if (r == null) return const SizedBox.shrink();
     final done = r.waiting.isEmpty;
+    // Two words, no counting: on its way, or done.
     final text = done
-        ? 'Geri çekildi: ${r.of}/${r.of} kişide · Folio kopyalarından '
-              'kaldırıldı'
-        : 'Geri çekildi: ${r.done}/${r.of} kişide · Bekleyen: '
-              '${r.waiting.join(', ')}; cihazı bağlanınca tamamlanır';
+        ? 'Büro kopyalarından silindi.'
+        : 'Büro kopyalarından siliniyor; alanların cihazı açılınca '
+              'tamamlanır.';
     return Padding(
       key: const ValueKey('secret-note-status'),
       padding: const EdgeInsets.only(top: 6),
@@ -198,9 +198,6 @@ Future<bool> confirmSecretNote(
     }
   }
   if (ways.isEmpty) return true;
-  final who = [
-    for (final e in ways.entries) '${_nameOf(e.key)} (${e.value.join(', ')})',
-  ];
   final ok = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -212,8 +209,9 @@ Future<bool> confirmSecretNote(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Bu not ${ways.length} kişiye gitti: ${who.join(', ')}. Gizli '
-              'yaparsanız onların cihazlarından silinmesi istenir.',
+              'Bu not büroda ${ways.length} kişide var '
+              '(${[for (final p in ways.keys) _nameOf(p)].join(', ')}). '
+              'Gizli yaparsanız onlardan da silinir.',
               style: const TextStyle(fontSize: 13.5, height: 1.5),
             ),
             const SizedBox(height: 10),
@@ -224,8 +222,7 @@ Future<bool> confirmSecretNote(
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Her alıcıda, cihazı Folio’ya bağlanınca silinir. Dışarı '
-                'aktarılmış belge ve ekran görüntüsü geri alınamaz.',
+                'Dışarı aktarılmış belge ve ekran görüntüsü geri alınamaz.',
                 style: TextStyle(
                   fontSize: 12.5,
                   height: 1.45,
@@ -244,7 +241,7 @@ Future<bool> confirmSecretNote(
         FilledButton(
           key: const ValueKey('secret-note-confirm'),
           onPressed: () => Navigator.pop(context, true),
-          child: const Text('Gizli yap ve geri çek'),
+          child: const Text('Gizli yap'),
         ),
       ],
     ),

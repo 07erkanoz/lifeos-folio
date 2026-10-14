@@ -120,7 +120,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(db.agenda().where((i) => i.id == 'n1').single.secret, isTrue);
     expect(
-      find.textContaining('Geri çekildi: 0/1 kişide · Bekleyen: selin'),
+      find.textContaining('Büro kopyalarından siliniyor'),
       findsOneWidget,
     );
   });

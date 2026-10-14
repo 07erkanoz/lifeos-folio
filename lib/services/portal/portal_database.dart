@@ -32,6 +32,7 @@ part 'portal_agenda_versions.dart';
 part 'portal_clients.dart';
 part 'portal_notes.dart';
 part 'portal_proposals.dart';
+part 'portal_shared_ledger.dart';
 
 /// A UETS notification as kept, with the case it is tied to.
 class KeptNotice {
@@ -273,6 +274,7 @@ class PortalDatabase {
     _db.execute(PortalClients._tables);
     _db.execute(PortalNotes._tables);
     _db.execute(PortalProposals._tables);
+    _db.execute(PortalSharedLedger._tables);
     // When the lawyer last decided on a deadline: for the newer to win
     // between their own devices.
     final columns = {
