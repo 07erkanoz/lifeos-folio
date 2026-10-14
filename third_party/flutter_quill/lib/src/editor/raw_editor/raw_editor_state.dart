@@ -700,6 +700,17 @@ class QuillRawEditorState extends EditorState
 
   List<Object?>? _textKey(Line node, QuillLineLayout? layout, int start) {
     if (layout?.leading != null) return null;
+    // An embed's line only while its builder says what it is drawn from.
+    final embeds = <Object?>[];
+    for (final leaf in node.children) {
+      if (leaf is! Embed) continue;
+      final by = widget.config.embedBuilder(leaf).keptBy(
+            leaf,
+            readOnly: widget.config.readOnly,
+          );
+      if (by == null) return null;
+      embeds.add(by);
+    }
     final composing = _composingIn(node, start);
     return [
       widget.config,
@@ -715,6 +726,7 @@ class QuillRawEditorState extends EditorState
         (leaf as Leaf).value,
         leaf.style,
       ],
+      ...embeds,
       layout?.firstLine,
       layout?.hanging,
       layout?.width,

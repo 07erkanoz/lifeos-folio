@@ -178,6 +178,14 @@ class EditableTextBlock extends StatelessWidget {
     QuillLineLayout? layout,
     TextLine Function(TextRange composing) make,
   ) {
+    // An embed's line only while its builder says what it is drawn from.
+    final embeds = <Object?>[];
+    for (final leaf in line.children) {
+      if (leaf is! Embed) continue;
+      final by = embedBuilder(leaf).keptBy(leaf, readOnly: readOnly);
+      if (by == null) return make(composingRange);
+      embeds.add(by);
+    }
     final start = composingRange.isValid ? line.documentOffset : 0;
     // The composing word only where it is, and where the line is then (the
     // line's text marks it by the document's offsets); else none, so that
@@ -206,6 +214,7 @@ class EditableTextBlock extends StatelessWidget {
         (leaf as Leaf).value,
         leaf.style,
       ],
+      ...embeds,
       layout?.firstLine,
       layout?.hanging,
       layout?.width,

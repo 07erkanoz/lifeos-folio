@@ -98,7 +98,8 @@ class EditorTabSpans {
         identical(kept.$2, misspelt)) {
       return kept.$3;
     }
-    final merged = _merge(cited, misspelt);
+    // Not changed once made: the splitter indexes it once (markedSpans).
+    final merged = List<TextMark>.unmodifiable(_merge(cited, misspelt));
     _merged = (cited, misspelt, merged);
     return merged;
   }

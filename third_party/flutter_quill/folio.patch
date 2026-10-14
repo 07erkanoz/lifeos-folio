@@ -301,6 +301,23 @@ index f1b23db..6c3bf3f 100644
        final childParentData = (child.parentData as EditableContainerParentData)
          ..offset = Offset(_resolvedPadding!.left, mainAxisExtent);
        mainAxisExtent += child.size.height;
+diff --git a/lib/src/editor/embed/embed_editor_builder.dart b/lib/src/editor/embed/embed_editor_builder.dart
+index a04143d..48eadb2 100644
+--- a/lib/src/editor/embed/embed_editor_builder.dart
++++ b/lib/src/editor/embed/embed_editor_builder.dart
+@@ -17,6 +17,12 @@ abstract class EmbedBuilder {
+ 
+   String toPlainText(leaf.Embed node) => leaf.Embed.kObjectReplacementCharacter;
+ 
++  /// FOLIO PATCH: everything [build] draws [node] from, beyond the node
++  /// itself and the editor's settings: the line it is in is kept, not built
++  /// again, while this stays equal. Null (the default) for an embed drawn
++  /// from what the line cannot see: its line is built every time.
++  Object? keptBy(leaf.Embed node, {required bool readOnly}) => null;
++
+   Widget build(
+     BuildContext context,
+     EmbedContext embedContext,
 diff --git a/lib/src/editor/raw_editor/config/raw_editor_config.dart b/lib/src/editor/raw_editor/config/raw_editor_config.dart
 index f7f9df7..3a7c9c5 100644
 --- a/lib/src/editor/raw_editor/config/raw_editor_config.dart
@@ -406,7 +423,7 @@ index d795362..325cb8d 100644
    }
  }
 diff --git a/lib/src/editor/raw_editor/raw_editor_state.dart b/lib/src/editor/raw_editor/raw_editor_state.dart
-index 98905c2..e842858 100644
+index 98905c2..9e90e6e 100644
 --- a/lib/src/editor/raw_editor/raw_editor_state.dart
 +++ b/lib/src/editor/raw_editor/raw_editor_state.dart
 @@ -4,7 +4,8 @@ import 'dart:math' as math;
@@ -533,7 +550,7 @@ index 98905c2..e842858 100644
            linkActionPicker: _linkActionPicker,
            onLaunchUrl: widget.config.onLaunchUrl,
            cursorCont: _cursorCont,
-@@ -639,29 +677,73 @@ class QuillRawEditorState extends EditorState
+@@ -639,29 +677,85 @@ class QuillRawEditorState extends EditorState
      return result;
    }
  
@@ -560,6 +577,17 @@ index 98905c2..e842858 100644
 +
 +  List<Object?>? _textKey(Line node, QuillLineLayout? layout, int start) {
 +    if (layout?.leading != null) return null;
++    // An embed's line only while its builder says what it is drawn from.
++    final embeds = <Object?>[];
++    for (final leaf in node.children) {
++      if (leaf is! Embed) continue;
++      final by = widget.config.embedBuilder(leaf).keptBy(
++            leaf,
++            readOnly: widget.config.readOnly,
++          );
++      if (by == null) return null;
++      embeds.add(by);
++    }
 +    final composing = _composingIn(node, start);
 +    return [
 +      widget.config,
@@ -575,6 +603,7 @@ index 98905c2..e842858 100644
 +        (leaf as Leaf).value,
 +        leaf.style,
 +      ],
++      ...embeds,
 +      layout?.firstLine,
 +      layout?.hanging,
 +      layout?.width,
@@ -625,7 +654,7 @@ index 98905c2..e842858 100644
          _textDirection,
          controller.selection,
          widget.config.selectionColor,
-@@ -674,6 +756,33 @@ class QuillRawEditorState extends EditorState
+@@ -674,6 +768,33 @@ class QuillRawEditorState extends EditorState
      return editableTextLine;
    }
  
@@ -659,7 +688,7 @@ index 98905c2..e842858 100644
    HorizontalSpacing _getHorizontalSpacingForLine(
      Line line,
      DefaultStyles? defaultStyles,
-@@ -1136,6 +1245,34 @@ class QuillRawEditorState extends EditorState
+@@ -1136,6 +1257,34 @@ class QuillRawEditorState extends EditorState
  
      _showCaretOnScreenScheduled = true;
      SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -694,7 +723,7 @@ index 98905c2..e842858 100644
        if (widget.config.scrollable || _scrollController.hasClients) {
          _showCaretOnScreenScheduled = false;
  
-@@ -1231,6 +1368,10 @@ class QuillRawEditorState extends EditorState
+@@ -1231,6 +1380,10 @@ class QuillRawEditorState extends EditorState
        return false;
      }
  
@@ -1673,7 +1702,7 @@ index 0000000..4fd2759
 +  }
 +}
 diff --git a/lib/src/editor/widgets/text/text_block.dart b/lib/src/editor/widgets/text/text_block.dart
-index 47b5e01..156d4f9 100644
+index 47b5e01..5e92d31 100644
 --- a/lib/src/editor/widgets/text/text_block.dart
 +++ b/lib/src/editor/widgets/text/text_block.dart
 @@ -1,3 +1,4 @@
@@ -1707,7 +1736,7 @@ index 47b5e01..156d4f9 100644
    final LinkActionPicker linkActionPicker;
    final ValueChanged<String>? onLaunchUrl;
    final CustomRecognizerBuilder? customRecognizerBuilder;
-@@ -158,6 +164,62 @@ class EditableTextBlock extends StatelessWidget {
+@@ -158,6 +164,71 @@ class EditableTextBlock extends StatelessWidget {
      return null;
    }
  
@@ -1725,6 +1754,14 @@ index 47b5e01..156d4f9 100644
 +    QuillLineLayout? layout,
 +    TextLine Function(TextRange composing) make,
 +  ) {
++    // An embed's line only while its builder says what it is drawn from.
++    final embeds = <Object?>[];
++    for (final leaf in line.children) {
++      if (leaf is! Embed) continue;
++      final by = embedBuilder(leaf).keptBy(leaf, readOnly: readOnly);
++      if (by == null) return make(composingRange);
++      embeds.add(by);
++    }
 +    final start = composingRange.isValid ? line.documentOffset : 0;
 +    // The composing word only where it is, and where the line is then (the
 +    // line's text marks it by the document's offsets); else none, so that
@@ -1753,6 +1790,7 @@ index 47b5e01..156d4f9 100644
 +        (leaf as Leaf).value,
 +        leaf.style,
 +      ],
++      ...embeds,
 +      layout?.firstLine,
 +      layout?.hanging,
 +      layout?.width,
@@ -1770,7 +1808,7 @@ index 47b5e01..156d4f9 100644
    List<Widget> _buildChildren(BuildContext context,
        Map<int, int> indentLevelCounts, bool clearIndents) {
      final defaultStyles = QuillStyles.getStyles(context, false);
-@@ -175,17 +237,26 @@ class EditableTextBlock extends StatelessWidget {
+@@ -175,17 +246,26 @@ class EditableTextBlock extends StatelessWidget {
      var index = 0;
      for (final line in Iterable.castFrom<dynamic, Line>(block.children)) {
        index++;
@@ -1805,7 +1843,7 @@ index 47b5e01..156d4f9 100644
              textDirection: textDirection,
              embedBuilder: embedBuilder,
              textSpanBuilder: textSpanBuilder,
-@@ -197,10 +268,15 @@ class EditableTextBlock extends StatelessWidget {
+@@ -197,10 +277,15 @@ class EditableTextBlock extends StatelessWidget {
              onLaunchUrl: onLaunchUrl,
              customLinkPrefixes: customLinkPrefixes,
              customRecognizerBuilder: customRecognizerBuilder,
@@ -1825,7 +1863,7 @@ index 47b5e01..156d4f9 100644
            textDirection,
            textSelection,
            color,
-@@ -228,33 +304,33 @@ class EditableTextBlock extends StatelessWidget {
+@@ -228,33 +313,33 @@ class EditableTextBlock extends StatelessWidget {
      required Map<int, int> indentLevelCounts,
      required int count,
    }) {

@@ -163,7 +163,8 @@ class CitationMarks extends ChangeNotifier {
         identical(kept.$3, colors)) {
       return kept.$4;
     }
-    final made = _makeTextMarks(colors);
+    // Not changed once made: the splitter indexes it once (markedSpans).
+    final made = List<TextMark>.unmodifiable(_makeTextMarks(colors));
     _textMarks = (_marks, _cases, colors, made);
     return made;
   }

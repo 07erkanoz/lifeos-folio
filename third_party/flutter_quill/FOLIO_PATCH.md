@@ -128,7 +128,10 @@ girintisi var.
   yazma aralığını satırın konumuyla birlikte tutar; saklanan satıra başka
   satırın bileşik yazma aralığı verilmez. Gömülü öğeli satırlar (tablolar)
   da saklanıyor: 29 tablolu belgede her tuşta 29 tablo yeniden kurulup
-  ölçülüp çiziliyordu; tablo görünümü kendi durumunu kendisi tutuyor.
+  ölçülüp çiziliyordu. Bunun için `EmbedBuilder.keptBy` eklendi: gömülü
+  öğe satırın göremediği neyle çiziliyorsa onu söyler (tablo: saklanan
+  bloğu, Word kuralı, salt okunurluk; resim: verisi). `null` diyen gömülü
+  öğenin satırı eskisi gibi her seferinde kurulur.
 - Liste ya da kod bloğu olmayan satırda `_buildLeading` hemen döner
   (`text_block.dart`); önce satırın bütün delta'sını dört kez üretiyordu.
 - Her satır ayrı bir erişilebilirlik sınırı (`text_line.dart`,

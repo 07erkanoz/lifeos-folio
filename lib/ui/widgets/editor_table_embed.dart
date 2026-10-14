@@ -66,6 +66,21 @@ class EditorTableEmbed extends EmbedBuilder {
   @override
   bool get expanded => false;
 
+  /// What the table is drawn from beyond its line: its block as kept (a
+  /// new one each time a cell changes it, or anything else does), the
+  /// document's rules, and whether it may be typed in. The line it is in is
+  /// kept while these stay (third_party/flutter_quill/FOLIO_PATCH.md).
+  @override
+  Object? keptBy(Embed node, {required bool readOnly}) {
+    final index = node.value.data;
+    final all = blocks();
+    return (
+      index is int && index >= 0 && index < all.length ? all[index] : null,
+      word(),
+      readOnly || this.readOnly(),
+    );
+  }
+
   @override
   Widget build(BuildContext context, EmbedContext embedContext) {
     final index = embedContext.node.value.data;
@@ -100,8 +115,12 @@ class EditorTableEmbed extends EmbedBuilder {
       word: word(),
     );
     // Only shown: drawn as it is, its marks kept, neither touched nor
-    // given the keyboard.
-    return readOnly() ? ExcludeFocus(child: IgnorePointer(child: view)) : view;
+    // given the keyboard; the editor's own read only too (held in another
+    // window, the pen with another): its cells were typed in all the same.
+    // A cell that has the keyboard lets it go.
+    return readOnly() || embedContext.readOnly
+        ? ExcludeFocus(child: IgnorePointer(child: view))
+        : view;
   }
 }
 

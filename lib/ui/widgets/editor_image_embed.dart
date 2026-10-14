@@ -62,6 +62,12 @@ class EditorImageEmbed extends EmbedBuilder {
     return bytes;
   }
 
+  /// Drawn from its own data and its line's size alone, which the line it
+  /// is in keeps (third_party/flutter_quill/FOLIO_PATCH.md).
+  @override
+  Object? keptBy(Embed node, {required bool readOnly}) =>
+      (node.value.data, readOnly);
+
   @override
   Widget build(BuildContext context, EmbedContext embedContext) {
     final bytes = _bytesOf(embedContext.node);

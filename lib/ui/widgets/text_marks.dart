@@ -38,6 +38,10 @@ class TextMark {
 ///
 /// Marks are taken in the order given: where two overlap, the one offered
 /// first keeps the ground, and the other is drawn only where it sticks out.
+///
+/// A long [marks] is indexed once by where its marks start, for that list:
+/// it must not be changed after it is given (the editor's are unmodifiable
+/// lists, a new one each time the marks change).
 List<InlineSpan>? markedSpans(
   String text,
   int start,
