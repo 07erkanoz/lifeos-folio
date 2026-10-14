@@ -23,6 +23,13 @@ class LedgerNeedsRepair implements Exception {
       'Bu ödemenin eski kayıtları onarım bekliyor; önce onarım raporuna bakın.';
 }
 
+/// Another person's record of the office: changed only by them (R6).
+class LedgerNotYours implements Exception {
+  const LedgerNotYours();
+  @override
+  String toString() => 'Bu kaydı yalnız yazan değiştirebilir.';
+}
+
 /// A set-off past what is held for the client.
 class LedgerOverdrawn implements Exception {
   const LedgerOverdrawn(this.left);
@@ -39,45 +46,43 @@ class LedgerOverdrawn implements Exception {
 /// movements made anew with it; all of it or none.
 class LedgerService {
   LedgerService(this.db, {HlcClock? clock, Random? random})
-    : _clock = clock ?? SyncClock.of(db, localDeviceId(db, random: random));
+    : _clock = clock ?? SyncClock.of(db);
 
   final PortalDatabase db;
   final HlcClock _clock;
 
-  static const _deviceKey = 'senkron_cihaz';
+  /// This database's own id: [SyncClock.localDeviceId].
+  static String localDeviceId(PortalDatabase db, {Random? random}) =>
+      SyncClock.localDeviceId(db, random: random);
 
-  /// This database's own id, drawn once: the source of the versions it
-  /// writes, with its generation.
-  static String localDeviceId(PortalDatabase db, {Random? random}) {
-    final kept = db.meta(_deviceKey);
-    if (kept != null && kept.isNotEmpty) return kept;
-    final r = random ?? Random.secure();
-    final id = List.generate(12, (_) => r.nextInt(36).toRadixString(36)).join();
-    db.setMeta(_deviceKey, id);
-    return id;
-  }
-
-  ClientRecord _fresh(ClientRecord seen) {
-    if (db.ledgerRepairOf(seen.id) != null) throw const LedgerNeedsRepair();
-    final now = db.clientRecord(seen.id);
+  /// [id]'s record as it is now, to be changed here: refused when it waits
+  /// for its repair or is still in an older Folio's form, when it is
+  /// another person's, or when it no longer says what [seen] (what was
+  /// shown) said.
+  ClientRecord _fresh(String id, {required String seen}) {
+    if (db.ledgerRepairOf(id) != null) throw const LedgerNeedsRepair();
+    final now = db.clientRecord(id);
     if (now == null || now.kind != ClientRecordKind.enforcement) {
       throw const LedgerConflict();
     }
-    String shape(ClientRecord r) => Hlc.canonical({
-      for (final e in LedgerBook.versionsOf(r).entries) e.key: '${e.value}',
-      'mahsup': [for (final s in LedgerBook.setOffsOf(r)) s.toJson()],
-    });
-    if (shape(now) != shape(seen)) throw const LedgerConflict();
+    if (!LedgerBook.isNewForm(now)) throw const LedgerNeedsRepair();
+    final me = PortalDatabase.clientPerson?.call() ?? '';
+    if (now.person.isNotEmpty && me.isNotEmpty && now.person != me) {
+      throw const LedgerNotYours();
+    }
+    if (LedgerBook.tokenOf(now) != seen) throw const LedgerConflict();
     return now;
   }
 
   ClientRecord _write(
     ClientRecord r, {
+    required String what,
     required Map<String, Hlc> versions,
     required List<LedgerSetOff> setOffs,
     Map<String, Object?>? data,
     String? clientId,
     bool? removed,
+    bool made = false,
   }) {
     final next = LedgerBook.write(
       r,
@@ -88,7 +93,18 @@ class LedgerService {
       removed: removed,
       updated: DateTime.now(),
     );
-    db.saveClientRecord(next);
+    if (!db.saveClientRecord(next)) {
+      throw StateError('Kayıt yazılamadı.');
+    }
+    // Who changed what, when, from where; no money in it (R3, R5).
+    db.addLedgerHistory(next.id, {
+      'islem': what,
+      'kisi': PortalDatabase.clientPerson?.call() ?? '',
+      'kaynak': _clock.source,
+      'zaman': DateTime.now().toIso8601String(),
+      if (!made) 'eski': LedgerBook.contentOf(r),
+      'yeni': LedgerBook.contentOf(next),
+    });
     return next;
   }
 
@@ -135,6 +151,8 @@ class LedgerService {
       final version = _clock.tick();
       made = _write(
         base,
+        what: 'ekle',
+        made: true,
         versions: {
           for (final g in [...LedgerBook.groups.keys, LedgerBook.lifecycle])
             g: version,
@@ -174,7 +192,7 @@ class LedgerService {
   }) {
     late ClientRecord made;
     db.inTransaction(() {
-      final r = _fresh(seen);
+      final r = _fresh(seen.id, seen: LedgerBook.tokenOf(seen));
       final versions = LedgerBook.versionsOf(r);
       final data = {
         ...r.data,
@@ -191,7 +209,19 @@ class LedgerService {
           way != r.text('odeme') ||
           whole != (r.data['tamami'] == true);
       final words = debtor != r.text('borclu') || note != r.text('aciklama');
-      if (money) versions['finans'] = _clock.tick();
+      if (money) {
+        // The lawyer's word that UYAP has it was for the sum and day it
+        // had: not for these (R4).
+        final word =
+            r.text('resmiKarar') == 'elle' || r.text('resmi') == 'elle';
+        if (word) {
+          data['resmiKararSurum'] = '${versions['finans']}';
+          data['resmi'] = '';
+          if (r.text('resmi') == 'elle') data['resmiKarar'] = 'elle';
+          versions['resmiKarar'] = _clock.tick();
+        }
+        versions['finans'] = _clock.tick();
+      }
       if (words) versions['bilgi'] = _clock.tick();
       var setOffs = LedgerBook.setOffsOf(r);
       if (target != shown) {
@@ -222,7 +252,13 @@ class LedgerService {
           ];
         }
       }
-      made = _write(r, versions: versions, setOffs: setOffs, data: data);
+      made = _write(
+        r,
+        what: 'duzelt',
+        versions: versions,
+        setOffs: setOffs,
+        data: data,
+      );
     });
     return made;
   }
@@ -238,7 +274,15 @@ class LedgerService {
   ClientRecord setOfficial(ClientRecord seen, bool official) => _group(
     seen,
     'resmiKarar',
-    (data) => {...data, 'resmiKarar': official ? 'elle' : '', 'resmi': ''},
+    (data) => {
+      ...data,
+      'resmiKarar': official ? 'elle' : '',
+      'resmi': '',
+      // For the sum and day it has now (R4).
+      'resmiKararSurum': official
+          ? '${LedgerBook.versionOf(seen, 'finans')}'
+          : '',
+    },
   );
 
   ClientRecord _group(
@@ -248,10 +292,11 @@ class LedgerService {
   ) {
     late ClientRecord made;
     db.inTransaction(() {
-      final r = _fresh(seen);
+      final r = _fresh(seen.id, seen: LedgerBook.tokenOf(seen));
       final versions = LedgerBook.versionsOf(r)..[group] = _clock.tick();
       made = _write(
         r,
+        what: group,
         versions: versions,
         setOffs: LedgerBook.setOffsOf(r),
         data: change(r.data),
@@ -265,11 +310,12 @@ class LedgerService {
   ClientRecord setRemoved(ClientRecord seen, bool removed) {
     late ClientRecord made;
     db.inTransaction(() {
-      final r = _fresh(seen);
+      final r = _fresh(seen.id, seen: LedgerBook.tokenOf(seen));
       final versions = LedgerBook.versionsOf(r)
         ..[LedgerBook.lifecycle] = _clock.tick();
       made = _write(
         r,
+        what: removed ? 'kaldir' : 'geri-koy',
         versions: versions,
         setOffs: LedgerBook.setOffsOf(r),
         removed: removed,
@@ -280,17 +326,19 @@ class LedgerService {
 
   /// [amount] of what [entryId] holds for the client taken as [target]
   /// ([LedgerOverdrawn] past what is left).
+  ///
+  /// [seen] is the mark of the record as the movement it was made from
+  /// showed it ([LedgerBook.tokenOf], its `defterSurum`).
   ClientRecord addSetOff(
     String entryId,
     MovementKind target,
     int amount, {
+    required String seen,
     DateTime? at,
   }) {
     late ClientRecord made;
     db.inTransaction(() {
-      final seen = db.clientRecord(entryId);
-      if (seen == null) throw const LedgerConflict();
-      final r = _fresh(seen);
+      final r = _fresh(entryId, seen: seen);
       final state = LedgerBook.stateOf(r);
       final left =
           state.held - state.active.fold<int>(0, (n, s) => n + s.amount);
@@ -299,6 +347,7 @@ class LedgerService {
       }
       made = _write(
         r,
+        what: 'mahsup',
         versions: LedgerBook.versionsOf(r),
         setOffs: [
           ...LedgerBook.setOffsOf(r),
@@ -316,14 +365,17 @@ class LedgerService {
   }
 
   /// [setOffId] of [entryId] taken back: the money held again.
-  ClientRecord removeSetOff(String entryId, String setOffId) {
+  ClientRecord removeSetOff(
+    String entryId,
+    String setOffId, {
+    required String seen,
+  }) {
     late ClientRecord made;
     db.inTransaction(() {
-      final seen = db.clientRecord(entryId);
-      if (seen == null) throw const LedgerConflict();
-      final r = _fresh(seen);
+      final r = _fresh(entryId, seen: seen);
       made = _write(
         r,
+        what: 'mahsup-geri-al',
         versions: LedgerBook.versionsOf(r),
         setOffs: [
           for (final s in LedgerBook.setOffsOf(r))

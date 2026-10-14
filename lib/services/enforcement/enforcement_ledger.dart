@@ -2,6 +2,7 @@ import '../clients/client.dart';
 import '../clients/client_accounts.dart';
 import '../portal/portal_database.dart';
 import '../uyap/uyap_web_service.dart';
+import 'ledger_book.dart';
 
 /// What a line of an enforcement file's own account in Folio is.
 enum LedgerKind {
@@ -65,8 +66,7 @@ class LedgerEntry {
   /// alike. A record from before kept it as `resmi: elle`; a collection's
   /// key kept there by an older Folio is not a word of the lawyer's and is
   /// worked out anew.
-  bool get markedByHand =>
-      record.text('resmiKarar') == 'elle' || record.text('resmi') == 'elle';
+  bool get markedByHand => LedgerBook.officialByHand(record);
 
   /// What UYAP showed it as (a collection's receipt, or the lawyer's word
   /// "elle"); empty while UYAP does not show it.

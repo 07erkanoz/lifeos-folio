@@ -20,6 +20,8 @@ extension PortalClients on PortalDatabase {
       json TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS ledger_projection_entry
       ON ledger_projection(entry_id);
+    CREATE INDEX IF NOT EXISTS ledger_projection_client
+      ON ledger_projection(client_id);
     CREATE TABLE IF NOT EXISTS ledger_legacy (
       id TEXT PRIMARY KEY, entry_id TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS ledger_repair (
@@ -76,6 +78,8 @@ extension PortalClients on PortalDatabase {
   bool saveClientRecord(ClientRecord r) {
     // A ledger's movements are made of it, never written (R3).
     if (LedgerBook.isProjected(r) || _isProjectionId(r.id)) return false;
+    // Nor taken back or set off by hand, nor booked as an older Folio did.
+    if (_actsOnLedger(r)) return false;
     final kept = clientRecord(r.id);
     if (kept != null && kept.locked) return false;
     // Money in or out is evidence: never changed once written.
@@ -86,8 +90,21 @@ extension PortalClients on PortalDatabase {
     }
     _putRecord(r);
     if (r.kind == ClientRecordKind.enforcement) rebuildLedger(r.id);
-    PortalDatabase.changed?.call();
+    _notifyChanged();
     return true;
+  }
+
+  /// Whether [r] is a movement acting on a ledger's own money: one that
+  /// takes back or sets off a movement made of a ledger, or books a
+  /// ledger's payment as an older Folio did (`kaynak: icra:…`).
+  bool _actsOnLedger(ClientRecord r) {
+    if (r.kind != ClientRecordKind.movement) return false;
+    final source = r.text('kaynak');
+    if (source.startsWith('icra:') || source.startsWith('mahsup:icra:')) {
+      return true;
+    }
+    final link = _linkOf(r);
+    return link != null && (link.startsWith('icra:') || _isProjectionId(link));
   }
 
   bool _isProjectionId(String id) =>
@@ -116,6 +133,28 @@ extension PortalClients on PortalDatabase {
       );
     }
   }
+
+  /// A line of [entryId]'s history: who changed what of it, when, and
+  /// from which device (R3, R5); seen only where the ledger is.
+  void addLedgerHistory(String entryId, Map<String, Object?> line) {
+    final id =
+        'g${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
+        '${Random.secure().nextInt(1 << 32).toRadixString(36)}';
+    _db.execute(
+      'INSERT INTO ledger_history(id, entry_id, json) VALUES(?,?,?)',
+      [id, entryId, jsonEncode(line)],
+    );
+  }
+
+  /// [entryId]'s history, the oldest first.
+  List<Map<String, Object?>> ledgerHistory(String entryId) => [
+    for (final r in _db.select(
+      'SELECT json FROM ledger_history WHERE entry_id=? ORDER BY id',
+      [entryId],
+    ))
+      if (jsonDecode(r['json'] as String) case final Map j)
+        Map<String, Object?>.from(j),
+  ];
 
   /// The movements of a ledger whose record is no longer here, gone.
   void _dropOrphanProjection() => _db.execute(
@@ -150,14 +189,24 @@ extension PortalClients on PortalDatabase {
       r['entry_id'] as String,
   ];
 
-  /// Whether [r] is a movement made of a ledger here or by an older Folio
-  /// (its old movements, moved aside): never taken from another device.
+  /// Whether [r] is a movement not to be taken from another device: made
+  /// of a ledger, or acting on a movement made of one, or one of the old
+  /// movements a ledger's migration moved aside, or acting on one of them;
+  /// or an older Folio's booking of a ledger that is in its new form here.
+  /// An older Folio's booking of a ledger in its old form here is taken: the
+  /// ledger is weighed with it ([_weighLedger]).
   bool _ledgerMade(ClientRecord r) {
     if (r.kind != ClientRecordKind.movement) return false;
     if (LedgerBook.isProjected(r)) return true;
     final source = r.text('kaynak');
-    if (source.startsWith('icra:') || source.startsWith('mahsup:icra:')) {
+    if (source.startsWith('mahsup:icra:')) return true;
+    final link = _linkOf(r);
+    if (link != null && (link.startsWith('icra:') || _isProjectionId(link))) {
       return true;
+    }
+    if (source.startsWith('icra:')) {
+      final entry = clientRecord(source.substring('icra:'.length));
+      if (entry != null && LedgerBook.isNewForm(entry)) return true;
     }
     final named = {
       r.id,
@@ -172,6 +221,28 @@ extension PortalClients on PortalDatabase {
         )
         .isNotEmpty;
   }
+
+  /// The old movements moved aside, by their ledger: for another device to
+  /// know them (R3), [entries] alone when given.
+  List<Map<String, Object?>> _legacyMap({Set<String>? entries}) => [
+    for (final r in _db.select('SELECT id, entry_id FROM ledger_legacy'))
+      if (entries == null || entries.contains(r['entry_id']))
+        {'id': r['id'], 'kayit': r['entry_id']},
+  ];
+
+  void _takeLegacyMap(Object? list) {
+    for (final j in list is List ? list : const []) {
+      if (j is! Map || j['id'] is! String || j['kayit'] is! String) continue;
+      _db.execute(
+        'INSERT OR IGNORE INTO ledger_legacy(id, entry_id) VALUES(?,?)',
+        [j['id'], j['kayit']],
+      );
+    }
+  }
+
+  /// For tests: [r] kept as an older Folio kept it, with no check.
+  @visibleForTesting
+  void putRecordForTesting(ClientRecord r) => _putRecord(r);
 
   void _putRecord(ClientRecord r) => _db.execute(
     'INSERT OR REPLACE INTO client_record(id, client_id, kind, json, '
@@ -242,7 +313,20 @@ extension PortalClients on PortalDatabase {
       _db.execute('DELETE FROM client_record WHERE id=?', [r['id']]);
       removedClientRecords.add(rec);
     }
+    // What was kept of the ledgers gone, their history and repair reports
+    // too, and the money others sent that waited (R11).
     _dropOrphanProjection();
+    for (final table in const ['ledger_history', 'ledger_repair']) {
+      _db.execute(
+        'DELETE FROM $table WHERE entry_id NOT IN (SELECT id FROM client_record)',
+      );
+    }
+    for (final r in _db.select('SELECT id, json FROM client_record_pending')) {
+      final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
+      if (rec == null || (rec.kind.financial && rec.person != keepPerson)) {
+        _db.execute('DELETE FROM client_record_pending WHERE id=?', [r['id']]);
+      }
+    }
   }
 
   /// The clients as the list shows them: each card, with the cases its
@@ -441,6 +525,7 @@ extension PortalClients on PortalDatabase {
               when allowed || !rec.kind.financial || rec.person == me)
             rec.toJson(),
       ],
+      if (allowed) 'defterEski': _legacyMap(),
     };
   }
 
@@ -484,6 +569,18 @@ extension PortalClients on PortalDatabase {
                   (money || !rec.kind.financial))
             {...rec.toJson(), 'kisi': me},
       ],
+      if (money)
+        'defterEski': _legacyMap(
+          entries: {
+            for (final r in _db.select(
+              "SELECT id, client_id, json FROM client_record WHERE kind='icra'",
+            ))
+              if (shared.contains(r['client_id']))
+                if (ClientRecord.fromJson(jsonDecode(r['json'] as String))
+                    case final rec? when mine(rec.person))
+                  rec.id,
+          },
+        ),
     };
   }
 
@@ -590,6 +687,11 @@ extension PortalClients on PortalDatabase {
         changed = true;
       }
       final ledgers = <String>{};
+      // Ledgers in their old form, with what came of them: weighed after.
+      final weigh = <String>{};
+      // The old movements another device moved aside, known first: what
+      // acts on them is not taken (R3).
+      if (money) _takeLegacyMap(theirs['defterEski']);
       for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {
         final r = ClientRecord.fromJson(j);
         // Money from, or for, one who may not see it is not taken.
@@ -613,7 +715,12 @@ extension PortalClients on PortalDatabase {
         }
         // A movement that takes back, sets off or books another's: only
         // its owner's, of the same client; one whose other has not come
-        // yet waits apart, in no total, till it does (R6).
+        // yet waits apart, in no total, till it does (R6). A movement made
+        // of a ledger is no one's to act on (R3), from any device.
+        if (_linkCheck(r) == _Link.refused && _linkOf(r) != null) {
+          final target = clientRecord(_linkOf(r)!);
+          if (target != null && LedgerBook.isProjected(target)) continue;
+        }
         if (author != null) {
           switch (_linkCheck(r)) {
             case _Link.refused:
@@ -648,11 +755,33 @@ extension PortalClients on PortalDatabase {
           continue;
         }
         _putRecord(r);
-        if (r.kind == ClientRecordKind.enforcement) ledgers.add(r.id);
+        if (r.kind == ClientRecordKind.enforcement) {
+          if (LedgerBook.isNewForm(r)) {
+            ledgers.add(r.id);
+          } else {
+            weigh.add(r.id);
+          }
+        }
+        final source = r.text('kaynak');
+        if (source.startsWith('icra:')) {
+          weigh.add(source.substring('icra:'.length));
+        }
         changed = true;
       }
-      ledgers.forEach(rebuildLedger);
-      if (_takeWaiting()) changed = true;
+      for (final id in ledgers) {
+        // Mended on another device: mended here alike.
+        if (ledgerRepairOf(id) != null) {
+          _adoptRepaired(id);
+        } else {
+          rebuildLedger(id);
+        }
+        // Each version seen: what is written here after it comes after it.
+        if (clientRecord(id) case final r?) _observe(r);
+      }
+      for (final id in weigh.difference(ledgers)) {
+        _weighLedger(id);
+      }
+      if (_takeWaiting(money: money, me: me)) changed = true;
       // Every colleague's client unshared, come now or before: what
       // others wrote of it goes here, this person's stays.
       // Not knowing who this is, nothing is taken for another's.
@@ -689,7 +818,9 @@ extension PortalClients on PortalDatabase {
     if (link == null) return _Link.ok;
     final target = clientRecord(link);
     if (target == null) return _Link.waiting;
-    if (target.person != r.person || target.clientId != r.clientId) {
+    if (LedgerBook.isProjected(target) ||
+        target.person != r.person ||
+        target.clientId != r.clientId) {
       return _Link.refused;
     }
     return _Link.ok;
@@ -697,13 +828,22 @@ extension PortalClients on PortalDatabase {
 
   /// The movements waiting for the record they name, taken in now that it
   /// came, or dropped when it is another's; true when one was taken in.
-  bool _takeWaiting() {
+  bool _takeWaiting({required bool money, required String me}) {
     var took = false;
     for (final row in _db.select(
       'SELECT id, author, json FROM client_record_pending',
     )) {
       final r = ClientRecord.fromJson(jsonDecode(row['json'] as String));
-      final check = r == null ? _Link.refused : _linkCheck(r);
+      // What may be taken is asked again now: the money let, the client
+      // still shared, its writer the one who sent it, nothing of a ledger.
+      final card = r == null ? null : clientCard(r.clientId);
+      final allowed =
+          r != null &&
+          (money || !r.kind.financial) &&
+          r.person == row['author'] &&
+          !(card != null && _unshared(card, me) && r.person != me) &&
+          !_ledgerMade(r);
+      final check = !allowed ? _Link.refused : _linkCheck(r);
       if (check == _Link.waiting) continue;
       _db.execute('DELETE FROM client_record_pending WHERE id=?', [row['id']]);
       if (check == _Link.refused || r == null) continue;
@@ -723,108 +863,151 @@ extension PortalClients on PortalDatabase {
           as int;
 
   /// The enforcement ledgers made into their new form (docs/senkron-plan.md
-  /// R3, migration; schema 2), in the migration's transaction. For each
-  /// record, the movements an older Folio wrote for it (what was held, the
-  /// set-offs and the reversals of either) are weighed against the record:
-  /// - alike (one standing held of its sum, set-offs within it; or none for
-  ///   a record taken off or of the office's cash): the set-offs go into
-  ///   the record, the old movements aside to the ledger's history, and
-  ///   its projection takes their place; no total changes;
-  /// - not alike: the record waits for the lawyer's word in a repair
-  ///   report, its old movements as they are; nothing is mended unseen.
+  /// R3, migration; schema 2), in the migration's transaction: each in its
+  /// old form weighed ([_weighLedger]); one in its new form is left as it
+  /// is, so that the migration run again changes nothing.
   void migrateLedgers() {
-    final all = [
-      for (final r in _db.select('SELECT json FROM client_record'))
-        ?ClientRecord.fromJson(jsonDecode(r['json'] as String)),
-    ];
-    final movements = [
-      for (final r in all)
-        if (r.kind == ClientRecordKind.movement) r,
-    ];
-    final reversalsOf = <String, List<ClientRecord>>{};
-    for (final m in movements) {
-      final back = m.text('ters');
-      if (back.isNotEmpty) (reversalsOf[back] ??= []).add(m);
+    final index = _LegacyIndex(_db);
+    for (final e in index.entries) {
+      if (LedgerBook.isNewForm(e)) continue;
+      _weighLedgerWith(e, index);
     }
-    for (final e in all) {
-      if (e.kind != ClientRecordKind.enforcement) continue;
-      final held = [
-        for (final m in movements)
-          if (m.text('kaynak') == 'icra:${e.id}' && m.text('ters').isEmpty) m,
-      ];
-      final heldIds = {for (final m in held) m.id};
-      final applied = [
-        for (final m in movements)
-          if (m.text('ters').isEmpty &&
-              m.text('kaynak').startsWith('mahsup:') &&
-              heldIds.contains(m.text('kaynak').substring('mahsup:'.length)))
-            m,
-      ];
-      final reversals = [
-        for (final m in [...held, ...applied]) ...?reversalsOf[m.id],
-      ];
-      final legacy = [...held, ...applied, ...reversals];
-      bool standing(ClientRecord m) =>
-          !m.removed && !reversalsOf.containsKey(m.id);
-      final standingHeld = [
-        for (final m in held)
-          if (standing(m)) m,
-      ];
-      final standingApplied = [
-        for (final m in applied)
-          if (standing(m)) m,
-      ];
-      String? why;
-      if (reversals.any((r) => reversalsOf.containsKey(r.id))) {
-        why = 'Bir ters kayıt yeniden terslenmiş.';
-      } else if (LedgerBook.books(e) && e.amount > 0) {
-        final takenOut = standingApplied.fold<int>(0, (n, m) => n + m.amount);
-        if (standingHeld.length != 1) {
-          why = standingHeld.isEmpty
-              ? 'Ödeme müvekkil hesabına işlenmemiş.'
-              : 'Ödeme müvekkil hesabına ${standingHeld.length} kez işlenmiş.';
-        } else if (standingHeld.single.amount != e.amount) {
-          why = 'Müvekkil hesabındaki tutar ödemeninkinden farklı.';
-        } else if (takenOut > e.amount) {
-          why = 'Mahsuplar ödenen tutarı aşıyor.';
-        } else if (standingApplied.any(
-          (m) => m.text('kaynak') != 'mahsup:${standingHeld.single.id}',
-        )) {
-          why = 'Bir mahsup terslenmiş bir tahsilata bağlı.';
-        }
-      } else if (standingHeld.isNotEmpty || standingApplied.isNotEmpty) {
-        why = 'Kaldırılmış ödeme müvekkil hesabında hâlâ duruyor.';
-      }
-      if (why != null) {
-        _db.execute(
-          'INSERT OR REPLACE INTO ledger_repair(entry_id, json) VALUES(?,?)',
-          [
-            e.id,
-            jsonEncode({
-              'neden': why,
-              'kimlikler': [for (final m in legacy) m.id],
-              'ozet': _legacyDigest(legacy),
-            }),
-          ],
-        );
-        continue;
-      }
-      _ledgerAside(e, legacy, [
-        for (final m in standingApplied)
+  }
+
+  /// [entryId], a ledger in its old form, weighed against the movements an
+  /// older Folio wrote of it ([_weigh]): alike, made into its new form; not
+  /// alike, put in a repair report for the lawyer's word.
+  void _weighLedger(String entryId) {
+    final e = clientRecord(entryId);
+    if (e == null ||
+        e.kind != ClientRecordKind.enforcement ||
+        LedgerBook.isNewForm(e)) {
+      return;
+    }
+    _weighLedgerWith(e, _LegacyIndex(_db));
+  }
+
+  void _weighLedgerWith(ClientRecord e, _LegacyIndex index) {
+    final weighed = _weigh(e, index);
+    if (weighed.why == null) {
+      _ledgerAside(e, weighed.legacy, weighed.setOffs);
+      return;
+    }
+    _db.execute(
+      'INSERT OR REPLACE INTO ledger_repair(entry_id, json) VALUES(?,?)',
+      [e.id, jsonEncode(_reportOf(e, weighed))],
+    );
+  }
+
+  /// [e]'s old movements weighed against it, component by component: its
+  /// client, its case, TL, what each is, and its sum (R3).
+  _Weighed _weigh(ClientRecord e, _LegacyIndex index) {
+    final held = [
+      for (final m in index.bySource['icra:${e.id}'] ?? const <ClientRecord>[])
+        if (m.text('ters').isEmpty) m,
+    ];
+    final applied = [
+      for (final h in held)
+        for (final m
+            in index.bySource['mahsup:${h.id}'] ?? const <ClientRecord>[])
+          if (m.text('ters').isEmpty) m,
+    ];
+    final reversals = [
+      for (final m in [...held, ...applied]) ...?index.reversalsOf[m.id],
+    ];
+    final legacy = [...held, ...applied, ...reversals];
+    bool standing(ClientRecord m) =>
+        !m.removed && !index.reversalsOf.containsKey(m.id);
+    bool ours(ClientRecord m) =>
+        m.clientId == e.clientId &&
+        m.text('dosya') == e.text('dosya') &&
+        (m.text('para').isEmpty || m.text('para') == 'TL');
+    final standingHeld = [
+      for (final m in held)
+        if (standing(m)) m,
+    ];
+    final standingApplied = [
+      for (final m in applied)
+        if (standing(m)) m,
+    ];
+    final setOffs = [
+      for (final m in standingApplied)
+        if (m.movement case final kind? when kind.isApplied)
           LedgerSetOff(
             id: m.id,
-            target: m.movement ?? MovementKind.toFee,
+            target: kind,
             amount: m.amount,
             at: m.at,
             version: Hlc.fromLegacy(m.created.toIso8601String()),
           ),
-      ]);
+    ];
+    String? why;
+    final byId = {for (final m in legacy) m.id: m};
+    if (reversals.any((r) => index.reversalsOf.containsKey(r.id))) {
+      why = 'Bir ters kayıt yeniden terslenmiş.';
+    } else if (legacy.any((m) => !ours(m))) {
+      why =
+          'Eski kayıtlardan biri başka bir müvekkilin, dosyanın ya da '
+          'para biriminin.';
+    } else if (reversals.any((r) => byId[r.text('ters')]?.amount != r.amount)) {
+      why = 'Bir ters kayıt düzelttiği tutardan farklı.';
+    } else if (held.any((m) => m.movement != MovementKind.collected) ||
+        applied.any((m) => !(m.movement?.isApplied ?? false))) {
+      why = 'Eski kayıtlardan birinin türü beklenmedik.';
+    } else if (LedgerBook.books(e) && e.amount > 0) {
+      final takenOut = standingApplied.fold<int>(0, (n, m) => n + m.amount);
+      if (standingHeld.length != 1) {
+        why = standingHeld.isEmpty
+            ? 'Ödeme müvekkil hesabına işlenmemiş.'
+            : 'Ödeme müvekkil hesabına ${standingHeld.length} kez işlenmiş.';
+      } else if (standingHeld.single.amount != e.amount) {
+        why = 'Müvekkil hesabındaki tutar ödemeninkinden farklı.';
+      } else if (takenOut > e.amount) {
+        why = 'Mahsuplar ödenen tutarı aşıyor.';
+      } else if (standingApplied.any(
+        (m) => m.text('kaynak') != 'mahsup:${standingHeld.single.id}',
+      )) {
+        why = 'Bir mahsup terslenmiş bir tahsilata bağlı.';
+      }
+    } else if (standingHeld.isNotEmpty || standingApplied.isNotEmpty) {
+      why = 'Kaldırılmış ödeme müvekkil hesabında hâlâ duruyor.';
     }
+    int sum(Iterable<ClientRecord> ms) =>
+        ms.fold<int>(0, (n, m) => n + m.amount);
+    final proposed = LedgerBook.stateOf(
+      LedgerBook.write(e, versions: LedgerBook.versionsOf(e), setOffs: setOffs),
+    );
+    final takenNow = sum(standingApplied);
+    final takenAfter = proposed.active.fold<int>(0, (n, s) => n + s.amount);
+    return _Weighed(
+      legacy: legacy,
+      why: why,
+      setOffs: setOffs,
+      now: {'emanet': sum(standingHeld) - takenNow, 'ucret': takenNow},
+      after: {'emanet': proposed.held - takenAfter, 'ucret': takenAfter},
+    );
   }
 
-  static String _legacyDigest(List<ClientRecord> legacy) => Hlc.digest([
-    for (final m in legacy..sort((a, b) => a.id.compareTo(b.id))) m.toJson(),
-  ]);
+  /// The report of [e]'s weighing: why, the old movements, what is held
+  /// and taken as a fee now and once mended, and a digest of the record,
+  /// the movements and what is proposed, which the lawyer's word is given
+  /// for.
+  Map<String, Object?> _reportOf(ClientRecord e, _Weighed w) => {
+    'neden': w.why,
+    'kimlikler': [for (final m in w.legacy) m.id],
+    'simdi': w.now,
+    'onarinca': w.after,
+    'ozet': _digestOf(e, w),
+  };
+
+  static String _digestOf(ClientRecord e, _Weighed w) => Hlc.digest({
+    'kayit': {'veri': e.data, 'muvekkil': e.clientId, 'silindi': e.removed},
+    'eski': [
+      for (final m in [...w.legacy]..sort((a, b) => a.id.compareTo(b.id)))
+        m.toJson(),
+    ],
+    'oneri': [for (final s in w.setOffs) s.toJson()],
+  });
 
   /// [e] in its new form with [setOffs], its [legacy] movements moved to
   /// the ledger's history, and its projection made.
@@ -833,9 +1016,14 @@ extension PortalClients on PortalDatabase {
     List<ClientRecord> legacy,
     List<LedgerSetOff> setOffs,
   ) {
-    _putRecord(
-      LedgerBook.write(e, versions: LedgerBook.versionsOf(e), setOffs: setOffs),
-    );
+    final made = LedgerBook.isNewForm(e)
+        ? e
+        : LedgerBook.write(
+            e,
+            versions: LedgerBook.versionsOf(e),
+            setOffs: setOffs,
+          );
+    _putRecord(made);
     for (final m in legacy) {
       _db.execute(
         'INSERT OR REPLACE INTO ledger_history(id, entry_id, json) '
@@ -850,34 +1038,63 @@ extension PortalClients on PortalDatabase {
     }
     _db.execute('DELETE FROM ledger_repair WHERE entry_id=?', [e.id]);
     rebuildLedger(e.id);
+    _observe(made);
+  }
+
+  /// [entryId] waited for its repair here and came in its new form from a
+  /// device where it was mended: its old movements here moved aside alike.
+  void _adoptRepaired(String entryId) {
+    final e = clientRecord(entryId);
+    if (e == null || !LedgerBook.isNewForm(e)) return;
+    _ledgerAside(e, _weigh(e, _LegacyIndex(_db)).legacy, const []);
+  }
+
+  /// Every version of [r] taken into the clock (R2).
+  void _observe(ClientRecord r) {
+    for (final v in LedgerBook.versionsOf(r).values) {
+      SyncClock.observe(this, v);
+    }
+    for (final s in LedgerBook.setOffsOf(r)) {
+      SyncClock.observe(this, s.version);
+    }
   }
 
   /// The lawyer's word on [entryId]'s repair report: its old movements
-  /// give way to what its record says, as the report showed them. False
-  /// when they changed since ([digest] no longer theirs): the report is to
-  /// be looked at again.
+  /// give way to what its record says, as the report showed it. When the
+  /// record, its movements or what is proposed changed since ([digest] no
+  /// longer theirs), nothing is mended, the report is made anew, and false
+  /// is given: it is to be looked at again.
   bool resolveLedgerRepair(String entryId, String digest) {
-    final report = ledgerRepairOf(entryId);
-    final e = clientRecord(entryId);
-    if (report == null || e == null) return false;
-    final ids = [
-      for (final i in (report['kimlikler'] as List? ?? const [])) '$i',
-    ];
-    final legacy = [
-      for (final id in ids)
-        if (_db.select('SELECT json FROM client_record WHERE id=?', [id])
-            case final rows when rows.isNotEmpty)
-          ?ClientRecord.fromJson(jsonDecode(rows.first['json'] as String)),
-    ];
-    if (legacy.length != ids.length || _legacyDigest(legacy) != digest) {
-      return false;
-    }
     var ok = false;
     _transaction(() {
-      _ledgerAside(e, legacy, LedgerBook.setOffsOf(e));
+      final e = clientRecord(entryId);
+      if (e == null || ledgerRepairOf(entryId) == null) return;
+      final weighed = _weigh(e, _LegacyIndex(_db));
+      if (_digestOf(e, weighed) != digest) {
+        _db.execute(
+          'INSERT OR REPLACE INTO ledger_repair(entry_id, json) VALUES(?,?)',
+          [
+            e.id,
+            jsonEncode(
+              _reportOf(
+                e,
+                _Weighed(
+                  legacy: weighed.legacy,
+                  why: weighed.why ?? 'Kayıt bu arada değişti.',
+                  setOffs: weighed.setOffs,
+                  now: weighed.now,
+                  after: weighed.after,
+                ),
+              ),
+            ),
+          ],
+        );
+        return;
+      }
+      _ledgerAside(e, weighed.legacy, weighed.setOffs);
       ok = true;
     });
-    PortalDatabase.changed?.call();
+    if (ok) _notifyChanged();
     return ok;
   }
 
@@ -893,3 +1110,40 @@ extension PortalClients on PortalDatabase {
 
 /// What a member's movement may do to the record it names.
 enum _Link { ok, refused, waiting }
+
+/// What an older Folio wrote of the ledgers, read once: the movements by
+/// what they came of, and the reversals by what they take back.
+class _LegacyIndex {
+  _LegacyIndex(Database db) {
+    for (final r in db.select('SELECT json FROM client_record')) {
+      final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
+      if (rec == null) continue;
+      if (rec.kind == ClientRecordKind.enforcement) entries.add(rec);
+      if (rec.kind != ClientRecordKind.movement) continue;
+      final source = rec.text('kaynak');
+      if (source.isNotEmpty) (bySource[source] ??= []).add(rec);
+      final back = rec.text('ters');
+      if (back.isNotEmpty) (reversalsOf[back] ??= []).add(rec);
+    }
+  }
+
+  final entries = <ClientRecord>[];
+  final bySource = <String, List<ClientRecord>>{};
+  final reversalsOf = <String, List<ClientRecord>>{};
+}
+
+/// A ledger weighed against its old movements.
+class _Weighed {
+  const _Weighed({
+    required this.legacy,
+    required this.why,
+    required this.setOffs,
+    required this.now,
+    required this.after,
+  });
+
+  final List<ClientRecord> legacy;
+  final String? why;
+  final List<LedgerSetOff> setOffs;
+  final Map<String, int> now, after;
+}

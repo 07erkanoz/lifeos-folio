@@ -337,6 +337,7 @@ class ClientAccountsView extends StatelessWidget {
                     child: Text('Tahsilat belgesi'),
                   ),
                 if (onApply != null &&
+                    !_othersLedger(m) &&
                     m.reverses.isEmpty &&
                     (kind == MovementKind.collected ||
                         kind == MovementKind.advanceIn)) ...[
@@ -352,7 +353,8 @@ class ClientAccountsView extends StatelessWidget {
                 // What an enforcement payment holds is taken off from its own
                 // line in the file, not reversed here (R3).
                 if (!(LedgerBook.isProjected(m) &&
-                    kind == MovementKind.collected))
+                        kind == MovementKind.collected) &&
+                    !_othersLedger(m))
                   const PopupMenuItem(
                     value: 'ters',
                     child: Text('Ters kayıtla düzelt'),
@@ -936,9 +938,16 @@ ClientRecord appliedMovement(
   final target = made.movement;
   if (target == null) return (ledger: true, refused: 'Mahsup türü yok.');
   try {
-    LedgerService(db)
-        .addSetOff(source.entryId, target, made.amount, at: made.at);
+    LedgerService(db).addSetOff(
+      source.entryId,
+      target,
+      made.amount,
+      at: made.at,
+      seen: held.text('defterSurum'),
+    );
     return (ledger: true, refused: null);
+  } on LedgerNotYours catch (e) {
+    return (ledger: true, refused: '$e');
   } on LedgerOverdrawn catch (e) {
     return (ledger: true, refused: '$e');
   } on LedgerConflict catch (e) {
@@ -964,11 +973,22 @@ ClientRecord appliedMovement(
     );
   }
   try {
-    LedgerService(db).removeSetOff(source.entryId, setOff);
+    LedgerService(db)
+        .removeSetOff(source.entryId, setOff, seen: m.text('defterSurum'));
     return (ledger: true, refused: null);
+  } on LedgerNotYours catch (e) {
+    return (ledger: true, refused: '$e');
   } on LedgerConflict catch (e) {
     return (ledger: true, refused: '$e');
   } on LedgerNeedsRepair catch (e) {
     return (ledger: true, refused: '$e');
   }
+}
+
+/// Whether [m] is made of a colleague's enforcement ledger: shown, changed
+/// only by its owner (R6).
+bool _othersLedger(ClientRecord m) {
+  if (!LedgerBook.isProjected(m)) return false;
+  final me = PortalDatabase.clientPerson?.call() ?? '';
+  return m.person.isNotEmpty && me.isNotEmpty && m.person != me;
 }

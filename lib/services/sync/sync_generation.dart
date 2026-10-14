@@ -196,16 +196,39 @@ abstract final class SyncGeneration {
 }
 
 /// The one clock of this Folio's database, made the first time a version
-/// is wanted, once the device's id is known.
+/// is wanted; its source this database's own id ([localDeviceId]) and
+/// generation.
 abstract final class SyncClock {
   static HlcClock? _clock;
   static PortalDatabase? _of;
+  static const _deviceKey = 'senkron_cihaz';
 
-  static HlcClock of(PortalDatabase db, String deviceId) {
+  /// This database's own id, drawn once: the source of the versions it
+  /// writes, with its generation.
+  static String localDeviceId(PortalDatabase db, {Random? random}) {
+    final kept = db.meta(_deviceKey);
+    if (kept != null && kept.isNotEmpty) return kept;
+    final r = random ?? Random.secure();
+    final id = List.generate(12, (_) => r.nextInt(36).toRadixString(36)).join();
+    db.setMeta(_deviceKey, id);
+    return id;
+  }
+
+  static HlcClock of(PortalDatabase db) {
     if (_clock == null || !identical(_of, db)) {
-      _clock = SyncGeneration.clockFor(db, deviceId: deviceId);
+      _clock = SyncGeneration.clockFor(db, deviceId: localDeviceId(db));
       _of = db;
     }
     return _clock!;
+  }
+
+  /// [seen], a version another device made, taken in [db]: what is written
+  /// here after it comes after it (R2), the clock made for it when none is
+  /// yet.
+  static void observe(PortalDatabase db, Hlc seen) {
+    if (seen.l == 0) return;
+    final clock = of(db);
+    if (seen.compareTo(clock.last) <= 0 && seen.l <= clock.last.l) return;
+    clock.receive(seen);
   }
 }

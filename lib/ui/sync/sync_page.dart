@@ -276,6 +276,7 @@ class _SyncPageState extends State<SyncPage> {
                   _seenText(d.deviceId),
                   key: ValueKey('sync-device-${d.deviceId}'),
                   online: _net.isOnline(d.deviceId),
+                  stopped: _stoppedText(d.deviceId),
                 ),
               if (own.isEmpty) ...[
                 const SizedBox(height: 6),
@@ -344,12 +345,30 @@ class _SyncPageState extends State<SyncPage> {
     ].join(' · ');
   }
 
+  /// What is not kept alike with [deviceId] for a capability its Folio
+  /// lacks (docs/senkron-plan.md R0): null when all is.
+  String? _stoppedText(String deviceId) {
+    final parts = _net.stoppedParts[deviceId];
+    if (parts == null || parts.isEmpty) return null;
+    const names = {
+      OwnSync.agenda: 'Ajanda ve müvekkiller',
+      OwnSync.profilePart: 'Profil',
+      OwnSync.settingsPart: 'Kalıplar ve ayarlar',
+      OwnSync.uyapData: 'UYAP',
+      OwnSync.officeClients: 'Büroyla paylaşılan müvekkiller',
+    };
+    final what = [for (final p in parts.keys) names[p] ?? p];
+    return '${what.join(', ')} bu cihazla eşitlenmiyor. Bu cihazdaki Folio '
+        'eski; güncelleyince kendiliğinden sürer.';
+  }
+
   Widget _deviceRow(
     IconData icon,
     String name,
     String? detail, {
     Key? key,
     bool online = false,
+    String? stopped,
   }) => Padding(
     key: key,
     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -369,6 +388,26 @@ class _SyncPageState extends State<SyncPage> {
                   style: TextStyle(
                     fontSize: 12,
                     color: online ? AgendaColors.ok : AgendaColors.muted,
+                  ),
+                ),
+              if (stopped != null)
+                Container(
+                  key: const ValueKey('sync-device-stopped'),
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AgendaColors.taskFill,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    stopped,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AgendaColors.taskText,
+                    ),
                   ),
                 ),
             ],

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
@@ -336,12 +337,33 @@ class PortalDatabase {
 
   void _transaction(void Function() action) {
     _db.execute('BEGIN IMMEDIATE');
+    _depth++;
     try {
       action();
       _db.execute('COMMIT');
     } catch (_) {
       _db.execute('ROLLBACK');
+      _changedLater = false;
       rethrow;
+    } finally {
+      _depth--;
+    }
+    // What changed is told once it is written, not before.
+    if (_depth == 0 && _changedLater) {
+      _changedLater = false;
+      PortalDatabase.changed?.call();
+    }
+  }
+
+  int _depth = 0;
+  bool _changedLater = false;
+
+  /// [changed] told now, or after the transaction under way is written.
+  void _notifyChanged() {
+    if (_depth > 0) {
+      _changedLater = true;
+    } else {
+      PortalDatabase.changed?.call();
     }
   }
 

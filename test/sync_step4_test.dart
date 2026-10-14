@@ -120,9 +120,19 @@ void main() {
         'effect, the other waits, on both alike', () {
       final first = pay(book(a, 'a'));
       send(a, b);
-      book(a, 'a').addSetOff(first.id, MovementKind.toFee, 6000);
+      book(a, 'a').addSetOff(
+        first.id,
+        MovementKind.toFee,
+        6000,
+        seen: LedgerBook.tokenOf(a.clientRecord(first.id)!),
+      );
       wall = wall.add(const Duration(seconds: 1));
-      book(b, 'b').addSetOff(first.id, MovementKind.toFee, 6000);
+      book(b, 'b').addSetOff(
+        first.id,
+        MovementKind.toFee,
+        6000,
+        seen: LedgerBook.tokenOf(b.clientRecord(first.id)!),
+      );
       // Each order of coming.
       send(b, a);
       send(a, b);
@@ -156,7 +166,12 @@ void main() {
         whole: false,
         target: null,
       );
-      book(b, 'b').addSetOff(first.id, MovementKind.toFee, 8000);
+      book(b, 'b').addSetOff(
+        first.id,
+        MovementKind.toFee,
+        8000,
+        seen: LedgerBook.tokenOf(b.clientRecord(first.id)!),
+      );
       send(a, b);
       send(b, a);
       for (final db in [a, b]) {
@@ -206,15 +221,29 @@ void main() {
         'second is in effect on both, by the same id', () {
       final first = pay(book(a, 'a'));
       send(a, b);
-      final m1 = book(a, 'a').addSetOff(first.id, MovementKind.toFee, 6000);
+      final m1 = book(a, 'a').addSetOff(
+        first.id,
+        MovementKind.toFee,
+        6000,
+        seen: LedgerBook.tokenOf(a.clientRecord(first.id)!),
+      );
       wall = wall.add(const Duration(seconds: 1));
-      book(b, 'b').addSetOff(first.id, MovementKind.toFee, 6000);
+      book(b, 'b').addSetOff(
+        first.id,
+        MovementKind.toFee,
+        6000,
+        seen: LedgerBook.tokenOf(b.clientRecord(first.id)!),
+      );
       // A sees the second only after its own; B sees both at once.
       send(b, a);
       send(a, b);
       final firstSetOff = LedgerBook.setOffsOf(m1).single.id;
       wall = wall.add(const Duration(minutes: 1));
-      book(a, 'a').removeSetOff(first.id, firstSetOff);
+      book(a, 'a').removeSetOff(
+        first.id,
+        firstSetOff,
+        seen: LedgerBook.tokenOf(a.clientRecord(first.id)!),
+      );
       send(a, b);
       expect(legs(a), legs(b));
       for (final db in [a, b]) {
@@ -229,7 +258,12 @@ void main() {
       'corrected in the file; only a set-off of the whole follows the sum',
       () {
         final part = pay(book(a, 'a'));
-        book(a, 'a').addSetOff(part.id, MovementKind.toFee, 4000);
+        book(a, 'a').addSetOff(
+          part.id,
+          MovementKind.toFee,
+          4000,
+          seen: LedgerBook.tokenOf(a.clientRecord(part.id)!),
+        );
         wall = wall.add(const Duration(minutes: 1));
         book(a, 'a').edit(
           a.clientRecord(part.id)!,
@@ -407,8 +441,8 @@ void main() {
     test('old movements alike with their record give way to its movements: '
         'no total changes, a part set off kept', () {
       a.saveClientRecord(entry('e1'));
-      a.saveClientRecord(old('h', 'icra:e1', MovementKind.collected, 10000));
-      a.saveClientRecord(old('f', 'mahsup:h', MovementKind.toFee, 4000));
+      a.putRecordForTesting(old('h', 'icra:e1', MovementKind.collected, 10000));
+      a.putRecordForTesting(old('f', 'mahsup:h', MovementKind.toFee, 4000));
       final before = (account(a)!.feeIn, account(a)!.advanceLeft);
       final cash = cashTotals(cashLines(a)).income;
       a.migrateLedgers();
@@ -434,24 +468,26 @@ void main() {
     test('old movements not alike wait for the lawyer\'s word: booked twice, '
         'a reversal reversed, money of a payment taken off', () {
       a.saveClientRecord(entry('twice'));
-      a.saveClientRecord(
+      a.putRecordForTesting(
         old('t1', 'icra:twice', MovementKind.collected, 10000),
       );
-      a.saveClientRecord(
+      a.putRecordForTesting(
         old('t2', 'icra:twice', MovementKind.collected, 10000),
       );
       a.saveClientRecord(entry('again'));
-      a.saveClientRecord(
+      a.putRecordForTesting(
         old('g1', 'icra:again', MovementKind.collected, 10000),
       );
-      a.saveClientRecord(
+      a.putRecordForTesting(
         old('g2', 'icra:again', MovementKind.collected, 10000, back: 'g1'),
       );
-      a.saveClientRecord(
+      a.putRecordForTesting(
         old('g3', 'icra:again', MovementKind.collected, 10000, back: 'g2'),
       );
       a.saveClientRecord(entry('gone', removed: true));
-      a.saveClientRecord(old('o1', 'icra:gone', MovementKind.collected, 10000));
+      a.putRecordForTesting(
+        old('o1', 'icra:gone', MovementKind.collected, 10000),
+      );
       final before = account(a)!.advanceLeft;
       a.migrateLedgers();
       expect(a.ledgerRepairs.toSet(), {'twice', 'again', 'gone'});
@@ -472,7 +508,7 @@ void main() {
     test('the migration is a step of the schema: run as the database opens, '
         'once', () {
       a.saveClientRecord(entry('e1'));
-      a.saveClientRecord(old('h', 'icra:e1', MovementKind.collected, 10000));
+      a.putRecordForTesting(old('h', 'icra:e1', MovementKind.collected, 10000));
       // In its old form, the record makes no movement of its own beside its
       // old ones.
       expect(legs(a), isEmpty);
@@ -483,5 +519,217 @@ void main() {
       expect(account(a)!.advanceLeft, 10000);
       expect(SyncMigration.run(a), isFalse);
     });
+  });
+
+  group('Codex\'s review of step 4', () {
+    ClientRecord entry(String id, {String dosya = 'dosya'}) => ClientRecord(
+      id: id,
+      clientId: 'k1',
+      kind: ClientRecordKind.enforcement,
+      data: {
+        'dosya': dosya,
+        'tur': 'haricen',
+        'tutar': 10000,
+        'zaman': '2026-10-10T00:00:00',
+      },
+      created: DateTime(2026, 10, 10),
+      by: 'Av. D',
+      updated: DateTime(2026, 10, 10),
+    );
+    ClientRecord held(String id, String entryId, {String dosya = 'dosya'}) =>
+        ClientRecord(
+          id: id,
+          clientId: 'k1',
+          kind: ClientRecordKind.movement,
+          data: {
+            'dosya': dosya,
+            'hesap': MovementKind.collected.code,
+            'tutar': 10000,
+            'zaman': '2026-10-10T00:00:00',
+            'kaynak': 'icra:$entryId',
+          },
+          created: DateTime(2026, 10, 10, 1),
+          by: 'Av. D',
+          updated: DateTime(2026, 10, 10, 1),
+          locked: true,
+        );
+
+    test('a change made after a version from a clock ahead comes after it, '
+        'and is not lost at the next keeping alike', () {
+      final ahead = wall.add(const Duration(days: 1));
+      final first =
+          LedgerService(
+            a,
+            clock: HlcClock(source: 'a:0', now: () => ahead),
+          ).add(
+            clientId: 'k1',
+            caseKey: 'dosya',
+            kind: 'haricen',
+            amount: 10000,
+            at: DateTime(2026, 10, 10),
+            by: 'Av. D',
+          );
+      send(a, b);
+      // B's own clock, the database's: it has seen A's version.
+      LedgerService(b).edit(
+        b.clientRecord(first.id)!,
+        amount: 15000,
+        at: DateTime(2026, 10, 10),
+        debtor: '',
+        way: '',
+        note: '',
+        whole: false,
+        target: null,
+      );
+      send(b, a);
+      expect(a.clientRecord(first.id)!.amount, 15000);
+    });
+
+    test('a colleague\'s ledger is changed by no path of this device\'s', () {
+      final person = PortalDatabase.clientPerson;
+      addTearDown(() => PortalDatabase.clientPerson = person);
+      final first = pay(book(a, 'a'));
+      PortalDatabase.clientPerson = () => 'selin';
+      expect(
+        () =>
+            book(a, 'a').setReported(a.clientRecord(first.id)!, DateTime.now()),
+        throwsA(isA<LedgerNotYours>()),
+      );
+      final heldMove = a.allClientRecords().singleWhere(LedgerBook.isProjected);
+      final via = ledgerApply(
+        a,
+        heldMove,
+        appliedMovement(heldMove, MovementKind.toFee, 4000, lawyer: 'Av. S'),
+      );
+      expect(via.refused, isNotNull);
+      expect(LedgerBook.setOffsOf(a.clientRecord(first.id)!), isEmpty);
+    });
+
+    test('the migration run again leaves a ledger it made as it is', () {
+      a.saveClientRecord(entry('e1'));
+      a.putRecordForTesting(held('h', 'e1'));
+      a.migrateLedgers();
+      final legsOnce = legs(a);
+      final recordOnce = a.clientRecord('e1')!.toJson();
+      a.migrateLedgers();
+      expect(a.ledgerRepairs, isEmpty);
+      expect(legs(a), legsOnce);
+      expect(a.clientRecord('e1')!.toJson(), recordOnce);
+    });
+
+    test('a movement of another case is not taken for the ledger\'s', () {
+      a.saveClientRecord(entry('e1'));
+      a.putRecordForTesting(held('h', 'e1', dosya: 'baska'));
+      a.migrateLedgers();
+      expect(a.ledgerRepairOf('e1')!['neden'], contains('başka'));
+    });
+
+    test('a repair agreed to for what has changed since is not made: the '
+        'report is made anew', () {
+      a.saveClientRecord(entry('e1'));
+      a.putRecordForTesting(held('h1', 'e1'));
+      a.putRecordForTesting(held('h2', 'e1'));
+      a.migrateLedgers();
+      final shown = a.ledgerRepairOf('e1')!['ozet'] as String;
+      a.putRecordForTesting(held('h3', 'e1'));
+      expect(a.resolveLedgerRepair('e1', shown), isFalse);
+      final anew = a.ledgerRepairOf('e1')!;
+      expect(anew['ozet'], isNot(shown));
+      expect(anew['kimlikler'], contains('h3'));
+      expect(a.resolveLedgerRepair('e1', anew['ozet'] as String), isTrue);
+      expect(legs(a), ['icra:e1:emanet=10000']);
+      expect(account(a)!.advanceLeft, 10000);
+    });
+
+    test('a ledger in its old form from another device is weighed here: its '
+        'money neither lost nor counted twice', () {
+      b.saveClientRecord(entry('e1'));
+      b.putRecordForTesting(held('h', 'e1'));
+      a.clientsMerge(b.clientsExport());
+      expect(account(a)!.advanceLeft, 10000);
+      expect(legs(a), ['icra:e1:emanet=10000']);
+      expect(a.clientRecord('h'), isNull, reason: 'moved aside');
+    });
+
+    test('the old movements moved aside are known to the other devices: '
+        'they are not taken back from an older one', () {
+      a.saveClientRecord(entry('e1'));
+      a.putRecordForTesting(held('h', 'e1'));
+      a.migrateLedgers();
+      send(a, b);
+      b.clientsMerge({
+        'muvekkilKayitlari': [held('h', 'e1').toJson()],
+      });
+      expect(b.clientRecord('h'), isNull);
+      expect(account(b)!.advanceLeft, 10000);
+    });
+
+    test('a reversal of a movement made of a ledger is taken by no path', () {
+      pay(book(a, 'a'));
+      final move = a.allClientRecords().singleWhere(LedgerBook.isProjected);
+      final back = ClientRecord(
+        id: 'r1',
+        clientId: 'k1',
+        kind: ClientRecordKind.movement,
+        data: {...move.data, 'ters': move.id}..remove('turetilmis'),
+        created: DateTime.now(),
+        by: 'Av. D',
+        updated: DateTime.now(),
+        locked: true,
+      );
+      expect(a.saveClientRecord(back), isFalse);
+      a.clientsMerge({
+        'muvekkilKayitlari': [back.toJson()],
+      });
+      expect(a.clientRecord('r1'), isNull);
+      expect(account(a)!.advanceLeft, 10000);
+    });
+
+    test('a set-off from a movement shown before the record changed is '
+        'refused', () {
+      final first = pay(book(a, 'a'));
+      final shown = a.allClientRecords().singleWhere(LedgerBook.isProjected);
+      wall = wall.add(const Duration(minutes: 1));
+      book(a, 'a').setReported(a.clientRecord(first.id)!, DateTime.now());
+      final via = ledgerApply(
+        a,
+        shown,
+        appliedMovement(shown, MovementKind.toFee, 4000, lawyer: 'Av. D'),
+      );
+      expect(via.refused, isNotNull);
+      expect(LedgerBook.setOffsOf(a.clientRecord(first.id)!), isEmpty);
+    });
+
+    test('the lawyer\'s word that UYAP has it is for the sum it had', () {
+      final first = pay(book(a, 'a'));
+      wall = wall.add(const Duration(minutes: 1));
+      book(a, 'a').setOfficial(a.clientRecord(first.id)!, true);
+      expect(LedgerBook.officialByHand(a.clientRecord(first.id)!), isTrue);
+      wall = wall.add(const Duration(minutes: 1));
+      book(a, 'a').edit(
+        a.clientRecord(first.id)!,
+        amount: 12000,
+        at: DateTime(2026, 10, 10),
+        debtor: 'Mehmet Tunç',
+        way: '',
+        note: '',
+        whole: false,
+        target: null,
+      );
+      expect(LedgerBook.officialByHand(a.clientRecord(first.id)!), isFalse);
+    });
+
+    test(
+      'each change is in the ledger\'s history: what, by whom, from where',
+      () {
+        final first = pay(book(a, 'a'));
+        wall = wall.add(const Duration(minutes: 1));
+        book(a, 'a').setReported(a.clientRecord(first.id)!, DateTime.now());
+        final lines = a.ledgerHistory(first.id);
+        expect([for (final l in lines) l['islem']], ['ekle', 'bildirildi']);
+        expect(lines.last['kaynak'], 'a:0');
+        expect(lines.last['eski'], isNotNull);
+      },
+    );
   });
 }

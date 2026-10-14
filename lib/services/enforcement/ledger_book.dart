@@ -97,7 +97,15 @@ abstract final class LedgerBook {
   /// The record's fields, by the group each is changed with.
   static const groups = <String, List<String>>{
     // What the money is: changed together, chosen together.
-    'finans': ['tutar', 'zaman', 'odeme', 'tamami', 'uyapBakiye'],
+    'finans': [
+      'dosya',
+      'tur',
+      'tutar',
+      'zaman',
+      'odeme',
+      'tamami',
+      'uyapBakiye',
+    ],
     'bilgi': ['borclu', 'aciklama'],
     'bildirildi': ['bildirildi'],
     'resmiKarar': ['resmiKarar', 'resmi'],
@@ -212,6 +220,28 @@ abstract final class LedgerBook {
     );
   }
 
+  /// What [r] says, all of it but when it was last written: two copies
+  /// that say the same give the same text (R12's check).
+  static String contentOf(ClientRecord r) => Hlc.canonical({
+    'veri': r.data,
+    'muvekkil': r.clientId,
+    'silindi': r.removed,
+  });
+
+  /// A short mark of [contentOf], carried by [r]'s movements: what a
+  /// change made from one of them was made seeing.
+  static String tokenOf(ClientRecord r) => Hlc.digest(contentOf(r));
+
+  /// Whether the lawyer's word that UYAP has [r] stands: given for the sum
+  /// and day it has now (R4). A word given by an older Folio, with no
+  /// version of its own, stands till they change.
+  static bool officialByHand(ClientRecord r) {
+    final word = r.text('resmiKarar') == 'elle' || r.text('resmi') == 'elle';
+    if (!word) return false;
+    final given = r.text('resmiKararSurum');
+    return given.isEmpty || given == '${versionOf(r, 'finans')}';
+  }
+
   /// Whether [r] is in the form this Folio writes, with its groups'
   /// versions: an older Folio's has its movements still of its own.
   static bool isNewForm(ClientRecord r) => r.data[_versions] is Map;
@@ -268,7 +298,13 @@ abstract final class LedgerBook {
       id: id,
       clientId: r.clientId,
       kind: ClientRecordKind.movement,
-      data: {'dosya': r.text('dosya'), ...data, 'turetilmis': true},
+      data: {
+        'dosya': r.text('dosya'),
+        ...data,
+        'turetilmis': true,
+        // What the record said when this was made of it.
+        'defterSurum': tokenOf(r),
+      },
       created: r.created,
       by: r.by,
       updated: r.updated,

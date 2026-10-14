@@ -64,7 +64,7 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
     - İlan edilenler: `hlc`, `paketBolme`.
     - Test edilmeyen: büro parçalarının parçalı aktarımı (büro üyeliği kurulumu uçtan uca testte,
       adım 8).
-  - **§5 adım 4 (ekran dışı kısmı) bitti:**
+  - **§5 adım 4 bitti:**
     - `lib/services/enforcement/ledger_book.dart`:
       - alan grupları (`finans`, `bilgi`, `bildirildi`, `resmiKarar`, `yasam`) ve HLC sürümleri
         (`surumler`);
@@ -89,11 +89,25 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
       `resolveLedgerRepair` rapor özetiyle onaylı onarım yapar.
     - İlan ve etkinleştirme: `defterIslemi`. Eski sürüm cihazla `ajanda` ve `muvekkil-buro`
       parçaları durur.
-    - Kalan (ekran; maket onayı bekliyor):
-      - askıdaki mahsubun gösterilmesi;
-      - onarım raporu ekranı;
-      - eski sürüm cihazla duran parçanın Senkron sayfasında gösterilmesi.
-  - Sıradaki adım: adım 4'ün Codex denetimi ve ekran kısmı, sonra §5 adım 5.
+    - Codex kod denetimi (15 bulgu, §7) işlendi:
+      - gelen sürümler yerel saati ilerletir (`SyncClock.observe`);
+      - meslektaşın defteri kart ve Kasa'dan değişmez (`LedgerNotYours`), gelen ters ve mahsup
+        türetilmiş harekete yazılamaz;
+      - göç yeniden çalışınca yeni biçimdeki kaydı atlar; net etki bileşen bileşen karşılaştırılır;
+      - onarım onayı rapor özetini (kayıt + eski hareketler + öneri) yeniden hesaplar, değiştiyse
+        raporu yeniler ve onarmaz;
+      - eski biçimdeki kayıt gelirse projeksiyon kurulmaz, tartılır; eski kimlik eşlemesi
+        (`defterEski`) kendi cihazlara ve büroya gider;
+      - sürüm denetimi içerik özetiyle (`defterSurum`), mahsup komutları da gösterileni denetler;
+      - elle "UYAP'ta var" sözü finansal sürüme bağlı; para değişince düşer;
+      - her değişiklik `ledger_history`'ye yazılır; para yetkisi gidince temizlenir;
+      - yazım başarısızsa hata; `changed` bildirimi commit'ten sonra;
+      - projeksiyonda `client_id` indeksi, göçte eski hareketler önceden indekslenir.
+    - Ekranlar (maket onaylı):
+      - icra ödeme kartında askıdaki mahsup ve "Mahsubu geri al";
+      - Kasa'da onarım raporu şeridi: şimdiki ve onarınca durum, "Onar" düğmesi;
+      - Senkron sayfasında eski sürüm cihazla duran parçaların satırı.
+  - Sıradaki adım: §5 adım 5.
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,
@@ -828,3 +842,15 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
     hesaplamalarıyla tutarlı bulundu.
   - Üç önerisi işlendi: göçte net etkinin bileşen bileşen karşılaştırılması; defter geçmişine
     R11 ve R7 kurallarının uygulanması; geri almada projeksiyon kimlikleri.
+- **Adım 4 kod denetimi (14 Ekim, REVISE, 9 kritik, 5 uyarı, 1 öneri):**
+  - Kritikler: gelen HLC'nin saati ilerletmemesi; meslektaşın defterine karttan yazılabilmesi;
+    göçün yeniden çalışınca başarılı kaydı onarıma düşürmesi; onarım onayının veri kümesini
+    kanıtlamaması; bileşen bazlı karşılaştırmanın eksikliği; sürümsüz kayıtta çift sayım; eski
+    kimlik eşlemesinin taşınmaması; projeksiyona ters yazma yasağının depoda ve birleşimde
+    uygulanmaması; sürüm denetiminin eşit sürümlü içerik değişikliğini kaçırması.
+  - Uyarılar: finansal grup eksikliği; elle UYAP onayının finansal sürüme bağlı olmaması; defter
+    izinin tutulmaması; başarısız yazımın başarılı görünmesi ve erken bildirim; eski sürümle
+    sessiz durma ve askı/onarım için kullanıcı yolu olmaması.
+  - Öneri: büyük veri kümesinde projeksiyon okuma ve göç maliyeti.
+  - Hepsi işlendi (§0 adım 4); her biri `test/sync_step4_test.dart` "Codex's review of step 4"
+    grubunda, ekranlar `test/sync_step4_screens_test.dart`'ta denenir.

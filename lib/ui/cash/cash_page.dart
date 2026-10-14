@@ -368,12 +368,136 @@ class _CashPageState extends State<CashPage> {
             children: [
               _top(wide),
               const SizedBox(height: 10),
+              ..._repairs(),
               if (_reports) ..._report(wide) else ..._book(wide),
             ],
           ),
         );
       },
     );
+  }
+
+  /// The enforcement payments whose old movements wait for the lawyer's
+  /// word (docs/senkron-plan.md R3), each with why, what the account holds
+  /// now and what it will once mended; none, nothing shown.
+  List<Widget> _repairs() {
+    final db = _db!;
+    final ids = db.ledgerRepairs;
+    if (ids.isEmpty) return const [];
+    String sums(Object? m) {
+      final map = m is Map ? m : const {};
+      final held = (map['emanet'] as num?)?.toInt() ?? 0;
+      final fee = (map['ucret'] as num?)?.toInt() ?? 0;
+      if (held == 0 && fee == 0) return 'hesapta yok';
+      return [
+        if (held != 0) '${lira(held)} emanet',
+        if (fee != 0) '${lira(fee)} ücret',
+      ].join(', ');
+    }
+
+    Widget row(String id) {
+      final e = db.clientRecord(id);
+      final report = db.ledgerRepairOf(id);
+      if (e == null || report == null) return const SizedBox.shrink();
+      final after = sums(report['onarinca']);
+      return Container(
+        key: ValueKey('ledger-repair-$id'),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: AgendaColors.line)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${lira(e.amount)} · ${_caseTitle(e.text('dosya'))}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '${report['neden'] ?? ''}',
+                    style: TextStyle(fontSize: 13, color: AgendaColors.muted),
+                  ),
+                  Text(
+                    'Şimdi: ${sums(report['simdi'])} → Onarınca: '
+                    '${after == 'hesapta yok' ? 'hesaptan çıkar' : after}',
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton(
+              key: ValueKey('ledger-repair-ok-$id'),
+              onPressed: () async {
+                final ok = db.resolveLedgerRepair(id, '${report['ozet']}');
+                await _load();
+                if (!mounted) return;
+                showNotice(
+                  context,
+                  ok
+                      ? 'Onarıldı.'
+                      : 'Kayıt bu arada değişti; rapor yenilendi, '
+                            'yeniden bakın.',
+                );
+              },
+              child: const Text('Onar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return [
+      Container(
+        key: const ValueKey('ledger-repairs'),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AgendaColors.task),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 18,
+                  color: AgendaColors.taskText,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${ids.length} icra ödemesinin eski kayıtları onarım '
+                    'bekliyor',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Folio\'nun önceki sürümü bu ödemeleri hesaba farklı işlemiş. '
+              'Siz onaylayana kadar hesap olduğu gibi kalır.',
+              style: TextStyle(fontSize: 13, color: AgendaColors.muted),
+            ),
+            const SizedBox(height: 8),
+            for (final id in ids) row(id),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+    ];
   }
 
   Widget _top(bool wide) {

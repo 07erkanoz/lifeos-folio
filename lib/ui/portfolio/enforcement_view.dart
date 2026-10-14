@@ -399,6 +399,8 @@ class _EnforcementViewState extends State<EnforcementView> {
       refused = '$e';
     } on LedgerOverdrawn catch (e) {
       refused = '$e';
+    } on LedgerNotYours catch (e) {
+      refused = '$e';
     }
     await _loadBooked();
     if (refused != null && mounted) showNotice(context, refused);
@@ -1847,6 +1849,69 @@ class _EnforcementViewState extends State<EnforcementView> {
               ],
             ],
           ),
+          // Set-offs past what is held wait, kept, in no account, till they
+          // fit (docs/senkron-plan.md R3).
+          for (final w in LedgerBook.stateOf(e.record).waiting)
+            Container(
+              key: ValueKey('ledger-waiting-${e.id}-${w.id}'),
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+              decoration: BoxDecoration(
+                color: AgendaColors.taskFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.pause_circle_outline_rounded,
+                    size: 18,
+                    color: AgendaColors.taskText,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text:
+                                'Mahsup askıda: ${_tl(w.amount / 100)} TL '
+                                '${w.target == MovementKind.toFee ? 'vekâlet ücretine' : 'karşı vekâlet ücretine'}\n',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          TextSpan(
+                            text:
+                                'Emanette ${_tl(LedgerBook.stateOf(e.record).held / 100)} TL '
+                                'var; mahsup sığana kadar hesaba işlenmez. '
+                                'Tutarı düzeltin ya da mahsubu kaldırın.',
+                          ),
+                        ],
+                      ),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AgendaColors.taskText,
+                      ),
+                    ),
+                  ),
+                  if (!others)
+                    OutlinedButton(
+                      key: ValueKey('ledger-waiting-remove-${w.id}'),
+                      onPressed: () async {
+                        final db = await widget.database();
+                        await _change(
+                          db,
+                          (book) => book.removeSetOff(
+                            e.id,
+                            w.id,
+                            seen: LedgerBook.tokenOf(e.record),
+                          ),
+                        );
+                      },
+                      child: const Text('Mahsubu kaldır'),
+                    ),
+                ],
+              ),
+            ),
           if (others)
             Padding(
               padding: const EdgeInsets.only(top: 8),
