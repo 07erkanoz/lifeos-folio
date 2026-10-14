@@ -441,4 +441,211 @@ void main() {
       expect(b.clientCard('k')!.note, 'Sahibinin notu');
     });
   });
+
+  group('Codex\'s review of step 6', () {
+    late PortalDatabase a2, b2;
+    late Directory dir;
+    late OfficeTask task;
+    setUp(() {
+      a2 = PortalDatabase.memory();
+      b2 = PortalDatabase.memory();
+      dir = Directory.systemTemp.createTempSync('adim6-denetim');
+      task =
+          OfficeTask(
+              id: 't1',
+              title: 'Bilirkişi raporuna itiraz',
+              by: 'deniz',
+              byName: 'Av. Deniz Kaya',
+              assignees: const {'selin': 'Av. Selin Ak'},
+              createdAt: DateTime(2026, 10, 7),
+              cases: const [
+                TaskCase(caseKey: 'dava', number: '2026/412', court: 'X'),
+              ],
+            )
+            ..events.add(
+              TaskEvent.create(TaskEventKind.given, 'deniz', 'Av. Deniz Kaya'),
+            );
+    });
+    tearDown(() {
+      a2.dispose();
+      b2.dispose();
+      dir.deleteSync(recursive: true);
+    });
+    String person(String device) => device[0] == 'a' ? 'deniz' : 'selin';
+    List<String>? paths;
+    var tracked = 0;
+    TaskNotes notes(PortalDatabase db, String me) => TaskNotes(
+      db: db,
+      me: () => me,
+      tasks: () => [task],
+      personOf: person,
+      received: (_, _) => paths,
+      onTracking: () => tracked++,
+    );
+    Future<bool> give(
+      PortalDatabase from,
+      String fromDevice,
+      PortalDatabase to,
+      String toDevice,
+    ) => notes(
+      to,
+      person(toDevice),
+    ).merge(notes(from, person(fromDevice)).export(toDevice), fromDevice);
+    List<String> titles(PortalDatabase db) => [
+      for (final r in db.taskNotes('deniz', 't1', 'dava')) '${r['title']}',
+    ];
+
+    test('a description made secret on another own device is not written '
+        'in its paper here, by the mark alone', () {
+      final made = LedgerService(a).add(
+        clientId: 'k',
+        caseKey: 'dava',
+        kind: 'feragat',
+        amount: 10000,
+        at: DateTime(2026, 10, 10),
+        by: 'Av. Deniz Kaya',
+        note: 'Borçlu ödeme güçlüğünde',
+      );
+      a2.clientsMerge(a.clientsExport());
+      LedgerService(a).edit(
+        a.clientRecord(made.id)!,
+        amount: 10000,
+        at: DateTime(2026, 10, 10),
+        debtor: '',
+        way: '',
+        note: 'Borçlu ödeme güçlüğünde',
+        whole: false,
+        target: null,
+        noteSecret: true,
+      );
+      // Only the notes' tracking comes to a2: its copy still open.
+      a2.noteTrackingMerge(a.noteTrackingExport());
+      final entry = ledgerOf(a2, 'dava').single;
+      expect(entry.noteSecret, isTrue);
+      final paper = waiverRequest(
+        const EnforcementParties(
+          office: 'Manavgat İcra Dairesi',
+          number: '2026/1234',
+          creditor: 'Bora Yapı A.Ş.',
+          lawyer: 'Av. Deniz Kaya',
+          debtors: ['Mehmet Tunç'],
+        ),
+        entry,
+      );
+      expect(
+        paper.blocks.map((b) => b.plainText).join('\n'),
+        isNot(contains('ödeme güçlüğünde')),
+      );
+    });
+
+    test(
+      'taken back, open again, taken off: a list of before from the '
+      'giver\'s other device brings nothing back; nor off, back, off',
+      () async {
+        a.saveAgenda(note('n', 'Tanık listesi'));
+        AgendaItem n() => a.agenda().single;
+        await give(a, 'a1', b, 'b1');
+        a.saveAgenda(n().copyWith(secret: true));
+        await give(a, 'a1', b, 'b1');
+        a.saveAgenda(n().copyWith(secret: false, body: 'Yeni'));
+        await give(a, 'a1', b, 'b1');
+        // a2 has it as it is open now, and hears nothing more.
+        a2.agendaMerge(a.agendaExport());
+        a.removeAgenda('n');
+        await give(a, 'a1', b, 'b1');
+        expect(titles(b), isEmpty);
+        await give(a2, 'a2', b, 'b1');
+        expect(titles(b), isEmpty);
+
+        final c = PortalDatabase.memory();
+        addTearDown(c.dispose);
+        a.saveAgenda(note('m', 'Bilirkişi'));
+        await give(a, 'a1', c, 'c1');
+        a.removeAgenda('m');
+        a.restoreAgenda('m');
+        a2.agendaMerge(a.agendaExport());
+        a.removeAgenda('m');
+        await give(a, 'a1', c, 'c1');
+        await give(a2, 'a2', c, 'c1');
+        expect([
+          for (final r in c.taskNotes('deniz', 't1', 'dava')) r['title'],
+        ], isEmpty);
+      },
+    );
+
+    test('a package that could not be cleaned is not said to be', () async {
+      final details = File('${dir.path}/dosya.json')
+        ..writeAsStringSync(
+          jsonEncode({
+            'evrakAdlari': {},
+            'notlar': [
+              {'metin': 'Eski metin'},
+            ],
+          }),
+        );
+      // Where the new file would be written is taken: it cannot be.
+      Directory('${details.path}.yeni').createSync();
+      paths = [details.path];
+      addTearDown(() => paths = null);
+      a.recordHold('eski:t1|dava', 'b1', 'selin', 'gorev:t1|dava');
+      a.saveAgenda(note('n', 'Tanık listesi'));
+      await give(a, 'a1', b, 'b1');
+      expect(details.readAsStringSync(), contains('Eski metin'));
+      expect(b.taskNotesCleaning('t1', 'dava'), 'temizlenecek');
+      a.saveAgenda(a.agenda().single.copyWith(secret: true));
+      await give(b, 'b1', a, 'a1');
+      final r = SecretNotes.recallOf(a, 'ajanda:n', caseKey: 'dava')!;
+      expect(r.done, 0);
+      // Possible again: cleaned at the next start.
+      Directory('${details.path}.yeni').deleteSync();
+      await notes(b, 'selin').cleanLeft();
+      expect(details.readAsStringSync(), isNot(contains('Eski metin')));
+      expect(b.taskNotesCleaning('t1', 'dava'), 'tamam');
+    });
+
+    test('a task done: what was taken back of it goes still, and its older '
+        'package is cleaned', () async {
+      final details = File('${dir.path}/dosya.json')
+        ..writeAsStringSync(
+          jsonEncode({
+            'evrakAdlari': {},
+            'notlar': [
+              {'metin': 'Eski metin'},
+            ],
+          }),
+        );
+      paths = [details.path];
+      addTearDown(() => paths = null);
+      b.setTaskNotesCleaning('t1', 'dava', 'bekliyor');
+      a.saveAgenda(note('n', 'Tanık listesi'));
+      a.recordHold('ajanda:n', 'b1', 'selin', 'gorev:t1|dava');
+      task.events.add(
+        TaskEvent.create(TaskEventKind.cancelled, 'deniz', 'Av. Deniz Kaya'),
+      );
+      a.saveAgenda(a.agenda().single.copyWith(secret: true));
+      await give(a, 'a1', b, 'b1');
+      expect(details.readAsStringSync(), isNot(contains('Eski metin')));
+    });
+
+    test('who may hold what is told to the giver\'s other devices, and '
+        'the notes that came go to the doer\'s other devices', () async {
+      a.saveAgenda(note('n', 'Tanık listesi'));
+      tracked = 0;
+      await give(a, 'a1', b, 'b1');
+      expect(tracked, greaterThan(0));
+      a2.noteTrackingMerge(a.noteTrackingExport());
+      expect(a2.holdsOf('ajanda:n'), isNotEmpty);
+      expect(b2.noteTrackingMerge(b.noteTrackingExport()), isTrue);
+      expect(
+        [for (final r in b2.taskNotes('deniz', 't1', 'dava')) r['title']],
+        ['Tanık listesi'],
+      );
+      a.saveAgenda(a.agenda().single.copyWith(secret: true));
+      await give(a, 'a1', b, 'b1');
+      b2.noteTrackingMerge(b.noteTrackingExport());
+      expect(b2.taskNotes('deniz', 't1', 'dava'), isEmpty);
+      // Taken again: nothing changes.
+      expect(b2.noteTrackingMerge(b.noteTrackingExport()), isFalse);
+    });
+  });
 }

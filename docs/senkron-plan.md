@@ -956,3 +956,19 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
     onay, olası alıcı, eski kuyruk, kalıcı temizlik, yetkiden bağımsız kart geri çekmesi.
     Kullanıcının isteğiyle bunlar uygulamada karşılandı (not not birleşim, açık işaretler,
     `govde` karşılaştırması, kapsamlı `note_hold`, kalıcı temizlik durumu, metinsiz `kartGizli`).
+- **Adım 6 kod denetimi (14 Ekim, REVISE, 7 kritik, 2 uyarı):** Bu sürümde işlenenler:
+  - İcra belgesi açıklamanın gizliliğini kalıcı gizleme kaydıyla da belirler
+    (`SecretNotes.descriptionHidden`, `LedgerEntry.noteHidden`).
+  - Alıcıda gizleme (`gizlenen`) ve silme (`silindi`) ayrı ve bağımsız tutulur; boş kayıtta da en
+    yeni silme sürümü saklanır; habersiz cihazın eski listesi diriltemez.
+  - Eski paket temizliği üç durumlu (`bekliyor`, `temizlenecek`, `tamam`); yalnız `tamam` ya da hiç
+    eski paket yoksa "temiz" bildirilir; açılışta yarım kalanlar yeniden denenir.
+  - Kapanan ya da geri alınan görevlere de metinsiz gizleme ve silme işareti gider; eski paketleri
+    temizlenir.
+  - Görev dosyası gönderim sınırında notsuz biçime getirilir; getirilemezse o paket bekler. Göç bir
+    dosyada hata alırsa bitmiş sayılmaz.
+  - Gizlilik yazımı ile gizleme kaydı aynı işlemde; iç içe işlem güvenli.
+  - Takip değişiklikleri kendi cihazlara (`ownChanged`), kendi cihazdan gelen gizleme büroya
+    (`officeChanged`) hemen yayılır; değişiklik yoksa tetik yok.
+  - Alınan görev notları `not-takibi` ile kişinin diğer cihazlarına gider.
+  - Meslektaşın kartında not alanı salt okunur; kayıttan sonra kart veritabanından yeniden okunur.

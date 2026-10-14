@@ -1,5 +1,6 @@
 import '../clients/client.dart';
 import '../clients/client_accounts.dart';
+import '../notes/secret_notes.dart';
 import '../portal/portal_database.dart';
 import '../uyap/uyap_web_service.dart';
 import 'ledger_book.dart';
@@ -30,7 +31,11 @@ enum LedgerKind {
 /// the debt Folio shows is UYAP's less it; once UYAP shows it, it is
 /// official and no longer taken off twice.
 class LedgerEntry {
-  const LedgerEntry(this.record, {this.matched = ''});
+  const LedgerEntry(this.record, {this.matched = '', this.noteHidden = false});
+
+  /// Its description made secret on another own device, by the mark that
+  /// came here (R7), whatever the copy of it here says yet.
+  final bool noteHidden;
 
   final ClientRecord record;
 
@@ -54,7 +59,7 @@ class LedgerEntry {
   String get note => record.text('aciklama');
 
   /// [note] a secret note (R7): never in the office's copy nor a document.
-  bool get noteSecret => record.data['aciklamaGizli'] == true;
+  bool get noteSecret => record.data['aciklamaGizli'] == true || noteHidden;
 
   /// Whether it settled the whole debt (or waived the whole claim).
   bool get whole => record.data['tamami'] == true;
@@ -96,12 +101,17 @@ List<LedgerEntry> ledgerOf(
       if (!r.removed &&
           r.kind == ClientRecordKind.enforcement &&
           r.text('dosya') == caseKey)
-        LedgerEntry(r),
+        LedgerEntry(r, noteHidden: SecretNotes.descriptionHidden(db, r)),
   ]..sort((a, b) => a.at.compareTo(b.at));
   if (collections.isEmpty || parse == null) return entries;
   final found = officialMatches(entries, collections, parse);
   return [
-    for (final e in entries) LedgerEntry(e.record, matched: found[e.id] ?? ''),
+    for (final e in entries)
+      LedgerEntry(
+        e.record,
+        matched: found[e.id] ?? '',
+        noteHidden: e.noteHidden,
+      ),
   ];
 }
 

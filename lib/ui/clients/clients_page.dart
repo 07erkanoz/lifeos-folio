@@ -1558,7 +1558,15 @@ class _ClientCardState extends State<ClientCard> {
     final card = _card();
     final saved = await showDialog<Client>(
       context: context,
-      builder: (_) => _ContactDialog(card, groups: clientGroups(_db)),
+      builder: (_) => _ContactDialog(
+        card,
+        groups: clientGroups(_db),
+        // A colleague's card's notes are theirs (R6).
+        notesLocked:
+            card.person.isNotEmpty &&
+            widget.person.isNotEmpty &&
+            card.person != widget.person,
+      ),
     );
     if (saved == null || !mounted) return;
     // Made secret after the office had it: asked first (R7).
@@ -1568,7 +1576,8 @@ class _ClientCardState extends State<ClientCard> {
       return;
     }
     _db.saveClient(saved);
-    if (mounted) setState(() => _client = saved);
+    // As it was kept: what was not taken is not shown as if it were.
+    if (mounted) setState(() => _client = _db.clientCard(saved.id) ?? saved);
     widget.onChanged?.call(saved.id);
   }
 
@@ -3648,7 +3657,7 @@ class _ClientCardState extends State<ClientCard> {
       },
     );
     _db.saveClient(saved);
-    setState(() => _client = saved);
+    setState(() => _client = _db.clientCard(saved.id) ?? saved);
     widget.onChanged?.call(saved.id);
   }
 
@@ -4176,8 +4185,12 @@ class _ContactDialog extends StatefulWidget {
     this.client, {
     this.groups = const [],
     this.fresh = false,
+    this.notesLocked = false,
   });
   final Client client;
+
+  /// A colleague's card: its note shown, not changed here.
+  final bool notesLocked;
 
   /// The groups the lawyer has given clients so far, to pick from.
   final List<String> groups;
@@ -4262,14 +4275,31 @@ class _ContactDialogState extends State<_ContactDialog> {
             _field(_phone2, 'İkinci telefon'),
             _field(_email, 'E-posta'),
             _field(_address, 'Adres', lines: 2),
-            _field(_note, 'Not', lines: 3),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: SecretNoteSwitch(
-                value: _noteSecret,
-                onChanged: (v) => setState(() => _noteSecret = v),
+            if (widget.notesLocked)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(
+                  controller: _note,
+                  readOnly: true,
+                  minLines: 1,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Not',
+                    helperText:
+                        'Bu kartın notunu yalnız sahibi değiştirebilir.',
+                  ),
+                ),
+              )
+            else ...[
+              _field(_note, 'Not', lines: 3),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: SecretNoteSwitch(
+                  value: _noteSecret,
+                  onChanged: (v) => setState(() => _noteSecret = v),
+                ),
               ),
-            ),
+            ],
             TextField(
               key: const ValueKey('contact-group'),
               controller: _group,

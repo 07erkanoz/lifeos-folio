@@ -465,6 +465,8 @@ class OwnSync extends ChangeNotifier {
       tasks: () => _net.tasks.all,
       personOf: _personOf,
       received: _net.packages.receivedPaths,
+      // Who may hold what, to the person's other devices at once.
+      onTracking: _net.ownChanged,
     );
     _net.officeParts[TaskNotes.part] = OfficePart(
       export: (to) async => notes.export(to),
@@ -475,12 +477,52 @@ class OwnSync extends ChangeNotifier {
       },
     );
     _net.packageCame = notes.came;
+    _net.prepareTaskFiles = (paths, caseKey) =>
+        _withoutNotes(db, paths, caseKey);
     _net.ownParts[noteTracking] = OwnPart(
       export: () async => db.noteTrackingExport(),
-      merge: (theirs) async => db.noteTrackingMerge(theirs),
+      merge: (theirs) async {
+        final changed = db.noteTrackingMerge(theirs);
+        // A note made secret on another own device: taken back of the
+        // office from here too, at once.
+        if (changed) _net.officeChanged();
+        return changed;
+      },
     );
     await _net.packages.load();
     await _carryTaskNotes(db, _net.packages);
+    await notes.cleanLeft();
+  }
+
+  /// [paths], a task's case's files, its details made as this Folio makes
+  /// them: none of the agenda's notes in them, the notices' deadlines as
+  /// they are now. False when one could not be read or written.
+  Future<bool> _withoutNotes(
+    PortalDatabase db,
+    List<String> paths,
+    String caseKey,
+  ) async {
+    var ok = true;
+    for (final path in paths) {
+      final name = p.basename(path);
+      if (!name.startsWith('dosya') || !name.endsWith('.json')) continue;
+      try {
+        final file = File(path);
+        if (!await file.exists()) continue;
+        final j = jsonDecode(await file.readAsString());
+        if (j is! Map || !j.containsKey('evrakAdlari')) continue;
+        if (j[TaskNotes.format] != null && !j.containsKey('notlar')) continue;
+        j
+          ..remove('notlar')
+          ..addAll(TaskPackage.caseExtras(db, caseKey));
+        final part = File('$path.yeni');
+        await part.writeAsString(jsonEncode(j), flush: true);
+        await part.rename(path);
+      } catch (_) {
+        ok = false;
+      }
+    }
+    return ok;
   }
 
   /// Once, from a Folio before the tasks' notes went apart: the packages
@@ -501,30 +543,14 @@ class OwnSync extends ChangeNotifier {
         'gorev:$scope',
       );
     }
-    final files = {
-      for (final e in packages.sources.entries)
-        for (final path in e.value) path: e.key.split('|').last,
-      for (final e in packages.pending.entries)
-        for (final path in e.value) path: e.key.split('|')[1],
-    };
-    for (final MapEntry(key: path, value: caseKey) in files.entries) {
-      final name = p.basename(path);
-      if (!name.startsWith('dosya') || !name.endsWith('.json')) continue;
-      try {
-        final file = File(path);
-        if (!await file.exists()) continue;
-        final j = jsonDecode(await file.readAsString());
-        if (j is! Map || !j.containsKey('evrakAdlari')) continue;
-        j
-          ..remove('notlar')
-          ..addAll(TaskPackage.caseExtras(db, caseKey));
-        final part = File('$path.yeni');
-        await part.writeAsString(jsonEncode(j), flush: true);
-        await part.rename(path);
-      } catch (_) {
-        // Tried again at the next start.
-        return;
-      }
+    // Each package given here, made without its notes: tried again at the
+    // next start where one could not be, and checked again before it goes.
+    var all = true;
+    for (final e in packages.sources.entries) {
+      if (!await _withoutNotes(db, e.value, e.key.split('|').last)) all = false;
+    }
+    for (final e in packages.pending.entries) {
+      if (!await _withoutNotes(db, e.value, e.key.split('|')[1])) all = false;
     }
     for (final key in packages.receivedKeys) {
       final parts = key.split('|');
@@ -533,7 +559,7 @@ class OwnSync extends ChangeNotifier {
         db.setTaskNotesCleaning(parts[0], parts[1], 'bekliyor');
       }
     }
-    db.setMeta(done, '1');
+    if (all) db.setMeta(done, '1');
   }
 
   Future<void> _fetchOwnFiles(PortalDatabase db) async {

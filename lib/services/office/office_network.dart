@@ -478,6 +478,11 @@ class OfficeNetwork extends ChangeNotifier {
   Future<void> Function(String task, String caseKey, List<String> saved)?
   packageCame;
 
+  /// A task's case's files made fit to go, just before they do: an older
+  /// Folio's details made without the agenda's notes (R7). False keeps
+  /// them back.
+  Future<bool> Function(List<String> paths, String caseKey)? prepareTaskFiles;
+
   /// What the office's members keep alike, by name, each part on only
   /// where its user turned it on (the clients). What goes is made for the
   /// member it goes to; what comes is told who sent it.
@@ -2107,6 +2112,11 @@ class OfficeNetwork extends ChangeNotifier {
       }
       final peer = _peers[parts[2]];
       if (peer == null || !peer.online) continue;
+      // Never as an older Folio made it, its notes in it.
+      final prepare = prepareTaskFiles;
+      if (prepare != null && !await prepare(packages.pending[key]!, parts[1])) {
+        continue;
+      }
       await send(
         peer,
         packages.pending[key]!,

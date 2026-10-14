@@ -61,18 +61,22 @@ abstract final class SecretNotes {
   }
 
   /// [r] as a record sent to the office: a secret description left empty.
+  /// Whether enforcement payment [r]'s description is secret: so marked,
+  /// or made secret on another own device at a version not older than its
+  /// own (the mark that came).
+  static bool descriptionHidden(PortalDatabase db, ClientRecord r) {
+    if (r.data['aciklamaGizli'] == true) return true;
+    if (r.kind != ClientRecordKind.enforcement) return false;
+    final hide = db.hideOf('aciklama:${r.id}');
+    return hide != null && LedgerBook.versionOf(r, 'bilgi') <= hide;
+  }
+
   static Map<String, Object?> recordForOffice(
     PortalDatabase db,
     ClientRecord r,
   ) {
     final j = r.toJson();
-    final hide = db.hideOf('aciklama:${r.id}');
-    final secret =
-        r.data['aciklamaGizli'] == true ||
-        (hide != null &&
-            r.kind == ClientRecordKind.enforcement &&
-            LedgerBook.versionOf(r, 'bilgi') <= hide);
-    if (secret && j['veri'] is Map) {
+    if (descriptionHidden(db, r) && j['veri'] is Map) {
       j['veri'] = {...j['veri'] as Map, 'aciklama': '', 'aciklamaGizli': true};
     }
     return j;

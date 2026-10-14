@@ -372,6 +372,11 @@ class PortalDatabase {
   void inTransaction(void Function() action) => _transaction(action);
 
   void _transaction(void Function() action) {
+    // Within one already: part of it.
+    if (_depth > 0) {
+      action();
+      return;
+    }
     _db.execute('BEGIN IMMEDIATE');
     _depth++;
     try {
@@ -1292,7 +1297,10 @@ class PortalDatabase {
       );
       return;
     }
-    if (_saveAgendaRow(item)) changed?.call();
+    // The row and the mark of it made secret, together (R7).
+    var saved = false;
+    _transaction(() => saved = _saveAgendaRow(item));
+    if (saved) changed?.call();
   }
 
   /// False for a row taken off: a change made of it as it was shown does

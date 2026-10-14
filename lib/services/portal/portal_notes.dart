@@ -69,7 +69,7 @@ extension PortalNotes on PortalDatabase {
   /// That [device] of [person] may hold [noteKey] in [scope] (`gorev:`
   /// task and case, `kart:` a card's id): sent to it, or said by it. [held] the
   /// version it said it holds, [applied] the latest taking back it did.
-  void recordHold(
+  bool recordHold(
     String noteKey,
     String device,
     String person,
@@ -78,6 +78,11 @@ extension PortalNotes on PortalDatabase {
     Hlc? applied,
     bool gone = false,
   }) {
+    final before = _db.select(
+      'SELECT tuttu, surum, uygulanan FROM note_hold WHERE not_key=? '
+      'AND cihaz=? AND kapsam=?',
+      [noteKey, device, scope],
+    );
     _db.execute(
       'INSERT OR IGNORE INTO note_hold(not_key, cihaz, kisi, kapsam, tuttu) '
       'VALUES(?,?,?,?,1)',
@@ -102,6 +107,18 @@ extension PortalNotes on PortalDatabase {
         scope,
       ],
     );
+    final after = _db.select(
+      'SELECT tuttu, surum, uygulanan FROM note_hold WHERE not_key=? '
+      'AND cihaz=? AND kapsam=?',
+      [noteKey, device, scope],
+    );
+    return before.isEmpty ||
+        Hlc.canonical({
+              for (final c in before.first.keys) c: before.first[c],
+            }) !=
+            Hlc.canonical({
+              for (final c in after.first.keys) c: after.first[c],
+            });
   }
 
   /// Who holds, or may hold, [noteKey], device by device.
@@ -133,6 +150,12 @@ extension PortalNotes on PortalDatabase {
     ],
     'alinanGizlemeler': [
       for (final r in _db.select('SELECT * FROM taken_note_hide'))
+        {for (final c in r.keys) c: r[c]},
+    ],
+    // The colleagues' tasks' notes that came here, for this person's other
+    // devices: note by note, with what was taken back and off.
+    'gorevNotlari': [
+      for (final r in _db.select('SELECT * FROM task_note'))
         {for (final c in r.keys) c: r[c]},
     ],
   };
@@ -177,6 +200,44 @@ extension PortalNotes on PortalDatabase {
           takeNoteHide(r['sahip'] as String, r['not_key'] as String, v);
         }
       }
+      final scopes =
+          <
+            String,
+            ({List<Map> rows, Map<String, Hlc> hidden, Map<String, Hlc> off})
+          >{};
+      for (final r in theirs['gorevNotlari'] as List? ?? const []) {
+        if (r is! Map ||
+            r['sahip'] is! String ||
+            r['gorev'] is! String ||
+            r['dosya'] is! String ||
+            r['id'] is! String) {
+          continue;
+        }
+        final s = scopes.putIfAbsent(
+          '${r['sahip']}|${r['gorev']}|${r['dosya']}',
+          () => (rows: [], hidden: {}, off: {}),
+        );
+        final versions = PortalAgendaVersions._map(r['surumler']) ?? const {};
+        final row = PortalAgendaVersions._map(r['satir']);
+        if (row != null) {
+          s.rows.add({...row, 'id': r['id'], 'surumler': r['surumler']});
+        }
+        if (Hlc.tryParse(r['gizlenen']) case final h?) s.hidden[r['id']] = h;
+        if (Hlc.tryParse(versions['silindi']) case final o?) {
+          s.off[r['id'] as String] = o;
+        }
+      }
+      for (final MapEntry(:key, :value) in scopes.entries) {
+        final parts = key.split('|');
+        mergeTaskNotes(
+          parts[0],
+          parts[1],
+          parts.sublist(2).join('|'),
+          value.rows,
+          value.hidden,
+          removed: value.off,
+        );
+      }
     });
     final changed = Hlc.canonical(noteTrackingExport()) != before;
     if (changed) applyTakenNoteHides();
@@ -203,6 +264,27 @@ extension PortalNotes on PortalDatabase {
       if (Hlc.tryParse(r['surum']) case final v?)
         (key: r['not_key'] as String, version: v),
   ];
+
+  /// The task and case of every note [person] held, or may have, of this
+  /// person's tasks: "task|case".
+  Set<String> holdScopesOf(String person) => {
+    for (final r in _db.select(
+      "SELECT DISTINCT kapsam FROM note_hold WHERE kisi=? AND kapsam LIKE 'gorev:%'",
+      [person],
+    ))
+      (r['kapsam'] as String).substring('gorev:'.length),
+  };
+
+  /// The task and case of every note kept here of [owner]'s: "task|case".
+  Set<String> receivedScopesOf(String owner) => {
+    for (final r in _db.select(
+      'SELECT DISTINCT gorev, dosya FROM task_note WHERE sahip=?',
+      [owner],
+    ))
+      '${r['gorev']}|${r['dosya']}',
+    for (final r in _db.select('SELECT gorev, dosya FROM task_note_clean'))
+      '${r['gorev']}|${r['dosya']}',
+  };
 
   /// Whether [device] is known to have held [noteKey].
   bool knowsHold(String noteKey, String device) => _db.select(
@@ -369,21 +451,57 @@ extension PortalNotes on PortalDatabase {
     var changed = false;
     final g = PortalAgendaVersions._agendaGroups;
     _transaction(() {
-      Map<String, Object?>? keptRow(String id) {
+      // What is kept of one note: its row (null while taken back or off),
+      // its groups' versions and lifecycle, when it was taken off
+      // (`silindi`) and taken back (`gizlenen`), each apart.
+      ({
+        Map<String, Object?>? row,
+        Map<String, Hlc> versions,
+        Hlc life,
+        Hlc? off,
+        Hlc? hid,
+      })?
+      kept(String id) {
         final r = _db.select(
           'SELECT satir, surumler, gizlenen FROM task_note WHERE sahip=? '
           'AND gorev=? AND dosya=? AND id=?',
           [owner, task, caseKey, id],
         );
-        return r.isEmpty ? null : {for (final c in r.first.keys) c: r.first[c]};
+        if (r.isEmpty) return null;
+        final v = PortalAgendaVersions._map(r.first['surumler']) ?? const {};
+        return (
+          row: PortalAgendaVersions._map(r.first['satir']),
+          versions: g.versionsOf(v, legacy: null),
+          life: PortalAgendaVersions._lifeOf(v, null),
+          off: Hlc.tryParse(v['silindi']),
+          hid: Hlc.tryParse(r.first['gizlenen']),
+        );
       }
 
       void write(
         String id,
         Map<String, Object?>? row,
-        String versions,
-        String hid,
+        Map<String, Hlc> versions,
+        Hlc life,
+        Hlc? off,
+        Hlc? hid,
       ) {
+        final now = (
+          row: row,
+          versions: versions,
+          life: life,
+          off: off,
+          hid: hid,
+        );
+        final was = kept(id);
+        if (was != null &&
+            Hlc.canonical(was.row) == Hlc.canonical(now.row) &&
+            FieldGroups.encode(was.versions) == FieldGroups.encode(versions) &&
+            was.life == life &&
+            was.off == off &&
+            was.hid == hid) {
+          return;
+        }
         _db.execute(
           'INSERT OR REPLACE INTO task_note(sahip, gorev, dosya, id, satir, '
           'surumler, gizlenen) VALUES(?,?,?,?,?,?,?)',
@@ -393,11 +511,19 @@ extension PortalNotes on PortalDatabase {
             caseKey,
             id,
             row == null ? null : jsonEncode(row),
-            versions,
-            hid,
+            jsonEncode({
+              for (final e in versions.entries) e.key: '${e.value}',
+              'yasam': '$life',
+              'silindi': ?off?.toString(),
+            }),
+            hid == null ? '' : '$hid',
           ],
         );
+        changed = true;
       }
+
+      Hlc? later(Hlc? a, Hlc? b) =>
+          a == null ? b : (b == null || a >= b ? a : b);
 
       for (final raw in rows) {
         if (raw['id'] is! String) continue;
@@ -405,78 +531,47 @@ extension PortalNotes on PortalDatabase {
         final row = PortalAgendaVersions._agendaRow(raw);
         final versions = g.versionsOf(raw['surumler'], legacy: null);
         final life = PortalAgendaVersions._lifeOf(raw['surumler'], null);
-        final kept = keptRow(id);
-        final hid = Hlc.tryParse(kept?['gizlenen']);
-        // Taken back: no copy of before comes back.
-        if (hid != null && versions['govde']! <= hid) continue;
-        // Taken off there after this copy: it stays off.
-        if (kept != null &&
-            kept['satir'] == null &&
-            PortalAgendaVersions._lifeOf(kept['surumler'], null) >= life &&
-            hid == null) {
+        final k = kept(id);
+        // Each mark stands on its own: taken back unless its text and
+        // secrecy are newer than that; taken off unless it was brought
+        // back after.
+        if (k?.hid != null && versions['govde']! <= k!.hid!) continue;
+        if (k?.off != null && life <= k!.off!) continue;
+        if (k == null || k.row == null) {
+          write(id, row, versions, later(life, k?.life)!, k?.off, k?.hid);
           continue;
         }
-        if (kept == null || kept['satir'] == null) {
-          write(
-            id,
-            row,
-            FieldGroups.encode({...versions, 'yasam': life}),
-            '${hid ?? ''}',
-          );
-          changed = true;
-          continue;
-        }
-        final mineRow = PortalAgendaVersions._map(kept['satir'])!;
-        final mv = g.versionsOf(kept['surumler'], legacy: null);
-        final ml = PortalAgendaVersions._lifeOf(kept['surumler'], null);
-        final m = g.merge(mineRow, mv, row, versions);
-        final next = FieldGroups.encode({
-          ...m.versions,
-          'yasam': life > ml ? life : ml,
-        });
-        if (next == kept['surumler'] &&
-            Hlc.canonical(m.row) == Hlc.canonical(mineRow)) {
-          continue;
-        }
-        write(id, m.row, next, '${hid ?? ''}');
-        changed = true;
+        final m = g.merge(k.row!, k.versions, row, versions);
+        write(id, m.row, m.versions, later(life, k.life)!, k.off, k.hid);
       }
       for (final MapEntry(key: id, value: v) in removed.entries) {
-        final kept = keptRow(id);
-        if (kept == null || kept['satir'] == null) {
-          if (kept == null) {
-            write(id, null, FieldGroups.encode({'yasam': v}), '');
-            changed = true;
-          }
-          continue;
-        }
-        final life = PortalAgendaVersions._lifeOf(kept['surumler'], null);
-        if (life >= v) continue;
-        final versions = g.versionsOf(kept['surumler'], legacy: null);
+        final k = kept(id);
+        final off = later(k?.off, v)!;
+        final life = later(k?.life, v)!;
+        // Brought back after it was taken off, there: it stands.
+        final stands = k?.row != null && k!.life > off;
         write(
           id,
-          null,
-          FieldGroups.encode({...versions, 'yasam': v}),
-          '${kept['gizlenen'] ?? ''}',
+          stands ? k.row : null,
+          k?.versions ?? g.versionsOf(null, legacy: null),
+          life,
+          off,
+          k?.hid,
         );
-        changed = true;
       }
       for (final MapEntry(key: id, value: v) in hidden.entries) {
-        final kept = keptRow(id);
-        final hid = Hlc.tryParse(kept?['gizlenen']);
-        if (hid != null && hid >= v) continue;
-        final body = kept == null
-            ? null
-            : g.versionsOf(kept['surumler'], legacy: null)['govde'];
+        final k = kept(id);
+        final hid = later(k?.hid, v)!;
         // Made open again after it, there: the copy that came stays.
-        final open = body != null && body > v && kept!['satir'] != null;
+        final stands = k?.row != null && k!.versions['govde']! > hid;
         write(
           id,
-          open ? PortalAgendaVersions._map(kept['satir']) : null,
-          '${kept?['surumler'] ?? FieldGroups.encode({})}',
-          '$v',
+          stands ? k.row : null,
+          k?.versions ?? g.versionsOf(null, legacy: null),
+          k?.life ?? const Hlc(0, 0, Hlc.migrated),
+          k?.off,
+          hid,
         );
-        changed = true;
       }
     });
     return changed;
@@ -521,7 +616,7 @@ extension PortalNotes on PortalDatabase {
 
   List<({String task, String caseKey})> get taskNotesToClean => [
     for (final r in _db.select(
-      "SELECT gorev, dosya FROM task_note_clean WHERE durum='bekliyor'",
+      "SELECT gorev, dosya FROM task_note_clean WHERE durum='temizlenecek'",
     ))
       (task: r['gorev'] as String, caseKey: r['dosya'] as String),
   ];

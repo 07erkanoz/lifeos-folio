@@ -53,6 +53,12 @@ extension PortalClients on PortalDatabase {
   /// Keeps [c] as the lawyer wrote it here: what they changed given a new
   /// version (R1), what came from another device since kept ([Client.written]).
   void saveClient(Client c) {
+    // The card and the marks of its notes made secret, together (R7).
+    _transaction(() => _saveClient(c));
+    PortalDatabase.changed?.call();
+  }
+
+  void _saveClient(Client c) {
     final before = clientCard(c.id);
     var made = c.written(before, SyncClock.of(this));
     // A colleague's card: its notes are theirs to write, as they wrote
@@ -97,7 +103,6 @@ extension PortalClients on PortalDatabase {
         }
       }
     }
-    PortalDatabase.changed?.call();
   }
 
   /// Every version of [c] taken into the clock (R2).
