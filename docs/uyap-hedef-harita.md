@@ -277,6 +277,11 @@ oturumluk `evrakId` anahtar olmaz.
 **11.6 Savcılık.** Mobil savcılık yalnız listeleme değildir: kimlik çözme (`MobileCaseFinder`),
 kanal tablosundaki taraf/evrak/indirme yetenekleri ayrı doğrulanır; doğrulanana kadar savcılık
 dosyasının ayrıntısı web bölümüdür.
+*Ölçüldü (14 Ekim 2026, canlı, Manavgat CBS'nin 3 açık dosyasından ilki):* liste satırı
+`dosyaTurKod` 16 taşır; `taraflar` (yalın da `dosyaTurKod` ile de) HTTP 200 içinde `status` 500,
+`errorCode` `PRTL_GNL_1-1`, "Bu dosya üzerinde ilgili işlemi yapma yetkiniz bulunmamaktadır."
+döner; `dosya/{id}/1` boş `tumEvraklar` ve boş `son20Evrak` döner. Sonuç: **mobil savcılık
+dosyasında yalnız listeleme yapar**; taraf ve evrak web'indir (bugünkü davranış doğru).
 
 **11.7 Mobil oturum.** `auth/refresh` hız kuyruğundan geçer; 429 alınca token silinmez, beklenir.
 
