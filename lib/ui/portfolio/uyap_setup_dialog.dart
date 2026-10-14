@@ -139,10 +139,28 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
       UyapJob(kind: UyapJobKind.setup, done: true) => _setupDone(context),
       UyapJob(kind: UyapJobKind.webCompletion, done: true) => (
         'Web bilgileri tamamlandı',
-        const Text(
-          'Para, icra hesabı, borçlular ve Yargıtay dosyaları UYAP Web’den '
-          'geldi. Bundan sonra bir dosyayı açtığınızda eskiyen bilgileri '
-          'tazelenir.',
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              job.listGaps
+                  ? 'Dosyalarınızın para, icra hesabı ve borçlu bilgileri '
+                        'UYAP Web’den geldi. Bundan sonra bir dosyayı '
+                        'açtığınızda eskiyen bilgileri tazelenir.'
+                  : 'Para, icra hesabı, borçlular ve Yargıtay dosyaları UYAP '
+                        'Web’den geldi. Bundan sonra bir dosyayı açtığınızda '
+                        'eskiyen bilgileri tazelenir.',
+            ),
+            if (job.listGaps) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Yargıtay listesinin bir kısmı alınamadı. Dava Dosyalarım’da '
+                '“Portföyü yenile” ile yeniden deneyin.',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
         ),
         [
           FilledButton(

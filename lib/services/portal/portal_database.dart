@@ -1662,15 +1662,37 @@ class PortalDatabase {
     final List<UyapParty> next;
     final String nextSource;
     final mobile = source == 'uyap_mobil';
+    // A kept name shortened ("A** E**") takes a whole one it surely is:
+    // the only one of its role with the same initials, keeping its counsel.
+    List<UyapParty> named() => [
+      for (final k in kept)
+        if (isShortenedName(k.name))
+          switch ([
+            for (final t in parties)
+              if (!isShortenedName(t.name) && _sameInitials(k, t)) t,
+          ]) {
+            [final only] => UyapParty(
+              only.name,
+              k.role.isNotEmpty ? k.role : only.role,
+              k.lawyer.isNotEmpty ? k.lawyer : only.lawyer,
+              k.kind.isNotEmpty ? k.kind : only.kind,
+            ),
+            _ => k,
+          }
+        else
+          k,
+    ];
     if (kept.isEmpty) {
       next = parties;
       nextSource = source;
-    } else if (keptShort && !comeShort) {
-      // Whole names over shortened ones; the kept whole names stay.
-      next = UyapParty.merge(parties, [
-        for (final t in kept)
+    } else if (keptShort && !comeShort && !mobile) {
+      // Whole names over shortened ones, from whatever source: those it
+      // names whole, the shortened gone; the kept whole ones stay with what
+      // they had.
+      next = UyapParty.merge([
+        for (final t in named())
           if (!isShortenedName(t.name)) t,
-      ]);
+      ], parties);
       nextSource = rank(source) >= rank(keptSource) ? source : '$keptSource';
     } else if (!mobile &&
         rank(source) >= rank(keptSource) &&
@@ -1683,8 +1705,9 @@ class PortalDatabase {
       // UYAP knows better.
       return;
     } else {
-      // UYAP Mobil only adds and fills, never drops one kept.
-      next = UyapParty.merge(kept, [
+      // UYAP Mobil only adds and fills, never drops one kept; shortened
+      // names it names whole are made whole.
+      next = UyapParty.merge(named(), [
         for (final t in parties)
           if (!isShortenedName(t.name) || keptShort) t,
       ]);
@@ -2234,6 +2257,22 @@ class PortalDatabase {
 
 /// Whether [name] is a party's name UYAP shortened ("A** E**", "A.. E..",
 /// "A. E."): known by its initials only, it names no client.
+/// Whether the shortened [short] ("A** E**", "A. E.") is [whole] by its
+/// initials and role.
+bool _sameInitials(UyapParty short, UyapParty whole) {
+  List<String> initials(String name) => [
+    for (final w in UyapWebService.fold(name).trim().split(RegExp(r'\s+')))
+      if (w.isNotEmpty) w.substring(0, 1),
+  ];
+  final a = initials(short.name), b = initials(whole.name);
+  final ra = UyapWebService.fold(short.role).trim();
+  final rb = UyapWebService.fold(whole.role).trim();
+  return a.isNotEmpty &&
+      a.length == b.length &&
+      a.join() == b.join() &&
+      (ra.isEmpty || rb.isEmpty || ra == rb);
+}
+
 bool isShortenedName(String name) {
   final t = name.trim();
   if (t.isEmpty) return false;

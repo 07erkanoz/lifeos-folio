@@ -108,7 +108,35 @@ void main() {
     expect(merged.last.role, 'Tanık');
   });
 
+  test('one kept party gives its counsel to one of a new list at most', () {
+    final filled = UyapParty.fill(
+      const [
+        UyapParty('ALİ VELİ', 'Davacı', '', ''),
+        UyapParty('ALİ KAYA', 'Davacı', '', ''),
+      ],
+      const [UyapParty('ALİ', 'Davacı', 'Av. Bir', '')],
+    );
+    expect(filled.where((t) => t.lawyer.isNotEmpty), isEmpty);
+  });
+
   group('the parties kept in the database', () {
+    test('UYAP Mobil gives a shortened kept name its whole one, and drops '
+        'none of the web\'s', () {
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      db.saveCaseParties('k', const [
+        UyapParty('F**** Ö***', 'Alacaklı', 'Av. Erkan Öz', 'Kişi'),
+        UyapParty('MUAMMER ÖZ', 'Borçlu', 'Av. Web', 'Kişi'),
+      ], source: 'uyap_web');
+      db.saveCaseParties('k', const [
+        UyapParty('FATMA ÖZEN', 'Alacaklı', '', ''),
+      ], source: 'uyap_mobil');
+      final kept = db.caseParties(caseKey: 'k')['k']!;
+      expect(kept.map((t) => t.name), ['FATMA ÖZEN', 'MUAMMER ÖZ']);
+      expect(kept[0].lawyer, 'Av. Erkan Öz');
+      expect(kept[1].lawyer, 'Av. Web');
+    });
+
     const key = 'k';
     const web = [
       UyapParty('FATMA ÖZEN', 'Alacaklı', 'Av. Erkan Öz', 'Kişi'),

@@ -577,7 +577,10 @@ class UyapCaseStore {
       list = [
         ...list,
         for (final d in before.documents)
-          if (!named.contains(d.key) && before.files.containsKey(d.key)) d,
+          if (!named.contains(d.key) &&
+              (before.files.containsKey(d.key) ||
+                  d.attachments.any((a) => before.files.containsKey(a.key))))
+            d,
       ];
     }
     final keys = _keys(list);

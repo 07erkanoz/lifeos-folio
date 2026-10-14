@@ -1566,15 +1566,21 @@ class UyapParty {
   /// one whose name begins as [p]'s does, when only one does. Null when
   /// none is, or when more than one could be: counsel is never carried to
   /// a party guessed.
-  static int? matchIn(List<UyapParty> among, UyapParty p) {
+  static int? matchIn(
+    List<UyapParty> among,
+    UyapParty p, {
+    Set<int> taken = const {},
+  }) {
+    if (_who(p).isEmpty) return null;
     final exact = [
       for (final (i, k) in among.indexed)
-        if (_who(k) == _who(p) && _roles(k, p)) i,
+        if (!taken.contains(i) && _who(k) == _who(p) && _roles(k, p)) i,
     ];
-    if (exact.isNotEmpty) return exact.first;
+    if (exact.length == 1) return exact.single;
+    if (exact.length > 1) return null;
     final near = [
       for (final (i, k) in among.indexed)
-        if (same(k, p)) i,
+        if (!taken.contains(i) && same(k, p)) i,
     ];
     return near.length == 1 ? near.single : null;
   }
@@ -1582,19 +1588,24 @@ class UyapParty {
   /// [kept] with [other]'s added: a party only [other] names comes in, one
   /// both name keeps what [kept] had and takes only what it lacked (role,
   /// counsel, kind). None is taken away, none named twice; one [other]
-  /// names that could be more than one kept is left out.
+  /// names that could be more than one kept is left out. One to one: a
+  /// kept party takes from one of [other]'s at most.
   static List<UyapParty> merge(List<UyapParty> kept, List<UyapParty> other) {
     if (kept.isEmpty) return other;
     if (other.isEmpty) return kept;
     final out = [...kept];
+    final taken = <int>{};
     for (final p in other) {
-      final at = matchIn(out, p);
+      final at = matchIn(out, p, taken: taken);
       if (at != null) {
+        taken.add(at);
         out[at] = out[at].filledFrom(p);
         continue;
       }
-      // Ambiguous ("ALİ" beside two ALİs): not added a third time.
+      // Ambiguous ("ALİ" beside two ALİs), or one already matched: not
+      // added again.
       if (out.any((k) => same(k, p))) continue;
+      if (_who(p).isEmpty) continue;
       out.add(p);
     }
     return out;
@@ -1602,14 +1613,24 @@ class UyapParty {
 
   /// [winner] as it is, each party taking from [kept]'s same party only what
   /// it lacks: a newer list from the source that owns the parties, which
-  /// still keeps counsel an older reading knew.
-  static List<UyapParty> fill(List<UyapParty> winner, List<UyapParty> kept) => [
-    for (final p in winner)
-      switch (matchIn(kept, p)) {
-        final i? => p.filledFrom(kept[i]),
-        null => p,
-      },
-  ];
+  /// still keeps counsel an older reading knew. One to one: a kept party
+  /// gives to one of [winner]'s at most.
+  static List<UyapParty> fill(List<UyapParty> winner, List<UyapParty> kept) {
+    final taken = <int>{};
+    return [
+      for (final p in winner)
+        switch (matchIn(kept, p, taken: taken)) {
+          // Both ways one: a kept "ALİ" that two of the new list could be
+          // gives to neither.
+          final i?
+              when (_who(kept[i]) == _who(p) ||
+                      winner.where((w) => same(w, kept[i])).length == 1) &&
+                  taken.add(i) =>
+            p.filledFrom(kept[i]),
+          _ => p,
+        },
+    ];
+  }
 
   UyapParty filledFrom(UyapParty o) => UyapParty(
     name.length >= o.name.length || !same(this, o) ? name : o.name,

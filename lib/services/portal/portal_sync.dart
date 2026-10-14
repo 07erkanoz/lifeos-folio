@@ -540,9 +540,11 @@ class PortalSync extends ChangeNotifier {
 
   Future<void> _startJob(UyapJob next) async {
     setupOffer.value = false;
-    _jobGen++;
+    final gen = ++_jobGen;
     // A run of the job before stops first: one job at a time.
     await _jobRun;
+    // Another start, a pause or a drop came meanwhile: that one stands.
+    if (gen != _jobGen || _disposed) return;
     await _keepJob(next);
     unawaited(
       SyncLog.note(
@@ -566,15 +568,18 @@ class PortalSync extends ChangeNotifier {
   /// A stopped job goes on, where its channel is connected; not connected,
   /// it stays stopped, waiting for the channel.
   Future<void> resumeJob() async {
-    final j = job.value;
-    if (j == null || j.done) return;
-    _jobGen++;
+    if (job.value == null || job.value!.done) return;
+    final gen = ++_jobGen;
     await _jobRun;
+    // Let go of, paused or started anew meanwhile: that stands.
+    final j = job.value;
+    if (gen != _jobGen || _disposed || j == null || j.done) return;
     if (!_jobConnected(j)) {
       await _keepJob(j.copyWith(stage: j.stage, stopped: UyapJobStop.session));
       return;
     }
     await _keepJob(j.copyWith(stage: j.stage));
+    if (gen != _jobGen) return;
     await _runJob();
   }
 
@@ -607,12 +612,23 @@ class PortalSync extends ChangeNotifier {
     final gen = _jobGen;
     var j = job.value;
     if (j == null || j.done || !_jobConnected(j)) return;
-    bool going() => !_disposed && gen == _jobGen && _jobConnected(j!);
+    // Whether this run is still the job's: a pause, a drop or a start
+    // after it makes it another's, and it writes nothing more.
+    bool current() => !_disposed && gen == _jobGen;
+    bool going() => current() && _jobConnected(j!);
+    Future<bool> keep(UyapJob next) async {
+      final db = await _database();
+      if (!current()) return false;
+      db.setMeta(_jobKey, next.encode());
+      job.value = next;
+      j = next;
+      return true;
+    }
+
     Future<void> stopped([UyapJobStop why = UyapJobStop.session]) async {
-      // A run let go of writes nothing: the job is another's now.
-      if (_disposed || gen != _jobGen) return;
-      await _keepJob(j!.copyWith(stage: j.stage, stopped: why));
-      unawaited(SyncLog.note('İş durdu (${why.name}): ${j!.stage.name}'));
+      if (await keep(j!.copyWith(stage: j!.stage, stopped: why))) {
+        unawaited(SyncLog.note('İş durdu (${why.name}): ${j!.stage.name}'));
+      }
     }
 
     // A reading of the lawyer's own on the channel finishes first: one
@@ -623,36 +639,41 @@ class PortalSync extends ChangeNotifier {
       }
     }
 
-    if (j.stage == UyapJobStage.list) {
+    if (j!.stage == UyapJobStage.list) {
       jobProgress.value = const UyapJobProgress(UyapJobStage.list, 0, 0);
       await idle();
       if (!going()) return stopped();
       final db = await _database();
-      final key = _jobListKey(j);
+      if (!going()) return stopped();
+      final key = _jobListKey(j!);
       final before = db.meta(key);
-      if (j.channel == PortalChannel.uyapMobile) {
+      final webSetup =
+          j!.channel == PortalChannel.uyapWeb && j!.kind == UyapJobKind.setup;
+      if (j!.channel == PortalChannel.uyapMobile) {
         await syncMobile(full: true);
       } else {
         // The setup on the web reads every list, UYAP Mobil connected or
-        // not.
-        await syncWeb(force: true, whole: j.kind == UyapJobKind.setup);
+        // not, and is not held back by UYAP Mobil's reading before.
+        await syncWeb(force: true, whole: webSetup);
       }
       if (!going()) return stopped();
-      // Read whole now, or within the rest before: the list is there. Else
-      // it is said, and the cases listed are read all the same.
+      // Read whole now; on UYAP Mobil also within the rest before: the
+      // list is there. Else it is said, and the cases listed are read.
       final at = DateTime.tryParse(db.meta(key) ?? '');
       final fresh =
           at != null &&
           (db.meta(key) != before ||
-              DateTime.now().difference(at) < portfolioRest);
-      j = await _keepJob(
-        j.copyWith(
-          stage: j.kind == UyapJobKind.setup
+              (!webSetup && DateTime.now().difference(at) < portfolioRest));
+      if (!await keep(
+        j!.copyWith(
+          stage: j!.kind == UyapJobKind.setup
               ? UyapJobStage.parties
               : UyapJobStage.web,
           listGaps: !fresh,
         ),
-      );
+      )) {
+        return;
+      }
     }
     for (final (stage, next) in [
       (UyapJobStage.parties, UyapJobStage.documents),
@@ -662,20 +683,21 @@ class PortalSync extends ChangeNotifier {
       if (j!.stage != stage) continue;
       await idle();
       if (!going()) return stopped();
-      var left = 0;
-      await _run(j.channel, (db) async {
-        left = await _jobCases(db, j!, going);
-        return left > 0 ? 'Bazı dosyalar okunamadı' : null;
+      // Not run (another reading took the channel first): not done.
+      int? left;
+      await _run(j!.channel, (db) async {
+        left = await _jobCases(db, j!, going, current);
+        return left! > 0 ? 'Bazı dosyalar okunamadı' : null;
       });
       if (!going()) return stopped();
-      // Cases left that would not be read: the job waits, to be tried
-      // again when the lawyer says.
-      if (left > 0) return stopped(UyapJobStop.incomplete);
-      j = await _keepJob(j.copyWith(stage: next));
+      // Cases left that would not be read, or the stage not run: the job
+      // waits, to be tried again when the lawyer says.
+      if (left == null || left! > 0) return stopped(UyapJobStop.incomplete);
+      if (!await keep(j!.copyWith(stage: next))) return;
     }
     if (j!.done) {
       jobProgress.value = null;
-      unawaited(SyncLog.note('İş bitti: ${j.kind.name}'));
+      unawaited(SyncLog.note('İş bitti: ${j!.kind.name}'));
       uyapChanged?.call();
     }
   }
@@ -719,11 +741,13 @@ class PortalSync extends ChangeNotifier {
   /// channel alone: those with a hearing within a month first, then the
   /// icra files, then the rest. Each case's sections are counted again
   /// just before it is read: what the lawyer read meanwhile is not asked
-  /// again. How many were left unread; on stopping ([going]) at least one.
+  /// again. How many are left unread at the end, counted anew; on stopping
+  /// ([going]) at least one. A run no longer [current] writes nothing.
   Future<int> _jobCases(
     PortalDatabase db,
     UyapJob j,
     bool Function() going,
+    bool Function() current,
   ) async {
     final archived = db.revokedShares();
     final now = DateTime.now();
@@ -751,7 +775,6 @@ class PortalSync extends ChangeNotifier {
     ]..sort((a, b) => rank(a).compareTo(rank(b)));
     final total = open.length;
     var done = 0;
-    var left = 0;
     final label = switch (j.stage) {
       UyapJobStage.parties => 'Taraflar',
       UyapJobStage.documents => 'Evrak listeleri',
@@ -761,9 +784,8 @@ class PortalSync extends ChangeNotifier {
     final changed = <String>{};
     try {
       for (final kase in open) {
-        if (!going()) return left + 1;
-        final wants = _jobWants(j, db.sections(kase.key));
-        if (wants.isEmpty) {
+        if (!going()) return 1;
+        if (_jobWants(j, db.sections(kase.key)).isEmpty) {
           done++;
           continue;
         }
@@ -771,7 +793,7 @@ class PortalSync extends ChangeNotifier {
         while (UyapCasePanelController.lawyerWaiting && going()) {
           await Future<void>.delayed(const Duration(milliseconds: 400));
         }
-        if (!going()) return left + 1;
+        if (!going()) return 1;
         _progress(j.channel, '$label $done/$total');
         final panel = UyapCasePanelController(
           web: _web,
@@ -782,33 +804,46 @@ class PortalSync extends ChangeNotifier {
         );
         try {
           await panel.attach(linkOf(kase));
-          await panel.readSections(j.channel, wants);
-          if (panel.error == null && panel.outcomes.isNotEmpty) {
-            _keepRead(
-              db,
-              kase.key,
-              panel.record!,
-              web: j.channel == PortalChannel.uyapWeb,
-              whole: panel.whole,
-              outcomes: panel.outcomes,
-            );
-            if (wants.contains(CaseSection.parties)) changed.add(kase.key);
-          } else {
-            // The session gone: stopped, to go on when it is back.
-            if (!going()) return left + 1;
-            // Counted a try, so that it is not asked for without end.
-            db.saveSections(kase.key, j.channel, [
-              for (final s in wants) SectionOutcome(s, SectionResult.failed),
-            ]);
-            unawaited(SyncLog.note('$label: ${kase.number} okunamadı'));
+          // Counted again now: the lawyer may have read it meanwhile.
+          final wants = _jobWants(j, db.sections(kase.key));
+          if (wants.isNotEmpty && going()) {
+            await panel.readSections(j.channel, wants);
+            // A run let go of keeps nothing more.
+            if (!current()) return 1;
+            if (panel.outcomes.isNotEmpty && panel.record != null) {
+              // What came is kept, the session gone after it or not.
+              _keepRead(
+                db,
+                kase.key,
+                panel.record!,
+                web: j.channel == PortalChannel.uyapWeb,
+                whole: panel.whole && panel.error == null,
+                outcomes: panel.outcomes,
+              );
+              if (panel.outcomes.any(
+                (o) =>
+                    o.section == CaseSection.parties &&
+                    o.result == SectionResult.read,
+              )) {
+                changed.add(kase.key);
+              }
+            } else {
+              // The session gone: stopped, to go on when it is back.
+              if (!going()) return 1;
+              // Counted a try, so that it is not asked for without end.
+              db.saveSections(kase.key, j.channel, [
+                for (final s in wants) SectionOutcome(s, SectionResult.failed),
+              ]);
+              unawaited(SyncLog.note('$label: ${kase.number} okunamadı'));
+            }
+            portfolioVersion.value++;
           }
-          portfolioVersion.value++;
         } catch (e) {
           unawaited(SyncLog.note('$label: ${kase.number} hata: $e'));
         } finally {
           panel.dispose();
         }
-        if (_jobWants(j, db.sections(kase.key)).isNotEmpty) left++;
+        if (!going()) return 1;
         done++;
         jobProgress.value = UyapJobProgress(j.stage, done, total);
         await Future<void>.delayed(_caseGap);
@@ -817,7 +852,11 @@ class PortalSync extends ChangeNotifier {
       // Whose a deadline is, told again by the parties come.
       if (changed.isNotEmpty) await _partiesChanged(db, changed);
     }
-    return left;
+    // Counted at the end: one the lawyer read meanwhile is not left.
+    return [
+      for (final c in open)
+        if (_jobWants(j, db.sections(c.key)).isNotEmpty) c,
+    ].length;
   }
 
   /// Whether UYAP Mobil reads [kase]'s sections: a court's or the Council
@@ -1814,72 +1853,95 @@ class PortalSync extends ChangeNotifier {
       ))
         h.caseKey,
     };
-    final todo = <(PortalCase, Set<CaseSection>)>[];
-    for (final c in db.cases().values) {
-      if (archived.contains(c.key) || isClosedStatus(c.status?.value)) {
-        continue;
-      }
-      final web = [
-        for (final s in db.sections(c.key))
-          if (s.channel == PortalChannel.uyapWeb) s,
-      ];
-      // Never filled from the web: the lawyer's completion does it.
-      if (web.isEmpty) continue;
-      final stale = {
-        for (final s in web)
-          if ((!s.result.done && s.tries < _jobTries) ||
-              (s.succeeded != null &&
-                  now.difference(s.succeeded!) > const Duration(days: 7)))
+    // A case's web sections the web read before and older than a week,
+    // or failed; never filled from the web, the lawyer's completion does
+    // it. Counted when the case's turn comes.
+    Set<CaseSection> stale(String key) {
+      final at = DateTime.now();
+      return {
+        for (final s in db.sections(key))
+          if (s.channel == PortalChannel.uyapWeb &&
+              ((!s.result.done && s.tries < _jobTries) ||
+                  (s.succeeded != null &&
+                      at.difference(s.succeeded!) > const Duration(days: 7))))
             s.section,
       };
-      if (stale.isNotEmpty) todo.add((c, stale));
     }
-    todo.sort(
-      (a, b) => (soon.contains(a.$1.key) ? 0 : 1).compareTo(
-        soon.contains(b.$1.key) ? 0 : 1,
-      ),
-    );
-    for (final (kase, wants) in todo) {
-      if (count >= enrichPerDay) break;
-      if (!going()) return false;
-      while (UyapCasePanelController.lawyerWaiting && going()) {
-        await Future<void>.delayed(const Duration(milliseconds: 400));
-      }
-      final panel = UyapCasePanelController(
-        web: _web,
-        mobile: _mobile,
-        sync: this,
-        pause: Duration.zero,
-        background: true,
-      );
-      try {
-        await panel.attach(linkOf(kase));
-        await panel.readSections(PortalChannel.uyapWeb, wants);
-        if (panel.error == null && panel.outcomes.isNotEmpty) {
-          _keepRead(
-            db,
-            kase.key,
-            panel.record!,
-            web: true,
-            whole: panel.whole,
-            outcomes: panel.outcomes,
-          );
-        } else {
-          if (!going()) return false;
-          db.saveSections(kase.key, PortalChannel.uyapWeb, [
-            for (final s in wants) SectionOutcome(s, SectionResult.failed),
-          ]);
+
+    final todo =
+        [
+          for (final c in db.cases().values)
+            if (!archived.contains(c.key) &&
+                !isClosedStatus(c.status?.value) &&
+                stale(c.key).isNotEmpty)
+              c,
+        ]..sort(
+          (a, b) => (soon.contains(a.key) ? 0 : 1).compareTo(
+            soon.contains(b.key) ? 0 : 1,
+          ),
+        );
+    var through = true;
+    final changed = <String>{};
+    try {
+      for (final kase in todo) {
+        if (count >= enrichPerDay) break;
+        if (!going()) return false;
+        while (UyapCasePanelController.lawyerWaiting && going()) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
         }
-        portfolioVersion.value++;
-      } catch (_) {
-      } finally {
-        panel.dispose();
+        if (!going()) return false;
+        // Read meanwhile by the lawyer: not again.
+        final wants = stale(kase.key);
+        if (wants.isEmpty) continue;
+        final panel = UyapCasePanelController(
+          web: _web,
+          mobile: _mobile,
+          sync: this,
+          pause: Duration.zero,
+          background: true,
+        );
+        try {
+          await panel.attach(linkOf(kase));
+          await panel.readSections(PortalChannel.uyapWeb, wants);
+          if (panel.outcomes.isNotEmpty && panel.record != null) {
+            _keepRead(
+              db,
+              kase.key,
+              panel.record!,
+              web: true,
+              whole: panel.whole && panel.error == null,
+              outcomes: panel.outcomes,
+            );
+            if (panel.outcomes.any(
+              (o) =>
+                  o.section == CaseSection.parties &&
+                  o.result == SectionResult.read,
+            )) {
+              changed.add(kase.key);
+            }
+            if (panel.outcomes.any((o) => !o.result.done)) through = false;
+          } else {
+            through = false;
+            if (!going()) return false;
+            db.saveSections(kase.key, PortalChannel.uyapWeb, [
+              for (final s in wants) SectionOutcome(s, SectionResult.failed),
+            ]);
+          }
+          portfolioVersion.value++;
+        } catch (_) {
+          through = false;
+        } finally {
+          panel.dispose();
+        }
+        count++;
+        db.setMeta(dayKey, '$count');
+        await Future<void>.delayed(_caseGap);
       }
-      count++;
-      db.setMeta(dayKey, '$count');
-      await Future<void>.delayed(_caseGap);
+    } finally {
+      if (changed.isNotEmpty) await _partiesChanged(db, changed);
     }
-    return true;
+    // Not done for the day while one failed: tried again in two hours.
+    return through;
   }
 
   /// When the open cases were last enriched from the web of themselves.
@@ -1900,10 +1962,12 @@ class PortalSync extends ChangeNotifier {
     // reads only what it alone has, on its own clock.
     // [whole]: the setup on the web, which reads every list.
     final webOnly = !whole && _mobile.connected;
+    // The setup on the web ([whole]) is not held back by the rest: UYAP
+    // Mobil's reading before is not the web's lists.
     final (portfolioDue, rested) = _portfolioDue(
       db,
       full: force,
-      newCase: newCase || closed,
+      newCase: newCase || closed || whole,
       key: webOnly ? _webOnlyKey : _portfolioKey,
     );
     final hearingsDue = force || _hearingsDue(db, PortalChannel.uyapWeb);
@@ -1998,8 +2062,22 @@ class PortalSync extends ChangeNotifier {
         when now.difference(last) < const Duration(minutes: 3)) {
       return;
     }
-    // Taken at once: a second opening meanwhile does not read it too.
-    _openedAt[key] = now;
+    // A second opening meanwhile does not read it too.
+    if (!_opening.add(key)) return;
+    try {
+      await _readOpened(panel, key, now);
+    } finally {
+      _opening.remove(key);
+    }
+  }
+
+  final _opening = <String>{};
+
+  Future<void> _readOpened(
+    UyapCasePanelController panel,
+    String key,
+    DateTime now,
+  ) async {
     final db = await _database();
     Set<CaseSection> stale(PortalChannel channel) {
       final kept = {
@@ -2359,6 +2437,10 @@ class PortalSync extends ChangeNotifier {
         if (_mobile.connected) PortalChannel.uyapMobile,
         if (_web.connected) PortalChannel.uyapWeb,
       ];
+      // This scan's own results, not an earlier reading's.
+      for (final c in channels) {
+        _listWhole.remove(c);
+      }
       await Future.wait([
         for (final c in channels)
           c == PortalChannel.uyapMobile

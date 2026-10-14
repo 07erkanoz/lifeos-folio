@@ -483,11 +483,19 @@ class UyapCasePanelController extends ChangeNotifier {
       // Each section on its own: one that fails leaves the others read,
       // and is kept failed. The web gone, the reading stops, as before.
       final failed = <CaseSection>{};
+      // The session gone midway: what came before is kept, the rest is not
+      // asked, and the reading ends in an error.
+      var lost = false;
       Future<T?> part<T>(CaseSection section, Future<T> Function() read) async {
+        if (lost) {
+          failed.add(section);
+          whole = false;
+          return null;
+        }
         try {
           return await read();
         } catch (_) {
-          if (!web.connected) rethrow;
+          if (!web.connected) lost = true;
           failed.add(section);
           whole = false;
           return null;
@@ -564,6 +572,10 @@ class UyapCasePanelController extends ChangeNotifier {
       UyapCaseMoney? money;
       if (!only.contains(CaseSection.money)) {
         // Not asked for: kept as it was.
+      } else if (lost) {
+        sections.add(
+          const SectionOutcome(CaseSection.money, SectionResult.failed),
+        );
       } else if (typeCode != null &&
           permissions.allows('tahsilat_reddiyat_bilgileri')) {
         busy = 'Harç ve tahsilat bilgileri çekiliyor';
@@ -594,9 +606,11 @@ class UyapCasePanelController extends ChangeNotifier {
       // says it shows them, neither asks a quota.
       UyapEnforcement? enforcement;
       final account =
+          !lost &&
           only.contains(CaseSection.account) &&
           (permissions.allowed?.contains('hesap_bilgileri') ?? false);
       final debtorsShown =
+          !lost &&
           only.contains(CaseSection.debtors) &&
           (permissions.allowed?.contains('borclu_bilgileri') ?? false);
       if (account || debtorsShown) {
@@ -650,7 +664,9 @@ class UyapCasePanelController extends ChangeNotifier {
         sections.add(
           SectionOutcome(
             section,
-            !told && icra ? SectionResult.failed : SectionResult.notShown,
+            lost || (!told && icra)
+                ? SectionResult.failed
+                : SectionResult.notShown,
           ),
         );
       }
@@ -676,6 +692,7 @@ class UyapCasePanelController extends ChangeNotifier {
         for (final s in sections)
           if (only.contains(s.section)) s,
       ];
+      if (lost) throw StateError('UYAP Web oturumu kapandı.');
     });
   }
 
