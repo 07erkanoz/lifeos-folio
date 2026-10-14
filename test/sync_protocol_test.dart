@@ -106,6 +106,25 @@ void main() {
       expect(again.tick() > made, isTrue);
     });
 
+    test('a counter past its width carries into the millisecond: written '
+        'and read back in order', () {
+      final wall = DateTime.utc(2026, 10, 14, 9);
+      final ms = wall.millisecondsSinceEpoch;
+      final clock = HlcClock(
+        source: 'a:0',
+        l: ms,
+        c: Hlc.maxCounter,
+        now: () => wall,
+      );
+      final next = clock.tick();
+      expect((next.l, next.c), (ms + 1, 0));
+      final seen = HlcClock(source: 'a:0', now: () => wall)
+        ..receive(Hlc(ms, Hlc.maxCounter, 'b:0'));
+      expect((seen.last.l, seen.last.c), (ms + 1, 0));
+      expect(Hlc.tryParse('${Hlc(ms, Hlc.maxCounter, 'b:0')}'), isNotNull);
+      expect('${Hlc(ms, Hlc.maxCounter, 'b')}'.compareTo('$next') < 0, isTrue);
+    });
+
     test('versions are ordered by time, counter and device, and read back', () {
       const a = Hlc(5, 0, 'b:0'), b = Hlc(5, 1, 'a:0'), c = Hlc(5, 1, 'b:0');
       expect([c, a, b]..sort(), [a, b, c]);
@@ -173,15 +192,14 @@ void main() {
     setUp(() => dir = Directory.systemTemp.createTempSync('folio_nesil_'));
     tearDown(() => dir.deleteSync(recursive: true));
 
-    test('a database that came back from a backup writes in a new '
-        'generation: no version made before it is made again', () async {
+    test('a database put back from a backup taken while Folio ran writes '
+        'after every version made before it', () async {
       final path = '${dir.path}/portal.sqlite';
       final outside = File('${dir.path}/senkron-nesil.json');
       var db = PortalDatabase.open(path);
-      expect((await SyncGeneration.count(db, outside)).generation, 0);
-      expect((await SyncGeneration.count(db, outside)).restored, isFalse);
+      await SyncGeneration.count(db, outside);
       final wall = DateTime.utc(2026, 10, 14, 9);
-      // The backup taken now.
+      // The backup taken now; then a version made and sent.
       db.backupTo('${dir.path}/yedek.sqlite');
       final sent = SyncGeneration.clockFor(
         db,
@@ -189,25 +207,35 @@ void main() {
         now: () => wall,
       ).tick();
       db.dispose();
-      // The database put back, opened again: a new generation, and the
-      // same moment gives another version.
       File('${dir.path}/yedek.sqlite').copySync(path);
       db = PortalDatabase.open(path);
-      final back = await SyncGeneration.count(db, outside);
-      expect(back.restored, isTrue);
-      expect(back.generation, 1);
+      await SyncGeneration.count(db, outside);
+      // The same moment again: after the one sent, from the bound kept
+      // beside the database.
       final after = SyncGeneration.clockFor(
         db,
         deviceId: 'a',
         now: () => wall,
       ).tick();
-      // The clock goes on from the file's mark, and the generation is new:
-      // after the version sent, never the same.
       expect(after > sent, isTrue);
-      expect(after.source, 'a:1');
-      // Opened again as it is: no new generation.
+      db.dispose();
+    });
+
+    test('a database behind an opening came back from a backup: a new '
+        'generation; the same backup put back twice, another', () async {
+      final path = '${dir.path}/portal.sqlite';
+      final outside = File('${dir.path}/senkron-nesil.json');
+      var db = PortalDatabase.open(path);
+      expect((await SyncGeneration.count(db, outside)).generation, 0);
+      db.backupTo('${dir.path}/yedek.sqlite');
+      expect((await SyncGeneration.count(db, outside)).restored, isFalse);
+      db.dispose();
+      File('${dir.path}/yedek.sqlite').copySync(path);
+      db = PortalDatabase.open(path);
+      final back = await SyncGeneration.count(db, outside);
+      expect((back.restored, back.generation), (true, 1));
+      expect(SyncGeneration.sourceOf(db, 'a'), 'a:1');
       expect((await SyncGeneration.count(db, outside)).generation, 1);
-      // The same old backup put back a second time: another.
       db.dispose();
       File('${dir.path}/yedek.sqlite').copySync(path);
       db = PortalDatabase.open(path);
@@ -215,21 +243,44 @@ void main() {
       db.dispose();
     });
 
+    test('the file lost with its copy: not known what came after, so a new '
+        'generation with an epoch of its own; two such returns never write '
+        'as the same source', () async {
+      final path = '${dir.path}/portal.sqlite';
+      final outside = File('${dir.path}/senkron-nesil.json');
+      var db = PortalDatabase.open(path);
+      await SyncGeneration.count(db, outside);
+      db.backupTo('${dir.path}/yedek.sqlite');
+      db.dispose();
+      final sources = <String>{};
+      for (var i = 0; i < 2; i++) {
+        for (final f in dir.listSync()) {
+          if (f.path.contains('senkron-nesil')) f.deleteSync();
+        }
+        File('${dir.path}/yedek.sqlite').copySync(path);
+        db = PortalDatabase.open(path);
+        final back = await SyncGeneration.count(db, outside);
+        expect(back.restored, isTrue);
+        sources.add(SyncGeneration.sourceOf(db, 'a'));
+        db.dispose();
+      }
+      expect(sources, hasLength(2));
+    });
+
     test(
-      'an opening cut between the two writes costs a generation, nothing '
-      'else; a database with no file beside it is not trusted either',
+      'a file written half, or not at all, is read from the copy kept of '
+      'it; a database never opened, with no file, is generation nought',
       () async {
         final db = PortalDatabase.memory();
         addTearDown(db.dispose);
         final outside = File('${dir.path}/senkron-nesil.json');
         await SyncGeneration.count(db, outside);
-        // The file written, the database not: as if cut off.
-        outside.writeAsStringSync('{"sayac": 5, "nesil": 0}');
-        expect((await SyncGeneration.count(db, outside)).generation, 1);
-        // The file lost (a new install beside an old database).
-        outside.deleteSync();
-        expect((await SyncGeneration.count(db, outside)).generation, 2);
-        // A database never opened, with no file: generation nought.
+        await SyncGeneration.count(db, outside);
+        // Cut while written: the file is broken; the one before it stands.
+        outside.writeAsStringSync('{"sayac": 9');
+        final next = await SyncGeneration.count(db, outside);
+        expect(next.restored, isFalse);
+        expect(next.generation, 0);
         final fresh = PortalDatabase.memory();
         addTearDown(fresh.dispose);
         final none = File('${dir.path}/yok/senkron-nesil.json');
@@ -237,6 +288,33 @@ void main() {
         expect((first.generation, first.restored), (0, false));
       },
     );
+
+    test('the bound beside the database is moved on only past it: a minute '
+        'of versions writes the file once', () async {
+      final db = PortalDatabase.memory();
+      addTearDown(db.dispose);
+      final outside = File('${dir.path}/senkron-nesil.json');
+      await SyncGeneration.count(db, outside);
+      var wall = DateTime.utc(2026, 10, 14, 9);
+      final clock = SyncGeneration.clockFor(
+        db,
+        deviceId: 'a',
+        outside: outside,
+        now: () => wall,
+      );
+      clock.tick();
+      final first = outside.lastModifiedSync();
+      final written = outside.readAsStringSync();
+      for (var i = 0; i < 50; i++) {
+        wall = wall.add(const Duration(milliseconds: 100));
+        clock.tick();
+      }
+      expect(outside.readAsStringSync(), written);
+      expect(outside.lastModifiedSync(), first);
+      wall = wall.add(const Duration(minutes: 2));
+      clock.tick();
+      expect(outside.readAsStringSync(), isNot(written));
+    });
   });
 
   group('the migration (R0)', () {
@@ -292,6 +370,18 @@ void main() {
       );
       expect(db.meta('yarim'), isNull);
       expect(SyncMigration.schemaOf(db), 0);
+      // Run again with the step mended: it completes.
+      expect(
+        SyncMigration.run(
+          db,
+          using: [
+            SyncMigrationStep(2, 'tam', (db) => db.setMeta('yarim', 'hayir')),
+          ],
+        ),
+        isTrue,
+      );
+      expect(db.meta('yarim'), 'hayir');
+      expect(SyncMigration.schemaOf(db), 2);
     });
 
     test('with nothing to change, the schema is the base one, and no copy', () {
@@ -423,7 +513,7 @@ void main() {
         kept['dizustu']!.clear();
         kept['telefon']!.clear();
         SyncCaps.active = {SyncCaps.hlc};
-        phone.saysNoCapsForTesting = true;
+        phone.actsOldForTesting = true;
         for (var round = 0; round < 2; round++) {
           await laptop.syncOwn();
         }
@@ -434,8 +524,18 @@ void main() {
         expect(laptop.stoppedParts[phone.self!.deviceId], {
           'ajanda': {SyncCaps.hlc},
         });
+        // The old Folio starting: it sends every part at once, the agenda
+        // too; this one takes the profile, not the agenda, and sends back
+        // no agenda.
+        kept['dizustu']!.clear();
+        kept['telefon']!.clear();
+        await phone.syncOwn();
+        expect(kept['dizustu']!.containsKey('ajanda'), isFalse);
+        expect(kept['dizustu']!['profil'], {'kimden': 'telefon'});
+        expect(kept['telefon']!.containsKey('ajanda'), isFalse);
+        expect(kept['telefon']!['profil'], {'kimden': 'dizustu'});
         // Updated, it is kept alike again.
-        phone.saysNoCapsForTesting = false;
+        phone.actsOldForTesting = false;
         await laptop.syncOwn();
         await laptop.syncOwn();
         expect(kept['telefon']!['ajanda'], {'kimden': 'dizustu'});

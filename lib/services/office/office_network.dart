@@ -487,10 +487,17 @@ class OfficeNetwork extends ChangeNotifier {
   /// says of it.
   final stoppedParts = <String, Map<String, Set<String>>>{};
 
-  /// Whether [part] may go to and come from [deviceId]; noted in
-  /// [stoppedParts] either way.
-  bool _partWith(String deviceId, String part) {
-    final lacking = SyncCaps.missing(part, peerCaps[deviceId] ?? const {});
+  /// Whether [part] may go to and come from [deviceId], by what it said in
+  /// this exchange ([said]), not by what it said before; noted in
+  /// [stoppedParts] either way. A Folio that gives no protocol of this one
+  /// is sent and taken no part whose format needs anything (R0).
+  bool _partWith(String deviceId, String part, SyncSaid said) {
+    final needs = SyncCaps.needs(part);
+    final lacking = needs.isEmpty
+        ? const <String>{}
+        : said.protocol < SyncCaps.protocol
+        ? needs
+        : needs.difference(said.caps);
     final stopped = stoppedParts.putIfAbsent(deviceId, () => {});
     if (lacking.isEmpty) {
       stopped.remove(part);
@@ -500,15 +507,26 @@ class OfficeNetwork extends ChangeNotifier {
     return false;
   }
 
-  /// For tests: a Folio from before capabilities, which says none.
+  /// For tests: a Folio from before capabilities, as it was: it says
+  /// nothing of itself, sends every part at once, takes whatever comes and
+  /// knows no second step.
   @visibleForTesting
-  bool saysNoCapsForTesting = false;
+  bool actsOldForTesting = false;
 
   Map<String, Object?> get _said =>
-      saysNoCapsForTesting ? const {} : SyncCaps.said;
+      actsOldForTesting ? const {} : SyncCaps.said;
 
-  void _heard(String deviceId, Map<Object?, Object?> m) =>
-      peerCaps[deviceId] = SyncCaps.of(m).caps;
+  /// What [m] says its sender can do, kept for the Senkron page; the
+  /// exchange decides by what it returns.
+  SyncSaid _heard(String deviceId, Map<Object?, Object?> m) {
+    final said = SyncCaps.of(m);
+    peerCaps[deviceId] = said.caps;
+    return said;
+  }
+
+  /// The next message on [ch], listened for from now: a broadcast stream
+  /// gives none to who was not listening.
+  static _Next _next(OfficeChannel ch) => _Next(ch.messages);
 
   /// Whether this device's person sees the clients' money: alone, with no
   /// office, always; in one, a manager or one a manager let.
@@ -534,38 +552,43 @@ class OfficeNetwork extends ChangeNotifier {
         // Shut however it ends: a reply that never came or a send that
         // failed would otherwise leave the socket open. A part whose
         // format needs something of the other goes in a second step, once
-        // the other has said it has it (as Senkron does).
+        // the other has said in this exchange that it has it (R0).
         try {
           unawaited(_metOwn(ch));
+          final old = actsOldForTesting;
           final plain = SyncCaps.needs(e.key).isEmpty;
-          final reply = ch.messages.first.timeout(const Duration(seconds: 20))
-            ..ignore();
+          final reply = _next(ch);
           await ch.send({
             't': 'buro-parca',
             ..._said,
             'ad': e.key,
-            'veri': plain && _partWith(peer.deviceId, e.key)
-                ? await e.value.export(peer.deviceId)
-                : null,
+            'veri': old || plain ? await e.value.export(peer.deviceId) : null,
           });
-          final m = await reply;
-          _heard(peer.deviceId, m);
-          final may = _partWith(peer.deviceId, e.key);
+          final m = await reply.within(const Duration(seconds: 20));
+          // Only the answer to this part's: of its kind, and of this part
+          // where it says.
+          if (m == null ||
+              m['t'] != 'buro-parca' ||
+              (m['ad'] != null && m['ad'] != e.key)) {
+            continue;
+          }
+          final said = _heard(peer.deviceId, m);
+          final may = old || _partWith(peer.deviceId, e.key, said);
           if (may &&
               m['veri'] != null &&
               await e.value.merge(m['veri'], peer.deviceId)) {
             notifyListeners();
           }
-          if (!saysNoCapsForTesting && SyncCaps.of(m).protocol >= 2) {
-            final done = ch.messages.first.timeout(const Duration(seconds: 40))
-              ..ignore();
+          if (!old && said.protocol >= SyncCaps.protocol) {
+            final done = _next(ch);
             await ch.send({
               't': 'buro-parca-ek',
+              'ad': e.key,
               'veri': !plain && may
                   ? await e.value.export(peer.deviceId)
                   : null,
             });
-            await done;
+            await done.within(const Duration(seconds: 40));
           }
         } finally {
           await ch.close();
@@ -833,14 +856,20 @@ class OfficeNetwork extends ChangeNotifier {
     }
   }
 
-  /// The own parts that may go to [to]. [plain]: only those whose format
-  /// needs nothing of the other (true), only those that do (false), all
-  /// (null). What needs something goes only once [to] has said, in the
-  /// same exchange, that it has it (see [_syncOwnWith]).
-  Future<Map<String, Object?>> _ownParts(String to, {bool? plain}) async => {
+  /// The own parts that may go to [to], by what it said in this exchange
+  /// ([said]). [plain]: only those whose format needs nothing of the other
+  /// (true), only those that do (false), all (null). What needs something
+  /// goes only once [to] has said, in the same exchange, that it has it
+  /// (see [_syncOwnWith]).
+  Future<Map<String, Object?>> _ownParts(
+    String to,
+    SyncSaid said, {
+    bool? plain,
+  }) async => {
     for (final e in ownParts.entries)
-      if ((plain == null || SyncCaps.needs(e.key).isEmpty == plain) &&
-          _partWith(to, e.key))
+      if (actsOldForTesting ||
+          (plain == null || SyncCaps.needs(e.key).isEmpty == plain) &&
+              _partWith(to, e.key, said))
         e.key: await e.value.export().then<Object?>(
           (v) => v,
           onError: (Object e) {
@@ -850,12 +879,12 @@ class OfficeNetwork extends ChangeNotifier {
         ),
   };
 
-  Future<void> _ownCame(Object? theirs, String from) async {
+  Future<void> _ownCame(Object? theirs, String from, SyncSaid said) async {
     if (theirs is! Map) return;
     for (final e in ownParts.entries) {
       if (!theirs.containsKey(e.key)) continue;
       // Not taken from a device whose Folio lacks what its format needs.
-      if (!_partWith(from, e.key)) continue;
+      if (!actsOldForTesting && !_partWith(from, e.key, said)) continue;
       _ownMerging.add((part: e.key, done: false));
       try {
         await e.value.merge(theirs[e.key]);
@@ -892,34 +921,43 @@ class OfficeNetwork extends ChangeNotifier {
       );
       // Two steps (docs/senkron-plan.md R0): what needs nothing of the
       // other goes first, with what this Folio can do; what needs
-      // something goes only after the other has said, now, that it has
-      // it. A Folio from before capabilities says nothing and is sent no
-      // second step.
+      // something goes only after the other has said, in this exchange,
+      // that it has it. A Folio from before capabilities says nothing and
+      // is sent no second step. Kept alike only when every step came.
+      var whole = false;
       try {
         unawaited(_metOwn(ch));
         if (!ch.vouched) return;
-        final reply = ch.messages.first.timeout(const Duration(seconds: 20))
-          ..ignore();
+        final old = actsOldForTesting;
+        final reply = _next(ch);
         await ch.send({
           't': 'senkron',
           ..._said,
-          'parcalar': _pack(await _ownParts(peer.deviceId, plain: true)),
+          'parcalar': _pack(
+            await _ownParts(peer.deviceId, SyncCaps.nothing, plain: true),
+          ),
         });
-        final m = await reply;
-        _heard(peer.deviceId, m);
-        await _ownCame(_unpack(m['parcalar']), peer.deviceId);
-        if (!saysNoCapsForTesting && SyncCaps.of(m).protocol >= 2) {
-          final done = ch.messages.first.timeout(const Duration(seconds: 40))
-            ..ignore();
+        final m = await reply.within(const Duration(seconds: 20));
+        if (m == null || m['t'] != 'senkron') return;
+        final said = _heard(peer.deviceId, m);
+        await _ownCame(_unpack(m['parcalar']), peer.deviceId, said);
+        whole = true;
+        if (!old && said.protocol >= SyncCaps.protocol) {
+          final done = _next(ch);
           await ch.send({
             't': 'senkron-ek',
-            'parcalar': _pack(await _ownParts(peer.deviceId, plain: false)),
+            'parcalar': _pack(
+              await _ownParts(peer.deviceId, said, plain: false),
+            ),
           });
-          await done;
+          final ack = await done.within(const Duration(seconds: 40));
+          whole =
+              ack != null && ack['t'] == 'senkron-ek' && ack['tamam'] == true;
         }
       } finally {
         await ch.close();
       }
+      if (!whole) return;
       synced[peer.deviceId] = DateTime.now();
       notifyListeners();
     } catch (_) {}
@@ -1074,42 +1112,55 @@ class OfficeNetwork extends ChangeNotifier {
       }
       if (m['t'] == 'buro-parca') {
         // An office part another member sends: taken where it is on here,
-        // and this one's sent back, made for them.
+        // and this one's sent back, made for them; what needs something
+        // of the other in a second step (R0).
         final from = ch.peer.deviceId;
-        _heard(from, m);
+        final said = _heard(from, m);
         final name = '${m['ad']}';
         final part = officeParts[name];
-        final next = !saysNoCapsForTesting && SyncCaps.of(m).protocol >= 2
-            ? ch.messages.first
-                  .timeout(const Duration(seconds: 40))
-                  .then<Map<String, Object?>?>((w) => w)
-                  .catchError((Object _) => null)
+        final old = actsOldForTesting;
+        final next = !old && said.protocol >= SyncCaps.protocol
+            ? _next(ch)
             : null;
-        Object? mine;
-        final may =
-            part != null &&
-            ledger.member(from) != null &&
-            _partWith(from, name);
-        if (may) {
-          if (m['veri'] != null && await part.merge(m['veri'], from)) {
-            notifyListeners();
-          }
-          mine = await part.export(from);
-        }
-        await ch.send({'t': 'buro-parca', ..._said, 'veri': mine});
-        if (next != null) {
-          final more = await next;
-          if (more != null && more['t'] == 'buro-parca-ek') {
-            if (may &&
-                more['veri'] != null &&
-                await part.merge(more['veri'], from)) {
+        try {
+          final may =
+              part != null &&
+              ledger.member(from) != null &&
+              (old || _partWith(from, name, said));
+          Object? mine;
+          if (may) {
+            if (m['veri'] != null && await part.merge(m['veri'], from)) {
               notifyListeners();
             }
-            await ch.send({'t': 'buro-parca-ek'});
+            mine = await part.export(from);
           }
+          await ch.send({
+            't': 'buro-parca',
+            ..._said,
+            'ad': name,
+            'veri': mine,
+          });
+          if (next != null) {
+            final more = await next.within(const Duration(seconds: 40));
+            if (more != null &&
+                more['t'] == 'buro-parca-ek' &&
+                more['ad'] == name) {
+              if (may &&
+                  more['veri'] != null &&
+                  await part.merge(more['veri'], from)) {
+                notifyListeners();
+              }
+              await ch.send({'t': 'buro-parca-ek', 'ad': name, 'tamam': true});
+            }
+          }
+        } catch (_) {
+          // A part that would not merge: told by the other's waiting in
+          // vain; the channel is shut all the same.
+        } finally {
+          next?.cancel();
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          await ch.close();
         }
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-        await ch.close();
         return;
       }
       if (m['t'] == 'kendi') {
@@ -1155,33 +1206,41 @@ class OfficeNetwork extends ChangeNotifier {
           return;
         }
         final from = ch.peer.deviceId;
-        _heard(from, m);
+        final said = _heard(from, m);
+        final old = actsOldForTesting;
         // The second step comes when both said what they can do; listened
         // for before the answer goes, which it follows.
-        final next = !saysNoCapsForTesting && SyncCaps.of(m).protocol >= 2
-            ? ch.messages.first
-                  .timeout(const Duration(seconds: 40))
-                  .then<Map<String, Object?>?>((w) => w)
-                  .catchError((Object _) => null)
+        final next = !old && said.protocol >= SyncCaps.protocol
+            ? _next(ch)
             : null;
-        await _ownCame(_unpack(m['parcalar']), from);
-        // What it said it can do is known now: all that may go.
-        await ch.send({
-          't': 'senkron',
-          ..._said,
-          'parcalar': _pack(await _ownParts(from)),
-        });
-        if (next != null) {
-          final more = await next;
-          if (more != null && more['t'] == 'senkron-ek') {
-            await _ownCame(_unpack(more['parcalar']), from);
-            await ch.send({'t': 'senkron-ek'});
+        try {
+          await _ownCame(_unpack(m['parcalar']), from, said);
+          // What it said it can do is known now: all that may go.
+          await ch.send({
+            't': 'senkron',
+            ..._said,
+            'parcalar': _pack(await _ownParts(from, said)),
+          });
+          var whole = true;
+          if (next != null) {
+            final more = await next.within(const Duration(seconds: 40));
+            whole = more != null && more['t'] == 'senkron-ek';
+            if (whole) {
+              await _ownCame(_unpack(more['parcalar']), from, said);
+              await ch.send({'t': 'senkron-ek', 'tamam': true});
+            }
           }
+          if (whole) {
+            synced[from] = DateTime.now();
+            notifyListeners();
+          }
+        } catch (_) {
+          // Not kept alike this time; the channel is shut all the same.
+        } finally {
+          next?.cancel();
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          await ch.close();
         }
-        synced[ch.peer.deviceId] = DateTime.now();
-        notifyListeners();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-        await ch.close();
         return;
       }
       if (m['t'] == 'defter') {
@@ -3046,4 +3105,30 @@ class OwnPart {
 
   /// True when anything here changed.
   final Future<bool> Function(Object? theirs) merge;
+}
+
+/// The next message of a channel, listened for from when it was made: a
+/// broadcast stream keeps none for who was not listening. Waited for
+/// [within] a time counted from when it is asked, given up after.
+class _Next {
+  _Next(Stream<Map<String, Object?>> messages) {
+    _sub = messages.listen((m) {
+      if (!_got.isCompleted) _got.complete(m);
+      cancel();
+    });
+  }
+
+  final _got = Completer<Map<String, Object?>>();
+  late final StreamSubscription<Map<String, Object?>> _sub;
+
+  void cancel() => unawaited(_sub.cancel());
+
+  /// The message, or null when none came in [time].
+  Future<Map<String, Object?>?> within(Duration time) => _got.future
+      .timeout(time)
+      .then<Map<String, Object?>?>((m) => m)
+      .catchError((Object _) {
+        cancel();
+        return null;
+      });
 }

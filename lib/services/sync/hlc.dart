@@ -19,6 +19,10 @@ class Hlc implements Comparable<Hlc> {
 
   static const zero = Hlc(0, 0, '');
 
+  /// The largest counter: past it the clock's millisecond goes on by one,
+  /// so that a version is always written in [toString]'s width.
+  static const maxCounter = 99999;
+
   /// The source of versions made of old timestamps.
   static const migrated = 'goc';
 
@@ -131,8 +135,17 @@ class HlcClock {
     } else {
       _c++;
     }
+    _bound();
     _persist?.call(_l, _c);
     return Hlc(_l, _c, _source);
+  }
+
+  /// A counter past [Hlc.maxCounter] carried into the millisecond.
+  void _bound() {
+    if (_c > Hlc.maxCounter) {
+      _l++;
+      _c = 0;
+    }
   }
 
   /// [remote], a version another device made, seen here: what is written
@@ -152,6 +165,7 @@ class HlcClock {
     }
     _l = l;
     _c = c;
+    _bound();
     _persist?.call(_l, _c);
   }
 }

@@ -1,3 +1,7 @@
+/// What a Folio said of itself in one exchange: its protocol and the
+/// capabilities it has.
+typedef SyncSaid = ({int protocol, Set<String> caps});
+
 /// What a Folio says it can do when it keeps things alike with another
 /// (docs/senkron-plan.md R0, §4.1): its protocol, and the capabilities it
 /// knows. A part whose format here needs a capability the other device
@@ -66,9 +70,12 @@ abstract final class SyncCaps {
     'yetenek': known.toList()..sort(),
   };
 
+  /// What one says before the other has said anything.
+  static const SyncSaid nothing = (protocol: 1, caps: <String>{});
+
   /// What [message] says the other Folio has: nothing when it says
   /// nothing, as one before capabilities did.
-  static ({int protocol, Set<String> caps}) of(Map<Object?, Object?> message) {
+  static SyncSaid of(Map<Object?, Object?> message) {
     final version = message['surum'];
     final caps = message['yetenek'];
     return (

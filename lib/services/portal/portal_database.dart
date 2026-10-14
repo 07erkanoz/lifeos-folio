@@ -284,30 +284,43 @@ class PortalDatabase {
       PortalDatabase._(sqlite3.open(path));
 
   static PortalDatabase? _shared;
+  static Future<PortalDatabase>? _opening;
 
-  /// The one in Folio's data folder.
-  static Future<PortalDatabase> shared() async {
-    if (_shared != null) return _shared!;
+  /// The one in Folio's data folder, opened once however many ask at once.
+  /// It is given only once the sync's schema is current and this opening
+  /// counted (docs/senkron-plan.md R0, R2); either failing, it is closed
+  /// and the failure told, nothing written.
+  static Future<PortalDatabase> shared() {
+    final shared = _shared;
+    if (shared != null) return Future.value(shared);
+    return _opening ??= _openShared().then(
+      (db) => _shared = db,
+      onError: (Object e, StackTrace st) {
+        _opening = null;
+        Error.throwWithStackTrace(e, st);
+      },
+    );
+  }
+
+  static Future<PortalDatabase> _openShared() async {
     final dir = Directory(
       p.join((await folioSupportDirectory()).path, 'portal'),
     );
     await dir.create(recursive: true);
     final db = open(p.join(dir.path, 'portal.sqlite'));
-    // The sync's schema made current, a copy put aside first; and this
-    // opening counted, for the generation its versions are written in
-    // (docs/senkron-plan.md R0, R2).
     try {
       SyncMigration.run(db, backups: Directory(p.join(dir.path, 'yedek')));
-    } catch (_) {}
-    try {
       await SyncGeneration.count(
         db,
         File(
           p.join((await folioSupportDirectory()).path, 'senkron-nesil.json'),
         ),
       );
-    } catch (_) {}
-    return _shared = db;
+    } catch (_) {
+      db.dispose();
+      rethrow;
+    }
+    return db;
   }
 
   void dispose() => _db.dispose();
