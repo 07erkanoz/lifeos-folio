@@ -140,7 +140,11 @@ class ReadAloud extends ChangeNotifier {
     } catch (e) {
       if (run != _run) return;
       _error = '$e';
+      // Let go of, not only forgotten: a voice that loaded is an isolate of
+      // its own, and each try would leave one more.
+      final voice = _voice;
       _voice = null;
+      unawaited(voice?.then((v) => v.dispose(), onError: (Object _) {}));
     }
     if (run != _run) return;
     _finish();
@@ -226,12 +230,17 @@ class Dictation extends ChangeNotifier {
   StreamSubscription<String>? _texts;
   StreamSubscription<bool>? _busy;
 
+  /// Each start's turn: one begun again, or stopped, while it loaded goes
+  /// no further (else two would listen, and write each word twice).
+  int _run = 0;
+
   Future<void> start({
     required String modelDir,
     required ValueChanged<String> onText,
     Object? owner,
   }) async {
     await stop();
+    final run = ++_run;
     _unload?.cancel();
     _owner = owner;
     _error = null;
@@ -244,7 +253,7 @@ class Dictation extends ChangeNotifier {
       }
       _earDir = modelDir;
       final ear = await (_ear ??= _openEar(modelDir));
-      if (_state != ListenState.loading) return;
+      if (run != _run || _state != ListenState.loading) return;
       _texts = ear.texts.listen(
         onText,
         onError: (Object e) {
@@ -257,22 +266,26 @@ class Dictation extends ChangeNotifier {
         notifyListeners();
       });
       final samples = await _microphone.open(ListenWorker.sampleRate);
-      if (_state != ListenState.loading) {
-        await _microphone.close();
+      if (run != _run || _state != ListenState.loading) {
+        if (run == _run) await _microphone.close();
         return;
       }
       _heard = samples.listen(ear.feed);
       _state = ListenState.listening;
       notifyListeners();
     } catch (e) {
+      if (run != _run) return;
       _error = 'Mikrofon açılamadı: $e';
+      final ear = _ear;
       _ear = null;
+      unawaited(ear?.then((e) => e.dispose(), onError: (Object _) {}));
       await _close();
     }
   }
 
   Future<void> stop() async {
     if (_state == ListenState.idle) return;
+    _run++;
     final wasListening = _state == ListenState.listening;
     _state = ListenState.idle;
     notifyListeners();

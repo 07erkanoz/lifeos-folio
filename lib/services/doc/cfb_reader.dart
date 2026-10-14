@@ -72,10 +72,16 @@ class _Cfb {
       if (sector == endOfChain || sector == free) break;
       fatSectors.add(sector);
     }
+    // Each chain stops at a sector seen before: a damaged file's chain that
+    // runs in a circle would fill the memory, the archive's reading with it.
     var difat = difatStart;
+    final difatSeen = <int>{};
     for (
       var i = 0;
-      i < difatCount && difat != endOfChain && difat != free;
+      i < difatCount &&
+          difat != endOfChain &&
+          difat != free &&
+          difatSeen.add(difat);
       i++
     ) {
       final base = _offset(difat);
@@ -97,9 +103,9 @@ class _Cfb {
     if (fat.isEmpty) throw const FormatException('Yerleşim tablosu boş.');
 
     var sector = miniFatStart;
-    var guard = 0;
+    final miniSeen = <int>{};
     while (sector != endOfChain && sector != free && sector < fat.length) {
-      if (guard++ > 1 << 20) break;
+      if (!miniSeen.add(sector)) break;
       final base = _offset(sector);
       if (base + sectorSize > bytes.length) break;
       for (var i = 0; i < perSector; i++) {
@@ -108,7 +114,8 @@ class _Cfb {
       sector = fat[sector];
     }
 
-    final directory = _chain(directoryStart, 1 << 28);
+    // Nothing in the file is longer than the file.
+    final directory = _chain(directoryStart, bytes.length);
     final entries = <({String name, int type, int start, int size})>[];
     for (var at = 0; at + 128 <= directory.length; at += 128) {
       final view = ByteData.sublistView(directory, at, at + 128);
@@ -142,11 +149,12 @@ class _Cfb {
   }
 
   Uint8List _chain(int start, int size) {
+    if (size > bytes.length) size = bytes.length;
     final out = BytesBuilder();
     var sector = start;
-    var guard = 0;
+    final seen = <int>{};
     while (sector != endOfChain && sector != free && sector < fat.length) {
-      if (guard++ > 1 << 22 || out.length >= size) break;
+      if (!seen.add(sector) || out.length >= size) break;
       final base = _offset(sector);
       if (base >= bytes.length) break;
       final end = base + sectorSize > bytes.length
@@ -162,9 +170,9 @@ class _Cfb {
   Uint8List _miniChain(int start, int size, Uint8List host) {
     final out = BytesBuilder();
     var sector = start;
-    var guard = 0;
+    final seen = <int>{};
     while (sector != endOfChain && sector != free && sector < miniFat.length) {
-      if (guard++ > 1 << 22 || out.length >= size) break;
+      if (!seen.add(sector) || out.length >= size) break;
       final base = sector * miniSectorSize;
       if (base >= host.length) break;
       final end = base + miniSectorSize > host.length

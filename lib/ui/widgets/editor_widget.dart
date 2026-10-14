@@ -3496,8 +3496,9 @@ class _EditorWidgetState extends State<EditorWidget>
 
   /// Süre ekle: a deadline in the agenda, for the document's case.
   Future<void> _addDeadline() async {
-    final title = TextEditingController(text: 'Süre — $_documentName');
-    final note = TextEditingController();
+    // The fields keep their own text: a controller let go of as the dialog
+    // returns is still in use while it fades out.
+    var title = 'Süre — $_documentName', note = '';
     var day = DateTime.now().add(const Duration(days: 14));
     final link = _uyap.link;
     final saved = await showDialog<bool>(
@@ -3522,9 +3523,10 @@ class _EditorWidgetState extends State<EditorWidget>
                       ),
                     ),
                   ),
-                TextField(
+                TextFormField(
                   key: const ValueKey('deadline-title'),
-                  controller: title,
+                  initialValue: title,
+                  onChanged: (v) => title = v,
                   decoration: const InputDecoration(labelText: 'Süre'),
                 ),
                 const SizedBox(height: 12),
@@ -3545,8 +3547,9 @@ class _EditorWidgetState extends State<EditorWidget>
                   label: Text('Son gün: ${todayDotted(day)}'),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: note,
+                TextFormField(
+                  initialValue: note,
+                  onChanged: (v) => note = v,
                   decoration: const InputDecoration(labelText: 'Not'),
                 ),
               ],
@@ -3566,10 +3569,8 @@ class _EditorWidgetState extends State<EditorWidget>
         ),
       ),
     );
-    final name = title.text.trim();
-    final body = note.text.trim();
-    title.dispose();
-    note.dispose();
+    final name = title.trim();
+    final body = note.trim();
     if (saved != true || !mounted || name.isEmpty) return;
     try {
       final db = await PortalDatabase.shared();

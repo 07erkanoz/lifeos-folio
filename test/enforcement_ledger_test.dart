@@ -569,5 +569,10 @@ void main() {
       expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
     }
     expect(tester.takeException(), isNull);
+    // On a phone: the colleague's name cut short, the row not overflowed.
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('ledger-owner-hers')), findsOneWidget);
   });
 }

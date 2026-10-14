@@ -1687,7 +1687,10 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 const SizedBox(width: 8),
-                Text(doing, style: const TextStyle(fontSize: 12)),
+                // Wraps on a phone: the longest says whose UYAP it waits for.
+                Flexible(
+                  child: Text(doing, style: const TextStyle(fontSize: 12)),
+                ),
               ],
             ),
           ),

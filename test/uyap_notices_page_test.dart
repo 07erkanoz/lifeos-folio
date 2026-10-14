@@ -130,6 +130,23 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('on a phone, a notification\'s case opened takes its page '
+      'away', (tester) async {
+    final opened = await pump(tester, const Size(390, 844));
+    final pair = db.uyapNotices().firstWhere((n) => n.rows.length == 2);
+    await tester.tap(find.byKey(ValueKey('notice-${pair.key}')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('notice-open-case')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('notice-open-case')));
+    await tester.pumpAndSettle();
+    expect(opened, [pair.caseKey]);
+    // Back on the list, the notice's page gone.
+    expect(find.byKey(const ValueKey('notice-open-case')), findsNothing);
+    expect(find.byKey(ValueKey('notice-${pair.key}')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('the notifications fit a phone, a notification opening on '
       'its own page', (tester) async {
     await pump(tester, const Size(390, 844));

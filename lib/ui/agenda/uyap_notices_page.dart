@@ -75,6 +75,14 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
 
   @override
   void dispose() {
+    // The page gone (another place chosen): its notice's page with it, once
+    // the navigator is no longer being built.
+    final page = _noticePage;
+    if (page != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (page.isActive) page.navigator?.removeRoute(page);
+      });
+    }
     _soon?.cancel();
     _sync.noticesVersion.removeListener(_changed);
     _search.dispose();
@@ -129,26 +137,35 @@ class _UyapNoticesPageState extends State<UyapNoticesPage> {
     // Opened is read, here and on UYAP: at once, not when the page closes.
     if (!n.read) unawaited(_sync.markNotices([n], read: true));
     if (_narrow) {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: Text(n.title)),
-            body: ListenableBuilder(
-              listenable: _sync.noticesVersion,
-              builder: (context, _) => SingleChildScrollView(
-                child: _detail(
-                  context,
-                  _notices.where((x) => x.key == _selected).firstOrNull ?? n,
-                ),
+      final page = _noticePage = MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(n.title)),
+          body: ListenableBuilder(
+            listenable: _sync.noticesVersion,
+            builder: (context, _) => SingleChildScrollView(
+              child: _detail(
+                context,
+                _notices.where((x) => x.key == _selected).firstOrNull ?? n,
               ),
             ),
           ),
         ),
       );
+      await Navigator.of(context).push(page);
+      if (identical(_noticePage, page)) _noticePage = null;
     }
   }
 
-  void _openCase(String key) => widget.onOpenCase?.call(key);
+  /// The notice on a page of its own, on a phone: taken away when its case
+  /// is opened, else the case opens under it, out of sight.
+  MaterialPageRoute<void>? _noticePage;
+
+  void _openCase(String key) {
+    final page = _noticePage;
+    _noticePage = null;
+    if (page != null && page.isActive) Navigator.of(context).removeRoute(page);
+    widget.onOpenCase?.call(key);
+  }
 
   @override
   Widget build(BuildContext context) {

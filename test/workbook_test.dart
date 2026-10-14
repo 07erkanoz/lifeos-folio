@@ -46,6 +46,10 @@ void main() {
     expect(excelFormula('=SUM(A1:A9)'), '=SUM(A1:A9)');
     expect(excelFormula('=INDEX({1,2;3,4},2,1)'), '=INDEX({1,2;3,4},2,1)');
     expect(excelFormula('=düşeyara(A1;B:C;2;0)'), '=VLOOKUP(A1,B:C,2,0)');
+    // The Turkish decimal comma is the decimal point, not another argument.
+    expect(excelFormula('=YUVARLA(A1*1,18;2)'), '=ROUND(A1*1.18,2)');
+    expect(excelFormula('=TOPLA(A1;2,5)'), '=SUM(A1,2.5)');
+    expect(excelFormula('=EĞER(A1>0;"1,5";0)'), '=IF(A1>0,"1,5",0)');
   });
 
   test('a workbook shows results, recomputes what an edit reaches, and '

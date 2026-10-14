@@ -109,11 +109,24 @@ String excelFormula(String formula) {
 String _separators(String text) {
   final out = StringBuffer();
   var inString = false, braces = 0;
-  for (final char in text.split('')) {
+  bool digit(int at) =>
+      at >= 0 &&
+      at < text.length &&
+      text.codeUnitAt(at) >= 0x30 &&
+      text.codeUnitAt(at) <= 0x39;
+  for (var i = 0; i < text.length; i++) {
+    final char = text[i];
     if (char == '"') inString = !inString;
     if (!inString && char == '{') braces++;
     if (!inString && char == '}') braces--;
-    out.write(!inString && braces == 0 && char == ';' ? ',' : char);
+    final plain = !inString && braces == 0;
+    out.write(switch (char) {
+      ';' when plain => ',',
+      // The Turkish decimal comma, between two digits: "1,18" is 1.18, not
+      // two arguments ("YUVARLA(A1*1,18;2)" is ROUND(A1*1.18,2)).
+      ',' when plain && digit(i - 1) && digit(i + 1) => '.',
+      _ => char,
+    });
   }
   return out.toString();
 }

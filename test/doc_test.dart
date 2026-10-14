@@ -286,6 +286,22 @@ void main() {
     expect(CfbFile.parse(workbook)!.streams.keys, contains('Workbook'));
   });
 
+  test('a damaged file whose chains run in a circle is read at once', () {
+    final file = _container({'WordDocument': Uint8List(8192)}, 512);
+    final view = ByteData.sublistView(file);
+    final size = 1 << view.getUint16(0x1e, Endian.little);
+    final fat = view.getUint32(0x4c, Endian.little);
+    final dir = view.getUint32(0x30, Endian.little);
+    // The directory's next sector: itself; the header says the file holds
+    // a quarter of a million allocation sectors more.
+    view.setUint32((fat + 1) * size + dir * 4, dir, Endian.little);
+    view.setUint32(0x48, 0x40000, Endian.little);
+    final watch = Stopwatch()..start();
+    final read = CfbFile.parse(file);
+    expect(watch.elapsedMilliseconds, lessThan(500));
+    expect(read?.streams.keys, contains('WordDocument'));
+  });
+
   test('a .doc is offered the formats that can actually be written', () {
     expect(EvrakFormat.fromExtension('doc'), EvrakFormat.doc);
     expect(EvrakFormat.doc.canEdit, isTrue);

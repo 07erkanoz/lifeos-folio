@@ -1900,34 +1900,41 @@ class _EnforcementViewState extends State<EnforcementView> {
               print,
               if (others) ...[
                 const SizedBox(width: 8),
-                Container(
-                  key: ValueKey('ledger-owner-${e.id}'),
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F3F7),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.lock_outline_rounded,
-                        size: 14,
-                        color: AgendaColors.muted,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Yazan: $owner',
-                        style: TextStyle(
-                          fontSize: 12,
+                // On a phone the name is cut short, not the row overflowed.
+                Flexible(
+                  child: Container(
+                    key: ValueKey('ledger-owner-${e.id}'),
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F3F7),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          size: 14,
                           color: AgendaColors.muted,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Yazan: $owner',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AgendaColors.muted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ] else ...[

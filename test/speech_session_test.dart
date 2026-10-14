@@ -65,8 +65,9 @@ class FakeEar implements Ear {
     await Future<void>.delayed(Duration.zero);
   }
 
+  bool disposed = false;
   @override
-  void dispose() {}
+  void dispose() => disposed = true;
 }
 
 class FakeMicrophone implements Microphone {
@@ -212,6 +213,44 @@ void main() {
       await dictation.start(modelDir: '/ses', onText: (_) {});
       expect(dictation.state, ListenState.idle);
       expect(dictation.error, contains('Mikrofon açılamadı'));
+    });
+
+    test(
+      'a model that loaded is let go of when the microphone fails',
+      () async {
+        final ear = FakeEar();
+        final dictation = Dictation(
+          openEar: (_) async => ear,
+          microphone: _BrokenMicrophone(),
+        );
+        await dictation.start(modelDir: '/ses', onText: (_) {});
+        await settle();
+        expect(ear.disposed, isTrue);
+      },
+    );
+
+    test('started, stopped and started again while the model loads: each '
+        'word written once', () async {
+      final ear = FakeEar();
+      final loaded = Completer<Ear>();
+      final dictation = Dictation(
+        openEar: (_) => loaded.future,
+        microphone: FakeMicrophone(),
+      );
+      final written = <String>[];
+      final first = dictation.start(modelDir: '/ses', onText: written.add);
+      await settle();
+      await dictation.stop();
+      final second = dictation.start(modelDir: '/ses', onText: written.add);
+      await settle();
+      loaded.complete(ear);
+      await first;
+      await second;
+      expect(dictation.state, ListenState.listening);
+      ear.say('Sayın Mahkemeye,');
+      await settle();
+      expect(written, ['Sayın Mahkemeye,']);
+      await dictation.stop();
     });
   });
 

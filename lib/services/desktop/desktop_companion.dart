@@ -291,11 +291,11 @@ class DesktopCompanion extends ChangeNotifier
     await windowManager.hide();
   }
 
-  Future<void> _close({required bool completely}) async {
+  Future<void> _close({required bool completely, bool ask = true}) async {
     if (_quitting || _closing) return;
     _closing = true;
     try {
-      if (beforeClose != null && !await beforeClose!()) return;
+      if (ask && beforeClose != null && !await beforeClose!()) return;
       await windowSession?.save();
       if (!completely && enabled && (trayReady || shortcutReady)) {
         await windowManager.hide();
@@ -312,7 +312,9 @@ class DesktopCompanion extends ChangeNotifier
     }
   }
 
-  Future<void> quit() => _close(completely: true);
+  /// [ask] false: what is not saved was asked about already (an update,
+  /// before it put the new Folio in place).
+  Future<void> quit({bool ask = true}) => _close(completely: true, ask: ask);
 
   @override
   void onWindowClose() => _close(completely: false);

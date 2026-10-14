@@ -285,7 +285,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onOpen: _pickFiles,
     onNew: _newDocument,
     onArchive: _openMobileArchive,
-    onGallery: () => _selectGroup('images'),
+    onGallery: () async {
+      await _selectGroup('images');
+      _galleryFromHome = true;
+    },
     onScan: DocumentScan.available ? () => unawaited(_scanToPdf()) : null,
     onRecovery: _openRecovery,
     recoveryCount: _recoveryCount,
@@ -593,6 +596,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } else if (_library.query.isNotEmpty) {
       _searchController.clear();
       _library.setQuery('');
+    } else if (_phone && _group == 'images' && _galleryFromHome) {
+      // The gallery came from the first page: back to it, not to Tüm
+      // Evraklar on the way.
+      await _selectGroup('all');
+      if (mounted) setState(() => _mobileArchive = false);
     } else if (_library.sourceId != null ||
         _library.extensions.isNotEmpty ||
         _group != 'all') {
@@ -1360,8 +1368,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
   }
 
+  /// The phone's gallery opened from its first page: back goes there.
+  bool _galleryFromHome = false;
+
   Future<void> _selectGroup(String value, {bool asked = false}) async {
     if (!await _leaveEditor()) return;
+    _galleryFromHome = false;
     ScrollChrome.show();
     setState(() {
       if (!asked) _forgetAsked();

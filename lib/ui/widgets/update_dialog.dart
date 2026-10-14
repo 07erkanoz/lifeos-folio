@@ -74,6 +74,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
     final package = _package;
     if (package == null) return;
     final companion = CompanionScope.maybeOf(context);
+    // On Linux the new Folio is put in place first and this one closes
+    // after: what is not saved is asked about before, not while the new one
+    // waits two seconds to start and finds this one still open.
+    final ask = companion?.beforeClose;
+    if (Platform.isLinux && ask != null && !await ask()) return;
+    if (!mounted) return;
     setState(() {
       _step = _Step.installing;
       _error = null;
@@ -83,7 +89,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
         package,
         restart: () async {
           if (companion != null) {
-            await companion.quit();
+            await companion.quit(ask: !Platform.isLinux);
           } else {
             exit(0);
           }

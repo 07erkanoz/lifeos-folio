@@ -373,16 +373,18 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
   }
 
   Future<void> _text(Offset at) async {
-    final controller = TextEditingController();
+    // The field keeps its own text: a controller let go of as the dialog
+    // returns is still in use while it fades out.
+    var typed = '';
     final text = await showDialog<String>(
       context: context,
       builder: (dialog) => AlertDialog(
         title: const Text('Not'),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
+          onChanged: (v) => typed = v,
           autofocus: true,
           decoration: const InputDecoration(hintText: 'Yazın'),
-          onSubmitted: (v) => Navigator.pop(dialog, v),
+          onFieldSubmitted: (v) => Navigator.pop(dialog, v),
         ),
         actions: [
           TextButton(
@@ -390,13 +392,12 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
             child: const Text('Vazgeç'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialog, controller.text),
+            onPressed: () => Navigator.pop(dialog, typed),
             child: const Text('Ekle'),
           ),
         ],
       ),
     );
-    controller.dispose();
     if (text == null || text.trim().isEmpty) return;
     _change(
       _edit.copyWith(texts: [..._edit.texts, PhotoText(at, text.trim())]),
