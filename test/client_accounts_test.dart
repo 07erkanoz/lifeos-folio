@@ -7,6 +7,7 @@ import 'package:evrak_convert/services/clients/client_file_sync.dart';
 import 'package:evrak_convert/services/clients/client_files.dart';
 import 'package:evrak_convert/services/clients/client_statement_pdf.dart';
 import 'package:evrak_convert/services/clients/fee_reminders.dart';
+import 'package:evrak_convert/services/enforcement/ledger_service.dart';
 import 'package:flutter/services.dart' show ByteData;
 import 'package:evrak_convert/ui/clients/attachment_preview.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
@@ -150,13 +151,25 @@ void main() {
       mine.saveClientRecord(
         move('m2', 'a', MovementKind.feePaid, 100, client: 'k2'),
       );
+      // A message saying a payment's sum is money too; a hearing's is not.
+      ClientRecord message(String id, String kind) => ClientRecord(
+        id: id,
+        clientId: 'k1',
+        kind: ClientRecordKind.message,
+        data: {'tur': kind, 'metin': '12.500 TL tutarındaki ödeme alınmıştır.'},
+        created: DateTime(2026),
+        by: 'Av. Deniz Kaya',
+        updated: DateTime(2026),
+        person: 'deniz',
+      );
+      mine.saveClientRecord(message('s1', 'receipt'));
+      mine.saveClientRecord(message('s2', 'hearing'));
 
       final none = mine.clientsOfficeExport(money: false, me: 'deniz');
       expect((none['muvekkiller'] as List).length, 1);
-      expect(
-        [for (final r in none['muvekkilKayitlari'] as List) (r as Map)['id']],
-        ['g1'],
-      );
+      expect([
+        for (final r in none['muvekkilKayitlari'] as List) (r as Map)['id'],
+      ], unorderedEquals(['g1', 's2']));
       // A forged money record, from one who may not see it, is not taken.
       theirs.clientsOfficeMerge(
         mine.clientsOfficeExport(money: true, me: 'deniz'),
@@ -228,6 +241,56 @@ void main() {
         ),
         isFalse,
       );
+    });
+
+    test('an old ledger\'s pair from a colleague moves aside no record of '
+        'another\'s', () {
+      final person0 = PortalDatabase.clientPerson;
+      addTearDown(() => PortalDatabase.clientPerson = person0);
+      mine.saveClient(card('k1', office: true));
+      mine.saveClientRecord(
+        ClientRecord(
+          id: 'g1',
+          clientId: 'k1',
+          kind: ClientRecordKind.meeting,
+          data: const {'kararlar': 'Deniz yazdı'},
+          created: DateTime(2026),
+          by: 'Av. Deniz Kaya',
+          updated: DateTime(2026),
+          person: 'deniz',
+        ),
+      );
+      theirs.clientsOfficeMerge(
+        mine.clientsOfficeExport(money: true, me: 'deniz'),
+        money: true,
+        me: 'selin',
+        from: 'deniz',
+      );
+      PortalDatabase.clientPerson = () => 'selin';
+      final e = LedgerService(theirs).add(
+        clientId: 'k1',
+        caseKey: 'icra',
+        kind: 'haricen',
+        amount: 100000,
+        at: DateTime(2026, 10),
+        by: 'Av. Selin Aksoy',
+        person: 'selin',
+      );
+      final sent = theirs.clientsOfficeExport(money: true, me: 'selin');
+      PortalDatabase.clientPerson = () => 'deniz';
+      mine.clientsOfficeMerge(
+        {
+          ...sent,
+          'defterEski': [
+            {'id': 'g1', 'kayit': e.id},
+          ],
+        },
+        money: true,
+        me: 'deniz',
+        from: 'selin',
+      );
+      expect(mine.clientRecord(e.id), isNotNull);
+      expect(mine.clientRecord('g1'), isNotNull);
     });
   });
 

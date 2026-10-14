@@ -206,7 +206,13 @@ class OfficeLedger {
     OfficePeer self,
     String name,
   ) async {
-    if (exists) return;
+    if (exists) {
+      if (isOf(identity.deviceId)) return;
+      // Another office's ledger, of a device met to send files: this one's
+      // own office in its place.
+      _records = [];
+      _state = const _State.empty();
+    }
     final r = await _sign(identity, {
       'k': 'kur',
       'ad': name.trim(),
@@ -416,8 +422,29 @@ class OfficeLedger {
     return null;
   }
 
-  /// Takes records another member sent; true when anything was new.
-  Future<bool> merge(List<Object?> incoming) async {
+  /// Whether [deviceId] is of the office this ledger holds. A device can
+  /// hold an office's ledger and not be of it: met to send files, or about
+  /// to come back as its founder by the recovery code.
+  bool isOf(String deviceId) => exists && member(deviceId) != null;
+
+  /// Takes records another member sent; true when anything was new. [me]:
+  /// this device, which holding an office it is not of takes one that has
+  /// taken it in, in that one's place.
+  Future<bool> merge(List<Object?> incoming, {String? me}) async {
+    if (me != null && exists && !isOf(me)) {
+      final theirs = await _replay([
+        for (final r in incoming)
+          if (r is Map<String, Object?>) r,
+      ]);
+      if (theirs.officeId != null &&
+          theirs.officeId != officeId &&
+          theirs.members.containsKey(me)) {
+        _state = theirs;
+        _records = theirs.kept;
+        await _save();
+        return true;
+      }
+    }
     final records = [
       for (final r in incoming)
         if (r is Map<String, Object?>)
@@ -451,8 +478,14 @@ class OfficeLedger {
   /// signed; the founding record of another office is no part of this one.
   static Future<_State> _replay(List<Map<String, Object?>> records) async {
     var all = records;
+    var voided = const <String>{};
     for (var round = 0; round < 8; round++) {
-      final state = await _replayOnce(all);
+      final state = await _replayOnce(all, voided);
+      final now = _voidOf(all, state);
+      if (now.length != voided.length || !now.containsAll(voided)) {
+        voided = now;
+        continue;
+      }
       // A recovery by a code stands only while every code made in its
       // place names it as standing: one hung later on any branch by a
       // code made void does not, wherever it sorts, nor what its device
@@ -479,10 +512,13 @@ class OfficeLedger {
           if (!stale.contains(idOf(r))) r,
       ];
     }
-    return _replayOnce(all);
+    return _replayOnce(all, voided);
   }
 
-  static Future<_State> _replayOnce(List<Map<String, Object?>> records) async {
+  static Future<_State> _replayOnce(
+    List<Map<String, Object?>> records, [
+    Set<String> voided = const {},
+  ]) async {
     // Each record's place is how far it is from the founding along the
     // records it says it came after; a record whose predecessor is not here
     // waits outside. Equal places are put by id, the same on every device.
@@ -513,8 +549,17 @@ class OfficeLedger {
     final members = <String, OfficeMember>{};
     final money = <String>{};
     final kept = <Map<String, Object?>>[];
+    final falls = <String, List<(String, bool)>>{};
+    void fell(String device, Map<String, Object?> r, {required bool gone}) =>
+        (falls[device] ??= []).add((idOf(r), gone));
     for (final r in sorted) {
       final kind = r['k'];
+      // Signed where its signer could no longer: in the chain, of no effect.
+      if (voided.contains(idOf(r))) {
+        final signer = members[r['imzalayan']];
+        if (signer != null && await _holds(r, signer.publicKey)) kept.add(r);
+        continue;
+      }
       if (kind == 'kur') {
         if (office != null) continue;
         final key = r['dk'];
@@ -656,6 +701,9 @@ class OfficeLedger {
           // A person's role is theirs on every device.
           for (final d in members.values.toList()) {
             if (d.person == person) {
+              if (d.role == OfficeRole.manager && role != OfficeRole.manager) {
+                fell(d.deviceId, r, gone: false);
+              }
               members[d.deviceId] = d.copyWith(role: role);
             }
           }
@@ -671,6 +719,11 @@ class OfficeLedger {
           // they were let see; one device of theirs, lost or sold, goes
           // alone.
           if (whole && person != null) money.remove(person);
+          for (final d in members.values) {
+            if (d.deviceId == subject || (whole && d.person == person)) {
+              fell(d.deviceId, r, gone: true);
+            }
+          }
           members.removeWhere(
             (id, d) => id == subject || (whole && d.person == person),
           );
@@ -679,8 +732,51 @@ class OfficeLedger {
       }
       kept.add(r);
     }
-    return _State(office, name, members, kept, recovery, recoveryId, money);
+    return _State(
+      office,
+      name,
+      members,
+      kept,
+      recovery,
+      recoveryId,
+      money,
+      falls,
+    );
   }
+
+  /// The records whose signer, by then, had been let go of or made no
+  /// manager on another branch: signed after the record that did it, yet
+  /// not after it in the chain, by pointing at a record from before ("a
+  /// member let go of cannot come back", docs/buro.md). Kept in the chain,
+  /// for those after them, but doing nothing.
+  static Set<String> _voidOf(List<Map<String, Object?>> records, _State state) {
+    if (state.falls.isEmpty) return const {};
+    final ids = {for (final r in records) idOf(r): r};
+    final before = <String, Set<String>>{};
+    Set<String> ancestors(String id) => before[id] ??= () {
+      final out = <String>{};
+      var at = ids[id]?['onceki'];
+      while (at is String && out.add(at)) {
+        at = ids[at]?['onceki'];
+      }
+      return out;
+    }();
+    return {
+      for (final r in records)
+        if (state.falls[r['imzalayan']] case final falls?)
+          if (falls.any(
+            (f) =>
+                (f.$2 || !_bySelf.contains(r['k'])) &&
+                f.$1 != idOf(r) &&
+                !ancestors(idOf(r)).contains(f.$1) &&
+                !ancestors(f.$1).contains(idOf(r)),
+          ))
+            idOf(r),
+    };
+  }
+
+  /// The records a member signs as themselves, not as a manager.
+  static const _bySelf = {'kendi', 'kurtarma', 'kurtar', 'kur'};
 
   static OfficeMember? _member(
     Map<String, Object?> r,
@@ -731,6 +827,7 @@ class _State {
     this.recovery,
     this.recoveryId,
     this.money = const {},
+    this.falls = const {},
   ]);
   const _State.empty()
     : officeId = null,
@@ -739,8 +836,13 @@ class _State {
       kept = const [],
       recovery = null,
       recoveryId = null,
-      money = const {};
+      money = const {},
+      falls = const {};
   final String? officeId;
+
+  /// Each device let go of or made no manager, by the records that did it:
+  /// whether it was let go (else only no manager).
+  final Map<String, List<(String record, bool gone)>> falls;
 
   /// The founder's recovery code's public key, the latest, and its record.
   final String? recovery, recoveryId;

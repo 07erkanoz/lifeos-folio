@@ -24,8 +24,9 @@ import '../theme/folio_palette.dart';
 List<DueMessage> dueMessages(
   PortalDatabase db,
   DateTime now,
-  List<ClientEntry> entries,
-) {
+  List<ClientEntry> entries, {
+  bool money = true,
+}) {
   final today = DateTime(now.year, now.month, now.day);
   final told = {
     for (final r in db.allClientRecords())
@@ -66,7 +67,8 @@ List<DueMessage> dueMessages(
       }
     }
   }
-  for (final t in FeeReminders.open(db, now)) {
+  // An instalment says its sum: only to one who sees the money.
+  for (final t in money ? FeeReminders.open(db, now) : const <Never>[]) {
     final c = asked[t.client.id];
     if (c == null || t.daysLeft > 3) continue;
     final about =

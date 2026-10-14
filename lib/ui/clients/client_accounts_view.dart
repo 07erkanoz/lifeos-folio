@@ -996,8 +996,9 @@ ClientRecord appliedMovement(
 
 /// Whether [m] is made of a colleague's enforcement ledger: shown, changed
 /// only by its owner (R6).
+/// Whether [m] is another person's: taken back or set off by its writer
+/// alone (R6), a ledger's or not.
 bool _othersLedger(ClientRecord m) {
-  if (!LedgerBook.isProjected(m)) return false;
   final me = PortalDatabase.clientPerson?.call() ?? '';
   return m.person.isNotEmpty && me.isNotEmpty && m.person != me;
 }

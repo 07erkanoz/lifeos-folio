@@ -1094,7 +1094,15 @@ class _CashPageState extends State<CashPage> {
   }
 
   /// Whether [l] is money held for a client that may be taken as a fee.
+  /// Whether [l] is this person's own: another's line is taken back or set
+  /// off by its writer alone (R6).
+  static bool _mine(CashLine l) {
+    final me = PortalDatabase.clientPerson?.call() ?? '';
+    return l.record.person.isEmpty || me.isEmpty || l.record.person == me;
+  }
+
   static bool _held(CashLine l) =>
+      _mine(l) &&
       l.fromClient &&
       !l.struck &&
       l.side == CashSide.trust &&
@@ -1117,7 +1125,7 @@ class _CashPageState extends State<CashPage> {
         child: Text('Karşı vekâlet ücretine mahsup et'),
       ),
     ],
-    if (!l.fromClient && !l.struck)
+    if (!l.fromClient && !l.struck && _mine(l))
       const PopupMenuItem(value: 'ters', child: Text('Ters kayıtla düzelt')),
   ];
 

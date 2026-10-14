@@ -215,7 +215,12 @@ class _ClientsPageState extends State<ClientsPage> {
     final first = _entries.isEmpty ? widget.open : null;
     _listOpen = db.meta(_listKey) != 'kapali';
     final entries = db.clientEntries(lawyer: widget.lawyer);
-    final due = dueMessages(db, DateTime.now(), entries);
+    final due = dueMessages(
+      db,
+      DateTime.now(),
+      entries,
+      money: widget.seesMoney,
+    );
     final glance = clientGlances(
       db,
       entries,
@@ -246,7 +251,12 @@ class _ClientsPageState extends State<ClientsPage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, again) {
-          final due = dueMessages(db, DateTime.now(), _entries);
+          final due = dueMessages(
+            db,
+            DateTime.now(),
+            _entries,
+            money: widget.seesMoney,
+          );
           return AlertDialog(
             title: const Text('Bugün gönderilecek mesajlar'),
             content: SizedBox(

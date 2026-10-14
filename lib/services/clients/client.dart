@@ -762,6 +762,14 @@ class ClientRecord {
   final String by;
   final bool locked, removed;
 
+  /// Seen and sent only to those who see the money (R11): a [financial]
+  /// kind's, and a message to the client that says a sum, of an instalment
+  /// due or a payment taken.
+  bool get financial =>
+      kind.financial ||
+      (kind == ClientRecordKind.message &&
+          const {'instalment', 'receipt'}.contains(text('tur')));
+
   String text(String key) => data[key] is String ? data[key] as String : '';
   List<String> list(String key) => [
     for (final v in data[key] is List ? data[key] as List : const [])

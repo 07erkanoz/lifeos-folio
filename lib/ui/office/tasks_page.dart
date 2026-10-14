@@ -250,11 +250,11 @@ class _TasksPageState extends State<TasksPage> {
                       ],
                     ),
                   ),
-                  if (_net.ledger.exists && _db != null)
+                  if (_net.inOffice && _db != null)
                     for (final m in hearingMoves(_net.tasks.all, me, _db!, now))
                       _move(context, m),
                   Expanded(
-                    child: !_net.ledger.exists
+                    child: !_net.inOffice
                         ? Center(
                             child: Padding(
                               padding: const EdgeInsets.all(24),

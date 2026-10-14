@@ -217,7 +217,7 @@ class _MessagesPageState extends State<MessagesPage> {
                           ),
                         ),
                         const HelpButton(Help.messages),
-                        if (_net.ledger.exists)
+                        if (_net.inOffice)
                           FilledButton.icon(
                             key: const ValueKey('chat-new'),
                             onPressed: () => unawaited(_new()),
@@ -227,7 +227,7 @@ class _MessagesPageState extends State<MessagesPage> {
                       ],
                     ),
                   ),
-                  if (!_net.ledger.exists)
+                  if (!_net.inOffice)
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Text(

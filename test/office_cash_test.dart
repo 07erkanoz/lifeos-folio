@@ -383,4 +383,43 @@ void main() {
     expect(find.text('45.000 TL'), findsOneWidget);
     expect(find.byKey(const ValueKey('cash-bank-add')), findsNothing);
   });
+
+  test('a line is taken back by its writer alone, here and from a colleague '
+      '(R6)', () {
+    db.saveClientRecord(
+      _cash('c1', 5000, DateTime(2026, 10, 1), income: true, person: 'deniz'),
+    );
+    ClientRecord back(String person) =>
+        _cash(
+          'b-$person',
+          5000,
+          DateTime(2026, 10, 2),
+          income: true,
+          person: person,
+        ).copyWith(
+          data: {
+            ..._cash('x', 5000, DateTime(2026, 10, 2), income: true).data,
+            'ters': 'c1',
+          },
+        );
+    // Written here by a colleague: not kept.
+    expect(db.saveClientRecord(back('selin')), isFalse);
+    // Sent by one: not taken.
+    final other = PortalDatabase.memory();
+    addTearDown(other.dispose);
+    other.saveClientRecord(back('selin'));
+    db.clientsOfficeMerge(
+      {
+        'muvekkilKayitlari': [back('selin').toJson()],
+      },
+      money: true,
+      me: 'deniz',
+      from: 'selin',
+    );
+    expect(db.clientRecord('b-selin'), isNull);
+    expect(cashTotals(cashLines(db)).income, 500000);
+    // Its writer's own: taken back.
+    expect(db.saveClientRecord(back('deniz')), isTrue);
+    expect(cashTotals(cashLines(db)).income, 0);
+  });
 }

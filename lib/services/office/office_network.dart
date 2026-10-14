@@ -289,7 +289,24 @@ class OfficeNetwork extends ChangeNotifier {
       if (t.outgoing) {
         unawaited(chats.delivered(message, t.peer.deviceId));
       } else {
+        // A message's files come from its own device alone (_sendPending),
+        // by the names and sizes it gives: no other member puts a file of
+        // theirs behind it.
+        final said = chats
+            .of('${t.meta['sohbet']}')
+            ?.messages
+            .where((m) => m.id == message)
+            .firstOrNull;
         for (var i = 0; i < t.saved.length && i < t.files.length; i++) {
+          if (said != null) {
+            final name = t.files[i].name;
+            final a = said.attachments.where((a) => a.name == name).firstOrNull;
+            if (said.device != t.peer.deviceId ||
+                a == null ||
+                a.size != t.files[i].size) {
+              continue;
+            }
+          }
           unawaited(chats.fileCame(message, t.files[i].name, t.saved[i]));
         }
       }
@@ -541,7 +558,9 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// Whether this device's person sees the clients' money: alone, with no
   /// office, always; in one, a manager or one a manager let.
-  bool get seesMoney => ledger.officeId == null || ledger.seesMoney(me);
+  /// An office whose ledger is here and this device is not of (met to send
+  /// files) is no office of its: its own clients' money is its own.
+  bool get seesMoney => !ledger.isOf(me) || ledger.seesMoney(me);
 
   /// Whether [deviceId]'s person sees it.
   bool seesMoneyOf(String deviceId) => ledger.seesMoney(deviceId);
@@ -1434,7 +1453,12 @@ class OfficeNetwork extends ChangeNotifier {
       }
       if (m['t'] == 'defter') {
         await _ledgerCame(m['kayit']);
-        await ch.send({'t': 'defter', 'kayit': ledger.records});
+        // An office's records only from one of it: one met here, not of
+        // the office whose ledger it holds, passes on no one's names.
+        await ch.send({
+          't': 'defter',
+          'kayit': ledger.isOf(me) ? ledger.records : const [],
+        });
         await Future<void>.delayed(const Duration(milliseconds: 200));
         await ch.close();
         return;
@@ -1951,7 +1975,7 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   Future<void> _ledgerCame(Object? records) async {
-    if (records is List && await ledger.merge(records)) {
+    if (records is List && await ledger.merge(records, me: me)) {
       notifyListeners();
       unawaited(_shareLedger());
       await _queueForNewDevices();
@@ -1998,11 +2022,16 @@ class OfficeNetwork extends ChangeNotifier {
       );
       unawaited(_metOwn(ch));
       final reply = ch.messages.first.timeout(const Duration(seconds: 10));
-      await ch.send({'t': 'defter', 'kayit': ledger.records});
+      await ch.send({
+        't': 'defter',
+        'kayit': ledger.isOf(me) ? ledger.records : const [],
+      });
       final m = await reply;
       await ch.close();
       if (m['t'] == 'defter' && m['kayit'] is List) {
-        if (await ledger.merge(m['kayit'] as List)) notifyListeners();
+        if (await ledger.merge(m['kayit'] as List, me: me)) {
+          notifyListeners();
+        }
       }
     } catch (_) {}
   }
@@ -2942,7 +2971,10 @@ class OfficeNetwork extends ChangeNotifier {
   /// own devices: chosen on the office's page, or a member of one. Keeping
   /// one's own devices alike is no office: a lawyer alone with two devices
   /// is announced with no name, on no one else's list.
-  bool get officeOpen => _officeOpen || ledger.exists;
+  bool get officeOpen => _officeOpen || inOffice;
+
+  /// Whether this device is of an office: not only holding its ledger.
+  bool get inOffice => ledger.isOf(me);
   bool _officeOpen = false;
 
   Future<bool> _wanted() async {

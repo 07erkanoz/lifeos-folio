@@ -210,6 +210,69 @@ void main() {
     );
   });
 
+  test('another office\'s ledger, of a device met to send files, is no '
+      'office of this one: its own is founded, or one that took it in '
+      'comes in its place', () async {
+    final (deniz, denizPeer, _) = await device('Av. Deniz Kaya');
+    final (ayse, aysePeer, ayseKnown) = await device('Av. Ayşe Demir');
+    final (mert, mertPeer, _) = await device('Av. Mert Can');
+    final kaya = ledger('kaya');
+    await kaya.found(deniz, denizPeer, 'Kaya Hukuk Bürosu');
+    // Ayşe, alone, paired with Deniz: his office's ledger comes.
+    final here = ledger('ayse');
+    await here.merge(kaya.records, me: ayse.deviceId);
+    expect(here.exists, isTrue);
+    expect(here.isOf(ayse.deviceId), isFalse);
+    // Her own office, all the same.
+    await here.found(ayse, aysePeer, 'Demir Hukuk');
+    expect(here.isOf(ayse.deviceId), isTrue);
+    expect(here.officeName, 'Demir Hukuk');
+    // Another, holding Deniz's and of none: Mert's office takes her in.
+    final there = ledger('ayse-2');
+    await there.merge(kaya.records, me: ayse.deviceId);
+    final can = ledger('can');
+    await can.found(mert, mertPeer, 'Can Hukuk');
+    expect(await can.admit(mert, ayseKnown, OfficeRole.lawyer), isNull);
+    expect(await there.merge(can.records, me: ayse.deviceId), isTrue);
+    expect(there.isOf(ayse.deviceId), isTrue);
+    expect(there.officeName, 'Can Hukuk');
+  });
+
+  test('a manager let go of cannot come back by a record that points at '
+      'one from before; what a manager did before it stands', () async {
+    final (deniz, denizPeer, _) = await device('Av. Deniz Kaya');
+    final (mert, _, mertKnown) = await device('Av. Mert Can');
+    final (_, _, selinKnown) = await device('Av. Selin Aksoy');
+    final (_, _, newKnown) = await device('Av. Mert Can');
+    final office = ledger('kaya');
+    await office.found(deniz, denizPeer, 'Kaya Hukuk Bürosu');
+    expect(await office.admit(deniz, mertKnown, OfficeRole.manager), isNull);
+    // Mert, a manager, takes Selin in: that stands.
+    final his = ledger('mert');
+    await his.merge(office.records, me: mert.deviceId);
+    expect(await his.admit(mert, selinKnown, OfficeRole.lawyer), isNull);
+    await office.merge(his.records);
+    expect(office.member(selinKnown.deviceId), isNotNull);
+    // Let go of.
+    expect(await office.remove(deniz, mert.deviceId), isNull);
+    expect(office.member(mert.deviceId), isNull);
+    // His copy from before: a new device of his, a manager, signed after.
+    final old = ledger('mert-eski');
+    await old.merge(his.records, me: mert.deviceId);
+    expect(await old.admit(mert, newKnown, OfficeRole.manager), isNull);
+    // Kept in the chain to no effect, or not kept: by where it sorts.
+    await office.merge(old.records);
+    expect(office.member(newKnown.deviceId), isNull);
+    expect(office.member(mert.deviceId), isNull);
+    expect(office.member(selinKnown.deviceId), isNotNull);
+    // The same on a device that hears it all in the other order.
+    final other = ledger('baska');
+    await other.merge([...old.records, ...office.records]);
+    expect(other.member(newKnown.deviceId), isNull);
+    expect(other.member(selinKnown.deviceId), isNotNull);
+    expect(other.members.length, office.members.length);
+  });
+
   test('the founder comes back on a new device by the recovery code', () async {
     final (deniz, denizPeer, _) = await device('Av. Deniz Kaya');
     final (fresh, freshPeer, _) = await device('Av. Deniz Kaya');

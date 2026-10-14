@@ -1587,7 +1587,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         ),
       if (_source == null &&
           _archive == null &&
-          OfficeNetwork.instance.ledger.exists)
+          OfficeNetwork.instance.inOffice)
         OutlinedButton.icon(
           key: const ValueKey('case-share'),
           onPressed: () => unawaited(_share()),

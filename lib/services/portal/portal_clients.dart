@@ -227,6 +227,19 @@ extension PortalClients on PortalDatabase {
     if (_actsOnLedger(r)) return false;
     final kept = clientRecord(r.id);
     if (kept != null && kept.locked) return false;
+    // Another person's money is taken back or set off by them alone (R6):
+    // written here, every other device would refuse it, and the sums here
+    // would differ from theirs for good.
+    final link = _linkOf(r);
+    final target = link == null ? null : clientRecord(link);
+    if (kept == null &&
+        target != null &&
+        ((target.person.isNotEmpty &&
+                r.person.isNotEmpty &&
+                target.person != r.person) ||
+            target.clientId != r.clientId)) {
+      return false;
+    }
     // Money in or out is evidence: never changed once written.
     if ((r.kind == ClientRecordKind.movement ||
             r.kind == ClientRecordKind.cash) &&
@@ -430,6 +443,16 @@ extension PortalClients on PortalDatabase {
           !LedgerBook.isNewForm(e)) {
         continue;
       }
+      // Only a movement of that ledger's own, its writer's and its
+      // client's: a pair sent by anyone else's ledger moves aside no
+      // meeting, no cash, nothing of another person's.
+      final old = ClientRecord.fromJson(jsonDecode(row['json'] as String));
+      if (old == null ||
+          old.kind != ClientRecordKind.movement ||
+          old.person != e.person ||
+          old.clientId != e.clientId) {
+        continue;
+      }
       _db.execute(
         'INSERT OR REPLACE INTO ledger_history(id, entry_id, json) '
         'VALUES(?,?,?)',
@@ -525,6 +548,16 @@ extension PortalClients on PortalDatabase {
       _db.execute('DELETE FROM client_record WHERE id=?', [r['id']]);
       removedClientRecords.add(rec);
     }
+    // The messages that say a sum.
+    for (final r in _db.select(
+      'SELECT id, json FROM client_record WHERE kind=?',
+      [ClientRecordKind.message.code],
+    )) {
+      final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
+      if (rec == null || !rec.financial || rec.person == keepPerson) continue;
+      _db.execute('DELETE FROM client_record WHERE id=?', [r['id']]);
+      removedClientRecords.add(rec);
+    }
     // What was kept of the ledgers gone, their history and repair reports
     // too, the accounts shared with this person, and the money others sent
     // that waited (R11).
@@ -533,7 +566,7 @@ extension PortalClients on PortalDatabase {
     forgetFinancialProposals(keepPerson);
     for (final r in _db.select('SELECT id, json FROM client_record_pending')) {
       final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
-      if (rec == null || (rec.kind.financial && rec.person != keepPerson)) {
+      if (rec == null || (rec.financial && rec.person != keepPerson)) {
         _db.execute('DELETE FROM client_record_pending WHERE id=?', [r['id']]);
       }
     }
@@ -746,7 +779,7 @@ extension PortalClients on PortalDatabase {
         for (final r in _db.select('SELECT json FROM client_record'))
           if (ClientRecord.fromJson(jsonDecode(r['json'] as String))
               case final rec?
-              when allowed || !rec.kind.financial || rec.person == me)
+              when allowed || !rec.financial || rec.person == me)
             rec.toJson(),
       ],
       if (allowed) 'defterEski': _legacyMap(),
@@ -791,7 +824,7 @@ extension PortalClients on PortalDatabase {
               when (shared.contains(rec.clientId) ||
                       (rec.clientId == officeCashId && money)) &&
                   mine(rec.person) &&
-                  (money || !rec.kind.financial))
+                  (money || !rec.financial))
             {...SecretNotes.recordForOffice(this, rec), 'kisi': me},
       ],
       if (money)
@@ -947,7 +980,7 @@ extension PortalClients on PortalDatabase {
       for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {
         var r = ClientRecord.fromJson(j);
         // Money from, or for, one who may not see it is not taken.
-        if (r == null || (!money && r.kind.financial)) continue;
+        if (r == null || (!money && r.financial)) continue;
         // A ledger's movements are made here of its record, never taken.
         if (_ledgerMade(r)) continue;
         // Of a colleague's client unshared, only this person's own.
@@ -1072,6 +1105,12 @@ extension PortalClients on PortalDatabase {
   /// The record [r] names as the one it takes back (`ters`), sets off
   /// (`kaynak: mahsup:…`) or books (`kaynak: icra:…`); null for none.
   static String? _linkOf(ClientRecord r) {
+    // The office's cash takes back a line of its own as well: by its
+    // writer alone, as a movement.
+    if (r.kind == ClientRecordKind.cash) {
+      final back = r.text('ters');
+      return back.isEmpty ? null : back;
+    }
     if (r.kind != ClientRecordKind.movement) return null;
     final back = r.text('ters');
     if (back.isNotEmpty) return back;
@@ -1119,7 +1158,7 @@ extension PortalClients on PortalDatabase {
       final card = r == null ? null : clientCard(r.clientId);
       final allowed =
           r != null &&
-          (money || !r.kind.financial) &&
+          (money || !r.financial) &&
           r.person == row['author'] &&
           !(card != null && _unshared(card, me) && r.person != me) &&
           !_ledgerMade(r);
