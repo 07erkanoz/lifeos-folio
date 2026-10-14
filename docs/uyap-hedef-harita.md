@@ -159,8 +159,9 @@ da Z'nin ilk bölümü olarak okunur.
   yalnız bekleme, yani **iki web oturumu**.
 - **Kullanıcının başlattığı "Eksik bilgileri tamamla":** dosya ya da gün sınırı yok; oturum kapanana,
   hata sınırına ya da kullanıcı durdurana kadar sürer; sonra kaldığı yerden devam eder.
-- **Otomatik mod (O açık):** yalnız eskiyen bilgileri tazeler; günde en çok 200 dosya, gece yok. İlk
-  doldurmayı otomatik mod yapmaz.
+- **Otomatik mod (O açık):** yalnız web'den bir kez tamamlanmış dosyaların eskiyen (7 günden eski ya
+  da başarısız) web bölümlerini tazeler; günde en çok açık dosyaların yedide biri (en az 10), gece
+  yok. İlk doldurmayı otomatik mod yapmaz. (Ölçüm, 562 dosya: günde 410–580 istek, 10–14 dk.)
 - Elle tek dosya (dosyayı açmak, "UYAP'tan tazele") hiçbir sınıra sayılmaz.
 - Oturum kapanınca kuyruk **duraklar**; tamamlanan bölümler kayıtlıdır; mobile geçilmez.
 - Hata: oturum bitti → dur, giriş iste. 429 → bekle. Ağ/5xx → artan bekleme, partide en çok 1 tekrar.
@@ -306,7 +307,7 @@ Codex (gpt-6.1-sol) uygulamayı denetledi (25 bulgu). Düzeltilenler: iş nesli 
 duraklat/sürdür/bırak yarışı; liste aşaması tazelik denetimi ve `listGaps`; okunamayan dosya kalınca
 iş `incomplete` durur (bölüm başına 3 deneme, sonra vazgeçilir, açılışta okunur); her dosyanın
 bölümleri okunmadan hemen önce yeniden hesaplanır; web kurulumu mobil bağlıyken de bütün listeyi
-okur; günlük zenginleştirme yalnız eskiyen web bölümleri, sabit kanal, günde en çok 500 dosya;
+okur; günlük zenginleştirme yalnız eskiyen web bölümleri, sabit kanal, günde en çok açık dosyaların yedide biri (önce 500 idi);
 "Tümünü tazele" kanalı sabit; taraf eşleşmesi rol uyumu ve tek eşleşme ister (belirsiz kısa adda
 vekil taşınmaz); mobil taraf yalnız ekler; taraflar yalnız okunduklarında kanal adıyla yazılır;
 web bölümleri birbirinden bağımsız sonuçlanır; mobil evrak/taraf cevap şeması sıkılaştı (yalnız

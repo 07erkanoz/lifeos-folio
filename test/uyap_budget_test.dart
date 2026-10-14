@@ -594,6 +594,11 @@ void main() {
         },
       );
       expect(n, lessThan(700), reason: 'day $day: spread, not one burst');
+      // Not at night, when nothing is read of itself: each day reads its
+      // seventh.
+      if (!PortalSync.night(DateTime.now())) {
+        expect(n, greaterThan(100), reason: 'day $day: a seventh read');
+      }
     }
     await sync.setAutoFetch(false);
     sync.dispose();

@@ -77,7 +77,12 @@ class UyapOwnSync {
       'davalar': db.caseDigests(),
       'kayitlar': {
         for (final e in (await _fetched()).entries)
-          e.key: e.value.toIso8601String(),
+          e.key: e.value.at.toIso8601String(),
+      },
+      // Which sections were read when, apart: a section read on one device
+      // is asked by the other though the latest time is the same.
+      'bolumOzeti': {
+        for (final e in (await _fetched()).entries) e.key: e.value.sections,
       },
       'bildirimler': {
         for (final e in db.uyapNoticeKeys().entries) e.key: e.value,
@@ -138,13 +143,23 @@ class UyapOwnSync {
       }
     }
 
-    // Each case's list, where theirs was fetched later.
+    // Each case's list, where theirs was read later (its record or one of
+    // its sections), or as late with other sections read.
     final fetched = await _fetched();
+    final theirSections = (theirs['bolumOzeti'] as Map?) ?? const {};
+    bool later(String key, DateTime at) {
+      final mine = fetched[key];
+      if (mine == null || at.isAfter(mine.at)) return true;
+      return at.isAtSameMomentAs(mine.at) &&
+          theirSections[key] != null &&
+          '${theirSections[key]}' != mine.sections;
+    }
+
     final records = [
       for (final MapEntry(:key, :value)
           in ((theirs['kayitlar'] as Map?) ?? const {}).entries)
         if (DateTime.tryParse('$value') case final at?)
-          if (fetched['$key'] == null || at.isAfter(fetched['$key']!)) '$key',
+          if (later('$key', at)) '$key',
     ];
     // As many at a time as fit in a message (answer); asked again for the
     // rest until all came, or one comes that nothing fits.
@@ -170,11 +185,26 @@ class UyapOwnSync {
           '${json['esas'] ?? ''}',
           '${json['mahkeme'] ?? ''}',
         );
-        final adopted = await store.adoptChecked(json);
-        if (adopted != AdoptResult.failed) {
-          db.adoptSections(key, json['bolumler']);
-        }
-        if (adopted != AdoptResult.failed) {
+        // Read later there, by its record or by its sections: its record is
+        // taken whole with its sections. Not later: its sections only where
+        // its record says what this one says, so that no section is said
+        // read for data that is not here.
+        final theirAt = _readAt(
+          DateTime.tryParse('${json['cekildi'] ?? ''}'),
+          json['bolumler'],
+        );
+        final mine = fetched[record];
+        final newer =
+            theirAt != null &&
+            (mine == null ||
+                theirAt.isAfter(mine.at) ||
+                theirAt.isAtSameMomentAs(mine.at));
+        final adopted = await store.adoptChecked(json, force: newer);
+        final sameData =
+            adopted == AdoptResult.kept ||
+            (adopted == AdoptResult.older && await store.sameData(json));
+        if (sameData) db.adoptSections(key, json['bolumler']);
+        if (sameData) {
           // Read whole by the web there, as it says, as if here: not read
           // again here for it; also when only its sections came newer, the
           // record being the same. A device that does not say is not taken
@@ -382,20 +412,43 @@ class UyapOwnSync {
   /// a section read since (the record unchanged by it), whichever is later.
   /// So a section read on one device goes to the other though the case's
   /// record did not change.
-  Future<Map<String, DateTime>> _fetched() async {
+  Future<Map<String, ({DateTime at, String sections})>> _fetched() async {
     try {
       final db = await database();
       return {
         for (final (record, _) in await store.cases(counted: false))
-          record.key: [
-            record.fetchedAt,
-            for (final s in db.sections(caseKey(record.number, record.court)))
-              ?s.succeeded,
-          ].reduce((a, b) => b.isAfter(a) ? b : a),
+          if (db.sectionsToShare(caseKey(record.number, record.court))
+              case final shared)
+            record.key: (
+              at: _readAt(record.fetchedAt, shared)!,
+              sections: _sectionsDigest(shared),
+            ),
       };
     } catch (_) {
       return const {};
     }
+  }
+
+  /// The latest of [fetched] and the successes of the sections [shared]
+  /// (as [PortalDatabase.sectionsToShare] gives them).
+  static DateTime? _readAt(DateTime? fetched, Object? shared) {
+    var at = fetched;
+    for (final s in shared is List ? shared : const []) {
+      if (s is! Map) continue;
+      final done = DateTime.tryParse('${s['basari'] ?? ''}');
+      if (done != null && (at == null || done.isAfter(at))) at = done;
+    }
+    return at;
+  }
+
+  /// The sections read done, as a short digest: alike on two devices
+  /// when they have read the same sections at the same times.
+  static String _sectionsDigest(List<Map<String, Object?>> shared) {
+    final lines = [
+      for (final s in shared)
+        '${s['bolum']}|${s['kanal']}|${s['basari']}|${s['kismi']}',
+    ]..sort();
+    return PortalDatabase.digestOf(lines.join(';'));
   }
 
   static int _end(int i, int step, int length) =>

@@ -485,6 +485,67 @@ void main() {
     expect(other.meta(PortalSync.webCheckedKey(key)), later.toIso8601String());
   });
 
+  test('a case read later on another own device wins there though its '
+      'record did not change, data and sections together; asking stops once '
+      'alike', () async {
+    final root = await Directory.systemTemp.createTemp('folio-uyap-surum-');
+    addTearDown(() => root.delete(recursive: true));
+    final other = PortalDatabase.memory();
+    addTearDown(other.dispose);
+    final storeA = UyapCaseStore(directory: Directory('${root.path}/a'));
+    final storeB = UyapCaseStore(directory: Directory('${root.path}/b'));
+    const court = 'Manavgat 1. İcra Dairesi';
+    final key = caseKey('2025/3311', court);
+    Future<void> read(UyapCaseStore store, double collected, DateTime at) =>
+        store.keep(
+          target: const UyapCase('x', '2025/3311', 'i7', court),
+          details: const UyapCaseDetails(),
+          parties: const [UyapParty('A', 'Alacaklı', '', '')],
+          documents: const UyapCaseDocuments([]),
+          money: UyapCaseMoney(collected: collected),
+          now: at,
+        );
+    // A read 100 on day 10, and again on day 13: the same, its record
+    // still says day 10; B read 200 on day 12.
+    await read(storeA, 100, DateTime(2026, 10, 10, 9));
+    db.saveSections(key, PortalChannel.uyapWeb, const [
+      SectionOutcome(CaseSection.money, SectionResult.read),
+    ], at: DateTime(2026, 10, 13, 9));
+    await read(storeB, 200, DateTime(2026, 10, 12, 9));
+    other.saveSections(key, PortalChannel.uyapWeb, const [
+      SectionOutcome(CaseSection.money, SectionResult.read),
+    ], at: DateTime(2026, 10, 12, 9));
+    var asks = 0;
+    final a = UyapOwnSync(
+      database: () async => db,
+      store: storeA,
+      ask: (_, _) async => null,
+    );
+    final b = UyapOwnSync(
+      database: () async => other,
+      store: storeB,
+      ask: (_, body) {
+        if (body['parca'] == 'kayitlar') asks++;
+        return a.answer(body);
+      },
+    );
+    await b.merge(await a.summary('masaustu'));
+    final kept = (await storeB.load(court, '2025/3311'))!;
+    expect(kept.money!.collected, 100, reason: 'read later there');
+    expect(other.sections(key).single.succeeded, DateTime(2026, 10, 13, 9));
+    // Alike now: asked no more.
+    final before = asks;
+    await b.merge(await a.summary('masaustu'));
+    expect(asks, before);
+    // A failed try there since does not make it asked again and again.
+    db.saveSections(key, PortalChannel.uyapWeb, const [
+      SectionOutcome(CaseSection.money, SectionResult.failed),
+    ], at: DateTime(2026, 10, 14, 9));
+    await b.merge(await a.summary('masaustu'));
+    await b.merge(await a.summary('masaustu'));
+    expect(asks, before);
+  });
+
   test('a newer reading by UYAP Mobil on another own device keeps what '
       'only the web gave here: the money and the case\'s place', () async {
     final root = await Directory.systemTemp.createTemp('folio-uyap-kayit-');

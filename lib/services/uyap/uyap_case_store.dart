@@ -320,7 +320,13 @@ class UyapCaseStore {
   /// [adopt], saying whether the record was kept, was older than this
   /// device's (nothing to do) or could not be kept (the transfer is not
   /// whole).
-  Future<AdoptResult> adoptChecked(Map<String, Object?> json) async {
+  ///
+  /// [force]: kept though not fetched later here, when the other device
+  /// read the case later by what else it says (its sections).
+  Future<AdoptResult> adoptChecked(
+    Map<String, Object?> json, {
+    bool force = false,
+  }) async {
     final UyapCaseRecord theirs;
     try {
       theirs = UyapCaseRecord.fromJson(json);
@@ -333,7 +339,7 @@ class UyapCaseStore {
     } catch (_) {
       return AdoptResult.failed;
     }
-    if (mine != null) {
+    if (mine != null && !force) {
       final at = DateTime.tryParse('${mine['cekildi']}');
       if (at != null && !theirs.fetchedAt.isAfter(at)) {
         return AdoptResult.older;
@@ -390,6 +396,28 @@ class UyapCaseStore {
       return AdoptResult.failed;
     }
     return AdoptResult.kept;
+  }
+
+  /// Whether [json], another device's record of a case, says what the
+  /// record kept here says: the same particulars, parties, documents, money
+  /// and account, whenever each was fetched and wherever its files are.
+  Future<bool> sameData(Map<String, Object?> json) async {
+    try {
+      final theirs = UyapCaseRecord.fromJson(json).toJson();
+      final mine = await recordJson(UyapCaseRecord.fromJson(json).key);
+      if (mine == null) return false;
+      Map<String, Object?> data(Map<String, Object?> r) =>
+          UyapCaseRecord.fromJson(r).toJson()
+            ..remove('cekildi')
+            ..remove('oncekiCekim')
+            ..remove('yeni')
+            ..remove('dosyalar')
+            ..remove('onizlemeler')
+            ..remove('bag');
+      return jsonEncode(data(theirs)) == jsonEncode(data(mine));
+    } catch (_) {
+      return false;
+    }
   }
 
   /// A case that came with a task: kept like one fetched here, newer than

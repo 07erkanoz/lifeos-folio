@@ -161,7 +161,8 @@ class UyapHelpPage extends StatelessWidget {
       'UYAP’a ne zaman sorulur',
       'Yalnız siz Yenile, Senkronize et ya da kurulum gibi bir düğmeye '
           'bastığınızda ve bir dosyanın sayfasını açtığınızda; dosyanın '
-          'sayfası yalnız bir günden eski bilgileri yeniden sorar. Giriş '
+          'sayfası yalnız eksik, yarım kalmış ya da bir günden eski '
+          'bilgileri yeniden sorar. Giriş '
           'yapmak, ajandayı ya da bildirimleri açmak tek başına UYAP’a '
           'sormaz. İlk girişte kurulum ekranı açılır: dosya listenizi, '
           'müvekkillerinizi ve evrak listelerini siz başlatınca getirir; '
@@ -170,8 +171,9 @@ class UyapHelpPage extends StatelessWidget {
           'al” ayarını açarsanız bunlara ek olarak bildirimler saatte bir, '
           'duruşmalar günde bir ve dosya listeniz haftada bir alınır; UYAP '
           'Web bağlıysa dosyalarınızın web bilgileri her gün yedide biri '
-          'olmak üzere haftada bir yenilenir. Evrakın kendisi kendiliğinden '
-          'indirilmez. Gece hiçbir şey sorulmaz.',
+          'olmak üzere aşağı yukarı haftada bir yenilenir. Evrakın kendisi '
+          'kendiliğinden indirilmez. Gece kendiliğinden hiçbir şey '
+          'sorulmaz.',
     ),
     (
       'UYAP’ı yormamak için',

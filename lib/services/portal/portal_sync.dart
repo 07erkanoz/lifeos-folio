@@ -1729,29 +1729,71 @@ class PortalSync extends ChangeNotifier {
           problem = panel.error ?? 'Dosya UYAP’tan alınamadı.';
           continue;
         }
+        SectionOutcome? of(CaseSection s) =>
+            panel.outcomes.where((o) => o.section == s).firstOrNull;
+        final documents = of(CaseSection.documents);
+        final particulars = of(CaseSection.particulars);
+        final asked = DateTime.now().toUtc();
+        final details = record.details;
+        // The agenda's summary from what this reading read, and only that:
+        // a section that failed leaves the summary as it was.
         db.mergeCases([
           PortalCase(
             key: kase.key,
             number: kase.number,
             court: kase.court,
-            documents: Observed(
-              _newestFirst([
-                for (final d in record.documents)
-                  if (d.parentKey == null)
+            status:
+                particulars != null &&
+                    particulars.result == SectionResult.read &&
+                    details.status.isNotEmpty
+                ? Observed(details.status, channel, asked)
+                : null,
+            details:
+                particulars != null &&
+                    particulars.result == SectionResult.read &&
+                    (details.kind.isNotEmpty || details.opening.isNotEmpty)
+                ? Observed(
                     {
-                      'ad': d.type.isNotEmpty ? d.type : d.description,
-                      'tarih': d.approved,
-                      'no': d.number,
+                      if (details.kind.isNotEmpty) 'davaTuru': details.kind,
+                      if (details.opening.isNotEmpty)
+                        'acilisTuru': details.opening,
                     },
-              ]),
-              channel,
-              DateTime.now().toUtc(),
-              complete: channel == PortalChannel.uyapWeb,
-            ),
+                    channel,
+                    asked,
+                    complete: false,
+                  )
+                : null,
+            documents:
+                documents != null &&
+                    documents.result.done &&
+                    documents.result != SectionResult.notShown
+                ? Observed(
+                    _newestFirst([
+                      for (final d in record.documents)
+                        if (d.parentKey == null)
+                          {
+                            'ad': d.type.isNotEmpty ? d.type : d.description,
+                            'tarih': d.approved,
+                            'no': d.number,
+                          },
+                    ]),
+                    channel,
+                    asked,
+                    complete: !documents.partial,
+                  )
+                : null,
           ),
         ]);
         notifyListeners();
-        return null;
+        // Some sections did not come: said, what came is kept.
+        final failed = [
+          for (final o in panel.outcomes)
+            if (!o.result.done) o.section,
+        ];
+        return failed.isEmpty
+            ? null
+            : 'Dosyanın bazı bilgileri alınamadı (${failed.length} bölüm); '
+                  'gelenler kaydedildi.';
       } catch (e) {
         problem = '$e';
       } finally {

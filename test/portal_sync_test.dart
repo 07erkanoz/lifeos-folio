@@ -72,6 +72,8 @@ void main() {
             ],
           },
         };
+      } else if (path == 'mobile/avukat/taraflar') {
+        answer = {'tarafList': []};
       } else if (path == 'mobile/avukat/danistaydaireleri') {
         answer = {'danistayDairesi': []};
       }

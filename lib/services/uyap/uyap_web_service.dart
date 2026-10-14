@@ -1164,10 +1164,15 @@ class UyapWebService {
     String documentId,
     String caseId, {
     String path = '/view_document_brd.uyap',
-  }) => UyapPace.instance.run(
-    () => _viewDocumentNow(documentId, caseId, path: path),
-    isUyapFault: _fault,
-  );
+  }) =>
+      // Each try in the one line of documents: three seconds after the
+      // download before it, one under another case's id too.
+      UyapPace.instance.document(
+        () => UyapPace.instance.run(
+          () => _viewDocumentNow(documentId, caseId, path: path),
+          isUyapFault: _fault,
+        ),
+      );
 
   Future<Uint8List> _viewDocumentNow(
     String documentId,

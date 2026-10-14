@@ -548,8 +548,10 @@ class UyapMobileApi {
     ]) {
       if (wait > Duration.zero) await Future<void>.delayed(wait);
       try {
-        final data = await _get(
-          'mobile/ortak/evrakV2/${_id(documentId)}/${_id(caseId)}',
+        // Each try in the one line of documents: three seconds after the
+        // download before it, a retry of this one too (UyapPace.document).
+        final data = await UyapPace.instance.document(
+          () => _get('mobile/ortak/evrakV2/${_id(documentId)}/${_id(caseId)}'),
         );
         final dvo = data is Map ? data['evrakContentDVO'] : null;
         final content = dvo is Map ? '${dvo['content'] ?? ''}' : '';

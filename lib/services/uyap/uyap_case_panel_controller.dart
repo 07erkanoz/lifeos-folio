@@ -14,7 +14,6 @@ import '../portal/portal_sync.dart';
 import 'uyap_case_links.dart';
 import 'uyap_case_store.dart';
 import 'uyap_mobile_api.dart';
-import 'uyap_pace.dart';
 import 'uyap_web_service.dart';
 
 /// What the UYAP panel beside a document works with: the case the document
@@ -349,6 +348,9 @@ class UyapCasePanelController extends ChangeNotifier {
   }
 
   Future<T?> _doing<T>(String what, Future<T> Function() work) async {
+    // One inside another (a download reading the list again first): the
+    // outer one is still under way when the inner ends, and says so.
+    final outer = busy;
     busy = what;
     error = null;
     _changed();
@@ -358,7 +360,7 @@ class UyapCasePanelController extends ChangeNotifier {
       error = '$e'.replaceFirst('Bad state: ', '');
       return null;
     } finally {
-      busy = null;
+      busy = outer;
       _changed();
     }
   }
@@ -1080,10 +1082,11 @@ class UyapCasePanelController extends ChangeNotifier {
         throw StateError('${document.title} UYAP’taki listede bulunamadı.');
       }
     }
-    final caseId = (await _liveCase()).id;
-    // In the one line of documents: three seconds after the one before.
-    final bytes = await UyapPace.instance.document(
-      () => web.caseDocumentBytes(live!, caseId: caseId),
+    // Each try is in the one line of documents (UyapPace.document): three
+    // seconds after the download before it.
+    final bytes = await web.caseDocumentBytes(
+      live,
+      caseId: (await _liveCase()).id,
     );
     final (record, file) = await store.save(_record!, document, bytes);
     _record = await store.seen(record, document.key);
@@ -1107,12 +1110,7 @@ class UyapCasePanelController extends ChangeNotifier {
     // `evrak_indir`, the contract of the working KararArama app).
     Uint8List bytes;
     try {
-      final asked = live;
-      bytes = _checked(
-        await UyapPace.instance.document(
-          () => mobile.documentBytes(asked.documentId, id),
-        ),
-      );
+      bytes = _checked(await mobile.documentBytes(live.documentId, id));
     } catch (_) {
       // Both ids are the session's: looked up again, once; the list
       // alone, not the parties.
@@ -1121,11 +1119,8 @@ class UyapCasePanelController extends ChangeNotifier {
       await _refreshMobile({CaseSection.documents});
       final again = _liveDocuments[document.key];
       if (again == null || _mobileCaseId == null) rethrow;
-      final caseId = _mobileCaseId!;
       bytes = _checked(
-        await UyapPace.instance.document(
-          () => mobile.documentBytes(again.documentId, caseId),
-        ),
+        await mobile.documentBytes(again.documentId, _mobileCaseId!),
       );
     }
     if (store.sameAsAnother(_record!, document.key, bytes)) {

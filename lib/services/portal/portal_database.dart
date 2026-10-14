@@ -1807,7 +1807,8 @@ class PortalDatabase {
   /// [caseKey]'s sections read done, for the person's other devices.
   List<Map<String, Object?>> sectionsToShare(String caseKey) => [
     for (final s in sections(caseKey))
-      if (s.succeeded case final at?)
+      // Read done as it last was: one failed since is not said read.
+      if (s.succeeded case final at? when s.result.done)
         {
           'bolum': s.section.name,
           'kanal': s.channel.name,
