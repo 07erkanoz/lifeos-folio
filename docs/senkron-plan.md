@@ -64,7 +64,36 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
     - İlan edilenler: `hlc`, `paketBolme`.
     - Test edilmeyen: büro parçalarının parçalı aktarımı (büro üyeliği kurulumu uçtan uca testte,
       adım 8).
-  - Sıradaki adım: §5 adım 4, finansal işlem modeli.
+  - **§5 adım 4 (ekran dışı kısmı) bitti:**
+    - `lib/services/enforcement/ledger_book.dart`:
+      - alan grupları (`finans`, `bilgi`, `bildirildi`, `resmiKarar`, `yasam`) ve HLC sürümleri
+        (`surumler`);
+      - kayda bağlı mahsup listesi (`mahsuplar`);
+      - her cihazda aynı **etkin durum** ve "askıda" mahsup;
+      - türetilen hareketler (`icra:<id>:emanet`, `icra:<id>:mahsup:<mahsupId>`).
+    - Projeksiyon `ledger_projection` tablosunda. `allClientRecords()`, `clientRecords()` ve
+      `clientRecord()` onu da döndürür. Elle yazılamaz, gönderilmez, alınmaz. Yalnız yeni biçimdeki
+      (sürümlü) kayıt için kurulur.
+    - `lib/services/enforcement/ledger_service.dart` (R12): ekleme, düzeltme, bildirildi, işlendi,
+      kaldırma/geri koyma, mahsup ekleme/geri alma; her biri tek işlemde, gösterilen sürüm
+      denetlenerek (`LedgerConflict`). Mahsup kalandan fazla olamaz (`LedgerOverdrawn`).
+    - Düzeltme penceresinde "para nereye gitti" yalnız seçim değiştiyse mahsuplara dokunur;
+      karttan yapılmış kısmi mahsup kalır.
+    - Kart ve Kasa: icradan doğan emanete "Ters kayıtla düzelt" yok. "Mahsup et" defterin
+      mahsup listesine yazar; mahsubun tersi mahsubu geri alır. Ters kayıt artık `kaynak`'ı
+      kopyalamaz.
+    - Kasa her satırı bir kez tersler: hedefin ilk tersi sayılır, fazlası ve tersin tersi
+      sıfır sayılır.
+    - Göç (şema 2, `migrateLedgers`): eski hareketlerin net etkisi uyuşuyorsa geçmişe
+      (`ledger_history`, `ledger_legacy`) taşınır, uyuşmuyorsa `ledger_repair` raporuna gider.
+      `resolveLedgerRepair` rapor özetiyle onaylı onarım yapar.
+    - İlan ve etkinleştirme: `defterIslemi`. Eski sürüm cihazla `ajanda` ve `muvekkil-buro`
+      parçaları durur.
+    - Kalan (ekran; maket onayı bekliyor):
+      - askıdaki mahsubun gösterilmesi;
+      - onarım raporu ekranı;
+      - eski sürüm cihazla duran parçanın Senkron sayfasında gösterilmesi.
+  - Sıradaki adım: adım 4'ün Codex denetimi ve ekran kısmı, sonra §5 adım 5.
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,

@@ -19,6 +19,9 @@ import 'uyap_notice.dart';
 import '../legal/deadlines/aidiyet.dart' show vekilOlarakGeciyor;
 import '../uyap/uyap_web_service.dart' show UyapParty, UyapWebService;
 import '../clients/client.dart';
+import '../clients/client_accounts.dart' show Movement, MovementKind;
+import '../enforcement/ledger_book.dart';
+import '../sync/hlc.dart';
 import '../sync/sync_generation.dart';
 import '../sync/sync_migration.dart';
 

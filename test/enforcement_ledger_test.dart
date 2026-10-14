@@ -8,6 +8,7 @@ import 'package:evrak_convert/services/clients/client.dart';
 import 'package:evrak_convert/services/clients/client_accounts.dart';
 import 'package:evrak_convert/services/clients/office_cash.dart';
 import 'package:evrak_convert/services/enforcement/enforcement_ledger.dart';
+import 'package:evrak_convert/services/enforcement/ledger_book.dart';
 import 'package:evrak_convert/services/enforcement/enforcement_papers.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_data.dart';
@@ -272,7 +273,7 @@ void main() {
   });
 
   testWidgets('a payment made outside is corrected and taken off from its '
-      'own line: what it wrote in Kasa is reversed and written anew', (
+      'own line: its money in Kasa follows it, with no reversal written', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1400, 1200);
@@ -340,15 +341,33 @@ void main() {
     expect(account.feeIn, 1250000);
     expect(account.advanceLeft, 0);
 
-    // Taken off: the line goes, and what it wrote in Kasa is reversed.
+    // Its movements are made of it: none written of their own, none
+    // reversed (docs/senkron-plan.md R3).
+    final movements = [
+      for (final r in db.allClientRecords())
+        if (r.kind == ClientRecordKind.movement) r,
+    ];
+    expect(movements, hasLength(2), reason: 'held, and its set-off');
+    expect(movements.every(LedgerBook.isProjected), isTrue);
+    expect(
+      db.saveClientRecord(movements.first.copyWith(locked: false)),
+      isFalse,
+      reason: 'never written by hand',
+    );
+    expect(
+      db.allClientRecords().where(
+        (r) => r.kind == ClientRecordKind.movement && r.text('ters').isNotEmpty,
+      ),
+      isEmpty,
+    );
+
+    // Taken off: the line goes, and its money in Kasa with it.
     await tester.tap(find.byKey(ValueKey('ledger-remove-$id')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('ledger-remove-ok')));
     await tester.pumpAndSettle();
     expect(ledgerOf(db, 'k1'), isEmpty);
-    account = caseAccounts(db.allClientRecords())['k1']!;
-    expect(account.feeIn, 0);
-    expect(account.advanceLeft, 0);
+    expect(caseAccounts(db.allClientRecords())['k1'], isNull);
     expect(find.byKey(ValueKey('ledger-$id')), findsNothing);
   });
 

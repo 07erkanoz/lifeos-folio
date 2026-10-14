@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../tools/interest_page.dart';
 import '../../services/clients/client.dart';
+import '../../services/enforcement/ledger_book.dart';
 import '../../services/clients/client_accounts.dart';
 import '../../services/clients/client_documents.dart';
 import '../../services/editor/lawyer_profile.dart';
@@ -374,12 +375,13 @@ class _ClientsPageState extends State<ClientsPage> {
   /// What a client is found by, folded once for each list read: made on
   /// each keystroke, every case of every client was read from the database
   /// for its number.
-  String _searchText(ClientEntry e) =>
-      _searchTexts[e.key] ??= UyapWebService.fold(
-        '${e.name} ${e.client?.idNo ?? ''} '
-        '${e.client?.phone ?? ''} ${e.client?.phone2 ?? ''} '
-        '${[for (final c in e.cases) _db?.caseOf(c.caseKey)?.number ?? ''].join(' ')}',
-      );
+  String _searchText(
+    ClientEntry e,
+  ) => _searchTexts[e.key] ??= UyapWebService.fold(
+    '${e.name} ${e.client?.idNo ?? ''} '
+    '${e.client?.phone ?? ''} ${e.client?.phone2 ?? ''} '
+    '${[for (final c in e.cases) _db?.caseOf(c.caseKey)?.number ?? ''].join(' ')}',
+  );
 
   List<ClientEntry>? _searchOf;
   int? _searchCases;
@@ -1235,7 +1237,9 @@ class _ClientCardState extends State<ClientCard> {
       most: most,
     );
     if (made == null) return;
-    _keep(made);
+    final via = ledgerApply(_db, held, made);
+    if (!via.ledger) _keep(made);
+    if (via.refused != null && mounted) showNotice(context, via.refused!);
     if (mounted) setState(() {});
     widget.onChanged?.call(card.id);
   }
@@ -1259,7 +1263,18 @@ class _ClientCardState extends State<ClientCard> {
   }
 
   /// [m] taken back by a movement that names it: both stay, struck out.
+  /// A set-off made of an enforcement payment is taken back through its
+  /// ledger instead (R3).
   Future<void> _reverse(ClientRecord m) async {
+    if (LedgerBook.isProjected(m)) {
+      final via = ledgerTakeBack(_db, m);
+      if (via.refused != null) {
+        showNotice(context, via.refused!);
+      }
+      if (mounted) setState(() {});
+      widget.onChanged?.call(m.clientId);
+      return;
+    }
     final why = await showDialog<String>(
       context: context,
       builder: (_) => const _NoteDialog(
@@ -1283,7 +1298,9 @@ class _ClientCardState extends State<ClientCard> {
           'zaman': now.toIso8601String(),
           'aciklama': reason.isEmpty ? m.text('aciklama') : reason,
           'ekler': const [],
-        },
+          // A reversal is no money of what [m] came of: it would be taken
+          // for [m]'s booking by what looks for it.
+        }..remove('kaynak'),
         created: now,
         by: widget.lawyer,
         updated: now,

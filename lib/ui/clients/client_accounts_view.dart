@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
 import '../../services/clients/client_files.dart';
+import '../../services/enforcement/ledger_book.dart';
+import '../../services/enforcement/ledger_service.dart';
+import '../../services/portal/portal_database.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import 'clients_page.dart' show pickScan;
 import '../theme/folio_palette.dart';
@@ -346,10 +349,14 @@ class ClientAccountsView extends StatelessWidget {
                     child: Text('Karşı vekâlet ücretine mahsup et'),
                   ),
                 ],
-                const PopupMenuItem(
-                  value: 'ters',
-                  child: Text('Ters kayıtla düzelt'),
-                ),
+                // What an enforcement payment holds is taken off from its own
+                // line in the file, not reversed here (R3).
+                if (!(LedgerBook.isProjected(m) &&
+                    kind == MovementKind.collected))
+                  const PopupMenuItem(
+                    value: 'ters',
+                    child: Text('Ters kayıtla düzelt'),
+                  ),
               ],
             ),
         ],
@@ -912,4 +919,56 @@ ClientRecord appliedMovement(
     locked: true,
     person: person,
   );
+}
+
+/// [made], a set-off of [held], written through [held]'s ledger when
+/// [held] is an enforcement payment's money (docs/senkron-plan.md R3): the
+/// set-off goes into the payment's own record, its movement is made of it.
+/// [ledger] false for any other movement, to be kept as it is; [refused]
+/// what the ledger said when it would not.
+({bool ledger, String? refused}) ledgerApply(
+  PortalDatabase db,
+  ClientRecord held,
+  ClientRecord made,
+) {
+  final source = LedgerService.sourceOf(held);
+  if (source == null) return (ledger: false, refused: null);
+  final target = made.movement;
+  if (target == null) return (ledger: true, refused: 'Mahsup türü yok.');
+  try {
+    LedgerService(db)
+        .addSetOff(source.entryId, target, made.amount, at: made.at);
+    return (ledger: true, refused: null);
+  } on LedgerOverdrawn catch (e) {
+    return (ledger: true, refused: '$e');
+  } on LedgerConflict catch (e) {
+    return (ledger: true, refused: '$e');
+  } on LedgerNeedsRepair catch (e) {
+    return (ledger: true, refused: '$e');
+  }
+}
+
+/// [m], a set-off made of an enforcement payment's ledger, taken back
+/// through it; null for any other movement, else what was said.
+({bool ledger, String? refused}) ledgerTakeBack(
+  PortalDatabase db,
+  ClientRecord m,
+) {
+  final source = LedgerService.sourceOf(m);
+  if (source == null) return (ledger: false, refused: null);
+  final setOff = source.setOffId;
+  if (setOff == null) {
+    return (
+      ledger: true,
+      refused: 'Bu tutar icra dosyasındaki ödemeden kaldırılır.',
+    );
+  }
+  try {
+    LedgerService(db).removeSetOff(source.entryId, setOff);
+    return (ledger: true, refused: null);
+  } on LedgerConflict catch (e) {
+    return (ledger: true, refused: '$e');
+  } on LedgerNeedsRepair catch (e) {
+    return (ledger: true, refused: '$e');
+  }
 }

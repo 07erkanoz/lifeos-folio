@@ -25,7 +25,10 @@ abstract final class SyncMigration {
   /// in what is kept. The steps after it come with the parts they serve.
   static const base = 1;
 
-  static List<SyncMigrationStep> steps = const [];
+  static List<SyncMigrationStep> steps = [
+    // The enforcement ledgers' movements made of their records (§5 step 4).
+    SyncMigrationStep(2, 'icra-defteri', (db) => db.migrateLedgers()),
+  ];
 
   static int schemaOf(PortalDatabase db) =>
       int.tryParse(db.meta(schemaKey) ?? '') ?? 0;

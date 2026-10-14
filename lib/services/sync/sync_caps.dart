@@ -24,12 +24,17 @@ abstract final class SyncCaps {
 
   /// What this Folio knows and says it has: each only once the feature
   /// using it is whole here (§5).
-  static const known = {hlc, split};
+  static const known = {hlc, split, ledgerOps};
 
   /// The capabilities this Folio's own formats use now: a part needs of
   /// another device only those of its row in [matrix] that are here.
   /// Empty until a part's format changes (§5 steps 3 on).
-  static Set<String> active = const {};
+  static Set<String> active = const {
+    // The enforcement ledgers' records keep their groups' versions and
+    // set-offs, and their movements are made of them (§5 step 4): an
+    // older Folio would write them whole and send the movements back.
+    ledgerOps,
+  };
 
   /// What each part and channel needs when its format uses it (§4.1).
   static const matrix = <String, Set<String>>{

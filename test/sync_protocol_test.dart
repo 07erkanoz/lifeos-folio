@@ -388,7 +388,7 @@ void main() {
       final db = PortalDatabase.memory();
       addTearDown(db.dispose);
       final backups = Directory('${dir.path}/yedek');
-      expect(SyncMigration.run(db, backups: backups), isFalse);
+      expect(SyncMigration.run(db, backups: backups, using: const []), isFalse);
       expect(SyncMigration.schemaOf(db), SyncMigration.base);
       expect(backups.existsSync(), isFalse);
     });
@@ -619,11 +619,11 @@ void main() {
       phone.actsOldForTesting = true;
       final big = [for (var i = 0; i < 400; i++) '${i * 7919 % 10007}-$i'];
       Object? came;
-      laptop.ownParts['ajanda'] = OwnPart(
+      laptop.ownParts['profil'] = OwnPart(
         export: () async => {'satirlar': big},
         merge: (_) async => false,
       );
-      phone.ownParts['ajanda'] = OwnPart(
+      phone.ownParts['profil'] = OwnPart(
         export: () async => {'satirlar': const []},
         merge: (theirs) async {
           came = theirs;

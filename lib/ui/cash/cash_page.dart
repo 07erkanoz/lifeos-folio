@@ -20,7 +20,7 @@ import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../clients/attachment_preview.dart';
 import '../clients/client_accounts_view.dart'
-    show CurrencyChoice, MovementDialog, askApplyHeld;
+    show CurrencyChoice, MovementDialog, askApplyHeld, ledgerApply;
 import '../clients/clients_page.dart' show pickScan;
 import '../portfolio/portfolio_rows.dart' show titleName;
 import '../widgets/notice.dart';
@@ -1020,7 +1020,9 @@ class _CashPageState extends State<CashPage> {
       most: most,
     );
     if (made == null) return;
-    _keep(made);
+    final via = ledgerApply(db, held, made);
+    if (!via.ledger) _keep(made);
+    if (via.refused != null && mounted) showNotice(context, via.refused!);
     await _load();
   }
 

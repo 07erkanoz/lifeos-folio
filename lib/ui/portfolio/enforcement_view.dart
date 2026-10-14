@@ -10,6 +10,8 @@ import '../../services/editor/lawyer_profile.dart';
 import '../../services/editor/petition_templates.dart'
     show PetitionCase, PetitionTemplate, enforcementRequests, trUpper;
 import '../../services/enforcement/enforcement_ledger.dart';
+import '../../services/enforcement/ledger_book.dart';
+import '../../services/enforcement/ledger_service.dart';
 import '../../services/enforcement/enforcement_papers.dart';
 import '../../services/udf/udf_writer.dart';
 import '../../services/uyap/uyap_case_links.dart';
@@ -25,7 +27,6 @@ import '../../services/uyap/uyap_enforcement.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../tools/interest_page.dart';
 import '../widgets/notice.dart';
-import '../clients/client_accounts_view.dart' show appliedMovement;
 import '../widgets/folio_dialog.dart';
 import 'enforcement_ledger_dialog.dart';
 import 'portfolio_rows.dart';
@@ -253,35 +254,26 @@ class _EnforcementViewState extends State<EnforcementView> {
     if (input == null || !mounted) return;
     final db = await widget.database();
     final client = await _client(db);
-    final now = DateTime.now();
-    final me = OfficeNetwork.instance.me;
-    final entry = ClientRecord(
-      id: Client.newId(),
-      // A file with no client of the lawyer's keeps its account with the
-      // office's own book.
+    // A file with no client of the lawyer's keeps its account with the
+    // office's own book; its money goes in no client's account.
+    final booked = kind == LedgerKind.external && client != null;
+    // The line and its money in the client's account and Kasa, in one
+    // transaction (docs/senkron-plan.md R3, R12).
+    LedgerService(db).add(
       clientId: client?.$2.id ?? officeCashId,
-      kind: ClientRecordKind.enforcement,
-      data: {
-        'dosya': widget.caseKey,
-        'tur': input.kind.code,
-        'tutar': input.amount,
-        'zaman': input.at.toIso8601String(),
-        'borclu': input.debtor,
-        'odeme': input.way,
-        'aciklama': input.note,
-        'tamami': input.whole,
-        'uyapBakiye': ?uyap,
-      },
-      created: now,
+      caseKey: widget.caseKey,
+      kind: input.kind.code,
+      amount: input.amount,
+      at: input.at,
       by: widget.lawyer,
-      updated: now,
-      person: me,
+      person: OfficeNetwork.instance.me,
+      debtor: input.debtor,
+      way: input.way,
+      note: input.note,
+      whole: input.whole,
+      uyapLeft: uyap,
+      target: booked ? input.target : null,
     );
-    db.saveClientRecord(entry);
-    final booked =
-        kind == LedgerKind.external &&
-        client != null &&
-        _bookLedger(db, entry.id, client.$2, input);
     await _loadBooked();
     if (!mounted) return;
     // Its papers are printed from its card when wanted ("Yazdır"); nothing
@@ -302,54 +294,6 @@ class _EnforcementViewState extends State<EnforcementView> {
         'Belgeleri ödemenin "Yazdır" düğmesinden yazdırabilirsiniz.',
       ].join(' '),
     );
-  }
-
-  /// The money of payment [entryId] written to [client]'s account and to
-  /// Kasa: held for them, and taken as [input]'s target when it names one.
-  bool _bookLedger(
-    PortalDatabase db,
-    String entryId,
-    Client client,
-    LedgerInput input,
-  ) {
-    final now = DateTime.now();
-    final me = OfficeNetwork.instance.me;
-    final held = ClientRecord(
-      id: Client.newId(),
-      clientId: client.id,
-      kind: ClientRecordKind.movement,
-      data: {
-        'dosya': widget.caseKey,
-        'hesap': MovementKind.collected.code,
-        'tutar': input.amount,
-        'zaman': input.at.toIso8601String(),
-        'aciklama': [
-          'Haricen tahsilat',
-          if (input.debtor.isNotEmpty) input.debtor,
-        ].join(' · '),
-        'odeme': input.way,
-        'kaynak': 'icra:$entryId',
-      },
-      created: now,
-      by: widget.lawyer,
-      updated: now,
-      locked: true,
-      person: me,
-    );
-    db.saveClientRecord(held);
-    if (input.target case final target?) {
-      db.saveClientRecord(
-        appliedMovement(
-          held,
-          target,
-          input.amount,
-          lawyer: widget.lawyer,
-          person: me,
-          at: input.at,
-        ),
-      );
-    }
-    return true;
   }
 
   /// The movements [e] put in the client's account and Kasa, still
@@ -387,34 +331,6 @@ class _EnforcementViewState extends State<EnforcementView> {
     return applied == null ? null : MovementKind.of(applied.data['hesap']);
   }
 
-  /// [e]'s movements taken back by reversals that name them, saying [why];
-  /// whether there were any.
-  bool _unbook(PortalDatabase db, LedgerEntry e, String why) {
-    final (:held, :applied) = _movementsOf(db, e);
-    final now = DateTime.now();
-    for (final m in [...applied, ...held]) {
-      db.saveClientRecord(
-        ClientRecord(
-          id: Client.newId(),
-          clientId: m.clientId,
-          kind: ClientRecordKind.movement,
-          data: {
-            ...m.data,
-            'ters': m.id,
-            'zaman': now.toIso8601String(),
-            'aciklama': why,
-          }..remove('kaynak'),
-          created: now,
-          by: widget.lawyer,
-          updated: now,
-          locked: true,
-          person: OfficeNetwork.instance.me,
-        ),
-      );
-    }
-    return held.isNotEmpty;
-  }
-
   /// [e] corrected: its sum, day, debtor, way and note. A change of sum,
   /// day or where the money went takes back what it wrote in the client's
   /// account and Kasa, and writes it anew.
@@ -439,36 +355,54 @@ class _EnforcementViewState extends State<EnforcementView> {
       ),
     );
     if (input == null || !mounted) return;
-    final sum = input.amount != e.amount;
-    final money = sum || input.at != e.at || input.target != target;
-    final data = {
-      ...e.record.data,
-      'tutar': input.amount,
-      'zaman': input.at.toIso8601String(),
-      'borclu': input.debtor,
-      'odeme': input.way,
-      'aciklama': input.note,
-      'tamami': input.whole,
-    };
-    // A collection UYAP showed for the old sum is worked out anew; one the
-    // lawyer marked stays marked.
-    db.saveClientRecord(e.record.copyWith(data: data));
-    var rebooked = false;
-    if (e.kind == LedgerKind.external && money) {
-      if (_unbook(db, e, 'Haricen tahsilat düzeltildi')) {
-        final client = await _client(db);
-        if (client != null) rebooked = _bookLedger(db, e.id, client.$2, input);
-      }
-    }
-    await _loadBooked();
-    if (!mounted) return;
+    final money =
+        input.amount != e.amount || input.at != e.at || input.target != target;
+    // The line and its money, in one transaction; nothing written when it
+    // changed meanwhile on another device (R12).
+    final done = await _change(
+      db,
+      (book) => book.edit(
+        e.record,
+        amount: input.amount,
+        at: input.at,
+        debtor: input.debtor,
+        way: input.way,
+        note: input.note,
+        whole: input.whole,
+        target: input.target,
+        shown: target,
+      ),
+    );
+    if (!done || !mounted) return;
     showNotice(
       context,
       '${e.kind.label} düzeltildi.',
-      detail: rebooked
-          ? 'Kasa\'daki eski kayıt ters kayıtla düzeltildi, yenisi yazıldı.'
+      detail: money && LedgerBook.books(e.record)
+          ? 'Müvekkilin hesabı ve Kasa yeni tutara göre güncellendi.'
           : null,
     );
+  }
+
+  /// [change] made through the ledger's service, the view read again; a
+  /// change refused (made meanwhile elsewhere, or waiting for its repair)
+  /// told. Whether it was made.
+  Future<bool> _change(
+    PortalDatabase db,
+    void Function(LedgerService book) change,
+  ) async {
+    String? refused;
+    try {
+      change(LedgerService(db));
+    } on LedgerConflict catch (e) {
+      refused = '$e';
+    } on LedgerNeedsRepair catch (e) {
+      refused = '$e';
+    } on LedgerOverdrawn catch (e) {
+      refused = '$e';
+    }
+    await _loadBooked();
+    if (refused != null && mounted) showNotice(context, refused);
+    return refused == null;
   }
 
   /// Who the papers name: the office and the number, our side, the
@@ -903,37 +837,22 @@ class _EnforcementViewState extends State<EnforcementView> {
   Future<void> _markReported(LedgerEntry e, bool reported) async {
     if (_othersOf(e)) return;
     final db = await widget.database();
-    db.saveClientRecord(
-      e.record.copyWith(
-        data: {
-          ...e.record.data,
-          'bildirildi': reported ? DateTime.now().toIso8601String() : '',
-        },
-      ),
+    await _change(
+      db,
+      (book) => book.setReported(e.record, reported ? DateTime.now() : null),
     );
-    await _loadBooked();
   }
 
   /// [e] marked as UYAP shows it, or not yet.
   Future<void> _markOfficial(LedgerEntry e, bool official) async {
     if (_othersOf(e)) return;
     final db = await widget.database();
-    db.saveClientRecord(
-      e.record.copyWith(
-        // The lawyer's word, kept apart from what UYAP is matched to (R4);
-        // an older Folio's mark in `resmi` is taken off with it.
-        data: {
-          ...e.record.data,
-          'resmiKarar': official ? 'elle' : '',
-          'resmi': '',
-        },
-      ),
-    );
-    await _loadBooked();
+    // The lawyer's word, kept apart from what UYAP is matched to (R4).
+    await _change(db, (book) => book.setOfficial(e.record, official));
   }
 
   /// [e] taken off the file's account, and the money it put in the
-  /// client's taken back by reversals that name it.
+  /// client's account and Kasa with it (R3, R5).
   Future<void> _removeEntry(LedgerEntry e) async {
     if (_othersOf(e)) return;
     final ok = await showDialog<bool>(
@@ -942,7 +861,7 @@ class _EnforcementViewState extends State<EnforcementView> {
         title: Text('${e.kind.label} kaldırılsın mı?'),
         content: const Text(
           'Folio hesabından çıkar; müvekkil hesabına ve Kasa\'ya yazılan '
-          'tutarlar ters kayıtla düzeltilir.',
+          'tutarlar da kalkar.',
         ),
         actions: [
           TextButton(
@@ -959,10 +878,10 @@ class _EnforcementViewState extends State<EnforcementView> {
     );
     if (ok != true) return;
     final db = await widget.database();
-    _unbook(db, e, '${e.kind.label} kaldırıldı');
-    db.saveClientRecord(e.record.copyWith(removed: true));
-    await _loadBooked();
-    if (mounted) showNotice(context, '${e.kind.label} kaldırıldı.');
+    if (await _change(db, (book) => book.setRemoved(e.record, true)) &&
+        mounted) {
+      showNotice(context, '${e.kind.label} kaldırıldı.');
+    }
   }
 
   /// Whether a payment out of [kind] passes the claim on (to the creditor

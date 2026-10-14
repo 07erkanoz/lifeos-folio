@@ -95,13 +95,33 @@ List<CashLine> cashLines(PortalDatabase db, {List<ClientEntry>? entries}) {
     for (final r in records)
       if (r.reverses.isNotEmpty) r.reverses,
   };
+  // A line is taken back once, as a client's account takes it
+  // (docs/senkron-plan.md R3): by the first reversal of it, of a line that
+  // is no reversal itself. Another reversal of it, or one of a reversal, is
+  // shown struck and counts for nothing.
+  final byId = {for (final r in records) r.id: r};
+  final firstBack = <String, String>{};
+  for (final r
+      in [...records]..sort((a, b) {
+        final c = a.created.compareTo(b.created);
+        return c != 0 ? c : a.id.compareTo(b.id);
+      })) {
+    final target = byId[r.reverses];
+    if (r.reverses.isEmpty || target == null || target.reverses.isNotEmpty) {
+      continue;
+    }
+    firstBack.putIfAbsent(r.reverses, () => r.id);
+  }
   final out = <CashLine>[];
   for (final r in records) {
     final back = r.reverses.isNotEmpty;
     final struck = back || reversed.contains(r.id);
+    // What this line counts for: its own sum, its reversal's taken off,
+    // nothing for a reversal that takes back nothing more.
+    final counts = !back || firstBack[r.reverses] == r.id;
     if (r.kind == ClientRecordKind.cash) {
       final income = r.text('tur') == 'gelir';
-      final sign = (income ? 1 : -1) * (back ? -1 : 1);
+      final sign = (income ? 1 : -1) * (back ? -1 : 1) * (counts ? 1 : 0);
       out.add(
         CashLine(
           record: r,
@@ -149,7 +169,7 @@ List<CashLine> cashLines(PortalDatabase db, {List<ClientEntry>? entries}) {
             if (r.text('aciklama').isNotEmpty) r.text('aciklama'),
             if (back) 'ters kayıt',
           ].join(' · '),
-          amount: (back ? -1 : 1) * r.amount,
+          amount: (back ? -1 : 1) * (counts ? 1 : 0) * r.amount,
           client: e?.name ?? db.clientCard(r.clientId)?.name ?? '',
           clientKey: e?.key,
           caseKey: r.text('dosya'),
@@ -170,7 +190,7 @@ List<CashLine> cashLines(PortalDatabase db, {List<ClientEntry>? entries}) {
           if (r.text('aciklama').isNotEmpty) r.text('aciklama'),
           if (back) 'ters kayıt',
         ].join(' · '),
-        amount: kind.sign * (back ? -1 : 1) * r.amount,
+        amount: kind.sign * (back ? -1 : 1) * (counts ? 1 : 0) * r.amount,
         client: e?.name ?? db.clientCard(r.clientId)?.name ?? '',
         clientKey: e?.key,
         caseKey: r.text('dosya'),
