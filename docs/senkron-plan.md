@@ -972,3 +972,13 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
     (`officeChanged`) hemen yayılır; değişiklik yoksa tetik yok.
   - Alınan görev notları `not-takibi` ile kişinin diğer cihazlarına gider.
   - Meslektaşın kartında not alanı salt okunur; kayıttan sonra kart veritabanından yeniden okunur.
+- **Adım 6 kod denetimi, 2. tur (14 Ekim, REVISE: 4 kapandı, 5 kısmen, 2 yeni kritik):** işlenenler:
+  - Belge, açık ekranın eski nesnesiyle değil, kayıt yeniden okunarak üretilir.
+  - Eski paket temizliği sürümlü bildirilir (`task_note_clean.surum`, `eskiSurum`); veren en son
+    bildirimi tutar, sonradan gelip temizlenemeyen paket eski "temiz" onayını geçersiz kılar.
+    Temizlik yalnız gerçekten yazılacak dosya varsa durum değiştirir (döngü yok).
+  - Kapanan görevin işareti alıcıda o kapsamın notlarını hemen düşürür.
+  - Kart notu alıcıları ve alınan görev notları değişince kendi cihazlara hemen yayılır.
+  - Kendi cihazdan gelen görev notları, oradaki eski paketin temizliğini başlatır (`cleanKnown`).
+  - Bir kişiye gönderilen not, o kişinin büro defterindeki bütün cihazlarında "olası" sayılır;
+    kişi ancak bütün cihazları uygulayınca tamamlanır.

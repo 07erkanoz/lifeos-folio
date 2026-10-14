@@ -456,9 +456,18 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// [e]'s request to the office, or the debtor's receipt: its name and
   /// its pages, filled from the file and the payment.
   Future<(String, DocModel)> _paperOf(
-    LedgerEntry e, {
+    LedgerEntry shown, {
     required bool receipt,
   }) async {
+    // As it is kept now, whether its description is secret too (R7): what
+    // came since the screen read it counts.
+    final db = await widget.database();
+    final e =
+        ledgerOf(
+          db,
+          widget.caseKey,
+        ).where((x) => x.id == shown.id).firstOrNull ??
+        shown;
     final parties = await _parties();
     final DocModel model = receipt
         ? debtorReceipt(parties, e)

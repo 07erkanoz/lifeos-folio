@@ -26,6 +26,7 @@ class TaskNotes {
     required this.personOf,
     required this.received,
     this.onTracking,
+    this.devicesOf,
   });
 
   static const part = 'gorev-notlari';
@@ -48,6 +49,10 @@ class TaskNotes {
   /// for the person's own devices to hear of it.
   final void Function()? onTracking;
 
+  /// Every device of a person's in the office: a note sent to one of them
+  /// may go on to the others, each is taken as holding it (R7).
+  final List<String> Function(String person)? devicesOf;
+
   /// What goes to [toDevice]: the notes of the tasks this person gave its
   /// person, and of their cards' notes what was taken back; and what this
   /// one holds of theirs.
@@ -66,10 +71,14 @@ class TaskNotes {
         final n = db.taskNoteRows(c.caseKey);
         final scope = 'gorev:${t.id}|${c.caseKey}';
         open.add('${t.id}|${c.caseKey}');
-        // Sent: it may be there from now on, whether it came or not.
+        // Sent: it may be there from now on, whether it came or not, and
+        // on every device of the person's.
+        final devices = {toDevice, ...?devicesOf?.call(to)};
         for (final row in n.rows) {
-          if (db.recordHold('ajanda:${row['id']}', toDevice, to, scope)) {
-            tracked = true;
+          for (final d in devices) {
+            if (db.recordHold('ajanda:${row['id']}', d, to, scope)) {
+              tracked = true;
+            }
           }
         }
         scopes.add({
@@ -113,11 +122,15 @@ class TaskNotes {
           'dosya': h.caseKey,
           'notlar': <String, String>{},
           'gizlenen': <String, String>{},
-          // Cleaned for sure, or nothing of before here to clean.
+          // Cleaned for sure, or nothing of before here to clean; and the
+          // version of that word, the latest standing there.
           'eskiTemiz': switch (db.taskNotesCleaning(h.task, h.caseKey)) {
             null || 'tamam' => true,
             _ => false,
           },
+          'eskiSurum': ?db
+              .taskNotesCleaningVersion(h.task, h.caseKey)
+              ?.toString(),
         },
       );
       if (h.hidden != null) {
@@ -162,7 +175,11 @@ class TaskNotes {
       }
       final task = s['gorev'] as String, caseKey = s['dosya'] as String;
       if (!theirTasks.contains(task)) continue;
-      final standing = given.contains('$task|$caseKey');
+      // Done there, before it is here: what came of it goes at once.
+      if (s['kapali'] == true && db.forgetTaskScope(from, task, caseKey)) {
+        changed = true;
+      }
+      final standing = s['kapali'] != true && given.contains('$task|$caseKey');
       Map<String, Hlc> versions(Object? m) => {
         if (m is Map)
           for (final e in m.entries) '${e.key}': ?Hlc.tryParse(e.value),
@@ -244,14 +261,18 @@ class TaskNotes {
           tracked = true;
         }
       });
-      if (r['eskiTemiz'] == true &&
-          db.knowsHold('eski:$key', fromDevice) &&
+      // An older package's cleaning, as it is now there: clean, or not
+      // (a package come since that could not be cleaned).
+      final said = Hlc.tryParse(r['eskiSurum']) ?? oldCleaned;
+      if (db.knowsHold('eski:$key', fromDevice) &&
           db.recordHold(
             'eski:$key',
             fromDevice,
             from,
             scope,
-            applied: oldCleaned,
+            held: said,
+            applied: r['eskiTemiz'] == true ? said : null,
+            latest: true,
           )) {
         tracked = true;
       }
@@ -271,7 +292,9 @@ class TaskNotes {
         tracked = true;
       }
     }
-    if (tracked) onTracking?.call();
+    // What came here, and who holds what: to this person's other devices
+    // at once.
+    if (tracked || changed) onTracking?.call();
     return changed;
   }
 
@@ -281,7 +304,6 @@ class TaskNotes {
   /// till every file of it is ('temizlenecek'), then 'tamam': only then it
   /// is said to be. True when a file was written.
   Future<bool> cleanPackage(String task, String caseKey) async {
-    db.setTaskNotesCleaning(task, caseKey, 'temizlenecek');
     var wrote = false;
     for (final path in received(task, caseKey) ?? const <String>[]) {
       if (!_details(path)) continue;
@@ -293,6 +315,8 @@ class TaskNotes {
           continue;
         }
         if (!j.containsKey('notlar') && !j.containsKey('sureler')) continue;
+        // Said to be cleaned only once it is: till then, to be.
+        db.setTaskNotesCleaning(task, caseKey, 'temizlenecek');
         j
           ..remove('notlar')
           ..remove('sureler');
@@ -302,6 +326,7 @@ class TaskNotes {
         wrote = true;
       } catch (_) {
         // Tried again as the next list comes, and at the next start.
+        db.setTaskNotesCleaning(task, caseKey, 'temizlenecek');
         return wrote;
       }
     }
@@ -334,6 +359,18 @@ class TaskNotes {
     } else {
       db.setTaskNotesCleaning(task, caseKey, 'bekliyor');
     }
+  }
+
+  /// The packages here of the givers whose notes came apart (their notes
+  /// kept here, from them or another own device), cleaned of an older
+  /// Folio's notes: as what came from another own device comes.
+  Future<bool> cleanKnown() async {
+    var wrote = false;
+    for (final s in db.taskNoteScopes) {
+      if (db.taskNotesCleaning(s.task, s.caseKey) == 'tamam') continue;
+      if (await cleanPackage(s.task, s.caseKey)) wrote = true;
+    }
+    return wrote;
   }
 
   /// The packages left to be cleaned (a file that could not be written),

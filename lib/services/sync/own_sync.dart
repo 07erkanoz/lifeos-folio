@@ -377,8 +377,18 @@ class OwnSync extends ChangeNotifier {
             money: _net.seesMoney && _net.seesMoneyOf(to),
             me: _net.me,
           );
-          // Who may hold each note from now on, for its taking back.
-          SecretNotes.recordCardHolds(db, sent, to, _personOf(to));
+          // Who may hold each note from now on, for its taking back: every
+          // device of its person's; told to this person's own at once.
+          final person = _personOf(to);
+          if (SecretNotes.recordCardHolds(
+            db,
+            sent,
+            to,
+            person,
+            devices: _net.ledger.devicesOf(person),
+          )) {
+            _net.ownChanged();
+          }
           return sent;
         },
         merge: (theirs, from) async {
@@ -467,6 +477,7 @@ class OwnSync extends ChangeNotifier {
       received: _net.packages.receivedPaths,
       // Who may hold what, to the person's other devices at once.
       onTracking: _net.ownChanged,
+      devicesOf: _net.ledger.devicesOf,
     );
     _net.officeParts[TaskNotes.part] = OfficePart(
       export: (to) async => notes.export(to),
@@ -484,8 +495,12 @@ class OwnSync extends ChangeNotifier {
       merge: (theirs) async {
         final changed = db.noteTrackingMerge(theirs);
         // A note made secret on another own device: taken back of the
-        // office from here too, at once.
-        if (changed) _net.officeChanged();
+        // office from here too, at once; and a giver's notes come here
+        // from another own device, their older packages here cleaned.
+        if (changed) {
+          _net.officeChanged();
+          await notes.cleanKnown();
+        }
         return changed;
       },
     );

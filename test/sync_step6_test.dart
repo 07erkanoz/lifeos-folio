@@ -648,4 +648,143 @@ void main() {
       expect(b2.noteTrackingMerge(b.noteTrackingExport()), isFalse);
     });
   });
+
+  group('Codex\'s second review of step 6', () {
+    late PortalDatabase b2;
+    late Directory dir;
+    late OfficeTask task;
+    setUp(() {
+      b2 = PortalDatabase.memory();
+      dir = Directory.systemTemp.createTempSync('adim6-ikinci');
+      task =
+          OfficeTask(
+              id: 't1',
+              title: 'Bilirkişi raporuna itiraz',
+              by: 'deniz',
+              byName: 'Av. Deniz Kaya',
+              assignees: const {'selin': 'Av. Selin Ak'},
+              createdAt: DateTime(2026, 10, 7),
+              cases: const [
+                TaskCase(caseKey: 'dava', number: '2026/412', court: 'X'),
+              ],
+            )
+            ..events.add(
+              TaskEvent.create(TaskEventKind.given, 'deniz', 'Av. Deniz Kaya'),
+            );
+    });
+    tearDown(() {
+      b2.dispose();
+      dir.deleteSync(recursive: true);
+    });
+    String person(String device) => device[0] == 'a' ? 'deniz' : 'selin';
+    List<String>? paths;
+    TaskNotes notes(PortalDatabase db, String me) => TaskNotes(
+      db: db,
+      me: () => me,
+      tasks: () => [task],
+      personOf: person,
+      received: (_, _) => paths,
+      devicesOf: (p) => p == 'selin' ? ['b1', 'b2'] : ['a1'],
+    );
+    Future<bool> give(
+      PortalDatabase from,
+      String fromDevice,
+      PortalDatabase to,
+      String toDevice,
+    ) => notes(
+      to,
+      person(toDevice),
+    ).merge(notes(from, person(fromDevice)).export(toDevice), fromDevice);
+    File old(String name, String text) => File('${dir.path}/$name')
+      ..writeAsStringSync(
+        jsonEncode({
+          'evrakAdlari': {},
+          'notlar': [
+            {'metin': text},
+          ],
+        }),
+      );
+
+    test('every device of the doer\'s is counted, a note gone from one to '
+        'another of theirs too', () async {
+      a.saveAgenda(note('n', 'Tanık listesi'));
+      await give(a, 'a1', b, 'b1');
+      // b2 had it from b1, never from the giver.
+      b2.noteTrackingMerge(b.noteTrackingExport());
+      a.saveAgenda(a.agenda().single.copyWith(secret: true));
+      await give(a, 'a1', b, 'b1');
+      await give(b, 'b1', a, 'a1');
+      final r = SecretNotes.recallOf(a, 'ajanda:n', caseKey: 'dava')!;
+      expect((r.done, r.of), (0, 1));
+      await give(a, 'a1', b2, 'b2');
+      await give(b2, 'b2', a, 'a1');
+      final r2 = SecretNotes.recallOf(a, 'ajanda:n', caseKey: 'dava')!;
+      expect((r2.done, r2.of), (1, 1));
+    });
+
+    test('a package cleaned, then one that came and could not be: the word '
+        'of before no longer stands', () async {
+      final first = old('dosya.json', 'Eski metin');
+      paths = [first.path];
+      addTearDown(() => paths = null);
+      a.recordHold('eski:t1|dava', 'b1', 'selin', 'gorev:t1|dava');
+      a.saveAgenda(note('n', 'Tanık listesi'));
+      a.saveAgenda(a.agenda().single.copyWith(secret: true));
+      await give(a, 'a1', b, 'b1');
+      await give(b, 'b1', a, 'a1');
+      bool oldDone() => a.oldHoldsOf('dava').single.applied != null;
+      expect(oldDone(), isTrue);
+      // Another older package comes; it cannot be written.
+      final second = old('dosya (2).json', 'Başka eski metin');
+      Directory('${second.path}.yeni').createSync();
+      paths = [first.path, second.path];
+      await notes(b, 'selin').came('t1', 'dava', [second.path]);
+      await give(b, 'b1', a, 'a1');
+      expect(oldDone(), isFalse);
+    });
+
+    test('a task done there before it is here: what came of it goes at '
+        'once', () async {
+      a.saveAgenda(note('n', 'Tanık listesi'));
+      await give(a, 'a1', b, 'b1');
+      expect(b.taskNotes('deniz', 't1', 'dava'), isNotEmpty);
+      // The giver closes it; the doer has not heard yet.
+      final closed = OfficeTask(
+        id: 't1',
+        title: task.title,
+        by: 'deniz',
+        byName: 'Av. Deniz Kaya',
+        assignees: task.assignees,
+        createdAt: task.createdAt,
+        cases: task.cases,
+        events: [
+          ...task.events,
+          TaskEvent.create(TaskEventKind.cancelled, 'deniz', 'Av. Deniz Kaya'),
+        ],
+      );
+      final sent = TaskNotes(
+        db: a,
+        me: () => 'deniz',
+        tasks: () => [closed],
+        personOf: person,
+        received: (_, _) => null,
+      ).export('b1');
+      await notes(b, 'selin').merge(sent, 'a1');
+      expect(b.taskNotes('deniz', 't1', 'dava'), isEmpty);
+    });
+
+    test('a giver\'s notes come to another own device of the doer\'s: its '
+        'older package there is cleaned too', () async {
+      final there = old('dosya.json', 'Eski metin');
+      a.saveAgenda(note('n', 'Tanık listesi'));
+      await give(a, 'a1', b, 'b1');
+      b2.setTaskNotesCleaning('t1', 'dava', 'bekliyor');
+      b2.noteTrackingMerge(b.noteTrackingExport());
+      paths = [there.path];
+      addTearDown(() => paths = null);
+      await notes(b2, 'selin').cleanKnown();
+      expect(there.readAsStringSync(), isNot(contains('Eski metin')));
+      expect(b2.taskNotesCleaning('t1', 'dava'), 'tamam');
+    });
+  });
 }

@@ -85,35 +85,41 @@ abstract final class SecretNotes {
   /// That the office member [person]'s [device] may hold the notes of the
   /// cards in [sent], a `muvekkil-buro` export to it: each note not empty,
   /// for what is taken back of it later to be counted there.
-  static void recordCardHolds(
+  /// Every device of [person]'s ([devices]) is taken as holding it: a
+  /// copy goes from one of theirs to another (R7). True when anything new
+  /// was kept.
+  static bool recordCardHolds(
     PortalDatabase db,
     Map<String, Object?> sent,
     String device,
-    String person,
-  ) {
-    if (person.isEmpty) return;
+    String person, {
+    List<String> devices = const [],
+  }) {
+    if (person.isEmpty) return false;
+    var changed = false;
+    final all = {device, ...devices};
+    void hold(String key, String scope) {
+      for (final d in all) {
+        if (db.recordHold(key, d, person, scope)) changed = true;
+      }
+    }
+
     for (final j in sent['muvekkiller'] as List? ?? const []) {
       if (j is! Map || j['buro'] != true || j['id'] is! String) continue;
       final id = j['id'] as String, scope = 'kart:$id';
-      if ('${j['not'] ?? ''}'.isNotEmpty) {
-        db.recordHold('kartNotu:$id', device, person, scope);
-      }
+      if ('${j['not'] ?? ''}'.isNotEmpty) hold('kartNotu:$id', scope);
       (j['dosyaNotlari'] as Map? ?? const {}).forEach((k, n) {
         if (n is Map && '${n['metin'] ?? ''}'.isNotEmpty) {
-          db.recordHold('dosyaNotu:$id:$k', device, person, scope);
+          hold('dosyaNotu:$id:$k', scope);
         }
       });
     }
     for (final j in sent['muvekkilKayitlari'] as List? ?? const []) {
       if (j is! Map || j['id'] is! String || j['veri'] is! Map) continue;
       if ('${(j['veri'] as Map)['aciklama'] ?? ''}'.isEmpty) continue;
-      db.recordHold(
-        'aciklama:${j['id']}',
-        device,
-        person,
-        'kart:${j['muvekkil']}',
-      );
+      hold('aciklama:${j['id']}', 'kart:${j['muvekkil']}');
     }
+    return changed;
   }
 
   /// How far [noteKey], made secret, was taken back of the office: of the

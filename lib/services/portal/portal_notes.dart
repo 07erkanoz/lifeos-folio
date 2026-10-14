@@ -77,6 +77,7 @@ extension PortalNotes on PortalDatabase {
     Hlc? held,
     Hlc? applied,
     bool gone = false,
+    bool latest = false,
   }) {
     final before = _db.select(
       'SELECT tuttu, surum, uygulanan FROM note_hold WHERE not_key=? '
@@ -93,6 +94,30 @@ extension PortalNotes on PortalDatabase {
       'AND kapsam=?',
       [noteKey, device, scope],
     ).first;
+    // A report that says how it is now, by its version: the latest one
+    // stands, clean or not ([held] its version, [applied] when clean).
+    if (latest) {
+      final was = Hlc.tryParse(now['surum']);
+      if (held != null && (was == null || held > was)) {
+        _db.execute(
+          'UPDATE note_hold SET surum=?, uygulanan=? WHERE not_key=? '
+          'AND cihaz=? AND kapsam=?',
+          ['$held', applied == null ? '' : '$applied', noteKey, device, scope],
+        );
+      }
+      final after = _db.select(
+        'SELECT tuttu, surum, uygulanan FROM note_hold WHERE not_key=? '
+        'AND cihaz=? AND kapsam=?',
+        [noteKey, device, scope],
+      );
+      return before.isEmpty ||
+          Hlc.canonical({
+                for (final c in before.first.keys) c: before.first[c],
+              }) !=
+              Hlc.canonical({
+                for (final c in after.first.keys) c: after.first[c],
+              });
+    }
     final was = Hlc.tryParse(now['uygulanan']);
     _db.execute(
       'UPDATE note_hold SET surum=?, uygulanan=? WHERE not_key=? AND cihaz=? '
@@ -189,6 +214,8 @@ extension PortalNotes on PortalDatabase {
           r['kapsam'] as String,
           held: Hlc.tryParse(r['surum']),
           applied: Hlc.tryParse(r['uygulanan']),
+          // An older package's cleaning: the latest report stands.
+          latest: (r['not_key'] as String).startsWith('eski:'),
         );
       }
       for (final r in theirs['alinanGizlemeler'] as List? ?? const []) {
@@ -597,6 +624,28 @@ extension PortalNotes on PortalDatabase {
     return changed;
   }
 
+  /// [owner]'s [task]'s case [caseKey]'s notes, its task done there: gone
+  /// here, what was taken back of them kept. True when one was.
+  bool forgetTaskScope(String owner, String task, String caseKey) {
+    final had = _db.select(
+      'SELECT 1 FROM task_note WHERE sahip=? AND gorev=? AND dosya=? '
+      'AND satir IS NOT NULL',
+      [owner, task, caseKey],
+    );
+    if (had.isEmpty) return false;
+    _db.execute(
+      'UPDATE task_note SET satir=NULL WHERE sahip=? AND gorev=? AND dosya=?',
+      [owner, task, caseKey],
+    );
+    return true;
+  }
+
+  /// Every task and case of which notes of a giver's are kept here.
+  List<({String task, String caseKey})> get taskNoteScopes => [
+    for (final r in _db.select('SELECT DISTINCT gorev, dosya FROM task_note'))
+      (task: r['gorev'] as String, caseKey: r['dosya'] as String),
+  ];
+
   /// Whether the notes an older Folio put in [task]'s case [caseKey]'s
   /// package here are still to be taken out ('bekliyor'), or were ('tamam').
   String? taskNotesCleaning(String task, String caseKey) {
@@ -607,12 +656,25 @@ extension PortalNotes on PortalDatabase {
     return r.isEmpty ? null : r.first['durum'] as String;
   }
 
-  void setTaskNotesCleaning(String task, String caseKey, String state) =>
-      _db.execute(
-        'INSERT OR REPLACE INTO task_note_clean(gorev, dosya, durum) '
-        'VALUES(?,?,?)',
-        [task, caseKey, state],
-      );
+  /// Each change of it a version of its own, for the giver to take the
+  /// latest of what is said of it.
+  void setTaskNotesCleaning(String task, String caseKey, String state) {
+    if (taskNotesCleaning(task, caseKey) == state) return;
+    _db.execute(
+      'INSERT OR REPLACE INTO task_note_clean(gorev, dosya, durum, surum) '
+      'VALUES(?,?,?,?)',
+      [task, caseKey, state, '${SyncClock.of(this).tick()}'],
+    );
+  }
+
+  /// The version of what was last said of [task]'s case's cleaning.
+  Hlc? taskNotesCleaningVersion(String task, String caseKey) {
+    final r = _db.select(
+      'SELECT surum FROM task_note_clean WHERE gorev=? AND dosya=?',
+      [task, caseKey],
+    );
+    return r.isEmpty ? null : Hlc.tryParse(r.first['surum']);
+  }
 
   List<({String task, String caseKey})> get taskNotesToClean => [
     for (final r in _db.select(
