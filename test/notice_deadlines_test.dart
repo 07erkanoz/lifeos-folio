@@ -420,7 +420,21 @@ void main() {
         db.saveAgenda(shown.copyWith(done: true));
         expect(db.agenda(), isEmpty);
         expect(db.legacyNoticeDeadlines(), isEmpty);
-        db.saveAgenda(shown.copyWith(done: false));
+        // Unticked from a screen that read it done (R1: what the lawyer
+        // changed of the row as it was shown).
+        final ticked = AgendaItem(
+          id: shown.id,
+          kind: shown.kind,
+          title: shown.title,
+          body: shown.body,
+          at: shown.at,
+          allDay: shown.allDay,
+          done: true,
+          caseKey: shown.caseKey,
+          hearingKey: shown.hearingKey,
+          updated: shown.updated,
+        );
+        db.saveAgenda(ticked.copyWith(done: false));
         expect(
           db.agenda().single.body,
           isNot(contains('önceki hesap · önceki')),

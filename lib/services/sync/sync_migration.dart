@@ -28,6 +28,12 @@ abstract final class SyncMigration {
   static List<SyncMigrationStep> steps = [
     // The enforcement ledgers' movements made of their records (§5 step 4).
     SyncMigrationStep(2, 'icra-defteri', (db) => db.migrateLedgers()),
+    // The agenda's, the decisions' and the cards' group versions (§5 step
+    // 5). Their columns are added empty at opening, which an older Folio
+    // reads past; what is kept is not changed, its versions made of its
+    // timestamps when read (R2.1). The step is counted so that the copy is
+    // put aside before the first row is written in the new form.
+    SyncMigrationStep(3, 'alan-surumleri', (_) {}),
   ];
 
   static int schemaOf(PortalDatabase db) =>

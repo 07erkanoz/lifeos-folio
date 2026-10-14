@@ -15,18 +15,48 @@ extension PortalAgendaVersions on PortalDatabase {
     'bag': ['case_key', 'hearing_key'],
   });
 
-  /// A deadline's confirmation is one group: the inputs it was given for
-  /// and when, its day going with them.
+  /// A deadline's confirmation is one group: the inputs it was given for,
+  /// when, and the day it had then.
   static const _decisionGroups = FieldGroups({
     'tamam': ['done'],
     'gun': ['manual_day'],
     'baslik': ['title_override'],
     'govde': ['body_override'],
-    'onay': ['confirmed_inputs', 'confirmed_at'],
+    'onay': ['confirmed_inputs', 'confirmed_at', 'confirmed_day'],
     'kaldir': ['dismissed'],
   });
 
   static const _life = 'yasam';
+
+  /// [now] with the groups that [edited] changed of [from] (the row as it
+  /// was shown) in place: what came from another device since, in the
+  /// others, stays (R1).
+  static Map<String, Object?> _applied(
+    FieldGroups groups,
+    Map<String, Object?> now,
+    Map from,
+    Map edited,
+  ) {
+    final out = {...now};
+    for (final g in groups.groups.keys) {
+      if (Hlc.canonical(groups.valueOf(from, g)) ==
+          Hlc.canonical(groups.valueOf(edited, g))) {
+        continue;
+      }
+      for (final f in groups.groups[g]!) {
+        out[f] = edited[f];
+      }
+    }
+    return out;
+  }
+
+  /// Every version kept taken into the clock before one is written after
+  /// it: an older Folio's, made of its timestamps, among them (R2).
+  void _observeAll(Iterable<Hlc> versions) {
+    for (final v in versions) {
+      SyncClock.observe(this, v);
+    }
+  }
 
   static String? _text(Object? v) => v is String ? v : null;
   static int _flag(Object? v) => v == 1 || v == true ? 1 : 0;
@@ -144,17 +174,18 @@ extension PortalAgendaVersions on PortalDatabase {
   bool _agendaSave(AgendaItem item) {
     final here = _agendaHere(item.id);
     if (here != null && !here.live) return false;
-    final row = _agendaRow({
-      'id': item.id,
-      'kind': item.kind,
-      'title': item.title,
-      'body': item.body,
-      'at': item.at?.toIso8601String(),
-      'all_day': item.allDay,
-      'done': item.done,
-      'case_key': item.caseKey,
-      'hearing_key': item.hearingKey,
+    Map<String, Object?> rowOf(AgendaItem i) => _agendaRow({
+      'id': i.id,
+      'kind': i.kind,
+      'title': i.title,
+      'body': i.body,
+      'at': i.at?.toIso8601String(),
+      'all_day': i.allDay,
+      'done': i.done,
+      'case_key': i.caseKey,
+      'hearing_key': i.hearingKey,
     });
+    var row = rowOf(item);
     final clock = SyncClock.of(this);
     final Map<String, Hlc> versions;
     final Hlc life;
@@ -162,6 +193,11 @@ extension PortalAgendaVersions on PortalDatabase {
       life = clock.tick();
       versions = {for (final g in _agendaGroups.groups.keys) g: life};
     } else {
+      _observeAll([here.life, ...here.versions!.values]);
+      // Only what the lawyer changed of it as it was shown.
+      if (item.base case final shown?) {
+        row = _applied(_agendaGroups, here.row!, rowOf(shown), row);
+      }
       versions = _agendaGroups.stamp(here.row, here.versions!, row, clock.tick);
       life = here.life;
     }
@@ -183,6 +219,7 @@ extension PortalAgendaVersions on PortalDatabase {
   void _agendaRemove(String id) {
     final here = _agendaHere(id);
     if (here != null && !here.live) return;
+    if (here != null) _observeAll([here.life, ...here.versions!.values]);
     final now = DateTime.now().toIso8601String();
     _agendaWrite(
       id,
@@ -202,6 +239,7 @@ extension PortalAgendaVersions on PortalDatabase {
   bool restoreAgenda(String id) {
     final here = _agendaHere(id);
     if (here == null || here.live || here.row == null) return false;
+    _observeAll([here.life, ...?here.versions?.values]);
     _agendaWrite(
       id,
       _AgendaCopy(
@@ -307,16 +345,16 @@ extension PortalAgendaVersions on PortalDatabase {
   /// decision not kept before is weighed against none, so that what it
   /// leaves as it was never outweighs another device's word on it.
   void _decisionSave(DeadlineUser u) {
-    final row = _decisionRow({
-      'deadline_id': u.deadlineId,
-      'done': u.done,
-      'manual_day': u.manualDay,
-      'title_override': u.titleOverride,
-      'body_override': u.bodyOverride,
-      'confirmed_inputs': u.confirmedInputs,
-      'confirmed_at': u.confirmedAt?.toIso8601String(),
-      'confirmed_day': u.confirmedDay,
-      'dismissed': u.dismissed,
+    Map<String, Object?> rowOf(DeadlineUser d) => _decisionRow({
+      'deadline_id': d.deadlineId,
+      'done': d.done,
+      'manual_day': d.manualDay,
+      'title_override': d.titleOverride,
+      'body_override': d.bodyOverride,
+      'confirmed_inputs': d.confirmedInputs,
+      'confirmed_at': d.confirmedAt?.toIso8601String(),
+      'confirmed_day': d.confirmedDay,
+      'dismissed': d.dismissed,
     });
     final here = _db.select('SELECT * FROM deadline_user WHERE deadline_id=?', [
       u.deadlineId,
@@ -330,6 +368,15 @@ extension PortalAgendaVersions on PortalDatabase {
             here.first['surumler'],
             legacy: here.first['updated'],
           );
+    _observeAll(kept.values);
+    // Only what the lawyer changed of the decisions as they were shown;
+    // made anew, of none.
+    final row = _applied(
+      _decisionGroups,
+      before,
+      rowOf(u.base ?? DeadlineUser(deadlineId: u.deadlineId)),
+      rowOf(u),
+    );
     _decisionWrite(
       row,
       _decisionGroups.stamp(before, kept, row, SyncClock.of(this).tick),
@@ -338,7 +385,7 @@ extension PortalAgendaVersions on PortalDatabase {
   }
 
   /// Another device's decisions, taken group by group; a confirmation's
-  /// day goes with it, and one only this side knows is kept.
+  /// day goes with it.
   bool _decisionMerge(Map theirs) {
     var changed = false;
     for (final r in theirs['kararlar'] as List? ?? const []) {
@@ -367,11 +414,13 @@ extension PortalAgendaVersions on PortalDatabase {
       );
       final merged = _decisionGroups.merge(m, mv, t, tv);
       final row = merged.row;
-      String onay(Map x) => Hlc.canonical(_decisionGroups.valueOf(x, 'onay'));
-      if (onay(row) == onay(t)) {
-        row['confirmed_day'] = onay(t) != onay(m)
-            ? t['confirmed_day']
-            : m['confirmed_day'] ?? t['confirmed_day'];
+      // One confirmation of before its day was kept, its day read on one
+      // device from its history: the day one of them has, for both.
+      if (mv['onay'] == tv['onay'] &&
+          m['confirmed_inputs'] == t['confirmed_inputs'] &&
+          m['confirmed_at'] == t['confirmed_at'] &&
+          (m['confirmed_day'] == null || t['confirmed_day'] == null)) {
+        row['confirmed_day'] = m['confirmed_day'] ?? t['confirmed_day'];
       }
       if (Hlc.canonical([row, FieldGroups.encode(merged.versions)]) ==
           Hlc.canonical([m, FieldGroups.encode(mv)])) {
@@ -392,7 +441,8 @@ extension PortalAgendaVersions on PortalDatabase {
   /// Another device's word of whom the lawyer acts for in each case: the
   /// later version's; for the same, the same on every device. The notices
   /// of each case changed, to be reckoned again.
-  Set<String> _representationMerge(Map theirs) {
+  ({bool changed, Set<String> notices}) _representationMerge(Map theirs) {
+    var changed = false;
     final touched = <String>{};
     for (final r in theirs['temsil'] as List? ?? const []) {
       if (r is! Map || r['case_key'] is! String || r['json'] is! String) {
@@ -416,13 +466,14 @@ extension PortalAgendaVersions on PortalDatabase {
         'surum) VALUES(?,?,?,?)',
         [key, r['json'], '${r['updated'] ?? ''}', '$tv'],
       );
+      changed = true;
       for (final n in _db.select('SELECT id FROM uets WHERE case_key=?', [
         key,
       ])) {
         touched.add(n['id'] as String);
       }
     }
-    return touched;
+    return (changed: changed, notices: touched);
   }
 }
 

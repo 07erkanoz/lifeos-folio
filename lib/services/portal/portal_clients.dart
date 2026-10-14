@@ -53,7 +53,7 @@ extension PortalClients on PortalDatabase {
   /// Keeps [c] as the lawyer wrote it here: what they changed given a new
   /// version (R1), what came from another device since kept ([Client.written]).
   void saveClient(Client c) {
-    _putClient(c.written(clientCard(c.id), SyncClock.of(this).tick));
+    _putClient(c.written(clientCard(c.id), SyncClock.of(this)));
     PortalDatabase.changed?.call();
   }
 

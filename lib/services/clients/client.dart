@@ -32,7 +32,13 @@ class Client {
     this.caseNotes = const {},
     this.group = '',
     this.hidden = false,
+    this.base,
   });
+
+  /// The card as it was read, that this one was changed from ([copyWith]):
+  /// what the lawyer changed is told apart from what came from another
+  /// device since ([written]). Never kept.
+  final Client? base;
 
   /// The lawyer's own group for the client ("Bankalar", "Sigorta"), by
   /// which the list is narrowed; empty for none.
@@ -163,6 +169,7 @@ class Client {
       caseNotes: caseNotes ?? this.caseNotes,
       group: group ?? this.group,
       hidden: hidden ?? this.hidden,
+      base: base ?? this,
     );
     // Only what changed is stamped now; the rest keeps the time it had.
     final was = _values, is_ = made._values;
@@ -195,6 +202,7 @@ class Client {
     caseNotes: caseNotes,
     group: group,
     hidden: hidden,
+    base: base,
   );
 
   /// When field [k] was last set.
@@ -205,36 +213,68 @@ class Client {
       versions[k] ?? Hlc.fromLegacy(stampOf(k).toIso8601String());
 
   /// Every version the card was written with, its cases' and notes' too.
+  /// Those made of when each was set among them (R2.1): seen before one
+  /// is written after them.
   Iterable<Hlc> get allVersions => [
-    ...versions.values,
-    for (final l in caseLinks.values) ?l.version,
-    for (final n in caseNotes.values) ?n.version,
+    for (final k in fields) versionOf(k),
+    for (final l in caseLinks.values) l.versionOf,
+    for (final n in caseNotes.values) n.versionOf,
   ];
 
   /// This card as the lawyer wrote it here, [before] the one kept: what
-  /// they changed given [tick]'s version, the rest as kept. A field is
-  /// theirs to change when it was stamped as this card was ([copyWith]
-  /// stamps what it changes); one only shown as it was, and changed since
-  /// on another device, keeps what came. A case's note or link likewise,
-  /// by when it was written.
-  Client written(Client? before, Hlc Function() tick) {
-    // A new card: each field the lawyer's word as of when it was made, its
-    // version made of that (R2.1), the same on every device.
-    if (before == null) return this;
+  /// they changed given a new version of [clock], the rest as kept, so
+  /// that what came from another device since stands. What they changed is
+  /// what differs from [base], the card as it was read; for one made
+  /// without it, a field stamped as this card was ([copyWith] stamps what
+  /// it changes), a case's note or link written after the one kept. The
+  /// names and the cards it took in, as they were changed of [base]. A new
+  /// card's versions are this device's, of when each was set.
+  Client written(Client? before, HlcClock clock) {
+    // What is kept is seen first: this is written after it (R2).
+    void seen(Iterable<Hlc> versions) {
+      for (final v in versions) {
+        if (v.l > 0 && v.compareTo(clock.last) > 0) clock.receive(v);
+      }
+    }
+
+    if (before == null) {
+      Hlc at(DateTime t) =>
+          Hlc(t.toUtc().millisecondsSinceEpoch, 0, clock.source);
+      final made = _picked(
+        _values,
+        stamps: {for (final k in fields) k: stampOf(k)},
+        versions: {for (final k in fields) k: at(stampOf(k))},
+        names: names,
+        updated: updated,
+        sharedOnce: sharedOnce,
+        person: person,
+        absorbed: absorbed,
+        caseLinks: {
+          for (final e in caseLinks.entries)
+            e.key: e.value.withVersion(at(e.value.at)),
+        },
+        caseNotes: {
+          for (final e in caseNotes.entries)
+            e.key: e.value.withVersion(at(e.value.at)),
+        },
+      );
+      seen(made.allVersions);
+      return made;
+    }
+    seen(before.allVersions);
+    final shown = base;
     final now = _values;
     final was = before._values;
+    final from = shown?._values;
     final pick = <String, Object>{};
     final stampsNow = <String, DateTime>{};
     final versionsNow = <String, Hlc>{};
     for (final k in fields) {
-      if (now[k] == was[k]) {
-        pick[k] = was[k]!;
-        stampsNow[k] = before.stampOf(k);
-        versionsNow[k] = before.versionOf(k);
-      } else if (stampOf(k) == updated) {
+      final mine = from != null ? now[k] != from[k] : stampOf(k) == updated;
+      if (now[k] != was[k] && mine) {
         pick[k] = now[k]!;
         stampsNow[k] = stampOf(k);
-        versionsNow[k] = tick();
+        versionsNow[k] = clock.tick();
       } else {
         pick[k] = was[k]!;
         stampsNow[k] = before.stampOf(k);
@@ -245,25 +285,45 @@ class Client {
     caseLinks.forEach((k, l) {
       final kept = links[k];
       if (kept != null && kept.sameAs(l)) return;
-      if (kept != null && !l.at.isAfter(kept.at)) return;
-      links[k] = l.withVersion(tick());
+      final mine = shown != null
+          ? !(shown.caseLinks[k]?.sameAs(l) ?? false)
+          : kept == null || l.at.isAfter(kept.at);
+      if (mine) links[k] = l.withVersion(clock.tick());
     });
     final notes = <String, CaseNote>{...before.caseNotes};
     caseNotes.forEach((k, n) {
       final kept = notes[k];
       if (kept != null && kept.sameAs(n)) return;
-      if (kept != null && !n.at.isAfter(kept.at)) return;
-      notes[k] = n.withVersion(tick());
+      final mine = shown != null
+          ? !(shown.caseNotes[k]?.sameAs(n) ?? false)
+          : kept == null || n.at.isAfter(kept.at);
+      if (mine) notes[k] = n.withVersion(clock.tick());
     });
+    // The names and the cards taken in: as kept, with what this one added
+    // to or took off of what it was read with.
+    List<String> changedOf(
+      List<String> kept,
+      List<String> read,
+      List<String> made,
+    ) => shown == null
+        ? {...kept, ...made}.toList()
+        : ({
+            ...kept,
+            ...made.where((x) => !read.contains(x)),
+          }..removeAll(read.where((x) => !made.contains(x)))).toList();
     return _picked(
       pick,
       stamps: stampsNow,
       versions: versionsNow,
-      names: names,
+      names: changedOf(before.names, shown?.names ?? const [], names),
       updated: updated,
-      sharedOnce: sharedOnce,
-      person: person,
-      absorbed: absorbed,
+      sharedOnce: sharedOnce || before.sharedOnce,
+      person: before.person.isNotEmpty ? before.person : person,
+      absorbed: changedOf(
+        before.absorbed,
+        shown?.absorbed ?? const [],
+        absorbed,
+      ),
       caseLinks: links,
       caseNotes: notes,
     );

@@ -133,7 +133,7 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
     - İlan ve etkinleştirme: `alanSurumu`, `silmeOmru`. Eski sürüm cihazla ajanda parçası durur.
     - Testler: `test/sync_step5_test.dart` (A, B, C üç cihaz).
     - Ekran değişikliği yok.
-  - Sıradaki adım: adım 5'in Codex denetimi, sonra §5 adım 6 (gizli not; önce maket).
+  - Sıradaki adım: §5 adım 6 (gizli not; önce maket).
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,
@@ -899,3 +899,22 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
   - Açık bırakılanlar: icra ekranında kayıtların her ödeme için yeniden okunması (performans);
     büro cihazlarının duran parçasının Senkron sayfasında gösterilmesi; adım 4'ün ara
     sürümünde kabul edilmiş ileri saatli kayıtlar (bu sürüm yayımlanmadı).
+- **Adım 5 kod denetimi (14 Ekim, REVISE, 3 kritik, 5 uyarı, 1 öneri):** Bu sürümde işlenenler:
+  - Ekranda eski kalmış kopya: `AgendaItem`, `DeadlineUser` ve `Client` okundukları hâli (`base`)
+    taşır; kaydederken yalnız o hâle göre değişen gruplar şimdiki kayda uygulanır. Arada başka
+    cihazdan gelen başlık, kaldırma ya da telefon ezilmez; kaldırılmış süre sıradan düzenlemeyle
+    dönmez. `base` olmadan yapılan yeni kararlar boş karara göre tartılır.
+  - Saat: kayıtlı satırın, kartın, notun ve bağın sürümleri (damgadan türetilenler de) yerel
+    yazımdan önce saate işlenir; ileri saatli eski satır silinince geri dönmez.
+  - `confirmed_day` onay grubunda; aynı sürümde gün yalnız birinde varsa ikisine de o gider, iki
+    farklı gün her cihazda aynı seçilir; doldurma yeni sürüm üretmez, döngü yok.
+  - Dosya notu ve bağı: niyet okunan kopyadan anlaşılır, fiziksel saat yazımı reddetmez.
+  - Yeni kartın alanları, notları ve bağları bu cihazın kaynağıyla, kendi zamanlarından sürüm alır.
+  - Ad ve katılan kart kümeleri, okunan kopyaya göre eklenen ve çıkarılanla şimdiki kayda
+    uygulanır; `sharedOnce` birleşir, sahip korunur.
+  - Temsil değişikliği tebligatsız dosyada da "değişti" sayılır (yayılım).
+  - Şema adımı 3 (`alan-surumleri`): yedek, yeni biçimde ilk yazımdan önce alınır; boş sütunlar
+    açılışta eklenir, eski Folio onları okumaz.
+  - Testler silinen satırların içeriğini ve sürümünü de karşılaştırır.
+  - Bilinen sınır: aynı ekran nesnesinden üst üste iki kayıtta, aradaki uzak değişiklik ilk
+    kaydın değiştirdiği alanda ezilebilir; ekranlar her kayıttan sonra yeniden okur.

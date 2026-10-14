@@ -127,6 +127,12 @@ class DeadlineUser {
   /// Taken off the agenda by the lawyer; still shown on its notice.
   final bool dismissed;
 
+  /// The decisions as they were read, that these were changed from
+  /// ([copyWith]); none for ones made anew, weighed against no decision.
+  /// What the lawyer changed is told apart from what came from another
+  /// device since (docs/senkron-plan.md R1). Never kept.
+  final DeadlineUser? base;
+
   const DeadlineUser({
     required this.deadlineId,
     this.done = false,
@@ -137,6 +143,7 @@ class DeadlineUser {
     this.confirmedAt,
     this.dismissed = false,
     this.confirmedDay,
+    this.base,
   });
 
   DeadlineUser copyWith({
@@ -162,6 +169,7 @@ class DeadlineUser {
     confirmedAt: clearConfirmation ? null : confirmedAt ?? this.confirmedAt,
     confirmedDay: clearConfirmation ? null : confirmedDay ?? this.confirmedDay,
     dismissed: dismissed ?? this.dismissed,
+    base: base ?? this,
   );
 }
 

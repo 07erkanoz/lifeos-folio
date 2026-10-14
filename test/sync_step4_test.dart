@@ -514,7 +514,7 @@ void main() {
       expect(legs(a), isEmpty);
       expect(account(a)!.advanceLeft, 10000);
       expect(SyncMigration.run(a), isTrue);
-      expect(SyncMigration.schemaOf(a), 2);
+      expect(SyncMigration.schemaOf(a), 3);
       expect(legs(a), ['icra:e1:emanet=10000']);
       expect(account(a)!.advanceLeft, 10000);
       expect(SyncMigration.run(a), isFalse);

@@ -68,6 +68,11 @@ class AgendaItem {
   final String? hearingKey;
   final DateTime updated;
 
+  /// The row as it was read, that this one was changed from ([copyWith]):
+  /// what the lawyer changed is told apart from what came from another
+  /// device since (docs/senkron-plan.md R1). Never kept.
+  final AgendaItem? base;
+
   const AgendaItem({
     required this.id,
     required this.kind,
@@ -79,6 +84,7 @@ class AgendaItem {
     this.caseKey,
     this.hearingKey,
     required this.updated,
+    this.base,
   });
 
   static String newId() {
@@ -106,6 +112,7 @@ class AgendaItem {
     caseKey: caseKey,
     hearingKey: hearingKey,
     updated: updated ?? DateTime.now(),
+    base: base ?? this,
   );
 }
 
@@ -1197,18 +1204,23 @@ class PortalDatabase {
     final kept = deadline(item.id);
     if (kept != null) {
       final shown = kept.onAgenda ? _agendaOf(kept) : null;
+      // What the lawyer changed of it as it was shown; what came from
+      // another device since stays (R1).
+      final from = item.base ?? shown;
       final user = kept.user ?? DeadlineUser(deadlineId: item.id);
       String? day(DateTime? d) => d == null ? null : _dayKey(d);
       saveDeadlineUser(
         user.copyWith(
-          done: item.done,
-          manualDay: shown != null && day(item.at) != day(shown.at)
+          done: item.base == null || item.done != item.base!.done
+              ? item.done
+              : null,
+          manualDay: from != null && day(item.at) != day(from.at)
               ? day(item.at)
               : null,
-          titleOverride: shown != null && item.title != shown.title
+          titleOverride: from != null && item.title != from.title
               ? item.title
               : null,
-          bodyOverride: shown != null && item.body != shown.body
+          bodyOverride: from != null && item.body != from.body
               ? item.body
               : null,
         ),
@@ -1255,6 +1267,7 @@ class PortalDatabase {
           caseKey: item.caseKey,
           hearingKey: item.hearingKey,
           updated: item.updated,
+          base: item.base,
         ),
       );
       return;
@@ -1357,8 +1370,8 @@ class PortalDatabase {
         changedHere = true;
       }
       final represented = _representationMerge(theirs);
-      if (represented.isNotEmpty) changedHere = true;
-      touched.addAll(represented);
+      if (represented.changed) changedHere = true;
+      touched.addAll(represented.notices);
       mergedNotices = touched;
       _fillConfirmedDays();
       _db.execute('COMMIT');
@@ -1818,7 +1831,19 @@ class PortalDatabase {
     List<({String ad, String rol})> parties,
   ) {
     // None said is kept too, as an empty word: the lawyer's other devices
-    // would bring the old one back otherwise.
+    // would bring the old one back otherwise. What was kept is seen first,
+    // so that this word comes after it (R2).
+    final kept = _db.select(
+      'SELECT updated, surum FROM case_representation WHERE case_key=?',
+      [caseKey],
+    );
+    if (kept.isNotEmpty) {
+      SyncClock.observe(
+        this,
+        Hlc.tryParse(kept.first['surum']) ??
+            Hlc.fromLegacy(kept.first['updated']),
+      );
+    }
     _db.execute(
       'INSERT OR REPLACE INTO case_representation(case_key, json, updated, '
       'surum) VALUES(?,?,?,?)',

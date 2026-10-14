@@ -44,6 +44,18 @@ void main() {
       for (final r in db.agendaExport()['temsil'] as List)
         {...r as Map}..remove('updated'),
     ],
+    // What each taken off said and its lifecycle version, too.
+    'silinenler': [
+      for (final r in db.agendaExport()['silinenler'] as List)
+        {
+          'id': (r as Map)['id'],
+          'surum': r['surum'],
+          'satir': r['satir'] == null
+              ? null
+              : ({...jsonDecode(r['satir'] as String) as Map}
+                  ..remove('updated')),
+        },
+    ],
   });
 
   final t0 = DateTime(2026, 10, 14, 9);
@@ -370,5 +382,141 @@ void main() {
       SyncCaps.missing('ajanda', {SyncCaps.hlc, SyncCaps.ledgerOps}),
       isNotEmpty,
     );
+  });
+
+  group('Codex\'s review of step 5', () {
+    test('a row saved as it was shown keeps what came since: done ticked '
+        'on an old screen does not take the new title back', () {
+      a.saveAgenda(note('n', 'Ara'));
+      send(a, b);
+      final shown = item(a, 'n')!;
+      b.saveAgenda(item(b, 'n')!.copyWith(title: 'Yarın ara'));
+      send(b, a);
+      a.saveAgenda(shown.copyWith(done: true));
+      send(a, b);
+      for (final db in [a, b]) {
+        final n = item(db, 'n')!;
+        expect((n.title, n.done), ('Yarın ara', true));
+      }
+    });
+
+    test('a day given on an old screen does not bring back a deadline '
+        'taken off on another device', () {
+      final shown = const DeadlineUser(deadlineId: 'd');
+      b.saveDeadlineUser(shown.copyWith(dismissed: true));
+      send(b, a);
+      a.saveDeadlineUser(shown.copyWith(manualDay: '2026-10-30'));
+      send(a, b);
+      for (final db in [a, b]) {
+        final d = (db.agendaExport()['kararlar'] as List).single as Map;
+        expect((d['dismissed'], d['manual_day']), (1, '2026-10-30'));
+      }
+    });
+
+    test('a row an older Folio kept with a clock ahead, taken off here, '
+        'stays off: what is kept is seen before it is written after', () {
+      final ahead = {
+        'satirlar': [
+          {
+            'id': 'o',
+            'kind': 'note',
+            'title': 'İleri saatli',
+            'updated': '2027-01-01T09:00:00.000',
+          },
+        ],
+      };
+      a.agendaMerge(ahead);
+      b.agendaMerge(ahead);
+      a.removeAgenda('o');
+      send(a, b);
+      send(b, a);
+      expect(item(a, 'o'), isNull);
+      expect(item(b, 'o'), isNull);
+    });
+
+    test('a confirmation\'s day one device read from its history goes to '
+        'the other; two days of the same version end alike; taken again, '
+        'nothing changes', () {
+      Map<String, Object?> kept(String? day) => {
+        'kararlar': [
+          {
+            'deadline_id': 'd',
+            'confirmed_inputs': 'girdi',
+            'confirmed_at': '2026-10-01T09:00:00.000',
+            'confirmed_day': day,
+            'updated': '2026-10-01T09:00:00.000',
+          },
+        ],
+      };
+      a.agendaMerge(kept('2026-10-20'));
+      b.agendaMerge(kept(null));
+      send(a, b);
+      send(b, a);
+      for (final db in [a, b]) {
+        final d = (db.agendaExport()['kararlar'] as List).single as Map;
+        expect(d['confirmed_day'], '2026-10-20');
+      }
+      expect(send(a, b), isFalse);
+      expect(send(b, a), isFalse);
+      c.agendaMerge(kept('2026-10-27'));
+      send(c, a);
+      send(a, c);
+      expect(said(a), said(c));
+      expect(send(c, a), isFalse);
+    });
+
+    test('a card saved as it was shown keeps the names and cards taken in '
+        'on another device', () {
+      a.saveClient(Client(id: 'k', name: 'Ayşe Karaca', updated: t0));
+      b.clientsMerge(a.clientsExport());
+      final shown = a.clientCard('k')!;
+      final there = b.clientCard('k')!;
+      b.saveClient(
+        there.copyWith(
+          names: [...there.names, 'ayse k'],
+          absorbed: [...there.absorbed, 'k2'],
+        ),
+      );
+      a.clientsMerge(b.clientsExport());
+      a.saveClient(shown.copyWith(note: 'Sabah aranır'));
+      final k = a.clientCard('k')!;
+      expect(k.names, contains('ayse k'));
+      expect(k.absorbed, contains('k2'));
+      expect(k.note, 'Sabah aranır');
+    });
+
+    test('a case\'s note changed here after one written by a clock ahead '
+        'is this one\'s: it wins on both', () {
+      final ahead = t0.add(const Duration(days: 1));
+      b.saveClient(
+        Client(
+          id: 'k',
+          name: 'Ayşe Karaca',
+          updated: t0,
+          caseNotes: {'dava': CaseNote('İleri saatli not', ahead)},
+        ),
+      );
+      a.clientsMerge(b.clientsExport());
+      a.saveClient(
+        a
+            .clientCard('k')!
+            .copyWith(caseNotes: {'dava': CaseNote('Rapor geldi', t0)}),
+      );
+      b.clientsMerge(a.clientsExport());
+      for (final db in [a, b]) {
+        expect(db.clientCard('k')!.caseNotes['dava']!.text, 'Rapor geldi');
+      }
+    });
+
+    test('a new card has this device\'s versions; whom the lawyer acts for '
+        'in a case with no notice, changed, is told as a change', () {
+      a.saveClient(Client(id: 'k', name: 'Ayşe Karaca', updated: t0));
+      final versions = a.clientCard('k')!.versions;
+      expect(versions.keys, containsAll(Client.fields));
+      expect(versions['ad']!.source, isNot(Hlc.migrated));
+      a.setRepresentation('dava', [(ad: 'Ayşe Karaca', rol: 'Davacı')]);
+      expect(send(a, b), isTrue);
+      expect(b.representation('dava').single.ad, 'Ayşe Karaca');
+    });
   });
 }
