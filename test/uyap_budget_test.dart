@@ -448,6 +448,14 @@ void main() {
     return total;
   }
 
+  /// Today's count of cases freshened of themselves, from nought: a new
+  /// day's. The count is kept by the calendar's day, which [age] does not
+  /// move.
+  void newDay() {
+    final now = DateTime.now();
+    db.setMeta('web_enriched_count:${now.year}-${now.month}-${now.day}', '0');
+  }
+
   /// Every kept time pushed back [by]: the days going by.
   void age(Duration by) {
     for (final c in db.cases().values) {
@@ -567,13 +575,26 @@ void main() {
     age(const Duration(days: 7));
     await measure(
       'Kendiliğinden okuma açık: bir hafta sonraki gün (haftalık portföy + '
-      'eskiyen web bölümleri, günde en çok ${PortalSync.enrichPerDay} dosya)',
+      'eskiyen web bölümleri, günde açık dosyaların yedide biri)',
       () async {
         await sync.syncNotices(auto: true);
         await Future.wait([sync.syncWeb(), sync.syncMobile()]);
         await sync.enrichOnWeb();
       },
     );
+    // The week after: each day a seventh, none left out.
+    for (var day = 2; day <= 8; day++) {
+      age(const Duration(days: 1));
+      newDay();
+      final n = await measure(
+        'Kendiliğinden okuma açık: sonraki haftanın $day. günü',
+        () async {
+          await Future.wait([sync.syncWeb(), sync.syncMobile()]);
+          await sync.enrichOnWeb();
+        },
+      );
+      expect(n, lessThan(700), reason: 'day $day: spread, not one burst');
+    }
     await sync.setAutoFetch(false);
     sync.dispose();
   });

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../services/pdf/pdf_service.dart';
 import '../../services/tiff/tiff_service.dart';
 import '../../services/udf/udf_reader.dart';
+import '../../services/uyap/uyap_pace.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import 'notice.dart';
 import 'pdf_viewer_widget.dart';
@@ -157,7 +158,7 @@ class _UyapOperationsDialogState extends State<UyapOperationsDialog> {
     try {
       Uint8List bytes;
       try {
-        bytes = await _web.documentBytes(op);
+        bytes = await UyapPace.instance.document(() => _web.documentBytes(op));
       } on UyapStaleDocument {
         if (op.orderNumber.isEmpty) rethrow;
         await _fetch();
@@ -165,7 +166,10 @@ class _UyapOperationsDialogState extends State<UyapOperationsDialog> {
         if (fresh.isEmpty) {
           throw StateError('İşlem kaydı yenilenen listede bulunamadı.');
         }
-        bytes = await _web.documentBytes(fresh.first);
+        final again = fresh.first;
+        bytes = await UyapPace.instance.document(
+          () => _web.documentBytes(again),
+        );
       }
       final title = op.name.isEmpty ? 'UYAP evrakı' : op.name;
       final pdf = await _asPdf(bytes, title);

@@ -19,7 +19,8 @@ class UyapCooling implements Exception {
   const UyapCooling();
 
   @override
-  String toString() => 'UYAP şu an yanıt vermiyor; daha sonra yeniden denenecek.';
+  String toString() =>
+      'UYAP şu an yanıt vermiyor; daha sonra yeniden denenecek.';
 }
 
 class UyapPace {
@@ -29,6 +30,7 @@ class UyapPace {
     this.quickGap = const Duration(milliseconds: 250),
     this.firstCool = const Duration(seconds: 30),
     this.maxCool = const Duration(minutes: 15),
+    this.documentGap = const Duration(seconds: 3),
     Random? random,
     DateTime Function()? now,
   }) : _random = random ?? Random(),
@@ -44,6 +46,7 @@ class UyapPace {
       quickGap = Duration.zero,
       firstCool = Duration.zero,
       maxCool = Duration.zero,
+      documentGap = Duration.zero,
       _random = Random(),
       _now = DateTime.now,
       _queued = false;
@@ -62,6 +65,36 @@ class UyapPace {
       (status != null && (status == 429 || status >= 500));
 
   final Duration gap, spread, quickGap, firstCool, maxCool;
+
+  /// The least time between one document's download ending and the next
+  /// one's beginning, whoever asks for them: the lawyer one by one or all
+  /// at once, a shared case's, a task's, İşlemlerim's. UYAP's document
+  /// store is the heaviest of its doors.
+  final Duration documentGap;
+  DateTime? _documentDone;
+  Future<void> _documentLine = Future.value();
+
+  /// [fetch], a document's download, in the one line of documents: after
+  /// the one before it has ended and [documentGap] has passed.
+  Future<T> document<T>(Future<T> Function() fetch) {
+    final result = Completer<T>();
+    _documentLine = _documentLine.then((_) async {
+      final last = _documentDone;
+      if (last != null) {
+        final wait = last.add(documentGap).difference(_now());
+        if (wait > Duration.zero) await Future<void>.delayed(wait);
+      }
+      try {
+        result.complete(await fetch());
+      } catch (e, st) {
+        result.completeError(e, st);
+      } finally {
+        _documentDone = _now();
+      }
+    });
+    return result.future;
+  }
+
   final Random _random;
   final DateTime Function() _now;
   final bool _queued;
@@ -151,8 +184,7 @@ class UyapPace {
     }
   }
 
-  bool get _coolingNow =>
-      _cool > Duration.zero && _coolUntil.isAfter(_now());
+  bool get _coolingNow => _cool > Duration.zero && _coolUntil.isAfter(_now());
 
   /// For a sync, the wait until UYAP's failing is over; none for what a
   /// lawyer asked. Awaited before taking a turn in any line (this one, or a

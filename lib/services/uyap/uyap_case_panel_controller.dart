@@ -14,6 +14,7 @@ import '../portal/portal_sync.dart';
 import 'uyap_case_links.dart';
 import 'uyap_case_store.dart';
 import 'uyap_mobile_api.dart';
+import 'uyap_pace.dart';
 import 'uyap_web_service.dart';
 
 /// What the UYAP panel beside a document works with: the case the document
@@ -1079,9 +1080,10 @@ class UyapCasePanelController extends ChangeNotifier {
         throw StateError('${document.title} UYAP’taki listede bulunamadı.');
       }
     }
-    final bytes = await web.caseDocumentBytes(
-      live,
-      caseId: (await _liveCase()).id,
+    final caseId = (await _liveCase()).id;
+    // In the one line of documents: three seconds after the one before.
+    final bytes = await UyapPace.instance.document(
+      () => web.caseDocumentBytes(live!, caseId: caseId),
     );
     final (record, file) = await store.save(_record!, document, bytes);
     _record = await store.seen(record, document.key);
@@ -1105,7 +1107,12 @@ class UyapCasePanelController extends ChangeNotifier {
     // `evrak_indir`, the contract of the working KararArama app).
     Uint8List bytes;
     try {
-      bytes = _checked(await mobile.documentBytes(live.documentId, id));
+      final asked = live;
+      bytes = _checked(
+        await UyapPace.instance.document(
+          () => mobile.documentBytes(asked.documentId, id),
+        ),
+      );
     } catch (_) {
       // Both ids are the session's: looked up again, once; the list
       // alone, not the parties.
@@ -1114,8 +1121,11 @@ class UyapCasePanelController extends ChangeNotifier {
       await _refreshMobile({CaseSection.documents});
       final again = _liveDocuments[document.key];
       if (again == null || _mobileCaseId == null) rethrow;
+      final caseId = _mobileCaseId!;
       bytes = _checked(
-        await mobile.documentBytes(again.documentId, _mobileCaseId!),
+        await UyapPace.instance.document(
+          () => mobile.documentBytes(again.documentId, caseId),
+        ),
       );
     }
     if (store.sameAsAnother(_record!, document.key, bytes)) {

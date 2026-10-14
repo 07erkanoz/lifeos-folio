@@ -1839,7 +1839,11 @@ class PortalSync extends ChangeNotifier {
   Future<void>? _enrichment;
 
   /// Cases freshened of themselves a day at most.
-  static const enrichPerDay = 500;
+  /// A seventh of the open cases (at least ten): each freshened once a
+  /// week, the load spread over the week. A fixed number let the cases
+  /// the setup read on one day all go stale on one day a week later, and
+  /// be read together: some three thousand requests on one day.
+  static int enrichPerDay(int open) => max(10, (open / 7).ceil());
 
   Future<bool> _enrichStale(PortalDatabase db, bool Function() going) async {
     final now = DateTime.now();
@@ -1880,11 +1884,21 @@ class PortalSync extends ChangeNotifier {
             soon.contains(b.key) ? 0 : 1,
           ),
         );
+    final cap = enrichPerDay(
+      db
+          .cases()
+          .values
+          .where(
+            (c) =>
+                !archived.contains(c.key) && !isClosedStatus(c.status?.value),
+          )
+          .length,
+    );
     var through = true;
     final changed = <String>{};
     try {
       for (final kase in todo) {
-        if (count >= enrichPerDay) break;
+        if (count >= cap) break;
         if (!going()) return false;
         while (UyapCasePanelController.lawyerWaiting && going()) {
           await Future<void>.delayed(const Duration(milliseconds: 400));

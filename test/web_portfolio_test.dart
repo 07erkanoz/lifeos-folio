@@ -340,11 +340,24 @@ void main() {
       expect(db.meta(PortalSync.enrichedKey), isNull, reason: 'at night');
       return;
     }
-    // The cases could not be fetched here (no portal answers the panel):
-    // tried, and not counted done, so it is tried again in two hours.
+    // No case filled from the web yet: nothing is read of itself (the
+    // lawyer's completion fills them), and the day is done.
+    expect(db.meta(PortalSync.enrichedKey), isNotNull, reason: 'none due');
+    // A case the web read a week ago, which does not answer here (no
+    // portal answers the panel): tried, and not counted done, so it is
+    // tried again in two hours.
+    db.setMeta(PortalSync.enrichedKey, '');
+    db.saveSections(db.cases().keys.first, PortalChannel.uyapWeb, const [
+      SectionOutcome(CaseSection.money, SectionResult.read),
+    ], at: DateTime.now().subtract(const Duration(days: 8)));
+    db.setMeta(
+      '${PortalSync.enrichedKey}_try',
+      DateTime(2000).toIso8601String(),
+    );
+    await sync.enrichOnWeb();
     final tried = db.meta('${PortalSync.enrichedKey}_try');
     expect(tried, isNot(DateTime(2000).toIso8601String()));
-    expect(db.meta(PortalSync.enrichedKey), isNull, reason: 'not done');
+    expect(db.meta(PortalSync.enrichedKey), isEmpty, reason: 'not done');
     await sync.enrichOnWeb();
     expect(
       db.meta('${PortalSync.enrichedKey}_try'),
@@ -450,8 +463,7 @@ void main() {
     // The web brings this year's collections.
     await read(25, at);
     db.saveSections(key, PortalChannel.uyapWeb, [
-      for (final s in CaseSection.values)
-        SectionOutcome(s, SectionResult.read),
+      for (final s in CaseSection.values) SectionOutcome(s, SectionResult.read),
     ], at: at);
     await b.merge(await a.summary('masaustu'));
     expect(other.meta(PortalSync.webCheckedKey(key)), at.toIso8601String());

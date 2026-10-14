@@ -155,4 +155,35 @@ void main() {
     expect(UyapPace.fault(Exception(), status: 404), isFalse);
     expect(UyapPace.fault(StateError('x')), isFalse);
   });
+
+  test('documents come one at a time, each the gap after the one before '
+      'ended, whoever asks; one that fails does not stop the line', () async {
+    final pace = UyapPace(documentGap: const Duration(milliseconds: 300));
+    final watch = Stopwatch()..start();
+    final spans = <(int, int)>[];
+    Future<int> fetch(int i, {bool fail = false}) => pace.document(() async {
+      final start = watch.elapsedMilliseconds;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      spans.add((start, watch.elapsedMilliseconds));
+      if (fail) throw StateError('UYAP');
+      return i;
+    });
+    // Three asked at once, as a bulk download, a shared case and a task
+    // would.
+    final results = await Future.wait([
+      fetch(1),
+      fetch(2, fail: true).catchError((Object _) => -1),
+      fetch(3),
+    ]);
+    expect(results, [1, -1, 3]);
+    for (var i = 1; i < spans.length; i++) {
+      expect(
+        spans[i].$1 - spans[i - 1].$2,
+        greaterThanOrEqualTo(290),
+        reason: 'document ${i + 1} began too soon',
+      );
+    }
+    // The real gap: three seconds.
+    expect(UyapPace().documentGap, const Duration(seconds: 3));
+  });
 }
