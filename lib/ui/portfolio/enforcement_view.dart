@@ -1278,7 +1278,13 @@ class _EnforcementViewState extends State<EnforcementView> {
     required DateTime fetchedAt,
   }) {
     final scheme = Theme.of(context).colorScheme;
-    final waiting = pending.fold<int>(0, (n, e) => n + e.amount) / 100;
+    // What was paid outside and waits for UYAP: a waiver is no payment,
+    // though Folio's balance counts it off too.
+    final waiting =
+        pending
+            .where((e) => e.kind == LedgerKind.external)
+            .fold<int>(0, (n, e) => n + e.amount) /
+        100;
     final ours = folioLeft(left, _ledger);
     final whole = total ?? ((paid ?? 0) + (left ?? 0));
     final paidShare = whole > 0 && paid != null

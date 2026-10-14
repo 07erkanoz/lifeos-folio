@@ -373,8 +373,16 @@ class _ChatThreadState extends State<ChatThread> {
     ];
     final chat = _net.chats.of(widget.chatId);
     if (paths.isEmpty || chat == null) return;
-    await _say(_net.post(chat, text: _text.text, files: paths));
-    _text.clear();
+    final error = await _net.post(chat, text: _text.text, files: paths);
+    // Left before it went: nothing here to clear or say.
+    if (!mounted) return;
+    // The words written stay when they did not go, as a dropped file's do.
+    if (error == null) {
+      _text.clear();
+    } else {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(error)));
+    }
   }
 
   Future<void> _voice() async {

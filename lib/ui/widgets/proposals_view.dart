@@ -309,16 +309,17 @@ Future<void> showProposals(
 );
 
 Future<String?> _reasonOf(BuildContext context) {
-  final text = TextEditingController();
+  // The field keeps its own text: no controller left behind.
+  var text = '';
   return showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Reddet'),
       content: SizedBox(
         width: 420,
-        child: TextField(
+        child: TextFormField(
           key: const ValueKey('proposal-reason'),
-          controller: text,
+          onChanged: (v) => text = v,
           autofocus: true,
           decoration: const InputDecoration(labelText: 'Neden (isteğe bağlı)'),
         ),
@@ -330,7 +331,7 @@ Future<String?> _reasonOf(BuildContext context) {
         ),
         FilledButton(
           key: const ValueKey('proposal-refuse'),
-          onPressed: () => Navigator.pop(context, text.text.trim()),
+          onPressed: () => Navigator.pop(context, text.trim()),
           child: const Text('Reddet'),
         ),
       ],

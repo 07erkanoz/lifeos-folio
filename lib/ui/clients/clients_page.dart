@@ -197,6 +197,7 @@ class _ClientsPageState extends State<ClientsPage> {
   @override
   void dispose() {
     _again?.cancel();
+    _entriesRead.dispose();
     _sync?.portfolioVersion.removeListener(_partiesCame);
     _sync?.removeListener(_syncChanged);
     super.dispose();
@@ -236,6 +237,7 @@ class _ClientsPageState extends State<ClientsPage> {
       _groups = groups;
       if (_group != null && !groups.contains(_group)) _group = null;
     });
+    _entriesRead.value++;
     if (first != null) {
       final e = _entries.where((x) => x.key == first).firstOrNull;
       if (e != null) _open(e);
@@ -412,13 +414,32 @@ class _ClientsPageState extends State<ClientsPage> {
               builder: (page) => Scaffold(
                 appBar: AppBar(title: const Text('Müvekkil')),
                 // A case opened from here comes in front: this page is
-                // closed first, not left over it.
-                body: _detail(e, closing: () => Navigator.of(page).pop()),
+                // closed first, not left over it. The client as the list
+                // has it now: a case added or taken off shows here too.
+                body: ValueListenableBuilder(
+                  valueListenable: _entriesRead,
+                  builder: (_, _, _) =>
+                      _detail(_now(e), closing: () => Navigator.of(page).pop()),
+                ),
               ),
             ),
           )
           .then((_) => _load()),
     );
+  }
+
+  /// Told each time the list is read again, for a phone's page of a client
+  /// open over it.
+  final _entriesRead = ValueNotifier(0);
+
+  /// [e] as the list has it now: by its key, or the one its card was made
+  /// from; itself when it is no longer there.
+  ClientEntry _now(ClientEntry e) {
+    final was = _madeFrom[e.key] ?? e.key;
+    return _entries
+            .where((x) => x.key == e.key || (_madeFrom[x.key] ?? x.key) == was)
+            .firstOrNull ??
+        e;
   }
 
   /// The key a card's made under, by the key it had before: a client only
@@ -1165,6 +1186,20 @@ class _ClientCardState extends State<ClientCard> {
   late Client? _client = widget.entry.client;
   PortalDatabase get _db => widget.database;
 
+  @override
+  void didUpdateWidget(ClientCard old) {
+    super.didUpdateWidget(old);
+    // The card as read again (a sync, another device's word): shown, not
+    // the one this page was opened with.
+    _client = widget.entry.client ?? _client;
+  }
+
+  /// The card as kept now, after a proposal about it was decided here.
+  void _cardChanged() => setState(() {
+    final id = _client?.id;
+    if (id != null) _client = _db.clientCard(id) ?? _client;
+  });
+
   /// The card, made the first time something is kept for a client only
   /// seen in the cases so far.
   Client _card() {
@@ -1553,7 +1588,31 @@ class _ClientCardState extends State<ClientCard> {
     return c == null ? key : '${c.number} · ${c.court}';
   }
 
+  /// What the card reads of the database, once for the entry it shows: a
+  /// key typed in the search builds the card again, and each read the
+  /// whole of a table. Read again when the list is read again.
+  Object? _readFor;
+  List<PortalHearing>? _hearingsKept;
+  List<({DateTime day, String title, String caseKey})>? _deadlinesKept;
+  List<DueInstalment>? _feesKept;
+
+  void _fresh() {
+    if (identical(_readFor, widget.entry)) return;
+    _readFor = widget.entry;
+    _hearingsKept = _deadlinesKept = _feesKept = null;
+  }
+
+  List<DueInstalment> get _fees {
+    _fresh();
+    return _feesKept ??= FeeReminders.open(_db, DateTime.now());
+  }
+
   List<PortalHearing> get _hearings {
+    _fresh();
+    return _hearingsKept ??= _readHearings();
+  }
+
+  List<PortalHearing> _readHearings() {
     final now = DateTime.now();
     return [
       for (final c in widget.entry.cases)
@@ -1824,6 +1883,8 @@ class _ClientCardState extends State<ClientCard> {
 
   @override
   void setState(VoidCallback fn) {
+    // Something done on the card itself is read at once.
+    _readFor = null;
     super.setState(fn);
     _revision.value++;
   }
@@ -1988,6 +2049,11 @@ class _ClientCardState extends State<ClientCard> {
 
   /// The deadlines on the agenda for the client's cases, not done.
   List<({DateTime day, String title, String caseKey})> get _deadlines {
+    _fresh();
+    return _deadlinesKept ??= _readDeadlines();
+  }
+
+  List<({DateTime day, String title, String caseKey})> _readDeadlines() {
     final keys = {for (final c in widget.entry.cases) c.caseKey};
     if (keys.isEmpty) return const [];
     return [
@@ -2037,7 +2103,7 @@ class _ClientCardState extends State<ClientCard> {
             day: true,
           ),
       if (widget.seesMoney && _client != null)
-        for (final t in FeeReminders.open(_db, now))
+        for (final t in _fees)
           if (widget.entry.ids.contains(t.client.id) ||
               t.client.id == _client!.id)
             _Event(
@@ -2329,7 +2395,7 @@ class _ClientCardState extends State<ClientCard> {
       _timeline(events),
       _meetingBox(meetings),
       _paperBox(attorneys),
-      ProposalsStrip(db: _db, onChanged: () => setState(() {})),
+      ProposalsStrip(db: _db, onChanged: _cardChanged),
       _clientNoteBox(c),
     ];
     return ListView(
@@ -4641,7 +4707,16 @@ class _MeetingFormState extends State<MeetingForm> {
               by: widget.lawyer,
               updated: now,
             )
-          : kept.copyWith(data: {...kept.data, ...data}),
+          // What the form has a field for is the form's: one emptied (no
+          // case, no next step, no end) goes, not kept from before.
+          : kept.copyWith(
+              data: {...kept.data, ...data}
+                ..removeWhere(
+                  (k, _) =>
+                      const {'dosya', 'gorev', 'bitis'}.contains(k) &&
+                      !data.containsKey(k),
+                ),
+            ),
     );
   }
 

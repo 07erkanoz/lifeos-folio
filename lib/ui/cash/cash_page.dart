@@ -928,10 +928,14 @@ class _CashPageState extends State<CashPage> {
     ];
     final q = UyapWebService.fold(_query.trim());
     final ways = {for (final l in month) l.way}..remove('');
+    // A way this month has not (Banka chosen, then a month all in cash), or
+    // no choice to make: no filter left on unseen, "kayıt yok" with no way
+    // to take it off.
+    final way = ways.length > 1 && ways.contains(_way) ? _way : null;
     final shown = [
       for (final l in month)
         if ((_side == null || l.side == _side) &&
-            (_way == null || l.way == _way) &&
+            (way == null || l.way == way) &&
             (q.isEmpty ||
                 UyapWebService.fold(
                   '${l.title} ${l.client} ${_caseNumber(l.caseKey)} '
@@ -956,7 +960,7 @@ class _CashPageState extends State<CashPage> {
           ),
         if (ways.length > 1)
           DropdownButton<String?>(
-            value: _way,
+            value: way,
             underline: const SizedBox(),
             hint: const Text('Ödeme'),
             items: [

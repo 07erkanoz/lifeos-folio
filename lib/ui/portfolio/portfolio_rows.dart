@@ -228,9 +228,7 @@ class PortfolioRow {
       : state.fresh;
 
   /// "Davacı", "Alacaklı": the role the lawyer stands in.
-  late final String? ourRole = ours.isEmpty
-      ? null
-      : titleName(ours.first.role);
+  late final String? ourRole = ours.isEmpty ? null : titleName(ours.first.role);
 
   /// "Antalya Adliyesi": the courthouse the court sits in.
   late final String place = courthouseOf(kase.court);
@@ -349,6 +347,7 @@ Future<List<PortfolioRow>> loadPortfolio({
     next.putIfAbsent(h.caseKey, () => h);
   }
   await breathe();
+  final said = db.representations();
   return [
     for (final kase in db.cases().values)
       () {
@@ -356,7 +355,7 @@ Future<List<PortfolioRow>> loadPortfolio({
         final (ours, others) = splitParties(
           record?.parties ?? const [],
           lawyer,
-          said: db.representation(kase.key),
+          said: said[kase.key] ?? const [],
         );
         return PortfolioRow(
           kase: kase,

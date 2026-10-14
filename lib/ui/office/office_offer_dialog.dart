@@ -25,7 +25,13 @@ class OfficeOfferDialog extends StatelessWidget {
     Future<void> Function() onAccept,
   ) => showDialog<void>(
     context: context,
-    builder: (_) => OfficeOfferDialog(transfer: transfer, onAccept: onAccept),
+    // Answered by one of its buttons only: closed otherwise, the offer was
+    // gone from the list, and the sender waited on "GİDİYOR".
+    barrierDismissible: false,
+    builder: (_) => PopScope(
+      canPop: false,
+      child: OfficeOfferDialog(transfer: transfer, onAccept: onAccept),
+    ),
   );
 
   @override

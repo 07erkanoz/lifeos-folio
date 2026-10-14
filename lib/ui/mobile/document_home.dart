@@ -92,10 +92,19 @@ class MobileDocumentHome extends StatelessWidget {
       ? 'İyi günler'
       : 'İyi akşamlar';
 
+  /// When each recent document was last changed, and when that was asked:
+  /// the page is built again at each badge and sync, a look at the disk
+  /// for every row each time; once a minute is enough for "dün".
+  static final _changed = <String, (DateTime asked, DateTime at)>{};
+
   /// "dün", "3 gün önce": when a document was last changed.
   static String _ago(String path, DateTime now) {
     try {
-      final t = File(path).lastModifiedSync();
+      final kept = _changed[path], asked = DateTime.now();
+      final t =
+          kept != null && asked.difference(kept.$1) < const Duration(minutes: 1)
+          ? kept.$2
+          : (_changed[path] = (asked, File(path).lastModifiedSync())).$2;
       final days = DateTime(
         now.year,
         now.month,

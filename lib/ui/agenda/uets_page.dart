@@ -188,6 +188,9 @@ class _UetsPageState extends State<UetsPage> {
     final db = _db;
     if (db == null) return;
     setState(() {
+      // Asked again when shown next: a case fetched from UYAP meanwhile
+      // brings its parties. What was shown stays till then.
+      _partiesAsked.clear();
       _notices = db.notices();
       _cases = db.cases();
       _deadlines = db.deadlines();

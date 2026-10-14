@@ -2547,7 +2547,12 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         'SÜRE',
         deadline == null
             ? 'Açık süre yok'
-            : '${deadline.title} · ${deadlineDays! <= 0 ? 'bugün' : '$deadlineDays gün'}',
+            // One gone by says so, not "bugün" (the facts line says it too).
+            : '${deadline.title} · ${switch (deadlineDays!) {
+                0 => 'bugün',
+                < 0 => '${-deadlineDays} gün geçti',
+                _ => '$deadlineDays gün',
+              }}',
         deadline == null
             ? 'Ajandadan eklenir'
             : '${dayText(deadline.at!)} son gün',
@@ -3013,8 +3018,14 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
         out.add((bucket: b, doc: null, attachment: null));
       }
       out.add((bucket: null, doc: d, attachment: null));
-      for (final (i, a) in children.indexed) {
-        out.add((bucket: null, doc: a, attachment: i + 1));
+      // Each by its own place among the document's attachments: a filter
+      // leaving the third alone shows it as "Ek 3", not "Ek 1".
+      for (final a in children) {
+        out.add((
+          bucket: null,
+          doc: a,
+          attachment: d.attachments.indexOf(a) + 1,
+        ));
       }
     }
     _entriesFor = record;

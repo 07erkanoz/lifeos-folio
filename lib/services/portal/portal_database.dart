@@ -1870,6 +1870,18 @@ class PortalDatabase {
     ];
   }
 
+  /// [representation] of every case at once, by its key: the portfolio's
+  /// thousands of rows read with one query, not one each.
+  Map<String, List<({String ad, String rol})>> representations() => {
+    for (final r in _db.select(
+      'SELECT case_key, json FROM case_representation',
+    ))
+      r['case_key'] as String: [
+        for (final t in jsonList(jsonDecode(r['json'] as String)))
+          if (t is Map) (ad: '${t['ad']}', rol: '${t['rol']}'),
+      ],
+  };
+
   /// Whom the lawyer said they act for in the case [caseKey]: each party's
   /// name and role; empty while not said.
   List<({String ad, String rol})> representation(String caseKey) {

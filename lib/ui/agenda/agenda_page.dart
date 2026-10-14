@@ -304,7 +304,8 @@ class _AgendaPageState extends State<AgendaPage> {
       DateTime(_anchor.year, _anchor.month),
       DateTime(_anchor.year, _anchor.month + 1),
     ),
-    _View.list => (_day(_now()), _day(_now()).add(const Duration(days: 60))),
+    // From the day the arrows and "Bugün" set, as the other views are.
+    _View.list => (_day(_anchor), _day(_anchor).add(const Duration(days: 60))),
   };
 
   void _reload() {
@@ -383,7 +384,10 @@ class _AgendaPageState extends State<AgendaPage> {
       _View.day =>
         '${from.day} ${_months[from.month - 1]} ${from.year}, ${_days[from.weekday - 1]}',
       _View.month => '${_months[from.month - 1]} ${from.year}',
-      _View.list => 'Önümüzdeki 60 gün',
+      _View.list =>
+        from == _day(_now())
+            ? 'Önümüzdeki 60 gün'
+            : '${from.day} ${_short(from.month)} – ${last.day} ${_short(last.month)} ${last.year}',
       _View.week =>
         from.month == friday.month
             ? '${from.day} – ${friday.day} ${_months[from.month - 1]} ${from.year}'
@@ -410,7 +414,7 @@ class _AgendaPageState extends State<AgendaPage> {
   /// The agenda written out for the lawyer's own calendar.
   Future<void> _exportCalendar() => showDialog<void>(
     context: context,
-    builder: (_) => CalendarExportDialog(database: _db!),
+    builder: (_) => CalendarExportDialog(database: _db!, lawyer: widget.lawyer),
   );
 
   Future<void> _addItem({String? caseKey, String? hearingKey}) async {
@@ -665,7 +669,11 @@ class _AgendaPageState extends State<AgendaPage> {
                     key: ValueKey('agenda-view-${view.name}'),
                     borderRadius: BorderRadius.circular(8),
                     onTap: () {
-                      setState(() => _view = view);
+                      setState(() {
+                        _view = view;
+                        // The list is the days ahead: from today, chosen.
+                        if (view == _View.list) _anchor = _day(_now());
+                      });
                       unawaited(_saveView());
                       _reload();
                     },
@@ -818,7 +826,10 @@ class _AgendaPageState extends State<AgendaPage> {
                 ],
                 selected: {_view},
                 onSelectionChanged: (v) {
-                  setState(() => _view = v.first);
+                  setState(() {
+                    _view = v.first;
+                    if (_view == _View.list) _anchor = _day(_now());
+                  });
                   unawaited(_saveView());
                   _reload();
                 },

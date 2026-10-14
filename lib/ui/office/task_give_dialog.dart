@@ -219,7 +219,11 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
           items: [
             for (final (field, who) in c.items)
               if (field.text.trim().isNotEmpty)
-                TaskItem.create(field.text, assignee: who),
+                // One taken out of KİME since: anyone of them.
+                TaskItem.create(
+                  field.text,
+                  assignee: _to.contains(who) ? who : '',
+                ),
           ],
           docs: c.docs,
           docKeys: c.chosen.toList(),
@@ -289,6 +293,8 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
     final packed = <String, TaskPackage>{};
     final missing = <String>[];
     for (final c in cases) {
+      // Closed meanwhile: the rest are not packed for a dialog gone.
+      if (!mounted) break;
       setState(() => _packing = '${c.number} hazırlanıyor…');
       final pack = await TaskPackage.pack(
         c,
@@ -503,7 +509,8 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          // Not while the task is being made: the cases half packed.
+          onPressed: _busy ? null : () => Navigator.pop(context),
           child: const Text('Vazgeç'),
         ),
         FilledButton(
@@ -774,7 +781,15 @@ class _TaskGiveDialogState extends State<TaskGiveDialog> {
               IconButton(
                 tooltip: 'Çıkar',
                 visualDensity: VisualDensity.compact,
-                onPressed: () => setState(() => _cases.remove(c)),
+                onPressed: () => setState(() {
+                  _cases.remove(c);
+                  // The last day counted from its hearing goes with it, not
+                  // given unseen with no hearing to count from.
+                  if (_byHearing?.caseKey == c.row.key) {
+                    _byHearing = null;
+                    _due = null;
+                  }
+                }),
                 icon: const Icon(Icons.close_rounded, size: 18),
               ),
             ],
