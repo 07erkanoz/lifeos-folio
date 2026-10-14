@@ -24,7 +24,7 @@ abstract final class SyncCaps {
 
   /// What this Folio knows and says it has: each only once the feature
   /// using it is whole here (§5).
-  static const known = {hlc, split, ledgerOps};
+  static const known = {hlc, split, ledgerOps, fieldVersions, lifecycle};
 
   /// The capabilities this Folio's own formats use now: a part needs of
   /// another device only those of its row in [matrix] that are here.
@@ -34,6 +34,12 @@ abstract final class SyncCaps {
     // set-offs, and their movements are made of them (§5 step 4): an
     // older Folio would write them whole and send the movements back.
     ledgerOps,
+    // The agenda, the decisions on deadlines, whom the lawyer acts for and
+    // the clients' cards keep each group's version, and a row taken off
+    // its lifecycle version (§5 step 5): an older Folio would write them
+    // whole and bring back what was taken off.
+    fieldVersions,
+    lifecycle,
   };
 
   /// What each part and channel needs when its format uses it (§4.1).

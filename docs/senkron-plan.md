@@ -107,7 +107,33 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
       - icra ödeme kartında askıdaki mahsup ve "Mahsubu geri al";
       - Kasa'da onarım raporu şeridi: şimdiki ve onarınca durum, "Onar" düğmesi;
       - Senkron sayfasında eski sürüm cihazla duran parçaların satırı.
-  - Sıradaki adım: §5 adım 5.
+  - **§5 adım 5 bitti:**
+    - `lib/services/sync/field_versions.dart`: bir satırın alan grupları, her grubun HLC sürümü,
+      yalnız değişen gruba yeni sürüm, grup grup birleştirme.
+    - Ajanda satırı (`lib/services/portal/portal_agenda_versions.dart`):
+      - gruplar `tur`, `baslik`, `govde`, `zaman` (`at`, `all_day`), `tamam`, `bag`
+        (`case_key`, `hearing_key`) ve yaşam sürümü `yasam`;
+      - silinen satır `agenda_removed`'da son içeriği ve yaşam sürümüyle durur (`silinenler`);
+      - başka cihazdaki düzenleme silineni geri getirmez; yalnız `restoreAgenda` ("Geri al")
+        daha yeni yaşam sürümüyle getirir, aradaki düzenlemeyle birlikte;
+      - silinmiş satır ekranda gösterildiği hâliyle kaydedilince geri gelmez;
+      - eşit yaşam sürümünde silme kazanır (eski kural); eski `silinen` işaretleri hâlâ okunur.
+    - Süre kararı (`deadline_user`): `tamam`, `gun`, `baslik`, `govde`, `onay`
+      (`confirmed_inputs`, `confirmed_at`; gün onunla gider), `kaldir`. İlk kez yazılan karar boş
+      karara göre sürümlenir: değiştirmediği alan başka cihazın sözünü ezmez.
+    - Temsil (`case_representation.surum`): sonraki sürüm; eşitte her cihazda aynı seçim.
+    - Müvekkil kartı:
+      - alan sürümleri `alanSurumu`; sürümsüz alan damgasından (`alanZamani`) türetilir, göç
+        gerekmez;
+      - `saveClient` yalnız avukatın bu kartta değiştirdiğini (`copyWith` damgası kartın zamanı)
+        sürümler; ekranda eski kalmış alan, başka cihazdan geleni ezmez;
+      - yeni kartın sürümleri kendi zamanından türetilir;
+      - `CaseNote` ve `CaseLink` kendi `surum`'unu taşır.
+    - Gelen her sürüm saate işlenir (R2).
+    - İlan ve etkinleştirme: `alanSurumu`, `silmeOmru`. Eski sürüm cihazla ajanda parçası durur.
+    - Testler: `test/sync_step5_test.dart` (A, B, C üç cihaz).
+    - Ekran değişikliği yok.
+  - Sıradaki adım: adım 5'in Codex denetimi, sonra §5 adım 6 (gizli not; önce maket).
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,

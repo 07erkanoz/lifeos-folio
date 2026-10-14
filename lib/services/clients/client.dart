@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../sync/hlc.dart';
 import '../uyap/uyap_web_service.dart';
 
 /// A client of the lawyer's: a person or a body, by the names the cases
@@ -26,6 +27,7 @@ class Client {
     this.person = '',
     this.absorbed = const [],
     this.stamps = const {},
+    this.versions = const {},
     this.caseLinks = const {},
     this.caseNotes = const {},
     this.group = '',
@@ -46,6 +48,11 @@ class Client {
   /// different fields of a card keep both ([merge]). One not stamped was
   /// set when the card was ([updated]).
   final Map<String, DateTime> stamps;
+
+  /// Each of [fields]' version (docs/senkron-plan.md R1, R2), written by
+  /// [written]: one not yet versioned has its [stamps]' made of it, the
+  /// same on every device (R2.1).
+  final Map<String, Hlc> versions;
 
   /// The cases the lawyer tied to the client by hand, or took off it, by
   /// case key: these overrule what the names in the cases say.
@@ -151,6 +158,7 @@ class Client {
       sharedOnce: sharedOnce || (office ?? this.office),
       person: person,
       absorbed: absorbed ?? this.absorbed,
+      versions: versions,
       caseLinks: caseLinks ?? this.caseLinks,
       caseNotes: caseNotes ?? this.caseNotes,
       group: group ?? this.group,
@@ -182,6 +190,7 @@ class Client {
     person: person,
     absorbed: absorbed,
     stamps: stamps,
+    versions: versions,
     caseLinks: caseLinks,
     caseNotes: caseNotes,
     group: group,
@@ -190,6 +199,112 @@ class Client {
 
   /// When field [k] was last set.
   DateTime stampOf(String k) => stamps[k] ?? updated;
+
+  /// Field [k]'s version: as written, else made of when it was last set.
+  Hlc versionOf(String k) =>
+      versions[k] ?? Hlc.fromLegacy(stampOf(k).toIso8601String());
+
+  /// Every version the card was written with, its cases' and notes' too.
+  Iterable<Hlc> get allVersions => [
+    ...versions.values,
+    for (final l in caseLinks.values) ?l.version,
+    for (final n in caseNotes.values) ?n.version,
+  ];
+
+  /// This card as the lawyer wrote it here, [before] the one kept: what
+  /// they changed given [tick]'s version, the rest as kept. A field is
+  /// theirs to change when it was stamped as this card was ([copyWith]
+  /// stamps what it changes); one only shown as it was, and changed since
+  /// on another device, keeps what came. A case's note or link likewise,
+  /// by when it was written.
+  Client written(Client? before, Hlc Function() tick) {
+    // A new card: each field the lawyer's word as of when it was made, its
+    // version made of that (R2.1), the same on every device.
+    if (before == null) return this;
+    final now = _values;
+    final was = before._values;
+    final pick = <String, Object>{};
+    final stampsNow = <String, DateTime>{};
+    final versionsNow = <String, Hlc>{};
+    for (final k in fields) {
+      if (now[k] == was[k]) {
+        pick[k] = was[k]!;
+        stampsNow[k] = before.stampOf(k);
+        versionsNow[k] = before.versionOf(k);
+      } else if (stampOf(k) == updated) {
+        pick[k] = now[k]!;
+        stampsNow[k] = stampOf(k);
+        versionsNow[k] = tick();
+      } else {
+        pick[k] = was[k]!;
+        stampsNow[k] = before.stampOf(k);
+        versionsNow[k] = before.versionOf(k);
+      }
+    }
+    final links = <String, CaseLink>{...before.caseLinks};
+    caseLinks.forEach((k, l) {
+      final kept = links[k];
+      if (kept != null && kept.sameAs(l)) return;
+      if (kept != null && !l.at.isAfter(kept.at)) return;
+      links[k] = l.withVersion(tick());
+    });
+    final notes = <String, CaseNote>{...before.caseNotes};
+    caseNotes.forEach((k, n) {
+      final kept = notes[k];
+      if (kept != null && kept.sameAs(n)) return;
+      if (kept != null && !n.at.isAfter(kept.at)) return;
+      notes[k] = n.withVersion(tick());
+    });
+    return _picked(
+      pick,
+      stamps: stampsNow,
+      versions: versionsNow,
+      names: names,
+      updated: updated,
+      sharedOnce: sharedOnce,
+      person: person,
+      absorbed: absorbed,
+      caseLinks: links,
+      caseNotes: notes,
+    );
+  }
+
+  Client _picked(
+    Map<String, Object> pick, {
+    required Map<String, DateTime> stamps,
+    required Map<String, Hlc> versions,
+    required List<String> names,
+    required DateTime updated,
+    required bool sharedOnce,
+    required String person,
+    required List<String> absorbed,
+    required Map<String, CaseLink> caseLinks,
+    required Map<String, CaseNote> caseNotes,
+  }) => Client(
+    id: id,
+    name: pick['ad']! as String,
+    body: pick['kurum']! as bool,
+    idNo: pick['kimlik']! as String,
+    phone: pick['telefon']! as String,
+    phone2: pick['telefon2']! as String,
+    email: pick['eposta']! as String,
+    address: pick['adres']! as String,
+    note: pick['not']! as String,
+    messages: pick['mesajIzni']! as bool,
+    names: names,
+    updated: updated,
+    removed: pick['silindi']! as bool,
+    office: pick['buro']! as bool,
+    sharedOnce: sharedOnce,
+    person: person,
+    absorbed: absorbed,
+    stamps: stamps,
+    versions: versions,
+    caseLinks: caseLinks,
+    caseNotes: caseNotes,
+    group: pick['grup']! as String,
+    hidden: pick['gizli']! as bool,
+  );
 
   Map<String, Object> get _values => {
     'ad': name,
@@ -224,48 +339,44 @@ class Client {
     final a = mine._values, b = theirs._values;
     final pick = <String, Object>{};
     final stamps = <String, DateTime>{};
+    final versions = <String, Hlc>{};
     for (final k in fields) {
-      final ta = mine.stampOf(k), tb = theirs.stampOf(k);
-      final later =
-          tb.isAfter(ta) || (tb == ta && '${b[k]}'.compareTo('${a[k]}') > 0);
+      final va = mine.versionOf(k), vb = theirs.versionOf(k);
+      // The later version; for the same, the same value on every device.
+      final later = Hlc.decide(vb, b[k], va, a[k]) > 0;
       pick[k] = later ? b[k]! : a[k]!;
-      stamps[k] = later ? tb : ta;
+      stamps[k] = later ? theirs.stampOf(k) : mine.stampOf(k);
+      versions[k] = later ? vb : va;
     }
     final links = {...mine.caseLinks};
     theirs.caseLinks.forEach((k, l) {
       final kept = links[k];
-      if (kept == null || l.at.isAfter(kept.at)) links[k] = l;
+      if (kept == null ||
+          Hlc.decide(l.versionOf, l.value, kept.versionOf, kept.value) > 0) {
+        links[k] = l;
+      }
     });
     final notes = {...mine.caseNotes};
     theirs.caseNotes.forEach((k, n) {
       final kept = notes[k];
-      if (kept == null || n.at.isAfter(kept.at)) notes[k] = n;
+      if (kept == null ||
+          Hlc.decide(n.versionOf, n.value, kept.versionOf, kept.value) > 0) {
+        notes[k] = n;
+      }
     });
-    return Client(
-      id: mine.id,
-      name: pick['ad']! as String,
-      body: pick['kurum']! as bool,
-      idNo: pick['kimlik']! as String,
-      phone: pick['telefon']! as String,
-      phone2: pick['telefon2']! as String,
-      email: pick['eposta']! as String,
-      address: pick['adres']! as String,
-      note: pick['not']! as String,
-      messages: pick['mesajIzni']! as bool,
+    return mine._picked(
+      pick,
+      stamps: stamps,
+      versions: versions,
       names: {...mine.names, ...theirs.names}.toList(),
       updated: theirs.updated.isAfter(mine.updated)
           ? theirs.updated
           : mine.updated,
-      removed: pick['silindi']! as bool,
-      office: pick['buro']! as bool,
       sharedOnce: mine.sharedOnce || theirs.sharedOnce,
       person: mine.person.isNotEmpty ? mine.person : theirs.person,
       absorbed: {...mine.absorbed, ...theirs.absorbed}.toList(),
-      stamps: stamps,
       caseLinks: links,
       caseNotes: notes,
-      group: pick['grup']! as String,
-      hidden: pick['gizli']! as bool,
     );
   }
 
@@ -293,6 +404,11 @@ class Client {
       for (final k in fields)
         if (stamps[k] case final t?) k: t.toIso8601String(),
     },
+    if (versions.isNotEmpty)
+      'alanSurumu': {
+        for (final k in fields)
+          if (versions[k] case final v?) k: '$v',
+      },
     'dosyalar': {
       for (final k in caseLinks.keys.toList()..sort())
         k: caseLinks[k]!.toJson(),
@@ -338,6 +454,11 @@ class Client {
             if (fields.contains(e.key))
               '${e.key}': ?DateTime.tryParse('${e.value}'),
       },
+      versions: {
+        if (j['alanSurumu'] is Map)
+          for (final e in (j['alanSurumu'] as Map).entries)
+            if (fields.contains(e.key)) '${e.key}': ?Hlc.tryParse(e.value),
+      },
       caseLinks: {
         if (j['dosyalar'] is Map)
           for (final e in (j['dosyalar'] as Map).entries)
@@ -358,16 +479,29 @@ class Client {
 /// it ([removed]; the cases' names bring it back no more), or neither
 /// again; [at] is when this was said, the later word winning.
 class CaseLink {
-  const CaseLink(this.state, this.at, {this.role = ''});
+  const CaseLink(this.state, this.at, {this.role = '', this.version});
 
   static const added = 'ekli', removed = 'cikarildi', none = '';
   final String state, role;
   final DateTime at;
 
+  /// Its version (R1); null for one written before versions.
+  final Hlc? version;
+
+  Hlc get versionOf => version ?? Hlc.fromLegacy(at.toIso8601String());
+
+  /// What it says, for choosing between two of the same version.
+  Map<String, Object?> get value => {...toJson()}..remove('surum');
+
+  bool sameAs(CaseLink o) => state == o.state && role == o.role && at == o.at;
+
+  CaseLink withVersion(Hlc v) => CaseLink(state, at, role: role, version: v);
+
   Map<String, Object?> toJson() => {
     'durum': state,
     'rol': role,
     'zaman': at.toIso8601String(),
+    if (version != null) 'surum': '$version',
   };
 
   static CaseLink? fromJson(Object? j) {
@@ -379,6 +513,7 @@ class CaseLink {
       state,
       at,
       role: j['rol'] is String ? j['rol'] as String : '',
+      version: Hlc.tryParse(j['surum']),
     );
   }
 }
@@ -386,14 +521,27 @@ class CaseLink {
 /// The lawyer's note on one of the client's cases: [by] wrote it at [at];
 /// the later note wins on every device.
 class CaseNote {
-  const CaseNote(this.text, this.at, {this.by = ''});
+  const CaseNote(this.text, this.at, {this.by = '', this.version});
   final String text, by;
   final DateTime at;
+
+  /// Its version (R1); null for one written before versions.
+  final Hlc? version;
+
+  Hlc get versionOf => version ?? Hlc.fromLegacy(at.toIso8601String());
+
+  /// What it says, for choosing between two of the same version.
+  Map<String, Object?> get value => {...toJson()}..remove('surum');
+
+  bool sameAs(CaseNote o) => text == o.text && by == o.by && at == o.at;
+
+  CaseNote withVersion(Hlc v) => CaseNote(text, at, by: by, version: v);
 
   Map<String, Object?> toJson() => {
     'metin': text,
     'yazan': by,
     'zaman': at.toIso8601String(),
+    if (version != null) 'surum': '$version',
   };
 
   static CaseNote? fromJson(Object? j) {
@@ -404,6 +552,7 @@ class CaseNote {
       j['metin'] as String,
       at,
       by: j['yazan'] is String ? j['yazan'] as String : '',
+      version: Hlc.tryParse(j['surum']),
     );
   }
 }

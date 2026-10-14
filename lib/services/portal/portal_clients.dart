@@ -50,9 +50,18 @@ extension PortalClients on PortalDatabase {
   int get clientsRevision =>
       _db.select('SELECT n FROM clients_revision').first.columnAt(0) as int;
 
+  /// Keeps [c] as the lawyer wrote it here: what they changed given a new
+  /// version (R1), what came from another device since kept ([Client.written]).
   void saveClient(Client c) {
-    _putClient(c);
+    _putClient(c.written(clientCard(c.id), SyncClock.of(this).tick));
     PortalDatabase.changed?.call();
+  }
+
+  /// Every version of [c] taken into the clock (R2).
+  void _observeCard(Client c) {
+    for (final v in c.allVersions) {
+      SyncClock.observe(this, v);
+    }
   }
 
   void _putClient(Client c) => _db.execute(
@@ -702,6 +711,7 @@ extension PortalClients on PortalDatabase {
           continue;
         }
         // The owner's devices each say what they changed: field by field.
+        _observeCard(c);
         final merged = kept == null ? c : Client.merge(kept, c);
         if (kept != null && merged.encode() == kept.encode()) continue;
         _putClient(merged);
@@ -763,6 +773,7 @@ extension PortalClients on PortalDatabase {
       for (final j in theirs['muvekkiller'] as List? ?? const []) {
         final c = Client.fromJson(j);
         if (c == null) continue;
+        _observeCard(c);
         final kept = clientCard(c.id);
         final merged = kept == null ? c : Client.merge(kept, c);
         if (kept != null && merged.encode() == kept.encode()) continue;
