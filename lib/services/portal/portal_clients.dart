@@ -13,6 +13,8 @@ extension PortalClients on PortalDatabase {
       locked INTEGER NOT NULL DEFAULT 0);
     CREATE INDEX IF NOT EXISTS client_record_client
       ON client_record(client_id);
+    CREATE TABLE IF NOT EXISTS client_record_pending (
+      id TEXT PRIMARY KEY, author TEXT NOT NULL, json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS clients_revision (n INTEGER NOT NULL);
     INSERT INTO clients_revision SELECT 0
       WHERE NOT EXISTS (SELECT 1 FROM clients_revision);
@@ -121,10 +123,14 @@ extension PortalClients on PortalDatabase {
   }
 
   /// The money records others wrote, forgotten here: this person may no
-  /// longer see them. Their own stay.
+  /// longer see them. Their own stay. Every [ClientRecordKind.financial]
+  /// kind: the office's cash and bank and papers, and the enforcement
+  /// files' accounts, as much as the fees and movements (R11).
   void forgetClientMoney({required String keepPerson}) {
+    final kinds = ClientRecordKind.financialCodes.map((_) => '?').join(',');
     for (final r in _db.select(
-      "SELECT id, json FROM client_record WHERE kind IN ('ucret','hareket')",
+      'SELECT id, json FROM client_record WHERE kind IN ($kinds)',
+      ClientRecordKind.financialCodes,
     )) {
       final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
       if (rec == null || rec.person == keepPerson) continue;
@@ -326,7 +332,7 @@ extension PortalClients on PortalDatabase {
         for (final r in _db.select('SELECT json FROM client_record'))
           if (ClientRecord.fromJson(jsonDecode(r['json'] as String))
               case final rec?
-              when allowed || !rec.kind.money || rec.person == me)
+              when allowed || !rec.kind.financial || rec.person == me)
             rec.toJson(),
       ],
     };
@@ -369,7 +375,7 @@ extension PortalClients on PortalDatabase {
               when (shared.contains(rec.clientId) ||
                       (rec.clientId == officeCashId && money)) &&
                   mine(rec.person) &&
-                  (money || !rec.kind.money))
+                  (money || !rec.kind.financial))
             {...rec.toJson(), 'kisi': me},
       ],
     };
@@ -480,7 +486,7 @@ extension PortalClients on PortalDatabase {
       for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {
         final r = ClientRecord.fromJson(j);
         // Money from, or for, one who may not see it is not taken.
-        if (r == null || (!money && r.kind.money)) continue;
+        if (r == null || (!money && r.kind.financial)) continue;
         // Of a colleague's client unshared, only this person's own.
         final card = clientCard(r.clientId);
         if (card != null && _unshared(card, me) && r.person != me) continue;
@@ -496,6 +502,23 @@ extension PortalClients on PortalDatabase {
             continue;
           }
         }
+        // A movement that takes back, sets off or books another's: only
+        // its owner's, of the same client; one whose other has not come
+        // yet waits apart, in no total, till it does (R6).
+        if (author != null) {
+          switch (_linkCheck(r)) {
+            case _Link.refused:
+              continue;
+            case _Link.waiting:
+              _db.execute(
+                'INSERT OR REPLACE INTO client_record_pending(id, author, json) '
+                'VALUES(?,?,?)',
+                [r.id, author, jsonEncode(r.toJson())],
+              );
+              continue;
+            case _Link.ok:
+          }
+        }
         final kept = clientRecord(r.id);
         if (kept != null && (kept.locked || !r.updated.isAfter(kept.updated))) {
           continue;
@@ -503,6 +526,7 @@ extension PortalClients on PortalDatabase {
         _putRecord(r);
         changed = true;
       }
+      if (_takeWaiting()) changed = true;
       // Every colleague's client unshared, come now or before: what
       // others wrote of it goes here, this person's stays.
       // Not knowing who this is, nothing is taken for another's.
@@ -515,6 +539,62 @@ extension PortalClients on PortalDatabase {
     return changed;
   }
 
+  /// The record [r] names as the one it takes back (`ters`), sets off
+  /// (`kaynak: mahsup:…`) or books (`kaynak: icra:…`); null for none.
+  static String? _linkOf(ClientRecord r) {
+    if (r.kind != ClientRecordKind.movement) return null;
+    final back = r.text('ters');
+    if (back.isNotEmpty) return back;
+    final source = r.text('kaynak');
+    for (final p in const ['mahsup:', 'icra:']) {
+      if (source.startsWith(p) && source.length > p.length) {
+        return source.substring(p.length);
+      }
+    }
+    return null;
+  }
+
+  /// Whether a member's [r] may act on the record it names: refused when
+  /// that is another person's or another client's, waiting when it has not
+  /// come yet.
+  _Link _linkCheck(ClientRecord r) {
+    final link = _linkOf(r);
+    if (link == null) return _Link.ok;
+    final target = clientRecord(link);
+    if (target == null) return _Link.waiting;
+    if (target.person != r.person || target.clientId != r.clientId) {
+      return _Link.refused;
+    }
+    return _Link.ok;
+  }
+
+  /// The movements waiting for the record they name, taken in now that it
+  /// came, or dropped when it is another's; true when one was taken in.
+  bool _takeWaiting() {
+    var took = false;
+    for (final row in _db.select(
+      'SELECT id, author, json FROM client_record_pending',
+    )) {
+      final r = ClientRecord.fromJson(jsonDecode(row['json'] as String));
+      final check = r == null ? _Link.refused : _linkCheck(r);
+      if (check == _Link.waiting) continue;
+      _db.execute('DELETE FROM client_record_pending WHERE id=?', [row['id']]);
+      if (check == _Link.refused || r == null) continue;
+      final kept = clientRecord(r.id);
+      if (kept != null && (kept.locked || !r.updated.isAfter(kept.updated))) {
+        continue;
+      }
+      _putRecord(r);
+      took = true;
+    }
+    return took;
+  }
+
+  /// The movements from members waiting for the record they name.
+  int get waitingRecords =>
+      _db.select('SELECT count(*) AS n FROM client_record_pending').first['n']
+          as int;
+
   /// A colleague's client unshared: the mark of it, nothing of the person
   /// in it (a card merged into another keeps its name and its records).
   static bool _unshared(Client c, String me) =>
@@ -524,3 +604,6 @@ extension PortalClients on PortalDatabase {
       c.person.isNotEmpty &&
       c.person != me;
 }
+
+/// What a member's movement may do to the record it names.
+enum _Link { ok, refused, waiting }

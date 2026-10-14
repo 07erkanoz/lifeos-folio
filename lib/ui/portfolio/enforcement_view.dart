@@ -153,24 +153,15 @@ class _EnforcementViewState extends State<EnforcementView> {
         if (r.kind == ClientRecordKind.movement && !r.removed)
           if (r.text('kaynak').isNotEmpty) r.text('kaynak'),
     };
-    var ledger = ledgerOf(db, widget.caseKey);
-    // What UYAP shows now of the payments made outside: official, on every
-    // device alike.
-    final found = officialMatches(
-      ledger,
-      widget.record?.money?.collections ?? const [],
-      uyapDay,
+    // What UYAP shows now of the payments made outside: official, worked
+    // out from it each time and written nowhere, so that looking at a file
+    // changes nothing on any device (docs/senkron-plan.md R4).
+    final ledger = ledgerOf(
+      db,
+      widget.caseKey,
+      collections: widget.record?.money?.collections ?? const [],
+      parse: uyapDay,
     );
-    if (found.isNotEmpty) {
-      for (final e in ledger) {
-        final key = found[e.id];
-        if (key == null) continue;
-        db.saveClientRecord(
-          e.record.copyWith(data: {...e.record.data, 'resmi': key}),
-        );
-      }
-      ledger = ledgerOf(db, widget.caseKey);
-    }
     final bookings = {
       for (final e in ledger)
         if (_movementsOf(db, e) case (:final held, :final applied))
@@ -448,9 +439,8 @@ class _EnforcementViewState extends State<EnforcementView> {
       'aciklama': input.note,
       'tamami': input.whole,
     };
-    // A collection UYAP showed for the old sum is not this one's any more;
-    // one the lawyer marked stays marked.
-    if (sum && e.isOfficial && e.official != 'elle') data['resmi'] = '';
+    // A collection UYAP showed for the old sum is worked out anew; one the
+    // lawyer marked stays marked.
     db.saveClientRecord(e.record.copyWith(data: data));
     var rebooked = false;
     if (e.kind == LedgerKind.external && money) {
@@ -917,7 +907,13 @@ class _EnforcementViewState extends State<EnforcementView> {
     final db = await widget.database();
     db.saveClientRecord(
       e.record.copyWith(
-        data: {...e.record.data, 'resmi': official ? 'elle' : ''},
+        // The lawyer's word, kept apart from what UYAP is matched to (R4);
+        // an older Folio's mark in `resmi` is taken off with it.
+        data: {
+          ...e.record.data,
+          'resmiKarar': official ? 'elle' : '',
+          'resmi': '',
+        },
       ),
     );
     await _loadBooked();

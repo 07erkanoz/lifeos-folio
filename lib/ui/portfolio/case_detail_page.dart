@@ -276,7 +276,12 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       _sharedBy = _sharedByOf(db, kase.key);
       _sharedWith = SharedCases.sharedWith(db, kase.key);
       _archive = archive;
-      _ledger = ledgerOf(db, kase.key);
+      _ledger = ledgerOf(
+        db,
+        kase.key,
+        collections: _c.record?.money?.collections ?? const [],
+        parse: uyapDay,
+      );
       _state = state;
       _hearings = db.hearings(caseKey: kase.key)
         ..sort((a, b) => b.at.compareTo(a.at));

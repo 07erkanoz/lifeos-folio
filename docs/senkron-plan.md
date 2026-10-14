@@ -30,7 +30,25 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
       - Görev paketi, dosya isteği ve soru kanalının biçim sürümleri, o biçimleri değiştiren
         adımlara.
     - Bu adımda hiçbir parçanın biçimi değişmedi (`SyncCaps.active` boş). Yalnız `hlc` ilan ediliyor.
-  - Sıradaki adım: §5 adım 2, bugünkü açıkları kapatmak.
+    - Codex denetimi (11 bulgu, REVISE) düzeltildi (`b54eadc`):
+      - açılış hataları yutulmuyor, tek açılış;
+      - dış dosya atomik yazılıyor, kaybolunca rastgele dönem kimliği;
+      - saat için bir dakikalık sınır;
+      - yetenek kararı alışverişin kendi mesajından;
+      - zaman aşımı, tür doğrulaması ve başarı kaydı;
+      - sayaç taşması;
+      - eski sürüm Folio'nun iki yönlü testi.
+  - **§5 adım 2 (ekran dışı kısmı) bitti:**
+    - R11: `ClientRecordKind.financial`. Para yetkisi gönderme, kabul ve dosya isteğinde icra
+      defterini de kapsıyor. Yetki kaybında bütün finansal türler temizleniyor.
+    - R6 denetimi: büro üyesinin `ters`, `kaynak: mahsup:…` ve `kaynak: icra:…` hareketi yalnız kendi
+      kaydına ve aynı müvekkile. Hedefi gelmemiş olan `client_record_pending`'de bekliyor, toplamlara
+      girmiyor.
+    - R4: UYAP eşleşmesi kaydedilmiyor, her açılışta hesaplanıyor (`ledgerOf(collections:)`).
+      Avukatın sözü `resmiKarar`'da. Eski `resmi: elle` okunuyor, eski otomatik anahtar okunmuyor.
+    - Kalan: başkasının defter kaydında Düzenle/Sil/Bildirildi/Resmi'nin kapanması (ekran; maket
+      onayı bekliyor).
+  - Sıradaki adım: adım 2'nin ekran kısmı, sonra §5 adım 3.
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,

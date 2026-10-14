@@ -39,12 +39,14 @@ LedgerEntry _entry(
       'borclu': 'Mehmet Tunç',
       'odeme': 'Nakit',
       'tamami': whole,
-      'resmi': official,
+      if (official == 'elle') 'resmiKarar': 'elle',
     },
     created: _at,
     by: 'Av. Deniz Kaya',
     updated: _at,
   ),
+  // UYAP's match is worked out, never kept (docs/senkron-plan.md R4).
+  matched: official == 'elle' ? '' : official,
 );
 
 String _text(DocModel m) => m.blocks.map((b) => b.plainText).join('\n');
@@ -261,7 +263,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(ledgerOf(db, 'k1').single.official, 'makbuz:M-9');
+    // Shown as UYAP's, worked out from what it shows; nothing written for
+    // it (docs/senkron-plan.md R4).
+    expect(ledgerOf(db, 'k1').single.isOfficial, isFalse);
+    expect(ledgerOf(db, 'k1').single.record.data.containsKey('resmi'), isFalse);
     expect(find.text("UYAP'ta görüldü"), findsOneWidget);
     expect(find.byKey(const ValueKey('enforcement-folio-left')), findsNothing);
   });

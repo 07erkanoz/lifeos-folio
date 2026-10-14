@@ -29,9 +29,14 @@ enum LedgerKind {
 /// the debt Folio shows is UYAP's less it; once UYAP shows it, it is
 /// official and no longer taken off twice.
 class LedgerEntry {
-  const LedgerEntry(this.record);
+  const LedgerEntry(this.record, {this.matched = ''});
 
   final ClientRecord record;
+
+  /// The collection of UYAP's it was found to be ([officialMatches]):
+  /// worked out from what UYAP shows each time, never kept, so that
+  /// looking at a file writes nothing (docs/senkron-plan.md R4).
+  final String matched;
 
   String get id => record.id;
   LedgerKind get kind =>
@@ -56,9 +61,16 @@ class LedgerEntry {
   DateTime? get reported => DateTime.tryParse(record.text('bildirildi'));
   bool get isReported => reported != null;
 
+  /// The lawyer's own word that UYAP has it (`resmiKarar`), kept and kept
+  /// alike. A record from before kept it as `resmi: elle`; a collection's
+  /// key kept there by an older Folio is not a word of the lawyer's and is
+  /// worked out anew.
+  bool get markedByHand =>
+      record.text('resmiKarar') == 'elle' || record.text('resmi') == 'elle';
+
   /// What UYAP showed it as (a collection's receipt, or the lawyer's word
   /// "elle"); empty while UYAP does not show it.
-  String get official => record.text('resmi');
+  String get official => markedByHand ? 'elle' : matched;
   bool get isOfficial => official.isNotEmpty;
 
   /// UYAP's balance when it was written, in kuruş; null when not known.
@@ -68,13 +80,27 @@ class LedgerEntry {
 }
 
 /// [caseKey]'s own account in Folio, the oldest first; none taken off.
-List<LedgerEntry> ledgerOf(PortalDatabase db, String caseKey) => [
-  for (final r in db.allClientRecords())
-    if (!r.removed &&
-        r.kind == ClientRecordKind.enforcement &&
-        r.text('dosya') == caseKey)
-      LedgerEntry(r),
-]..sort((a, b) => a.at.compareTo(b.at));
+/// With UYAP's [collections] (and [parse] for their days), each payment
+/// UYAP shows is official, worked out now ([officialMatches]).
+List<LedgerEntry> ledgerOf(
+  PortalDatabase db,
+  String caseKey, {
+  List<UyapMoneyItem> collections = const [],
+  DateTime? Function(String raw)? parse,
+}) {
+  final entries = [
+    for (final r in db.allClientRecords())
+      if (!r.removed &&
+          r.kind == ClientRecordKind.enforcement &&
+          r.text('dosya') == caseKey)
+        LedgerEntry(r),
+  ]..sort((a, b) => a.at.compareTo(b.at));
+  if (collections.isEmpty || parse == null) return entries;
+  final found = officialMatches(entries, collections, parse);
+  return [
+    for (final e in entries) LedgerEntry(e.record, matched: found[e.id] ?? ''),
+  ];
+}
 
 /// The key a collection of UYAP's is known by.
 String collectionKey(UyapMoneyItem c) => c.receipt.isNotEmpty
@@ -91,9 +117,11 @@ Map<String, String> officialMatches(
   List<UyapMoneyItem> collections,
   DateTime? Function(String raw) parse,
 ) {
+  // A collection one entry was matched to is no other's; the lawyer's
+  // own word takes none.
   final taken = {
     for (final e in entries)
-      if (e.isOfficial) e.official,
+      if (!e.markedByHand && e.matched.isNotEmpty) e.matched,
   };
   final out = <String, String>{};
   bool outside(UyapMoneyItem c) =>

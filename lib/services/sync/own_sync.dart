@@ -391,7 +391,7 @@ class OwnSync extends ChangeNotifier {
                     may: (r) =>
                         ((db.clientCard(r.clientId)?.office ?? false) ||
                             r.clientId == officeCashId) &&
-                        (!r.kind.money || money),
+                        (!r.kind.financial || money),
                   )
                   .catchError((Object _) => 0),
             );
@@ -408,7 +408,7 @@ class OwnSync extends ChangeNotifier {
           may: (r) =>
               ((db.clientCard(r.clientId)?.office ?? false) ||
                   r.clientId == officeCashId) &&
-              (!r.kind.money || (_net.seesMoney && _net.seesMoneyOf(from))),
+              (!r.kind.financial || (_net.seesMoney && _net.seesMoneyOf(from))),
         );
       };
     } else {
@@ -451,7 +451,7 @@ class OwnSync extends ChangeNotifier {
   /// What an own device has of a record's files: the money others wrote
   /// only while this person may see it.
   bool _ownMay(ClientRecord r) =>
-      !r.kind.money || _net.seesMoney || r.person == _net.me;
+      !r.kind.financial || _net.seesMoney || r.person == _net.me;
 
   /// The files of the records taken off here (unshared, the money no
   /// longer let), gone too where no other record names them.

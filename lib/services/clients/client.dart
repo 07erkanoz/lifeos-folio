@@ -467,6 +467,18 @@ enum ClientRecordKind {
       this == bank ||
       this == paper;
 
+  /// Seen and sent only to those who see the money (docs/senkron-plan.md
+  /// R11): [money]'s, and an enforcement file's own account, whose sums,
+  /// debtors and notes are money though they count in no total. Kept
+  /// apart from [money], which the accounts and lists use.
+  bool get financial => money || this == enforcement;
+
+  /// The [financial] kinds' codes.
+  static final financialCodes = [
+    for (final k in values)
+      if (k.financial) k.code,
+  ];
+
   static ClientRecordKind? of(Object? code) {
     for (final k in values) {
       if (k.code == code) return k;
