@@ -120,43 +120,52 @@ class UyapMobileApi {
     return _identify();
   }
 
+  /// What the session did, a line each, with no token in it: when it was
+  /// taken up again, renewed, refused and why (uyap-senkron.log).
+  static void Function(String line)? log;
+
   /// A session kept from before, its refresh token not yet expired. Null
-  /// when UYAP refused it, and the kept tokens are dropped. When UYAP could
-  /// not be reached (no network yet at start, a server error) it throws
-  /// [UyapMobileUnreachable] and the kept tokens stay, to be tried again.
+  /// only when UYAP said it is over (the refresh token refused, or the
+  /// renewed one refused again), and the kept tokens are dropped. Anything
+  /// else (no network yet at start, a server error, an answer not
+  /// understood) throws [UyapMobileUnreachable] and the kept tokens stay,
+  /// to be tried again: a seven-day session is not lost to a doubt.
   Future<MobileSession?> restore(MobileTokens tokens) async {
-    if (!tokens.refreshExpires.isAfter(DateTime.now())) return null;
+    if (!tokens.refreshExpires.isAfter(DateTime.now())) {
+      log?.call(
+        'UYAP Mobil oturumu geri yüklenmedi: süresi ${tokens.refreshExpires} '
+        'tarihinde doldu',
+      );
+      return null;
+    }
     _generation++;
     _tokens = tokens;
     try {
-      return await _identify();
+      final s = await _identify();
+      log?.call(
+        'UYAP Mobil oturumu geri yüklendi; ${tokens.refreshExpires} '
+        'tarihine kadar geçerli',
+      );
+      return s;
     } catch (e) {
-      if (_transient(e)) {
-        // Not connected for now, but not forgotten: [onTokens] is not told.
-        _generation++;
-        _tokens = null;
+      if (e is _Expired || e is _Refused) {
+        log?.call('UYAP Mobil oturumu düştü: $e');
+        if (_tokens != null) _setTokens(null);
         session.value = null;
-        throw UyapMobileUnreachable(
-          e is _HttpError || e is _Unreachable
-              ? '$e'
-              : uyapFault('UYAP Mobil', e),
-        );
+        return null;
       }
-      if (_tokens != null) _setTokens(null);
+      // Not connected for now, but not forgotten: [onTokens] is not told.
+      log?.call('UYAP Mobil oturumu şimdilik açılamadı, saklı kalıyor: $e');
+      _generation++;
+      _tokens = null;
       session.value = null;
-      return null;
+      throw UyapMobileUnreachable(
+        e is _HttpError || e is _Unreachable
+            ? '$e'
+            : uyapFault('UYAP Mobil', e),
+      );
     }
   }
-
-  /// A failure that says nothing of the session: the network, a timeout or
-  /// UYAP's own server error.
-  static bool _transient(Object e) =>
-      e is SocketException ||
-      e is TimeoutException ||
-      e is HttpException ||
-      e is TlsException ||
-      e is _Unreachable ||
-      (e is _HttpError && (e.status >= 500 || e.status == 429));
 
   Future<MobileSession> _identify() async {
     final user = await _get('mobile/avukat/user');
@@ -274,14 +283,22 @@ class UyapMobileApi {
       }, authorized: false);
       if (generation != _generation || !identical(_tokens, had)) return;
       _setTokens(had.renewed(data, DateTime.now()));
+      log?.call('UYAP Mobil erişim jetonu yenilendi');
     } on _HttpError catch (e) {
       // A server error is not a refusal: the session may well be good.
-      if (e.status >= 500) throw _Unreachable('$e');
+      if (e.status >= 500) {
+        log?.call('UYAP Mobil yenilemesi sunucu hatası verdi: ${e.status}');
+        throw _Unreachable('$e');
+      }
+      log?.call(
+        'UYAP Mobil yenileme jetonunu reddetti: HTTP ${e.status} '
+        '${e.message}',
+      );
       if (generation == _generation) {
         _setTokens(null);
         session.value = null;
       }
-      throw StateError('UYAP Mobil oturumu sona erdi. Yeniden bağlanın.');
+      throw const _Expired();
     } finally {
       _refreshing = null;
     }
@@ -360,7 +377,11 @@ class UyapMobileApi {
     if (text.trim().isEmpty) return null;
     final data = jsonDecode(text);
     if (data is Map && data['status'] != null && '${data['status']}' != '200') {
-      if (authorized && '${data['status']}' == '403') throw const _Refused();
+      // UYAP Mobil may say an access token is over in a 200's body.
+      if (authorized &&
+          ('${data['status']}' == '403' || '${data['status']}' == '401')) {
+        throw const _Refused();
+      }
       throw StateError(uyapRefused('UYAP Mobil', _message(text)));
     }
     return data;
@@ -805,6 +826,15 @@ class MobileSession {
 
 class _Refused implements Exception {
   const _Refused();
+  @override
+  String toString() => 'UYAP Mobil yenilenen erişim jetonunu da kabul etmedi';
+}
+
+/// UYAP refused the refresh token: the session is over.
+class _Expired implements Exception {
+  const _Expired();
+  @override
+  String toString() => 'UYAP Mobil oturumu sona erdi. Yeniden bağlanın.';
 }
 
 /// UYAP Mobil could not be reached, so whether a kept session is still

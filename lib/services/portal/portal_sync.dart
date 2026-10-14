@@ -140,6 +140,8 @@ class PortalSync extends ChangeNotifier {
   void start() {
     if (_started) return;
     _started = true;
+    // What UYAP Mobil's session does, in the log a lawyer can send.
+    UyapMobileApi.log = (line) => unawaited(SyncLog.note(line));
     _web.session.addListener(_webChanged);
     _mobile.session.addListener(_mobileChanged);
     _uets.session.addListener(_uetsChanged);

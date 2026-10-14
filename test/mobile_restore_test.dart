@@ -12,19 +12,33 @@ void main() {
   late UyapMobileApi api;
   var userStatus = 200;
   var refreshStatus = 200;
+  // The user's answer in a 200's body: its status, as UYAP Mobil may say an
+  // access token is over in it; null for a plain answer.
+  String? userBody;
+  var bodyOnce = false;
   final told = <MobileTokens?>[];
+  final logged = <String>[];
 
   setUp(() async {
     told.clear();
+    logged.clear();
     userStatus = 200;
     refreshStatus = 200;
+    userBody = null;
+    bodyOnce = false;
+    UyapMobileApi.log = logged.add;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((r) async {
       final path = r.uri.path.replaceFirst('/services/', '');
       r.response.headers.contentType = ContentType.json;
       if (path == 'mobile/avukat/user') {
         r.response.statusCode = userStatus;
-        r.response.write(jsonEncode({'adi': 'Deniz'}));
+        if (userBody != null) {
+          r.response.write(userBody);
+          if (bodyOnce) userBody = null;
+        } else {
+          r.response.write(jsonEncode({'adi': 'Deniz'}));
+        }
       } else if (path == 'auth/refresh') {
         r.response.statusCode = refreshStatus;
         r.response.write(jsonEncode({'accessToken': 'a2'}));
@@ -37,7 +51,10 @@ void main() {
       Uri.parse('http://127.0.0.1:${server.port}/services/'),
     )..onTokens = told.add;
   });
-  tearDown(() => server.close(force: true));
+  tearDown(() {
+    UyapMobileApi.log = null;
+    return server.close(force: true);
+  });
 
   MobileTokens kept({bool accessExpired = false}) {
     final now = DateTime.now();
@@ -95,5 +112,42 @@ void main() {
     expect(await api.restore(kept(accessExpired: true)), isNull);
     expect(api.connected, isFalse);
     expect(told, [null]);
+  });
+
+  test('an access token said over in a 200\'s body is renewed, and the '
+      'session goes on', () async {
+    userBody = jsonEncode({'status': 401, 'message': 'Token süresi doldu'});
+    bodyOnce = true;
+    final session = await api.restore(kept());
+    expect(session?.user, 'Deniz');
+    expect(api.connected, isTrue);
+    expect(told.single?.access, 'a2', reason: 'renewed, and kept');
+    expect(logged, contains('UYAP Mobil erişim jetonu yenilendi'));
+  });
+
+  test('an answer not understood keeps the session for the next try', () async {
+    userBody = jsonEncode({'status': 500, 'message': 'Beklenmeyen hata'});
+    await expectLater(
+      api.restore(kept()),
+      throwsA(isA<UyapMobileUnreachable>()),
+    );
+    expect(told, isEmpty, reason: 'the kept tokens are not removed');
+    expect(
+      logged.single,
+      startsWith('UYAP Mobil oturumu şimdilik açılamadı, saklı kalıyor'),
+    );
+  });
+
+  test('why a session ended is told in the log, with no token in it', () async {
+    refreshStatus = 400;
+    expect(await api.restore(kept(accessExpired: true)), isNull);
+    expect(told, [null]);
+    expect(
+      logged,
+      contains(startsWith('UYAP Mobil yenileme jetonunu reddetti: HTTP 400')),
+    );
+    for (final line in logged) {
+      expect(line.contains('r1') || line.contains('a1'), isFalse, reason: line);
+    }
   });
 }
