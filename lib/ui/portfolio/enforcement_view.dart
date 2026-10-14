@@ -159,7 +159,15 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// again (a payment shared changed, or taken off; R8).
   ChangeNotifier? _sync;
 
-  void _changed() => unawaited(_loadBooked());
+  Timer? _soon;
+
+  /// Many changes at once (a sync's) read once, a moment after the last.
+  void _changed() {
+    _soon?.cancel();
+    _soon = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) unawaited(_loadBooked());
+    });
+  }
 
   @override
   void initState() {
@@ -170,6 +178,7 @@ class _EnforcementViewState extends State<EnforcementView> {
 
   @override
   void dispose() {
+    _soon?.cancel();
     _sync?.removeListener(_changed);
     super.dispose();
   }
@@ -192,64 +201,20 @@ class _EnforcementViewState extends State<EnforcementView> {
   Future<void> _loadBooked() async {
     final db = await widget.database();
     _proposalsDb = db;
-    // Each owner's, with what UYAP shows here: a payment it shows is not
-    // taken off the debt twice (R4).
-    final collections = widget.record?.money?.collections ?? const [];
-    _shared = {
-      for (final e in db.sharedLedgersOf(widget.caseKey).entries)
-        e.key: () {
-          final entries = [
-            for (final r in e.value)
-              if (!r.removed)
-                LedgerEntry(
-                  r,
-                  noteHidden: SecretNotes.descriptionHidden(db, r),
-                ),
-          ]..sort((a, b) => a.at.compareTo(b.at));
-          if (collections.isEmpty) return entries;
-          final found = officialMatches(entries, collections, uyapDay);
-          return [
-            for (final x in entries)
-              LedgerEntry(
-                x.record,
-                matched: found[x.id] ?? '',
-                noteHidden: x.noteHidden,
-              ),
-          ];
-        }(),
-    };
-    _sharedRemoved = db.sharedLedgerRemoved(widget.caseKey);
-    final booked = {
-      for (final r in db.allClientRecords())
-        if (r.kind == ClientRecordKind.movement && !r.removed)
-          if (r.text('kaynak').isNotEmpty) r.text('kaynak'),
-    };
-    // What UYAP shows now of the payments made outside: official, worked
-    // out from it each time and written nowhere, so that looking at a file
-    // changes nothing on any device (docs/senkron-plan.md R4).
-    final ledger = ledgerOf(
+    final read = readEnforcementBooks(
       db,
       widget.caseKey,
-      collections: widget.record?.money?.collections ?? const [],
-      parse: uyapDay,
+      widget.record?.money?.collections ?? const [],
     );
-    final bookings = {
-      for (final e in ledger)
-        if (_movementsOf(db, e) case (:final held, :final applied))
-          e.id: (
-            booked: held.isNotEmpty,
-            target: applied.isEmpty
-                ? null
-                : MovementKind.of(applied.first.data['hesap']),
-          ),
-    };
+    _shared = read.shared;
+    _sharedRemoved = read.sharedRemoved;
     if (mounted) {
       setState(() {
-        _booked = booked;
-        _ledger = ledger;
-        _bookings = bookings;
+        _booked = read.booked;
+        _ledger = read.ledger;
+        _bookings = read.bookings;
       });
-      widget.onLedger?.call(ledger);
+      widget.onLedger?.call(read.ledger);
     }
   }
 
@@ -363,28 +328,7 @@ class _EnforcementViewState extends State<EnforcementView> {
   ({List<ClientRecord> held, List<ClientRecord> applied}) _movementsOf(
     PortalDatabase db,
     LedgerEntry e,
-  ) {
-    final records = db.allClientRecords().toList();
-    final reversed = {
-      for (final r in records)
-        if (r.text('ters').isNotEmpty) r.text('ters'),
-    };
-    bool standing(ClientRecord r) =>
-        !r.removed &&
-        r.kind == ClientRecordKind.movement &&
-        !reversed.contains(r.id);
-    final held = [
-      for (final r in records)
-        if (standing(r) && r.text('kaynak') == 'icra:${e.id}') r,
-    ];
-    final applied = [
-      for (final r in records)
-        if (standing(r) &&
-            held.any((m) => r.text('kaynak') == 'mahsup:${m.id}'))
-          r,
-    ];
-    return (held: held, applied: applied);
-  }
+  ) => _MovementIndex(db).of(e);
 
   /// Where [e]'s money was written: null for held for the client.
   MovementKind? _targetOf(PortalDatabase db, LedgerEntry e) {
@@ -2586,4 +2530,103 @@ class _EnforcementViewState extends State<EnforcementView> {
         ),
     ]);
   }
+}
+
+/// The movements of the client's account and Kasa, read once and indexed:
+/// what each enforcement payment put in them, still standing.
+class _MovementIndex {
+  _MovementIndex(PortalDatabase db) {
+    final records = db.recordsOfKind(ClientRecordKind.movement);
+    final reversed = {
+      for (final r in records)
+        if (r.text('ters').isNotEmpty) r.text('ters'),
+    };
+    for (final r in records) {
+      final source = r.text('kaynak');
+      if (r.removed || source.isEmpty) continue;
+      booked.add(source);
+      if (reversed.contains(r.id)) continue;
+      (_bySource[source] ??= []).add(r);
+    }
+  }
+
+  final _bySource = <String, List<ClientRecord>>{};
+
+  /// Every source a movement not taken off names (`kaynak`).
+  final booked = <String>{};
+
+  ({List<ClientRecord> held, List<ClientRecord> applied}) of(LedgerEntry e) {
+    final held = _bySource['icra:${e.id}'] ?? const <ClientRecord>[];
+    return (
+      held: held,
+      applied: [for (final m in held) ...?_bySource['mahsup:${m.id}']],
+    );
+  }
+}
+
+/// What the enforcement tab shows of [caseKey]: the file's own account
+/// with what UYAP shows of it ([collections]), what each payment put in the
+/// client's account and Kasa, and the accounts shared with this person
+/// (R8). Each kind of record read once, not once a payment.
+@visibleForTesting
+({
+  Set<String> booked,
+  List<LedgerEntry> ledger,
+  Map<String, ({bool booked, MovementKind? target})> bookings,
+  Map<String, List<LedgerEntry>> shared,
+  String? sharedRemoved,
+})
+readEnforcementBooks(
+  PortalDatabase db,
+  String caseKey,
+  List<UyapMoneyItem> collections,
+) {
+  // Each owner's, with what UYAP shows here: a payment it shows is not
+  // taken off the debt twice (R4).
+  final shared = {
+    for (final e in db.sharedLedgersOf(caseKey).entries)
+      e.key: () {
+        final entries = [
+          for (final r in e.value)
+            if (!r.removed)
+              LedgerEntry(r, noteHidden: SecretNotes.descriptionHidden(db, r)),
+        ]..sort((a, b) => a.at.compareTo(b.at));
+        if (collections.isEmpty) return entries;
+        final found = officialMatches(entries, collections, uyapDay);
+        return [
+          for (final x in entries)
+            LedgerEntry(
+              x.record,
+              matched: found[x.id] ?? '',
+              noteHidden: x.noteHidden,
+            ),
+        ];
+      }(),
+  };
+  // What UYAP shows now of the payments made outside: official, worked out
+  // from it each time and written nowhere, so that looking at a file
+  // changes nothing on any device (docs/senkron-plan.md R4).
+  final ledger = ledgerOf(
+    db,
+    caseKey,
+    collections: collections,
+    parse: uyapDay,
+  );
+  final index = _MovementIndex(db);
+  return (
+    booked: index.booked,
+    ledger: ledger,
+    bookings: {
+      for (final e in ledger)
+        if (index.of(e) case (:final held, :final applied))
+          e.id: (
+            booked: held.isNotEmpty,
+            target: applied.isEmpty
+                ? null
+                : MovementKind.of(applied.first.data['hesap']),
+          ),
+    },
+    shared: shared,
+    sharedRemoved: db.sharedLedgerRemoved(caseKey),
+  );
 }

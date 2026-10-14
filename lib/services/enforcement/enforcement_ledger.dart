@@ -97,10 +97,8 @@ List<LedgerEntry> ledgerOf(
   DateTime? Function(String raw)? parse,
 }) {
   final entries = [
-    for (final r in db.allClientRecords())
-      if (!r.removed &&
-          r.kind == ClientRecordKind.enforcement &&
-          r.text('dosya') == caseKey)
+    for (final r in db.recordsOfKind(ClientRecordKind.enforcement))
+      if (!r.removed && r.text('dosya') == caseKey)
         LedgerEntry(r, noteHidden: SecretNotes.descriptionHidden(db, r)),
   ]..sort((a, b) => a.at.compareTo(b.at));
   if (collections.isEmpty || parse == null) return entries;

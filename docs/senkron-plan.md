@@ -1099,3 +1099,9 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
     `defterIslemi`, `alanSurumu`, `hlc` aranır.
   - Açık kalanlar değişmedi: gerçek ağla uçtan uca test, icra ekranında tekrar okumalar, büro
     eşinin duran parçaları.
+- **İcra sekmesinin hızı (14 Ekim, ölçüldü):** 5.400 kayıt, dosyada 20 ödeme: okuma 2.159 ms'den
+  40 ms'ye indi (`tool/measure_enforcement_test.dart`, test ortamında). Neden: her ödeme için bütün
+  müvekkil kayıtları baştan çözülüyordu. Şimdi hareketler türüne göre bir kez okunup dizinleniyor
+  (`readEnforcementBooks`, `recordsOfKind`); `ledgerOf` yalnız icra kayıtlarını okuyor; eşitleme
+  bildirimleri 400 ms seyreltilip tek okumaya dönüyor. Eski ve yeni sonuçlar ölçümde birebir
+  karşılaştırıldı.

@@ -466,6 +466,17 @@ extension PortalClients on PortalDatabase {
     ..._projection(),
   ];
 
+  /// Every record of [kind] kept, the removed among them; the ledgers'
+  /// movements too for movements. Only those read: a screen that needs
+  /// one kind does not decode every record of every client.
+  List<ClientRecord> recordsOfKind(ClientRecordKind kind) => [
+    for (final r in _db.select('SELECT json FROM client_record WHERE kind=?', [
+      kind.code,
+    ]))
+      ?ClientRecord.fromJson(jsonDecode(r['json'] as String)),
+    if (kind == ClientRecordKind.movement) ..._projection(),
+  ];
+
   ClientRecord? clientRecord(String id) {
     final rows = _db.select('SELECT json FROM client_record WHERE id=?', [id]);
     if (rows.isNotEmpty) {
