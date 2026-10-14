@@ -20,6 +20,7 @@ import '../../services/portal/portal_sync.dart';
 import '../../services/platform/document_scan.dart';
 import '../../services/speech/speech_models.dart';
 import '../../services/speech/speech_session.dart';
+import '../widgets/secret_note.dart';
 import '../widgets/speech_bar.dart';
 import '../widgets/speech_download_dialog.dart';
 import '../../services/portal/portal_hearing.dart';
@@ -1275,7 +1276,7 @@ class _ClientCardState extends State<ClientCard> {
       widget.onChanged?.call(m.clientId);
       return;
     }
-    final why = await showDialog<String>(
+    final why = await showDialog<({String text, bool secret})>(
       context: context,
       builder: (_) => const _NoteDialog(
         title: 'Ters kayıtla düzelt',
@@ -1285,7 +1286,7 @@ class _ClientCardState extends State<ClientCard> {
       ),
     );
     if (why == null) return;
-    final reason = why.trim();
+    final reason = why.text.trim();
     final now = DateTime.now();
     _keep(
       ClientRecord(
@@ -1559,7 +1560,13 @@ class _ClientCardState extends State<ClientCard> {
       context: context,
       builder: (_) => _ContactDialog(card, groups: clientGroups(_db)),
     );
-    if (saved == null) return;
+    if (saved == null || !mounted) return;
+    // Made secret after the office had it: asked first (R7).
+    if (saved.noteSecret &&
+        !card.noteSecret &&
+        !await confirmSecretNote(context, _db, 'kartNotu:${card.id}')) {
+      return;
+    }
     _db.saveClient(saved);
     if (mounted) setState(() => _client = saved);
     widget.onChanged?.call(saved.id);
@@ -2784,6 +2791,10 @@ class _ClientCardState extends State<ClientCard> {
                       ),
                     ),
                   ),
+                  if (note.secret) ...[
+                    const SecretNoteMark(),
+                    const SizedBox(width: 6),
+                  ],
                   Text(
                     _shortDay(note.at),
                     style: TextStyle(fontSize: 11, color: AgendaColors.muted),
@@ -3486,12 +3497,29 @@ class _ClientCardState extends State<ClientCard> {
     children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-        child: Text(
-          (c?.note ?? '').isEmpty ? 'Not yok.' : c!.note,
-          style: TextStyle(
-            fontSize: 12.5,
-            color: (c?.note ?? '').isEmpty ? AgendaColors.muted : null,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    (c?.note ?? '').isEmpty ? 'Not yok.' : c!.note,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: (c?.note ?? '').isEmpty
+                          ? AgendaColors.muted
+                          : null,
+                    ),
+                  ),
+                ),
+                if (c?.noteSecret ?? false) const SecretNoteMark(),
+              ],
+            ),
+            if (c != null)
+              SecretNoteStatus(db: _db, noteKey: 'kartNotu:${c.id}'),
+          ],
         ),
       ),
     ],
@@ -3580,19 +3608,43 @@ class _ClientCardState extends State<ClientCard> {
   }
 
   Future<void> _editNote(String key) async {
-    final note = await showDialog<String>(
+    final card = _card();
+    final was = _noteOf(key);
+    // A colleague's card's notes are theirs (R6).
+    final theirs =
+        card.person.isNotEmpty &&
+        widget.person.isNotEmpty &&
+        card.person != widget.person;
+    if (theirs) {
+      showNotice(context, 'Bu kartın notlarını yalnız sahibi değiştirebilir.');
+      return;
+    }
+    final noteKey = 'dosyaNotu:${card.id}:$key';
+    final note = await showDialog<({String text, bool secret})>(
       context: context,
       builder: (_) => _NoteDialog(
         title: 'Dosya notu · ${_number(key)}',
-        text: _noteOf(key)?.text ?? '',
+        text: was?.text ?? '',
+        secret: was?.secret ?? false,
+        status: SecretNoteStatus(db: _db, noteKey: noteKey),
       ),
     );
     if (note == null || !mounted) return;
-    final card = _card();
+    if (note.secret &&
+        !(was?.secret ?? false) &&
+        !await confirmSecretNote(context, _db, noteKey)) {
+      return;
+    }
+    if (!mounted) return;
     final saved = card.copyWith(
       caseNotes: {
         ...card.caseNotes,
-        key: CaseNote(note.trim(), DateTime.now(), by: widget.lawyer),
+        key: CaseNote(
+          note.text.trim(),
+          DateTime.now(),
+          by: widget.lawyer,
+          secret: note.secret,
+        ),
       },
     );
     _db.saveClient(saved);
@@ -3847,10 +3899,19 @@ class _NoteDialog extends StatefulWidget {
     this.label,
     this.ok = 'Kaydet',
     this.lines = 4,
+    this.secret,
+    this.status,
   });
   final String title, text, ok;
   final String? label;
   final int lines;
+
+  /// Whether the note is secret (R7), for the switch under it; none for a
+  /// text that is no note.
+  final bool? secret;
+
+  /// How far it was taken back of the office, under it.
+  final Widget? status;
 
   @override
   State<_NoteDialog> createState() => _NoteDialogState();
@@ -3858,6 +3919,7 @@ class _NoteDialog extends StatefulWidget {
 
 class _NoteDialogState extends State<_NoteDialog> {
   late final _text = TextEditingController(text: widget.text);
+  late bool _secret = widget.secret ?? false;
 
   @override
   void dispose() {
@@ -3870,18 +3932,32 @@ class _NoteDialogState extends State<_NoteDialog> {
     title: Text(widget.title),
     content: SizedBox(
       width: 480,
-      child: TextField(
-        key: const ValueKey('case-note-text'),
-        controller: _text,
-        autofocus: true,
-        minLines: widget.lines,
-        maxLines: widget.lines == 1 ? 1 : 10,
-        decoration: InputDecoration(
-          labelText: widget.label,
-          hintText: widget.label == null
-              ? 'Tanıklar, sulh sınırı, müvekkilin istekleri…'
-              : null,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('case-note-text'),
+            controller: _text,
+            autofocus: true,
+            minLines: widget.lines,
+            maxLines: widget.lines == 1 ? 1 : 10,
+            decoration: InputDecoration(
+              labelText: widget.label,
+              hintText: widget.label == null
+                  ? 'Tanıklar, sulh sınırı, müvekkilin istekleri…'
+                  : null,
+            ),
+          ),
+          if (widget.secret != null) ...[
+            const SizedBox(height: 12),
+            SecretNoteSwitch(
+              value: _secret,
+              onChanged: (v) => setState(() => _secret = v),
+            ),
+          ],
+          ?widget.status,
+        ],
       ),
     ),
     actions: [
@@ -3891,7 +3967,8 @@ class _NoteDialogState extends State<_NoteDialog> {
       ),
       FilledButton(
         key: const ValueKey('case-note-save'),
-        onPressed: () => Navigator.pop(context, _text.text),
+        onPressed: () =>
+            Navigator.pop(context, (text: _text.text, secret: _secret)),
         child: Text(widget.ok),
       ),
     ],
@@ -4120,6 +4197,7 @@ class _ContactDialogState extends State<_ContactDialog> {
   late final _email = TextEditingController(text: widget.client.email);
   late final _address = TextEditingController(text: widget.client.address);
   late final _note = TextEditingController(text: widget.client.note);
+  late bool _noteSecret = widget.client.noteSecret;
   late final _group = TextEditingController(text: widget.client.group);
   late bool _body = widget.client.body;
   late bool _messages = widget.client.messages;
@@ -4185,6 +4263,13 @@ class _ContactDialogState extends State<_ContactDialog> {
             _field(_email, 'E-posta'),
             _field(_address, 'Adres', lines: 2),
             _field(_note, 'Not', lines: 3),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: SecretNoteSwitch(
+                value: _noteSecret,
+                onChanged: (v) => setState(() => _noteSecret = v),
+              ),
+            ),
             TextField(
               key: const ValueKey('contact-group'),
               controller: _group,
@@ -4266,6 +4351,7 @@ class _ContactDialogState extends State<_ContactDialog> {
                     email: _email.text.trim(),
                     address: _address.text.trim(),
                     note: _note.text.trim(),
+                    noteSecret: _noteSecret,
                     messages: _messages,
                     names: names,
                     group: _group.text.trim(),

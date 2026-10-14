@@ -4,6 +4,7 @@ import '../../services/clients/client_accounts.dart';
 import '../../services/enforcement/enforcement_ledger.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/folio_dialog.dart';
+import '../widgets/secret_note.dart';
 
 String _two(int v) => v.toString().padLeft(2, '0');
 String _day(DateTime t) => '${_two(t.day)}.${_two(t.month)}.${t.year}';
@@ -19,6 +20,7 @@ typedef LedgerInput = ({
   String way,
   bool whole,
   String note,
+  bool noteSecret,
   MovementKind? target,
 });
 
@@ -60,6 +62,7 @@ class _LedgerDialogState extends State<LedgerDialog> {
     },
   );
   late final _note = TextEditingController(text: widget.editing?.note ?? '');
+  late bool _noteSecret = widget.editing?.noteSecret ?? false;
   late DateTime _at = widget.editing?.at ?? DateTime.now();
   late String _debtor =
       widget.editing?.debtor ??
@@ -124,6 +127,7 @@ class _LedgerDialogState extends State<LedgerDialog> {
       way: _external ? _way : '',
       whole: _whole,
       note: _note.text.trim(),
+      noteSecret: _noteSecret,
       target: _external ? _target : null,
     ));
   }
@@ -299,13 +303,19 @@ class _LedgerDialogState extends State<LedgerDialog> {
               'ücrete mahsup edilebilir.',
               style: muted,
             ),
-          ] else
+          ] else ...[
             TextField(
               controller: _note,
               decoration: const InputDecoration(
                 labelText: 'Açıklama (isteğe bağlı)',
               ),
             ),
+            const SizedBox(height: 8),
+            SecretNoteSwitch(
+              value: _noteSecret,
+              onChanged: (v) => setState(() => _noteSecret = v),
+            ),
+          ],
           // The papers are printed from the payment's card ("Yazdır"),
           // when wanted: none is made, nor opened, on saving.
           const SizedBox(height: 10),

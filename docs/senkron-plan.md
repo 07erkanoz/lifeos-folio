@@ -133,7 +133,35 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
     - İlan ve etkinleştirme: `alanSurumu`, `silmeOmru`. Eski sürüm cihazla ajanda parçası durur.
     - Testler: `test/sync_step5_test.dart` (A, B, C üç cihaz).
     - Ekran değişikliği yok.
-  - Sıradaki adım: §5 adım 6 (gizli not; önce maket).
+  - **§5 adım 6 bitti (gizli not ve geri çekme, R7):**
+    - Gizlilik metinle aynı sürümde: ajanda `gizli_not` (`govde` grubu), süre gövdesi
+      `govde_gizli`, `CaseNote.secret`, kart `noteSecret` (`not` ile tek alan), icra
+      `aciklamaGizli` (`bilgi` grubu). Gizli ajanda satırı başlığıyla birlikte gizlidir.
+    - `lib/services/notes/secret_notes.dart`: bütün dışa çıkış kararları burada. Gizli olan görev
+      paketine, paylaşılan dosyaya, takvim dosyasına, icra belgesine girmez; kart büroya boş metin
+      ve kendi sürümüyle gider. Kendi cihazlara tam gider.
+    - **Görev paketi not taşımaz** (`notBicimi: 2`). Notlar `gorev-notlari` büro parçasıyla
+      (`lib/services/notes/task_notes.dart`) not not, grup sürümleriyle gider; alıcı not not
+      birleştirir, gizlenen ve silineni açık işaretle bırakır, gizleneni kalıcı tutar (eski liste
+      diriltmez). Kapanan görevin notları alıcıda düşer.
+    - Gizleme kaydı (`note_hide`) yerel yazımla aynı anda, metinsiz ve kalıcı; ajanda parçası kapalı
+      cihaz da bu kayda bakar. Kimde ne var (`note_hold`): gönderimde "olası", alıcının
+      bildirimiyle "tutuyor"/"uyguladı". Bu ikisi ve alıcının aldığı gizlemeler `not-takibi`
+      (her zaman açık kendi cihaz parçası) ile eşitlenir. "Geri çekildi: n/m kişide" kişinin bütün
+      cihazları uygulayınca sayılır.
+    - Kart notu, dosya notu ve icra açıklamasının geri çekilmesi para yetkisinden ve paylaşım
+      ayarından bağımsız, metinsiz işaretle (`kartGizli`); alıcı her kart birleşiminden sonra
+      yeniden uygular.
+    - Eski paketler: veren tarafta bekleyen/kaynak dosyalar notsuz yeniden yazılır, teslimler
+      "eski" tutan olarak kaydedilir; alıcıda verenin ilk listesi gelince ve sonra gelen her eski
+      pakette notlar ve süreler ayrıntı dosyasından silinir (evraklara dokunulmaz).
+    - Meslektaşın kart ve dosya notu servis katmanında değiştirilemez (R6).
+    - İlan ve etkinleştirme: `notGizli`, `geriCekme`; `gorev-notlari` ve `not-takibi` bunları ister.
+    - Ekranlar (onaylı maketler): ekleme penceresinde anahtar; ajanda satırında kilit; notu basılı
+      tutunca ya da sağ tıklayınca gizlilik ve geri çekme durumu; dosya notu ve kart notu anahtarı
+      ve etiketi; icra açıklaması anahtarı; paylaşılmış notu gizlerken onay penceresi.
+    - Testler: `test/sync_step6_test.dart`, `test/sync_step6_screens_test.dart`.
+  - Sıradaki adım: adım 6'nın Codex kod denetimi, sonra §5 adım 7 (öneri ve karar; önce maket).
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,
@@ -918,3 +946,13 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
   - Testler silinen satırların içeriğini ve sürümünü de karşılaştırır.
   - Bilinen sınır: aynı ekran nesnesinden üst üste iki kayıtta, aradaki uzak değişiklik ilk
     kaydın değiştirdiği alanda ezilebilir; ekranlar her kayıttan sonra yeniden okur.
+- **Adım 6 plan denetimleri (14 Ekim, üç tur, REVISE):**
+  - 1. tur (15 bulgu): gizli başlığın takvime ve süreye sızması, paketlemeden sonra gizlenen not,
+    teslim geçmişi, kendi cihaz yayılımı, cihaz başına onay, kimliksiz eski paketler, yetki, R6.
+  - 2. tur (12 bulgu): donmuş not kopyasının yol açtığı yarım aktarım, yeniden deneme, aktarım
+    başına yetenek, tombstone, fiziksel kopya sahipliği.
+  - 3. tur (9 bulgu): canlı durum yönü doğru bulundu; liste sürümünün en büyük sürümle
+    sıralanamaması, gizlemenin `govde` grubuyla karşılaştırılması, kapanan görev, kapsam başına
+    onay, olası alıcı, eski kuyruk, kalıcı temizlik, yetkiden bağımsız kart geri çekmesi.
+    Kullanıcının isteğiyle bunlar uygulamada karşılandı (not not birleşim, açık işaretler,
+    `govde` karşılaştırması, kapsamlı `note_hold`, kalıcı temizlik durumu, metinsiz `kartGizli`).

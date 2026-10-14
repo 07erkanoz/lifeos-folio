@@ -34,6 +34,7 @@ import '../office/tasks_page.dart' show TaskDetail;
 import '../portfolio/portfolio_rows.dart' show splitParties, titleName;
 import 'channel_bar.dart';
 import 'deadline_review.dart';
+import '../widgets/secret_note.dart';
 import '../widgets/folio_select.dart';
 
 /// The agenda: the hearings both UYAP portals report, merged, and the
@@ -1232,7 +1233,9 @@ class _AgendaPageState extends State<AgendaPage> {
     required String title,
     String? subtitle,
     bool selected = false,
+    bool secret = false,
     VoidCallback? onTap,
+    VoidCallback? onLongPress,
     Key? key,
   }) => Material(
     key: key,
@@ -1241,6 +1244,8 @@ class _AgendaPageState extends State<AgendaPage> {
     child: InkWell(
       borderRadius: BorderRadius.circular(7),
       onTap: onTap,
+      onLongPress: onLongPress,
+      onSecondaryTap: onLongPress,
       child: Container(
         padding: const EdgeInsets.fromLTRB(7, 5, 7, 4),
         decoration: BoxDecoration(
@@ -1256,16 +1261,31 @@ class _AgendaPageState extends State<AgendaPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11.5,
-                height: 1.25,
-                fontWeight: FontWeight.w700,
-                color: ink,
-              ),
+            Row(
+              children: [
+                if (secret) ...[
+                  Icon(
+                    Icons.lock_outline_rounded,
+                    key: const ValueKey('secret-note-mark'),
+                    size: 12,
+                    color: ink,
+                  ),
+                  const SizedBox(width: 3),
+                ],
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.25,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                    ),
+                  ),
+                ),
+              ],
             ),
             if (subtitle != null)
               Text(
@@ -1311,7 +1331,66 @@ class _AgendaPageState extends State<AgendaPage> {
       subtitle: deadline || i.allDay
           ? null
           : '${i.kind == 'task' ? 'İş' : 'Not'} · ${_hm(i.at!)}',
+      secret: i.secret,
       onTap: () => _toggle(i),
+      onLongPress: i.id.startsWith('gorev-') ? null : () => _editSecret(i),
+    );
+  }
+
+  /// [i] made secret, or open again (docs/senkron-plan.md R7): one shared
+  /// with the office before asked of first; how far it was taken back.
+  Future<void> _editSecret(AgendaItem i) async {
+    final db = _db;
+    if (db == null) return;
+    final key = 'ajanda:${i.id}';
+    var secret = i.secret;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, set) => AlertDialog(
+          title: Text(i.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (i.body.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(i.body, style: const TextStyle(fontSize: 13)),
+                  ),
+                SecretNoteSwitch(
+                  full: true,
+                  value: secret,
+                  onChanged: (v) async {
+                    if (v &&
+                        !await confirmSecretNote(
+                          context,
+                          db,
+                          key,
+                          caseKey: i.caseKey,
+                        )) {
+                      return;
+                    }
+                    final now = _items.where((x) => x.id == i.id).firstOrNull;
+                    db.saveAgenda((now ?? i).copyWith(secret: v));
+                    set(() => secret = v);
+                    _reload();
+                  },
+                ),
+                SecretNoteStatus(db: db, noteKey: key, caseKey: i.caseKey),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Kapat'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2278,6 +2357,8 @@ class _AgendaPageState extends State<AgendaPage> {
           for (final t in tasks)
             InkWell(
               onTap: () => _toggle(t),
+              onLongPress: () => _editSecret(t),
+              onSecondaryTap: () => _editSecret(t),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
@@ -2304,6 +2385,7 @@ class _AgendaPageState extends State<AgendaPage> {
                         ),
                       ),
                     ),
+                    if (t.secret) const SecretNoteMark(),
                   ],
                 ),
               ),
@@ -3089,6 +3171,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
 
   final _title = TextEditingController();
   final _body = TextEditingController();
+  bool _secret = false;
   late DateTime _date = widget.day;
   TimeOfDay? _time = const TimeOfDay(hour: 9, minute: 0);
   String? _error;
@@ -3126,6 +3209,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
         caseKey: widget.caseKey,
         hearingKey: widget.hearingKey,
         updated: DateTime.now(),
+        secret: _secret,
       ),
     );
   }
@@ -3176,6 +3260,12 @@ class _AddItemDialogState extends State<_AddItemDialog> {
                 controller: _body,
                 style: const TextStyle(fontSize: 13),
                 decoration: field('Açıklama (isteğe bağlı)'),
+              ),
+              const SizedBox(height: 12),
+              SecretNoteSwitch(
+                full: true,
+                value: _secret,
+                onChanged: (v) => setState(() => _secret = v),
               ),
               const SizedBox(height: 12),
               Row(

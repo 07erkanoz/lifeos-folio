@@ -26,6 +26,7 @@ import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_enforcement.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../tools/interest_page.dart';
+import '../widgets/secret_note.dart';
 import '../widgets/notice.dart';
 import '../widgets/folio_dialog.dart';
 import 'enforcement_ledger_dialog.dart';
@@ -277,6 +278,7 @@ class _EnforcementViewState extends State<EnforcementView> {
       debtor: input.debtor,
       way: input.way,
       note: input.note,
+      noteSecret: input.noteSecret,
       whole: input.whole,
       uyapLeft: uyap,
       target: booked ? input.target : null,
@@ -362,6 +364,13 @@ class _EnforcementViewState extends State<EnforcementView> {
       ),
     );
     if (input == null || !mounted) return;
+    // Its description made secret after the office had it: asked first (R7).
+    if (input.noteSecret &&
+        !e.noteSecret &&
+        !await confirmSecretNote(context, db, 'aciklama:${e.record.id}')) {
+      return;
+    }
+    if (!mounted) return;
     final money =
         input.amount != e.amount || input.at != e.at || input.target != target;
     // The line and its money, in one transaction; nothing written when it
@@ -375,6 +384,7 @@ class _EnforcementViewState extends State<EnforcementView> {
         debtor: input.debtor,
         way: input.way,
         note: input.note,
+        noteSecret: input.noteSecret,
         whole: input.whole,
         target: input.target,
         shown: target,
@@ -1583,7 +1593,7 @@ class _EnforcementViewState extends State<EnforcementView> {
       if (e.way.isNotEmpty) e.way,
       if (e.whole) 'borcun tamamı',
       ?where,
-      if (e.note.isNotEmpty) e.note,
+      if (e.note.isNotEmpty) e.noteSecret ? '${e.note} (gizli not)' : e.note,
     ].join(' · ');
     final reported = e.reported;
     Widget step(String text, Color dot, {Color? color, Key? key}) => Row(
