@@ -858,7 +858,7 @@ extension PortalClients on PortalDatabase {
     if (from.isEmpty || from == me) return false;
     var changed = false;
     _transaction(() {
-      for (final j in theirs['muvekkiller'] as List? ?? const []) {
+      for (final j in jsonList(theirs['muvekkiller'])) {
         final c = Client.fromJson(j);
         if (c == null || c.person != from) continue;
         final kept = clientCard(c.id);
@@ -907,7 +907,7 @@ extension PortalClients on PortalDatabase {
         if (c.office && !c.removed) c.id,
     };
     final records = [
-      for (final j in theirs['muvekkilKayitlari'] as List? ?? const [])
+      for (final j in jsonList(theirs['muvekkilKayitlari']))
         if (j is Map &&
             (shared.contains(j['muvekkil']) ||
                 (j['muvekkil'] == officeCashId && money)) &&
@@ -925,7 +925,7 @@ extension PortalClients on PortalDatabase {
         'muvekkilKayitlari': records,
         if (money)
           'defterEski': [
-            for (final j in theirs['defterEski'] as List? ?? const [])
+            for (final j in jsonList(theirs['defterEski']))
               if (j is Map &&
                   (ledgersOf.contains(j['kayit']) ||
                       (j['kayit'] is String &&
@@ -954,7 +954,7 @@ extension PortalClients on PortalDatabase {
     final me = person ?? PortalDatabase.clientPerson?.call() ?? '';
     var changed = false;
     _transaction(() {
-      for (final j in theirs['muvekkiller'] as List? ?? const []) {
+      for (final j in jsonList(theirs['muvekkiller'])) {
         var c = Client.fromJson(j);
         if (c == null) continue;
         _observeCard(c);
@@ -977,7 +977,7 @@ extension PortalClients on PortalDatabase {
       }
       // Ledgers kept here in their old form that came in their new one.
       final mended = <String>{};
-      for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {
+      for (final j in jsonList(theirs['muvekkilKayitlari'])) {
         var r = ClientRecord.fromJson(j);
         // Money from, or for, one who may not see it is not taken.
         if (r == null || (!money && r.financial)) continue;

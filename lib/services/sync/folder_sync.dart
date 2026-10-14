@@ -13,6 +13,7 @@ import '../office/office_network.dart';
 import '../office/office_transfer.dart';
 import '../platform/app_directories.dart';
 import '../uyap/uyap_case_store.dart' show UyapSettings;
+import '../../models/json_shape.dart';
 
 /// A folder kept alike on the person's own devices.
 class SyncedFolder {
@@ -118,7 +119,7 @@ class FolderSync extends ChangeNotifier {
       if (await file.exists()) {
         final j = jsonDecode(await file.readAsString());
         if (j is Map) {
-          for (final f in (j['klasorler'] as List? ?? const [])) {
+          for (final f in (jsonList(j['klasorler']))) {
             final folder = SyncedFolder.fromJson(f);
             if (folder != null) folders[folder.id] = folder;
           }
@@ -368,7 +369,7 @@ class FolderSync extends ChangeNotifier {
     final from = theirs['cihaz'] as String;
     final fromName = '${theirs['ad'] ?? ''}';
     var changed = false;
-    for (final t in (theirs['klasorler'] as List? ?? const [])) {
+    for (final t in (jsonList(theirs['klasorler']))) {
       if (t is! Map || t['id'] is! String) continue;
       final id = t['id'] as String;
       final mine = folders[id];
@@ -490,24 +491,27 @@ class FolderSync extends ChangeNotifier {
         continue;
       }
       final here = File(target);
-      if (await here.exists()) {
-        final sum = await OfficeTransfer.sha256Of(here);
-        if (sum == t.files[i].sha256) {
-          await came.delete().catchError((Object _) => came);
-          base[rel] = sum;
-          placed[rel] = sum;
-          continue;
-        }
-        if (sum != base[rel]) {
-          // Changed here too: kept, under this device's name.
-          await here.rename(_copyName(target, _net.self?.device ?? 'bu cihaz'));
-        }
-      }
       try {
+        if (await here.exists()) {
+          final sum = await OfficeTransfer.sha256Of(here);
+          if (sum == t.files[i].sha256) {
+            await came.delete().catchError((Object _) => came);
+            base[rel] = sum;
+            placed[rel] = sum;
+            continue;
+          }
+          if (sum != base[rel]) {
+            // Changed here too: kept, under this device's name.
+            await here.rename(
+              _copyName(target, _net.self?.device ?? 'bu cihaz'),
+            );
+          }
+        }
         await here.parent.create(recursive: true);
         await _place(came, target);
       } catch (_) {
-        // Not put in place: not said so, and sent again next time.
+        // Not put in place (the one here held open, in Word): not said so,
+        // and sent again next time; the batch's others go on.
         continue;
       }
       base[rel] = t.files[i].sha256;

@@ -186,7 +186,7 @@ class OptimizerService {
         '${p.basename(e.executable)} çalıştırılamadı. Folio paketinin tools klasörünü ve izinlerini kontrol edin.',
       );
     } finally {
-      await temp.delete(recursive: true);
+      await _letGo(temp);
     }
   }
 
@@ -335,5 +335,19 @@ class OptimizerService {
       }
     }
     return output.takeBytes();
+  }
+}
+
+/// The working copy taken away, never in place of the result or of the
+/// error: a scanner or a tool not yet gone holding a file is tried once
+/// more a moment later, then left for the system's temporary folder.
+Future<void> _letGo(Directory temp) async {
+  for (var i = 0; i < 2; i++) {
+    try {
+      await temp.delete(recursive: true);
+      return;
+    } catch (_) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
   }
 }

@@ -13,6 +13,7 @@ import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
 import 'uyap_case_links.dart';
 import 'uyap_web_service.dart';
+import '../../models/json_shape.dart';
 
 /// Where UYAP's documents are kept, and whether they are kept at all.
 class UyapSettings extends ChangeNotifier {
@@ -200,7 +201,7 @@ class UyapCaseRecord {
       (json['kunye'] as Map? ?? const {}).cast<String, Object?>(),
     ),
     parties: [
-      for (final t in (json['taraflar'] as List? ?? const []))
+      for (final t in (jsonList(json['taraflar'])))
         if (t is Map)
           UyapParty(
             '${t['ad'] ?? ''}',
@@ -210,11 +211,11 @@ class UyapCaseRecord {
           ),
     ],
     documents: [
-      for (final d in (json['evraklar'] as List? ?? const []))
+      for (final d in (jsonList(json['evraklar'])))
         if (d is Map) UyapCaseDocument.stored(d.cast<String, Object?>()),
     ],
     withheld: json['engel'] as String?,
-    fresh: {for (final k in (json['yeni'] as List? ?? const [])) '$k'},
+    fresh: {for (final k in (jsonList(json['yeni']))) '$k'},
     files: json['surum'] == 1 ? const {} : _paths(json['dosyalar']),
     previews: {
       ..._paths(json['onizlemeler']),
@@ -227,7 +228,7 @@ class UyapCaseRecord {
     enforcement: json['icra'] is Map
         ? UyapEnforcement.stored(json['icra'] as Map)
         : null,
-    hidden: {for (final k in (json['gizli'] as List? ?? const [])) '$k'},
+    hidden: {for (final k in (jsonList(json['gizli']))) '$k'},
   );
 
   /// Where a record's documents are, taken to Folio's folder as it is now

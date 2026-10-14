@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../platform/app_directories.dart';
 import 'office_network.dart';
+import '../../models/json_shape.dart';
 
 /// One delivery that came: who sent it, when, with what word, and where
 /// its files are.
@@ -41,7 +42,7 @@ class InboxItem {
     // place and are no delivery; nor a voice message, which is heard in
     // its talk.
     if (e['tur'] == 'senkron') return null;
-    final names = [for (final n in (e['dosyalar'] as List? ?? const [])) '$n'];
+    final names = [for (final n in (jsonList(e['dosyalar']))) '$n'];
     if (e['tur'] == 'sohbet' &&
         names.isNotEmpty &&
         names.every((n) => n.toLowerCase().endsWith('.wav'))) {
@@ -55,7 +56,7 @@ class InboxItem {
       from: '${e['kisi'] ?? ''}',
       device: '${e['cihaz'] ?? ''}',
       names: names,
-      paths: [for (final n in (e['yollar'] as List? ?? const [])) '$n'],
+      paths: [for (final n in (jsonList(e['yollar']))) '$n'],
       size: e['boyut'] is int ? e['boyut'] as int : 0,
       note: '${e['not'] ?? ''}',
       at: at.toLocal(),

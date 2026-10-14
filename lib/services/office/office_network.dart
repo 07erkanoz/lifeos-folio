@@ -882,7 +882,11 @@ class OfficeNetwork extends ChangeNotifier {
   /// The office parts made alike with each member on the network.
   Future<void> syncOffice() async {
     for (final peer in _peers.values.toList()) {
-      if (peer.host == null || !isTrusted(peer.deviceId)) continue;
+      // One not on the network now is met when it comes back: tried now,
+      // each part waited for to the end, it held the others behind it.
+      if (!peer.online || peer.host == null || !isTrusted(peer.deviceId)) {
+        continue;
+      }
       await _syncOfficeParts(peer);
     }
   }
@@ -2021,13 +2025,20 @@ class OfficeNetwork extends ChangeNotifier {
         port: peer.port,
       );
       unawaited(_metOwn(ch));
-      final reply = ch.messages.first.timeout(const Duration(seconds: 10));
-      await ch.send({
-        't': 'defter',
-        'kayit': ledger.isOf(me) ? ledger.records : const [],
-      });
-      final m = await reply;
-      await ch.close();
+      // Shut whatever comes of it, an answer not coming among them: else
+      // a phone gone to sleep mid-way leaves one open each time it is met.
+      final Map<String, Object?> m;
+      try {
+        final reply = ch.messages.first.timeout(const Duration(seconds: 10))
+          ..ignore();
+        await ch.send({
+          't': 'defter',
+          'kayit': ledger.isOf(me) ? ledger.records : const [],
+        });
+        m = await reply;
+      } finally {
+        await ch.close();
+      }
       if (m['t'] == 'defter' && m['kayit'] is List) {
         if (await ledger.merge(m['kayit'] as List, me: me)) {
           notifyListeners();
@@ -2280,10 +2291,15 @@ class OfficeNetwork extends ChangeNotifier {
         port: peer.port,
       );
       unawaited(_metOwn(ch));
-      final reply = ch.messages.first.timeout(const Duration(seconds: 10));
-      await ch.send({'t': 'gorev', 'gorev': task.toJson()});
-      final m = await reply;
-      await ch.close();
+      final Map<String, Object?> m;
+      try {
+        final reply = ch.messages.first.timeout(const Duration(seconds: 10))
+          ..ignore();
+        await ch.send({'t': 'gorev', 'gorev': task.toJson()});
+        m = await reply;
+      } finally {
+        await ch.close();
+      }
       final theirs = OfficeTask.fromJson(m['gorev']);
       if (theirs != null &&
           await tasks.merge(
@@ -2540,10 +2556,15 @@ class OfficeNetwork extends ChangeNotifier {
         port: peer.port,
       );
       unawaited(_metOwn(ch));
-      final reply = ch.messages.first.timeout(const Duration(seconds: 10));
-      await ch.send({'t': 'sohbet', 'sohbet': chat.toJson()});
-      final m = await reply;
-      await ch.close();
+      final Map<String, Object?> m;
+      try {
+        final reply = ch.messages.first.timeout(const Duration(seconds: 10))
+          ..ignore();
+        await ch.send({'t': 'sohbet', 'sohbet': chat.toJson()});
+        m = await reply;
+      } finally {
+        await ch.close();
+      }
       final theirs = Chat.fromJson(m['sohbet']);
       if (theirs != null &&
           await chats.merge(
@@ -2729,14 +2750,28 @@ class OfficeNetwork extends ChangeNotifier {
   Future<String?> removeMember(String deviceId) async {
     final identity = _identity;
     if (identity == null) return 'Önce büro ağına katılın.';
+    // A person let go of goes with every device of theirs: each told now,
+    // before the ledger forgets which they were.
+    final person = ledger.personOf(deviceId);
+    final devices = person == deviceId
+        ? {deviceId, ...ledger.devicesOf(person)}
+        : {deviceId};
     final error = await ledger.remove(identity, deviceId);
     if (error == null) {
+      final gone = {
+        for (final d in devices)
+          if (ledger.member(d) == null) d,
+      };
       // What was still to go to them does not.
-      packages.pending.removeWhere((key, _) => key.endsWith('|$deviceId'));
+      packages.pending.removeWhere(
+        (key, _) => gone.contains(taskDeliveryOf(key)?.$3),
+      );
       await packages.save();
-      await chats.dropPendingFor(deviceId);
+      for (final d in gone) {
+        await chats.dropPendingFor(d);
+      }
       for (final t in [...transfers]) {
-        if (t.outgoing && !t.finished && t.peer.deviceId == deviceId) {
+        if (t.outgoing && !t.finished && gone.contains(t.peer.deviceId)) {
           t.stop('Büro üyeliği sona erdi.');
         }
       }

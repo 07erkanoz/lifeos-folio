@@ -10,6 +10,7 @@ import '../platform/app_directories.dart';
 import 'office_identity.dart';
 import 'office_known.dart';
 import 'office_peer.dart';
+import '../../models/json_shape.dart';
 
 enum OfficeRole {
   manager('Yönetici'),
@@ -495,7 +496,7 @@ class OfficeLedger {
         final instead = r['yerine'];
         if (r['k'] != 'kurtarma' || instead is! String) continue;
         (standing[instead] ??= []).add({
-          for (final k in (r['kalan'] as List? ?? const [])) '$k',
+          for (final k in (jsonList(r['kalan']))) '$k',
         });
       }
       final stale = {
@@ -565,7 +566,7 @@ class OfficeLedger {
         final key = r['dk'];
         if (r['imzalayan'] != r['cihaz'] || key is! String) continue;
         if (!await _holds(r, key)) continue;
-        if (OfficeIdentity.idOf(base64Decode(key)) != r['cihaz']) continue;
+        if (OfficeIdentity.idOf(_decoded(key)) != r['cihaz']) continue;
         office = idOf(r);
         name = '${r['ad'] ?? ''}';
         final m = _member(r, OfficeRole.manager, founder: true);
@@ -585,7 +586,7 @@ class OfficeLedger {
         if (r['kod'] != recoveryId) continue;
         if (key is! String || word is! String) continue;
         if (r['imzalayan'] != subject || members.containsKey(subject)) continue;
-        if (OfficeIdentity.idOf(base64Decode(key)) != subject) continue;
+        if (OfficeIdentity.idOf(_decoded(key)) != subject) continue;
         if (!await _holds(r, key)) continue;
         final plain = {...r}
           ..remove('sig')
@@ -629,7 +630,7 @@ class OfficeLedger {
         // A member's own device, by the member: theirs in all but its key.
         final key = r['dk'];
         if (key is! String || members.containsKey(subject)) continue;
-        if (OfficeIdentity.idOf(base64Decode(key)) != subject) continue;
+        if (OfficeIdentity.idOf(_decoded(key)) != subject) continue;
         if (!await _holds(r, signer.publicKey)) continue;
         // The device's own word that it is to be this person's.
         final consent = r['onay'];
@@ -644,13 +645,13 @@ class OfficeLedger {
         // And proof that it is: one person's key vouches for both.
         final up = r['up'], uc = r['uc'], mc = r['mc'];
         if (up is! String || uc is! String || mc is! String) continue;
-        final userKey = base64Decode(up);
+        final userKey = _decoded(up);
         // The person's key the member came in under, not one made anew.
         if (OfficeIdentity.idOf(userKey) != signer.userId) continue;
-        if (!await OfficeIdentity.vouchedBy(userKey, base64Decode(key), uc) ||
+        if (!await OfficeIdentity.vouchedBy(userKey, _decoded(key), uc) ||
             !await OfficeIdentity.vouchedBy(
               userKey,
-              base64Decode(signer.publicKey),
+              _decoded(signer.publicKey),
               mc,
             )) {
           continue;
@@ -686,7 +687,7 @@ class OfficeLedger {
           final key = r['dk'];
           if (role == null || key is! String) continue;
           if (members.containsKey(subject)) continue;
-          if (OfficeIdentity.idOf(base64Decode(key)) != subject) continue;
+          if (OfficeIdentity.idOf(_decoded(key)) != subject) continue;
           final m = _member(r, role);
           if (m == null) continue;
           members[subject] = m;
@@ -773,6 +774,17 @@ class OfficeLedger {
           ))
             idOf(r),
     };
+  }
+
+  /// Base64 a record carries, its keys: nothing for one that is not, so
+  /// that a record made wrong is passed over, not the whole ledger's
+  /// reading stopped by it (and a channel with it).
+  static List<int> _decoded(String text) {
+    try {
+      return base64Decode(text);
+    } on FormatException {
+      return const [];
+    }
   }
 
   /// The records a member signs as themselves, not as a manager.

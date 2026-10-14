@@ -207,7 +207,7 @@ extension PortalNotes on PortalDatabase {
     if (theirs is! Map) return false;
     final before = Hlc.canonical(noteTrackingExport());
     _transaction(() {
-      for (final r in theirs['gizlemeler'] as List? ?? const []) {
+      for (final r in jsonList(theirs['gizlemeler'])) {
         if (r is! Map) continue;
         final v = Hlc.tryParse(r['surum']);
         if (r['not_key'] is! String || r['kapsam'] is! String || v == null) {
@@ -216,7 +216,7 @@ extension PortalNotes on PortalDatabase {
         SyncClock.observe(this, v);
         recordHide(r['not_key'] as String, r['kapsam'] as String, v);
       }
-      for (final r in theirs['tutanlar'] as List? ?? const []) {
+      for (final r in jsonList(theirs['tutanlar'])) {
         if (r is! Map ||
             r['not_key'] is! String ||
             r['cihaz'] is! String ||
@@ -234,7 +234,7 @@ extension PortalNotes on PortalDatabase {
           latest: (r['not_key'] as String).startsWith('eski:'),
         );
       }
-      for (final r in theirs['alinanGizlemeler'] as List? ?? const []) {
+      for (final r in jsonList(theirs['alinanGizlemeler'])) {
         if (r is! Map || r['sahip'] is! String || r['not_key'] is! String) {
           continue;
         }
@@ -251,7 +251,7 @@ extension PortalNotes on PortalDatabase {
             String,
             ({List<Map> rows, Map<String, Hlc> hidden, Map<String, Hlc> off})
           >{};
-      for (final r in theirs['gorevNotlari'] as List? ?? const []) {
+      for (final r in jsonList(theirs['gorevNotlari'])) {
         if (r is! Map ||
             r['sahip'] is! String ||
             r['gorev'] is! String ||

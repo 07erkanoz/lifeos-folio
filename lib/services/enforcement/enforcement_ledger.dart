@@ -137,18 +137,33 @@ Map<String, String> officialMatches(
   final out = <String, String>{};
   bool outside(UyapMoneyItem c) =>
       UyapWebService.fold(c.kind).contains('haric');
+  // Each collection by a key of its own: two of one day and sum with no
+  // receipt number are two, the second "#2", not one taken twice over.
+  final seen = <String, int>{};
+  final keys = [
+    for (final c in collections)
+      if (collectionKey(c) case final base)
+        if ((seen[base] = (seen[base] ?? 0) + 1) case final n)
+          n == 1 ? base : '$base#$n',
+  ];
   for (final e in entries) {
     if (e.isOfficial || e.kind != LedgerKind.external) continue;
-    final fits = [
-      for (final c in collections)
-        if ((c.amount * 100).round() == e.amount &&
-            !taken.contains(collectionKey(c)) &&
-            !(parse(c.date)?.isBefore(e.at.subtract(const Duration(days: 3))) ??
-                false))
-          c,
-    ]..sort((a, b) => (outside(b) ? 1 : 0) - (outside(a) ? 1 : 0));
+    final fits =
+        [
+          for (final (i, c) in collections.indexed)
+            if ((c.amount * 100).round() == e.amount &&
+                !taken.contains(keys[i]) &&
+                !(parse(c.date)
+                        ?.isBefore(e.at.subtract(const Duration(days: 3))) ??
+                    false))
+              i,
+        ]..sort(
+          (a, b) =>
+              (outside(collections[b]) ? 1 : 0) -
+              (outside(collections[a]) ? 1 : 0),
+        );
     if (fits.isEmpty) continue;
-    final key = collectionKey(fits.first);
+    final key = keys[fits.first];
     taken.add(key);
     out[e.id] = key;
   }

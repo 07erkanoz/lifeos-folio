@@ -288,7 +288,15 @@ class SpeechModelStore {
           mode: resumed ? FileMode.append : FileMode.write,
         );
         try {
-          await for (final chunk in response) {
+          // A line gone quiet (Wi-Fi changed, a connection half open) is
+          // said, not waited on for good: what came is kept, and the next
+          // try goes on from there.
+          await for (final chunk in response.timeout(
+            const Duration(seconds: 60),
+            onTimeout: (line) => line.addError(
+              HttpException('İndirme durdu: ${f.name}; yeniden deneyin.'),
+            ),
+          )) {
             sink.add(chunk);
             have += chunk.length;
             progress(have);

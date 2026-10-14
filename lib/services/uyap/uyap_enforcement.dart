@@ -3,6 +3,10 @@
 /// line by line as the portal's account page lists it, and its debtors.
 /// Kept as UYAP gave them and read when shown, so that a label UYAP spells
 /// otherwise is shown as it came, never lost.
+library;
+
+import '../../models/json_shape.dart';
+
 class UyapEnforcement {
   const UyapEnforcement({this.lines = const [], this.debtors = const []});
 
@@ -46,11 +50,11 @@ class UyapEnforcement {
 
   factory UyapEnforcement.stored(Map<Object?, Object?> json) => UyapEnforcement(
     lines: [
-      for (final r in json['hesap'] as List? ?? const [])
+      for (final r in jsonList(json['hesap']))
         if (r is Map) ?UyapAccountLine.fromJson(r),
     ],
     debtors: [
-      for (final r in json['borclular'] as List? ?? const [])
+      for (final r in jsonList(json['borclular']))
         if (r is Map) ?UyapDebtor.stored(r),
     ],
   );

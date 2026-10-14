@@ -1,6 +1,7 @@
 import '../clients/client.dart';
 import '../clients/client_accounts.dart';
 import '../sync/hlc.dart';
+import '../../models/json_shape.dart';
 
 /// A set-off of a payment made outside, kept in the payment's own record
 /// (docs/senkron-plan.md R3): taken as the lawyer's fee or the counter fee,
@@ -140,7 +141,7 @@ abstract final class LedgerBook {
         };
 
   static List<LedgerSetOff> setOffsOf(ClientRecord r) => [
-    for (final j in (r.data[_setOffs] as List? ?? const []))
+    for (final j in (jsonList(r.data[_setOffs])))
       ?LedgerSetOff.fromJson(
         j,
         fallback: Hlc.fromLegacy(r.updated.toIso8601String()),

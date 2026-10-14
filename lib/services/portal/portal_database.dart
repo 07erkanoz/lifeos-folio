@@ -27,6 +27,7 @@ import '../sync/field_versions.dart';
 import '../sync/hlc.dart';
 import '../sync/sync_generation.dart';
 import '../sync/sync_migration.dart';
+import '../../models/json_shape.dart';
 
 part 'portal_agenda_versions.dart';
 part 'portal_clients.dart';
@@ -1411,7 +1412,7 @@ class PortalDatabase {
       if (_agendaMergeRows(theirs)) changedHere = true;
       if (_decisionMerge(theirs)) changedHere = true;
       final touched = <String>{};
-      for (final r in (theirs['secimler'] as List? ?? const [])) {
+      for (final r in (jsonList(theirs['secimler']))) {
         if (r is! Map || r['id'] is! String || r['notice_id'] is! String) {
           continue;
         }

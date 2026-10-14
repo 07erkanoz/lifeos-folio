@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:path/path.dart' as p;
 
 import '../platform/app_directories.dart';
+import '../../models/json_shape.dart';
 
 /// What a talk is: between two, among some, or the managers' word to all.
 enum ChatKind { private, group, broadcast }
@@ -175,8 +176,7 @@ class ChatMessage {
       at: at.toLocal(),
       text: '${j['metin'] ?? ''}',
       attachments: [
-        for (final a in (j['ekler'] as List? ?? const []))
-          ?ChatAttachment.fromJson(a),
+        for (final a in (jsonList(j['ekler']))) ?ChatAttachment.fromJson(a),
       ],
       signature: j['imza'] is String ? j['imza'] as String : '',
       device: j['cihaz'] is String ? j['cihaz'] as String : null,
@@ -269,8 +269,7 @@ class Chat {
           for (final e in members.entries) '${e.key}': '${e.value}',
       },
       messages: [
-        for (final m in (j['mesajlar'] as List? ?? const []))
-          ?ChatMessage.fromJson(m),
+        for (final m in (jsonList(j['mesajlar']))) ?ChatMessage.fromJson(m),
       ],
     );
   }
@@ -343,7 +342,7 @@ class OfficeChats {
       if (!await file.exists()) return;
       final j = jsonDecode(await file.readAsString());
       if (j is! Map) return;
-      for (final c in (j['sohbetler'] as List? ?? const [])) {
+      for (final c in (jsonList(j['sohbetler']))) {
         final chat = Chat.fromJson(c);
         if (chat != null) _chats[chat.id] = chat;
       }

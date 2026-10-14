@@ -75,6 +75,22 @@ void main() {
       UyapMoneyItem(kind: 'Haciz', date: '01.09.2026', amount: 700),
     ], uyapDay);
     expect(found, {'a': 'tahsilat:12.10.2026|5000.0'});
+    // Two of one day and sum, no receipt number: each payment its own.
+    expect(
+      officialMatches(entries, const [
+        UyapMoneyItem(
+          kind: 'Haricen Tahsilat',
+          date: '12.10.2026',
+          amount: 5000,
+        ),
+        UyapMoneyItem(
+          kind: 'Haricen Tahsilat',
+          date: '12.10.2026',
+          amount: 5000,
+        ),
+      ], uyapDay),
+      {'a': 'tahsilat:12.10.2026|5000.0', 'b': 'tahsilat:12.10.2026|5000.0#2'},
+    );
     // UYAP's balance less what it does not show yet.
     expect(folioLeft(80000, [entries[0], ...entries.skip(1)]), 80000 - 10700);
     expect(

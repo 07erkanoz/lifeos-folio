@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 import 'uyap_enforcement.dart' show parseLira;
+import '../../models/json_shape.dart';
 
 String _str(Object? v) => v?.toString() ?? '';
 
@@ -224,7 +225,7 @@ class UyapCaseDetails {
   ];
 
   static List<(String, String)> _unpairs(Object? json) => [
-    for (final r in (json as List? ?? const []))
+    for (final r in (jsonList(json)))
       if (r is List && r.length == 2) (_str(r[0]), _str(r[1])),
   ];
 
@@ -429,7 +430,7 @@ class UyapCaseMoney {
   factory UyapCaseMoney.fromJson(Object? raw) {
     final json = _one(raw);
     List<UyapMoneyItem> items(String key) => [
-      for (final item in (json[key] as List? ?? const []))
+      for (final item in (jsonList(json[key])))
         if (item is Map) UyapMoneyItem.fromJson(item),
     ];
     return UyapCaseMoney(
@@ -470,7 +471,7 @@ class UyapCaseMoney {
 
   factory UyapCaseMoney.stored(Map<Object?, Object?> json) {
     List<UyapMoneyItem> items(String key) => [
-      for (final item in (json[key] as List? ?? const []))
+      for (final item in (jsonList(json[key])))
         if (item is Map) UyapMoneyItem.stored(item),
     ];
     return UyapCaseMoney(
@@ -580,7 +581,7 @@ class UyapCaseDocument {
         sentToSystem: _str(json['sentToSystem']),
         parentKey: json['parentKey'] as String?,
         attachments: [
-          for (final a in (json['attachments'] as List? ?? const []))
+          for (final a in (jsonList(json['attachments'])))
             if (a is Map) UyapCaseDocument.stored(a.cast<String, Object?>()),
         ],
       );

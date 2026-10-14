@@ -7,6 +7,7 @@ import '../office/office_task.dart';
 import '../portal/portal_database.dart';
 import '../sync/hlc.dart';
 import '../sync/sync_generation.dart';
+import '../../models/json_shape.dart';
 
 /// The notes of the cases of the office's tasks, kept alike as they are
 /// now, never as a copy frozen in a task's package (docs/senkron-plan.md
@@ -169,7 +170,7 @@ class TaskNotes {
       for (final t in tasks())
         if (t.by == from) t.id,
     };
-    for (final s in theirs['gorevler'] as List? ?? const []) {
+    for (final s in jsonList(theirs['gorevler'])) {
       if (s is! Map || s['gorev'] is! String || s['dosya'] is! String) {
         continue;
       }
@@ -186,7 +187,7 @@ class TaskNotes {
       };
       final rows = [
         if (standing)
-          for (final r in s['notlar'] as List? ?? const [])
+          for (final r in jsonList(s['notlar']))
             if (r is Map) r,
       ];
       for (final r in rows) {
@@ -221,7 +222,7 @@ class TaskNotes {
         if (await cleanPackage(parts.$1, parts.$2)) changed = true;
       }
     }
-    for (final h in theirs['kartGizli'] as List? ?? const []) {
+    for (final h in jsonList(theirs['kartGizli'])) {
       if (h is! Map || h['not'] is! String) continue;
       final v = Hlc.tryParse(h['surum']);
       if (v != null) db.takeNoteHide(from, h['not'] as String, v);
@@ -233,7 +234,7 @@ class TaskNotes {
         if (t.by == self && t.assignees.containsKey(from))
           for (final c in t.cases) '${t.id}|${c.caseKey}',
     };
-    for (final r in theirs['rapor'] as List? ?? const []) {
+    for (final r in jsonList(theirs['rapor'])) {
       if (r is! Map) continue;
       final key = '${r['gorev']}|${r['dosya']}';
       if (!mine.contains(key)) continue;
@@ -277,7 +278,7 @@ class TaskNotes {
         tracked = true;
       }
     }
-    for (final h in theirs['uygulanan'] as List? ?? const []) {
+    for (final h in jsonList(theirs['uygulanan'])) {
       if (h is! Map || h['not'] is! String) continue;
       final key = h['not'] as String;
       final parts = key.split(':');

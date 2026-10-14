@@ -165,11 +165,32 @@ class RtfWriter {
           body.write('\\cellx${(edge * _twip).round()}');
         }
         for (final cell in row.cells) {
-          final blocks = cell.blocks.isEmpty
-              ? [DocBlock(plainText: '')]
-              : cell.blocks;
-          for (final block in blocks) {
-            paragraph(block, inCell: true);
+          final blocks = [
+            for (final b in cell.blocks)
+              // A table in a cell, which RTF's simple tables do not hold:
+              // its rows as lines of the cell, their cells by tabs, so that
+              // no word of it is lost.
+              if (b.type == DocBlockType.table && b.table != null)
+                for (final r in b.table!.rows)
+                  DocBlock(
+                    plainText: [
+                      for (final c in r.cells)
+                        c.blocks.map((x) => x.plainText).join(' '),
+                    ].join('\t'),
+                  )
+              else
+                b,
+          ];
+          if (blocks.isEmpty) blocks.add(DocBlock(plainText: ''));
+          for (final (i, block) in blocks.indexed) {
+            if (block.type == DocBlockType.image && block.imageBase64 != null) {
+              _picture(body, block, inCell: true);
+            } else {
+              paragraph(block, inCell: true);
+            }
+            // Each of a cell's paragraphs ends as a paragraph; the last by
+            // the cell's own end.
+            if (i < blocks.length - 1) body.write('\\par ');
           }
           body.write('\\cell');
         }
@@ -319,13 +340,17 @@ class RtfWriter {
     return '$head$regions$body}';
   }
 
-  static void _picture(StringBuffer body, DocBlock block) {
+  static void _picture(
+    StringBuffer body,
+    DocBlock block, {
+    bool inCell = false,
+  }) {
     final data = base64Decode(block.imageBase64!);
     final kind = block.imageMime == 'image/jpeg' ? 'jpegblip' : 'pngblip';
     // A paragraph of its own, in its own alignment: left to carry on from
     // the one before, it took that one's indents and frame with it.
     body
-      ..write('\\pard\\plain')
+      ..write(inCell ? '\\pard\\plain\\intbl' : '\\pard\\plain')
       ..write(switch (block.alignment) {
         DocAlignment.center => '\\qc',
         DocAlignment.right => '\\qr',
@@ -342,7 +367,8 @@ class RtfWriter {
     for (final byte in data) {
       body.write(byte.toRadixString(16).padLeft(2, '0'));
     }
-    body.write('}\\par\n');
+    // In a cell its paragraph ends as the cell's others do.
+    body.write(inCell ? '}' : '}\\par\n');
   }
 
   /// RTF's three special characters, and everything a codepage could get

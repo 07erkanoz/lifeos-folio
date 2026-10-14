@@ -24,6 +24,7 @@ import 'settings_sync.dart';
 import 'sync_caps.dart';
 import 'uyap_documents_sync.dart';
 import 'uyap_own_sync.dart';
+import '../../models/json_shape.dart';
 
 /// Senkron (docs/buro.md): what one person's own devices keep alike when
 /// they are on the same network, each part on or off on this device.
@@ -112,10 +113,8 @@ class OwnSync extends ChangeNotifier {
       if (await file.exists()) {
         final j = jsonDecode(await file.readAsString());
         if (j is Map) {
-          _off.addAll([
-            for (final s in (j['kapali'] as List? ?? const [])) '$s',
-          ]);
-          _on.addAll([for (final s in (j['acik'] as List? ?? const [])) '$s']);
+          _off.addAll([for (final s in (jsonList(j['kapali']))) '$s']);
+          _on.addAll([for (final s in (jsonList(j['acik']))) '$s']);
         }
       }
     } catch (_) {}
@@ -160,9 +159,7 @@ class OwnSync extends ChangeNotifier {
       merge: (theirs) async {
         if (theirs is! Map || theirs['cihaz'] is! String) return false;
         final id = theirs['cihaz'] as String;
-        held[id] = {
-          for (final k in (theirs['acik'] as List? ?? const [])) '$k',
-        };
+        held[id] = {for (final k in (jsonList(theirs['acik']))) '$k'};
         if (theirs['telefon'] == true) _phones.add(id);
         if (theirs['oto'] == true) {
           _reads.add(id);

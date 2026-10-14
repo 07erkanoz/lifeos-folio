@@ -2,6 +2,7 @@ import '../clients/client.dart';
 import '../enforcement/ledger_book.dart';
 import '../portal/portal_database.dart';
 import '../sync/hlc.dart';
+import '../../models/json_shape.dart';
 
 /// What of the lawyer's notes may leave their own devices (docs/senkron-
 /// plan.md R7, §3 decision 1): a secret note goes to their other devices
@@ -104,7 +105,7 @@ abstract final class SecretNotes {
       }
     }
 
-    for (final j in sent['muvekkiller'] as List? ?? const []) {
+    for (final j in jsonList(sent['muvekkiller'])) {
       if (j is! Map || j['buro'] != true || j['id'] is! String) continue;
       final id = j['id'] as String, scope = 'kart:$id';
       if ('${j['not'] ?? ''}'.isNotEmpty) hold('kartNotu:$id', scope);
@@ -114,7 +115,7 @@ abstract final class SecretNotes {
         }
       });
     }
-    for (final j in sent['muvekkilKayitlari'] as List? ?? const []) {
+    for (final j in jsonList(sent['muvekkilKayitlari'])) {
       if (j is! Map || j['id'] is! String || j['veri'] is! Map) continue;
       if ('${(j['veri'] as Map)['aciklama'] ?? ''}'.isEmpty) continue;
       hold('aciklama:${j['id']}', 'kart:${j['muvekkil']}');

@@ -25,8 +25,7 @@ class DocModel {
         for (final row in b.table!.rows) {
           final cellTexts = <String>[];
           for (final cell in row.cells) {
-            final cellContent = cell.blocks.map((cb) => cb.plainText).join(' ');
-            cellTexts.add(cellContent.trim());
+            cellTexts.add(_cellText(cell.blocks).trim());
           }
           sb.writeln(cellTexts.join(' | '));
         }
@@ -36,6 +35,17 @@ class DocModel {
     }
     return sb.toString().trim();
   }
+
+  /// A cell's words, a table within it too: its text was left out of the
+  /// search, its plainText being empty.
+  static String _cellText(List<DocBlock> blocks) => [
+    for (final cb in blocks)
+      if (cb.type == DocBlockType.table && cb.table != null)
+        for (final row in cb.table!.rows)
+          for (final cell in row.cells) _cellText(cell.blocks)
+      else
+        cb.plainText,
+  ].join(' ');
 }
 
 class DocPageProperties {

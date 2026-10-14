@@ -57,6 +57,28 @@ void main() {
     },
   );
 
+  test('a weekend moving the last day into the recess is said, the day not '
+      'put later', () {
+    // 18 Temmuz 2026 Cumartesi; the first working day, 20 Temmuz, is the
+    // recess's first.
+    final adj = TurkishLegalCalendar.adjustDeadline(
+      DateTime(2026, 7, 18),
+      kategori: MahkemeKategorisi.hukuk,
+      adliTatileTabi: true,
+    );
+    expect(adj.effectiveDate, DateTime(2026, 7, 20));
+    expect(adj.tatilBelirsiz, isTrue);
+    expect(adj.notes.join(' '), contains('adli tatile düştü'));
+    // An enforcement office's is not lengthened by the recess at all.
+    expect(
+      TurkishLegalCalendar.adjustDeadline(
+        DateTime(2026, 7, 18),
+        kategori: MahkemeKategorisi.icra,
+      ).tatilBelirsiz,
+      isFalse,
+    );
+  });
+
   test('working days skip the weekend', () {
     expect(
       rule(2, SureBirimi.isGunu).hamSonTarih(DateTime(2026, 10, 9)),

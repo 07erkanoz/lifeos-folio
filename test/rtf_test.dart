@@ -36,6 +36,70 @@ void main() {
     expect(model.toPlainText(), 'kiralamış olan taşınmaz');
   });
 
+  test('a table cell keeps its paragraphs and its picture, written and '
+      'read back', () {
+    const png =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    final model = DocModel(
+      blocks: [
+        DocBlock(
+          type: DocBlockType.table,
+          plainText: '',
+          table: DocTable(
+            rows: [
+              DocTableRow(
+                cells: [
+                  DocTableCell(
+                    blocks: [
+                      DocBlock(plainText: 'Birinci'),
+                      DocBlock(plainText: 'Ikinci'),
+                    ],
+                  ),
+                  DocTableCell(
+                    blocks: [
+                      DocBlock(
+                        type: DocBlockType.image,
+                        plainText: '',
+                        imageBase64: png,
+                        imageMime: 'image/png',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final back = RtfReader.readBytes(RtfWriter.writeBytes(model))!;
+    final table = back.blocks.firstWhere((b) => b.table != null).table!;
+    final cells = table.rows.single.cells;
+    expect(
+      [for (final b in cells[0].blocks) b.plainText],
+      ['Birinci', 'Ikinci'],
+    );
+    expect(cells[1].blocks.single.type, DocBlockType.image);
+    // Nothing of the cells before the table.
+    expect(back.blocks.first.table, isNotNull);
+  });
+
+  test(
+    'a cell\'s paragraphs are the cell\'s till \\pard, \\intbl said once',
+    () {
+      final model = RtfReader.readBytes(
+        rtf(
+          r'{\rtf1\ansi \trowd\cellx2000\cellx4000'
+          r'\pard\intbl a\cell b\par c\cell\row\pard Sonra\par}',
+        ),
+      )!;
+      final cells = model.blocks.first.table!.rows.single.cells;
+      expect([for (final b in cells[0].blocks) b.plainText], ['a']);
+      expect([for (final b in cells[1].blocks) b.plainText], ['b', 'c']);
+      expect(model.blocks.last.plainText, 'Sonra');
+    },
+  );
+
   test('a paragraph indented out of the margin still opens', () {
     final model = RtfReader.readBytes(
       rtf(r'{\rtf1\ansi \pard\li-142\fi-284 Merhaba\par}'),

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../../models/json_shape.dart';
+
 /// A law the reader may cite, and the short forms they cite it by.
 @immutable
 class Law {
@@ -74,12 +76,8 @@ class Law {
     number: (json['no'] as num).toInt(),
     tertip: (json['tertip'] as num).toInt(),
     name: json['ad'] as String,
-    abbreviations: [
-      for (final a in (json['kisa'] as List? ?? const [])) a as String,
-    ],
-    aliases: [
-      for (final a in (json['adlar'] as List? ?? const [])) a as String,
-    ],
+    abbreviations: [for (final a in (jsonList(json['kisa']))) a as String],
+    aliases: [for (final a in (jsonList(json['adlar']))) a as String],
     repealed: json['mulga'] == true,
     byName: json['adla'] != false,
   );

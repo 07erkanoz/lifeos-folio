@@ -295,13 +295,13 @@ extension PortalSharedLedger on PortalDatabase {
     if (theirs is! Map) return false;
     var changed = false;
     final byShare = <String, List<ClientRecord>>{};
-    for (final r in theirs['kayitlar'] as List? ?? const []) {
+    for (final r in jsonList(theirs['kayitlar'])) {
       if (r is! Map) continue;
       final rec = ClientRecord.fromJson(PortalAgendaVersions._map(r['json']));
       if (rec == null) continue;
       byShare.putIfAbsent('${r['sahip']}|${r['dosya']}', () => []).add(rec);
     }
-    for (final s in theirs['durumlar'] as List? ?? const []) {
+    for (final s in jsonList(theirs['durumlar'])) {
       if (s is! Map || s['sahip'] is! String || s['dosya'] is! String) {
         continue;
       }

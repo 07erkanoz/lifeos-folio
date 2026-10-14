@@ -16,6 +16,7 @@ import 'task_hearings.dart';
 import '../portal/portal_database.dart';
 import '../clients/client_accounts.dart' show money;
 import '../clients/fee_reminders.dart';
+import '../../models/json_shape.dart';
 
 /// The office's words as the system's notifications (docs/buro.md,
 /// Bildirimler): a message, a task's step, a device asking to be known and
@@ -203,10 +204,8 @@ class TaskReminders {
       if (!await file.exists()) return;
       final j = jsonDecode(await file.readAsString());
       if (j is! Map) return;
-      _sent.addAll([
-        for (final s in (j['gonderilen'] as List? ?? const [])) '$s',
-      ]);
-      _seen.addAll([for (final s in (j['goruldu'] as List? ?? const [])) '$s']);
+      _sent.addAll([for (final s in (jsonList(j['gonderilen']))) '$s']);
+      _seen.addAll([for (final s in (jsonList(j['goruldu']))) '$s']);
     } catch (_) {}
   }
 

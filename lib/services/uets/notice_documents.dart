@@ -11,6 +11,7 @@ import 'package:xml/xml.dart';
 import '../pdf/pdf_pages.dart';
 import '../portal/portal_database.dart';
 import '../search/text_extractor.dart';
+import '../../models/json_shape.dart';
 
 /// The reader's version: raised whenever how a document is read changes,
 /// so that every package kept is read again (the audit's B21).
@@ -173,7 +174,7 @@ class NoticeCaseFile {
         number: '${m['dosyaNo'] ?? ''}',
         kind: '${m['tur'] ?? ''}',
         parties: [
-          for (final t in (m['taraflar'] as List? ?? const []))
+          for (final t in (jsonList(m['taraflar'])))
             if (t is Map)
               (
                 name: '${t['ad'] ?? ''}',

@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:path/path.dart' as p;
 
 import '../platform/app_directories.dart';
+import '../../models/json_shape.dart';
 
 /// Where a task stands (docs/buro.md, Görev).
 enum TaskStage {
@@ -117,11 +118,11 @@ class TaskCase {
     number: '${j['no'] ?? ''}',
     court: '${j['mahkeme'] ?? ''}',
     items: [
-      for (final i in (j['isler'] as List? ?? const []))
+      for (final i in (jsonList(j['isler'])))
         if (i is Map) TaskItem.fromJson(i),
     ],
     docs: _enum(TaskDocs.values, j['evrak']) ?? TaskDocs.chosen,
-    docKeys: [for (final k in (j['secili'] as List? ?? const [])) '$k'],
+    docKeys: [for (final k in (jsonList(j['secili']))) '$k'],
   );
 }
 
@@ -282,7 +283,7 @@ class TaskEvent {
       text: '${j['metin'] ?? ''}',
       percent: percent is int ? percent.clamp(0, 100) : null,
       itemId: j['is'] is String ? j['is'] as String : null,
-      files: [for (final f in (j['dosyalar'] as List? ?? const [])) '$f'],
+      files: [for (final f in (jsonList(j['dosyalar']))) '$f'],
       signature: j['imza'] is String ? j['imza'] as String : '',
       device: j['cihaz'] is String ? j['cihaz'] as String : null,
     );
@@ -481,14 +482,13 @@ class OfficeTask {
       due: DateTime.tryParse('${j['son']}'),
       priority: _enum(TaskPriority.values, j['oncelik']) ?? TaskPriority.normal,
       cases: [
-        for (final c in (j['dosyalar'] as List? ?? const []))
+        for (final c in (jsonList(j['dosyalar'])))
           if (c is Map) TaskCase.fromJson(c),
       ],
       supervisor: '${j['gozetim'] ?? ''}',
       hearing: TaskHearing.fromJson(j['durusma']),
       events: [
-        for (final e in (j['olaylar'] as List? ?? const []))
-          ?TaskEvent.fromJson(e),
+        for (final e in (jsonList(j['olaylar']))) ?TaskEvent.fromJson(e),
       ],
     );
   }

@@ -405,6 +405,22 @@ class TurkishLegalCalendar {
         'Son gün $neden rastladığından süre ilk iş günü mesai '
         'bitiminde sona erer (HMK m.93 / CMK m.39 / İYUK m.8).',
       );
+      // Moved into the recess by the move itself (a Saturday before 20
+      // July): whether the recess then lengthens it is not settled here,
+      // and lengthening puts the day later, the unsafe way. Said, not done.
+      if (!inAdliTatil(effective) &&
+          inAdliTatil(shifted) &&
+          tatilUzatmaz == null &&
+          kategori != MahkemeKategorisi.icra &&
+          adliTatileTabi != false) {
+        tatilBelirsiz = true;
+        notes.add(
+          '⚠ Son gün, ilk iş gününe kaymasıyla adli tatile düştü. Sürenin '
+          'bu durumda da uzayıp uzamadığı (HMK m.104 / CMK m.331 / İYUK '
+          'm.8/3) kesin değil; güvenli tarafta kalmak için uzatma '
+          'UYGULANMADI. Kontrol edin.',
+        );
+      }
       effective = shifted;
     }
 

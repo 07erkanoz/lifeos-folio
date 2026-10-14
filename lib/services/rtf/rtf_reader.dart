@@ -279,7 +279,10 @@ class _Parser {
         _byte(byte);
       }
     }
-    if (inCell) _closeCell();
+    if (inCell &&
+        (buffer.isNotEmpty || spans.isNotEmpty || cellBlocks.isNotEmpty)) {
+      _closeCell();
+    }
     if (rowCells.isNotEmpty) _closeRow();
     // The last `\par` already closed the last paragraph; closing again would
     // add an empty one at the end of every document. Text after it is a
@@ -508,6 +511,9 @@ class _Parser {
         _paragraphBreak();
       case 'pard':
         paragraph = _Paragraph();
+        // In a table is a paragraph's own, as its indents are: said again
+        // by \intbl after \pard, kept till then over a cell's paragraphs.
+        inCell = false;
       case 'listtext':
       case 'pntext':
         marker = StringBuffer();
@@ -599,6 +605,7 @@ class _Parser {
       case 'row':
       case 'nestrow':
         _closeRow();
+        inCell = false;
       case 'ls':
         paragraph.list = DocListType.unordered;
       case 'ilvl':
@@ -812,7 +819,13 @@ class _Parser {
 
   void _closeCell() {
     inCell = true;
-    _closeParagraph();
+    // A cell that ends in its picture has no empty paragraph after it.
+    final afterPicture =
+        buffer.isEmpty &&
+        spans.isEmpty &&
+        cellBlocks.isNotEmpty &&
+        cellBlocks.last.type == DocBlockType.image;
+    if (!afterPicture) _closeParagraph();
     final index = rowCells.length;
     rowCells.add(
       DocTableCell(
@@ -823,7 +836,6 @@ class _Parser {
       ),
     );
     cellBlocks.clear();
-    inCell = false;
   }
 
   void _closeRow() {
@@ -990,8 +1002,10 @@ class _Parser {
       if (value == null) return;
       data[i ~/ 2] = value;
     }
-    _closeParagraph();
-    blocks.add(
+    // In a cell, no empty paragraph before it either: a cell keeps those.
+    if (!inCell || buffer.isNotEmpty || spans.isNotEmpty) _closeParagraph();
+    // A cell's picture is the cell's: the table is added only once it ends.
+    (inCell ? cellBlocks : blocks).add(
       DocBlock(
         type: DocBlockType.image,
         plainText: '',

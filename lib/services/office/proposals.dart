@@ -7,6 +7,7 @@ import '../enforcement/ledger_service.dart';
 import '../portal/portal_database.dart';
 import '../sync/hlc.dart';
 import '../sync/sync_generation.dart';
+import '../../models/json_shape.dart';
 
 /// A colleague's proposals of another's records, and the owner's decisions
 /// on them (docs/senkron-plan.md R6, §3 decision 2): an enforcement
@@ -508,7 +509,7 @@ class ProposalService {
     if (theirs is! Map || from.isEmpty || from == me) return false;
     var changed = false;
     db.inTransaction(() {
-      for (final j in theirs['oneriler'] as List? ?? const []) {
+      for (final j in jsonList(theirs['oneriler'])) {
         final p = Proposal.fromJson(j);
         if (p == null || p.owner != me || p.by != from) continue;
         if (p.financial && !money) continue;
@@ -519,7 +520,7 @@ class ProposalService {
         }
         if (db.putProposal(p)) changed = true;
       }
-      for (final j in theirs['kararlar'] as List? ?? const []) {
+      for (final j in jsonList(theirs['kararlar'])) {
         final d = ProposalDecision.fromJson(j);
         if (d == null || d.owner != from) continue;
         final p = db.proposal(d.proposal);
@@ -566,11 +567,11 @@ class ProposalService {
           }
         }
       }
-      for (final j in theirs['oneriler'] as List? ?? const []) {
+      for (final j in jsonList(theirs['oneriler'])) {
         final p = Proposal.fromJson(j);
         if (p != null && _mayKeep(p) && db.putProposal(p)) changed = true;
       }
-      for (final j in theirs['kararlar'] as List? ?? const []) {
+      for (final j in jsonList(theirs['kararlar'])) {
         final d = ProposalDecision.fromJson(j);
         if (d == null) continue;
         // Never one whose proposal is not here to be weighed (its money
@@ -587,7 +588,7 @@ class ProposalService {
         db.putDecision(d);
         changed = true;
       }
-      for (final b in theirs['engellenen'] as List? ?? const []) {
+      for (final b in jsonList(theirs['engellenen'])) {
         if (b is Map && b['kayit'] is String && b['grup'] is String) {
           db.blockOutput(
             b['kayit'] as String,

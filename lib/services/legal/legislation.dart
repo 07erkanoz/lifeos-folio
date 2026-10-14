@@ -11,6 +11,7 @@ import 'bedesten_legislation.dart';
 import 'citation.dart';
 import 'html_text.dart';
 import 'rich_text.dart';
+import '../../models/json_shape.dart';
 
 /// Where an article's text came from, named so a reader can weigh it.
 enum ArticleSource {
@@ -376,7 +377,7 @@ class Legislation {
       return _BankCopy(
         law: BedestenLaw.fromJson(json['belge'] as Map<String, Object?>),
         tree: [
-          for (final node in json['agac'] as List? ?? const [])
+          for (final node in jsonList(json['agac']))
             BedestenNode.fromJson(node as Map<String, Object?>),
         ],
         pages: {for (final entry in pages.entries) entry.key: '${entry.value}'},

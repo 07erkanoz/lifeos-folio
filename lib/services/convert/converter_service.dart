@@ -202,19 +202,9 @@ class ConverterService {
         return compute(DocxBridge.readBytes, bytes);
 
       case EvrakFormat.image:
-        final image = img.decodeImage(bytes);
-        if (image == null) throw const FormatException('Görsel okunamadı.');
-        return DocModel(
-          blocks: [
-            for (final frame in image.frames)
-              DocBlock(
-                type: DocBlockType.image,
-                plainText: '',
-                imageBase64: base64Encode(img.encodePng(frame)),
-                imageMime: 'image/png',
-              ),
-          ],
-        );
+        // Off the window's thread too: a phone's twelve megapixels decoded
+        // and written again held it for seconds.
+        return compute(_imageModel, bytes);
       case EvrakFormat.pdf:
         // Text extraction, reflow and model construction all stay outside the
         // UI isolate. Long court filings otherwise pause the window after the
@@ -290,4 +280,21 @@ class ConverterService {
     if (blocks.isEmpty) blocks.add(DocBlock(plainText: ''));
     return DocModel(blocks: blocks);
   }
+}
+
+/// A picture as a document: each frame of it a page's image.
+DocModel _imageModel(Uint8List bytes) {
+  final image = img.decodeImage(bytes);
+  if (image == null) throw const FormatException('Görsel okunamadı.');
+  return DocModel(
+    blocks: [
+      for (final frame in image.frames)
+        DocBlock(
+          type: DocBlockType.image,
+          plainText: '',
+          imageBase64: base64Encode(img.encodePng(frame)),
+          imageMime: 'image/png',
+        ),
+    ],
+  );
 }

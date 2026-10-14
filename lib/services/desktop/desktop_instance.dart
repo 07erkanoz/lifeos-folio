@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
+
+import 'package:ffi/ffi.dart';
 
 import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
@@ -9,6 +12,33 @@ import '../platform/atomic_file.dart';
 /// One index owner per user. Subsequent file launches are forwarded over a
 /// loopback-only socket authenticated with a per-run random token.
 class DesktopInstance {
+  /// [message] told with no window of Folio's own: Windows's message box,
+  /// the desktop's notification on Linux; never a reason to fail.
+  static void tellStuck(String message) {
+    stderr.writeln(message);
+    try {
+      if (Platform.isWindows) {
+        final box = DynamicLibrary.open('user32.dll')
+            .lookupFunction<
+              Int32 Function(IntPtr, Pointer<Utf16>, Pointer<Utf16>, Uint32),
+              int Function(int, Pointer<Utf16>, Pointer<Utf16>, int)
+            >('MessageBoxW');
+        final text =
+            '$message Görev Yöneticisi\'nden LifeOS Folio\'yu '
+                    'kapatıp yeniden açın.'
+                .toNativeUtf16();
+        final title = 'LifeOS Folio'.toNativeUtf16();
+        // MB_OK | MB_ICONWARNING
+        box(0, text, title, 0x30);
+        malloc
+          ..free(text)
+          ..free(title);
+      } else if (Platform.isLinux) {
+        Process.runSync('notify-send', ['LifeOS Folio', message]);
+      }
+    } catch (_) {}
+  }
+
   final RandomAccessFile _lock;
   final ServerSocket _server;
   final String _token;

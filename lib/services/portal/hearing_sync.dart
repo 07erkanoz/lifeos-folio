@@ -3,6 +3,7 @@ import 'portal_case.dart';
 import 'portal_channel.dart';
 import 'portal_database.dart';
 import 'portal_hearing.dart';
+import '../../models/json_shape.dart';
 
 /// One portal's hearing row as a [PortalHearing]. The web and the mobile
 /// API name the fields alike (`tarihSaat`, `kayitId`, `dosyaNo`,
@@ -25,7 +26,7 @@ PortalHearing? parseHearing(
   }
 
   final parties = [
-    for (final p in row['dosyaTaraflari'] as List? ?? const [])
+    for (final p in jsonList(row['dosyaTaraflari']))
       if (p is Map) {for (final e in p.entries) '${e.key}': e.value},
   ];
   final link = '${row['token'] ?? ''}'.trim();

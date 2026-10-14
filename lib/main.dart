@@ -87,11 +87,18 @@ void main(List<String> arguments) async {
       : Future<WindowSession?>.value();
   DesktopInstance? instance;
   if (Platform.isLinux || Platform.isWindows) {
-    instance = await DesktopInstance.acquire(
-      arguments.contains('--quick-search')
-          ? ['--quick-search']
-          : DocumentLaunch.parse(arguments).arguments,
-    );
+    try {
+      instance = await DesktopInstance.acquire(
+        arguments.contains('--quick-search')
+            ? ['--quick-search']
+            : DocumentLaunch.parse(arguments).arguments,
+      );
+    } on StateError catch (e) {
+      // The open Folio does not answer: said, and this one ends, not left
+      // running with no window.
+      DesktopInstance.tellStuck(e.message);
+      exit(1);
+    }
     if (instance == null) exit(0);
   }
   final windowSession = await sessionFuture;

@@ -352,7 +352,7 @@ extension PortalAgendaVersions on PortalDatabase {
         came['${e.key}'] = _removed(e.key, e.value, null, null);
       }
     }
-    for (final r in theirs['satirlar'] as List? ?? const []) {
+    for (final r in jsonList(theirs['satirlar'])) {
       if (r is! Map || r['id'] is! String || r['kind'] is! String) continue;
       final id = r['id'] as String;
       final copy = _live(r);
@@ -460,7 +460,7 @@ extension PortalAgendaVersions on PortalDatabase {
   /// day goes with it.
   bool _decisionMerge(Map theirs) {
     var changed = false;
-    for (final r in theirs['kararlar'] as List? ?? const []) {
+    for (final r in jsonList(theirs['kararlar'])) {
       if (r is! Map || r['deadline_id'] is! String) continue;
       final t = _decisionRow(r);
       final tv = _decisionGroups.versionsOf(
@@ -516,7 +516,7 @@ extension PortalAgendaVersions on PortalDatabase {
   ({bool changed, Set<String> notices}) _representationMerge(Map theirs) {
     var changed = false;
     final touched = <String>{};
-    for (final r in theirs['temsil'] as List? ?? const []) {
+    for (final r in jsonList(theirs['temsil'])) {
       if (r is! Map || r['case_key'] is! String || r['json'] is! String) {
         continue;
       }

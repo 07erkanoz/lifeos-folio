@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'observed.dart';
 import 'portal_channel.dart';
+import '../../models/json_shape.dart';
 
 /// One case as the portals together know it: the web's richer record and
 /// the mobile API's shorter one merged field by field, each field
@@ -113,7 +114,7 @@ extension PortalCaseJson on PortalCase {
 
   static PortalCase fromJson(Map<String, Object?> json) {
     List<Map<String, Object?>> list(Object? v) => [
-      for (final e in v as List? ?? const []) Map<String, Object?>.from(e),
+      for (final e in jsonList(v)) Map<String, Object?>.from(e),
     ];
     return PortalCase(
       key: json['key'] as String,

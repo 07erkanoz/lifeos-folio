@@ -1,4 +1,5 @@
 import '../../models/evrak_file.dart';
+import '../../models/json_shape.dart';
 
 /// ASCII-folded Turkish search key. Original text is kept for display.
 String foldSearchText(String value) => value
@@ -181,7 +182,7 @@ class DocumentPassages {
   final int matches;
   const DocumentPassages({this.passages = const [], this.matches = 0});
   factory DocumentPassages.fromMap(Map map) => DocumentPassages(
-    passages: List<String>.from(map['passages'] as List? ?? const []),
+    passages: List<String>.from(jsonList(map['passages'])),
     matches: map['matches'] as int? ?? 0,
   );
   bool get isEmpty => passages.isEmpty;

@@ -18,6 +18,7 @@ import '../uyap/uyap_case_panel_controller.dart';
 import '../uyap/uyap_case_store.dart';
 import 'office_network.dart';
 import 'task_package.dart';
+import '../../models/json_shape.dart';
 
 /// Where a case shared with this person, or given with a task, came from:
 /// its owner's name and the device that has it.
@@ -311,7 +312,7 @@ class SharedCases {
     final person = network.ledger.personOf(fromDevice);
     final name = network.ledger.member(fromDevice)?.name ?? '';
     var changed = false;
-    for (final raw in theirs['dosyalar'] as List? ?? const []) {
+    for (final raw in jsonList(theirs['dosyalar'])) {
       if (raw is! Map) continue;
       final json = raw.cast<String, Object?>();
       final got = ReceivedCase(json, const []);
@@ -347,7 +348,7 @@ class SharedCases {
     // Their account of each case shared, kept apart, read only; none to one
     // who may not see the money (R8, R11).
     final money = network.seesMoney && network.seesMoneyOf(fromDevice);
-    for (final raw in theirs['defterler'] as List? ?? const []) {
+    for (final raw in jsonList(theirs['defterler'])) {
       if (raw is! Map || raw['dosya'] is! String) continue;
       final version = Hlc.tryParse(raw['surum']);
       if (version == null || person.isEmpty) continue;
@@ -359,14 +360,13 @@ class SharedCases {
         closed: raw['kapali'] == true || !money,
         ownerName: name,
         records: [
-          for (final j in raw['kayitlar'] as List? ?? const [])
-            ?ClientRecord.fromJson(j),
+          for (final j in jsonList(raw['kayitlar'])) ?ClientRecord.fromJson(j),
         ],
       )) {
         changed = true;
       }
     }
-    for (final key in theirs['kaldirilan'] as List? ?? const []) {
+    for (final key in jsonList(theirs['kaldirilan'])) {
       final source = sourceOf(db, '$key');
       if (source == null || source.person != person) continue;
       db.setMeta(markOf('$key'), '');

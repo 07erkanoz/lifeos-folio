@@ -191,4 +191,44 @@ void main() {
     expect(back.blocks.first.hanging, 113);
     expect(back.metadata['openEnd'], isTrue);
   });
+
+  test('a table within a cell is in the document\'s text, for the search', () {
+    final model = DocModel(
+      blocks: [
+        DocBlock(
+          type: DocBlockType.table,
+          plainText: '',
+          table: DocTable(
+            rows: [
+              DocTableRow(
+                cells: [
+                  DocTableCell(
+                    blocks: [
+                      DocBlock(plainText: 'dış'),
+                      DocBlock(
+                        type: DocBlockType.table,
+                        plainText: '',
+                        table: DocTable(
+                          rows: [
+                            DocTableRow(
+                              cells: [
+                                DocTableCell(
+                                  blocks: [DocBlock(plainText: 'iç metin')],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    expect(model.toPlainText(), contains('iç metin'));
+  });
 }

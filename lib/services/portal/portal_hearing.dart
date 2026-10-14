@@ -1,5 +1,6 @@
 import 'observed.dart';
 import 'portal_channel.dart';
+import '../../models/json_shape.dart';
 
 /// One hearing as the portals together know it (UYGULAMAPLANI §9.7).
 class PortalHearing {
@@ -110,7 +111,7 @@ class PortalHearing {
   static PortalHearing fromJson(Map<String, Object?> json) {
     String str(Object? v) => '$v';
     List<Map<String, Object?>> list(Object? v) => [
-      for (final e in v as List? ?? const []) Map<String, Object?>.from(e),
+      for (final e in jsonList(v)) Map<String, Object?>.from(e),
     ];
     return PortalHearing(
       key: json['key'] as String,

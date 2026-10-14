@@ -13,6 +13,7 @@ import '../portal/portal_hearing.dart';
 import '../uyap/uyap_case_panel_controller.dart';
 import '../uyap/uyap_case_store.dart';
 import 'office_task.dart';
+import '../../models/json_shape.dart';
 
 /// A task's case as it goes to those it is given to (docs/buro.md, Görev):
 /// they cannot open it in UYAP, so its particulars, parties, list of
@@ -319,7 +320,7 @@ class ReceivedCase {
   List<Map<String, Object?>> get notes => _list('notlar');
 
   List<Map<String, Object?>> _list(String key) => [
-    for (final t in (details[key] as List? ?? const []))
+    for (final t in (jsonList(details[key])))
       if (t is Map) t.cast<String, Object?>(),
   ];
 
@@ -395,9 +396,7 @@ class TaskPackages {
       (j['kaynak'] as Map? ?? const {}).forEach(
         (k, v) => sources['$k'] = [for (final x in v as List) '$x'],
       );
-      delivered.addAll([
-        for (final x in (j['teslim'] as List? ?? const [])) '$x',
-      ]);
+      delivered.addAll([for (final x in (jsonList(j['teslim']))) '$x']);
     } catch (_) {}
   }
 
