@@ -467,6 +467,22 @@ void main() {
     ], at: at);
     await b.merge(await a.summary('masaustu'));
     expect(other.meta(PortalSync.webCheckedKey(key)), at.toIso8601String());
+    // Read again there, nothing changed in the case: its record is the
+    // same, its sections newer, and they come all the same.
+    final later = DateTime(2026, 10, 13, 9);
+    await read(25, later);
+    db.saveSections(key, PortalChannel.uyapWeb, [
+      for (final s in CaseSection.values) SectionOutcome(s, SectionResult.read),
+    ], at: later);
+    await b.merge(await a.summary('masaustu'));
+    expect(
+      other
+          .sections(key)
+          .where((s) => s.channel == PortalChannel.uyapWeb)
+          .map((s) => s.succeeded),
+      everyElement(later),
+    );
+    expect(other.meta(PortalSync.webCheckedKey(key)), later.toIso8601String());
   });
 
   test('a newer reading by UYAP Mobil on another own device keeps what '

@@ -318,8 +318,10 @@ Ertelenenler (mimari değişiklik, canlı ölçüm ister):
 - İki cihazın aynı uzun işi çalıştırmasını önleyen sahiplik ve paylaşılan ilerleme (11.4).
 - Liste aşamasında birim/sayfa düzeyinde devam (bugün liste yeniden okunur ya da 3 saat içinde
   okunduysa atlanır).
-- Bölüm sonuçlarının kayıttan bağımsız aktarımı (kayıt değişmezse bölüm sonucu diğer cihaza gitmez).
+- ~~Bölüm sonuçlarının kayıttan bağımsız aktarımı~~ — yapıldı: özet, kaydın ve bölümlerin en geç
+  zamanını taşır.
 - Mobil ve web birim kodlarının ayrı alanlarda tutulması (`yargiTuru/yargiBirimi` ortak; arabuluculuk
   mobilde 25, web'de 13).
 - Başka cihazdan gelen kaydın alan alan, kanal/tarih sahipliğiyle birleştirilmesi (`adoptChecked`).
-- Ajandadaki "Dosyayı güncelle"nin bölüm okuyucusuna taşınması (bugün yalnız portföy özetini yazar).
+- ~~Ajandadaki "Dosyayı güncelle"nin bölüm okuyucusuna taşınması~~ — yapıldı: `syncCase` kanalı
+  sabit `readSections` ile okur, kaydı/tarafları/bölümleri ve ajandanın evrak özetini yazar.

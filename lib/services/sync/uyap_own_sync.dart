@@ -174,20 +174,24 @@ class UyapOwnSync {
         if (adopted != AdoptResult.failed) {
           db.adoptSections(key, json['bolumler']);
         }
+        if (adopted != AdoptResult.failed) {
+          // Read whole by the web there, as it says, as if here: not read
+          // again here for it; also when only its sections came newer, the
+          // record being the same. A device that does not say is not taken
+          // at its data's word (money kept from before is no new reading).
+          final at = _webReadWhole(db.sections(key));
+          final mineAt = DateTime.tryParse(
+            db.meta(PortalSync.webCheckedKey(key)) ?? '',
+          );
+          if (at != null && (mineAt == null || at.isAfter(mineAt))) {
+            db.setMeta('case_checked:$key', at.toIso8601String());
+            db.setMeta(PortalSync.webCheckedKey(key), at.toIso8601String());
+            changed = true;
+          }
+        }
         switch (adopted) {
           case AdoptResult.kept:
             changed = true;
-            // Read whole by the web there, as it says, as if here: not read
-            // again here for it. A device that does not say is not taken at
-            // its data's word (money kept from before is no new reading).
-            final at = _webReadWhole(db.sections(key));
-            final mineAt = DateTime.tryParse(
-              db.meta(PortalSync.webCheckedKey(key)) ?? '',
-            );
-            if (at != null && (mineAt == null || at.isAfter(mineAt))) {
-              db.setMeta('case_checked:$key', at.toIso8601String());
-              db.setMeta(PortalSync.webCheckedKey(key), at.toIso8601String());
-            }
             // Its parties for the clients here too.
             if (await store.load(
                   '${json['mahkeme'] ?? ''}',
@@ -374,9 +378,21 @@ class UyapOwnSync {
 
   /// When each kept case's list was fetched; none when the store cannot
   /// be read here.
+  /// When each kept case was last read here: its record's reading, or
+  /// a section read since (the record unchanged by it), whichever is later.
+  /// So a section read on one device goes to the other though the case's
+  /// record did not change.
   Future<Map<String, DateTime>> _fetched() async {
     try {
-      return await store.fetchedTimes();
+      final db = await database();
+      return {
+        for (final (record, _) in await store.cases(counted: false))
+          record.key: [
+            record.fetchedAt,
+            for (final s in db.sections(caseKey(record.number, record.court)))
+              ?s.succeeded,
+          ].reduce((a, b) => b.isAfter(a) ? b : a),
+      };
     } catch (_) {
       return const {};
     }

@@ -28,7 +28,6 @@ import '../uyap/uyap_pace.dart';
 import '../uyap/uyap_web_service.dart';
 import 'hearing_sync.dart';
 import 'observed.dart';
-import 'case_import.dart';
 import 'portal_case.dart';
 import 'case_sections.dart';
 import 'portal_channel.dart';
@@ -1691,95 +1690,72 @@ class PortalSync extends ChangeNotifier {
   static const _archiveWord =
       'Paylaşımı kaldırılan dosya arşivde duruyor; UYAP’a sorulmaz.';
 
+  /// The agenda's "Dosyayı güncelle": [key]'s case read as its page reads
+  /// it, every section its channel gives (§5): on the web when it is
+  /// connected, else on UYAP Mobil a court's or the Council of State's;
+  /// the web not finding it, UYAP Mobil reads what it gives. Kept as any
+  /// reading is (record, parties, sections), and the documents' summary
+  /// the agenda shows. Null when it worked, else what went wrong.
   Future<String?> syncCase(String key) async {
     final db = await _database();
     final kase = db.caseOf(key);
     if (kase == null) return 'Dosya henüz kayıtlı değil.';
     if (db.revokedShare(key) != null) return _archiveWord;
-    final connected = {
+    final channels = [
       if (_web.connected) PortalChannel.uyapWeb,
-      if (_mobile.connected) PortalChannel.uyapMobile,
-    };
-    final asked = DateTime.now().toUtc();
-    final old = kase.details?.value ?? const <String, Object?>{};
-    String? problem = 'Dosyayı güncellemek için UYAP bağlantısı gerekir.';
-    for (final channel in ChannelTable.channels(
-      UyapOp.details,
-      connected,
-      kase.family,
-    )) {
-      // Ids are their session's: the case is found in this one by its
-      // court and number, even one known only from a hearing; on UYAP
-      // Mobil only a court's or the Council of State's (§11.6).
-      String? id;
-      if (channel != PortalChannel.uyapWeb) {
-        if (!mobileReads(kase)) continue;
-        try {
-          id = await mobileCaseId(court: kase.court, number: kase.number);
-        } catch (_) {}
-        // Not found anew: the id the list gave, which may still hold.
-        if (id == null || id.isEmpty) id = kase.ids[channel];
-        if (id == null || id.isEmpty) continue;
-      }
+      if (_mobile.connected && mobileReads(kase)) PortalChannel.uyapMobile,
+    ];
+    if (channels.isEmpty) {
+      return 'Dosyayı güncellemek için UYAP bağlantısı gerekir.';
+    }
+    String? problem;
+    for (final channel in channels) {
+      final panel = UyapCasePanelController(
+        web: _web,
+        mobile: _mobile,
+        sync: this,
+        pause: Duration.zero,
+      );
       try {
-        if (channel == PortalChannel.uyapWeb) {
-          final target = await _web.findCase(
-            await PortalCaseImport(sync: this).linkFor(kase),
-          );
-          final details = await _web.caseDetails(target);
-          final documents = await _web.caseDocuments(target);
-          db.mergeCases([
-            PortalCase(
-              key: kase.key,
-              number: kase.number,
-              court: kase.court,
-              status: details.status.isEmpty
-                  ? null
-                  : Observed(details.status, channel, asked),
-              details: Observed(
-                {
-                  ...old,
-                  if (details.kind.isNotEmpty) 'davaTuru': details.kind,
-                  if (details.opening.isNotEmpty) 'acilisTuru': details.opening,
-                },
-                channel,
-                asked,
-              ),
-              documents: Observed(
-                _newestFirst([
-                  for (final d in documents.documents)
-                    if (d.parentKey == null)
-                      {
-                        'ad': d.type.isNotEmpty ? d.type : d.description,
-                        'tarih': d.approved,
-                        'no': d.number,
-                      },
-                ]),
-                channel,
-                asked,
-              ),
-            ),
-          ]);
-        } else {
-          final raw = await _mobile.caseDocuments(id!);
-          db.mergeCases([
-            PortalCase(
-              key: kase.key,
-              number: kase.number,
-              court: kase.court,
-              documents: Observed(
-                _newestFirst(_mobileDocuments(raw)),
-                channel,
-                asked,
-                complete: false,
-              ),
-            ),
-          ]);
+        await panel.attach(linkOf(kase));
+        await panel.readSections(
+          channel,
+          channel == PortalChannel.uyapWeb
+              ? CaseSection.values.toSet()
+              : _mobileSections.toSet(),
+        );
+        final record = panel.record;
+        if (panel.error != null || record == null) {
+          problem = panel.error ?? 'Dosya UYAP’tan alınamadı.';
+          continue;
         }
+        db.mergeCases([
+          PortalCase(
+            key: kase.key,
+            number: kase.number,
+            court: kase.court,
+            documents: Observed(
+              _newestFirst([
+                for (final d in record.documents)
+                  if (d.parentKey == null)
+                    {
+                      'ad': d.type.isNotEmpty ? d.type : d.description,
+                      'tarih': d.approved,
+                      'no': d.number,
+                    },
+              ]),
+              channel,
+              DateTime.now().toUtc(),
+              complete: channel == PortalChannel.uyapWeb,
+            ),
+          ),
+        ]);
         notifyListeners();
         return null;
       } catch (e) {
         problem = '$e';
+      } finally {
+        panel.dispose();
       }
     }
     return problem;
@@ -2710,35 +2686,6 @@ class PortalSync extends ChangeNotifier {
   /// Every case kept, from both portals.
   Future<List<PortalCase>> portfolio() async =>
       (await _database()).cases().values.toList();
-}
-
-/// The mobile API's documents of a case, from `tumEvraklar` (grouped by
-/// case, or a list) or else `son20Evrak`.
-List<Map<String, Object?>> _mobileDocuments(Map<String, Object?> raw) {
-  Iterable<Object?> rows(Object? v) => v is List
-      ? v
-      : v is Map
-      ? v.values.expand((g) => g is List ? g : const [])
-      : const [];
-  var all = rows(raw['tumEvraklar']).toList();
-  if (all.isEmpty) all = rows(raw['son20Evrak']).toList();
-  String text(Map row, List<String> keys) => keys
-      .map((k) => '${row[k] ?? ''}'.trim())
-      .firstWhere((v) => v.isNotEmpty, orElse: () => '');
-  return [
-    for (final row in all)
-      if (row is Map)
-        {
-          'ad': text(row, [
-            'evrakTuruAciklama',
-            'dagitimPlanTuruAciklama',
-            'evrakTuru',
-            'aciklama',
-          ]),
-          'tarih': text(row, ['onayTarihi', 'onaylandigiTarih']),
-          'no': text(row, ['birimEvrakNo', 'evrakId']),
-        },
-  ];
 }
 
 /// Documents with the latest approval first ("06.10.2026 09:20" or ISO).

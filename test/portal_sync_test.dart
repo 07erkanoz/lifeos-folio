@@ -6,6 +6,7 @@ import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,7 +41,10 @@ void main() {
       } else if (path == 'mobile/avukat/mahkeme') {
         answer = {
           'birimListesi': [
-            {'birimId': 'enc-1', 'birimAdi': 'Antalya 3. Asliye Hukuk'},
+            {
+              'birimId': 'enc-1',
+              'birimAdi': 'Antalya 3. Asliye Hukuk Mahkemesi',
+            },
           ],
         };
       } else if (path == 'mobile/avukat/dosya') {
@@ -129,6 +133,20 @@ void main() {
   });
 
   test('a case is synced on its own, newest document first', () async {
+    // The case's record kept in a folder of the test's own.
+    final root = await Directory.systemTemp.createTemp('folio-case-sync-');
+    final real = UyapCaseStore.instance;
+    UyapCaseStore.instance = UyapCaseStore(
+      directory: Directory('${root.path}/destek'),
+      settings: UyapSettings(
+        directory: Directory('${root.path}/destek'),
+        home: '${root.path}/ev',
+      ),
+    );
+    addTearDown(() async {
+      UyapCaseStore.instance = real;
+      await root.delete(recursive: true);
+    });
     await api.login('kod');
     await syncMobilePortfolio(api, db);
     final sync = PortalSync(
