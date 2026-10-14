@@ -488,9 +488,7 @@ class DecisionDevice {
     if (lost) 'kayip': true,
     if (lostAt > 0) 'kayipNesil': lostAt,
     if (known.isNotEmpty) 'bilinen': (known.toList()..sort()),
-    'kazananlar': {
-      for (final e in allWinners.entries) '${e.key}': e.value,
-    },
+    'kazananlar': {for (final e in allWinners.entries) '${e.key}': e.value},
   };
 
   /// Whether [d] holds by this choice: made by the device chosen for its

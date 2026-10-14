@@ -21,6 +21,7 @@ import '../../services/notes/secret_notes.dart';
 import '../../services/office/office_network.dart';
 import '../../services/pdf/pdf_service.dart';
 import '../../services/print/print_job.dart';
+import '../../services/portal/portal_sync.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_case_data.dart';
 import '../../services/uyap/uyap_case_store.dart';
@@ -154,10 +155,23 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// boxes side by side and one under another ran into each other.
   _Section _section = _Section.payments;
 
+  /// What keeps the portals and the office alike: told, the view is read
+  /// again (a payment shared changed, or taken off; R8).
+  ChangeNotifier? _sync;
+
+  void _changed() => unawaited(_loadBooked());
+
   @override
   void initState() {
     super.initState();
+    _sync = PortalSync.started?..addListener(_changed);
     unawaited(_loadBooked());
+  }
+
+  @override
+  void dispose() {
+    _sync?.removeListener(_changed);
+    super.dispose();
   }
 
   @override
@@ -178,13 +192,31 @@ class _EnforcementViewState extends State<EnforcementView> {
   Future<void> _loadBooked() async {
     final db = await widget.database();
     _proposalsDb = db;
+    // Each owner's, with what UYAP shows here: a payment it shows is not
+    // taken off the debt twice (R4).
+    final collections = widget.record?.money?.collections ?? const [];
     _shared = {
       for (final e in db.sharedLedgersOf(widget.caseKey).entries)
-        e.key: [
-          for (final r in e.value)
-            if (!r.removed)
-              LedgerEntry(r, noteHidden: SecretNotes.descriptionHidden(db, r)),
-        ]..sort((a, b) => a.at.compareTo(b.at)),
+        e.key: () {
+          final entries = [
+            for (final r in e.value)
+              if (!r.removed)
+                LedgerEntry(
+                  r,
+                  noteHidden: SecretNotes.descriptionHidden(db, r),
+                ),
+          ]..sort((a, b) => a.at.compareTo(b.at));
+          if (collections.isEmpty) return entries;
+          final found = officialMatches(entries, collections, uyapDay);
+          return [
+            for (final x in entries)
+              LedgerEntry(
+                x.record,
+                matched: found[x.id] ?? '',
+                noteHidden: x.noteHidden,
+              ),
+          ];
+        }(),
     };
     _sharedRemoved = db.sharedLedgerRemoved(widget.caseKey);
     final booked = {

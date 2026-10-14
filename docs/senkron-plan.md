@@ -184,7 +184,14 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
       (şimdi → önerilen, Onayla / Reddet, eskiyse Kapat; karar cihazı dışında yalnız görünür);
       meslektaşın kartında "Not öner"; Senkron sayfasında karar cihazı kutusu.
     - Testler: `test/sync_step7_test.dart`, `test/sync_step7_screens_test.dart`.
-  - Sıradaki adım: §5 adım 9 (uçtan uca denetim).
+  - **§5 adım 9 (uçtan uca):** `test/sync_step9_test.dart`: Deniz'in üç cihazı (A ilk, B, C) ve Selin
+    (D); kart, dosya notu, icra ödemesi, paylaşılan dosya, ajanda notu, görev; aynı anda
+    tamamlandı + başlık; meslektaş önerisi ve onay; kart notu ve ajanda notu sonradan gizli. Her
+    adım arasında rastgele eşleşmeler, tekrar ve kesinti (parçanın gelmemesi), 40 sıra. Sonunda:
+    A, B, C ajanda, kart, hesap, kasa, ödeme ve karar bakımından aynı; öneri her yerde bir kez
+    uygulanmış; D'de kart notu ve görev notu geri çekilmiş; paylaşılan dosyanın ödemesi D'de salt
+    okunur ve hesabına girmemiş; büroya giden hiçbir pakette gizli metin yok. Test tabanı:
+    başlangıçta 1629, şimdi 1750 test, hepsi geçiyor.
   - **§5 adım 8 bitti (paylaşılan dosyada Folio hesabı, R8):**
     - **Karar 4 değişti (kullanıcı, 14 Ekim):** ayrı "Folio hesabını da paylaş" tercihi yok. Dosya
       paylaşılınca, alıcılardan para görme yetkisi olanlar o dosyanın icra ödemelerini
@@ -1057,3 +1064,15 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
   - Çakışma metni sade.
   - Adım 8'in veri katmanı (`portal_shared_ledger.dart`) eklendi; ekran ve gönderim, "Folio
     hesabını da paylaş" anahtarı mı yoksa para yetkilisine kendiliğinden mi kararı bekliyor.
+- **Adım 8 kod denetimi (14 Ekim, REVISE, 5 kritik, 2 yüksek):** işlenenler:
+  - Paylaşılan hesabın ödemeleri alıcının UYAP tahsilatlarıyla eşleşir; UYAP'ta görünen ödeme
+    borçtan iki kez düşülmez.
+  - Kartla da gelen kayıt iki yönde bir tutulur: karttan gelen paylaşılan kopyayı, paylaşılandan
+    gelen kartınkini günceller.
+  - Geri çekilen açıklama paylaşılan kopyadan da silinir; sonradan gelen kopyada da.
+  - Para yetkisi kalkınca paylaşım sürümleri korunur; yetki dönünce eski paket bir şey getirmez.
+  - Ekran, eşitleme bildirimiyle yeniden okunur.
+  - Alıcının diğer cihazları paylaşılan hesabı `not-takibi` ile alır (para yetkisi varken).
+  - Güncellemeden önce paylaşılmış dosya ilk gönderimde sürüm alır.
+  - Açık kalan: gönderenin paylaşım listesi kendi cihazları arasında eşitlenmiyor (dosya
+    paylaşımının bugünkü hâli; ayrı iş).

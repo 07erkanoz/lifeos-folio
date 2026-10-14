@@ -142,4 +142,76 @@ void main() {
     b.forgetClientMoney(keepPerson: 'selin');
     expect(b.sharedLedgersOf('dava'), isEmpty);
   });
+
+  group('Codex\'s review of step 8', () {
+    test('here through the card too: kept alike both ways, so the shared '
+        'copy is as new once the card is no longer shared', () {
+      final r = payment();
+      SharedCases.share(a, 'dava', ['selin']);
+      send();
+      LedgerService(a).edit(
+        a.clientRecord(r.id)!,
+        amount: 1200000,
+        at: DateTime(2026, 10, 10),
+        debtor: '',
+        way: '',
+        note: '',
+        whole: false,
+        target: null,
+      );
+      // The newer comes through the card: the shared copy alike, at once.
+      b.clientsMerge(a.clientsExport());
+      expect(b.sharedLedgerRecord(r.id)!.amount, 1200000);
+    });
+
+    test('a description taken back is taken out of the shared copy too', () {
+      final r = payment(note: 'Borçlu ödeme güçlüğünde');
+      SharedCases.share(a, 'dava', ['selin']);
+      send();
+      expect(b.sharedLedgerRecord(r.id)!.text('aciklama'), isNotEmpty);
+      LedgerService(a).edit(
+        a.clientRecord(r.id)!,
+        amount: 1500000,
+        at: DateTime(2026, 10, 10),
+        debtor: '',
+        way: '',
+        note: 'Borçlu ödeme güçlüğünde',
+        whole: false,
+        target: null,
+        noteSecret: true,
+      );
+      final hide = a.hideOf('aciklama:${r.id}')!;
+      b.takeNoteHide('deniz', 'aciklama:${r.id}', hide);
+      b.applyTakenNoteHides();
+      expect(b.sharedLedgerRecord(r.id)!.text('aciklama'), isEmpty);
+    });
+
+    test('the money no longer let, then let again: a package of a share of '
+        'before brings nothing back', () {
+      payment();
+      SharedCases.share(a, 'dava', ['selin']);
+      final first = a.caseShareVersion('dava')!;
+      send();
+      SharedCases.share(a, 'dava', const []);
+      send(closed: true);
+      b.forgetClientMoney(keepPerson: 'selin');
+      expect(send(version: first), isFalse);
+      expect(b.sharedLedgersOf('dava'), isEmpty);
+    });
+
+    test('the one it is shared with: their other device has it too', () {
+      final r = payment();
+      SharedCases.share(a, 'dava', ['selin']);
+      send();
+      final b2 = PortalDatabase.memory();
+      addTearDown(b2.dispose);
+      b2.noteTrackingMerge(b.noteTrackingExport());
+      expect(b2.sharedLedgerRecord(r.id), isNotNull);
+      // Closed: on the other device too.
+      SharedCases.share(a, 'dava', const []);
+      send(closed: true);
+      b2.noteTrackingMerge(b.noteTrackingExport());
+      expect(b2.sharedLedgersOf('dava'), isEmpty);
+    });
+  });
 }

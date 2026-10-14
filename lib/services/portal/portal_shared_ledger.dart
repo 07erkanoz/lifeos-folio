@@ -82,11 +82,27 @@ extension PortalSharedLedger on PortalDatabase {
           changed = true;
         }
       } else {
-        for (final r in records) {
+        for (var r in records) {
           if (r.kind != ClientRecordKind.enforcement ||
               r.person != owner ||
               r.text('dosya') != caseKey) {
             continue;
+          }
+          // Its description taken back by its owner: not kept (R7).
+          r = _withoutTakenDescription(owner, r);
+          // Here through the card too: one record, kept alike both ways.
+          final card = clientRecord(r.id);
+          if (card != null &&
+              card.person == owner &&
+              card.kind == ClientRecordKind.enforcement &&
+              !LedgerBook.isProjected(card)) {
+            final both = LedgerBook.merge(card, r);
+            if (LedgerBook.contentOf(both) != LedgerBook.contentOf(card)) {
+              _putRecord(both);
+              rebuildLedger(both.id);
+              changed = true;
+            }
+            r = both;
           }
           final row = _db.select(
             'SELECT json FROM shared_ledger WHERE sahip=? AND dosya=? AND id=?',
@@ -160,9 +176,109 @@ extension PortalSharedLedger on PortalDatabase {
   }
 
   /// Every account shared with this person forgotten: they may no longer
-  /// see the money (R11).
+  /// see the money (R11). What version each share had is kept: the money
+  /// let again, no package of before brings one back.
   void forgetSharedLedgers() {
     _db.execute('DELETE FROM shared_ledger');
-    _db.execute('DELETE FROM shared_ledger_state');
+    _db.execute('UPDATE shared_ledger_state SET acik=0');
+  }
+
+  /// [r] with its description empty when its owner took it back at a
+  /// version not older than its own.
+  ClientRecord _withoutTakenDescription(String owner, ClientRecord r) {
+    final hide = takenNoteHide(owner, 'aciklama:${r.id}');
+    if (hide == null ||
+        r.text('aciklama').isEmpty ||
+        LedgerBook.versionOf(r, 'bilgi') > hide) {
+      return r;
+    }
+    return ClientRecord.fromJson({
+          ...r.toJson(),
+          'veri': {...r.data, 'aciklama': '', 'aciklamaGizli': true},
+        }) ??
+        r;
+  }
+
+  /// The descriptions taken back, out of the accounts shared with this
+  /// person too. True when one was.
+  bool applyTakenHidesToShared() {
+    var changed = false;
+    for (final row in _db.select(
+      'SELECT sahip, dosya, id, json FROM shared_ledger',
+    )) {
+      final r = ClientRecord.fromJson(PortalAgendaVersions._map(row['json']));
+      if (r == null) continue;
+      final next = _withoutTakenDescription(row['sahip'] as String, r);
+      if (identical(next, r)) continue;
+      _db.execute(
+        'UPDATE shared_ledger SET json=? WHERE sahip=? AND dosya=? AND id=?',
+        [jsonEncode(next.toJson()), row['sahip'], row['dosya'], row['id']],
+      );
+      changed = true;
+    }
+    return changed;
+  }
+
+  /// [r], come through a card, kept alike in the account shared too.
+  void _alsoShared(ClientRecord r) {
+    final rows = _db.select(
+      'SELECT sahip, dosya, json FROM shared_ledger WHERE id=?',
+      [r.id],
+    );
+    for (final row in rows) {
+      final kept = ClientRecord.fromJson(
+        PortalAgendaVersions._map(row['json']),
+      );
+      if (kept == null || kept.person != r.person) continue;
+      final both = LedgerBook.merge(kept, r);
+      _db.execute(
+        'UPDATE shared_ledger SET json=? WHERE sahip=? AND dosya=? AND id=?',
+        [jsonEncode(both.toJson()), row['sahip'], row['dosya'], r.id],
+      );
+    }
+  }
+
+  /// What the person's other devices take of the accounts shared with
+  /// them: each with its share's version.
+  Map<String, Object?> sharedLedgersExport() => {
+    'durumlar': [
+      for (final r in _db.select('SELECT * FROM shared_ledger_state'))
+        {for (final c in r.keys) c: r[c]},
+    ],
+    'kayitlar': [
+      for (final r in _db.select('SELECT * FROM shared_ledger'))
+        {for (final c in r.keys) c: r[c]},
+    ],
+  };
+
+  /// Another own device's [sharedLedgersExport], taken by the same rules:
+  /// none of before, closed ones gone. True when anything changed.
+  bool sharedLedgersMerge(Object? theirs) {
+    if (theirs is! Map) return false;
+    var changed = false;
+    final byShare = <String, List<ClientRecord>>{};
+    for (final r in theirs['kayitlar'] as List? ?? const []) {
+      if (r is! Map) continue;
+      final rec = ClientRecord.fromJson(PortalAgendaVersions._map(r['json']));
+      if (rec == null) continue;
+      byShare.putIfAbsent('${r['sahip']}|${r['dosya']}', () => []).add(rec);
+    }
+    for (final s in theirs['durumlar'] as List? ?? const []) {
+      if (s is! Map || s['sahip'] is! String || s['dosya'] is! String) {
+        continue;
+      }
+      final v = Hlc.tryParse(s['surum']);
+      if (v == null) continue;
+      if (takeSharedLedger(
+        s['sahip'] as String,
+        s['dosya'] as String,
+        v,
+        closed: s['acik'] != 1,
+        records: byShare['${s['sahip']}|${s['dosya']}'] ?? const [],
+      )) {
+        changed = true;
+      }
+    }
+    return changed;
   }
 }

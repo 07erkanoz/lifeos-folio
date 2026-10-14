@@ -304,7 +304,16 @@ class OwnSync extends ChangeNotifier {
     // office.
     _net.officeParts[SharedCases.part] = OfficePart(
       export: shared.export,
-      merge: shared.merge,
+      merge: (theirs, from) async {
+        final changed = await shared.merge(theirs, from);
+        // A case's account shared changed: the screens read it again, the
+        // person's other devices told (R8).
+        if (changed) {
+          _net.ownChanged();
+          PortalSync.started?.notifyListeners();
+        }
+        return changed;
+      },
     );
     _net.officeAnswers[SharedCases.documentKind] = shared.answer;
     for (final (part, files) in [

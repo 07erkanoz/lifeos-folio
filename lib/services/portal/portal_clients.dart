@@ -1001,6 +1001,8 @@ extension PortalClients on PortalDatabase {
             continue;
           }
           _putRecord(merged);
+          // One record: its copy of a case's account shared alike (R8).
+          _alsoShared(merged);
           ledgers.add(r.id);
           changed = true;
           continue;
@@ -1010,6 +1012,8 @@ extension PortalClients on PortalDatabase {
         }
         _putRecord(r);
         if (r.kind == ClientRecordKind.enforcement) {
+          // One record: its copy of a case's account shared alike (R8).
+          _alsoShared(r);
           if (LedgerBook.isNewForm(r)) {
             ledgers.add(r.id);
           } else {

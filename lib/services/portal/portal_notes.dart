@@ -189,6 +189,10 @@ extension PortalNotes on PortalDatabase {
       for (final r in _db.select('SELECT * FROM taken_note_hide'))
         {for (final c in r.keys) c: r[c]},
     ],
+    // The cases' accounts shared with this person, for their other devices
+    // (R8): only while they may see the money.
+    if (PortalDatabase.clientMoneyAllowed?.call() ?? true)
+      'paylasilanDefterler': sharedLedgersExport(),
     // The colleagues' tasks' notes that came here, for this person's other
     // devices: note by note, with what was taken back and off.
     'gorevNotlari': [
@@ -238,6 +242,9 @@ extension PortalNotes on PortalDatabase {
         if (v != null) {
           takeNoteHide(r['sahip'] as String, r['not_key'] as String, v);
         }
+      }
+      if (PortalDatabase.clientMoneyAllowed?.call() ?? true) {
+        sharedLedgersMerge(theirs['paylasilanDefterler']);
       }
       final scopes =
           <
@@ -368,7 +375,8 @@ extension PortalNotes on PortalDatabase {
   /// copies kept here: the text of one of before left empty, whatever came
   /// since. True when one was.
   bool applyTakenNoteHides() {
-    var changed = false;
+    // Those of the accounts shared with this person too (R8).
+    var changed = applyTakenHidesToShared();
     final hides = [
       for (final r in _db.select(
         'SELECT sahip, not_key, surum FROM taken_note_hide',

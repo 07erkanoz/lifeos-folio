@@ -203,6 +203,8 @@ class SharedCases {
     if (keeps) {
       for (final e in _read(db, _everKey).entries) {
         if (!e.value.contains(person)) continue;
+        // Shared before its account went with it: its word versioned once.
+        if (db.caseShareVersion(e.key) == null) db.tickCaseShare(e.key);
         final version = db.caseShareVersion(e.key);
         if (version == null) continue;
         final open = money && (shared[e.key]?.contains(person) ?? false);
