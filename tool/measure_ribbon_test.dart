@@ -121,6 +121,12 @@ void main() {
         '$total yeniden kurulum',
       );
       print(
+        'QuillEditor:${rebuilt['QuillEditor'] ?? 0} '
+        'QuillRawEditor:${rebuilt['QuillRawEditor'] ?? 0} '
+        'EditorWidget:${rebuilt['EditorWidget'] ?? 0} '
+        'EditableTextLine:${rebuilt['EditableTextLine'] ?? 0}',
+      );
+      print(
         (rebuilt.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
             .take(25)
             .map((e) => '${e.key}:${e.value}')

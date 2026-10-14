@@ -5,7 +5,7 @@ import 'dart:ui' as ui hide TextStyle;
 
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart'
-    show clampDouble, defaultTargetPlatform, kIsWeb;
+    show clampDouble, defaultTargetPlatform, kIsWeb, listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
@@ -22,6 +22,7 @@ import '../../delta/delta_diff.dart';
 import '../../document/attribute.dart';
 import '../../document/document.dart';
 import '../../document/nodes/block.dart';
+import '../../document/nodes/leaf.dart';
 import '../../document/nodes/line.dart';
 import '../../document/nodes/node.dart';
 import '../editor.dart';
@@ -31,6 +32,7 @@ import '../widgets/link.dart';
 import '../widgets/proxy.dart';
 import '../widgets/text/text_block.dart';
 import '../widgets/text/text_line.dart';
+import '../widgets/text/utils/text_block_utils.dart' show QuillLineLayout;
 import '../widgets/text/text_selection.dart';
 import 'keyboard_shortcuts/editor_keyboard_shortcut_actions_manager.dart';
 import 'keyboard_shortcuts/editor_keyboard_shortcuts.dart';
@@ -606,8 +608,12 @@ class QuillRawEditorState extends EditorState
     var prevNodeOl = false;
     var clearIndents = false;
 
+    // FOLIO PATCH: where each line starts, counted along (see _keptText).
+    var start = 0;
     for (final node in doc.root.children) {
       final attrs = node.style.attributes;
+      final nodeStart = start;
+      start += node.length;
 
       if (prevNodeOl && attrs[Attribute.list.key] != Attribute.ol ||
           attrs.isEmpty) {
@@ -618,7 +624,7 @@ class QuillRawEditorState extends EditorState
       final nodeTextDirection = getDirectionOfNode(node, _textDirection);
       if (node is Line) {
         final editableTextLine =
-            _getEditableTextLineFromNode(node, context, attrs);
+            _getEditableTextLineFromNode(node, context, attrs, nodeStart);
         result.add(Directionality(
             textDirection: nodeTextDirection, child: editableTextLine));
       } else if (node is Block) {
@@ -671,11 +677,76 @@ class QuillRawEditorState extends EditorState
     return result;
   }
 
+  /// FOLIO PATCH: each line's text as last built, by what it was built of.
+  /// Every line was built again at each key, its spans made anew and let
+  /// go of: a 600 paragraph petition spent most of a keystroke on it, and on
+  /// the memory it left. A line nothing of which changed keeps its TextLine
+  /// (its text), and only its frame, which draws the selection and the
+  /// caret where they are now, is made again. A line with an embed (a
+  /// table, a picture: theirs from outside the line) or a drawn leading
+  /// (a list's mark) is built as ever.
+  final _keptText = Expando<(List<Object?>, TextLine)>();
+
+  List<Object?>? _textKey(Line node, QuillLineLayout? layout, int start) {
+    if (node.hasEmbed || layout?.leading != null) return null;
+    final composing = composingRange.value;
+    final end = start + node.length;
+    return [
+      widget.config,
+      _styles,
+      _textDirection,
+      // The composing word only where it is.
+      if (composing.isValid && composing.start < end && composing.end > start)
+        composing,
+      node.style,
+      for (final leaf in node.children) ...[
+        leaf,
+        (leaf as Leaf).value,
+        leaf.style,
+      ],
+      layout?.firstLine,
+      layout?.hanging,
+      layout?.width,
+      layout?.rowHeight,
+      layout?.rows?.length,
+      ...?layout?.rows,
+    ];
+  }
+
   EditableTextLine _getEditableTextLineFromNode(
-      Line node, BuildContext context, Map<String, Attribute<dynamic>> attrs) {
+      Line node, BuildContext context, Map<String, Attribute<dynamic>> attrs,
+      [int start = 0]) {
     // FOLIO PATCH: the line's own indents and spacing, when it carries any.
     final layout = widget.config.lineLayoutBuilder?.call(node);
     final vertical = _getVerticalSpacingForLine(node, _styles);
+    final key = _textKey(node, layout, start);
+    final kept = _keptText[node];
+    final textLine = key != null && kept != null && listEquals(kept.$1, key)
+        ? kept.$2
+        : _newTextLine(node, layout, key);
+    final editableTextLine = EditableTextLine(
+        node,
+        null,
+        textLine,
+        layout?.horizontal ?? _getHorizontalSpacingForLine(node, _styles),
+        layout == null
+            ? vertical
+            : VerticalSpacing(
+                vertical.top + layout.top, vertical.bottom + layout.bottom),
+        _textDirection,
+        controller.selection,
+        widget.config.selectionColor,
+        widget.config.enableInteractiveSelection,
+        _hasFocus,
+        MediaQuery.devicePixelRatioOf(context),
+        _cursorCont,
+        _styles!.inlineCode!,
+        _getDecoration(node, _styles, attrs));
+    return editableTextLine;
+  }
+
+  TextLine _newTextLine(
+      Line node, QuillLineLayout? layout, List<Object?>? key) {
     final textLine = TextLine(
       firstLineIndent: layout?.firstLine ?? 0,
       hangingIndent: layout?.hanging ?? 0,
@@ -696,25 +767,8 @@ class QuillRawEditorState extends EditorState
       customLinkPrefixes: widget.config.customLinkPrefixes,
       composingRange: composingRange.value,
     );
-    final editableTextLine = EditableTextLine(
-        node,
-        null,
-        textLine,
-        layout?.horizontal ?? _getHorizontalSpacingForLine(node, _styles),
-        layout == null
-            ? vertical
-            : VerticalSpacing(
-                vertical.top + layout.top, vertical.bottom + layout.bottom),
-        _textDirection,
-        controller.selection,
-        widget.config.selectionColor,
-        widget.config.enableInteractiveSelection,
-        _hasFocus,
-        MediaQuery.devicePixelRatioOf(context),
-        _cursorCont,
-        _styles!.inlineCode!,
-        _getDecoration(node, _styles, attrs));
-    return editableTextLine;
+    if (key != null) _keptText[node] = (key, textLine);
+    return textLine;
   }
 
   HorizontalSpacing _getHorizontalSpacingForLine(

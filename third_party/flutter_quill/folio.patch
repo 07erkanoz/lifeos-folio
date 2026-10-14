@@ -10,6 +10,98 @@ index 81e19fa..f9cad27 100644
  export 'src/editor/widgets/text/utils/text_block_utils.dart';
  export 'src/editor_toolbar_controller_shared/copy_cut_service/copy_cut_service.dart';
  export 'src/editor_toolbar_controller_shared/copy_cut_service/copy_cut_service_provider.dart';
+diff --git a/lib/src/common/utils/color.dart b/lib/src/common/utils/color.dart
+index 06724af..80576f3 100644
+--- a/lib/src/common/utils/color.dart
++++ b/lib/src/common/utils/color.dart
+@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
+ 
+ import '../../editor/widgets/default_styles.dart';
+ 
+-Color stringToColor(String? s,
+-    [Color? originalColor, DefaultStyles? defaultStyles]) {
++Color stringToColor(
++  String? s, [
++  Color? originalColor,
++  DefaultStyles? defaultStyles,
++]) {
+   final palette = defaultStyles?.palette;
+   if (s != null && palette != null) {
+     final maybeColor = palette[s];
+@@ -119,8 +122,12 @@ Color stringToColor(String? s,
+     s = s.substring(5); // trim left 'rgba('
+     s = s.substring(0, s.length - 1); // trim right ')'
+     final arr = s.split(',').map((e) => e.trim()).toList();
+-    return Color.fromRGBO(int.parse(arr[0]), int.parse(arr[1]),
+-        int.parse(arr[2]), double.parse(arr[3]));
++    return Color.fromRGBO(
++      int.parse(arr[0]),
++      int.parse(arr[1]),
++      int.parse(arr[2]),
++      double.parse(arr[3]),
++    );
+   }
+ 
+   // TODO: take care of "color": "inherit"
+@@ -134,6 +141,9 @@ Color stringToColor(String? s,
+ 
+   var hex = s.replaceFirst('#', '');
+   hex = hex.length == 6 ? 'ff$hex' : hex;
+-  final val = int.parse(hex, radix: 16);
++  // Folio: a colour that is no number ("#AUTO" from a Word file) leaves the
++  // text as it was rather than breaking the whole page.
++  final val = hex.length == 8 ? int.tryParse(hex, radix: 16) : null;
++  if (val == null) return originalColor ?? Colors.black;
+   return Color(val);
+ }
+diff --git a/lib/src/document/history.dart b/lib/src/document/history.dart
+index 2721e83..7a51a9f 100644
+--- a/lib/src/document/history.dart
++++ b/lib/src/document/history.dart
+@@ -35,7 +35,7 @@ class History {
+   void handleDocChange(DocChange docChange) {
+     if (ignoreChange) return;
+     if (!userOnly || docChange.source == ChangeSource.local) {
+-      record(docChange.change, docChange.before);
++      record(docChange.change, docChange.before, docChange.source);
+     } else {
+       transform(docChange.change);
+     }
+@@ -45,13 +45,21 @@ class History {
+     stack.clear();
+   }
+ 
+-  void record(Delta change, Delta before) {
++  /// Where the last recorded change came from (Folio): a change from
++  /// elsewhere is not undone together with one made here.
++  ChangeSource? _lastSource;
++
++  void record(Delta change, Delta before, [ChangeSource? source]) {
+     if (change.isEmpty) return;
+     stack.redo.clear();
+     var undoDelta = change.invert(before);
+     final timeStamp = DateTime.now().millisecondsSinceEpoch;
++    final sameSource = source == _lastSource;
++    _lastSource = source;
+ 
+-    if (lastRecorded + interval > timeStamp && stack.undo.isNotEmpty) {
++    if (lastRecorded + interval > timeStamp &&
++        stack.undo.isNotEmpty &&
++        sameSource) {
+       final lastDelta = stack.undo.removeLast();
+       undoDelta = undoDelta.compose(lastDelta);
+     } else {
+@@ -119,9 +127,7 @@ class History {
+ }
+ 
+ class HistoryStack {
+-  HistoryStack.empty()
+-      : undo = [],
+-        redo = [];
++  HistoryStack.empty() : undo = [], redo = [];
+ 
+   List<Delta> undo;
+   List<Delta> redo;
 diff --git a/lib/src/editor/config/editor_config.dart b/lib/src/editor/config/editor_config.dart
 index 68526c3..9db74a7 100644
 --- a/lib/src/editor/config/editor_config.dart
@@ -314,7 +406,7 @@ index d795362..325cb8d 100644
    }
  }
 diff --git a/lib/src/editor/raw_editor/raw_editor_state.dart b/lib/src/editor/raw_editor/raw_editor_state.dart
-index 98905c2..7386e1d 100644
+index 98905c2..aa32b01 100644
 --- a/lib/src/editor/raw_editor/raw_editor_state.dart
 +++ b/lib/src/editor/raw_editor/raw_editor_state.dart
 @@ -4,7 +4,8 @@ import 'dart:math' as math;
@@ -323,11 +415,27 @@ index 98905c2..7386e1d 100644
  import 'package:collection/collection.dart';
 -import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 +import 'package:flutter/foundation.dart'
-+    show clampDouble, defaultTargetPlatform, kIsWeb;
++    show clampDouble, defaultTargetPlatform, kIsWeb, listEquals;
  import 'package:flutter/material.dart';
  import 'package:flutter/rendering.dart' show RenderAbstractViewport;
  import 'package:flutter/scheduler.dart' show SchedulerBinding;
-@@ -249,17 +250,45 @@ class QuillRawEditorState extends EditorState
+@@ -21,6 +22,7 @@ import '../../delta/delta_diff.dart';
+ import '../../document/attribute.dart';
+ import '../../document/document.dart';
+ import '../../document/nodes/block.dart';
++import '../../document/nodes/leaf.dart';
+ import '../../document/nodes/line.dart';
+ import '../../document/nodes/node.dart';
+ import '../editor.dart';
+@@ -30,6 +32,7 @@ import '../widgets/link.dart';
+ import '../widgets/proxy.dart';
+ import '../widgets/text/text_block.dart';
+ import '../widgets/text/text_line.dart';
++import '../widgets/text/utils/text_block_utils.dart' show QuillLineLayout;
+ import '../widgets/text/text_selection.dart';
+ import 'keyboard_shortcuts/editor_keyboard_shortcut_actions_manager.dart';
+ import 'keyboard_shortcuts/editor_keyboard_shortcuts.dart';
+@@ -249,17 +252,45 @@ class QuillRawEditorState extends EditorState
    ///
    /// Copied from [EditableTextState].
    TextSelectionToolbarAnchors get contextMenuAnchors {
@@ -379,7 +487,7 @@ index 98905c2..7386e1d 100644
    /// Gets the line heights at the start and end of the selection for the given
    /// [QuillRawEditorState].
    ///
-@@ -423,6 +452,7 @@ class QuillRawEditorState extends EditorState
+@@ -423,6 +454,7 @@ class QuillRawEditorState extends EditorState
                      scrollBottomInset: widget.config.scrollBottomInset,
                      padding: widget.config.padding,
                      maxContentWidth: widget.config.maxContentWidth,
@@ -387,7 +495,7 @@ index 98905c2..7386e1d 100644
                      cursorController: _cursorCont,
                      floatingCursorDisabled:
                          widget.config.floatingCursorDisabled,
-@@ -456,6 +486,7 @@ class QuillRawEditorState extends EditorState
+@@ -456,6 +488,7 @@ class QuillRawEditorState extends EditorState
                  scrollBottomInset: widget.config.scrollBottomInset,
                  padding: widget.config.padding,
                  maxContentWidth: widget.config.maxContentWidth,
@@ -395,7 +503,29 @@ index 98905c2..7386e1d 100644
                  floatingCursorDisabled: widget.config.floatingCursorDisabled,
                  children: _buildChildren(doc, context),
                ),
-@@ -609,6 +640,7 @@ class QuillRawEditorState extends EditorState
+@@ -575,8 +608,12 @@ class QuillRawEditorState extends EditorState
+     var prevNodeOl = false;
+     var clearIndents = false;
+ 
++    // FOLIO PATCH: where each line starts, counted along (see _keptText).
++    var start = 0;
+     for (final node in doc.root.children) {
+       final attrs = node.style.attributes;
++      final nodeStart = start;
++      start += node.length;
+ 
+       if (prevNodeOl && attrs[Attribute.list.key] != Attribute.ol ||
+           attrs.isEmpty) {
+@@ -587,7 +624,7 @@ class QuillRawEditorState extends EditorState
+       final nodeTextDirection = getDirectionOfNode(node, _textDirection);
+       if (node is Line) {
+         final editableTextLine =
+-            _getEditableTextLineFromNode(node, context, attrs);
++            _getEditableTextLineFromNode(node, context, attrs, nodeStart);
+         result.add(Directionality(
+             textDirection: nodeTextDirection, child: editableTextLine));
+       } else if (node is Block) {
+@@ -609,6 +646,7 @@ class QuillRawEditorState extends EditorState
                : null,
            embedBuilder: widget.config.embedBuilder,
            textSpanBuilder: widget.config.textSpanBuilder,
@@ -403,13 +533,81 @@ index 98905c2..7386e1d 100644
            linkActionPicker: _linkActionPicker,
            onLaunchUrl: widget.config.onLaunchUrl,
            cursorCont: _cursorCont,
-@@ -641,7 +673,15 @@ class QuillRawEditorState extends EditorState
+@@ -639,9 +677,82 @@ class QuillRawEditorState extends EditorState
+     return result;
+   }
  
++  /// FOLIO PATCH: each line's text as last built, by what it was built of.
++  /// Every line was built again at each key, its spans made anew and let
++  /// go of: a 600 paragraph petition spent most of a keystroke on it, and on
++  /// the memory it left. A line nothing of which changed keeps its TextLine
++  /// (its text), and only its frame, which draws the selection and the
++  /// caret where they are now, is made again. A line with an embed (a
++  /// table, a picture: theirs from outside the line) or a drawn leading
++  /// (a list's mark) is built as ever.
++  final _keptText = Expando<(List<Object?>, TextLine)>();
++
++  List<Object?>? _textKey(Line node, QuillLineLayout? layout, int start) {
++    if (node.hasEmbed || layout?.leading != null) return null;
++    final composing = composingRange.value;
++    final end = start + node.length;
++    return [
++      widget.config,
++      _styles,
++      _textDirection,
++      // The composing word only where it is.
++      if (composing.isValid && composing.start < end && composing.end > start)
++        composing,
++      node.style,
++      for (final leaf in node.children) ...[
++        leaf,
++        (leaf as Leaf).value,
++        leaf.style,
++      ],
++      layout?.firstLine,
++      layout?.hanging,
++      layout?.width,
++      layout?.rowHeight,
++      layout?.rows?.length,
++      ...?layout?.rows,
++    ];
++  }
++
    EditableTextLine _getEditableTextLineFromNode(
-       Line node, BuildContext context, Map<String, Attribute<dynamic>> attrs) {
+-      Line node, BuildContext context, Map<String, Attribute<dynamic>> attrs) {
++      Line node, BuildContext context, Map<String, Attribute<dynamic>> attrs,
++      [int start = 0]) {
 +    // FOLIO PATCH: the line's own indents and spacing, when it carries any.
 +    final layout = widget.config.lineLayoutBuilder?.call(node);
 +    final vertical = _getVerticalSpacingForLine(node, _styles);
++    final key = _textKey(node, layout, start);
++    final kept = _keptText[node];
++    final textLine = key != null && kept != null && listEquals(kept.$1, key)
++        ? kept.$2
++        : _newTextLine(node, layout, key);
++    final editableTextLine = EditableTextLine(
++        node,
++        null,
++        textLine,
++        layout?.horizontal ?? _getHorizontalSpacingForLine(node, _styles),
++        layout == null
++            ? vertical
++            : VerticalSpacing(
++                vertical.top + layout.top, vertical.bottom + layout.bottom),
++        _textDirection,
++        controller.selection,
++        widget.config.selectionColor,
++        widget.config.enableInteractiveSelection,
++        _hasFocus,
++        MediaQuery.devicePixelRatioOf(context),
++        _cursorCont,
++        _styles!.inlineCode!,
++        _getDecoration(node, _styles, attrs));
++    return editableTextLine;
++  }
++
++  TextLine _newTextLine(
++      Line node, QuillLineLayout? layout, List<Object?>? key) {
      final textLine = TextLine(
 +      firstLineIndent: layout?.firstLine ?? 0,
 +      hangingIndent: layout?.hanging ?? 0,
@@ -419,21 +617,32 @@ index 98905c2..7386e1d 100644
        line: node,
        textDirection: _textDirection,
        embedBuilder: widget.config.embedBuilder,
-@@ -660,8 +700,11 @@ class QuillRawEditorState extends EditorState
-         node,
-         null,
-         textLine,
+@@ -656,22 +767,8 @@ class QuillRawEditorState extends EditorState
+       customLinkPrefixes: widget.config.customLinkPrefixes,
+       composingRange: composingRange.value,
+     );
+-    final editableTextLine = EditableTextLine(
+-        node,
+-        null,
+-        textLine,
 -        _getHorizontalSpacingForLine(node, _styles),
 -        _getVerticalSpacingForLine(node, _styles),
-+        layout?.horizontal ?? _getHorizontalSpacingForLine(node, _styles),
-+        layout == null
-+            ? vertical
-+            : VerticalSpacing(
-+                vertical.top + layout.top, vertical.bottom + layout.bottom),
-         _textDirection,
-         controller.selection,
-         widget.config.selectionColor,
-@@ -1136,6 +1179,34 @@ class QuillRawEditorState extends EditorState
+-        _textDirection,
+-        controller.selection,
+-        widget.config.selectionColor,
+-        widget.config.enableInteractiveSelection,
+-        _hasFocus,
+-        MediaQuery.devicePixelRatioOf(context),
+-        _cursorCont,
+-        _styles!.inlineCode!,
+-        _getDecoration(node, _styles, attrs));
+-    return editableTextLine;
++    if (key != null) _keptText[node] = (key, textLine);
++    return textLine;
+   }
+ 
+   HorizontalSpacing _getHorizontalSpacingForLine(
+@@ -1136,6 +1233,34 @@ class QuillRawEditorState extends EditorState
  
      _showCaretOnScreenScheduled = true;
      SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -468,7 +677,7 @@ index 98905c2..7386e1d 100644
        if (widget.config.scrollable || _scrollController.hasClients) {
          _showCaretOnScreenScheduled = false;
  
-@@ -1231,6 +1302,10 @@ class QuillRawEditorState extends EditorState
+@@ -1231,6 +1356,10 @@ class QuillRawEditorState extends EditorState
        return false;
      }
  

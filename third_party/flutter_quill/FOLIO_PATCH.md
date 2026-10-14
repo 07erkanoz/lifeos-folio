@@ -109,6 +109,17 @@ girintisi var.
   yerdeyken sürüklenen metin seçili görünüyor, Delete ve Ctrl+B hiçbir
   yere ulaşmıyordu.
 
+- Değişmeyen satırın metni yeniden kurulmaz (`raw_editor_state.dart`,
+  `_keptText`). Quill her tuşta belgenin bütün satırlarını yeniden kurup
+  her birinin metin aralıklarını baştan üretiyordu. Artık satırın
+  `TextLine`'ı, satırın parçaları, onların metni ve stilleri, satır düzeni,
+  editörün ayarları ve stilleri aynı kaldıkça saklanıyor. Satırın çerçevesi
+  (`EditableTextLine`: seçim, imleç, konum) her karede yine kuruluyor.
+  Gömülü öğesi (tablo, resim) ya da çizilmiş liste işareti olan satırlar
+  eskisi gibi her seferinde kuruluyor. 600 paragraflık belgede, test
+  ortamında tuş başına Dart işi yaklaşık %35 azaldı
+  (`tool/profile_typing_test.dart`).
+
 Uygulama tarafı: `lib/ui/widgets/editor_line_layout.dart`,
 `lib/ui/widgets/editor_tab_spans.dart`, `lib/ui/widgets/editor_pages.dart`;
 testler: `test/editor_line_layout_test.dart`,
