@@ -2079,24 +2079,28 @@ class PortalSync extends ChangeNotifier {
     DateTime now,
   ) async {
     final db = await _database();
-    Set<CaseSection> stale(PortalChannel channel) {
-      final kept = {
-        for (final s in db.sections(key))
-          if (s.channel == channel) s.section: s,
-      };
-      return {
-        for (final section
-            in channel == PortalChannel.uyapWeb
-                ? CaseSection.values
-                : _mobileSections)
-          if (kept[section] case final s
-              when s == null ||
-                  !s.result.done ||
-                  !s.complete && section != CaseSection.particulars ||
-                  now.difference(s.succeeded!) > const Duration(days: 1))
-            section,
-      };
-    }
+    final states = db.sections(key);
+    bool fresh(SectionState? s, CaseSection section) =>
+        s != null &&
+        s.result.done &&
+        (s.complete || section == CaseSection.particulars) &&
+        now.difference(s.succeeded!) <= const Duration(days: 1);
+    SectionState? on(CaseSection section, PortalChannel channel) => states
+        .where((s) => s.section == section && s.channel == channel)
+        .firstOrNull;
+    Set<CaseSection> stale(PortalChannel channel) => {
+      for (final section
+          in channel == PortalChannel.uyapWeb
+              ? CaseSection.values
+              : _mobileSections)
+        if (!fresh(on(section, channel), section) &&
+            // The documents' list UYAP Mobil gave whole today is not asked
+            // of the web again (§7).
+            !(channel == PortalChannel.uyapWeb &&
+                section == CaseSection.documents &&
+                fresh(on(section, PortalChannel.uyapMobile), section)))
+          section,
+    };
 
     if (_web.connected) {
       final wanted = stale(PortalChannel.uyapWeb);
