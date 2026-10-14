@@ -23,6 +23,7 @@ import '../clients/client_accounts_view.dart'
     show CurrencyChoice, MovementDialog, askApplyHeld, ledgerApply;
 import '../clients/clients_page.dart' show pickScan;
 import '../portfolio/portfolio_rows.dart' show titleName;
+import '../widgets/proposals_view.dart';
 import '../widgets/notice.dart';
 import '../theme/folio_palette.dart';
 
@@ -369,6 +370,15 @@ class _CashPageState extends State<CashPage> {
               _top(wide),
               const SizedBox(height: 10),
               ..._repairs(),
+              // What colleagues proposed of this person's records (R6).
+              if (_db case final db?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: ProposalsStrip(
+                    db: db,
+                    onChanged: () => unawaited(_load()),
+                  ),
+                ),
               if (_reports) ..._report(wide) else ..._book(wide),
             ],
           ),

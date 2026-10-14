@@ -20,6 +20,7 @@ import '../../services/portal/portal_sync.dart';
 import '../../services/platform/document_scan.dart';
 import '../../services/speech/speech_models.dart';
 import '../../services/speech/speech_session.dart';
+import '../widgets/proposals_view.dart';
 import '../widgets/secret_note.dart';
 import '../widgets/speech_bar.dart';
 import '../widgets/speech_download_dialog.dart';
@@ -2318,6 +2319,7 @@ class _ClientCardState extends State<ClientCard> {
       _timeline(events),
       _meetingBox(meetings),
       _paperBox(attorneys),
+      ProposalsStrip(db: _db, onChanged: () => setState(() {})),
       _clientNoteBox(c),
     ];
     return ListView(
@@ -2870,7 +2872,14 @@ class _ClientCardState extends State<ClientCard> {
               // The note its own place to tap, not the card's.
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: noteBox,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    noteBox,
+                    if (_client case final c?)
+                      ProposalStatus(db: _db, target: c.id, caseKey: key),
+                  ],
+                ),
               ),
               if (_opened.contains(key)) _caseDetail(x, wide),
             ],
@@ -3495,14 +3504,57 @@ class _ClientCardState extends State<ClientCard> {
 
   bool _allPapers = false;
 
+  /// A colleague's [card]'s note (of the case [caseKey], else the card's
+  /// own) as this person would have it, proposed to its owner (R6).
+  Future<void> _proposeNote(
+    Client card, {
+    String caseKey = '',
+    String now = '',
+  }) async {
+    final note = await showDialog<({String text, bool secret})>(
+      context: context,
+      builder: (_) => _NoteDialog(
+        title: caseKey.isEmpty
+            ? 'Not öner · ${titleName(card.name)}'
+            : 'Not öner · ${_number(caseKey)}',
+        text: now,
+        ok: 'Öneriyi gönder',
+      ),
+    );
+    if (note == null || !mounted) return;
+    if (note.text.trim() == now.trim()) {
+      showNotice(context, 'Bir değişiklik yazılmadı.');
+      return;
+    }
+    final made = proposalsHere(_db).propose(
+      kind: caseKey.isEmpty ? 'kartNotu' : 'dosyaNotu',
+      target: card.id,
+      caseKey: caseKey,
+      fields: {'metin': note.text.trim()},
+    );
+    if (!mounted) return;
+    setState(() {});
+    showNotice(
+      context,
+      made == null ? 'Öneri yapılamadı.' : 'Öneri gönderildi.',
+      detail: made == null ? null : 'Kartın sahibi onaylarsa nota işlenir.',
+    );
+  }
+
   /// The lawyer's note on the client, apart from the cases' notes.
   Widget _clientNoteBox(Client? c) => _box(
     'MÜVEKKİL NOTU',
-    action: TextButton(
-      key: const ValueKey('client-note'),
-      onPressed: _editContact,
-      child: Text((c?.note ?? '').isEmpty ? '+ Not' : 'Düzenle'),
-    ),
+    action: c != null && othersCard(c)
+        ? TextButton(
+            key: const ValueKey('client-note-propose'),
+            onPressed: () => unawaited(_proposeNote(c, now: c.note)),
+            child: const Text('Not öner'),
+          )
+        : TextButton(
+            key: const ValueKey('client-note'),
+            onPressed: _editContact,
+            child: Text((c?.note ?? '').isEmpty ? '+ Not' : 'Düzenle'),
+          ),
     children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
@@ -3528,6 +3580,7 @@ class _ClientCardState extends State<ClientCard> {
             ),
             if (c != null)
               SecretNoteStatus(db: _db, noteKey: 'kartNotu:${c.id}'),
+            if (c != null) ProposalStatus(db: _db, target: c.id),
           ],
         ),
       ),
@@ -3625,7 +3678,7 @@ class _ClientCardState extends State<ClientCard> {
         widget.person.isNotEmpty &&
         card.person != widget.person;
     if (theirs) {
-      showNotice(context, 'Bu kartın notlarını yalnız sahibi değiştirebilir.');
+      await _proposeNote(card, caseKey: key, now: was?.text ?? '');
       return;
     }
     final noteKey = 'dosyaNotu:${card.id}:$key';

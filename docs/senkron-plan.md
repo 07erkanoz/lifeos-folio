@@ -161,7 +161,31 @@ bugünkü hâlini, ezme risklerini, verilen kararları ve uygulama planını tut
       tutunca ya da sağ tıklayınca gizlilik ve geri çekme durumu; dosya notu ve kart notu anahtarı
       ve etiketi; icra açıklaması anahtarı; paylaşılmış notu gizlerken onay penceresi.
     - Testler: `test/sync_step6_test.dart`, `test/sync_step6_screens_test.dart`.
-  - Sıradaki adım: adım 6'nın Codex kod denetimi, sonra §5 adım 7 (öneri ve karar; önce maket).
+  - **§5 adım 7 bitti (öneri, karar ve karar cihazı, R6):**
+    - `lib/services/portal/portal_proposals.dart`: değişmez öneri (`proposal`), ayrı karar
+      (`proposal_decision`, çıktılarıyla), karar cihazı seçimi (`decision_device`, nesilli).
+    - `lib/services/office/proposals.dart` (`ProposalService`):
+      - öneri: icra ödemesinin tutar, tarih, borçlu, ödeme, açıklama, tamamı ya da silinmesi;
+        kart notu; dosya notu. Gördüğü grup sürümlerini taşır;
+      - karar yalnız karar cihazında ve tek işlemde: sürüm denetimi, uygulama (sahibin kendi
+        yazımı olarak, `LedgerService`/`saveClient`), karar ve çıktıları (önce/sonra);
+      - kayıt öneriden sonra değiştiyse öneri eskidir, uygulanmaz ("Kapat");
+      - karar cihazı: varsayılan kişinin ilk cihazı (büro kimliği); devir yalnız karar cihazından
+        açık bir diğer cihaza; "kayboldu" yeni nesil seçer, o an bilinen kararlar geçerli kalır;
+      - eski nesilden sonradan gelen karar geçersizdir: çıktısı, o arada değişmediyse geri alınır
+        (değiştiyse çatışma işareti), öneri yeniden karara açılır;
+      - büroya: öneriler sahibine, kararlar önerene (çıktısız); finansal olan yalnız ikisi de parayı
+        görebiliyorsa; kart notu önerisi yalnız paylaşılan kartta. Kendi cihazlara: öneriler,
+        kararlar (çıktılarıyla) ve karar cihazı (`oneriler`).
+    - İlan: `oneri`; `oneri` ve `oneriler` bunu ister.
+    - Ekranlar (onaylı maketler): meslektaşın ödemesinde "Değişiklik öner" / "Silinmesini öner",
+      öneri kipinde ödeme penceresi (neden alanı); önerenin durumu (bekliyor / onaylandı /
+      reddedildi / kayıt değişti); Kasa ve müvekkil kartında "Bekleyen öneriler" şeridi ve listesi
+      (şimdi → önerilen, Onayla / Reddet, eskiyse Kapat; karar cihazı dışında yalnız görünür);
+      meslektaşın kartında "Not öner"; Senkron sayfasında karar cihazı kutusu.
+    - Testler: `test/sync_step7_test.dart`, `test/sync_step7_screens_test.dart`.
+  - Sıradaki adım: adım 7'nin Codex kod denetimi, sonra §5 adım 8 (paylaşılan dosyada defter;
+    önce maket).
 - Bilinen, bu işten önce de kırık olan testler:
   - codex_recheck, dropped_files, ocr_test, office_transfer (zamana bağlı), shared_directory,
     task_package, uets_connect, uyap_case_test, uyap_connect, uyap_door, uyap_library,

@@ -547,11 +547,17 @@ void main() {
     expect(find.byKey(const ValueKey('ledger-remove-mine')), findsOneWidget);
     expect(find.byKey(const ValueKey('ledger-report-mine')), findsOneWidget);
     expect(find.byKey(const ValueKey('ledger-owner-mine')), findsNothing);
-    // A colleague's: who wrote it, and nothing that changes it.
+    // A colleague's: who wrote it, and nothing that changes it here.
     expect(find.byKey(const ValueKey('ledger-owner-hers')), findsOneWidget);
     expect(find.text('Yazan: Av. Selin Aksoy'), findsOneWidget);
     expect(
-      find.text('Bu kaydı yalnız Av. Selin Aksoy değiştirebilir.'),
+      find.textContaining('Bu kaydı yalnız Av. Selin Aksoy değiştirebilir.'),
+      findsOneWidget,
+    );
+    // Proposed to her instead (R6).
+    expect(find.byKey(const ValueKey('ledger-propose-hers')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('ledger-propose-remove-hers')),
       findsOneWidget,
     );
     for (final key in [

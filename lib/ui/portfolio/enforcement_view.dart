@@ -26,6 +26,7 @@ import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_enforcement.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../tools/interest_page.dart';
+import '../widgets/proposals_view.dart';
 import '../widgets/secret_note.dart';
 import '../widgets/notice.dart';
 import '../widgets/folio_dialog.dart';
@@ -165,8 +166,12 @@ class _EnforcementViewState extends State<EnforcementView> {
     if (old.record != widget.record) unawaited(_loadBooked());
   }
 
+  /// The database, once read: for what was proposed of a colleague's.
+  PortalDatabase? _proposalsDb;
+
   Future<void> _loadBooked() async {
     final db = await widget.database();
+    _proposalsDb = db;
     final booked = {
       for (final r in db.allClientRecords())
         if (r.kind == ClientRecordKind.movement && !r.removed)
@@ -338,6 +343,81 @@ class _EnforcementViewState extends State<EnforcementView> {
   MovementKind? _targetOf(PortalDatabase db, LedgerEntry e) {
     final applied = _movementsOf(db, e).applied.firstOrNull;
     return applied == null ? null : MovementKind.of(applied.data['hesap']);
+  }
+
+  /// A colleague's [e]: what this person would have of it, proposed to
+  /// its owner (docs/senkron-plan.md R6); taken off when [remove].
+  Future<void> _propose(LedgerEntry e, {bool remove = false}) async {
+    final db = await widget.database();
+    if (!mounted) return;
+    final owner = _ownerOf(e);
+    final Map<String, Object?> fields;
+    var reason = '';
+    if (remove) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Silinmesini öner'),
+          content: Text(
+            'Kaydın sahibi $owner; onaylarsa kayıt Folio hesabından '
+            'kaldırılır.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('ledger-propose-remove-ok'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Öneriyi gönder'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      fields = const {};
+    } else {
+      final input = await showDialog<LedgerInput>(
+        context: context,
+        builder: (_) => LedgerDialog(
+          kind: e.kind,
+          debtors: _debtorNames,
+          editing: e,
+          proposeTo: owner,
+        ),
+      );
+      if (input == null) return;
+      reason = input.reason;
+      fields = {
+        if (input.amount != e.amount) 'tutar': input.amount,
+        if (input.at != e.at) 'zaman': input.at.toIso8601String(),
+        if (input.debtor != e.debtor) 'borclu': input.debtor,
+        if (input.way != e.way) 'odeme': input.way,
+        if (input.note != e.note && !e.noteSecret) 'aciklama': input.note,
+        if (input.whole != e.whole) 'tamami': input.whole,
+      };
+      if (fields.isEmpty) {
+        if (mounted) showNotice(context, 'Bir değişiklik yazılmadı.');
+        return;
+      }
+    }
+    final made = proposalsHere(db).propose(
+      kind: 'icra',
+      target: e.id,
+      fields: fields,
+      remove: remove,
+      reason: reason,
+    );
+    if (!mounted) return;
+    setState(() {});
+    showNotice(
+      context,
+      made == null ? 'Öneri yapılamadı.' : 'Öneri gönderildi.',
+      detail: made == null
+          ? null
+          : 'Kaydın sahibi $owner; onaylarsa kayda işlenir.',
+    );
   }
 
   /// [e] corrected: its sum, day, debtor, way and note. A change of sum,
@@ -1938,15 +2018,38 @@ class _EnforcementViewState extends State<EnforcementView> {
                 ],
               ),
             ),
-          if (others)
+          if (others) ...[
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Bu kaydı yalnız $owner değiştirebilir.',
+                'Bu kaydı yalnız $owner değiştirebilir. Bir yanlış görürseniz '
+                'önerin; onaylarsa uygulanır.',
                 key: ValueKey('ledger-owner-note-${e.id}'),
                 style: TextStyle(fontSize: 12, color: AgendaColors.muted),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  OutlinedButton(
+                    key: ValueKey('ledger-propose-${e.id}'),
+                    onPressed: () => unawaited(_propose(e)),
+                    child: const Text('Değişiklik öner'),
+                  ),
+                  OutlinedButton(
+                    key: ValueKey('ledger-propose-remove-${e.id}'),
+                    onPressed: () => unawaited(_propose(e, remove: true)),
+                    child: const Text('Silinmesini öner'),
+                  ),
+                ],
+              ),
+            ),
+            if (_proposalsDb case final db?)
+              ProposalStatus(db: db, target: e.id),
+          ],
         ],
       ),
     );

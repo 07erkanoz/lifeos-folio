@@ -32,6 +32,7 @@ abstract final class SyncCaps {
     lifecycle,
     secretNotes,
     recall,
+    proposals,
   };
 
   /// The capabilities this Folio's own formats use now: a part needs of
@@ -52,6 +53,9 @@ abstract final class SyncCaps {
     // (§5 step 6): an older Folio would send it on as it came.
     secretNotes,
     recall,
+    // A colleague's change of another's record is a proposal, decided by
+    // its owner (§5 step 7).
+    proposals,
   };
 
   /// What each part and channel needs when its format uses it (§4.1).
@@ -80,6 +84,7 @@ abstract final class SyncCaps {
     'gorev-notlari': {hlc, secretNotes, recall},
     'not-takibi': {hlc, secretNotes, recall},
     'oneri': {proposals, hlc},
+    'oneriler': {proposals, hlc},
   };
 
   /// The capabilities [part] needs now: its row's that are in use here.

@@ -11,6 +11,7 @@ import '../clients/client_files.dart';
 import '../office/office_network.dart';
 import '../notes/secret_notes.dart';
 import '../notes/task_notes.dart';
+import '../office/proposals.dart';
 import '../office/shared_cases.dart';
 import '../office/task_package.dart';
 import '../platform/app_directories.dart';
@@ -70,6 +71,11 @@ class OwnSync extends ChangeNotifier {
   /// always, whatever else is, for the taking back to be done from every
   /// own device (docs/senkron-plan.md R7).
   static const noteTracking = 'not-takibi';
+
+  /// The proposals made and decided, and the device deciding: on always,
+  /// with the office's members and between the person's own devices
+  /// (docs/senkron-plan.md R6).
+  static const proposalsPart = 'oneri', ownProposals = 'oneriler';
   static const _optIn = {officeClients};
   final _on = <String>{};
 
@@ -507,6 +513,42 @@ class OwnSync extends ChangeNotifier {
     await _net.packages.load();
     await _carryTaskNotes(db, _net.packages);
     await notes.cleanLeft();
+    ProposalService proposals() => ProposalService(
+      db,
+      me: _net.me,
+      device: _net.self?.deviceId ?? '',
+      myName: _net.self?.name ?? '',
+    );
+    _net.officeParts[proposalsPart] = OfficePart(
+      // Of money only between two who may both see it (R11).
+      export: (to) async => proposals().officeExport(
+        _personOf(to),
+        money: _net.seesMoney && _net.seesMoneyOf(to),
+      ),
+      merge: (theirs, from) async {
+        final changed = proposals().officeMerge(
+          theirs,
+          _personOf(from),
+          money: _net.seesMoney && _net.seesMoneyOf(from),
+        );
+        if (changed) {
+          _net.ownChanged();
+          PortalSync.started?.notifyListeners();
+        }
+        return changed;
+      },
+    );
+    _net.ownParts[ownProposals] = OwnPart(
+      export: () async => proposals().ownExport(),
+      merge: (theirs) async {
+        final changed = proposals().ownMerge(theirs);
+        if (changed) {
+          _net.officeChanged();
+          PortalSync.started?.notifyListeners();
+        }
+        return changed;
+      },
+    );
   }
 
   /// [paths], a task's case's files, its details made as this Folio makes

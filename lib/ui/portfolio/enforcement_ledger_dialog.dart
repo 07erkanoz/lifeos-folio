@@ -22,6 +22,9 @@ typedef LedgerInput = ({
   String note,
   bool noteSecret,
   MovementKind? target,
+
+  /// Why, said with a proposal ([LedgerDialog.proposeTo]).
+  String reason,
 });
 
 /// A payment made outside the office, or a claim waived, written in the
@@ -34,6 +37,7 @@ class LedgerDialog extends StatefulWidget {
     this.left,
     this.editing,
     this.target,
+    this.proposeTo,
   });
 
   final LedgerKind kind;
@@ -48,6 +52,11 @@ class LedgerDialog extends StatefulWidget {
 
   /// Where [editing]'s money was written: null for held for the client.
   final MovementKind? target;
+
+  /// A colleague's payment, its owner's name: what is written is proposed
+  /// to them, not kept (docs/senkron-plan.md R6). Where the money goes and
+  /// a secret note are theirs alone, not asked.
+  final String? proposeTo;
 
   @override
   State<LedgerDialog> createState() => _LedgerDialogState();
@@ -73,7 +82,10 @@ class _LedgerDialogState extends State<LedgerDialog> {
   };
   late bool _whole = widget.editing?.whole ?? false;
   late MovementKind? _target = widget.target;
+  final _reason = TextEditingController();
   String? _error;
+
+  bool get _proposing => widget.proposeTo != null;
 
   bool get _external => widget.kind == LedgerKind.external;
   bool get _editing => widget.editing != null;
@@ -92,6 +104,7 @@ class _LedgerDialogState extends State<LedgerDialog> {
   void dispose() {
     _amount.dispose();
     _note.dispose();
+    _reason.dispose();
     super.dispose();
   }
 
@@ -129,6 +142,7 @@ class _LedgerDialogState extends State<LedgerDialog> {
       note: _note.text.trim(),
       noteSecret: _noteSecret,
       target: _external ? _target : null,
+      reason: _reason.text.trim(),
     ));
   }
 
@@ -138,8 +152,14 @@ class _LedgerDialogState extends State<LedgerDialog> {
     final muted = TextStyle(fontSize: 12, color: AgendaColors.muted);
     final debtors = _debtors;
     return FolioDialog(
-      title: _editing ? '${widget.kind.label} düzelt' : widget.kind.label,
-      subtitle: _external
+      title: _proposing
+          ? 'Değişiklik öner'
+          : _editing
+          ? '${widget.kind.label} düzelt'
+          : widget.kind.label,
+      subtitle: _proposing
+          ? 'Sahibi ${widget.proposeTo}; onaylarsa kayda işlenir.'
+          : _external
           ? 'Borçlunun büroya doğrudan yaptığı ödeme'
           : 'Alacağın bir kısmından ya da tamamından feragat',
       icon: _external
@@ -155,7 +175,7 @@ class _LedgerDialogState extends State<LedgerDialog> {
         FilledButton(
           key: const ValueKey('ledger-save'),
           onPressed: _save,
-          child: const Text('Kaydet'),
+          child: Text(_proposing ? 'Öneriyi gönder' : 'Kaydet'),
         ),
       ],
       child: Column(
@@ -267,7 +287,22 @@ class _LedgerDialogState extends State<LedgerDialog> {
             value: _whole,
             onChanged: (v) => setState(() => _whole = v),
           ),
-          if (_external) ...[
+          if (_proposing) ...[
+            if (!_external)
+              TextField(
+                controller: _note,
+                decoration: const InputDecoration(
+                  labelText: 'Açıklama (isteğe bağlı)',
+                ),
+              ),
+            TextField(
+              key: const ValueKey('ledger-reason'),
+              controller: _reason,
+              decoration: const InputDecoration(
+                labelText: 'Neden (isteğe bağlı)',
+              ),
+            ),
+          ] else if (_external) ...[
             Text('Para nereye yazılsın?', style: muted),
             RadioGroup<MovementKind?>(
               groupValue: _target,
@@ -319,7 +354,7 @@ class _LedgerDialogState extends State<LedgerDialog> {
           // The papers are printed from the payment's card ("Yazdır"),
           // when wanted: none is made, nor opened, on saving.
           const SizedBox(height: 10),
-          if (_editing && _external)
+          if (_editing && _external && !_proposing)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(
