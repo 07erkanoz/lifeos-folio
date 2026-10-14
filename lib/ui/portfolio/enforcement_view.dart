@@ -49,6 +49,16 @@ const _months = {
 
 /// A day as UYAP writes one: "21.09.2026", "2026-09-21", or the web's
 /// "Sep 21, 2026 10:50:00 PM".
+/// This device's person in the office ([OfficeNetwork.me]); replaced
+/// under test.
+@visibleForTesting
+String Function() ledgerMe = () => OfficeNetwork.instance.me;
+
+/// An office person's name by their id; replaced under test.
+@visibleForTesting
+String Function(String person) ledgerNameOf = (person) =>
+    OfficeNetwork.instance.ledger.member(person)?.name.trim() ?? '';
+
 DateTime? uyapDay(String raw) {
   final en = RegExp(r'([A-Za-z]{3})\w* (\d{1,2}), (\d{4})').firstMatch(raw);
   if (en != null) {
@@ -409,6 +419,7 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// day or where the money went takes back what it wrote in the client's
   /// account and Kasa, and writes it anew.
   Future<void> _edit(LedgerEntry e) async {
+    if (_othersOf(e)) return;
     final db = await widget.database();
     final target = _targetOf(db, e);
     final uyap = _uyapLeft;
@@ -890,6 +901,7 @@ class _EnforcementViewState extends State<EnforcementView> {
 
   /// [e] marked as told to the office (icra müdürlüğü) today, or not yet.
   Future<void> _markReported(LedgerEntry e, bool reported) async {
+    if (_othersOf(e)) return;
     final db = await widget.database();
     db.saveClientRecord(
       e.record.copyWith(
@@ -904,6 +916,7 @@ class _EnforcementViewState extends State<EnforcementView> {
 
   /// [e] marked as UYAP shows it, or not yet.
   Future<void> _markOfficial(LedgerEntry e, bool official) async {
+    if (_othersOf(e)) return;
     final db = await widget.database();
     db.saveClientRecord(
       e.record.copyWith(
@@ -922,6 +935,7 @@ class _EnforcementViewState extends State<EnforcementView> {
   /// [e] taken off the file's account, and the money it put in the
   /// client's taken back by reversals that name it.
   Future<void> _removeEntry(LedgerEntry e) async {
+    if (_othersOf(e)) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1608,8 +1622,20 @@ class _EnforcementViewState extends State<EnforcementView> {
 
   /// One payment or waiver: its sum and what it was, where it stands, and
   /// its buttons.
+  /// Whether [e] is another person's of the office: shown, and changed
+  /// only by them (docs/senkron-plan.md R6).
+  static bool _othersOf(LedgerEntry e) {
+    final owner = e.record.person, me = ledgerMe();
+    return owner.isNotEmpty && me.isNotEmpty && owner != me;
+  }
+
+  /// [e]'s owner by name, as the office knows them.
+  static String _ownerOf(LedgerEntry e) => ledgerNameOf(e.record.person);
+
   Widget _paymentCard(LedgerEntry e) {
     final scheme = Theme.of(context).colorScheme;
+    final others = _othersOf(e);
+    final owner = _ownerOf(e).isEmpty ? 'bir meslektaşınız' : _ownerOf(e);
     final external = e.kind == LedgerKind.external;
     final ink = external ? _green : _purple;
     final fill = external
@@ -1785,22 +1811,56 @@ class _EnforcementViewState extends State<EnforcementView> {
               ),
               const SizedBox(width: 8),
               print,
-              IconButton(
-                key: ValueKey('ledger-edit-${e.id}'),
-                tooltip: 'Düzenle',
-                icon: const Icon(Icons.edit_outlined, size: 20),
-                onPressed: () => unawaited(_edit(e)),
-              ),
-              IconButton(
-                key: ValueKey('ledger-remove-${e.id}'),
-                tooltip: 'Sil',
-                icon: Icon(
-                  Icons.delete_outline_rounded,
-                  size: 20,
-                  color: scheme.error,
+              if (others) ...[
+                const SizedBox(width: 8),
+                Container(
+                  key: ValueKey('ledger-owner-${e.id}'),
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F3F7),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 14,
+                        color: AgendaColors.muted,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Yazan: $owner',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AgendaColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                onPressed: () => unawaited(_removeEntry(e)),
-              ),
+              ] else ...[
+                IconButton(
+                  key: ValueKey('ledger-edit-${e.id}'),
+                  tooltip: 'Düzenle',
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  onPressed: () => unawaited(_edit(e)),
+                ),
+                IconButton(
+                  key: ValueKey('ledger-remove-${e.id}'),
+                  tooltip: 'Sil',
+                  icon: Icon(
+                    Icons.delete_outline_rounded,
+                    size: 20,
+                    color: scheme.error,
+                  ),
+                  onPressed: () => unawaited(_removeEntry(e)),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
@@ -1821,7 +1881,7 @@ class _EnforcementViewState extends State<EnforcementView> {
                   _green,
                   key: ValueKey('ledger-reported-${e.id}'),
                 ),
-                if (!e.isOfficial)
+                if (!e.isOfficial && !others)
                   small(
                     'Geri al',
                     () => unawaited(_markReported(e, false)),
@@ -1834,11 +1894,12 @@ class _EnforcementViewState extends State<EnforcementView> {
                   color: AgendaColors.taskText,
                   key: ValueKey('ledger-not-reported-${e.id}'),
                 ),
-                small(
-                  'Bildirildi işaretle',
-                  () => unawaited(_markReported(e, true)),
-                  ValueKey('ledger-report-${e.id}'),
-                ),
+                if (!others)
+                  small(
+                    'Bildirildi işaretle',
+                    () => unawaited(_markReported(e, true)),
+                    ValueKey('ledger-report-${e.id}'),
+                  ),
               ],
               arrow(),
               if (e.isOfficial) ...[
@@ -1846,7 +1907,7 @@ class _EnforcementViewState extends State<EnforcementView> {
                   e.official == 'elle' ? "UYAP'a işlendi" : "UYAP'ta görüldü",
                   _green,
                 ),
-                if (e.official == 'elle')
+                if (e.official == 'elle' && !others)
                   small(
                     'Geri al',
                     () => unawaited(_markOfficial(e, false)),
@@ -1858,14 +1919,24 @@ class _EnforcementViewState extends State<EnforcementView> {
                   tone(const Color(0xFFC4C9D2)),
                   color: AgendaColors.muted,
                 ),
-                small(
-                  "İşlendi say",
-                  () => unawaited(_markOfficial(e, true)),
-                  ValueKey('ledger-official-${e.id}'),
-                ),
+                if (!others)
+                  small(
+                    "İşlendi say",
+                    () => unawaited(_markOfficial(e, true)),
+                    ValueKey('ledger-official-${e.id}'),
+                  ),
               ],
             ],
           ),
+          if (others)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Bu kaydı yalnız $owner değiştirebilir.',
+                key: ValueKey('ledger-owner-note-${e.id}'),
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+            ),
         ],
       ),
     );

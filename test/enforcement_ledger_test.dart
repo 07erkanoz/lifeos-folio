@@ -463,4 +463,86 @@ void main() {
     final tied = await tester.runAsync(() => links.of(file.path));
     expect(tied?.number, '2026/1234');
   });
+
+  testWidgets('a colleague\'s payment is shown, with who wrote it, and '
+      'changed only by them', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final me = ledgerMe, names = ledgerNameOf;
+    addTearDown(() {
+      ledgerMe = me;
+      ledgerNameOf = names;
+    });
+    ledgerMe = () => 'deniz';
+    ledgerNameOf = (p) => p == 'selin' ? 'Av. Selin Aksoy' : '';
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    for (final (id, person) in [('mine', 'deniz'), ('hers', 'selin')]) {
+      db.saveClientRecord(
+        ClientRecord(
+          id: id,
+          clientId: 'c1',
+          kind: ClientRecordKind.enforcement,
+          data: {
+            'dosya': 'k1',
+            'tur': LedgerKind.external.code,
+            'tutar': 1000000,
+            'zaman': _at.toIso8601String(),
+            'borclu': 'Mehmet Tunç',
+            'odeme': 'Nakit',
+          },
+          created: _at,
+          by: 'Av. Deniz Kaya',
+          updated: _at,
+          person: person,
+        ),
+      );
+    }
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: EnforcementView(
+              record: UyapCaseRecord(
+                court: 'Manavgat İcra Dairesi',
+                number: '2026/1234',
+                fetchedAt: DateTime(2026, 10, 9),
+                enforcement: UyapEnforcement(
+                  lines: UyapEnforcement.linesFromJson(_account),
+                  debtors: const [UyapDebtor(id: '1', name: 'MEHMET TUNÇ')],
+                ),
+              ),
+              caseKey: 'k1',
+              title: '2026/1234 · Manavgat İcra Dairesi',
+              database: () async => db,
+              lawyer: 'Av. Deniz Kaya',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Her own: as before.
+    expect(find.byKey(const ValueKey('ledger-edit-mine')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ledger-remove-mine')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ledger-report-mine')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ledger-owner-mine')), findsNothing);
+    // A colleague's: who wrote it, and nothing that changes it.
+    expect(find.byKey(const ValueKey('ledger-owner-hers')), findsOneWidget);
+    expect(find.text('Yazan: Av. Selin Aksoy'), findsOneWidget);
+    expect(
+      find.text('Bu kaydı yalnız Av. Selin Aksoy değiştirebilir.'),
+      findsOneWidget,
+    );
+    for (final key in [
+      'ledger-edit-hers',
+      'ledger-remove-hers',
+      'ledger-report-hers',
+      'ledger-official-hers',
+    ]) {
+      expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
+    }
+    expect(tester.takeException(), isNull);
+  });
 }
