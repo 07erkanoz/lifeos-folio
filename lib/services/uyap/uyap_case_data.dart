@@ -11,6 +11,8 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
+import 'uyap_enforcement.dart' show parseLira;
+
 String _str(Object? v) => v?.toString() ?? '';
 
 /// Ids are base64 and come quoted now and then, which breaks them.
@@ -38,8 +40,9 @@ Map<String, Object?> _one(Object? raw) {
 /// A sum as UYAP gives it, a number or the text of one.
 double? _amount(Object? v) {
   if (v is num) return v.toDouble();
+  // "12.345,67" as well as "12345.67": read as the enforcement page reads.
   final s = _str(v).trim();
-  return s.isEmpty ? null : double.tryParse(s.replaceAll(',', '.'));
+  return s.isEmpty ? null : parseLira(s);
 }
 
 /// A date as the case list gives it: a map of `date` and `time`, or text.

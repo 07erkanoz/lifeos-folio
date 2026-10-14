@@ -24,7 +24,8 @@ void main() {
           file: EvrakFile.fromPath(
             (File('${dir.path}/foto$i.png')..writeAsBytesSync(png)).path,
           ),
-          modified: DateTime(2026, 10, 7, 9, i).millisecondsSinceEpoch,
+          // As the archive keeps it: microseconds.
+          modified: DateTime(2026, 10, 7, 9, i).microsecondsSinceEpoch,
         ),
     ];
   });

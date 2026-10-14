@@ -46,9 +46,25 @@ class EditorImageEmbed extends EmbedBuilder {
   /// Each picture's pixel size, read once from its header.
   static final _pixels = Expando<({int width, int height})>();
 
+  /// Each picture's bytes, decoded once for its data: the editor builds
+  /// every line again at each keystroke, and new bytes are a new image to
+  /// the cache, drawn anew (and blank a moment) each time.
+  static final _bytes = Expando<(String, Uint8List?)>();
+
+  static Uint8List? _bytesOf(Embed node) {
+    final data = node.value.data as String? ?? '';
+    final kept = _bytes[node];
+    if (kept != null && (identical(kept.$1, data) || kept.$1 == data)) {
+      return kept.$2;
+    }
+    final bytes = decode(data);
+    _bytes[node] = (data, bytes);
+    return bytes;
+  }
+
   @override
   Widget build(BuildContext context, EmbedContext embedContext) {
-    final bytes = decode(embedContext.node.value.data as String? ?? '');
+    final bytes = _bytesOf(embedContext.node);
     if (bytes == null) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 4),
@@ -81,6 +97,7 @@ class EditorImageEmbed extends EmbedBuilder {
             child: Image.memory(
               bytes,
               fit: BoxFit.fill,
+              gaplessPlayback: true,
               // A picture that cannot be decoded must not take the editor
               // down with it; the bytes are still written back on save.
               errorBuilder: (context, _, _) => const Text(

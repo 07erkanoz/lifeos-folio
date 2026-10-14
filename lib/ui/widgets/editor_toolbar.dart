@@ -3,6 +3,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/fonts/document_fonts.dart';
 import '../../services/editor/doc_delta_map.dart';
+import 'editor_ribbon.dart';
 
 /// Two-row groups on desktop; the same tools remain available on narrow screens.
 class EditorToolbar extends StatelessWidget {
@@ -165,9 +166,16 @@ class EditorToolbar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
+  Widget build(BuildContext context) => RibbonListenableBuilder(
     listenable: controller,
-    builder: (context, _) {
+    // What the ribbon shows of the text: a keystroke changes none of it.
+    selector: () => (
+      '${controller.getSelectionStyle().attributes}',
+      controller.selection.isCollapsed,
+      controller.hasUndo,
+      controller.hasRedo,
+    ),
+    builder: (context) {
       final scheme = Theme.of(context).colorScheme;
       final attrs = controller.getSelectionStyle().attributes;
       final font =

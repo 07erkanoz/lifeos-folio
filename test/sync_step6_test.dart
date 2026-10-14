@@ -14,6 +14,10 @@ import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_deadline.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// A case's key as UYAP's are made, "number|court": a '|' in it, as in the
+/// keys of the tasks' packages and notes.
+const dava = '2026/412|izmir 3 asliye hukuk';
+
 /// docs/senkron-plan.md §5 step 6: a secret note stays on the lawyer's own
 /// devices (R7, §3 decision 1).
 void main() {
@@ -34,7 +38,7 @@ void main() {
     title: title,
     body: '$title · ayrıntı',
     at: day,
-    caseKey: 'dava',
+    caseKey: dava,
     updated: DateTime(2026, 10, 14),
     secret: secret,
   );
@@ -50,16 +54,16 @@ void main() {
           kind: 'deadline',
           title: 'Gizli süre başlığı',
           at: day,
-          caseKey: 'dava',
+          caseKey: dava,
           updated: DateTime(2026, 10, 14),
           secret: true,
         ),
       );
       // The package carries no notes at all now; they go apart, none
       // secret.
-      final extras = TaskPackage.caseExtras(a, 'dava');
+      final extras = TaskPackage.caseExtras(a, dava);
       expect(extras.containsKey('notlar'), isFalse);
-      final notes = a.taskNoteRows('dava');
+      final notes = a.taskNoteRows(dava);
       final text = jsonEncode([extras, notes.rows]);
       expect(text, isNot(contains('Uzlaşma sınırı')));
       expect(text, isNot(contains('Gizli süre başlığı')));
@@ -100,7 +104,7 @@ void main() {
           updated: DateTime(2026, 10, 1),
           person: 'deniz',
           caseNotes: {
-            'dava': CaseNote('Rapor bekleniyor', DateTime(2026, 10, 1)),
+            dava: CaseNote('Rapor bekleniyor', DateTime(2026, 10, 1)),
           },
         ).copyWith(office: true),
       );
@@ -113,7 +117,7 @@ void main() {
         card.copyWith(
           noteSecret: true,
           caseNotes: {
-            'dava': CaseNote(
+            dava: CaseNote(
               'Rapor bekleniyor',
               DateTime(2026, 10, 2),
               secret: true,
@@ -127,7 +131,7 @@ void main() {
       b.clientsOfficeMerge(sent(), money: true, me: 'selin', from: 'deniz');
       final there = b.clientCard('k')!;
       expect((there.note, there.noteSecret), ('', true));
-      expect(there.caseNotes['dava']!.text, '');
+      expect(there.caseNotes[dava]!.text, '');
       // Own devices keep it whole.
       final own = PortalDatabase.memory();
       addTearDown(own.dispose);
@@ -139,7 +143,7 @@ void main() {
         'office and is not written in its paper', () {
       final made = LedgerService(a).add(
         clientId: 'k',
-        caseKey: 'dava',
+        caseKey: dava,
         kind: 'feragat',
         amount: 10000,
         at: DateTime(2026, 10, 10),
@@ -193,7 +197,7 @@ void main() {
           ('Müvekkili ara', 'Sınır 50.000 TL', true),
         );
         expect(
-          jsonEncode(db.taskNoteRows('dava').rows),
+          jsonEncode(db.taskNoteRows(dava).rows),
           isNot(contains('50.000')),
         );
       }
@@ -239,7 +243,7 @@ void main() {
             assignees: const {'selin': 'Av. Selin Ak'},
             createdAt: DateTime(2026, 10, 7),
             cases: const [
-              TaskCase(caseKey: 'dava', number: '2026/412', court: 'X'),
+              TaskCase(caseKey: dava, number: '2026/412', court: 'X'),
             ],
           )
           ..events.add(
@@ -268,10 +272,10 @@ void main() {
       person(toDevice),
     ).merge(notes(from, person(fromDevice)).export(toDevice), fromDevice);
     List<String> titles(PortalDatabase db) =>
-        [for (final r in db.taskNotes('deniz', 't1', 'dava')) '${r['title']}']
+        [for (final r in db.taskNotes('deniz', 't1', dava)) '${r['title']}']
           ..sort();
     ({int done, int of, List<String> waiting})? recall(String id) =>
-        SecretNotes.recallOf(a, 'ajanda:$id', caseKey: 'dava');
+        SecretNotes.recallOf(a, 'ajanda:$id', caseKey: dava);
 
     test('the notes come apart, note by note; one made secret goes from '
         'both of the doer\'s devices, and is counted taken back only when '
@@ -315,7 +319,7 @@ void main() {
       expect(titles(b), isEmpty);
       // The notes' tracking comes to a2, the agenda's part off.
       a2.noteTrackingMerge(a.noteTrackingExport());
-      expect(a2.taskNoteRows('dava').rows, isEmpty);
+      expect(a2.taskNoteRows(dava).rows, isEmpty);
       expect(SecretNotes.rowHidden(a2, a2.agenda().single), isTrue);
     });
 
@@ -347,8 +351,8 @@ void main() {
         'gorevler': [
           {
             'gorev': 't1',
-            'dosya': 'dava',
-            'notlar': mert.taskNoteRows('dava').rows,
+            'dosya': dava,
+            'notlar': mert.taskNoteRows(dava).rows,
           },
         ],
       }, 'm1');
@@ -373,8 +377,8 @@ void main() {
         ..writeAsStringSync(jsonEncode({'notlar': 'evrakın kendisi'}));
       paths = [details.path, document.path];
       addTearDown(() => paths = null);
-      b.setTaskNotesCleaning('t1', 'dava', 'bekliyor');
-      a.recordHold('eski:t1|dava', 'b1', 'selin', 'gorev:t1|dava');
+      b.setTaskNotesCleaning('t1', dava, 'bekliyor');
+      a.recordHold('eski:t1|$dava', 'b1', 'selin', 'gorev:t1|$dava');
       a.saveAgenda(note('n1', 'Tanık listesi'));
       await give(a, 'a1', b, 'b1');
       final j = jsonDecode(details.readAsStringSync()) as Map;
@@ -459,7 +463,7 @@ void main() {
               assignees: const {'selin': 'Av. Selin Ak'},
               createdAt: DateTime(2026, 10, 7),
               cases: const [
-                TaskCase(caseKey: 'dava', number: '2026/412', court: 'X'),
+                TaskCase(caseKey: dava, number: '2026/412', court: 'X'),
               ],
             )
             ..events.add(
@@ -492,14 +496,14 @@ void main() {
       person(toDevice),
     ).merge(notes(from, person(fromDevice)).export(toDevice), fromDevice);
     List<String> titles(PortalDatabase db) => [
-      for (final r in db.taskNotes('deniz', 't1', 'dava')) '${r['title']}',
+      for (final r in db.taskNotes('deniz', 't1', dava)) '${r['title']}',
     ];
 
     test('a description made secret on another own device is not written '
         'in its paper here, by the mark alone', () {
       final made = LedgerService(a).add(
         clientId: 'k',
-        caseKey: 'dava',
+        caseKey: dava,
         kind: 'feragat',
         amount: 10000,
         at: DateTime(2026, 10, 10),
@@ -520,7 +524,7 @@ void main() {
       );
       // Only the notes' tracking comes to a2: its copy still open.
       a2.noteTrackingMerge(a.noteTrackingExport());
-      final entry = ledgerOf(a2, 'dava').single;
+      final entry = ledgerOf(a2, dava).single;
       expect(entry.noteSecret, isTrue);
       final paper = waiverRequest(
         const EnforcementParties(
@@ -568,7 +572,7 @@ void main() {
         await give(a, 'a1', c, 'c1');
         await give(a2, 'a2', c, 'c1');
         expect([
-          for (final r in c.taskNotes('deniz', 't1', 'dava')) r['title'],
+          for (final r in c.taskNotes('deniz', 't1', dava)) r['title'],
         ], isEmpty);
       },
     );
@@ -587,20 +591,20 @@ void main() {
       Directory('${details.path}.yeni').createSync();
       paths = [details.path];
       addTearDown(() => paths = null);
-      a.recordHold('eski:t1|dava', 'b1', 'selin', 'gorev:t1|dava');
+      a.recordHold('eski:t1|$dava', 'b1', 'selin', 'gorev:t1|$dava');
       a.saveAgenda(note('n', 'Tanık listesi'));
       await give(a, 'a1', b, 'b1');
       expect(details.readAsStringSync(), contains('Eski metin'));
-      expect(b.taskNotesCleaning('t1', 'dava'), 'temizlenecek');
+      expect(b.taskNotesCleaning('t1', dava), 'temizlenecek');
       a.saveAgenda(a.agenda().single.copyWith(secret: true));
       await give(b, 'b1', a, 'a1');
-      final r = SecretNotes.recallOf(a, 'ajanda:n', caseKey: 'dava')!;
+      final r = SecretNotes.recallOf(a, 'ajanda:n', caseKey: dava)!;
       expect(r.done, 0);
       // Possible again: cleaned at the next start.
       Directory('${details.path}.yeni').deleteSync();
       await notes(b, 'selin').cleanLeft();
       expect(details.readAsStringSync(), isNot(contains('Eski metin')));
-      expect(b.taskNotesCleaning('t1', 'dava'), 'tamam');
+      expect(b.taskNotesCleaning('t1', dava), 'tamam');
     });
 
     test('a task done: what was taken back of it goes still, and its older '
@@ -616,9 +620,9 @@ void main() {
         );
       paths = [details.path];
       addTearDown(() => paths = null);
-      b.setTaskNotesCleaning('t1', 'dava', 'bekliyor');
+      b.setTaskNotesCleaning('t1', dava, 'bekliyor');
       a.saveAgenda(note('n', 'Tanık listesi'));
-      a.recordHold('ajanda:n', 'b1', 'selin', 'gorev:t1|dava');
+      a.recordHold('ajanda:n', 'b1', 'selin', 'gorev:t1|$dava');
       task.events.add(
         TaskEvent.create(TaskEventKind.cancelled, 'deniz', 'Av. Deniz Kaya'),
       );
@@ -637,13 +641,13 @@ void main() {
       expect(a2.holdsOf('ajanda:n'), isNotEmpty);
       expect(b2.noteTrackingMerge(b.noteTrackingExport()), isTrue);
       expect(
-        [for (final r in b2.taskNotes('deniz', 't1', 'dava')) r['title']],
+        [for (final r in b2.taskNotes('deniz', 't1', dava)) r['title']],
         ['Tanık listesi'],
       );
       a.saveAgenda(a.agenda().single.copyWith(secret: true));
       await give(a, 'a1', b, 'b1');
       b2.noteTrackingMerge(b.noteTrackingExport());
-      expect(b2.taskNotes('deniz', 't1', 'dava'), isEmpty);
+      expect(b2.taskNotes('deniz', 't1', dava), isEmpty);
       // Taken again: nothing changes.
       expect(b2.noteTrackingMerge(b.noteTrackingExport()), isFalse);
     });
@@ -665,7 +669,7 @@ void main() {
               assignees: const {'selin': 'Av. Selin Ak'},
               createdAt: DateTime(2026, 10, 7),
               cases: const [
-                TaskCase(caseKey: 'dava', number: '2026/412', court: 'X'),
+                TaskCase(caseKey: dava, number: '2026/412', court: 'X'),
               ],
             )
             ..events.add(
@@ -714,11 +718,11 @@ void main() {
       a.saveAgenda(a.agenda().single.copyWith(secret: true));
       await give(a, 'a1', b, 'b1');
       await give(b, 'b1', a, 'a1');
-      final r = SecretNotes.recallOf(a, 'ajanda:n', caseKey: 'dava')!;
+      final r = SecretNotes.recallOf(a, 'ajanda:n', caseKey: dava)!;
       expect((r.done, r.of), (0, 1));
       await give(a, 'a1', b2, 'b2');
       await give(b2, 'b2', a, 'a1');
-      final r2 = SecretNotes.recallOf(a, 'ajanda:n', caseKey: 'dava')!;
+      final r2 = SecretNotes.recallOf(a, 'ajanda:n', caseKey: dava)!;
       expect((r2.done, r2.of), (1, 1));
     });
 
@@ -727,18 +731,18 @@ void main() {
       final first = old('dosya.json', 'Eski metin');
       paths = [first.path];
       addTearDown(() => paths = null);
-      a.recordHold('eski:t1|dava', 'b1', 'selin', 'gorev:t1|dava');
+      a.recordHold('eski:t1|$dava', 'b1', 'selin', 'gorev:t1|$dava');
       a.saveAgenda(note('n', 'Tanık listesi'));
       a.saveAgenda(a.agenda().single.copyWith(secret: true));
       await give(a, 'a1', b, 'b1');
       await give(b, 'b1', a, 'a1');
-      bool oldDone() => a.oldHoldsOf('dava').single.applied != null;
+      bool oldDone() => a.oldHoldsOf(dava).single.applied != null;
       expect(oldDone(), isTrue);
       // Another older package comes; it cannot be written.
       final second = old('dosya (2).json', 'Başka eski metin');
       Directory('${second.path}.yeni').createSync();
       paths = [first.path, second.path];
-      await notes(b, 'selin').came('t1', 'dava', [second.path]);
+      await notes(b, 'selin').came('t1', dava, [second.path]);
       await give(b, 'b1', a, 'a1');
       expect(oldDone(), isFalse);
     });
@@ -747,7 +751,7 @@ void main() {
         'once', () async {
       a.saveAgenda(note('n', 'Tanık listesi'));
       await give(a, 'a1', b, 'b1');
-      expect(b.taskNotes('deniz', 't1', 'dava'), isNotEmpty);
+      expect(b.taskNotes('deniz', 't1', dava), isNotEmpty);
       // The giver closes it; the doer has not heard yet.
       final closed = OfficeTask(
         id: 't1',
@@ -770,7 +774,7 @@ void main() {
         received: (_, _) => null,
       ).export('b1');
       await notes(b, 'selin').merge(sent, 'a1');
-      expect(b.taskNotes('deniz', 't1', 'dava'), isEmpty);
+      expect(b.taskNotes('deniz', 't1', dava), isEmpty);
     });
 
     test('a giver\'s notes come to another own device of the doer\'s: its '
@@ -778,13 +782,13 @@ void main() {
       final there = old('dosya.json', 'Eski metin');
       a.saveAgenda(note('n', 'Tanık listesi'));
       await give(a, 'a1', b, 'b1');
-      b2.setTaskNotesCleaning('t1', 'dava', 'bekliyor');
+      b2.setTaskNotesCleaning('t1', dava, 'bekliyor');
       b2.noteTrackingMerge(b.noteTrackingExport());
       paths = [there.path];
       addTearDown(() => paths = null);
       await notes(b2, 'selin').cleanKnown();
       expect(there.readAsStringSync(), isNot(contains('Eski metin')));
-      expect(b2.taskNotesCleaning('t1', 'dava'), 'tamam');
+      expect(b2.taskNotesCleaning('t1', dava), 'tamam');
     });
   });
 }

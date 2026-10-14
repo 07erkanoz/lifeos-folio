@@ -376,15 +376,18 @@ class _AgendaPageState extends State<AgendaPage> {
   String get _rangeLabel {
     final (from, to) = _range;
     final last = to.subtract(const Duration(days: 1));
+    // The working week's Friday: the week's Sunday less two days, counted in
+    // days, not in the day of the month ("–1 Kasım" at a month's start).
+    final friday = last.subtract(const Duration(days: 2));
     return switch (_view) {
       _View.day =>
         '${from.day} ${_months[from.month - 1]} ${from.year}, ${_days[from.weekday - 1]}',
       _View.month => '${_months[from.month - 1]} ${from.year}',
       _View.list => 'Önümüzdeki 60 gün',
       _View.week =>
-        from.month == last.month
-            ? '${from.day} – ${last.day - 2} ${_months[from.month - 1]} ${from.year}'
-            : '${from.day} ${_short(from.month)} – ${last.day - 2} ${_short(last.month)} ${last.year}',
+        from.month == friday.month
+            ? '${from.day} – ${friday.day} ${_months[from.month - 1]} ${from.year}'
+            : '${from.day} ${_short(from.month)} – ${friday.day} ${_short(friday.month)} ${friday.year}',
     };
   }
 

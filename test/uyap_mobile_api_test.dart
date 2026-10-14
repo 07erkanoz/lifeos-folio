@@ -12,6 +12,11 @@ class _Fake {
   String access = 'a1';
   bool refuseNextAsBody = false;
   int fail500 = 0;
+  bool refuseRefresh = false;
+
+  /// Its refusals of the hearings, late: a request still waiting while
+  /// another's renewal is refused.
+  bool slowHearings = false;
 
   Uri get base => Uri.parse('http://127.0.0.1:${server.port}/services/');
 
@@ -32,12 +37,17 @@ class _Fake {
           'accessTokenLifetime': 3300,
           'refreshTokenLifetime': 604800,
         };
+      } else if (path == 'auth/refresh' && refuseRefresh) {
+        status = 401;
       } else if (path == 'auth/refresh') {
         refreshes++;
         await Future<void>.delayed(const Duration(milliseconds: 50));
         access = 'a${refreshes + 1}';
         answer = {'accessToken': access, 'accessTokenLifetime': 3300};
       } else if (bearer != 'Bearer $access') {
+        if (slowHearings && path.startsWith('mobile/avukat/durusmalarim/')) {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
         status = 401;
       } else if (refuseNextAsBody) {
         refuseNextAsBody = false;
@@ -118,6 +128,28 @@ void main() {
     ]) {
       expect(UyapMobileApi.isReturn(Uri.parse(other)), isFalse, reason: other);
     }
+  });
+
+  test('a renewal refused while another request waits: a new sign-in '
+      'renews again', () async {
+    await api.login('kod');
+    fake
+      ..access = 'baska'
+      ..refuseRefresh = true
+      ..slowHearings = true;
+    final waiting = api.hearingRows(
+      DateTime(2026, 10, 1),
+      DateTime(2026, 10, 29),
+    );
+    await expectLater(api.documentBytes('e1', 'd1'), throwsA(anything));
+    await expectLater(waiting, throwsA(anything));
+    // Signed in again; its token turned down at once, renewed as ever.
+    fake
+      ..refuseRefresh = false
+      ..slowHearings = false;
+    await api.login('kod');
+    fake.access = 'baska-2';
+    expect(await api.documentBytes('e1', 'd1'), [1, 2, 3]);
   });
 
   test('a login sends the code with the device fields and reads who', () async {

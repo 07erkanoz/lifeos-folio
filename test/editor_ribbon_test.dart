@@ -120,4 +120,61 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 5));
   });
+
+  testWidgets('a tab once opened is kept; a keystroke leaves Giriş alone', (
+    tester,
+  ) async {
+    await pump(tester, const Size(1600, 900));
+    State giris() => tester.state(find.byType(RibbonListenableBuilder));
+    final first = giris();
+    await tester.tap(find.byKey(const ValueKey('ribbon-tab-legal')));
+    await tester.pump();
+    expect(find.text('Dilekçe'), findsOneWidget);
+    // Giriş hidden, not taken down.
+    expect(find.byType(RibbonListenableBuilder), findsNothing);
+    expect(
+      find.byType(RibbonListenableBuilder, skipOffstage: false),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('ribbon-tab-home')));
+    await tester.pump();
+    expect(identical(giris(), first), isTrue);
+    expect(find.text('Dilekçe'), findsNothing);
+
+    // Typing builds the ribbon again only when what it shows changes.
+    var built = 0;
+    debugOnRebuildDirtyWidget = (element, _) {
+      if (element.widget is RibbonListenableBuilder) built++;
+    };
+    addTearDown(() => debugOnRebuildDirtyWidget = null);
+    final controller = tester
+        .widget<QuillEditor>(find.byType(QuillEditor).first)
+        .controller;
+    controller.replaceText(
+      0,
+      0,
+      'Sayın Mahkeme',
+      const TextSelection.collapsed(offset: 13),
+    );
+    await tester.pump();
+    final afterFirst = built;
+    controller.replaceText(
+      13,
+      0,
+      'ye',
+      const TextSelection.collapsed(offset: 15),
+    );
+    await tester.pump();
+    expect(built, afterFirst);
+    controller.formatText(0, 5, Attribute.bold);
+    controller.updateSelection(
+      const TextSelection(baseOffset: 0, extentOffset: 5),
+      ChangeSource.local,
+    );
+    await tester.pump();
+    expect(built, greaterThan(afterFirst));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
+  });
 }

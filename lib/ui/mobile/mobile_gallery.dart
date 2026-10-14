@@ -84,7 +84,10 @@ class _MobileGalleryState extends State<MobileGallery> {
         return DateTime(1970);
       }
     }
-    return DateTime.fromMillisecondsSinceEpoch(m > 100000000000 ? m : m * 1000);
+    // The archive keeps microseconds; milliseconds and seconds read too.
+    return m > 100000000000000
+        ? DateTime.fromMicrosecondsSinceEpoch(m)
+        : DateTime.fromMillisecondsSinceEpoch(m > 100000000000 ? m : m * 1000);
   }
 
   /// "Bugün", "Dün", "5 Ekim Pazartesi" this month, "Eylül 2026" before.

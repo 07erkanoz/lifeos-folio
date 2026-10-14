@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:path/path.dart' as p;
 
@@ -33,7 +34,7 @@ abstract final class SyncLog {
     if (await f.length() > 600 * 1024) {
       final lines = await f.readAsLines();
       await f.writeAsString(
-        '${lines.skip(lines.length - _keep).join('\n')}\n',
+        '${lines.skip(max(0, lines.length - _keep)).join('\n')}\n',
         flush: true,
       );
     }

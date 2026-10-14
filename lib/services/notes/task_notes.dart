@@ -94,12 +94,12 @@ class TaskNotes {
     // taken back and off of them still goes, no text (R7).
     for (final key in db.holdScopesOf(to)) {
       if (open.contains(key)) continue;
-      final parts = key.split('|');
-      if (parts.length != 2) continue;
-      final n = db.taskNoteRows(parts[1]);
+      final parts = taskScopeOf(key);
+      if (parts == null) continue;
+      final n = db.taskNoteRows(parts.$2);
       scopes.add({
-        'gorev': parts[0],
-        'dosya': parts[1],
+        'gorev': parts.$1,
+        'dosya': parts.$2,
         'kapali': true,
         'gizlenen': plain(n.hidden),
         'silinen': plain(n.removed),
@@ -214,11 +214,11 @@ class TaskNotes {
     // Of the tasks done or taken from this person, what an older Folio's
     // package left goes as well.
     for (final key in db.receivedScopesOf(from)) {
-      final parts = key.split('|');
-      if (parts.length == 2 &&
-          theirTasks.contains(parts[0]) &&
+      final parts = taskScopeOf(key);
+      if (parts != null &&
+          theirTasks.contains(parts.$1) &&
           !given.contains(key)) {
-        if (await cleanPackage(parts[0], parts[1])) changed = true;
+        if (await cleanPackage(parts.$1, parts.$2)) changed = true;
       }
     }
     for (final h in theirs['kartGizli'] as List? ?? const []) {

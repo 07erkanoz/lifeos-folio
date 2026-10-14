@@ -114,11 +114,13 @@ class AppLock extends ChangeNotifier {
   /// Sets the password (and turns the lock on); the recovery code it
   /// returns is shown once and kept only as its hash. With [withCode]
   /// false there is none: e-Devlet renews a forgotten password, Folio
-  /// knowing whose it is ([bindIdentity]).
+  /// knowing whose it is ([bindIdentity]). With [open] false a locked
+  /// Folio stays locked: the new code is shown on the lock screen first.
   Future<String?> setPassword(
     String password, {
     int? idleMinutes,
     bool withCode = true,
+    bool open = true,
   }) async {
     final code = withCode ? newRecoveryCode() : null;
     final salt = _random(16), recoverySalt = _random(16);
@@ -140,7 +142,7 @@ class AppLock extends ChangeNotifier {
     };
     await _save();
     _loaded = true;
-    _locked = false;
+    if (open) _locked = false;
     _wrong = 0;
     _waitUntil = null;
     notifyListeners();
@@ -196,7 +198,8 @@ class AppLock extends ChangeNotifier {
   Future<String?> recover(String code, String newPassword) async {
     final ok = await _try(() => _matches(_plainCode(code), 'ktuz', 'khash'));
     if (!ok) return null;
-    return setPassword(newPassword);
+    // Still locked: the lock screen shows the new code, then opens.
+    return setPassword(newPassword, open: false);
   }
 
   /// Whether Folio knows whose it is: the lawyer's TC number, kept only as

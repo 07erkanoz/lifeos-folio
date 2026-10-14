@@ -570,7 +570,14 @@ class CaseLaw {
         return const CaseLawResults.empty();
       }
 
-      final json = jsonDecode(body);
+      // A refusal or a page of HTML for an answer is no result, not an
+      // error that leaves the search turning.
+      final Object? json;
+      try {
+        json = jsonDecode(body);
+      } on FormatException {
+        return const CaseLawResults.empty();
+      }
       if (json is! Map) return const CaseLawResults.empty();
       if ((json['metadata'] as Map?)?['FMTY'] == 'ERROR') {
         return const CaseLawResults.empty();

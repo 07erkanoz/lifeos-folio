@@ -647,8 +647,9 @@ void main() {
         record.documents.first,
         Uint8List.fromList(bytes),
       );
-      const c = TaskCase(
-        caseKey: 'k1',
+      // A case's key as UYAP's make it, "number|court": a '|' in it.
+      final c = TaskCase(
+        caseKey: caseKey('2024/318', court),
         number: '2024/318',
         court: court,
         docKeys: ['a', 'b'],
@@ -670,13 +671,13 @@ void main() {
       await a.giveTask(
         title: 'İncele',
         to: [b.self!.deviceId],
-        cases: const [c],
-        packed: {'k1': pack},
+        cases: [c],
+        packed: {c.caseKey: pack},
       );
       await until(() => b.tasks.all.isNotEmpty);
       final t = b.tasks.all.single;
-      await until(() => b.receivedCase(t, 'k1') != null);
-      final got = b.receivedCase(t, 'k1')!;
+      await until(() => b.receivedCase(t, c.caseKey) != null);
+      final got = b.receivedCase(t, c.caseKey)!;
       expect(got.number, '2024/318');
       expect(got.particulars['kind'], 'Alacak (İtirazın İptali)');
       expect(got.parties.single['ad'], 'AYŞE KARACA');

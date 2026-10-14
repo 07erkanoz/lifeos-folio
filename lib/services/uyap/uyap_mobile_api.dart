@@ -245,11 +245,20 @@ class UyapMobileApi {
 
   /// Renews the access token once, however many requests wait for it; a
   /// login that happened meanwhile wins over the renewal's answer.
-  Future<void> _refresh() => _refreshing ??= () async {
-    var had = _tokens;
+  Future<void> _refresh() {
+    // Said at once, never kept as the renewal under way: a renewal that
+    // failed before its first wait would be kept so for good, every later
+    // one given its error, a new sign-in too.
+    if (_tokens == null) {
+      return Future.error(StateError('UYAP Mobil oturumu açık değil.'));
+    }
+    return _refreshing ??= _renew().whenComplete(() => _refreshing = null);
+  }
+
+  Future<void> _renew() async {
+    var had = _tokens!;
     final generation = _generation;
     try {
-      if (had == null) throw StateError('UYAP Mobil oturumu açık değil.');
       MobileTokens? kept;
       try {
         kept = await keptTokens?.call();
@@ -299,10 +308,8 @@ class UyapMobileApi {
         session.value = null;
       }
       throw const _Expired();
-    } finally {
-      _refreshing = null;
     }
-  }();
+  }
 
   Future<dynamic> _get(String path) => _authorized('GET', path, null);
   Future<dynamic> _post(String path, Map<String, Object?> body) =>

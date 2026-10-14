@@ -83,6 +83,51 @@ void main() {
     expect((l.knowsWhose, l.hasCode), (true, false));
   });
 
+  testWidgets('the new recovery code stays on the lock screen until it is '
+      'written down, then Folio opens', (tester) async {
+    final l = lock();
+    late String code;
+    await tester.runAsync(() async {
+      code = (await l.setPassword('büro-şifresi-1'))!;
+    });
+    l.lockNow();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppLockGate(lock: l, child: const Text('Folio açık')),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byKey(const ValueKey('lock-forgot')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.enterText(find.byKey(const ValueKey('lock-code')), code);
+    await tester.enterText(find.byKey(const ValueKey('lock-new')), 'yeni-22');
+    await tester.enterText(find.byKey(const ValueKey('lock-again')), 'yeni-22');
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const ValueKey('lock-recover-go')));
+      for (
+        var i = 0;
+        i < 50 && l.hasCode && !await l.checkPassword('yeni-22');
+        i++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(l.locked, isTrue);
+    expect(find.byKey(const ValueKey('lock-new-code')), findsOneWidget);
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Yazdım, devam et'));
+      for (var i = 0; i < 50 && l.locked; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    });
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(l.locked, isFalse);
+    expect(find.byKey(const ValueKey('lock-new-code')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   test('with whose it is known, no recovery code is made', () async {
     final l = lock();
     expect(await l.setPassword('1234', withCode: false), isNull);

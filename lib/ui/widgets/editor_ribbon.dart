@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
@@ -26,6 +27,136 @@ enum RibbonTab {
 /// The tab chosen, shared by the editor and the heading that shows the tabs,
 /// and kept while the app runs: the next document opens on it.
 final editorRibbonTab = ValueNotifier<RibbonTab>(RibbonTab.home);
+
+/// The ribbons of the tabs, the chosen one shown. A tab once opened is kept
+/// built, hidden: the Giriş ribbon alone is more than a thousand widgets,
+/// and building it again on every change of tab was what made the change
+/// slow. Changing the tab changes only which one is seen.
+class RibbonDeck extends StatefulWidget {
+  const RibbonDeck({super.key, required this.ribbons});
+  final Map<RibbonTab, Widget> ribbons;
+
+  @override
+  State<RibbonDeck> createState() => _RibbonDeckState();
+}
+
+class _RibbonDeckState extends State<RibbonDeck> {
+  final _opened = <RibbonTab>{editorRibbonTab.value};
+
+  @override
+  void initState() {
+    super.initState();
+    editorRibbonTab.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    editorRibbonTab.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() => setState(() => _opened.add(editorRibbonTab.value));
+
+  @override
+  Widget build(BuildContext context) {
+    final chosen = editorRibbonTab.value;
+    return Stack(
+      children: [
+        for (final tab in RibbonTab.values)
+          if (_opened.contains(tab))
+            Offstage(
+              key: ValueKey(tab),
+              offstage: tab != chosen,
+              child: TickerMode(
+                enabled: tab == chosen,
+                child: ExcludeFocus(
+                  excluding: tab != chosen,
+                  child: widget.ribbons[tab]!,
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+/// What a ribbon draws from the text, built again only when [selector]'s
+/// answer changes (a keystroke alone leaves the Giriş ribbon as it was),
+/// and not while its tab is hidden: then once it is shown again.
+class RibbonListenableBuilder extends StatefulWidget {
+  const RibbonListenableBuilder({
+    super.key,
+    required this.listenable,
+    required this.selector,
+    required this.builder,
+  });
+  final Listenable listenable;
+  final Object? Function() selector;
+  final WidgetBuilder builder;
+
+  @override
+  State<RibbonListenableBuilder> createState() =>
+      _RibbonListenableBuilderState();
+}
+
+class _RibbonListenableBuilderState extends State<RibbonListenableBuilder> {
+  Object? _seen;
+  bool _stale = false;
+  ValueListenable<TickerModeData>? _shown;
+
+  @override
+  void initState() {
+    super.initState();
+    _seen = widget.selector();
+    widget.listenable.addListener(_changed);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final shown = TickerMode.getValuesNotifier(context);
+    if (!identical(shown, _shown)) {
+      _shown?.removeListener(_shownChanged);
+      _shown = shown..addListener(_shownChanged);
+    }
+  }
+
+  @override
+  void didUpdateWidget(RibbonListenableBuilder old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.listenable, widget.listenable)) {
+      old.listenable.removeListener(_changed);
+      widget.listenable.addListener(_changed);
+    }
+    _seen = widget.selector();
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_changed);
+    _shown?.removeListener(_shownChanged);
+    super.dispose();
+  }
+
+  void _changed() {
+    if (_shown?.value.enabled == false) {
+      _stale = true;
+      return;
+    }
+    final now = widget.selector();
+    if (now == _seen) return;
+    setState(() => _seen = now);
+  }
+
+  void _shownChanged() {
+    if (_shown?.value.enabled != true || !_stale) return;
+    _stale = false;
+    _changed();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context);
+}
 
 /// The tabs in a heading: the chosen one in the primary colour, underlined.
 class EditorRibbonTabs extends StatelessWidget {

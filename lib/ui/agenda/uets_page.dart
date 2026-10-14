@@ -1122,10 +1122,9 @@ class _UetsPageState extends State<UetsPage> {
     final kind = _kindOf(n);
     final kase = n.caseKey == null ? null : _cases[n.caseKey];
     final envelope = _envelopes[m.id];
-    final deadlines = [
-      for (final d in _deadlines)
-        if (d.record.noticeId == m.id) d,
-    ];
+    // As the list counts them: one set aside ("Gerekmez") is gone from here
+    // too, not left to be confirmed and kept off the agenda all the same.
+    final deadlines = _of(n);
     final manifest = _db?.manifest(m.id);
     final cover = _coverage(m.id);
     Widget row(String label, String value) => Padding(

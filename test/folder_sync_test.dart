@@ -111,6 +111,18 @@ void main() {
             .map((e) => e.uri.pathSegments.last),
         contains('Cevap.udf'),
       );
+      // Brought back on the computer: it comes again, and stays on both.
+      File('${shared.path}/2026/Cevap.udf').writeAsStringSync('cevap');
+      await pc.syncOwn();
+      await until(() => File('$there/2026/Cevap.udf').existsSync());
+      for (var i = 0; i < 2; i++) {
+        await phone.syncOwn();
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        await pc.syncOwn();
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+      expect(File('${shared.path}/2026/Cevap.udf').existsSync(), isTrue);
+      expect(File('$there/2026/Cevap.udf').existsSync(), isTrue);
       // Changed on both before they met: both kept.
       File('${shared.path}/İtiraz.pdf').writeAsStringSync('masaüstünde');
       File('$there/İtiraz.pdf').writeAsStringSync('telefonda');

@@ -44,6 +44,16 @@ void main() {
       expect(of('89-2 Haciz Ihbarnamesi'), BelgeTuru.hacizIhbarnamesiIkinci);
       expect(of('3. Haciz İhbarnamesi'), BelgeTuru.hacizIhbarnamesiUcuncu);
       expect(of('Haciz İhbarnamesi'), BelgeTuru.hacizIhbarnamesi);
+      // A case's number before it is no stage.
+      expect(
+        of('2024/1233 Haciz İhbarnamesi (İİK 89/1).pdf'),
+        BelgeTuru.hacizIhbarnamesiBirinci,
+      );
+      expect(of('2024/5672 Haciz İhbarnamesi'), BelgeTuru.hacizIhbarnamesi);
+      expect(
+        of('Dosya_2023_Haciz_Ihbarnamesi.pdf'),
+        BelgeTuru.hacizIhbarnamesi,
+      );
     });
 
     test('UETS’s run-together names are read word by word', () {

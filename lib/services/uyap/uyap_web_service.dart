@@ -588,6 +588,13 @@ class UyapWebService {
       return true;
     } on TimeoutException {
       return true;
+    } on HttpException {
+      return true;
+    } on HandshakeException {
+      return true;
+    } on _PortalDown {
+      // UYAP at work on itself, or too busy: the session is not over.
+      return true;
     } catch (_) {
       // Answered, and not with a session.
     }
@@ -624,6 +631,7 @@ class UyapWebService {
     final response = await request.close().timeout(const Duration(seconds: 30));
     _takeCookies(response);
     final data = await _body(response);
+    if (_down(response.statusCode)) throw _PortalDown(response.statusCode);
     if (response.statusCode != 200 || data.trimLeft().startsWith('<')) {
       throw StateError('UYAP beklenmeyen bir yanıt verdi.');
     }
@@ -647,6 +655,8 @@ class UyapWebService {
     final response = await request.close().timeout(const Duration(seconds: 30));
     _takeCookies(response);
     final data = await _body(response);
+    // A maintenance page or a busy server is HTML too: not the session over.
+    if (_down(response.statusCode)) throw _PortalDown(response.statusCode);
     if (response.statusCode == 302 ||
         response.statusCode == 401 ||
         data.trimLeft().startsWith('<')) {
@@ -1205,6 +1215,7 @@ class UyapWebService {
           allowMalformed: true,
         )
         .trimLeft();
+    if (_down(response.statusCode)) throw _PortalDown(response.statusCode);
     if (response.statusCode == 302 ||
         response.statusCode == 401 ||
         head.startsWith('<')) {
@@ -1854,4 +1865,16 @@ class UyapCaseDocuments {
   const UyapCaseDocuments(this.documents, {this.withheld});
   final List<UyapCaseDocument> documents;
   final String? withheld;
+}
+
+/// UYAP Web not answering for now (HTTP 429 or 5xx): its page is often
+/// HTML, yet the session holds.
+bool _down(int status) => status == 429 || status >= 500;
+
+class _PortalDown implements Exception {
+  const _PortalDown(this.status);
+  final int status;
+
+  @override
+  String toString() => uyapStatus('UYAP Web', status);
 }

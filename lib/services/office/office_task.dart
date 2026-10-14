@@ -70,6 +70,22 @@ class TaskItem {
       TaskItem(id: _newId(), text: text.trim(), assignee: assignee);
 }
 
+/// A task's case as a key, "task|case": the case's own key has a '|' in it
+/// ("number|court", caseKey), so it is all after the first.
+(String task, String caseKey)? taskScopeOf(String key) {
+  final i = key.indexOf('|');
+  if (i <= 0 || i == key.length - 1) return null;
+  return (key.substring(0, i), key.substring(i + 1));
+}
+
+/// A task's case for a device, "task|case|device": the case between the
+/// first '|' and the last.
+(String task, String caseKey, String device)? taskDeliveryOf(String key) {
+  final i = key.indexOf('|'), j = key.lastIndexOf('|');
+  if (i <= 0 || j <= i + 1 || j == key.length - 1) return null;
+  return (key.substring(0, i), key.substring(i + 1, j), key.substring(j + 1));
+}
+
 /// A UYAP case the task is about, its things to do and what goes with it.
 class TaskCase {
   const TaskCase({

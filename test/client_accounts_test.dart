@@ -90,6 +90,10 @@ void main() {
     expect(kurusOf('12.500 TL'), 1250000);
     expect(kurusOf('12.500'), 1250000);
     expect(kurusOf('980,5'), 98050);
+    // A dot typed for the comma.
+    expect(kurusOf('12.50'), 1250);
+    expect(kurusOf('12.5'), 1250);
+    expect(kurusOf('1.250.000'), 125000000);
   });
 
   test('a movement written is never changed, here or from another device', () {

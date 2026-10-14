@@ -1510,6 +1510,7 @@ class _EditorWidgetState extends State<EditorWidget>
     page.headerOffset,
     page.footerOffset,
   ];
+
   /// The saved text, decoded once for each time it is saved, and its length.
   (String, Delta, int)? _baselineBody;
 
@@ -3098,8 +3099,7 @@ class _EditorWidgetState extends State<EditorWidget>
     required double lineWidth,
   }) => ListenableBuilder(
     listenable: _marks,
-    builder: (context, _) =>
-        _quillEditor(pages: pages, lineWidth: lineWidth),
+    builder: (context, _) => _quillEditor(pages: pages, lineWidth: lineWidth),
   );
 
   Widget _quillEditor({
@@ -4962,10 +4962,12 @@ class _EditorWidgetState extends State<EditorWidget>
                 );
 
       if (savePath == null || !mounted) return false;
-      // Another window's document is not written over from this one.
+      // Another window's document is not written over from this one: its
+      // own name too, when this window only reads it, held elsewhere.
       if (!PhoneDocumentSave.here &&
-          savePath != _lockedPath &&
-          await _heldByAnotherWindow(savePath)) {
+          (savePath == _lockedPath
+              ? _heldElsewhere
+              : await _heldByAnotherWindow(savePath))) {
         if (mounted) {
           showNotice(
             context,
@@ -5273,79 +5275,80 @@ class _EditorWidgetState extends State<EditorWidget>
                         const SizedBox(width: 2),
                       ],
                       Expanded(
-                        child: ValueListenableBuilder<RibbonTab>(
-                          valueListenable: editorRibbonTab,
-                          builder: (context, tab, toolbar) => ListenableBuilder(
-                            listenable: _uyap,
-                            builder: (context, _) {
-                              final expanded =
-                                  MediaQuery.sizeOf(context).width >= 1000 &&
-                                  MediaQuery.sizeOf(context).height >= 550;
-                              return switch (tab) {
-                                RibbonTab.home => toolbar!,
-                                RibbonTab.legal => _legalRibbon(
-                                  context,
-                                  expanded,
-                                ),
-                                RibbonTab.insert => _insertRibbon(
-                                  context,
-                                  expanded,
-                                ),
-                                RibbonTab.view => _viewRibbon(
-                                  context,
-                                  expanded,
-                                ),
-                              };
-                            },
-                          ),
-                          child: EditorToolbar(
-                            controller: _active,
-                            onFind: _find,
-                            onHistory: _history,
-                            onSnippets: () => unawaited(_snippets()),
-                            onReadAloud: speechAvailable
-                                ? () => unawaited(_readAloud())
-                                : null,
-                            onDictate: speechAvailable
-                                ? () => unawaited(_dictate())
-                                : null,
-                            onReplace: () => _find(replace: true),
-                            onPrint: _print,
-                            onInsertImage: _insertImage,
-                            onInsertTable: _insertTable,
-                            hasHeader: _regions.containsKey('header'),
-                            hasFooter: _regions.containsKey('footer'),
-                            onToggleRegion: (key) => switch (key) {
-                              'page-numbers' => _pageNumbers(),
-                              'letterheads' => _letterheads(),
-                              _ => _toggleRegion(key),
-                            },
-                            onHelp: _showShortcuts,
-                            onHorizontalRuler: () => setState(
-                              () =>
-                                  _showHorizontalRuler = !_showHorizontalRuler,
-                            ),
-                            onVerticalRuler: () => setState(
-                              () => _showVerticalRuler = !_showVerticalRuler,
-                            ),
-                            showHorizontalRuler: _showHorizontalRuler,
-                            showVerticalRuler: _showVerticalRuler,
-                            onFontSelected: (name) async {
-                              try {
-                                await DocumentFonts.loadEditorFamilies([name]);
-                                if (mounted) setState(() {});
-                              } catch (e) {
-                                if (context.mounted) {
-                                  showNotice(
-                                    context,
-                                    'Yazı tipi yüklenemedi',
-                                    detail: '$e',
-                                    kind: NoticeKind.error,
-                                  );
+                        child: RibbonDeck(
+                          ribbons: {
+                            for (final tab in RibbonTab.values.skip(1))
+                              tab: ListenableBuilder(
+                                listenable: _uyap,
+                                builder: (context, _) {
+                                  final expanded =
+                                      MediaQuery.sizeOf(context).width >=
+                                          1000 &&
+                                      MediaQuery.sizeOf(context).height >= 550;
+                                  return switch (tab) {
+                                    RibbonTab.legal => _legalRibbon(
+                                      context,
+                                      expanded,
+                                    ),
+                                    RibbonTab.insert => _insertRibbon(
+                                      context,
+                                      expanded,
+                                    ),
+                                    _ => _viewRibbon(context, expanded),
+                                  };
+                                },
+                              ),
+                            RibbonTab.home: EditorToolbar(
+                              controller: _active,
+                              onFind: _find,
+                              onHistory: _history,
+                              onSnippets: () => unawaited(_snippets()),
+                              onReadAloud: speechAvailable
+                                  ? () => unawaited(_readAloud())
+                                  : null,
+                              onDictate: speechAvailable
+                                  ? () => unawaited(_dictate())
+                                  : null,
+                              onReplace: () => _find(replace: true),
+                              onPrint: _print,
+                              onInsertImage: _insertImage,
+                              onInsertTable: _insertTable,
+                              hasHeader: _regions.containsKey('header'),
+                              hasFooter: _regions.containsKey('footer'),
+                              onToggleRegion: (key) => switch (key) {
+                                'page-numbers' => _pageNumbers(),
+                                'letterheads' => _letterheads(),
+                                _ => _toggleRegion(key),
+                              },
+                              onHelp: _showShortcuts,
+                              onHorizontalRuler: () => setState(
+                                () => _showHorizontalRuler =
+                                    !_showHorizontalRuler,
+                              ),
+                              onVerticalRuler: () => setState(
+                                () => _showVerticalRuler = !_showVerticalRuler,
+                              ),
+                              showHorizontalRuler: _showHorizontalRuler,
+                              showVerticalRuler: _showVerticalRuler,
+                              onFontSelected: (name) async {
+                                try {
+                                  await DocumentFonts.loadEditorFamilies([
+                                    name,
+                                  ]);
+                                  if (mounted) setState(() {});
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    showNotice(
+                                      context,
+                                      'Yazı tipi yüklenemedi',
+                                      detail: '$e',
+                                      kind: NoticeKind.error,
+                                    );
+                                  }
                                 }
-                              }
-                            },
-                          ),
+                              },
+                            ),
+                          },
                         ),
                       ),
                       // The case the document belongs to, every tab.

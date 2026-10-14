@@ -93,7 +93,13 @@ class _CaseLawSearchScreenState extends State<CaseLawSearchScreen> {
       _busy = true;
       _asked = true;
     });
-    final found = await widget.bank.search(query);
+    CaseLawResults found;
+    try {
+      found = await widget.bank.search(query);
+    } catch (_) {
+      // Whatever went wrong, the search is over: never "Ara" off for good.
+      found = const CaseLawResults.empty();
+    }
     // The reader may have searched again while this was on its way.
     if (!mounted || run != _run) return;
     setState(() {

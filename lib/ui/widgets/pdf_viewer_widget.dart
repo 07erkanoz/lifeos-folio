@@ -505,8 +505,16 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
       _hasSelection = false;
       _quarterTurns = 0;
       _showOcrText = false;
-      // What was read belongs to the document that has gone.
+      // What was read belongs to the document that has gone: the searcher
+      // too, which keeps each page's text by its number. A new one is made
+      // when the new document is ready.
       _citations?.clear();
+      _search
+        ?..removeListener(_searched)
+        ..dispose();
+      _search = null;
+      _searchField.clear();
+      _searching = false;
       _loadHighlights();
       _ocr.attach(widget.filePath, EvrakFormat.pdf);
     }

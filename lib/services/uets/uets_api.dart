@@ -540,7 +540,12 @@ class UetsApi {
   }) async {
     final request = await _request(method, path, body, authorized: authorized);
     final response = await request.close().timeout(const Duration(seconds: 90));
-    final text = await response.transform(utf8.decoder).join();
+    // The body is waited for too: headers come, the rest never, and a sync
+    // stood still for good (its next ones not even begun).
+    final text = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 90));
     return (code: response.statusCode, body: text);
   }
 

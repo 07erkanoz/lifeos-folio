@@ -319,10 +319,9 @@ class _LockScreenState extends State<_LockScreen> {
               ),
               const SizedBox(height: 14),
               FilledButton(
-                onPressed: () => setState(() {
-                  _newCode = null;
-                  _recovering = false;
-                }),
+                // Opened only now, by the new password: until then the
+                // screen, and the code on it, stay.
+                onPressed: () => unawaited(widget.lock.unlock(_new.text)),
                 child: const Text('Yazdım, devam et'),
               ),
             ],

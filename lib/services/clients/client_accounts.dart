@@ -308,11 +308,17 @@ String lira(int kurus) {
       '${cents == 0 ? '' : ',${cents.toString().padLeft(2, '0')}'} TL';
 }
 
-/// Kuruş from what is typed: "12.500", "12500,50", "12 500 TL".
+/// Kuruş from what is typed: "12.500", "12500,50", "12 500 TL", and "12.50"
+/// from a keypad whose decimal key is a dot.
 int? kurusOf(String text) {
-  final t = text
-      .replaceAll(RegExp(r'tl|[\s₺.]', caseSensitive: false), '')
-      .replaceAll(',', '.');
+  var t = text.replaceAll(RegExp(r'tl|[\s₺]', caseSensitive: false), '');
+  // A dot before one or two digits at the end, no comma: the kuruş, not a
+  // thousands' group ("12.50" is twelve lira and a half, not 1.250).
+  if (!t.contains(',') && RegExp(r'\.\d{1,2}$').hasMatch(t)) {
+    final i = t.lastIndexOf('.');
+    t = '${t.substring(0, i)},${t.substring(i + 1)}';
+  }
+  t = t.replaceAll('.', '').replaceAll(',', '.');
   final v = double.tryParse(t);
   return v == null ? null : (v * 100).round();
 }

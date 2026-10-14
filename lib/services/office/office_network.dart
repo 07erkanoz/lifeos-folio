@@ -1963,9 +1963,9 @@ class OfficeNetwork extends ChangeNotifier {
   Future<void> _queueForNewDevices() async {
     var queued = false;
     for (final MapEntry(key: key, value: paths) in packages.sources.entries) {
-      final parts = key.split('|');
-      if (parts.length != 2) continue;
-      final task = tasks.of(parts[0]);
+      final scope = taskScopeOf(key);
+      if (scope == null) continue;
+      final task = tasks.of(scope.$1);
       if (task == null || task.by != me || !task.open) continue;
       for (final id in _devicesOf(task.assignees.keys)) {
         final each = '$key|$id';
@@ -2114,27 +2114,28 @@ class OfficeNetwork extends ChangeNotifier {
   /// A task's cases to those it is given to who are on the network now.
   Future<void> _sendPackages(OfficeTask task, {String? only}) async {
     for (final key in packages.pending.keys.toList()) {
-      final parts = key.split('|');
-      if (parts.length != 3) continue;
-      if (parts[0] != task.id || (only != null && parts[2] != only)) continue;
+      final parts = taskDeliveryOf(key);
+      if (parts == null) continue;
+      final (taskId, caseKey, device) = parts;
+      if (taskId != task.id || (only != null && device != only)) continue;
       // A case only to one it is still given to, still of the office.
-      if (!task.assignees.containsKey(ledger.personOf(parts[2])) ||
-          ledger.member(parts[2]) == null) {
+      if (!task.assignees.containsKey(ledger.personOf(device)) ||
+          ledger.member(device) == null) {
         packages.pending.remove(key);
         await packages.save();
         continue;
       }
-      final peer = _peers[parts[2]];
+      final peer = _peers[device];
       if (peer == null || !peer.online) continue;
       // Never as an older Folio made it, its notes in it.
       final prepare = prepareTaskFiles;
-      if (prepare != null && !await prepare(packages.pending[key]!, parts[1])) {
+      if (prepare != null && !await prepare(packages.pending[key]!, caseKey)) {
         continue;
       }
       await send(
         peer,
         packages.pending[key]!,
-        meta: {'gorev': task.id, 'dosya': parts[1]},
+        meta: {'gorev': task.id, 'dosya': caseKey},
       );
     }
   }

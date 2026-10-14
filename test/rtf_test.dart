@@ -36,6 +36,13 @@ void main() {
     expect(model.toPlainText(), 'kiralamış olan taşınmaz');
   });
 
+  test('a paragraph indented out of the margin still opens', () {
+    final model = RtfReader.readBytes(
+      rtf(r'{\rtf1\ansi \pard\li-142\fi-284 Merhaba\par}'),
+    );
+    expect(model?.toPlainText(), 'Merhaba');
+  });
+
   test('a file that names no codepage is read by the fonts it uses', () {
     // Word leaves \ansicpg out often enough; the font table still says which
     // alphabet the bytes are in.

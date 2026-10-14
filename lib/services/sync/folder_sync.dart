@@ -301,18 +301,27 @@ class FolderSync extends ChangeNotifier {
     final out = <String, (int, int, String)>{
       for (final rel in stats.keys) rel: ?_hashes[p.join(f.path, rel)],
     };
-    // What was alike and is gone is taken off on the others too.
+    // What was alike and is gone is taken off on the others too: gone from
+    // the folder, not only unread now (held open, not allowed, a cloud
+    // file not brought down), which is no removal.
     final base = _base[f.id] ??= {};
     final gone = [
       for (final rel in base.keys)
-        if (!out.containsKey(rel)) rel,
+        if (!stats.containsKey(rel)) rel,
     ];
-    if (gone.isNotEmpty) {
-      final removed = _removed[f.id] ??= {};
+    final removed = _removed[f.id] ??= {};
+    // One here again (brought back from the bin, made anew) is no longer
+    // taken off: said so, it would go from the others and then from here.
+    final back = [
+      for (final rel in removed.keys)
+        if (stats.containsKey(rel)) rel,
+    ];
+    if (gone.isNotEmpty || back.isNotEmpty) {
       for (final rel in gone) {
         base.remove(rel);
         removed[rel] = DateTime.now().millisecondsSinceEpoch;
       }
+      back.forEach(removed.remove);
       unawaited(_save());
     }
     counts[f.id] = out.length;
@@ -432,6 +441,9 @@ class FolderSync extends ChangeNotifier {
       }
     }
     unawaited(_save());
+    // A name a Windows folder cannot hold (a ":" in it) stays here: one such
+    // file stopped every folder after it, again at each round.
+    push.removeWhere((rel) => _inside(f.path, rel) == null);
     if (push.isEmpty) return;
     final peer = _net.ownOnline.where((p) => p.deviceId == from).firstOrNull;
     if (peer == null) return;

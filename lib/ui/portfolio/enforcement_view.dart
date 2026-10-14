@@ -1372,7 +1372,9 @@ class _EnforcementViewState extends State<EnforcementView> {
                   height: 10,
                   child: Row(
                     children: [
-                      if (paidShare > 0)
+                      // A share too small for a flex of one is not drawn:
+                      // an Expanded of flex 0 is no flex at all.
+                      if ((paidShare * 1000).round() > 0)
                         Expanded(
                           flex: (paidShare * 1000).round(),
                           child: ColoredBox(
@@ -1380,7 +1382,7 @@ class _EnforcementViewState extends State<EnforcementView> {
                             child: const SizedBox.expand(),
                           ),
                         ),
-                      if (waitShare > 0)
+                      if ((waitShare * 1000).round() > 0)
                         Expanded(
                           flex: (waitShare * 1000).round(),
                           child: ColoredBox(
@@ -1388,7 +1390,7 @@ class _EnforcementViewState extends State<EnforcementView> {
                             child: const SizedBox.expand(),
                           ),
                         ),
-                      if (1 - paidShare - waitShare > 0)
+                      if (((1 - paidShare - waitShare) * 1000).round() > 0)
                         Expanded(
                           flex: ((1 - paidShare - waitShare) * 1000).round(),
                           child: ColoredBox(

@@ -31,8 +31,10 @@ void main() {
   late HttpServer server;
   var webAlive = true;
   var uetsAlive = true;
+  var webDown = false;
 
   setUp(() async {
+    webDown = false;
     webAlive = true;
     uetsAlive = true;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -41,6 +43,14 @@ void main() {
       final path = r.uri.path;
       var status = 200;
       Object? answer = const {};
+      if (path == '/kullanici_bilgileri.uyap' && webDown) {
+        // A maintenance page.
+        r.response.statusCode = 503;
+        r.response.headers.contentType = ContentType.html;
+        r.response.write('<html><body>Bakım çalışması</body></html>');
+        await r.response.close();
+        return;
+      }
       if (path == '/kullanici_bilgileri.uyap') {
         final cookie = r.headers.value('Cookie') ?? '';
         answer = webAlive && cookie.contains('JSESSIONID=good')
@@ -177,6 +187,28 @@ void main() {
     expect(web2.connected, isFalse);
     expect(secrets2.values.containsKey('uyap-web'), isFalse);
     s2.dispose();
+  });
+
+  test('a web session is kept while UYAP is under maintenance', () async {
+    webDown = true;
+    final secrets = _MemorySecrets()
+      ..values['uyap-web'] = {
+        'cookies': {'JSESSIONID': 'good'},
+        'tckn': '',
+        'user': 'Deniz',
+        'since': DateTime.now()
+            .subtract(const Duration(minutes: 30))
+            .toUtc()
+            .toIso8601String(),
+        'route': 'tray',
+      };
+    final web = UyapWebService.forTesting(portal: at('/'));
+    final s = sync(secrets, web: web)..start();
+    await until(() => web.connected);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(secrets.values.containsKey('uyap-web'), isTrue);
+    expect(await web.check(), isTrue);
+    s.dispose();
   });
 
   test('a web session past its three hours is not taken up', () async {

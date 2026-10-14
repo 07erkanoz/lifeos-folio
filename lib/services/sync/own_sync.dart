@@ -9,6 +9,7 @@ import '../clients/client.dart';
 import '../clients/client_file_sync.dart';
 import '../clients/client_files.dart';
 import '../office/office_network.dart';
+import '../office/office_task.dart';
 import '../notes/secret_notes.dart';
 import '../notes/task_notes.dart';
 import '../office/proposals.dart';
@@ -631,30 +632,30 @@ class OwnSync extends ChangeNotifier {
     const done = 'gorev_notlari_gocu';
     if (db.meta(done) == '1') return;
     for (final key in {...packages.delivered, ...packages.pending.keys}) {
-      final parts = key.split('|');
-      if (parts.length != 3) continue;
-      final scope = '${parts[0]}|${parts[1]}';
-      db.recordHold(
-        'eski:$scope',
-        parts[2],
-        _personOf(parts[2]),
-        'gorev:$scope',
-      );
+      final parts = taskDeliveryOf(key);
+      if (parts == null) continue;
+      final (task, caseKey, device) = parts;
+      final scope = '$task|$caseKey';
+      db.recordHold('eski:$scope', device, _personOf(device), 'gorev:$scope');
     }
     // Each package given here, made without its notes: tried again at the
     // next start where one could not be, and checked again before it goes.
     var all = true;
     for (final e in packages.sources.entries) {
-      if (!await _withoutNotes(db, e.value, e.key.split('|').last)) all = false;
+      final caseKey = taskScopeOf(e.key)?.$2;
+      if (caseKey == null) continue;
+      if (!await _withoutNotes(db, e.value, caseKey)) all = false;
     }
     for (final e in packages.pending.entries) {
-      if (!await _withoutNotes(db, e.value, e.key.split('|')[1])) all = false;
+      final caseKey = taskDeliveryOf(e.key)?.$2;
+      if (caseKey == null) continue;
+      if (!await _withoutNotes(db, e.value, caseKey)) all = false;
     }
     for (final key in packages.receivedKeys) {
-      final parts = key.split('|');
-      if (parts.length != 2) continue;
-      if (db.taskNotesCleaning(parts[0], parts[1]) == null) {
-        db.setTaskNotesCleaning(parts[0], parts[1], 'bekliyor');
+      final scope = taskScopeOf(key);
+      if (scope == null) continue;
+      if (db.taskNotesCleaning(scope.$1, scope.$2) == null) {
+        db.setTaskNotesCleaning(scope.$1, scope.$2, 'bekliyor');
       }
     }
     if (all) db.setMeta(done, '1');

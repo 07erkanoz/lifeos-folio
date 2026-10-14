@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -885,7 +886,7 @@ class _Parser {
     // first start at the left indent, the first further out, which is the
     // model's `hanging` measured from where the first row starts.
     final hanging = paragraph.first < 0
-        ? (-paragraph.first).clamp(0.0, paragraph.left)
+        ? (-paragraph.first).clamp(0.0, max(0.0, paragraph.left)).toDouble()
         : 0.0;
     (inCell ? cellBlocks : blocks).add(
       DocBlock(

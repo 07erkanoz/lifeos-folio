@@ -373,16 +373,15 @@ class BelgeTuruTespit {
   /// A garnishment notice's stage (İİK m.89) from its words; the bare kind
   /// when it says none.
   static BelgeTuru _hacizAsamasi(String folded) {
-    bool any(List<String> ks) => ks.any(folded.contains);
-    if (any(['ucuncu haciz', '3 haciz', '3. haciz', '89/3', '89 3'])) {
-      return BelgeTuru.hacizIhbarnamesiUcuncu;
-    }
-    if (any(['ikinci haciz', '2 haciz', '2. haciz', '89/2', '89 2'])) {
-      return BelgeTuru.hacizIhbarnamesiIkinci;
-    }
-    if (any(['birinci haciz', '1 haciz', '1. haciz', '89/1', '89 1'])) {
-      return BelgeTuru.hacizIhbarnamesiBirinci;
-    }
+    // The stage's number alone, never the end of a case's number: "2024/1233
+    // haciz ihbarnamesi" is no third notice, nor "89/12" the article's 1.
+    bool any(String word, int n) =>
+        folded.contains('$word haciz') ||
+        RegExp('(?<![\\d/])$n\\.?\\s*haciz').hasMatch(folded) ||
+        RegExp('(?<!\\d)89[/ ]$n(?!\\d)').hasMatch(folded);
+    if (any('ucuncu', 3)) return BelgeTuru.hacizIhbarnamesiUcuncu;
+    if (any('ikinci', 2)) return BelgeTuru.hacizIhbarnamesiIkinci;
+    if (any('birinci', 1)) return BelgeTuru.hacizIhbarnamesiBirinci;
     return BelgeTuru.hacizIhbarnamesi;
   }
 
