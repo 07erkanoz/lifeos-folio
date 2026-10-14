@@ -108,7 +108,8 @@ abstract final class LedgerBook {
     ],
     'bilgi': ['borclu', 'aciklama'],
     'bildirildi': ['bildirildi'],
-    'resmiKarar': ['resmiKarar', 'resmi'],
+    // The word and the sum and day it was given for, together (R4).
+    'resmiKarar': ['resmiKarar', 'resmi', 'resmiKararSurum'],
   };
 
   /// The group of whether the record stands or was taken off.
@@ -239,7 +240,17 @@ abstract final class LedgerBook {
     final word = r.text('resmiKarar') == 'elle' || r.text('resmi') == 'elle';
     if (!word) return false;
     final given = r.text('resmiKararSurum');
-    return given.isEmpty || given == '${versionOf(r, 'finans')}';
+    // In the new form a word is always bound ([bindOldWord]).
+    if (given.isEmpty) return !isNewForm(r);
+    return given == '${versionOf(r, 'finans')}';
+  }
+
+  /// [r]'s data, an older Folio's word that UYAP has it bound to the sum
+  /// and day it has now: for its new form, the same on every device.
+  static Map<String, Object?> bindOldWord(ClientRecord r) {
+    final word = r.text('resmiKarar') == 'elle' || r.text('resmi') == 'elle';
+    if (!word || r.text('resmiKararSurum').isNotEmpty) return r.data;
+    return {...r.data, 'resmiKararSurum': '${versionOf(r, 'finans')}'};
   }
 
   /// Whether [r] is in the form this Folio writes, with its groups'

@@ -104,7 +104,26 @@ extension PortalClients on PortalDatabase {
       return true;
     }
     final link = _linkOf(r);
-    return link != null && (link.startsWith('icra:') || _isProjectionId(link));
+    if (link == null) return false;
+    if (link.startsWith('icra:') || _isProjectionId(link)) return true;
+    final target = clientRecord(link);
+    return target != null && isOldLedgerMovement(target);
+  }
+
+  /// Whether [m] is a movement an older Folio wrote of a ledger, or a
+  /// set-off of one: its ledger waits for its repair, or was mended and it
+  /// moved aside; nothing new acts on it (R3).
+  bool isOldLedgerMovement(ClientRecord m) {
+    if (m.kind != ClientRecordKind.movement || LedgerBook.isProjected(m)) {
+      return false;
+    }
+    final source = m.text('kaynak');
+    if (source.startsWith('icra:')) return true;
+    if (!source.startsWith('mahsup:')) return false;
+    final held = clientRecord(source.substring('mahsup:'.length));
+    return held != null &&
+        !LedgerBook.isProjected(held) &&
+        held.text('kaynak').startsWith('icra:');
   }
 
   bool _isProjectionId(String id) =>
@@ -149,7 +168,7 @@ extension PortalClients on PortalDatabase {
   /// [entryId]'s history, the oldest first.
   List<Map<String, Object?>> ledgerHistory(String entryId) => [
     for (final r in _db.select(
-      'SELECT json FROM ledger_history WHERE entry_id=? ORDER BY id',
+      'SELECT json FROM ledger_history WHERE entry_id=? ORDER BY rowid',
       [entryId],
     ))
       if (jsonDecode(r['json'] as String) case final Map j)
@@ -161,6 +180,17 @@ extension PortalClients on PortalDatabase {
     'DELETE FROM ledger_projection WHERE entry_id NOT IN '
     '(SELECT id FROM client_record)',
   );
+
+  /// What was kept of the ledgers no longer here: their movements, their
+  /// history and their repair reports.
+  void _dropLedgerLeftovers() {
+    _dropOrphanProjection();
+    for (final table in const ['ledger_history', 'ledger_repair']) {
+      _db.execute(
+        'DELETE FROM $table WHERE entry_id NOT IN (SELECT id FROM client_record)',
+      );
+    }
+  }
 
   List<ClientRecord> _projection({
     String? where,
@@ -240,6 +270,32 @@ extension PortalClients on PortalDatabase {
     }
   }
 
+  /// The old movements kept here that another device moved aside, moved
+  /// aside here alike once their ledger is here in its new form: its
+  /// projection counts in their place (R3). True when one was.
+  bool _retireMapped() {
+    var moved = false;
+    for (final row in _db.select(
+      'SELECT l.id, l.entry_id, c.json FROM ledger_legacy l '
+      'JOIN client_record c ON c.id = l.id',
+    )) {
+      final e = clientRecord(row['entry_id'] as String);
+      if (e == null ||
+          e.kind != ClientRecordKind.enforcement ||
+          !LedgerBook.isNewForm(e)) {
+        continue;
+      }
+      _db.execute(
+        'INSERT OR REPLACE INTO ledger_history(id, entry_id, json) '
+        'VALUES(?,?,?)',
+        [row['id'], row['entry_id'], row['json']],
+      );
+      _db.execute('DELETE FROM client_record WHERE id=?', [row['id']]);
+      moved = true;
+    }
+    return moved;
+  }
+
   /// For tests: [r] kept as an older Folio kept it, with no check.
   @visibleForTesting
   void putRecordForTesting(ClientRecord r) => _putRecord(r);
@@ -315,12 +371,7 @@ extension PortalClients on PortalDatabase {
     }
     // What was kept of the ledgers gone, their history and repair reports
     // too, and the money others sent that waited (R11).
-    _dropOrphanProjection();
-    for (final table in const ['ledger_history', 'ledger_repair']) {
-      _db.execute(
-        'DELETE FROM $table WHERE entry_id NOT IN (SELECT id FROM client_record)',
-      );
-    }
+    _dropLedgerLeftovers();
     for (final r in _db.select('SELECT id, json FROM client_record_pending')) {
       final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
       if (rec == null || (rec.kind.financial && rec.person != keepPerson)) {
@@ -508,6 +559,20 @@ extension PortalClients on PortalDatabase {
       _db.execute('DELETE FROM client_record WHERE id=?', [r['id']]);
       if (rec != null) removedClientRecords.add(rec);
     }
+    _forgetWaitingOf(id, me);
+    _dropLedgerLeftovers();
+  }
+
+  /// What others than [me] sent of client [id] that waited, dropped.
+  void _forgetWaitingOf(String id, String me) {
+    for (final r in _db.select('SELECT id, json FROM client_record_pending')) {
+      final rec = ClientRecord.fromJson(jsonDecode(r['json'] as String));
+      if (rec != null &&
+          rec.clientId == id &&
+          !(rec.person == me && me.isNotEmpty)) {
+        _db.execute('DELETE FROM client_record_pending WHERE id=?', [r['id']]);
+      }
+    }
   }
 
   Map<String, Object?> clientsExport() {
@@ -631,6 +696,8 @@ extension PortalClients on PortalDatabase {
             _db.execute('DELETE FROM client_record WHERE id=?', [r['id']]);
             if (rec != null) removedClientRecords.add(rec);
           }
+          _forgetWaitingOf(c.id, me);
+          _dropLedgerLeftovers();
           changed = true;
           continue;
         }
@@ -645,16 +712,32 @@ extension PortalClients on PortalDatabase {
       for (final c in clientCards())
         if (c.office && !c.removed) c.id,
     };
+    final records = [
+      for (final j in theirs['muvekkilKayitlari'] as List? ?? const [])
+        if (j is Map &&
+            (shared.contains(j['muvekkil']) ||
+                (j['muvekkil'] == officeCashId && money)) &&
+            j['kisi'] == from)
+          j,
+    ];
+    // The old movements its writer's devices moved aside: only of their
+    // own ledgers, sent with them or kept here (R3, R6).
+    final ledgersOf = {
+      for (final j in records)
+        if (j['tur'] == ClientRecordKind.enforcement.code) j['id'],
+    };
     if (clientsMerge(
       {
-        'muvekkilKayitlari': [
-          for (final j in theirs['muvekkilKayitlari'] as List? ?? const [])
-            if (j is Map &&
-                (shared.contains(j['muvekkil']) ||
-                    (j['muvekkil'] == officeCashId && money)) &&
-                j['kisi'] == from)
-              j,
-        ],
+        'muvekkilKayitlari': records,
+        if (money)
+          'defterEski': [
+            for (final j in theirs['defterEski'] as List? ?? const [])
+              if (j is Map &&
+                  (ledgersOf.contains(j['kayit']) ||
+                      (j['kayit'] is String &&
+                          clientRecord(j['kayit'] as String)?.person == from)))
+                j,
+          ],
       },
       money: money,
       author: from,
@@ -691,7 +774,12 @@ extension PortalClients on PortalDatabase {
       final weigh = <String>{};
       // The old movements another device moved aside, known first: what
       // acts on them is not taken (R3).
-      if (money) _takeLegacyMap(theirs['defterEski']);
+      if (money) {
+        _takeLegacyMap(theirs['defterEski']);
+        if (_retireMapped()) changed = true;
+      }
+      // Ledgers kept here in their old form that came in their new one.
+      final mended = <String>{};
       for (final j in theirs['muvekkilKayitlari'] as List? ?? const []) {
         final r = ClientRecord.fromJson(j);
         // Money from, or for, one who may not see it is not taken.
@@ -742,6 +830,16 @@ extension PortalClients on PortalDatabase {
             kept != null &&
             kept.kind == ClientRecordKind.enforcement &&
             !kept.locked) {
+          // Both in an older Folio's form: the later of the two whole, and
+          // weighed; only the weighing makes it new (R3), never a merge.
+          if (!LedgerBook.isNewForm(kept) && !LedgerBook.isNewForm(r)) {
+            if (!r.updated.isAfter(kept.updated)) continue;
+            _putRecord(r);
+            weigh.add(r.id);
+            changed = true;
+            continue;
+          }
+          if (!LedgerBook.isNewForm(kept)) mended.add(r.id);
           final merged = LedgerBook.merge(kept, r);
           if (jsonEncode(merged.toJson()) == jsonEncode(kept.toJson())) {
             continue;
@@ -770,7 +868,7 @@ extension PortalClients on PortalDatabase {
       }
       for (final id in ledgers) {
         // Mended on another device: mended here alike.
-        if (ledgerRepairOf(id) != null) {
+        if (ledgerRepairOf(id) != null || mended.contains(id)) {
           _adoptRepaired(id);
         } else {
           rebuildLedger(id);
@@ -781,6 +879,7 @@ extension PortalClients on PortalDatabase {
       for (final id in weigh.difference(ledgers)) {
         _weighLedger(id);
       }
+      if (money && _retireMapped()) changed = true;
       if (_takeWaiting(money: money, me: me)) changed = true;
       // Every colleague's client unshared, come now or before: what
       // others wrote of it goes here, this person's stays.
@@ -821,6 +920,12 @@ extension PortalClients on PortalDatabase {
     if (LedgerBook.isProjected(target) ||
         target.person != r.person ||
         target.clientId != r.clientId) {
+      return _Link.refused;
+    }
+    // A reversal takes back a movement of its own case.
+    if (r.text('ters').isNotEmpty &&
+        r.text('dosya').isNotEmpty &&
+        target.text('dosya') != r.text('dosya')) {
       return _Link.refused;
     }
     return _Link.ok;
@@ -912,9 +1017,19 @@ extension PortalClients on PortalDatabase {
             in index.bySource['mahsup:${h.id}'] ?? const <ClientRecord>[])
           if (m.text('ters').isEmpty) m,
     ];
-    final reversals = [
-      for (final m in [...held, ...applied]) ...?index.reversalsOf[m.id],
-    ];
+    // The reversals of them, and of those, all the way down.
+    final reversals = <ClientRecord>[];
+    final seen = {
+      for (final m in [...held, ...applied]) m.id,
+    };
+    for (var round = [...held, ...applied]; round.isNotEmpty;) {
+      round = [
+        for (final m in round)
+          for (final r in index.reversalsOf[m.id] ?? const <ClientRecord>[])
+            if (seen.add(r.id)) r,
+      ];
+      reversals.addAll(round);
+    }
     final legacy = [...held, ...applied, ...reversals];
     bool standing(ClientRecord m) =>
         !m.removed && !index.reversalsOf.containsKey(m.id);
@@ -951,6 +1066,10 @@ extension PortalClients on PortalDatabase {
           'para biriminin.';
     } else if (reversals.any((r) => byId[r.text('ters')]?.amount != r.amount)) {
       why = 'Bir ters kayıt düzelttiği tutardan farklı.';
+    } else if (reversals.any(
+      (r) => byId[r.text('ters')]?.movement != r.movement,
+    )) {
+      why = 'Bir ters kayıt düzelttiği kaydın türünden farklı.';
     } else if (held.any((m) => m.movement != MovementKind.collected) ||
         applied.any((m) => !(m.movement?.isApplied ?? false))) {
       why = 'Eski kayıtlardan birinin türü beklenmedik.';
@@ -977,14 +1096,32 @@ extension PortalClients on PortalDatabase {
     final proposed = LedgerBook.stateOf(
       LedgerBook.write(e, versions: LedgerBook.versionsOf(e), setOffs: setOffs),
     );
-    final takenNow = sum(standingApplied);
-    final takenAfter = proposed.active.fold<int>(0, (n, s) => n + s.amount);
+    // What is held and taken, by what it is taken as: in TL, of this
+    // client and case alone; what is not is only named (`karsilastirilir`).
+    Map<String, Object?> sums(
+      int held,
+      Iterable<({MovementKind kind, int amount})> taken,
+    ) {
+      final out = <String, Object?>{'emanet': held};
+      for (final t in taken) {
+        out['emanet'] = (out['emanet'] as int) - t.amount;
+        out[t.kind.code] = ((out[t.kind.code] as int?) ?? 0) + t.amount;
+      }
+      return out;
+    }
+
     return _Weighed(
       legacy: legacy,
       why: why,
       setOffs: setOffs,
-      now: {'emanet': sum(standingHeld) - takenNow, 'ucret': takenNow},
-      after: {'emanet': proposed.held - takenAfter, 'ucret': takenAfter},
+      comparable: legacy.every(ours),
+      now: sums(sum(standingHeld), [
+        for (final m in standingApplied)
+          if (m.movement case final k?) (kind: k, amount: m.amount),
+      ]),
+      after: sums(proposed.held, [
+        for (final s in proposed.active) (kind: s.target, amount: s.amount),
+      ]),
     );
   }
 
@@ -997,6 +1134,7 @@ extension PortalClients on PortalDatabase {
     'kimlikler': [for (final m in w.legacy) m.id],
     'simdi': w.now,
     'onarinca': w.after,
+    'karsilastirilir': w.comparable,
     'ozet': _digestOf(e, w),
   };
 
@@ -1022,6 +1160,9 @@ extension PortalClients on PortalDatabase {
             e,
             versions: LedgerBook.versionsOf(e),
             setOffs: setOffs,
+            // The lawyer's word that UYAP has it, given by an older Folio,
+            // for the sum and day it has now (R4).
+            data: LedgerBook.bindOldWord(e),
           );
     _putRecord(made);
     for (final m in legacy) {
@@ -1069,6 +1210,8 @@ extension PortalClients on PortalDatabase {
     _transaction(() {
       final e = clientRecord(entryId);
       if (e == null || ledgerRepairOf(entryId) == null) return;
+      // Only by its writer, as every change of it (R6).
+      if (!isMineToMend(e)) return;
       final weighed = _weigh(e, _LegacyIndex(_db));
       if (_digestOf(e, weighed) != digest) {
         _db.execute(
@@ -1082,6 +1225,7 @@ extension PortalClients on PortalDatabase {
                   legacy: weighed.legacy,
                   why: weighed.why ?? 'Kayıt bu arada değişti.',
                   setOffs: weighed.setOffs,
+                  comparable: weighed.comparable,
                   now: weighed.now,
                   after: weighed.after,
                 ),
@@ -1092,10 +1236,23 @@ extension PortalClients on PortalDatabase {
         return;
       }
       _ledgerAside(e, weighed.legacy, weighed.setOffs);
+      addLedgerHistory(e.id, {
+        'islem': 'onar',
+        'kisi': PortalDatabase.clientPerson?.call() ?? '',
+        'kaynak': SyncClock.of(this).source,
+        'zaman': DateTime.now().toIso8601String(),
+        'eski': [for (final m in weighed.legacy) m.id],
+      });
       ok = true;
     });
     if (ok) _notifyChanged();
     return ok;
+  }
+
+  /// Whether [e] is this person's to mend: their own, or no one's named.
+  bool isMineToMend(ClientRecord e) {
+    final me = PortalDatabase.clientPerson?.call() ?? '';
+    return e.person.isEmpty || me.isEmpty || e.person == me;
   }
 
   /// A colleague's client unshared: the mark of it, nothing of the person
@@ -1138,6 +1295,7 @@ class _Weighed {
     required this.legacy,
     required this.why,
     required this.setOffs,
+    required this.comparable,
     required this.now,
     required this.after,
   });
@@ -1145,5 +1303,11 @@ class _Weighed {
   final List<ClientRecord> legacy;
   final String? why;
   final List<LedgerSetOff> setOffs;
-  final Map<String, int> now, after;
+
+  /// Whether every old movement is in TL, of this client and case: what
+  /// [now] and [after] say is the whole of it only then.
+  final bool comparable;
+
+  /// Kuruş held (`emanet`) and taken, by what it is taken as.
+  final Map<String, Object?> now, after;
 }

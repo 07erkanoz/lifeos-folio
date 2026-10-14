@@ -382,17 +382,25 @@ class _CashPageState extends State<CashPage> {
   /// now and what it will once mended; none, nothing shown.
   List<Widget> _repairs() {
     final db = _db!;
-    final ids = db.ledgerRepairs;
+    // Only this person's own: a colleague's is mended on their devices.
+    final ids = [
+      for (final id in db.ledgerRepairs)
+        if (db.clientRecord(id) case final e? when db.isMineToMend(e)) id,
+    ];
     if (ids.isEmpty) return const [];
     String sums(Object? m) {
       final map = m is Map ? m : const {};
-      final held = (map['emanet'] as num?)?.toInt() ?? 0;
-      final fee = (map['ucret'] as num?)?.toInt() ?? 0;
-      if (held == 0 && fee == 0) return 'hesapta yok';
-      return [
-        if (held != 0) '${lira(held)} emanet',
-        if (fee != 0) '${lira(fee)} ücret',
-      ].join(', ');
+      final parts = [
+        for (final e in map.entries)
+          if (e.value is num && e.value != 0)
+            '${lira((e.value as num).toInt())} '
+                '${switch (MovementKind.of(e.key)) {
+                  MovementKind.toFee => 'vekâlet ücreti',
+                  MovementKind.toCounterFee => 'karşı vekâlet ücreti',
+                  _ => 'emanet',
+                }}',
+      ];
+      return parts.isEmpty ? 'hesapta yok' : parts.join(', ');
     }
 
     Widget row(String id) {
@@ -424,8 +432,13 @@ class _CashPageState extends State<CashPage> {
                     style: TextStyle(fontSize: 13, color: AgendaColors.muted),
                   ),
                   Text(
-                    'Şimdi: ${sums(report['simdi'])} → Onarınca: '
-                    '${after == 'hesapta yok' ? 'hesaptan çıkar' : after}',
+                    report['karsilastirilir'] == false
+                        ? 'Eski kayıtlar ${(report['kimlikler'] as List?)?.length ?? 0} '
+                              'hareket; başka bir müvekkil, dosya ya da para birimi '
+                              'karıştığı için tutarlar yan yana konamıyor. '
+                              'Müvekkil hesabından bakın.'
+                        : 'Şimdi: ${sums(report['simdi'])} → Onarınca: '
+                              '${after == 'hesapta yok' ? 'hesaptan çıkar' : after}',
                     style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
                 ],

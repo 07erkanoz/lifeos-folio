@@ -37,6 +37,13 @@ Color get _green => tone(const Color(0xFF1B6B3A));
 Color get _purple => tone(const Color(0xFF5B3B9A));
 
 /// "250.000,00" from lira.
+/// Kuruş still held of [r]'s payment: what is held less its set-offs in
+/// effect.
+int _leftOf(ClientRecord r) {
+  final state = LedgerBook.stateOf(r);
+  return state.held - state.active.fold<int>(0, (n, s) => n + s.amount);
+}
+
 String _tl(double v) {
   final kurus = (v * 100).round();
   final s = lira(kurus.abs()).replaceAll(' TL', '');
@@ -1881,8 +1888,8 @@ class _EnforcementViewState extends State<EnforcementView> {
                           ),
                           TextSpan(
                             text:
-                                'Emanette ${_tl(LedgerBook.stateOf(e.record).held / 100)} TL '
-                                'var; mahsup sığana kadar hesaba işlenmez. '
+                                'Emanette ${_tl(_leftOf(e.record) / 100)} TL '
+                                'kaldı; mahsup sığana kadar hesaba işlenmez. '
                                 'Tutarı düzeltin ya da mahsubu kaldırın.',
                           ),
                         ],

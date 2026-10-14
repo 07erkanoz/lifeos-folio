@@ -934,7 +934,12 @@ ClientRecord appliedMovement(
   ClientRecord made,
 ) {
   final source = LedgerService.sourceOf(held);
-  if (source == null) return (ledger: false, refused: null);
+  if (source == null) {
+    // An older Folio's booking of a ledger: its repair first (R3).
+    return db.isOldLedgerMovement(held)
+        ? (ledger: true, refused: '${const LedgerNeedsRepair()}')
+        : (ledger: false, refused: null);
+  }
   final target = made.movement;
   if (target == null) return (ledger: true, refused: 'Mahsup türü yok.');
   try {
@@ -964,7 +969,11 @@ ClientRecord appliedMovement(
   ClientRecord m,
 ) {
   final source = LedgerService.sourceOf(m);
-  if (source == null) return (ledger: false, refused: null);
+  if (source == null) {
+    return db.isOldLedgerMovement(m)
+        ? (ledger: true, refused: '${const LedgerNeedsRepair()}')
+        : (ledger: false, refused: null);
+  }
   final setOff = source.setOffId;
   if (setOff == null) {
     return (

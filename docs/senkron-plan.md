@@ -854,3 +854,22 @@ PDF notlarının eşitlenmesi (R9) bu sıranın dışında, ayrı bir iştir.
   - Öneri: büyük veri kümesinde projeksiyon okuma ve göç maliyeti.
   - Hepsi işlendi (§0 adım 4); her biri `test/sync_step4_test.dart` "Codex's review of step 4"
     grubunda, ekranlar `test/sync_step4_screens_test.dart`'ta denenir.
+- **Adım 4 kod denetimi, 2. tur (14 Ekim, REVISE):** 15 bulgudan 5'i kapandı, 10'u kısmen; 6 yeni
+  bulgu. Bu sürümde işlenenler:
+  - İki eski biçimli kopya birleşince yeni biçime çevrilmez; sonraki kazanır ve tartılır (çift
+    sayım kapandı). Burada eski, gelen yeni biçimdeyse eski hareketler kenara alınır.
+  - Gelen eşleme (`defterEski`), defteri burada yeni biçimde olan eski hareketi de hesaptan
+    çıkarır (`_retireMapped`). Bürodan gelen eşleme, yalnız yazanın defterleri için alınır.
+  - Onarım bekleyen defterin eski hareketine mahsup ve ters yazılamaz; geç gelen parça oluşmaz.
+  - Onarımı yalnız yazan yapar; şerit yalnız kişinin kendi raporlarını gösterir; onarım geçmişe
+    yazılır.
+  - `resmiKararSurum` `resmiKarar` grubunda birleşir; eski elle söz göçte o anki finansal sürüme
+    bağlanır.
+  - Ters kayıtlar zincir boyunca rapora girer; türü düzelttiğinden farklı ters rapora gider.
+  - Bekleyen ters başka dosyanın hareketine bağlanamaz.
+  - Paylaşım geri çekilince bekleyen kayıtlar, defter geçmişi ve raporu da silinir.
+  - Rapor tutarları vekâlet ve karşı vekâlet ayrı; başka müvekkil, dosya ya da para birimi
+    karışınca tutar gösterilmez. Askı yazısı emanette kalanı gösterir.
+  - Açık bırakılanlar: icra ekranında kayıtların her ödeme için yeniden okunması (performans);
+    büro cihazlarının duran parçasının Senkron sayfasında gösterilmesi; adım 4'ün ara
+    sürümünde kabul edilmiş ileri saatli kayıtlar (bu sürüm yayımlanmadı).
