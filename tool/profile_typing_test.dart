@@ -3,7 +3,7 @@
 //
 //   systemd-run --user --scope -p MemoryMax=4G flutter test \
 //     --enable-vmservice --dart-define=N=600 tool/profile_typing_test.dart
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, depend_on_referenced_packages
 import 'dart:developer' as dev;
 import 'dart:isolate';
 

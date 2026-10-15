@@ -149,10 +149,14 @@ void main() {
 
     test('an older Folio\'s mark of one taken off still takes it off', () {
       a.saveAgenda(note('n', 'Müvekkili ara'));
+      // An older Folio wrote its time with no zone, in Turkey's (Hlc
+      // .fromLegacy reads it so): a minute from now there, whatever the
+      // zone of the machine the test runs on (CI's is UTC).
+      final turkey = DateTime.now().toUtc().add(
+        const Duration(hours: 3, minutes: 1),
+      );
       a.agendaMerge({
-        'silinen': {
-          'n': DateTime.now().add(const Duration(minutes: 1)).toIso8601String(),
-        },
+        'silinen': {'n': turkey.toIso8601String().replaceFirst('Z', '')},
       });
       expect(item(a, 'n'), isNull);
     });

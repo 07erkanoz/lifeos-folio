@@ -4,7 +4,7 @@
 //   flutter build linux --profile -t tool/typing_bench.dart --dart-define=N=600
 //   env -u WAYLAND_DISPLAY GDK_BACKEND=x11 xvfb-run -a \
 //     -s '-screen 0 1600x1000x24' build/linux/x64/profile/bundle/lifeos_folio
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, depend_on_referenced_packages
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'dart:isolate';
