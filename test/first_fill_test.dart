@@ -178,11 +178,17 @@ class _Mobile extends UyapMobileApi {
   @override
   bool get connected => on;
 
+  /// How often its hearings and its notifications were asked for.
+  int hearingsAsked = 0, noticesAsked = 0;
+
   @override
   Future<List<Map<String, Object?>>> hearingRows(
     DateTime from,
     DateTime to,
-  ) async => const [];
+  ) async {
+    hearingsAsked++;
+    return const [];
+  }
 
   /// The same codes as the web's: a case it lists is found there.
   @override
@@ -282,19 +288,21 @@ class _Mobile extends UyapMobileApi {
   bool vekilKaydi = false;
 
   @override
-  Future<List<Map<String, Object?>>> noticeRows({String? after}) async =>
-      vekilKaydi && after == null
-      ? [
-          {
-            'bildirimId': 'b1',
-            'mesajId': 'm1',
-            'baslik': 'Vekil Kaydı',
-            'mesaj':
-                'Antalya 3. Asliye Ceza Mahkemesi birimi, 2026/91 dosyasında '
-                ', Sanık Deniz Yılmaz vekili olarak Vekil Kaydı yapıldı.',
-          },
-        ]
-      : const [];
+  Future<List<Map<String, Object?>>> noticeRows({String? after}) async {
+    noticesAsked++;
+    return vekilKaydi && after == null
+        ? [
+            {
+              'bildirimId': 'b1',
+              'mesajId': 'm1',
+              'baslik': 'Vekil Kaydı',
+              'mesaj':
+                  'Antalya 3. Asliye Ceza Mahkemesi birimi, 2026/91 dosyasında '
+                  ', Sanık Deniz Yılmaz vekili olarak Vekil Kaydı yapıldı.',
+            },
+          ]
+        : const [];
+  }
 
   /// The documents' answer: none, or (null) one without the list.
   Map<String, Object?>? documents = const {'tumEvraklar': {}, 'son20Evrak': []};
@@ -1058,6 +1066,82 @@ void main() {
       expect(sync.jobClaim.value!.owner, SyncClock.localDeviceId(db));
       expect(sync.jobClaim.value!.generation, 1);
       expect(mobile.asked, isNotEmpty);
+    });
+  });
+
+  // docs/uyap-otomatik-okuma-tek-cihaz.md: a channel another own computer
+  // reads of itself is not read of itself here.
+  group('reading of itself, left to another own computer', () {
+    PortalSync withReader(
+      _Mobile mobile, {
+      _Web? web,
+      String? Function(PortalChannel)? reader,
+    }) {
+      // Turned on as the lawyer turns it on: kept, and read back at start.
+      db.setMeta(PortalSync.autoKey, '1');
+      final sync = PortalSync(
+        web: web ?? (_Web()..on = false),
+        mobile: mobile,
+        database: () async => db,
+        autoReader: reader,
+      )..autoFetch = true;
+      addTearDown(sync.dispose);
+      return sync;
+    }
+
+    Future<void> settle(bool Function() done) async {
+      for (var i = 0; i < 100 && !done(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+
+    String? office(PortalChannel c) =>
+        c == PortalChannel.uyapMobile ? 'Ofis bilgisayarı' : null;
+
+    test('what is due is not read on the channel the other reads; read when '
+        'none does', () async {
+      final left = _Mobile();
+      withReader(left, reader: office).readDueForTesting();
+      await settle(() => left.hearingsAsked > 0);
+      expect(left.hearingsAsked, 0);
+
+      final mine = _Mobile();
+      withReader(mine).readDueForTesting();
+      await settle(() => mine.hearingsAsked > 0);
+      expect(mine.hearingsAsked, greaterThan(0));
+    });
+
+    test('connected, the channel the other reads is not read, nor the '
+        'notifications when it is the only one here', () async {
+      final mobile = _Mobile();
+      final sync = withReader(mobile, reader: office);
+      await sync.connectedForTesting(PortalChannel.uyapMobile);
+      await settle(() => mobile.hearingsAsked > 0 || mobile.noticesAsked > 0);
+      expect(mobile.hearingsAsked, 0);
+      expect(mobile.noticesAsked, 0);
+      // None reading it elsewhere, connecting reads both.
+      final alone = _Mobile();
+      await withReader(alone).connectedForTesting(PortalChannel.uyapMobile);
+      await settle(() => alone.hearingsAsked > 0 && alone.noticesAsked > 0);
+      expect(alone.hearingsAsked, greaterThan(0));
+      expect(alone.noticesAsked, greaterThan(0));
+    });
+
+    test('a channel here the other does not read keeps the notifications '
+        'read here', () async {
+      final mobile = _Mobile();
+      final sync = withReader(mobile, web: _Web(), reader: office);
+      await sync.connectedForTesting(PortalChannel.uyapMobile);
+      await settle(() => mobile.noticesAsked > 0);
+      expect(mobile.hearingsAsked, 0);
+      expect(mobile.noticesAsked, greaterThan(0));
+    });
+
+    test('what the lawyer asks for is asked here all the same', () async {
+      final mobile = _Mobile();
+      final sync = withReader(mobile, reader: office);
+      await sync.syncMobile(full: true);
+      expect(mobile.hearingsAsked, greaterThan(0));
     });
   });
 

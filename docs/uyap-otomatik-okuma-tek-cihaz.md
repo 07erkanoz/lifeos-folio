@@ -1,4 +1,7 @@
-# Otomatik UYAP okuması: kendi cihazlardan yalnız biri okusun (öneri, 16 Ekim 2026)
+# Otomatik UYAP okuması: kendi cihazlardan yalnız biri okusun (16 Ekim 2026)
+
+**Durum:** uygulandı (dal `claude/kind-lehmann-7487c9`, `main`'e henüz alınmadı). Kararlar §6'da,
+ne yapıldığı §7'de.
 
 Kapsam: "UYAP verilerini kendiliğinden al" (`PortalSync.autoFetch`, Ayarlar › Bağlantılar,
 `lib/ui/settings/uyap_auto.dart`) iki bilgisayarda da açıkken UYAP'a iki kez gidilmesi. Uzun işler
@@ -123,17 +126,51 @@ UYAP durumu'na da aynı satır (soru 4).
   - `uyap` parçası kapalıyken bırakılmaz.
 - Ayarlar satırının metni (ekran testi).
 
-## 6. Kullanıcıya sorular
+## 6. Kararlar (kullanıcı, 16 Ekim 2026)
 
-1. **Kim okusun?** Öneri: kendiliğinden seçilsin. Önce o kanalda uzun işi çalıştıran, yoksa sabit
-   bir sıra. İsterseniz bunun yerine Ayarlar'da "Kendiliğinden okumayı bu bilgisayar yapsın"
-   seçeneği olur. Daha açık, ama bir ayar daha.
-2. **Kanal başına mı, cihaz başına mı?** Öneri: kanal başına. Ofiste yalnız UYAP Mobil, evde
-   UYAP Web bağlıysa ikisi de kendi kanalını okur, hiçbir şey eksik kalmaz. Cihaz başına olursa
-   daha basit olur, ama bir kanal hiç okunmayabilir.
-3. **Bildirimler:** öneri, yalnız buradaki bütün kanallar öbüründe okunuyorsa atlansın. Bir
-   kanal burada kalıyorsa bildirimler burada da okunur: hafif, ve zaten saatte bir.
-4. **Ekranda gösterilsin mi?** Öneri: yalnız Ayarlar satırında, bırakılmışken. UYAP durumu'nda
-   da isterseniz eklenir.
-5. **UETS (tebligat):** oturum geri gelince her cihaz UETS'yi de okuyor (`_uetsChanged`,
-   `:1293-1298`). Bu UYAP değil. Aynı kurala bağlansın mı, yoksa şimdilik dışarıda mı kalsın?
+1. **Kim okusun:** kendiliğinden seçilsin. Önce o kanalda uzun işi çalıştıran, yoksa sabit sıra.
+   Yeni ayar yok.
+2. **Kanal başına.**
+3. **Bildirimler:** yalnız buradaki bütün kanallar öbüründe okunuyorsa bırakılır.
+4. **Ekranda:** yalnız Ayarlar satırında, bırakılmışken.
+5. **UETS:** şimdilik dışarıda.
+
+Kullanıcının sorusu: "Bu kadar karışık işlemleri bir avukat nasıl yapacak?" Cevap: hiçbirini
+yapmaz. Seçim kendiliğinden yapılır. Ekranda görünen tek şey Ayarlar'daki bir satırdır; uzun işte
+de tek bir "Bu bilgisayarda devral" düğmesi vardır.
+
+## 7. Uygulama (16 Ekim 2026)
+
+- **Kural:** `autoReaderElsewhere` (`lib/services/sync/auto_reader.dart`): adaylar → kazanan;
+  saf işlev, ağdan bağımsız.
+- **`PortalSync`** (`portal_sync.dart`):
+  - kanca `autoReader` (statik; yapıcıda testler için verilebilir), `autoReaderOf(kanal)`;
+  - `_readDue` mobil ve web dalları ile `enrichOnWeb`;
+  - `_connected`'ın `autoFetch` dalı (`sync()` ve bildirimler);
+  - `syncNotices(auto: true)` (`_noticesElsewhere`): zamanlayıcı, ayarı açmak, telefon öne gelince;
+  - süren iş kanalı `jobRunningHere`; iş başlayınca ve bitince `jobRunsChanged`;
+  - ekranlar için `autoReadersChanged`;
+  - yalnız test için `readDueForTesting`.
+  - Okuma kodu değişmedi; avukatın düğmeleri (`full`/`force` yolları) bırakılmaz.
+- **Senkron** (`own_sync.dart`):
+  - `oturumlar` parçası süren işin kanalını taşır (`is`);
+  - `PortalSync.autoReader` ağdaki kendi cihazlardan kuralı kurar: cihaz adı `OfficePeer.device`;
+    telefon, `oto` ve oturum bilgisi parçadan;
+  - iş başlayınca ya da bitince `ownChanged`;
+  - cihaz gelip gidince ekran yeniden sorar.
+- **Ekran:** Ayarlar › Bağlantılar (`uyap_auto.dart`): bırakılmış kanal varken
+  *"Şu an kendiliğinden okumayı … yapıyor (UYAP Mobil); bu bilgisayar onun okuduklarını alır."*
+- **Testler:**
+  - `test/auto_reader_test.dart`: 4 kural testi ve Ayarlar satırı.
+  - `test/first_fill_test.dart`, "reading of itself, left to another own computer" (4):
+    - vakti gelen okuma bırakılan kanalda yapılmaz, bırakılmayınca yapılır;
+    - bağlanınca bırakılan kanal okunmaz, burada tek kanal oysa bildirimler de okunmaz (ve
+      bırakılmayınca ikisi de okunur);
+    - burada bırakılmayan bir kanal varken bildirimler okunur;
+    - avukatın istediği bırakılmaz.
+- **Bütün takım:** 1767 geçti, 27 başarısız. Hepsi önceden bilinen kırık ya da zamana bağlı
+  testler. Bu turda ilk kez düşen `uyap_budget_test` yük altında 30 sn sınırına takıldı; tek
+  başına geçiyor.
+- **Yapılmayanlar:** iki gerçek bilgisayarla ve canlı UYAP ile denenmedi. Kuralı uçtan uca
+  (`oturumlar` iki gerçek `OfficeNetwork` arasında) sınayan test yok; parça statik
+  `PortalSync.started`'a bağlı.

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../services/portal/portal_channel.dart';
 import '../../services/portal/portal_sync.dart';
 import '../mobile/settings_parts.dart';
 
@@ -13,9 +14,29 @@ class UyapAutoRow extends StatelessWidget {
 
   final PortalSync sync;
 
+  /// The channels connected here that another own computer reads of
+  /// itself, by its name: one line each name.
+  List<String> _leftTo() {
+    if (!sync.autoFetch) return const [];
+    final by = <String, List<String>>{};
+    for (final (channel, connected, name) in [
+      (PortalChannel.uyapMobile, sync.mobile.connected, 'UYAP Mobil'),
+      (PortalChannel.uyapWeb, sync.web.connected, 'UYAP Web'),
+    ]) {
+      if (!connected) continue;
+      final reader = sync.autoReaderOf(channel);
+      if (reader != null) (by[reader] ??= []).add(name);
+    }
+    return [
+      for (final MapEntry(key: reader, value: channels) in by.entries)
+        'Şu an kendiliğinden okumayı $reader yapıyor '
+            '(${channels.join(' ve ')}); bu bilgisayar onun okuduklarını alır.',
+    ];
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: sync,
+    listenable: Listenable.merge([sync, PortalSync.autoReadersChanged]),
     builder: (context, _) => Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -35,6 +56,18 @@ class UyapAutoRow extends StatelessWidget {
             await sync.setAutoFetch(on);
           }, key: const ValueKey('settings-uyap-auto-switch')),
         ),
+        for (final line in _leftTo())
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Text(
+              line,
+              key: const ValueKey('settings-uyap-auto-elsewhere'),
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(

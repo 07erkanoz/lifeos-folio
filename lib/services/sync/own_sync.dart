@@ -20,6 +20,8 @@ import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
 import '../uets/notice_deadlines.dart';
 import '../uyap/uyap_case_store.dart';
+import '../portal/portal_channel.dart';
+import 'auto_reader.dart';
 import 'settings_sync.dart';
 import 'sync_caps.dart';
 import 'uyap_documents_sync.dart';
@@ -138,6 +140,31 @@ class OwnSync extends ChangeNotifier {
               _reads.contains(peer.deviceId) &&
               (held[peer.deviceId]?.contains('mobil') ?? false),
         );
+    // Of the computers reading UYAP of themselves, one reads each channel
+    // (docs/uyap-otomatik-okuma-tek-cihaz.md).
+    PortalSync.autoReader = (channel) => autoReaderElsewhere(
+      channel,
+      me: _net.self?.deviceId ?? '',
+      myJob: PortalSync.started?.jobRunningHere,
+      takesTheirs: isOn(uyapData),
+      peers: [
+        for (final peer in _net.ownOnline)
+          AutoReadPeer(
+            id: peer.deviceId,
+            name: peer.device,
+            phone: _phones.contains(peer.deviceId),
+            reads: _reads.contains(peer.deviceId),
+            held: held[peer.deviceId] ?? const {},
+            job: _jobs[peer.deviceId],
+          ),
+      ],
+    );
+    PortalSync.jobRunsChanged = () {
+      _net.ownChanged();
+      PortalSync.autoReadersChanged.value++;
+    };
+    // An own device come or gone: who reads may be another now.
+    _net.addListener(() => PortalSync.autoReadersChanged.value++);
     // Read anew here: the others are given it a moment later.
     PortalSync.uyapChanged = () {
       if (isOn(uyapData)) _net.ownChanged();
@@ -161,6 +188,9 @@ class OwnSync extends ChangeNotifier {
         // UYAP Mobil's latest tokens: the other goes on with them, not
         // with a refresh token this one may have spent.
         'mobil': ?_sessions.sessionOf('mobil'),
+        // The channel of the long job running here: it reads that channel
+        // of itself, the others leaving it to this one.
+        'is': ?PortalSync.started?.jobRunningHere?.name,
       },
       merge: (theirs) async {
         if (theirs is! Map || theirs['cihaz'] is! String) return false;
@@ -172,8 +202,15 @@ class OwnSync extends ChangeNotifier {
         } else {
           _reads.remove(id);
         }
+        final job = PortalChannel.values.asNameMap()['${theirs['is']}'];
+        if (job == null) {
+          _jobs.remove(id);
+        } else {
+          _jobs[id] = job;
+        }
         _sessions.keepMobileAlike(theirs['mobil']);
         notifyListeners();
+        PortalSync.autoReadersChanged.value++;
         return false;
       },
     );
@@ -240,6 +277,9 @@ class OwnSync extends ChangeNotifier {
 
   /// The own devices that said they read UYAP of themselves and give it.
   final _reads = <String>{};
+
+  /// The channel of the long job each own device said it runs now.
+  final _jobs = <String, PortalChannel>{};
 
   /// Whether this device is a phone; by the platform when not said.
   final bool? phone;

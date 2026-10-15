@@ -75,7 +75,9 @@ class PortalSync extends ChangeNotifier {
     this.quiet = false,
     Future<List<Object?>> Function(Map<String, Object?> claim)? tellJob,
     String? deviceName,
+    String? Function(PortalChannel channel)? autoReader,
   }) : _tellJobHere = tellJob,
+       _autoReaderHere = autoReader,
        _nameHere = deviceName,
        _packageRoot = packageRoot ?? _defaultPackageRoot,
        _secrets = secrets ?? SecretStore(),
@@ -345,7 +347,10 @@ class PortalSync extends ChangeNotifier {
         final portfolioDue =
             (read == null || read.isBefore(weekStart(now))) &&
             (tried == null || now.difference(tried) > const Duration(hours: 2));
+        // A channel another own computer reads of itself is left to it:
+        // what it reads comes here (docs/uyap-otomatik-okuma-tek-cihaz.md).
         if (_mobile.connected &&
+            !_readElsewhere(PortalChannel.uyapMobile) &&
             (portfolioDue || _hearingsDue(db, PortalChannel.uyapMobile))) {
           unawaited(syncMobile());
         }
@@ -356,11 +361,13 @@ class PortalSync extends ChangeNotifier {
           full: false,
           key: _mobile.connected ? _webOnlyKey : _portfolioKey,
         ).$1;
-        if (_web.connected &&
+        final webHere =
+            _web.connected && !_readElsewhere(PortalChannel.uyapWeb);
+        if (webHere &&
             (_hearingsDue(db, PortalChannel.uyapWeb) || webPortfolioDue)) {
           unawaited(syncWeb());
         }
-        if (_web.connected) unawaited(enrichOnWeb());
+        if (webHere) unawaited(enrichOnWeb());
       }().catchError((Object _) {}),
     );
   }
@@ -492,8 +499,8 @@ class PortalSync extends ChangeNotifier {
     }
     final sync = channel == PortalChannel.uyapWeb ? syncWeb : syncMobile;
     if (autoFetch) {
-      unawaited(sync());
-      unawaited(syncNotices());
+      if (!_readElsewhere(channel)) unawaited(sync());
+      if (!_noticesElsewhere) unawaited(syncNotices());
       return;
     }
     final db = await _database();
@@ -506,6 +513,11 @@ class PortalSync extends ChangeNotifier {
   @visibleForTesting
   Future<void> connectedForTesting(PortalChannel channel) =>
       _connected(channel);
+
+  /// For tests: what is due of itself read, as the five minutes' timer
+  /// does by day.
+  @visibleForTesting
+  void readDueForTesting() => _readDue();
 
   // The lawyer's own long readings (§6, §11.3).
 
@@ -910,15 +922,25 @@ class PortalSync extends ChangeNotifier {
   String _jobListKey(UyapJob j) =>
       j.kind == UyapJobKind.setup ? _portfolioKey : _webOnlyKey;
 
-  Future<void> _runJob() => _jobRun ??= _jobSteps()
-      .catchError((Object e) {
-        unawaited(SyncLog.note('İş durdu: $e'));
-      })
-      .whenComplete(() {
-        _jobRun = null;
-        _beat?.cancel();
-        _beat = null;
-      });
+  Future<void> _runJob() {
+    if (_jobRun != null) return _jobRun!;
+    final run = _jobRun = _jobSteps()
+        .catchError((Object e) {
+          unawaited(SyncLog.note('İş durdu: $e'));
+        })
+        .whenComplete(() {
+          _jobRun = null;
+          _beat?.cancel();
+          _beat = null;
+          jobRunsChanged?.call();
+        });
+    jobRunsChanged?.call();
+    return run;
+  }
+
+  /// The channel of the long job running here now; null when none is.
+  PortalChannel? get jobRunningHere =>
+      _jobRun != null && _jobHere ? job.value?.channel : null;
 
   /// While the job runs here, the other own devices told so each minute,
   /// with how far it has come; nothing is asked of UYAP for it.
@@ -1728,6 +1750,8 @@ class PortalSync extends ChangeNotifier {
     // has Folio read UYAP of itself, not at night, and once an hour.
     if (auto) {
       if (!autoFetch || night(DateTime.now())) return Future.value();
+      // Every channel here read of itself on another own computer.
+      if (_noticesElsewhere) return Future.value();
       within ??= noticeEvery;
     }
     // A phone with Folio out of sight leaves it to the background check.
@@ -1765,6 +1789,38 @@ class PortalSync extends ChangeNotifier {
   /// session is on the network (set by Senkron). What the lawyer asks for
   /// by hand is asked here all the same.
   static bool Function()? deferToComputer;
+
+  /// The other own computer that reads [PortalChannel] of itself in this
+  /// one's stead, by its name; null when this one does (set by Senkron,
+  /// docs/uyap-otomatik-okuma-tek-cihaz.md). What the lawyer asks for by
+  /// hand is asked here all the same.
+  static String? Function(PortalChannel channel)? autoReader;
+  final String? Function(PortalChannel channel)? _autoReaderHere;
+
+  /// Told when who reads of itself may have changed: the screens ask
+  /// [autoReaderOf] again.
+  static final autoReadersChanged = ValueNotifier<int>(0);
+
+  /// Told when a long job starts or stops running here, for the other own
+  /// devices to know who reads of itself (set by Senkron).
+  static VoidCallback? jobRunsChanged;
+
+  /// The other own computer reading [channel] of itself instead of this
+  /// one; null when none is.
+  String? autoReaderOf(PortalChannel channel) =>
+      (_autoReaderHere ?? autoReader)?.call(channel);
+
+  bool _readElsewhere(PortalChannel channel) => autoReaderOf(channel) != null;
+
+  /// Whether every UYAP channel connected here is read of itself on
+  /// another own computer: the notifications then are too.
+  bool get _noticesElsewhere {
+    final here = [
+      if (_mobile.connected) PortalChannel.uyapMobile,
+      if (_web.connected) PortalChannel.uyapWeb,
+    ];
+    return here.isNotEmpty && here.every(_readElsewhere);
+  }
 
   /// Told when a reading of UYAP or UETS here is done: Senkron gives it to
   /// the person's other devices.
