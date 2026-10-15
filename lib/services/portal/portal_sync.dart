@@ -13,6 +13,7 @@ import '../editor/profile_autofill.dart';
 import '../platform/app_directories.dart';
 import '../legal/deadlines/aidiyet.dart';
 import '../security/secret_store.dart';
+import '../sync/sync_generation.dart';
 import '../uets/notice_deadlines.dart';
 import '../uets/notice_events.dart';
 import '../uets/notice_documents.dart';
@@ -32,6 +33,7 @@ import 'portal_case.dart';
 import 'case_sections.dart';
 import 'portal_channel.dart';
 import 'uyap_job.dart';
+import 'uyap_job_owner.dart';
 import 'uyap_status.dart';
 import 'portal_database.dart';
 import 'portal_hearing.dart';
@@ -71,7 +73,11 @@ class PortalSync extends ChangeNotifier {
     Future<String?> Function()? packageRoot,
     this._packageGap = const Duration(seconds: 3),
     this.quiet = false,
-  }) : _packageRoot = packageRoot ?? _defaultPackageRoot,
+    Future<List<Object?>> Function(Map<String, Object?> claim)? tellJob,
+    String? deviceName,
+  }) : _tellJobHere = tellJob,
+       _nameHere = deviceName,
+       _packageRoot = packageRoot ?? _defaultPackageRoot,
        _secrets = secrets ?? SecretStore(),
        _web = web ?? UyapWebService.instance,
        _mobile = mobile ?? UyapMobileApi.instance,
@@ -434,6 +440,7 @@ class PortalSync extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _restoreRetry?.cancel();
+    _beat?.cancel();
     _progressTimer?.cancel();
     _noticeTimer?.cancel();
     noticesVersion.dispose();
@@ -471,7 +478,11 @@ class PortalSync extends ChangeNotifier {
     await _autoLoaded;
     if (_disposed || quiet) return;
     final j = job.value;
+    // Another own device's job is not taken up here of itself, whatever
+    // was last heard of it: the lawyer takes it over
+    // (docs/uyap-is-sahipligi.md).
     if (j != null &&
+        _jobHere &&
         !j.done &&
         j.channel == channel &&
         (j.stopped == null || j.stopped == UyapJobStop.session)) {
@@ -491,13 +502,89 @@ class PortalSync extends ChangeNotifier {
     if (neverRead && j == null) setupOffer.value = true;
   }
 
+  /// For tests: [channel] connected, as its session's listener tells it.
+  @visibleForTesting
+  Future<void> connectedForTesting(PortalChannel channel) =>
+      _connected(channel);
+
   // The lawyer's own long readings (§6, §11.3).
 
   /// The setup or the web's completion the lawyer started; null when none.
+  /// On this device or another of theirs: [jobClaim] says which.
   final job = ValueNotifier<UyapJob?>(null);
 
-  /// How far the running job has come.
+  /// How far the running job has come, while it runs here.
   final jobProgress = ValueNotifier<UyapJobProgress?>(null);
+
+  /// The job as the lawyer's own devices keep it alike: with the one that
+  /// runs it, and how lately it said so (docs/uyap-is-sahipligi.md); kept
+  /// when let go of, so that an older word does not bring it back.
+  final jobClaim = ValueNotifier<UyapJobClaim?>(null);
+
+  /// Gives the job's record to the person's other devices on the network
+  /// now, and their records back (set by Senkron).
+  static Future<List<Object?>> Function(Map<String, Object?> claim)? tellJob;
+  final Future<List<Object?>> Function(Map<String, Object?> claim)?
+  _tellJobHere;
+
+  /// This device's name as its others show it (set by Senkron).
+  static String Function()? deviceName;
+  final String? _nameHere;
+
+  /// This device's own, by its database ([SyncClock.localDeviceId]): there
+  /// before any office is joined, and never another's.
+  String _me = '';
+
+  /// When each other device was last heard of here, by this one's clock:
+  /// its own may be off.
+  final _heard = <String, DateTime>{};
+  Timer? _beat;
+
+  String get _myName {
+    final named = _nameHere ?? deviceName?.call() ?? '';
+    if (named.isNotEmpty) return named;
+    try {
+      return Platform.localHostname;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Whether the job known, if any, is this device's to run.
+  bool get _jobHere {
+    final c = jobClaim.value;
+    return c == null || c.dropped || c.ownedBy(_me);
+  }
+
+  /// Whether the job known is another own device's.
+  bool get jobElsewhere {
+    final c = jobClaim.value;
+    return c != null && !c.dropped && !c.ownedBy(_me);
+  }
+
+  /// Whether the job known is another own device's and that one is taken
+  /// to be running it now: heard of within [UyapJobClaim.fresh].
+  bool jobRunningElsewhere([DateTime? now]) =>
+      jobElsewhere &&
+      jobClaim.value!.running(
+        now ?? DateTime.now(),
+        heard: _heard[jobClaim.value!.owner],
+      );
+
+  /// When the job's owner was last heard of: by its word, or here.
+  DateTime? get jobLastWord {
+    final c = jobClaim.value;
+    if (c == null) return null;
+    final heard = _heard[c.owner];
+    return heard != null && heard.isAfter(c.lastWord) ? heard : c.lastWord;
+  }
+
+  /// How far the job has come: here as it runs, else as its owner said.
+  UyapJobProgress? get jobProgressShown =>
+      jobElsewhere ? jobClaim.value!.progress : jobProgress.value;
+
+  /// The job's record for the person's other devices; null when none.
+  Map<String, Object?>? jobExport() => jobClaim.value?.toJson();
 
   /// Set when a portal connects and the portfolio was never read: the
   /// screens offer the setup, which the lawyer starts.
@@ -512,14 +599,143 @@ class PortalSync extends ChangeNotifier {
 
   Future<void> _loadJob() async {
     try {
-      job.value = UyapJob.decode((await _database()).meta(_jobKey));
+      final db = await _database();
+      _me = SyncClock.localDeviceId(db);
+      final raw = db.meta(_jobKey);
+      var claim = UyapJobClaim.decode(raw);
+      // One kept before the job had an owner: this device's, which ran it.
+      if (claim == null) {
+        if (UyapJob.decode(raw) case final old?) {
+          claim = UyapJobClaim.start(
+            old,
+            owner: _me,
+            ownerName: _myName,
+            version: SyncClock.of(db).tick(),
+            beating: false,
+          );
+          db.setMeta(_jobKey, claim.encode());
+        }
+      }
+      _showJob(claim);
     } catch (_) {}
   }
 
+  void _showJob(UyapJobClaim? claim) {
+    jobClaim.value = claim;
+    job.value = claim?.job;
+  }
+
+  /// [claim] kept here and given to the other own devices on the network;
+  /// what they hold taken in from their answers.
+  void _holdJob(PortalDatabase db, UyapJobClaim claim) {
+    db.setMeta(_jobKey, claim.encode());
+    _showJob(claim);
+    final tell = _tellJobHere ?? tellJob;
+    if (tell == null) return;
+    unawaited(
+      () async {
+        for (final theirs in await tell(claim.toJson())) {
+          await mergeJob(theirs, direct: true);
+        }
+      }().catchError((Object _) {}),
+    );
+  }
+
+  /// The owner's next word of its job, [next] (null: let go of): said
+  /// running while it is neither stopped nor done.
+  UyapJobClaim _sayJob(PortalDatabase db, UyapJob? next) {
+    final version = SyncClock.of(db).tick();
+    final now = jobClaim.value;
+    final claim = now == null
+        ? UyapJobClaim.start(
+            next!,
+            owner: _me,
+            ownerName: _myName,
+            version: version,
+          )
+        : now.said(
+            version: version,
+            job: next,
+            drop: next == null,
+            beating: next != null && !next.done && next.stopped == null,
+            progress: jobProgress.value,
+          );
+    _holdJob(db, claim);
+    return claim;
+  }
+
   Future<UyapJob> _keepJob(UyapJob next) async {
-    (await _database()).setMeta(_jobKey, next.encode());
-    job.value = next;
+    _sayJob(await _database(), next);
     return next;
+  }
+
+  /// [theirs], the job's record another own device holds, taken in where it
+  /// stands over the one here ([UyapJobClaim.pick]); [direct] when it came
+  /// from its device now, which is then heard of. The job running here and
+  /// taken over there stops at its next step and writes nothing more. True
+  /// when the one here changed.
+  Future<bool> mergeJob(Object? theirs, {bool direct = false}) async {
+    final their = UyapJobClaim.fromJson(theirs);
+    if (their == null) return false;
+    await _autoLoaded;
+    final db = await _database();
+    if (_disposed) return false;
+    SyncClock.observe(db, their.version);
+    if (direct && their.owner != _me) _heard[their.owner] = DateTime.now();
+    final mine = jobClaim.value;
+    final stands = mine == null ? their : UyapJobClaim.pick(mine, their);
+    if (identical(stands, mine)) return false;
+    final ranHere = mine != null && mine.runsOn(_me);
+    db.setMeta(_jobKey, stands.encode());
+    _showJob(stands);
+    if (ranHere && !stands.ownedBy(_me)) {
+      _jobGen++;
+      jobProgress.value = null;
+      final name = stands.ownerName;
+      unawaited(
+        SyncLog.note(
+          'İş ${name.isEmpty ? 'başka bir cihaza' : '$name cihazına'} '
+          'geçti; burada durdu',
+        ),
+      );
+    }
+    return true;
+  }
+
+  /// The job another own device runs, run here from now on, by the
+  /// lawyer's word alone: that one stops when it hears of it (at once when
+  /// on the network). It goes on from where it was, what that one read
+  /// and this one has not yet been given read again.
+  Future<void> takeOverJob() async {
+    await _autoLoaded;
+    final c = jobClaim.value;
+    if (c == null || !jobElsewhere || c.job!.done) return;
+    final gen = ++_jobGen;
+    await _jobRun;
+    if (gen != _jobGen || _disposed || !identical(jobClaim.value, c)) return;
+    final db = await _database();
+    var claim = c.takenOver(
+      device: _me,
+      name: _myName,
+      version: SyncClock.of(db).tick(),
+    );
+    if (!_jobConnected(claim.job!)) {
+      claim = claim.said(
+        version: SyncClock.of(db).tick(),
+        job: claim.job!.copyWith(
+          stage: claim.job!.stage,
+          stopped: UyapJobStop.session,
+        ),
+      );
+    }
+    _holdJob(db, claim);
+    unawaited(
+      SyncLog.note(
+        '${jobName(claim.job!.kind)} bu cihaza alındı'
+        '${c.ownerName.isEmpty ? '' : ' (${c.ownerName} cihazından)'}',
+      ),
+    );
+    if (claim.job!.stopped == null) await _runJob();
   }
 
   /// The first setup, on [channel]: its portfolio's list and hearings,
@@ -592,13 +808,37 @@ class PortalSync extends ChangeNotifier {
   }
 
   Future<void> _startJob(UyapJob next) async {
+    await _autoLoaded;
+    // Another own device runs one now: one job at a time for the person,
+    // that one taken over first.
+    if (jobRunningElsewhere()) {
+      unawaited(
+        SyncLog.note(
+          '${jobName(next.kind)} başlatılmadı: '
+          '${jobClaim.value!.ownerName} cihazında iş sürüyor',
+        ),
+      );
+      return;
+    }
     setupOffer.value = false;
     final gen = ++_jobGen;
     // A run of the job before stops first: one job at a time.
     await _jobRun;
     // Another start, a pause or a drop came meanwhile: that one stands.
     if (gen != _jobGen || _disposed) return;
-    await _keepJob(next);
+    final db = await _database();
+    // After every job known, here or on another own device: it stands
+    // where they meet.
+    _holdJob(
+      db,
+      UyapJobClaim.start(
+        next,
+        owner: _me,
+        ownerName: _myName,
+        version: SyncClock.of(db).tick(),
+        known: jobClaim.value,
+      ),
+    );
     unawaited(
       SyncLog.note(
         '${jobName(next.kind)} başladı (${_channelName(next.channel)})'
@@ -612,8 +852,9 @@ class PortalSync extends ChangeNotifier {
   /// ([resumeJob]), the cases read kept. The case being read when it is
   /// paused is the last one.
   Future<void> pauseJob() async {
+    await _autoLoaded;
     final j = job.value;
-    if (j == null || j.done) return;
+    if (j == null || j.done || !_jobHere) return;
     _jobGen++;
     await _keepJob(j.copyWith(stage: j.stage, stopped: UyapJobStop.user));
   }
@@ -621,7 +862,8 @@ class PortalSync extends ChangeNotifier {
   /// A stopped job goes on, where its channel is connected; not connected,
   /// it stays stopped, waiting for the channel.
   Future<void> resumeJob() async {
-    if (job.value == null || job.value!.done) return;
+    await _autoLoaded;
+    if (job.value == null || job.value!.done || !_jobHere) return;
     final gen = ++_jobGen;
     await _jobRun;
     // Let go of, paused or started anew meanwhile: that stands.
@@ -636,12 +878,15 @@ class PortalSync extends ChangeNotifier {
     await _runJob();
   }
 
-  /// The job let go of: what it read stays.
+  /// The job let go of: what it read stays. Another own device's only once
+  /// it is done: the lawyer takes over one that is not.
   Future<void> dropJob() async {
+    await _autoLoaded;
+    final j = job.value;
+    if (j == null || (!_jobHere && !j.done)) return;
     _jobGen++;
-    (await _database()).setMeta(_jobKey, '');
-    job.value = null;
     jobProgress.value = null;
+    _sayJob(await _database(), null);
   }
 
   /// How [kind] is named on the screens and in the log.
@@ -669,24 +914,47 @@ class PortalSync extends ChangeNotifier {
       .catchError((Object e) {
         unawaited(SyncLog.note('İş durdu: $e'));
       })
-      .whenComplete(() => _jobRun = null);
+      .whenComplete(() {
+        _jobRun = null;
+        _beat?.cancel();
+        _beat = null;
+      });
+
+  /// While the job runs here, the other own devices told so each minute,
+  /// with how far it has come; nothing is asked of UYAP for it.
+  void _beatJob(bool Function() current) {
+    _beat?.cancel();
+    _beat = Timer.periodic(UyapJobClaim.beatEvery, (_) {
+      final j = job.value;
+      if (!current() || j == null || j.done || j.stopped != null) return;
+      unawaited(
+        _database()
+            .then((db) {
+              if (current()) _sayJob(db, job.value);
+            })
+            .catchError((Object _) {}),
+      );
+    });
+  }
 
   Future<void> _jobSteps() async {
     final gen = _jobGen;
     var j = job.value;
-    if (j == null || j.done || !_jobConnected(j)) return;
+    if (j == null || j.done || !_jobHere || !_jobConnected(j)) return;
     // Whether this run is still the job's: a pause, a drop or a start
-    // after it makes it another's, and it writes nothing more.
-    bool current() => !_disposed && gen == _jobGen;
+    // after it, or the job taken over on another own device, makes it
+    // another's, and it writes nothing more.
+    bool current() => !_disposed && gen == _jobGen && _jobHere;
     bool going() => current() && _jobConnected(j!);
     Future<bool> keep(UyapJob next) async {
       final db = await _database();
       if (!current()) return false;
-      db.setMeta(_jobKey, next.encode());
-      job.value = next;
+      _sayJob(db, next);
       j = next;
       return true;
     }
+
+    _beatJob(current);
 
     Future<void> stopped([UyapJobStop why = UyapJobStop.session]) async {
       if (await keep(j!.copyWith(stage: j!.stage, stopped: why))) {

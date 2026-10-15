@@ -1,4 +1,7 @@
-# UYAP işinin sahipliği: iki kendi cihaz aynı uzun işi aynı anda çalıştırmasın (öneri, 16 Ekim 2026)
+# UYAP işinin sahipliği: iki kendi cihaz aynı uzun işi aynı anda çalıştırmasın (16 Ekim 2026)
+
+**Durum:** uygulandı (dal `claude/kind-lehmann-7487c9`, `main`'e henüz alınmadı; kullanıcı gözden
+geçirecek). Ne yapıldığı ve neyin kalmadığı §3'te.
 
 Kapsam: [uyap-hedef-harita.md](uyap-hedef-harita.md) §11.4 ("işi başlatan cihaz iş kaydına kendini
 yazar, diğeri yalnız ilerlemeyi gösterir") ve §12'de ertelenen "sahiplik ve paylaşılan ilerleme".
@@ -6,11 +9,10 @@ Senkron tarafı: [senkron-plan.md](senkron-plan.md). **UYAP'tan nasıl okunduğu
 `_jobSteps`, aynı `_jobCases`, aynı istekler ve aynı hız. Değişen yalnız *hangi cihazın* işi
 çalıştırdığı.
 
-Satır numaraları:
-- `portal_sync.dart`, `uyap_job.dart`, `uyap_setup_dialog.dart` ve `uyap_status_dialog.dart` için
-  numaralar, ana çalışma kopyasındaki **henüz commit edilmemiş** "Eksik bilgileri tamamla" işine
-  (`UyapJobKind.fill`, hedef harita §13) göredir.
-- Diğer dosyalar `main` `2b17c69`'a göredir.
+Satır numaraları (§1–§2) öneri yazılırken bakılan sürüme göredir: `portal_sync.dart`,
+`uyap_job.dart` ve iki pencere için "Eksik bilgileri tamamla" işinin (hedef harita §13) o günkü
+çalışma kopyası, şimdi `main` `71351ed`; diğerleri `main` `2b17c69`. Uygulamadan sonra kaymış
+olabilirler; §3 yeni yerleri adıyla verir.
 
 ## 1. İncelemede çıkan, tasarımı belirleyen bulgular
 
@@ -178,12 +180,13 @@ Kurallar:
   - "Süren iş" başlığı ve `_jobLine` (`uyap_status_dialog.dart:302-316`, `:364-386`): cihaz adı ve
     son haber eklenir. Örnek: *"Ofis bilgisayarı · UYAP Mobil · evrak listeleri 212/333 · son
     haber 1 dk önce"*.
-  - Tamamlama düğmeleri (`fillRuns`, `:168`, `:240-262`): başka cihazın işi tazeyken gizlenir.
-    Sessizken görünür; basınca 2.5'teki onay sorulur.
+  - Tamamlama düğmeleri (`fillRuns`): bugünkü kuralla, iş durmamışsa gizli. Bu, başka cihazın
+    işi için de geçerli; sessizken de. O zaman yol "Süren iş" altındaki "Ayrıntı ya da bu
+    bilgisayarda devral"dır. Yeni bir iş başlatmak yerine işi devralmak, aynı dosya listesini
+    sürdürür.
   - Sayılar bu cihazın verisidir. Eşitleme gecikmişse ofisin okuduklarını henüz göstermez; bir
     satır bunu söyler.
-- **Maket:** metinler yukarıda. Görsel maket ya da ekran görüntüsü turu, onay verilirse
-  uygulamadan önce yapılır.
+- **Maket:** yapılmadı; metinler yukarıda ve testlerde.
 
 ### 2.7 Bu tasarımın kapsamadıkları (ayrı iş)
 
@@ -197,38 +200,80 @@ Kurallar:
   önler; tek dosya açmayı önlemez.
 - **İki ayrı UYAP Web girişinin** birbirini düşürüp düşürmediği ölçülmedi (karar 5).
 
-## 3. Uygulama sırası (onaydan sonra)
+## 3. Uygulama (16 Ekim 2026)
 
-Ön koşul: ana çalışma kopyasındaki fill işi ve UYAP durumu commit edilmiş olmalı. Bu iş onların
-üstüne kurulur.
+`main` `71351ed` (tamamlama işi ve UYAP durumu) bu dala alındıktan sonra yapıldı. UYAP'tan okuma
+yolları (`_jobCases`, `readSections`, liste okumaları) değişmedi.
 
-1. **Saf kurallar** — *yapıldı (16 Ekim 2026)*.
-   - `UyapJobClaim` (`lib/services/portal/uyap_job_owner.dart`): başlatma, devir, sahibin sözü,
-     birleştirme (`pick`), taze/sessiz (`running`), kim çalıştırabilir (`runsOn`).
-   - Ağdan ve `PortalSync`'ten bağımsız; `uyap_job.dart`'a dokunmaz.
-   - Test: `test/uyap_job_owner_test.dart` (9 test).
-2. **`PortalSync`.**
-   - Sahiplik denetimleri: `_connected`, `_startJob`, `resumeJob`, `_jobSteps.current()`.
-   - Nabız zamanlayıcı, `takeOverJob`, `mergeJob`.
-   - Ağa dokunmaz; kancalar bugünkü gibi statik: `deferToComputer`/`uyapChanged` gibi
-     `jobSelf`/`jobChanged`.
-3. **`OwnSync`.**
-   - `uyap-is` parçası ve `ownAnswers['uyap-is']`; `SyncCaps.isSahipligi`.
-   - Sahibin ağa girip çıkması: `_net` dinleyicisi.
-4. **Ekranlar:** 2.6.
-5. **Testler.**
-   - `test/first_fill_test.dart`'ın iş grubuna (`:520`) iki `PortalSync` ile senaryolar:
-     - B, A'nın işini bağlanınca sürdürmez;
-     - B başlatamaz, nedenini görür;
-     - devir A'yı ilk adımında durdurur, yazdırmaz;
-     - ayrıyken iki nesil karşılaşınca tek sahip;
-     - eşit nesilde sonra başlatan kazanır, her iki sırada aynı;
-     - bırakılan diriltilmez;
-     - göç;
-     - eski sürüm eşe gitmez.
-   - Ağ katmanıyla A–B: `test/sync_step9_test.dart`'taki kurulum gibi.
-   - Ekran testleri: kurulum penceresi ve UYAP durumu, başka cihazın işi taze ve sessizken.
-6. `docs/uyap-hedef-harita.md` §11.4 ve §12'ye "uygulandı" notu.
+1. **Kurallar:** `UyapJobClaim` (`lib/services/portal/uyap_job_owner.dart`).
+   - İçerik: başlatma (`start`), devir (`takenOver`), sahibin sözü (`said`), birleştirme
+     (`pick`), taze/sessiz (`running`, 3 dk), kim çalıştırabilir (`runsOn`).
+   - Ağdan ve `PortalSync`'ten bağımsız; `UyapJob`'a dokunmaz.
+2. **`PortalSync`** (`portal_sync.dart`):
+   - Kayıt `uyap_job` metasında, sarılı biçimde durur. Sahipsiz eski kayıt açılışta bu cihazın
+     sayılır, 1. nesil, "çalışıyor" denmeden (`_loadJob`).
+   - Sahibin her sözü tek yoldan geçer (`_sayJob` → `_holdJob`): kayıt yazılır, ekrana verilir,
+     ağdaki kendi cihazlara söylenir. `_keepJob`, `_jobSteps.keep`, `dropJob` bunu kullanır.
+   - Denetimler (`_jobHere`):
+     - `_connected`: yalnız sahibin işi bağlanınca sürer;
+     - `pauseJob`, `resumeJob`: sahip olmayanda bir şey yapmaz;
+     - `_jobSteps`: başta ve her `current()`'ta denetler;
+     - `_startJob`: başka cihazın işi tazeyken başlatmaz, günlüğe yazar;
+     - `dropJob`: başka cihazın işini yalnız bitmişse kapatır.
+   - `mergeJob(theirs, direct:)`: gelen kaydı `pick` ile alır.
+     - Burada koşan iş başkasına geçtiyse `_jobGen++` olur: bir sonraki adımında durur ve yazmaz.
+     - `direct` ise sahibin duyulduğu an yerel saatle tutulur (`_heard`).
+   - `takeOverJob()`: yalnız avukatın düğmesiyle; kanal bağlı değilse `session` durumunda bekler.
+   - Nabız: iş koşarken 60 sn'de bir `_sayJob`; UYAP'a istek yok (`_beatJob`).
+   - Ekranlar için: `jobClaim`, `jobElsewhere`, `jobRunningElsewhere()`, `jobLastWord`,
+     `jobProgressShown`.
+   - Kancalar:
+     - `tellJob` ve `deviceName` statik (Senkron koyar); yapıcıda testler için verilebilir.
+     - `connectedForTesting` yalnız test için.
+3. **Senkron** (`own_sync.dart`, `sync_caps.dart`):
+   - `uyap-is` kendi cihaz parçası, her zaman açık.
+   - `ownAnswers['uyap-is']` gelen kaydı alır, buradakini döner.
+   - `PortalSync.tellJob` kaydı `askOwn` ile ağdaki her kendi cihaza söyler, yalnız
+     `isSahipligi` diyene.
+   - Cihaz adı `OfficePeer.device`.
+   - Yetenek `isSahipligi` (`known`, `active`; parça `{isSahipligi, hlc}` ister): eski sürüm
+     Folio'ya gitmez, ondan alınmaz.
+4. **Ekranlar:**
+   - Kurulum penceresi, başka cihazın işi:
+     - ilerleme kayıttan;
+     - not: "Bu iş başka bilgisayarınızda sürüyor: … · son haber …" ya da sessizken "kapalı ya da
+       başka bir ağda olabilir…";
+     - tek düğme "Bu bilgisayarda devral"; tazeyken onay sorulur.
+   - UYAP durumu, "Süren iş": cihaz adı ve son haber; düğme "Ayrıntı ya da bu bilgisayarda
+     devral"; sayıların bu bilgisayarın bildikleri olduğunu söyleyen satır.
+   - "Son haber" iki pencerede 30 sn'de bir yenilenir.
+5. **Testler:**
+   - `test/uyap_job_owner_test.dart` (9): kurallar.
+   - `test/first_fill_test.dart`, "two of the lawyer's own devices" (6):
+     - öbürü bağlanınca da Sürdür'de de çalıştırmaz;
+     - tazeyken başlatılamaz, devralınınca 2. nesille burada koşar;
+     - sessizken kendiliğinden bir şey yok, avukatın başlattığı sonra gelir;
+     - koşarken öbüründe devralınan iş bir sonraki adımında durur, gelen tarafları yazmaz;
+     - bırakılan öbüründe de bırakılır, eski söz diriltmez;
+     - sahipsiz eski kayıt bu cihazın.
+   - `test/uyap_job_owner_screens_test.dart` (4): kurulum penceresi taze ve sessiz, UYAP durumu,
+     "son haber" metni.
+   - Ekran testi ayrı dosyada. Nedeni: `first_fill_test`'teki önceki ekran testi `SyncLog`'un
+     yazma zincirini sahte saatinde bırakıyor; sonraki bir UYAP durumu okuması orada hiç bitmiyor.
+     Bu, bu işten önce de vardı.
+   - Bütün takım (16 Ekim 2026): 26 test başarısız.
+     - Hepsi senkron-plan §0'daki "bu işten önce de kırık olan testler" listesinde.
+     - Tek istisna `sync_protocol_test`'in A→B→C testi: zamana bağlı; `main`'de de üç denemenin
+       birinde düştü.
+
+Yapılmayanlar:
+- **Ağ katmanıyla uçtan uca test** (`uyap-is` parçası ve `askOwn` iki gerçek `OfficeNetwork`
+  arasında) yok. Parça `PortalSync.started`'ı kullanıyor; bir süreçte iki cihazın iki ayrı
+  `PortalSync`'i olamıyor. `PortalSync` tarafı yukarıdaki testlerde kanca yerine doğrudan
+  bağlanarak sınandı.
+- Bitmiş başka cihaz işinde "Ofis bilgisayarında tamamlandı" yazısı yok; bugünkü bitti metni
+  görünür, "Tamam" iki cihazda da kapatır.
+- Canlı UYAP ve iki gerçek bilgisayarla denenmedi.
 
 ## 4. Kararlar (kullanıcı, 16 Ekim 2026)
 

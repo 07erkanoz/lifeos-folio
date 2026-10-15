@@ -8,7 +8,10 @@ import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/portal/sync_log.dart';
 import 'package:evrak_convert/services/portal/uyap_job.dart';
+import 'package:evrak_convert/services/portal/uyap_job_owner.dart';
 import 'package:evrak_convert/services/portal/uyap_status.dart';
+import 'package:evrak_convert/services/sync/hlc.dart';
+import 'package:evrak_convert/services/sync/sync_generation.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
@@ -251,6 +254,7 @@ class _Mobile extends UyapMobileApi {
     String? caseType,
   }) async {
     asked.add('parties $caseId');
+    await onParties?.call(caseId);
     if (partiesFail || partiesFailFor.contains(caseId)) {
       throw StateError('UYAP');
     }
@@ -264,6 +268,9 @@ class _Mobile extends UyapMobileApi {
 
   /// Parties' answers before the session ends; endless when below zero.
   int answersLeft = -1;
+
+  /// Told of each case whose parties are asked for, before the answer.
+  Future<void> Function(String caseId)? onParties;
 
   /// The parties never answered, the session staying.
   bool partiesFail = false;
@@ -867,6 +874,190 @@ void main() {
         'AYŞE KARACA',
         'BERK İNŞAAT LTD. ŞTİ.',
       ]);
+    });
+  });
+
+  // docs/uyap-is-sahipligi.md: of the lawyer's own devices, one runs the
+  // job; the others show it.
+  group('two of the lawyer\'s own devices', () {
+    late PortalDatabase home;
+    setUp(() => home = PortalDatabase.memory());
+    tearDown(() => home.dispose());
+
+    /// The office computer (on [db]) and the home one (on [home]), each
+    /// telling the other of the job, as when on one network.
+    (PortalSync, PortalSync) pair(_Mobile office, _Mobile atHome) {
+      late PortalSync a, b;
+      Future<List<Object?>> Function(Map<String, Object?>) to(
+        PortalSync Function() other,
+      ) => (claim) async {
+        await other().mergeJob(claim, direct: true);
+        return [other().jobExport()];
+      };
+      a = PortalSync(
+        web: _Web()..on = false,
+        mobile: office,
+        database: () async => db,
+        deviceName: 'Ofis bilgisayarı',
+        tellJob: to(() => b),
+      );
+      b = PortalSync(
+        web: _Web()..on = false,
+        mobile: atHome,
+        database: () async => home,
+        deviceName: 'Ev bilgisayarı',
+        tellJob: to(() => a),
+      );
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+      return (a, b);
+    }
+
+    /// The office computer's setup at [stage], said [ago] to run.
+    Map<String, Object?> runningAtOffice({
+      Duration ago = Duration.zero,
+      UyapJobStage stage = UyapJobStage.list,
+    }) {
+      final at = DateTime.now().toUtc().subtract(ago);
+      return UyapJobClaim.start(
+        UyapJob(
+          kind: UyapJobKind.setup,
+          channel: PortalChannel.uyapMobile,
+          stage: stage,
+          started: at,
+        ),
+        owner: 'ofis',
+        ownerName: 'Ofis bilgisayarı',
+        version: Hlc(at.millisecondsSinceEpoch, 0, 'ofis'),
+      ).toJson();
+    }
+
+    PortalSync atHome(_Mobile mobile) {
+      final sync = PortalSync(
+        web: _Web()..on = false,
+        mobile: mobile,
+        database: () async => home,
+        deviceName: 'Ev bilgisayarı',
+      );
+      addTearDown(sync.dispose);
+      return sync;
+    }
+
+    test('a job started on one is shown on the other, which runs nothing of '
+        'it: not on connecting, not on Sürdür', () async {
+      final office = _Mobile()..answersLeft = 1;
+      final mobile = _Mobile();
+      final (a, b) = pair(office, mobile);
+      await a.startSetup(PortalChannel.uyapMobile);
+      await pumpEventQueue();
+      expect(a.job.value!.stopped, UyapJobStop.session);
+      expect(b.jobElsewhere, isTrue);
+      expect(b.job.value!.stopped, UyapJobStop.session);
+      expect(b.jobClaim.value!.ownerName, 'Ofis bilgisayarı');
+      await b.connectedForTesting(PortalChannel.uyapMobile);
+      await b.resumeJob();
+      await b.pauseJob();
+      await pumpEventQueue();
+      expect(mobile.asked, isEmpty);
+      expect(home.meta('portfolio_at'), isNull);
+      expect(b.job.value!.stopped, UyapJobStop.session);
+      expect(b.jobElsewhere, isTrue);
+    });
+
+    test('heard of within three minutes there, a start here waits for it to '
+        'be taken over; taken over, it runs here a generation on', () async {
+      final mobile = _Mobile();
+      final b = atHome(mobile);
+      await b.mergeJob(runningAtOffice(), direct: true);
+      expect(b.jobRunningElsewhere(), isTrue);
+      await b.startSetup(PortalChannel.uyapMobile);
+      expect(mobile.asked, isEmpty);
+      expect(b.jobClaim.value!.owner, 'ofis');
+      await b.takeOverJob();
+      expect(b.job.value!.done, isTrue);
+      expect(b.jobElsewhere, isFalse);
+      expect(b.jobClaim.value!.owner, SyncClock.localDeviceId(home));
+      expect(b.jobClaim.value!.generation, 2);
+      expect(mobile.asked, isNotEmpty);
+    });
+
+    test('heard of no more (off, or on another network): nothing runs of '
+        'itself, and a start of the lawyer\'s here comes after it', () async {
+      final mobile = _Mobile();
+      final b = atHome(mobile);
+      final office = runningAtOffice(ago: const Duration(minutes: 10));
+      await b.mergeJob(office);
+      expect(b.jobElsewhere, isTrue);
+      expect(b.jobRunningElsewhere(), isFalse);
+      await b.connectedForTesting(PortalChannel.uyapMobile);
+      await pumpEventQueue();
+      expect(mobile.asked, isEmpty);
+      await b.startSetup(PortalChannel.uyapMobile);
+      expect(b.job.value!.done, isTrue);
+      expect(b.jobElsewhere, isFalse);
+      // Where the two meet, this one stands.
+      final there = UyapJobClaim.fromJson(office)!;
+      expect(UyapJobClaim.pick(there, b.jobClaim.value!), b.jobClaim.value);
+    });
+
+    test('taken over on the other while it runs here, it stops at its next '
+        'step and writes nothing more', () async {
+      final office = _Mobile();
+      final (a, b) = pair(office, _Mobile());
+      office.onParties = (_) async {
+        office.onParties = null;
+        await b.takeOverJob();
+        await pumpEventQueue();
+      };
+      await a.startSetup(PortalChannel.uyapMobile);
+      expect(office.asked.where((x) => x.startsWith('parties')).length, 1);
+      expect(office.asked.where((x) => x.startsWith('documents')), isEmpty);
+      expect(a.jobElsewhere, isTrue);
+      expect(a.jobClaim.value!.owner, SyncClock.localDeviceId(home));
+      expect(a.jobClaim.value!.ownerName, 'Ev bilgisayarı');
+      // The parties that came after the job left are not kept here.
+      for (final key in [hukuk, icra]) {
+        expect(
+          sections(key)[(CaseSection.parties, PortalChannel.uyapMobile)],
+          isNull,
+        );
+      }
+    });
+
+    test('let go of on its owner, it is let go of on the other; an older '
+        'word does not bring it back', () async {
+      final (a, b) = pair(_Mobile(), _Mobile());
+      await a.startSetup(PortalChannel.uyapMobile);
+      await pumpEventQueue();
+      expect(b.job.value!.done, isTrue);
+      final before = a.jobExport();
+      await a.dropJob();
+      await pumpEventQueue();
+      expect(a.job.value, isNull);
+      expect(b.job.value, isNull);
+      expect(await b.mergeJob(before), isFalse);
+      expect(b.job.value, isNull);
+    });
+
+    test('a job kept before jobs had owners is this device\'s, and goes on '
+        'here', () async {
+      db.setMeta(
+        'uyap_job',
+        UyapJob(
+          kind: UyapJobKind.setup,
+          channel: PortalChannel.uyapMobile,
+          stage: UyapJobStage.list,
+          started: DateTime.now(),
+          stopped: UyapJobStop.session,
+        ).encode(),
+      );
+      final mobile = _Mobile();
+      final sync = syncOf(_Web()..on = false, mobile);
+      await sync.resumeJob();
+      expect(sync.job.value!.done, isTrue);
+      expect(sync.jobClaim.value!.owner, SyncClock.localDeviceId(db));
+      expect(sync.jobClaim.value!.generation, 1);
+      expect(mobile.asked, isNotEmpty);
     });
   });
 

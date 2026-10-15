@@ -48,18 +48,27 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
   int? _cases;
   bool _connecting = false;
 
+  /// "Son haber" told again as time goes: another own device's job.
+  Timer? _tick;
+
   @override
   void initState() {
     super.initState();
     _sync.job.addListener(_changed);
+    _sync.jobClaim.addListener(_changed);
     _sync.jobProgress.addListener(_changed);
     _sync.addListener(_changed);
+    _tick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && _sync.jobElsewhere) setState(() {});
+    });
     unawaited(_count());
   }
 
   @override
   void dispose() {
+    _tick?.cancel();
     _sync.job.removeListener(_changed);
+    _sync.jobClaim.removeListener(_changed);
     _sync.jobProgress.removeListener(_changed);
     _sync.removeListener(_changed);
     super.dispose();
@@ -115,6 +124,50 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
       }
       if (!_connected(job)) return;
       unawaited(_sync.resumeJob());
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+  /// Another own device's job run here from now on: asked first while that
+  /// one is running it, its channel connected here when it is not.
+  Future<void> _takeOver(UyapJob job) async {
+    final owner = _sync.jobClaim.value?.ownerName ?? '';
+    if (_sync.jobRunningElsewhere()) {
+      final yes = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Bu bilgisayarda devralınsın mı?'),
+          content: Text(
+            '${owner.isEmpty ? 'Öbür bilgisayarınız' : owner} bu işi şu an '
+            'okuyor. İki bilgisayar aynı anda okursa UYAP oturumu düşebilir. '
+            'Bu bilgisayara alınırsa öbürü, haberi gelince durur.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('uyap-setup-take-over-yes'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Devral'),
+            ),
+          ],
+        ),
+      );
+      if (yes != true || !mounted) return;
+    }
+    setState(() => _connecting = true);
+    try {
+      if (!_connected(job)) {
+        if (job.channel == PortalChannel.uyapWeb) {
+          await connectUyapWeb(context);
+        } else {
+          await connectUyapMobile(context, api: _sync.mobile);
+        }
+      }
+      unawaited(_sync.takeOverJob());
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
@@ -322,7 +375,11 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
 
   (String, Widget, List<Widget>) _running(BuildContext context, UyapJob job) {
     final scheme = Theme.of(context).colorScheme;
-    final progress = _sync.jobProgress.value;
+    final progress = _sync.jobProgressShown;
+    // Run by another of the lawyer's devices: shown, not run, here.
+    final elsewhere = _sync.jobElsewhere;
+    final owner = _sync.jobClaim.value?.ownerName ?? '';
+    final ownerName = owner.isEmpty ? 'Öbür bilgisayarınız' : owner;
     final setup = job.kind == UyapJobKind.setup;
     final fill = job.kind == UyapJobKind.fill;
     final stages = switch (job.kind) {
@@ -347,7 +404,7 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
     final channelName = job.channel == PortalChannel.uyapWeb
         ? 'UYAP Web'
         : 'UYAP Mobil';
-    final listProgress = _sync.state(job.channel).progress;
+    final listProgress = elsewhere ? null : _sync.state(job.channel).progress;
     Widget row(int i, UyapJobStage stage, String name) {
       final done = i < at;
       final now = i == at;
@@ -404,19 +461,36 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
     final perCase = setup || (fill && job.channel != PortalChannel.uyapWeb)
         ? 4
         : 10;
-    final note = switch (job.stopped) {
-      UyapJobStop.user => 'Duraklatıldı. Okunan dosyalar kayıtlı.',
-      UyapJobStop.session =>
-        '$channelName oturumu kapandı. Yeniden bağlandığınızda kaldığı '
-            'yerden sürer.',
-      UyapJobStop.incomplete =>
-        'Bazı dosyalar okunamadı; okunanlar kayıtlı. Sürdür ile yalnız '
-            'kalanlar yeniden denenir.',
-      null =>
-        '${left == null ? '' : 'Kalan yaklaşık ${_minutes(left * perCase)} · '}'
-            'Folio’yu kullanmaya devam edebilirsiniz; kesilirse kaldığı '
-            'yerden sürer.',
-    };
+    final word = _sync.jobLastWord;
+    final heard = word == null ? '' : ' · son haber ${lastWordText(word)}';
+    final note = elsewhere
+        ? switch (job.stopped) {
+            _ when _sync.jobRunningElsewhere() =>
+              'Bu iş başka bilgisayarınızda sürüyor: $ownerName$heard. '
+                  'Burada yalnız ilerlemesi görünür.',
+            null =>
+              '$ownerName$heard. O bilgisayar kapalı ya da başka bir ağda '
+                  'olabilir. Başka bir ağda çalışıyorsa iki bilgisayar aynı '
+                  'anda okur; aynı ağa gelince biri durur.',
+            UyapJobStop.user => '$ownerName: duraklatıldı$heard.',
+            UyapJobStop.session =>
+              '$ownerName: $channelName oturumu bekleniyor$heard.',
+            UyapJobStop.incomplete =>
+              '$ownerName: bazı dosyalar okunamadı$heard.',
+          }
+        : switch (job.stopped) {
+            UyapJobStop.user => 'Duraklatıldı. Okunan dosyalar kayıtlı.',
+            UyapJobStop.session =>
+              '$channelName oturumu kapandı. Yeniden bağlandığınızda kaldığı '
+                  'yerden sürer.',
+            UyapJobStop.incomplete =>
+              'Bazı dosyalar okunamadı; okunanlar kayıtlı. Sürdür ile yalnız '
+                  'kalanlar yeniden denenir.',
+            null =>
+              '${left == null ? '' : 'Kalan yaklaşık ${_minutes(left * perCase)} · '}'
+                  'Folio’yu kullanmaya devam edebilirsiniz; kesilirse kaldığı '
+                  'yerden sürer.',
+          };
     final paused = job.stopped != null;
     return (
       setup
@@ -441,7 +515,13 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Kapat'),
         ),
-        if (paused)
+        if (elsewhere)
+          FilledButton(
+            key: const ValueKey('uyap-setup-take-over'),
+            onPressed: _connecting ? null : () => unawaited(_takeOver(job)),
+            child: const Text('Bu bilgisayarda devral'),
+          )
+        else if (paused)
           FilledButton(
             key: const ValueKey('uyap-setup-resume'),
             onPressed: _connecting ? null : () => unawaited(_resume(job)),
@@ -511,4 +591,14 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
     final h = m ~/ 60, rest = m % 60;
     return rest == 0 ? '$h sa' : '$h sa $rest dk';
   }
+}
+
+/// How long ago [at] was, for "son haber": "az önce", "5 dk önce",
+/// "3 sa önce", "2 gün önce".
+String lastWordText(DateTime at, [DateTime? now]) {
+  final d = (now ?? DateTime.now()).difference(at);
+  if (d.inMinutes < 1) return 'az önce';
+  if (d.inHours < 1) return '${d.inMinutes} dk önce';
+  if (d.inDays < 1) return '${d.inHours} sa önce';
+  return '${d.inDays} gün önce';
 }

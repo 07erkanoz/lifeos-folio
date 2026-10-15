@@ -22,13 +22,16 @@ class UyapJobClaim {
   });
 
   /// A job started here now, by [owner]: of a generation after every one
-  /// [known] of, so that it comes after them wherever it meets them.
+  /// [known] of, so that it comes after them wherever it meets them. Said
+  /// running, unless [beating] is false: one kept from before the job had
+  /// an owner was not said running.
   factory UyapJobClaim.start(
     UyapJob job, {
     required String owner,
     required String ownerName,
     required Hlc version,
     UyapJobClaim? known,
+    bool beating = true,
   }) => UyapJobClaim(
     id: '$owner:${job.started.toUtc().microsecondsSinceEpoch}',
     started: job.started,
@@ -37,7 +40,7 @@ class UyapJobClaim {
     generation: (known?.generation ?? 0) + 1,
     version: version,
     job: job,
-    beat: version.wall,
+    beat: beating ? version.wall : null,
   );
 
   /// The job's own: the device that started it and when.

@@ -83,6 +83,11 @@ class OwnSync extends ChangeNotifier {
   /// Whom each case is shared with, between the person's own devices: on
   /// always (R8).
   static const ownShares = 'paylasimlar';
+
+  /// The lawyer's long UYAP job and the device running it: on always,
+  /// whatever else is, for two own devices never to run it at once
+  /// (docs/uyap-is-sahipligi.md).
+  static const uyapJob = 'uyap-is';
   static const _optIn = {officeClients};
   final _on = <String>{};
 
@@ -120,6 +125,7 @@ class OwnSync extends ChangeNotifier {
     } catch (_) {}
     await _apply();
     _startSessions();
+    _startJob();
     // A phone leaves UYAP to a computer of the person's on the network that
     // holds a session and gives what it reads; the lawyer's own asking is
     // done here all the same.
@@ -202,6 +208,31 @@ class OwnSync extends ChangeNotifier {
       _changedHere();
     });
     _mine = heldHere;
+  }
+
+  void _startJob() {
+    _net.ownParts[uyapJob] = OwnPart(
+      export: () async => PortalSync.started?.jobExport(),
+      merge: (theirs) async =>
+          await PortalSync.started?.mergeJob(theirs) ?? false,
+    );
+    // Told at once by the device running it, or by one taking it over: its
+    // record, and this one's back.
+    _net.ownAnswers[uyapJob] = (asked) async {
+      final sync = PortalSync.started;
+      await sync?.mergeJob(asked['kayit'], direct: true);
+      return (<String, Object?>{'kayit': sync?.jobExport()}, null);
+    };
+    PortalSync.tellJob = (claim) async => [
+      for (final peer in _net.ownOnline.toList())
+        if (_net.peerCaps[peer.deviceId]?.contains(SyncCaps.jobOwner) ?? false)
+          (await _net.askOwn(
+            peer.deviceId,
+            uyapJob,
+            body: {'kayit': claim},
+          ))?['kayit'],
+    ];
+    PortalSync.deviceName = () => _net.self?.device ?? '';
   }
 
   /// The person's own devices that said they are phones.

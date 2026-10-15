@@ -21,6 +21,7 @@ abstract final class SyncCaps {
   static const recall = 'geriCekme';
   static const sharedLedger = 'defterPaylasimi';
   static const split = 'paketBolme';
+  static const jobOwner = 'isSahipligi';
 
   /// What this Folio knows and says it has: each only once the feature
   /// using it is whole here (§5).
@@ -34,6 +35,7 @@ abstract final class SyncCaps {
     recall,
     proposals,
     sharedLedger,
+    jobOwner,
   };
 
   /// The capabilities this Folio's own formats use now: a part needs of
@@ -60,6 +62,8 @@ abstract final class SyncCaps {
     // The versions themselves, and a case's account shared (§5 step 8).
     hlc,
     sharedLedger,
+    // The long UYAP job with the device running it (docs/uyap-is-sahipligi.md).
+    jobOwner,
   };
 
   /// What each part and channel needs when its format uses it (§4.1).
@@ -90,6 +94,9 @@ abstract final class SyncCaps {
     'oneri': {proposals, hlc},
     'oneriler': {proposals, hlc},
     'paylasimlar': {sharedLedger, hlc},
+    // The long UYAP job and the device running it: an older Folio would
+    // run it too, not knowing whose it is (docs/uyap-is-sahipligi.md).
+    'uyap-is': {jobOwner, hlc},
   };
 
   /// The capabilities [part] needs now: its row's that are in use here.

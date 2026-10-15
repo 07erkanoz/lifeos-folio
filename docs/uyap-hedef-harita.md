@@ -269,6 +269,10 @@ cihazı aynı uzun işi aynı anda çalıştırmaz: işi başlatan cihaz iş kay
 yalnız ilerlemeyi gösterir.
 *Uygulandı (14 Ekim 2026):* bölüm sonuçları dosya kaydıyla birlikte `bolumler` olarak gider; kayıt
 içeriği değişmeden yalnız bölüm sonucu değişirse henüz gitmez (özet, kayıt zamanına bakıyor).
+*Uygulandı (16 Ekim 2026):* iş sahipliği ([uyap-is-sahipligi.md](uyap-is-sahipligi.md)). İş kaydı
+sahibiyle kendi cihazlar arasında gider (`uyap-is`); sahip 60 sn'de bir haber verir. Öbür cihaz
+işi yalnız gösterir, kendiliğinden başlatmaz ya da sürdürmez; avukat "Bu bilgisayarda devral" der.
+Ayrı ağlardaki iki cihaz birbirini duyamaz; karşılaşınca tek sahip kalır.
 
 **11.5 Kimlik.** Dosya eşleşmesi `caseKey` (folded mahkeme + esas) üzerindedir; kanalların mahkeme
 adı farklıysa alias tablosu tutulur, kayıt dosyası anahtarı aynı normalizasyonu kullanır. Evrak
@@ -321,7 +325,8 @@ savcılıklarda bütün illere bakar; kurulum ekranında "Bağlan ve sürdür", 
 yoksa da listede kalır; ajandadaki dosya güncellemesi oturum kimliğini çözer.
 
 Ertelenenler (mimari değişiklik, canlı ölçüm ister):
-- İki cihazın aynı uzun işi çalıştırmasını önleyen sahiplik ve paylaşılan ilerleme (11.4).
+- ~~İki cihazın aynı uzun işi çalıştırmasını önleyen sahiplik ve paylaşılan ilerleme (11.4).~~ —
+  yapıldı (16 Ekim 2026): [uyap-is-sahipligi.md](uyap-is-sahipligi.md).
 - Liste aşamasında birim/sayfa düzeyinde devam (bugün liste yeniden okunur ya da 3 saat içinde
   okunduysa atlanır).
 - ~~Bölüm sonuçlarının kayıttan bağımsız aktarımı~~ — yapıldı: özet, kaydın ve bölümlerin en geç

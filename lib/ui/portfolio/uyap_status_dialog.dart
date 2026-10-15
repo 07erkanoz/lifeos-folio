@@ -49,20 +49,29 @@ class _UyapStatusDialogState extends State<UyapStatusDialog> {
   bool _starting = false;
   Timer? _again;
 
+  /// "Son haber" told again as time goes: another own device's job.
+  Timer? _tick;
+
   @override
   void initState() {
     super.initState();
     _sync.addListener(_changed);
     _sync.job.addListener(_changed);
+    _sync.jobClaim.addListener(_changed);
     _sync.jobProgress.addListener(_changed);
+    _tick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && _sync.jobElsewhere) setState(() {});
+    });
     unawaited(_read());
   }
 
   @override
   void dispose() {
     _again?.cancel();
+    _tick?.cancel();
     _sync.removeListener(_changed);
     _sync.job.removeListener(_changed);
+    _sync.jobClaim.removeListener(_changed);
     _sync.jobProgress.removeListener(_changed);
     super.dispose();
   }
@@ -313,9 +322,20 @@ class _UyapStatusDialogState extends State<UyapStatusDialog> {
                   database: widget.database,
                 ),
               ),
-              child: const Text('Ayrıntı, duraklat ya da sürdür'),
+              child: Text(
+                _sync.jobElsewhere
+                    ? 'Ayrıntı ya da bu bilgisayarda devral'
+                    : 'Ayrıntı, duraklat ya da sürdür',
+              ),
             ),
           ),
+          // Its cases read there come here with the own devices' sync.
+          if (_sync.jobElsewhere)
+            line(
+              'Yukarıdaki sayılar bu bilgisayarın bildikleri; öbür '
+              'bilgisayarın okudukları eşitlemeyle gelir.',
+              style: muted,
+            ),
         ],
         heading('Son kayıtlar'),
         if (_log.isEmpty)
@@ -362,7 +382,8 @@ class _UyapStatusDialogState extends State<UyapStatusDialog> {
   }
 
   String _jobLine(UyapJob job) {
-    final progress = _sync.jobProgress.value;
+    final progress = _sync.jobProgressShown;
+    final elsewhere = _sync.jobElsewhere;
     final stage = switch (job.stage) {
       UyapJobStage.list => 'portföy listesi',
       UyapJobStage.parties => 'taraflar',
@@ -375,6 +396,9 @@ class _UyapStatusDialogState extends State<UyapStatusDialog> {
         : '';
     final why = switch (job.stopped) {
       null when job.done => '',
+      null when elsewhere && !_sync.jobRunningElsewhere() =>
+        ' · haber gelmiyor',
+      null when elsewhere => ' · sürüyor',
       // Its own reading not begun, the channel's list reading still is.
       null when progress == null && _sync.state(job.channel).running =>
         ' · liste okuması bitince başlar',
@@ -383,6 +407,12 @@ class _UyapStatusDialogState extends State<UyapStatusDialog> {
       UyapJobStop.session => ' · ${_name(job.channel)} oturumu bekleniyor',
       UyapJobStop.incomplete => ' · bazı dosyalar okunamadı',
     };
-    return '${_name(job.channel)} · $stage$count$why';
+    final word = _sync.jobLastWord;
+    final owner = _sync.jobClaim.value?.ownerName ?? '';
+    return elsewhere
+        ? '${owner.isEmpty ? 'Öbür bilgisayarınız' : owner} · '
+              '${_name(job.channel)} · $stage$count$why'
+              '${word == null ? '' : ' · son haber ${lastWordText(word)}'}'
+        : '${_name(job.channel)} · $stage$count$why';
   }
 }
