@@ -23,6 +23,7 @@ import 'package:evrak_convert/models/evrak_file.dart';
 import 'package:evrak_convert/services/editor/document_history.dart';
 import 'package:archive/archive.dart';
 import 'package:evrak_convert/main.dart';
+import 'package:evrak_convert/services/fonts/document_fonts.dart';
 import 'package:evrak_convert/services/legal/case_law.dart';
 import 'package:evrak_convert/services/pdf/pdf_service.dart';
 import 'package:evrak_convert/services/portal/observed.dart';
@@ -639,6 +640,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
     await _loadFonts();
+    // The page's font is kept as the future of the clock that first asked
+    // for it; a face the Word file's editor was still reading when its test
+    // ended never arrived in the next, and the archive's PDFs waited on it.
+    for (final face in DocumentFonts.faces) {
+      await DocumentFonts.loadFace('Times New Roman', face);
+    }
     // The in-app PDF viewer loads PDFium on its own; the built bundle has it.
     Pdfrx.pdfiumModulePath = pdfiumLibrary();
     Pdfrx.cacheDirectoryPath = Directory.systemTemp.path;
@@ -911,6 +918,9 @@ void main() {
       await library.initialize();
       await library.addPaths([archive.path]);
       await library.waitForIdle();
+      // The cases' database, opened once for every test: opened by the
+      // home page on this test's clock, it stayed half open in the next.
+      await PortalDatabase.shared();
     });
     debugDisableShadows = false;
     try {
