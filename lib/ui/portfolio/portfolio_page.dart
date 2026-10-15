@@ -17,6 +17,7 @@ import '../office/tasks_page.dart' show TaskDetail;
 import '../widgets/uyap_connect_view.dart';
 import 'portfolio_rows.dart';
 import 'uyap_setup_dialog.dart';
+import 'uyap_status_dialog.dart';
 import '../theme/folio_palette.dart';
 
 /// Dava Dosyalarım (docs/design/uyap-portfoy-taslak.png): the whole
@@ -57,7 +58,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
   List<PortfolioRow>? _rows;
   final _search = TextEditingController();
   _Scope _scope = _Scope.all;
-  _Sort _sort = _Sort.change;
+  _Sort _sort = _Sort.hearing;
   bool _closed = false;
   _Development? _development;
   // Each list's choices, any of which a case may match; none chosen, the
@@ -232,6 +233,22 @@ class _PortfolioPageState extends State<PortfolioPage> {
     }
   }
 
+  /// What Folio holds of UYAP and what its readings did; the list read
+  /// again after, a fill having read some cases meanwhile.
+  Future<void> _showStatus() async {
+    await UyapStatusDialog.show(context, sync: _sync);
+    await _reload();
+  }
+
+  /// The open cases whose documents' list never came: never read one by
+  /// one, or read for their parties alone.
+  int get _unread => [
+    for (final r in _rows ?? const <PortfolioRow>[])
+      if ((r.record?.documents.isEmpty ?? true) &&
+          !isClosedStatus(r.kase.status?.value))
+        r,
+  ].length;
+
   /// Every open case fetched again from the web portal: the money, the
   /// account and the debtors come only from there. Asked first: it takes
   /// long.
@@ -386,14 +403,16 @@ class _PortfolioPageState extends State<PortfolioPage> {
     ];
     int byNumber(PortfolioRow a, PortfolioRow b) =>
         a.kase.number.compareTo(b.kase.number);
+    int byChange(PortfolioRow a, PortfolioRow b) {
+      final news =
+          (b.freshCount > 0 || b.state.isNew ? 1 : 0) -
+          (a.freshCount > 0 || a.state.isNew ? 1 : 0);
+      return news != 0 ? news : b.lastChange.compareTo(a.lastChange);
+    }
+
     switch (_sort) {
       case _Sort.change:
-        rows.sort((a, b) {
-          final news =
-              (b.freshCount > 0 || b.state.isNew ? 1 : 0) -
-              (a.freshCount > 0 || a.state.isNew ? 1 : 0);
-          return news != 0 ? news : b.lastChange.compareTo(a.lastChange);
-        });
+        rows.sort(byChange);
       case _Sort.newest:
         rows.sort(
           (a, b) => (b.opened ?? DateTime(1900)).compareTo(
@@ -407,11 +426,13 @@ class _PortfolioPageState extends State<PortfolioPage> {
           ),
         );
       case _Sort.hearing:
-        rows.sort(
-          (a, b) => (a.hearing?.at ?? DateTime(2999)).compareTo(
+        // The cases without a hearing keep the order of their news.
+        rows.sort((a, b) {
+          final at = (a.hearing?.at ?? DateTime(2999)).compareTo(
             b.hearing?.at ?? DateTime(2999),
-          ),
-        );
+          );
+          return at != 0 ? at : byChange(a, b);
+        });
       case _Sort.number:
         rows.sort(byNumber);
     }
@@ -680,9 +701,15 @@ class _PortfolioPageState extends State<PortfolioPage> {
             onSelected: (v) => switch (v) {
               'web' => unawaited(_refreshAllOnWeb()),
               'setup' => unawaited(UyapSetupDialog.show(context)),
+              'status' => unawaited(_showStatus()),
               _ => unawaited(_scanClosed()),
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                key: ValueKey('portfolio-status'),
+                value: 'status',
+                child: Text('UYAP durumu'),
+              ),
               PopupMenuItem(
                 key: const ValueKey('portfolio-setup'),
                 value: 'setup',
@@ -1063,30 +1090,39 @@ class _PortfolioPageState extends State<PortfolioPage> {
               child: const Text('Temizle', style: TextStyle(fontSize: 12)),
             ),
           const Spacer(),
-          PopupMenuButton<_Sort>(
-            key: const ValueKey('portfolio-sort'),
-            tooltip: 'Sırala',
-            initialValue: _sort,
-            onSelected: (v) => setState(() => _sort = v),
-            itemBuilder: (_) => [
-              for (final s in _Sort.values)
-                PopupMenuItem(value: s, child: Text(_sortName(s))),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.swap_vert_rounded, size: 17),
-                  const SizedBox(width: 3),
-                  Text(
-                    _sortName(_sort, short: true),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+          Flexible(
+            child: PopupMenuButton<_Sort>(
+              key: const ValueKey('portfolio-sort'),
+              tooltip: 'Sırala',
+              initialValue: _sort,
+              onSelected: (v) => setState(() => _sort = v),
+              itemBuilder: (_) => [
+                for (final s in _Sort.values)
+                  PopupMenuItem(value: s, child: Text(_sortName(s))),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.swap_vert_rounded, size: 17),
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(
+                        _sortName(_sort, short: true),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1099,7 +1135,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
     _Sort.change => short ? 'Son gelişme' : 'Son gelişme önce',
     _Sort.newest => short ? 'Yeni açılan' : 'Yeni açılan önce',
     _Sort.oldest => short ? 'Eski açılan' : 'Eski açılan önce',
-    _Sort.hearing => short ? 'Yaklaşan duruşma' : 'Yaklaşan duruşma önce',
+    _Sort.hearing => short ? 'Yakın duruşma' : 'Yaklaşan duruşma önce',
     _Sort.number => 'Esas numarası',
   };
 
@@ -1521,10 +1557,17 @@ class _PortfolioPageState extends State<PortfolioPage> {
                     PopupMenuButton<String>(
                       key: const ValueKey('portfolio-menu'),
                       tooltip: 'Diğer',
-                      onSelected: (v) => v == 'setup'
-                          ? unawaited(UyapSetupDialog.show(context))
-                          : unawaited(_scanClosed()),
+                      onSelected: (v) => switch (v) {
+                        'setup' => unawaited(UyapSetupDialog.show(context)),
+                        'status' => unawaited(_showStatus()),
+                        _ => unawaited(_scanClosed()),
+                      },
                       itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          key: ValueKey('portfolio-status'),
+                          value: 'status',
+                          child: Text('UYAP durumu'),
+                        ),
                         const PopupMenuItem(
                           value: 'setup',
                           child: Text('UYAP kurulumu ve web tamamlaması'),
@@ -2135,11 +2178,32 @@ class _PortfolioPageState extends State<PortfolioPage> {
         Row(
           children: [
             Expanded(
-              child: Text(
-                _search.text.trim().length >= 2 || _filtered
-                    ? '${visible.length} dosya eşleşti'
-                    : '${visible.length} dosya',
-                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+              child: Row(
+                children: [
+                  Text(
+                    _search.text.trim().length >= 2 || _filtered
+                        ? '${visible.length} dosya eşleşti'
+                        : '${visible.length} dosya',
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                  ),
+                  if (_unread case final n when n > 0)
+                    Flexible(
+                      child: TextButton(
+                        key: const ValueKey('portfolio-unread'),
+                        onPressed: () => unawaited(_showStatus()),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        child: Text(
+                          '$n dosyanın evrak listesi yok · UYAP durumu',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             PopupMenuButton<_Sort>(
@@ -2540,7 +2604,8 @@ class _CaseRowState extends State<_CaseRow> {
       if (r.type.isNotEmpty) r.type,
       if (opened != null) 'açılış ${dayText(opened)}',
       if (record != null) 'senkron ${whenText(record.fetchedAt, now)}',
-      if (record == null) 'yalnız künye',
+      // Listed, never read one by one: its parties from the list at most.
+      if (record == null) 'tek tek okunmadı',
     ];
     // On a wide window, a table's row: the case, its parties, its next
     // hearing and its state, each in a column of its own (the columns'

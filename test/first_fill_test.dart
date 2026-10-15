@@ -6,13 +6,18 @@ import 'package:evrak_convert/services/portal/observed.dart';
 import 'package:evrak_convert/services/portal/portal_channel.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
+import 'package:evrak_convert/services/portal/sync_log.dart';
 import 'package:evrak_convert/services/portal/uyap_job.dart';
+import 'package:evrak_convert/services/portal/uyap_status.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_panel_controller.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_enforcement.dart';
 import 'package:evrak_convert/services/uyap/uyap_mobile_api.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
+import 'package:evrak_convert/ui/portfolio/portfolio_rows.dart';
+import 'package:evrak_convert/ui/portfolio/uyap_status_dialog.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _hukuk = 'Antalya 3. Asliye Hukuk Mahkemesi';
@@ -246,7 +251,9 @@ class _Mobile extends UyapMobileApi {
     String? caseType,
   }) async {
     asked.add('parties $caseId');
-    if (partiesFail) throw StateError('UYAP');
+    if (partiesFail || partiesFailFor.contains(caseId)) {
+      throw StateError('UYAP');
+    }
     // The session ending after this many answers.
     if (--answersLeft == 0) on = false;
     return [
@@ -260,6 +267,9 @@ class _Mobile extends UyapMobileApi {
 
   /// The parties never answered, the session staying.
   bool partiesFail = false;
+
+  /// The cases whose parties are never answered.
+  final partiesFailFor = <String>{};
 
   /// UYAP's notifications: a Vekil Kaydı for a case not in the portfolio.
   bool vekilKaydi = false;
@@ -586,6 +596,27 @@ void main() {
       expect(mobile.asked.where((a) => a.startsWith('parties')).length, 6);
     });
 
+    test('a case whose parties would not come does not hold back the '
+        'other cases documents: the job reads them, then waits for the lawyer '
+        'to try that one again', () async {
+      final mobile = _Mobile()..partiesFailFor.add('mid-1');
+      final sync = syncOf(_Web()..on = false, mobile);
+      await sync.startSetup(PortalChannel.uyapMobile);
+      expect(sync.job.value!.stopped, UyapJobStop.incomplete);
+      expect(sync.job.value!.stage, UyapJobStage.parties);
+      expect(
+        mobile.asked.where((a) => a.startsWith('documents')),
+        unorderedEquals(['documents mid-1', 'documents mid-2']),
+      );
+      // Sürdür asks only the parties left, nothing read again.
+      mobile
+        ..partiesFailFor.clear()
+        ..asked.clear();
+      await sync.resumeJob();
+      expect(sync.job.value!.done, isTrue);
+      expect(mobile.asked, ['parties mid-1']);
+    });
+
     test('paused by the lawyer it waits for them', () async {
       final mobile = _Mobile();
       final sync = syncOf(_Web()..on = false, mobile);
@@ -612,6 +643,230 @@ void main() {
       expect(db.meta(PortalSync.webCheckedKey(icra)), isNotNull);
       // Its counsel came from the web: the client stays.
       expect(clients(), contains('AYŞE KARACA'));
+    });
+  });
+
+  // A portfolio an earlier Folio listed whole, its reading of each case
+  // stopped half way: the cases never read are filled at the lawyer's
+  // asking, from Dava Dosyalarım's "UYAP durumu".
+  group('the cases listed but never read one by one', () {
+    /// The list read, the hukuk case read one by one before, the icra
+    /// file never.
+    Future<PortalSync> listedHalfRead(
+      _Web web,
+      _Mobile mobile, {
+      UyapCaseMoney? money,
+    }) async {
+      final sync = syncOf(web, mobile);
+      await sync.syncPortfolio(full: true);
+      await store.keep(
+        target: const UyapCase('id-h1', '2025/80', 'h1', _hukuk),
+        details: const UyapCaseDetails(),
+        parties: _parties,
+        documents: const UyapCaseDocuments([
+          UyapCaseDocument(
+            key: 'a',
+            documentId: 'a',
+            caseId: 'id-h1',
+            type: 'Tensip Zaptı',
+            number: '1',
+            approved: '01.09.2026 10:00',
+            sender: 'Mahkeme',
+            description: '',
+          ),
+        ]),
+        money: money,
+      );
+      return sync;
+    }
+
+    test('are filled on UYAP Mobil, those alone, their list not read '
+        'again', () async {
+      final mobile = _Mobile();
+      final sync = await listedHalfRead(_Web()..on = false, mobile);
+      expect(await sync.unreadCases(), {icra});
+      final listed = db.meta('portfolio_at');
+      mobile.asked.clear();
+      await sync.startFill();
+      expect(sync.job.value!.kind, UyapJobKind.fill);
+      expect(sync.job.value!.done, isTrue);
+      expect(db.meta('portfolio_at'), listed);
+      expect(mobile.asked, ['parties mid-2', 'documents mid-2']);
+      const m = PortalChannel.uyapMobile;
+      expect(sections(icra)[(CaseSection.parties, m)]!.complete, isTrue);
+      expect(sections(icra)[(CaseSection.documents, m)]!.complete, isTrue);
+      expect(sections(hukuk), isEmpty);
+      expect(await sync.unreadCases(), isEmpty);
+    });
+
+    test('a fill stopped after its parties stage and started anew still '
+        'reads the documents lists: what is missing is counted from what '
+        'came', () async {
+      final mobile = _Mobile();
+      final sync = await listedHalfRead(_Web()..on = false, mobile);
+      // Paused as soon as the icra file's parties are kept.
+      sync.portfolioVersion.addListener(() {
+        if (sync.job.value?.stage == UyapJobStage.parties) {
+          unawaited(sync.pauseJob());
+        }
+      });
+      await sync.startFill();
+      expect(sync.job.value!.stopped, UyapJobStop.user);
+      expect((await store.load(_icra, '2025/4410'))!.parties, isNotEmpty);
+      final status = await readUyapStatus(database: db, store: store);
+      expect(status.unread, isEmpty);
+      expect(status.documentsMissing, {icra});
+      mobile.asked.clear();
+      await sync.startFill();
+      expect(sync.job.value!.done, isTrue);
+      // Its parties not asked again; its documents' list read.
+      expect(mobile.asked, ['documents mid-2']);
+      expect(
+        (await readUyapStatus(database: db, store: store)).documentsMissing,
+        isEmpty,
+      );
+    });
+
+    test('on the web, only the cases whose money it never brought are read, '
+        'though UYAP Mobil is connected', () async {
+      final web = _Web();
+      final mobile = _Mobile();
+      final sync = await listedHalfRead(
+        web,
+        mobile,
+        money: const UyapCaseMoney(
+          fees: [UyapMoneyItem(kind: 'Peşin Harç', date: '', amount: 1)],
+        ),
+      );
+      final status = await readUyapStatus(database: db, store: store);
+      expect(status.webMissing, {icra});
+      web.asked.clear();
+      mobile.asked.clear();
+      await sync.startFill(channel: PortalChannel.uyapWeb);
+      expect(sync.job.value!.done, isTrue);
+      expect(sync.job.value!.channel, PortalChannel.uyapWeb);
+      expect(mobile.asked, isEmpty);
+      expect(web.asked, contains('parties id-i1'));
+      expect(web.asked.where((a) => a.contains('id-h1')), isEmpty);
+      final file = (await store.load(_icra, '2025/4410'))!;
+      expect(file.money, isNotNull);
+      expect(file.enforcement!.debtors, isNotEmpty);
+      expect(
+        (await readUyapStatus(database: db, store: store)).webMissing,
+        isEmpty,
+      );
+    });
+
+    test('the session ending, the fill goes on where it was, the case read '
+        'in its first stage still read in its next', () async {
+      final mobile = _Mobile()..answersLeft = 1;
+      final sync = await listedHalfRead(_Web()..on = false, mobile);
+      mobile.asked.clear();
+      await sync.startFill();
+      expect(sync.job.value!.stopped, UyapJobStop.session);
+      // Kept with the job: read now, the icra file is still the fill's.
+      expect(sync.job.value!.cases, {icra});
+      mobile.on = true;
+      await sync.resumeJob();
+      expect(sync.job.value!.done, isTrue);
+      expect(
+        sections(
+          icra,
+        )[(CaseSection.documents, PortalChannel.uyapMobile)]!.complete,
+        isTrue,
+      );
+    });
+
+    test('UYAP durumu counts them, says the list read and a reading of it '
+        'left unfinished, and the log says what the reading did', () async {
+      final log = File('${root.path}/uyap-senkron.log');
+      final before = SyncLog.file;
+      SyncLog.file = () async => log;
+      addTearDown(() async {
+        // What is being written finished before the folder goes.
+        await SyncLog.tail(0);
+        SyncLog.file = before;
+      });
+      await listedHalfRead(_Web()..on = false, _Mobile());
+      var status = await readUyapStatus(database: db, store: store);
+      expect(status.open, 2);
+      expect(status.read, 1);
+      expect(status.withParties, 1);
+      expect(status.unread, {icra});
+      // Its prosecutors' offices not answered: the list came in part.
+      expect(status.listWhole, isNull);
+      expect(status.listTried, isNotNull);
+      expect(status.listStarted, isEmpty);
+      final lines = await SyncLog.tail(20);
+      expect(lines.any((l) => l.contains('portföy listesi okunuyor')), isTrue);
+      expect(lines.any((l) => l.contains('portföyü okundu')), isTrue);
+      // Folio closed in the middle of a reading: its start stays.
+      db.setMeta(
+        PortalSync.listStartedKey(PortalChannel.uyapMobile),
+        DateTime(2026, 10, 15, 20, 23).toIso8601String(),
+      );
+      status = await readUyapStatus(database: db, store: store);
+      expect(status.listStarted.keys, [PortalChannel.uyapMobile]);
+    });
+
+    testWidgets('UYAP durumu shows them and fills them at a press', (
+      tester,
+    ) async {
+      final mobile = _Mobile();
+      late PortalSync sync;
+      await tester.runAsync(() async {
+        sync = await listedHalfRead(_Web()..on = false, mobile);
+      });
+      mobile.asked.clear();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: UyapStatusDialog(sync: sync, database: db, store: store),
+          ),
+        ),
+      );
+      Future<void> settle() async {
+        for (var i = 0; i < 20; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 50)),
+          );
+          await tester.pump();
+        }
+      }
+
+      await settle();
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Hiç okunmamış: 1'), findsOneWidget);
+      expect(find.textContaining('Evrak listesi gelen: 1'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('uyap-status-fill')));
+      // The job's own waits are the test clock's: let it go on to its end.
+      for (var i = 0; i < 30 && !(sync.job.value?.done ?? false); i++) {
+        await settle();
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(mobile.asked, ['parties mid-2', 'documents mid-2']);
+      expect(sync.job.value!.done, isTrue);
+      // Counted again a little after the job: none left.
+      await tester.pump(const Duration(seconds: 4));
+      await settle();
+      expect(find.text('Evrak listesi gelmemiş dosya yok.'), findsOneWidget);
+    });
+
+    test('the portfolio shows the parties the list gave a case never '
+        'read', () async {
+      await listedHalfRead(_Web()..on = false, _Mobile());
+      db.saveCaseParties(icra, _parties, source: 'uyap');
+      final rows = await loadPortfolio(
+        lawyer: _lawyer,
+        database: db,
+        store: store,
+      );
+      final row = rows.singleWhere((r) => r.kase.key == icra);
+      expect(row.record, isNull);
+      expect([...row.ours, ...row.others].map((p) => p.name), [
+        'AYŞE KARACA',
+        'BERK İNŞAAT LTD. ŞTİ.',
+      ]);
     });
   });
 

@@ -331,3 +331,40 @@ Ertelenenler (mimari değişiklik, canlı ölçüm ister):
 - Başka cihazdan gelen kaydın alan alan, kanal/tarih sahipliğiyle birleştirilmesi (`adoptChecked`).
 - ~~Ajandadaki "Dosyayı güncelle"nin bölüm okuyucusuna taşınması~~ — yapıldı: `syncCase` kanalı
   sabit `readSections` ile okur, kaydı/tarafları/bölümleri ve ajandanın evrak özetini yazar.
+
+## 13. Listelenmiş ama tek tek okunmamış dosyalar (15 Ekim 2026)
+
+Bulgu (kullanıcının bilgisayarı, `portal.sqlite` ve `uyap-senkron.log`): 12 Ekim'de eski kod web
+portföyünü eksiksiz okudu (563 dosya, tarafları listeden), sonra dosyaları tek tek okurken web
+oturumu kapanınca 98. dosyada durdu; 13–14 Ekim'deki denemeler de yarım kaldı. 14 Ekim'deki yeni
+tasarımda dosya okuma yalnız işe bırakıldı, ama kurulum yalnız portföy **hiç okunmamışsa**
+öneriliyor. Sonuç: açık 557 dosyanın 333'ü hiç okunmadı ve "Portföyü yenile" (§5: dosya okumaz)
+onları hiç getirmedi.
+
+Eklenenler:
+- **Eksik bilgileri tamamlama işi** (`UyapJobKind.fill`, `PortalSync.startFill`), kanalı kullanıcı
+  seçer; dosyalar başlarken sabitlenir (`UyapJob.cases`, `dosyalar`); liste yeniden okunmaz:
+  - **UYAP Mobil:** dosya kaydı olmayan açık dosyalar; taraflar → evrak listeleri (Yargıtay/savcılık
+    web'i bekler). Para gelmez.
+  - **UYAP Web:** parası web'den hiç gelmemiş açık dosyalar (kayıt yok ya da kayıtta para yok, web'in
+    para bölümü "okundu/yok" değil); web'de okunmamış bütün bölümler, mobilden tam gelen evrak
+    listesi hariç.
+  Kurulum işinin aşamalarını ve devam kurallarını kullanır. Dosya açılışı (§5) web bağlıysa web'de
+  hiç okunmamış ya da 24 saatten eski bölümleri (para dahil) zaten okur.
+- **Mobil savcılık taraması kaldığı yerden sürer:** bütün illerin taraması ~20 dk sürüyor ve
+  kesilince baştan başlıyordu. Her il bitince `mobile_prosecutor_scan` (başlangıç + taranan iller)
+  ve bulunan savcılıklar yazılır, dosyaları hemen portföye girer; sonraki okuma kalan illerden
+  sürer (30 gün içinde). Bilinen savcılıklar her okumada önce sorulur. İlerleme "Savcılıklar · il
+  x/81" olarak görünür.
+- **UYAP durumu** (Dava Dosyalarım ⋮ menüsü; okunmamış dosya varsa sayının yanında bağlantı):
+  son eksiksiz liste okuması, eksik kalan deneme, **başlayıp bitmeyen liste okuması**
+  (`list_started:<kanal>`), tek tek okunan/okunmayan sayıları, okunamayan bölümler, süren iş ve
+  günlüğün son satırları. UYAP'a istek atmaz.
+- Günlük: liste okumasının başı ve sonu, mobil listenin aşamaları (mahkemeler, Danıştay,
+  savcılık taraması) ve `_run`'ın yakaladığı hatalar `uyap-senkron.log`'a yazılır.
+- Hiç okunmamış dosyanın satırında listeden gelen taraflar (`case_party`) gösterilir; dipnot
+  "tek tek okunmadı" der.
+- **Okunamayan dosya sonraki aşamayı bekletmez** (16 Ekim 2026): 15 Ekim'de 5 dosyanın tarafları
+  gelmeyince 314 dosyanın evrak listesi hiç okunmadı. Artık iş bir aşamada kalan dosyaya rağmen
+  sonrakine geçer; sonda "bazı dosyalar okunamadı" diye ilk aşamasına dönüp durur, Sürdür yalnız
+  kalanları sorar. Gelmeyen bölüm ve sebebi (`panel.error`) günlüğe yazılır.

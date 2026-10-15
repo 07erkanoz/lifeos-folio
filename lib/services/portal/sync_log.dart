@@ -25,6 +25,20 @@ abstract final class SyncLog {
   static Future<void> note(String line) =>
       _last = _last.then((_) => _write(line)).catchError((Object _) {});
 
+  /// The last [count] lines written, the newest last; none when there is
+  /// no log yet or it cannot be read.
+  static Future<List<String>> tail(int count) async {
+    try {
+      await _last;
+      final f = await file();
+      if (f == null || !await f.exists()) return const [];
+      final lines = await f.readAsLines();
+      return lines.sublist(max(0, lines.length - count));
+    } catch (_) {
+      return const [];
+    }
+  }
+
   static Future<void> _write(String line) async {
     final f = await file();
     if (f == null) return;

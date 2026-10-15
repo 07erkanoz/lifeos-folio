@@ -61,9 +61,13 @@ class _Mobile extends UyapMobileApi {
     ];
   }
 
+  /// The provinces whose offices are not answered.
+  final failing = <String>{};
+
   @override
   Future<List<Map<String, Object?>>> prosecutorOffices(String code) async {
     asked.add('offices $code');
+    if (failing.contains(code)) throw StateError('UYAP');
     return code == '7'
         ? [
             {'birimId': 's7', 'birimAdi': _savcilik},
@@ -136,6 +140,41 @@ void main() {
     expect(mobile.asked, contains('provinces'));
     expect(mobile.asked, contains('investigations s7 true'));
   });
+
+  test(
+    'a scan of every province cut off goes on where it was, the '
+    'provinces asked whole not asked again; the offices known first',
+    () async {
+      final mobile = _Mobile()..failing.add('6');
+      final provinces = <(int, int)>[];
+      var result = await syncMobilePortfolio(
+        mobile,
+        db,
+        onProsecutors: (done, total) => provinces.add((done, total)),
+      );
+      expect(result.complete, isFalse);
+      expect(provinces.first, (0, 2));
+      expect(provinces.last, (2, 2));
+      // What Antalya brought is kept though the scan did not end.
+      expect(db.caseOf(caseKey('2026/12', _savcilik)), isNotNull);
+      expect(db.meta('mobile_prosecutor_full_at'), isNull);
+
+      mobile
+        ..failing.clear()
+        ..asked.clear();
+      result = await syncMobilePortfolio(mobile, db);
+      expect(result.complete, isTrue);
+      expect(mobile.asked, contains('offices 6'));
+      expect(mobile.asked, isNot(contains('offices 7')));
+      // Manavgat's, known, asked first and once.
+      expect(
+        mobile.asked.where((a) => a.startsWith('investigations')).toList(),
+        ['investigations s7 false'],
+      );
+      expect(db.meta('mobile_prosecutor_full_at'), isNotNull);
+      expect(db.meta('mobile_prosecutor_scan'), '');
+    },
+  );
 
   test('closed cases are listed only when the lawyer asks: no setting keeps '
       'it on', () async {

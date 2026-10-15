@@ -332,7 +332,7 @@ Future<List<PortfolioRow>> loadPortfolio({
       kept[caseKey(record.number, record.court)] = record;
     }
   } catch (_) {}
-  // Three readings of the database, the window let draw between them:
+  // The readings of the database, the window let draw between them:
   // one after the other they held it for some fifty milliseconds.
   Future<void> breathe() => Future<void>.delayed(Duration.zero);
   await breathe();
@@ -348,12 +348,18 @@ Future<List<PortfolioRow>> loadPortfolio({
   }
   await breathe();
   final said = db.representations();
+  await breathe();
+  // A case never read one by one shows the parties its list gave.
+  final listed = db.caseParties();
   return [
     for (final kase in db.cases().values)
       () {
         final record = kept[kase.key];
         final (ours, others) = splitParties(
-          record?.parties ?? const [],
+          switch (record?.parties) {
+            final read? when read.isNotEmpty => read,
+            _ => listed[kase.key] ?? const [],
+          },
           lawyer,
           said: said[kase.key] ?? const [],
         );

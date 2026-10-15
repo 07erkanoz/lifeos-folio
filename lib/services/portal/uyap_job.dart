@@ -2,11 +2,12 @@ import 'dart:convert';
 
 import 'portal_channel.dart';
 
-/// The two long readings the lawyer starts themselves
+/// The long readings the lawyer starts themselves
 /// (docs/uyap-hedef-harita.md §6, §11.3): the first setup, which builds the
-/// portfolio with its parties and documents' lists, and the web's
-/// completion, which brings what only the web gives.
-enum UyapJobKind { setup, webCompletion }
+/// portfolio with its parties and documents' lists; the web's completion,
+/// which brings what only the web gives; and the filling of the cases
+/// listed but never read one by one, their list not read again.
+enum UyapJobKind { setup, webCompletion, fill }
 
 /// Where a job is: the list first, then the cases section by section.
 enum UyapJobStage { list, parties, documents, web, done }
@@ -37,6 +38,7 @@ class UyapJob {
     required this.started,
     this.stopped,
     this.listGaps = false,
+    this.cases,
   });
 
   final UyapJobKind kind;
@@ -48,6 +50,11 @@ class UyapJob {
   /// Its list did not come whole: the cases listed were read, and the
   /// lawyer is told to read the portfolio again.
   final bool listGaps;
+
+  /// The cases it reads, by their keys, when not every open one: the fill's
+  /// are those never read when it was started, kept so that a case read in
+  /// its first stage is still read in its next.
+  final Set<String>? cases;
 
   bool get done => stage == UyapJobStage.done;
 
@@ -63,6 +70,7 @@ class UyapJob {
     started: started,
     stopped: stopped,
     listGaps: listGaps ?? this.listGaps,
+    cases: cases,
   );
 
   String encode() => jsonEncode({
@@ -72,6 +80,7 @@ class UyapJob {
     'basladi': started.toIso8601String(),
     'durdu': ?stopped?.name,
     if (listGaps) 'listeEksik': true,
+    'dosyalar': ?cases?.toList(),
   });
 
   static UyapJob? decode(String? raw) {
@@ -87,6 +96,9 @@ class UyapJob {
             ? null
             : UyapJobStop.values.byName('${j['durdu']}'),
         listGaps: j['listeEksik'] == true,
+        cases: j['dosyalar'] is List
+            ? {for (final k in j['dosyalar'] as List) '$k'}
+            : null,
       );
     } catch (_) {
       return null;
