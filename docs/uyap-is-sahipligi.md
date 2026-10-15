@@ -75,20 +75,22 @@ Satır numaraları:
 
 ### 2.1 İş kaydı paylaşılır, sahibiyle
 
-`UyapJob` (`uyap_job.dart`) şu alanları kazanır. Hepsi `encode`/`decode` içinde; eski kayıt
-okunabilir.
+`UyapJob` (`uyap_job.dart`) değişmez. Onu saran `UyapJobClaim`
+(`lib/services/portal/uyap_job_owner.dart`, **yapıldı**) şu alanları taşır; işin kendisi `is`
+altında, `UyapJob.encode` biçimiyle. Sahibi olmayan eski kayıt `UyapJob.decode` ile okunmaya devam
+eder (göç, aşağıda).
 
 | Alan | JSON | Anlamı |
 |---|---|---|
 | `id` | `kimlik` | işin kimliği: başlatan cihaz + başlama anı |
-| `owner`, `ownerName` | `sahip`, `sahipAdi` | çalıştıran cihazın kimliği (`OfficeIdentity.deviceId`) ve görünen adı ("Ofis bilgisayarı") |
+| `owner`, `ownerName` | `sahip`, `sahipAdi` | çalıştıran cihazın kimliği ve görünen adı ("Ofis bilgisayarı"). Kimlik `SyncClock.localDeviceId` (`sync_generation.dart:208`): veritabanına bağlı, büro ağına katılmadan da var ve değişmez. Büro kimliği kullanılmaz: ağa sonradan katılan cihaz kendi kaydını başkasınınki sanırdı |
 | `generation` | `nesil` | her devirde bir artar |
 | `beat` | `nabiz` | sahibin son "çalışıyorum" anı (UTC); yalnız iş koşarken ilerler |
 | `progress` | `ilerleme` | `{asama, bitti, toplam}`; bugün yalnız bellekte (`jobProgress`, `:500`), artık kayıtta da |
 | `version` | `surum` | HLC (`lib/services/sync/hlc.dart`); birleştirmede sıra |
 
 Kurallar:
-- **Kişi başına tek iş yuvası**, bugün cihaz başına olduğu gibi (soru 2).
+- **Kişi başına tek iş yuvası**, bugün cihaz başına olduğu gibi (karar 2).
 - Kayıt yine `uyap_job` metasında durur. Diğer cihazın işi de buraya yazılır, sahibi başka cihaz
   olarak.
 - **Göç:** sahibi olmayan eski kayıt, ilk açılışta bu cihazın, 1. nesil sayılır (`_loadJob`, `:513`).
@@ -114,9 +116,12 @@ Kurallar:
 1. Daha yüksek `nesil` kazanır.
 2. Eşit nesilde iki farklı iş varsa (ikisi de ayrı başlatılmış), **sonra başlatılan** kazanır: o,
    avukatın son isteğidir. Eşitlikte cihaz kimliği kazanır: her cihazda aynı sonuç.
-3. Aynı iş, aynı nesil: `surum` (HLC) yenisi kazanır. Bunu yalnız sahip yazar: ilerleme, aşama,
-   durma, bitme.
-4. "Bırakıldı" (`dropJob`) bir kayıt olarak kalır, silinmez. Sürümüyle gider; eski kayıt onu
+3. Aynı iş, aynı nesil, iki ayrı sahip (iki cihaz ayrıyken aynı işi devraldı): cihaz kimliği büyük
+   olan kazanır, sonradan kim ne derse desin. Sürüme bakılsaydı kaybedenin sonraki nabzı, onun
+   için durmuş olanı yeniden sahip yapabilirdi; ikisi de dururdu.
+4. Aynı iş, aynı nesil, aynı sahip: `surum` (HLC) yenisi kazanır. Bunu yalnız sahip yazar:
+   ilerleme, aşama, durma, bitme.
+5. "Bırakıldı" (`dropJob`) bir kayıt olarak kalır, silinmez. Sürümüyle gider; eski kayıt onu
    diriltmez.
 
 ### 2.4 Sahip olmayan cihaz ne yapar
@@ -137,8 +142,14 @@ Kurallar:
   - Sonra iş, `_jobCases`'in bugünkü kuralıyla kalan bölümlerden sürer.
   - Fill işinin sabit dosya listesi (`cases`, `dosyalar`) kayıtla gittiği için aynı dosyalar
     okunur.
-- **Duraklat** ve **Bırak** (soru 4): sahip ağdaysa ona istek olarak gider; değilse yalnız
-  "Devral" ve "Bu cihazda bırak" (yerel kopyayı unut).
+- **Uzaktan Duraklat ya da Bırak yok** (karar 4). Sahip olmayan cihazda tek düğme "Bu
+  bilgisayarda devral".
+- **Meslektaşlar etkilenmez.** Kayıt yalnız aynı kişinin cihazlarına gider:
+  - nabız `ownOnline`'a gider (aynı kullanıcı kimliği, `office_network.dart:853-860`);
+  - soru `askOwn` ile, yalnız kanıtlanmış kendi cihaz kanalında (`ch.vouched`, `:812`);
+  - parça yalnız `ownParts`'ta.
+  - Aynı büro ağında her avukat kendi UYAP'ıyla bağımsız çalışır: birinin işi ötekinin işini
+    ne görür ne durdurur.
 
 ### 2.5 "Uzun süre ses yok"
 
@@ -146,14 +157,13 @@ Kurallar:
 - **Sessiz:** daha eski. Sahip kapalı, uykuda ya da **başka ağda çalışıyor** olabilir. Bulgu 1
   yüzünden bu ikisi ayırt edilemez.
 - Öneri: sessizlik **kendiliğinden devir değildir**. Sessizlik yalnız devralmayı kolaylaştırır:
-  - Taze iken "Bu cihazda sürdür": uyarılı onay. *"Ofis bilgisayarı bu işi şu an okuyor. İki
+  - Taze iken "Bu bilgisayarda devral": uyarılı onay. *"Ofis bilgisayarı bu işi şu an okuyor. İki
     cihaz aynı anda okursa UYAP oturumu düşebilir. Bu cihaza alınırsa ofis bilgisayarı durur."*
   - Sessizken tek tık, bilgi satırıyla: *"Ofis bilgisayarından 3 saattir haber yok; kapalı ya da
     başka bir ağda olabilir. Başka bir ağda çalışıyorsa iki cihaz aynı anda okur; aynı ağa
     gelince biri durur."*
-- Kendiliğinden devrin bir istisnası düşünülebilir (soru 3): sahip **aynı ağda görünüyor**
-  (`isOnline`) ve "oturumum yok, bekliyorum" diyor (`stopped: session`). Bu cihazın o kanalı
-  bağlıysa iş burada sürer. Bu, kesin bilgiye dayanan tek durumdur.
+- Kendiliğinden devir hiçbir durumda yok. Sahip aynı ağda oturumunu bekliyor olsa da devir avukatın
+  düğmesiyle olur: daha basit ve öngörülebilir.
 
 ### 2.6 Ekranlar
 
@@ -161,8 +171,7 @@ Kurallar:
   - Sahip başka cihazsa üstte bir satır: *"Ofis bilgisayarında sürüyor · son haber 1 dk önce"*.
   - Aşama satırları kaydın `ilerleme`'sinden: "212 / 333".
   - Kalan süre gösterilmez.
-  - Düğmeler: Duraklat/Sürdür yerine "Bu cihazda sürdür" (2.5'teki onayla); sahip ağdaysa
-    "Duraklat".
+  - Düğmeler: Duraklat/Sürdür yerine yalnız "Bu bilgisayarda devral" (2.5'teki onayla).
   - Bitmiş iş (`:139-172`): *"Ofis bilgisayarında tamamlandı"*; "Tamam" bu cihazdaki kopyayı
     kapatır.
 - **UYAP durumu**:
@@ -186,17 +195,18 @@ Kurallar:
 - **UYAP Mobil jetonu ağda paylaşılıyor** (`oturumlar` parçası, `keepMobileAlike`,
   `portal_sync.dart:262-272`). İki cihaz aynı ağda aynı oturumla okuyabilir. Sahiplik uzun işi
   önler; tek dosya açmayı önlemez.
-- **İki ayrı UYAP Web girişinin** birbirini düşürüp düşürmediği ölçülmedi (soru 5).
+- **İki ayrı UYAP Web girişinin** birbirini düşürüp düşürmediği ölçülmedi (karar 5).
 
 ## 3. Uygulama sırası (onaydan sonra)
 
 Ön koşul: ana çalışma kopyasındaki fill işi ve UYAP durumu commit edilmiş olmalı. Bu iş onların
 üstüne kurulur.
 
-1. **Saf kurallar.**
-   - `UyapJob` alanları; `UyapJobOwnership`: birleştirme, taze/sessiz, kim çalıştırabilir.
-   - Hepsi `uyap_job.dart` içinde, ağdan bağımsız.
-   - Test: `test/uyap_job_owner_test.dart`.
+1. **Saf kurallar** — *yapıldı (16 Ekim 2026)*.
+   - `UyapJobClaim` (`lib/services/portal/uyap_job_owner.dart`): başlatma, devir, sahibin sözü,
+     birleştirme (`pick`), taze/sessiz (`running`), kim çalıştırabilir (`runsOn`).
+   - Ağdan ve `PortalSync`'ten bağımsız; `uyap_job.dart`'a dokunmaz.
+   - Test: `test/uyap_job_owner_test.dart` (9 test).
 2. **`PortalSync`.**
    - Sahiplik denetimleri: `_connected`, `_startJob`, `resumeJob`, `_jobSteps.current()`.
    - Nabız zamanlayıcı, `takeOverJob`, `mergeJob`.
@@ -220,24 +230,18 @@ Kurallar:
    - Ekran testleri: kurulum penceresi ve UYAP durumu, başka cihazın işi taze ve sessizken.
 6. `docs/uyap-hedef-harita.md` §11.4 ve §12'ye "uygulandı" notu.
 
-## 4. Kullanıcıya sorular
+## 4. Kararlar (kullanıcı, 16 Ekim 2026)
 
-1. **Ayrı ağlar** (bulgu 1). Ofis ile ev ayrı ağdayken çift okumayı kesin önlemenin yolu yok. Öneri:
-   - aynı ağdayken kesin önle;
-   - ayrıyken son bilinen durumu göster, kendiliğinden başlatma;
-   - karşılaşınca tek sahibe düş.
-
-   Bu yeterli mi? Ofis ile ev bilgisayarı arada hiç aynı ağa geliyor mu, ya da telefonunuz Folio'yla
-   ikisini de görüyor mu?
-2. **Yuva.** Kişi başına tek iş mi (önerilen; bugün cihaz başına tek), kanal başına tek iş mi? Kanal
-   başına olursa ofiste UYAP Mobil, evde UYAP Web tamamlaması aynı anda sürebilir.
-3. **Sessiz sahip.** Öneri: sessizlik kendiliğinden devir değil, yalnız devralmayı tek tık yapar.
-   - Taze sınırı 3 dk, nabız 60 sn.
-   - İstisna seçeneği: sahip aynı ağda görünüyor ve oturumu yok diye bekliyorsa, bağlı cihaz işi
-     kendiliğinden sürdürsün mü?
-4. **Uzaktan duraklat/bırak.** Sahip aynı ağdayken diğer cihazdan "Duraklat" ve "Bırak" ona
-   gitsin mi, yoksa yalnız "Bu cihazda sürdür" (devir) mi olsun?
-5. **UYAP Web'de iki giriş.** Aynı hesapla iki cihazdan UYAP Web'e girilince ilki düşüyor mu?
-   Düşüyorsa web işinde çift okuma kendiliğinden kısalır. Ölçülmedi.
-6. **Otomatik okuma** (2.7). İki cihazda açıksa günlük okumalar da çift gidiyor. Bu da aynı
-   sahipliğe bağlansın mı? Ayrı iş olarak önerilir.
+1. **Ayrı ağlarda tam koruma yok: kabul.** Ofis ile ev bilgisayarının aynı ağa gelip gelmeyeceği
+   bilinemez. Örnek: avukat dizüstüsünü ofise getirir. Ya da aynı büro ağında herkes kendi UYAP'ıyla
+   bağlıdır. Aynı ağdayken kesin önlenir; ayrıyken son bilinen durum gösterilir, hiçbir şey
+   kendiliğinden başlamaz; karşılaşınca tek sahibe düşülür. Meslektaşların cihazları bu kayda
+   karışmaz (2.4).
+2. **Kişi başına tek iş:** daha basit ve güvenli.
+3. **3 dakikadır haber yoksa çalışmıyor sayılır.** Nabız 60 sn. Kendiliğinden devir yok (2.5).
+4. **Uzaktan Duraklat/Bırak yok:** yalnız "Bu bilgisayarda devral".
+5. **İki UYAP Web girişi:** kullanıcı emin değil, "düşmesi gerek, UYAP denetliyor olabilir"
+   diyor. Ölçülmedi. Tasarım buna dayanmaz: düşerse sahip işi `session` ile durur ve yeniden
+   bağlandığında yalnız hâlâ sahipse sürer. İki cihazın birbirini sırayla düşürmesi de böylece
+   önlenir.
+6. **Otomatik okuma** (2.7): bu işin dışında, ayrı iş olarak önerildi.
