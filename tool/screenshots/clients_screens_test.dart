@@ -62,6 +62,11 @@ Future<void> _loadFonts() async {
     for (final style in ['Regular', 'Bold'])
       'fonts/pdf/LiberationMono-$style.ttf',
   ]);
+  // Folio's own words since 40936bd: drawn in the Ahem boxes without it.
+  await family('Inter', [
+    for (final cut in ['Regular', 'Medium', 'SemiBold', 'Bold'])
+      'fonts/ui/Inter-$cut.ttf',
+  ]);
   final flutter = File(Platform.resolvedExecutable).parent.parent.parent.parent;
   final material = '${flutter.path}/artifacts/material_fonts';
   await family('MaterialIcons', ['$material/MaterialIcons-Regular.otf']);

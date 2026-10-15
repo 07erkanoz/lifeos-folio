@@ -93,6 +93,11 @@ Future<void> _loadFonts() async {
     for (final style in ['Regular', 'Bold'])
       'fonts/pdf/LiberationMono-$style.ttf',
   ]);
+  // Folio's own words since 40936bd: drawn in the Ahem boxes without it.
+  await family('Inter', [
+    for (final cut in ['Regular', 'Medium', 'SemiBold', 'Bold'])
+      'fonts/ui/Inter-$cut.ttf',
+  ]);
   final flutter = File(Platform.resolvedExecutable).parent.parent.parent.parent;
   final material = '${flutter.path}/artifacts/material_fonts';
   await family('MaterialIcons', ['$material/MaterialIcons-Regular.otf']);
@@ -797,6 +802,18 @@ void main() {
   testWidgets('senkron', (tester) async {
     final dir = Directory.systemTemp.createTempSync('folio_sync_shot_');
     addTearDown(() => dir.deleteSync(recursive: true));
+    // The sync started here hooks the database for good; the screens after
+    // it save to theirs and would tell an office long gone.
+    final hooks = (
+      PortalDatabase.changed,
+      PortalDatabase.clientMoneyAllowed,
+      PortalDatabase.clientPerson,
+    );
+    addTearDown(() {
+      PortalDatabase.changed = hooks.$1;
+      PortalDatabase.clientMoneyAllowed = hooks.$2;
+      PortalDatabase.clientPerson = hooks.$3;
+    });
     late OfficeNetwork pc;
     late OwnSync sync;
     late FolderSync folders;

@@ -119,6 +119,11 @@ Future<void> _loadFonts() async {
     for (final style in ['Regular', 'Bold'])
       'fonts/pdf/LiberationMono-$style.ttf',
   ]);
+  // Folio's own words since 40936bd: drawn in the Ahem boxes without it.
+  await family('Inter', [
+    for (final cut in ['Regular', 'Medium', 'SemiBold', 'Bold'])
+      'fonts/ui/Inter-$cut.ttf',
+  ]);
   final flutter = File(Platform.resolvedExecutable).parent.parent.parent.parent;
   final material = '${flutter.path}/artifacts/material_fonts';
   await family('MaterialIcons', ['$material/MaterialIcons-Regular.otf']);
@@ -645,6 +650,11 @@ void main() {
     );
   });
 
+  // An asset a screen was still reading when its test ended stays in the
+  // bundle's cache as a future of that test's clock, which never completes
+  // in the next: the law table did, and the next editor marked nothing.
+  setUp(rootBundle.clear);
+
   testWidgets('formats: a Word file, an Excel sheet and a PDF', (tester) async {
     addTearDown(tester.view.reset);
     final base = _home();
@@ -832,10 +842,24 @@ void main() {
       );
       await _shot(tester, 'editor-emsal');
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      // The decision is a card over the page, closed by its own button;
+      // the list, a dialog now, went when the decision opened, and is
+      // opened again.
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('decision-panel')),
+          matching: find.byTooltip('Kapat (Esc)'),
+        ),
+      );
       await _settle(
         tester,
         () => find.byKey(const ValueKey('decision-panel')).evaluate().isEmpty,
+        rounds: 20,
+      );
+      await tester.tap(status);
+      await _settle(
+        tester,
+        () => find.byKey(const ValueKey('citation-list')).evaluate().isNotEmpty,
         rounds: 20,
       );
       final article = find.descendant(
