@@ -25,6 +25,7 @@ import '../../services/uyap/uyap_mobile_api.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/uyap_connect_view.dart';
+import '../widgets/uyap_doc_details.dart';
 import '../help/help_button.dart';
 import '../office/send_to_office.dart';
 import '../widgets/notice.dart';
@@ -3093,7 +3094,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     final picked = _picked.contains(d.key);
     void pick() =>
         setState(() => picked ? _picked.remove(d.key) : _picked.add(d.key));
-    final row = InkWell(
+    final details = uyapDocDetails(d);
+    final detailsOpen = details.isNotEmpty && _detailsOpen.contains(d.key);
+    final tip = uyapDocHover ? uyapDocTip(d) : '';
+    final left = attachment == null
+        ? (split ? 15.0 : 18.0)
+        : (split ? 44.0 : 58.0);
+    final line = InkWell(
       key: ValueKey('case-doc-${d.key}'),
       onTap: _selecting
           ? pick
@@ -3101,12 +3108,7 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
           ? () => _tapped(d)
           : () => unawaited(_openPreviewPage(d)),
       child: Container(
-        padding: EdgeInsets.fromLTRB(
-          attachment == null ? (split ? 15 : 18) : (split ? 44 : 58),
-          8,
-          split ? 12 : 18,
-          8,
-        ),
+        padding: EdgeInsets.fromLTRB(left, 8, split ? 12 : 18, 8),
         decoration: BoxDecoration(
           color: shown
               ? scheme.primary.withValues(alpha: .1)
@@ -3146,56 +3148,59 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
               ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (fresh)
-                        Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: scheme.primary,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'YENİ',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: .4,
-                              color: Colors.white,
+              child: _tipped(
+                tip,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  if (meta.isNotEmpty)
-                    Text(
-                      meta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AgendaColors.muted,
-                      ),
+                        if (fresh)
+                          Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: scheme.primary,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'YENİ',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: .4,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                ],
+                    if (meta.isNotEmpty)
+                      Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: AgendaColors.muted,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -3241,12 +3246,43 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                 ),
               ),
             ],
+            if (details.isNotEmpty)
+              UyapDocDetailsToggle(
+                key: ValueKey('case-doc-details-${d.key}'),
+                open: detailsOpen,
+                onPressed: () => setState(
+                  () => detailsOpen
+                      ? _detailsOpen.remove(d.key)
+                      : _detailsOpen.add(d.key),
+                ),
+              ),
           ],
         ),
       ),
     );
+    final row = detailsOpen
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              line,
+              UyapDocDetails(details: details, indent: left + 38),
+            ],
+          )
+        : line;
     return shown ? KeyedSubtree(key: _shownRow, child: row) : row;
   }
+
+  /// The rows whose details are open, by key.
+  final _detailsOpen = <String>{};
+
+  /// The row's text, told on a resting pointer who sent it and when.
+  Widget _tipped(String tip, Widget child) => tip.isEmpty
+      ? child
+      : Tooltip(
+          message: tip,
+          waitDuration: const Duration(milliseconds: 600),
+          child: child,
+        );
 
   // The other tabs.
 

@@ -478,6 +478,7 @@ void main() {
       await c.refresh();
     });
     String? inserted;
+    var opened = false;
     tester.view.physicalSize = const Size(500, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -486,7 +487,7 @@ void main() {
         home: Scaffold(
           body: UyapCasePanel(
             controller: c,
-            onOpen: (_, _) {},
+            onOpen: (_, _) => opened = true,
             onInsert: (text) => inserted = text,
             onClose: () {},
           ),
@@ -507,6 +508,18 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('uyap-doc-2')), findsOneWidget);
     expect(find.byKey(const ValueKey('uyap-doc-1')), findsNothing);
+
+    // Who sent it and when, under the row; the arrow opens nothing else.
+    expect(find.text('02.10.2026'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('uyap-doc-details-2')));
+    await tester.pump();
+    expect(find.text('Onay'), findsOneWidget);
+    expect(find.text('02.10.2026'), findsOneWidget);
+    expect(find.text('Gönderen'), findsOneWidget);
+    expect(opened, isFalse);
+    await tester.tap(find.byKey(const ValueKey('uyap-doc-details-2')));
+    await tester.pump();
+    expect(find.text('02.10.2026'), findsNothing);
   });
 
   test('a case has a page of its own, with no document, and a document is '

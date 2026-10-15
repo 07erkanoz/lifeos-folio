@@ -13,6 +13,7 @@ import '../../services/portal/portal_channel.dart';
 import '../mobile/scroll_chrome.dart';
 import 'uyap_case_picker.dart';
 import 'uyap_connect_view.dart';
+import 'uyap_doc_details.dart';
 import 'uyap_session_chip.dart';
 
 /// The UYAP case beside the document being written: its particulars and
@@ -1088,7 +1089,32 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
     ),
   );
 
+  /// The rows whose details are open, by key.
+  final _detailsOpen = <String>{};
+
   Widget _row(ThemeData theme, UyapCaseDocument d, {int depth = 0}) {
+    final details = uyapDocDetails(d);
+    final open = details.isNotEmpty && _detailsOpen.contains(d.key);
+    final tip = uyapDocHover ? uyapDocTip(d) : '';
+    final row = _rowLine(theme, d, depth, details, open, tip);
+    if (!open) return row;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row,
+        UyapDocDetails(details: details, indent: 48.0 + depth * 22),
+      ],
+    );
+  }
+
+  Widget _rowLine(
+    ThemeData theme,
+    UyapCaseDocument d,
+    int depth,
+    List<(String, String)> details,
+    bool open,
+    String tip,
+  ) {
     final saved = _c.isSaved(d.key);
     final fresh = _c.isNew(d.key);
     final date = d.date;
@@ -1111,40 +1137,43 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
               onChanged: (_) => _c.toggle(d.key),
             ),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          d.title.isEmpty ? 'Evrak' : d.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: fresh
-                                ? FontWeight.w700
-                                : FontWeight.w500,
+              child: _tipped(
+                tip,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            d.title.isEmpty ? 'Evrak' : d.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: fresh
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
                           ),
                         ),
-                      ),
-                      if (fresh) ...[
-                        const SizedBox(width: 6),
-                        _badge(theme, 'Yeni'),
+                        if (fresh) ...[
+                          const SizedBox(width: 6),
+                          _badge(theme, 'Yeni'),
+                        ],
                       ],
-                    ],
-                  ),
-                  if (meta.isNotEmpty)
-                    Text(
-                      meta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
                     ),
-                ],
+                    if (meta.isNotEmpty)
+                      Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
             Tooltip(
@@ -1157,9 +1186,28 @@ class _UyapCasePanelState extends State<UyapCasePanel> {
                     : theme.colorScheme.outline,
               ),
             ),
+            if (details.isNotEmpty)
+              UyapDocDetailsToggle(
+                key: ValueKey('uyap-doc-details-${d.key}'),
+                open: open,
+                onPressed: () => setState(
+                  () => open
+                      ? _detailsOpen.remove(d.key)
+                      : _detailsOpen.add(d.key),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
+
+  /// The row's text, told on a resting pointer who sent it and when.
+  Widget _tipped(String tip, Widget child) => tip.isEmpty
+      ? child
+      : Tooltip(
+          message: tip,
+          waitDuration: const Duration(milliseconds: 600),
+          child: child,
+        );
 }
