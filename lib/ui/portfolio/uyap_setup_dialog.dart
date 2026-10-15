@@ -172,6 +172,23 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
           ),
         ],
       ),
+      UyapJob(kind: UyapJobKind.fill, done: true) => (
+        'Eksik bilgiler tamamlandı',
+        Text(
+          '${job.cases?.length ?? 0} dosyanın '
+          '${job.channel == PortalChannel.uyapWeb ? 'künyesi, tarafları, evrak listesi ve parası' : 'tarafları ve evrak listesi'} '
+          'okundu. Okunamayan kaldıysa UYAP durumu’nda görünür.',
+        ),
+        [
+          FilledButton(
+            onPressed: () {
+              unawaited(_sync.dropJob());
+              Navigator.pop(context);
+            },
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
       final UyapJob running => _running(context, running),
     };
     return AlertDialog(
@@ -307,16 +324,25 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
     final scheme = Theme.of(context).colorScheme;
     final progress = _sync.jobProgress.value;
     final setup = job.kind == UyapJobKind.setup;
-    final stages = setup
-        ? const [
-            (UyapJobStage.list, 'Portföy listesi ve duruşmalar'),
-            (UyapJobStage.parties, 'Taraflar ve müvekkiller'),
-            (UyapJobStage.documents, 'Evrak listeleri'),
-          ]
-        : const [
-            (UyapJobStage.list, 'Yargıtay dosyaları'),
-            (UyapJobStage.web, 'Para, icra hesabı, borçlular, vekiller'),
-          ];
+    final fill = job.kind == UyapJobKind.fill;
+    final stages = switch (job.kind) {
+      UyapJobKind.setup => const [
+        (UyapJobStage.list, 'Portföy listesi ve duruşmalar'),
+        (UyapJobStage.parties, 'Taraflar ve müvekkiller'),
+        (UyapJobStage.documents, 'Evrak listeleri'),
+      ],
+      UyapJobKind.fill when job.channel == PortalChannel.uyapMobile => const [
+        (UyapJobStage.parties, 'Taraflar ve müvekkiller'),
+        (UyapJobStage.documents, 'Evrak listeleri'),
+      ],
+      UyapJobKind.fill => const [
+        (UyapJobStage.web, 'Künye, taraflar, evrak, para'),
+      ],
+      UyapJobKind.webCompletion => const [
+        (UyapJobStage.list, 'Yargıtay dosyaları'),
+        (UyapJobStage.web, 'Para, icra hesabı, borçlular, vekiller'),
+      ],
+    };
     final at = stages.indexWhere((s) => s.$1 == job.stage);
     final channelName = job.channel == PortalChannel.uyapWeb
         ? 'UYAP Web'
@@ -375,7 +401,9 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
     final left = progress == null || progress.total == 0
         ? null
         : progress.total - progress.done;
-    final perCase = setup ? 4 : 10;
+    final perCase = setup || (fill && job.channel != PortalChannel.uyapWeb)
+        ? 4
+        : 10;
     final note = switch (job.stopped) {
       UyapJobStop.user => 'Duraklatıldı. Okunan dosyalar kayıtlı.',
       UyapJobStop.session =>
@@ -391,7 +419,11 @@ class _UyapSetupDialogState extends State<UyapSetupDialog> {
     };
     final paused = job.stopped != null;
     return (
-      setup ? '$channelName’den getiriliyor' : 'UYAP Web ile tamamlanıyor',
+      setup
+          ? '$channelName’den getiriliyor'
+          : fill
+          ? 'Eksik bilgiler $channelName ile tamamlanıyor'
+          : 'UYAP Web ile tamamlanıyor',
       Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
