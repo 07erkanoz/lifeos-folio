@@ -36,7 +36,15 @@ for platform in "$@"; do
     echo "::error::lifeos.com.tr $platform için $version göstermiyor (${seen:-yok})."
     exit 1
   fi
-  url="$(curl -fsS "https://lifeos.com.tr/surum/stable/$platform.json" | jq -r .url)"
-  curl -fsSI "$url" > /dev/null
+  manifest="$(curl -fsS -H 'Cache-Control: no-cache' "https://lifeos.com.tr/surum/stable/$platform.json")"
+  url="$(jq -r .url <<< "$manifest")"
+  size="$(jq -r .size <<< "$manifest")"
+  # A file the site does not have still answers 200, with the site's own
+  # page: the package is there only if its size is the manifest's.
+  served="$(curl -fsSI "$url" | tr -d '\r' | sed -nE 's/^[Cc]ontent-[Ll]ength: *([0-9]+)$/\1/p' | tail -1)"
+  if [ "$served" != "$size" ]; then
+    echo "::error::$url $size bayt olmalı, site ${served:-?} bayt veriyor: paket yerinde değil."
+    exit 1
+  fi
   echo "$platform: $version yayında, $url"
 done
