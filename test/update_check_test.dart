@@ -119,6 +119,40 @@ void main() {
     }
   });
 
+  test('the Mac has its own manifest, one package for both kinds', () async {
+    expect(UpdateManifest.platforms, contains('macos-universal'));
+    final key = await publicKey();
+    final mac = await signed(
+      body(
+        platform: 'macos-universal',
+        url: 'https://lifeos.com.tr/downloads/LifeOS-Folio-1.2.0-macOS.dmg',
+      ),
+    );
+    final m = await UpdateManifest.verify(
+      mac,
+      platform: 'macos-universal',
+      key: key,
+    );
+    expect(m.url.pathSegments.last, 'LifeOS-Folio-1.2.0-macOS.dmg');
+    expect(
+      UpdateManifest.addressFor('macos-universal').toString(),
+      'https://lifeos.com.tr/surum/stable/macos-universal.json',
+    );
+    // Each Folio takes its own platform's alone.
+    await expectLater(
+      UpdateManifest.verify(mac, platform: 'linux-x64', key: key),
+      throwsFormatException,
+    );
+    await expectLater(
+      UpdateManifest.verify(
+        await signed(body()),
+        platform: 'macos-universal',
+        key: key,
+      ),
+      throwsFormatException,
+    );
+  });
+
   _bannerTest();
 
   group('the check', () {

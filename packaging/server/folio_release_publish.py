@@ -3,12 +3,16 @@
 
 The release workflow copies the packages and their signed manifests into
 the incoming folder over a restricted SSH key, then a READY file;
-folio-release.path starts this then. For each platform it checks the
+folio-release.path starts this then. A release comes in two goes: Windows,
+Linux and Android first, the Mac later (it is slower to build and to have
+Apple notarize). For each platform whose manifest came it checks the
 manifest's Ed25519 signature with Folio's public key, that it is newer than
 what is published, and the file's size and SHA-256. Only then does the file
 go under /downloads/ and the manifest under /surum/stable/ — files first, so
 a manifest never names a file that is not there yet. Anything that does not
 check out publishes nothing. The incoming folder is emptied either way.
+A package stays under /downloads/ while a published manifest names it, and
+for a week after one no longer does.
 
 The SSH key can only drop files; the signature, which only the release
 workflow can make, is what decides whether they are published.
@@ -28,7 +32,7 @@ import tempfile
 import time
 import urllib.parse
 
-PLATFORMS = ('windows-x64', 'linux-x64', 'android')
+PLATFORMS = ('windows-x64', 'linux-x64', 'android', 'macos-universal')
 # Same key as UpdateManifest.publicKey in the app.
 PUBLIC_KEY = base64.b64decode('uo8uTbTSKeMNBtitM6hL25KFShLiMnlZKA6gbTPcxgY=')
 HOST = 'lifeos.com.tr'
@@ -94,6 +98,18 @@ def published_build(site, platform):
         return 0
 
 
+def published_names(site):
+    """The packages the published manifests name: kept, however old."""
+    names = set()
+    for platform in PLATFORMS:
+        try:
+            manifest = json.loads((site / 'surum/stable' / f'{platform}.json').read_text('utf-8'))
+            names.add(urllib.parse.unquote(urllib.parse.urlsplit(manifest['url']).path.removeprefix('/downloads/')))
+        except (OSError, ValueError, KeyError, AttributeError):
+            pass
+    return names
+
+
 def install(data, target, owner):
     """Writes beside the target, then renames over it, so a reader never
     gets half a file."""
@@ -108,8 +124,12 @@ def install(data, target, owner):
 
 def publish(incoming, site, owner):
     ready = []
-    # Everything is checked before anything is published.
-    for platform in PLATFORMS:
+    # Every platform that came; everything is checked before anything is
+    # published.
+    sent = [platform for platform in PLATFORMS if os.path.lexists(incoming / f'{platform}.json')]
+    if not sent:
+        raise ValueError('gelen sürüm bilgisi yok')
+    for platform in sent:
         manifest_bytes = regular(incoming / f'{platform}.json')
         manifest = json.loads(manifest_bytes.decode('utf-8'))
         name = check_manifest(manifest, platform)
@@ -130,9 +150,12 @@ def publish(incoming, site, owner):
         if owner:
             shutil.chown(directory, *owner.split(':'))
 
+    # Another go's packages are not this one's to remove: only those no
+    # manifest names any more go, a week on.
     current = {name for _, name, _, _ in ready}
+    kept = current | published_names(site)
     for old in downloads.glob('LifeOS-Folio-*'):
-        if old.name not in current and time.time() - old.stat().st_mtime > KEEP_OLD:
+        if old.name not in kept and time.time() - old.stat().st_mtime > KEEP_OLD:
             old.unlink()
     return ready[0][3], sorted(current)
 

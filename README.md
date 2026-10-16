@@ -316,6 +316,8 @@ Platform kaynakları: [Android intent filtreleri](https://developer.android.com/
 
 Folio yeni bir sürüm olduğunu kendisi bildirir. Sürüm bilgisi `lifeos.com.tr/surum/stable/<platform>.json` adresinden okunur ve uygulamaya gömülü Ed25519 anahtarıyla imzalanmış olmalıdır; imzası tutmayan ya da `lifeos.com.tr` dışındaki bir dosyayı gösteren bilgi yok sayılır. Paketler GitHub Actions'ta derlenir, imzalanır ve sunucuya gönderilir; sunucu imzayı yeniden denetledikten sonra yayınlar.
 
+Mac paketi (`macos-universal`) aynı yoldan, Apple onayından sonra ayrı bir gönderimle gelir. Mac'te Folio yeni paketi indirip doğrular, içindeki uygulamanın Apple imzasının ve geliştiricisinin aynı olduğunu denetler, Folio kapanınca eskisinin yerine koyup yeniden açar. Folio diskteki paketten ya da yazma izni olmayan bir klasörden çalışıyorsa paket Finder'da açılır; uygulama Uygulamalar klasörüne elle sürüklenir.
+
 ## macOS
 
 macOS sürümü deneme aşamasındadır ve Apple tarafından imzalanmamıştır: paket ilk açılışta **Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç** ile bir kez onaylanmalıdır. Paket hem Apple Silicon hem Intel Mac'lerde çalışır ve GitHub'ın macOS makinesinde `.github/workflows/macos.yml` ile üretilir. OCR ve PDF küçültme araçları macOS için ayrıca derlenir (`packaging/native/build_tools.py macos`, `merge_macos.py`). Kartla e-imza, e-Devlet ile giriş ve UYAP gönderimi Mac'te henüz gerçek kullanıcıyla denenmedi; genel kısayol Mac'te yoktur.

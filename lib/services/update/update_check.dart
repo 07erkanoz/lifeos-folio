@@ -52,6 +52,7 @@ class UpdateCheck {
     if (Platform.isWindows) return 'windows-x64';
     if (Platform.isLinux) return 'linux-x64';
     if (Platform.isAndroid) return 'android';
+    if (Platform.isMacOS) return 'macos-universal';
     return null;
   }
 

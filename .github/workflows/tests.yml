@@ -87,6 +87,9 @@ jobs:
             libsecret-1-dev
       - name: Testler
         run: flutter test
+      - name: lifeos.com.tr'nin sürüm yayımlayıcısı
+        # packaging/server's script, which the release's two goes rely on.
+        run: python3 test/folio_release_publish_test.py
       # The Linux runner carries C++ of its own — the spelling bridge, the
       # file actions, the quick search — and nothing compiled any of it: the
       # tests never build a runner, and the only packaging job builds Windows.

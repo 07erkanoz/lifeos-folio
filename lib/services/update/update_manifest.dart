@@ -36,7 +36,13 @@ class UpdateManifest {
 
   static const schema = 1;
   static const channel = 'stable';
-  static const platforms = {'windows-x64', 'linux-x64', 'android'};
+  static const platforms = {
+    'windows-x64',
+    'linux-x64',
+    'android',
+    // One package for both kinds of Mac, Apple Silicon and Intel.
+    'macos-universal',
+  };
 
   /// Folio's update-signing public key. The private half is only in the
   /// release workflow's secrets and in the owner's backup.

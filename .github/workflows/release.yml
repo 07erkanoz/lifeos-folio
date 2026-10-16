@@ -1,9 +1,11 @@
 name: Sürüm yayınla
 run-name: LifeOS Folio ${{ github.ref_name }}
 # Pushing a tag v<version> that matches pubspec.yaml builds Folio for Windows,
-# Linux and Android (and, once they are out, the Mac: macos.yml), signs one update manifest per platform and publishes
+# Linux and Android, signs one update manifest per platform and publishes
 # them all as a GitHub Release, then sends them to lifeos.com.tr, which
 # publishes them once it has checked their signatures (packaging/server).
+# The Mac (macos.yml) follows once they are out, by the same road: its
+# package into the release, signed for, and sent to lifeos.com.tr.
 #
 # The packages travel through a draft of that release rather than workflow
 # artifacts, whose storage quota a private repository soon fills. The draft
@@ -263,41 +265,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" release/* --clobber
-      - name: lifeos.com.tr'ye gönder
-        # The key can only drop files into the server's incoming folder;
-        # the server publishes them only if the signatures above check out.
-        # READY goes last: it is what starts the server's check.
+      - name: lifeos.com.tr'ye gönder, yayında mı
+        # The server publishes them only if the signatures above check out.
         env:
           DEPLOY_KEY: ${{ secrets.FOLIO_DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.FOLIO_DEPLOY_KNOWN_HOSTS }}
-        run: |
-          install -m 600 /dev/null "$RUNNER_TEMP/deploy_key"
-          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/deploy_key"
-          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
-          ssh="ssh -i $RUNNER_TEMP/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
-          mkdir -p outgoing
-          cp packages/LifeOS-Folio-* release/*.json outgoing/
-          rsync -rt -e "$ssh" outgoing/ folio-release@sbyazilim.info:
-          touch "$RUNNER_TEMP/READY"
-          rsync -t -e "$ssh" "$RUNNER_TEMP/READY" folio-release@sbyazilim.info:READY
-      - name: Sitede yayında mı
-        env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          for platform in windows-x64 linux-x64 android; do
-            for attempt in $(seq 1 30); do
-              seen="$(curl -fsS -H 'Cache-Control: no-cache' "https://lifeos.com.tr/surum/stable/$platform.json" | jq -r .version || true)"
-              [ "$seen" = "$VERSION" ] && break
-              sleep 10
-            done
-            if [ "$seen" != "$VERSION" ]; then
-              echo "::error::lifeos.com.tr $platform için $VERSION göstermiyor (${seen:-yok})."
-              exit 1
-            fi
-            url="$(curl -fsS "https://lifeos.com.tr/surum/stable/$platform.json" | jq -r .url)"
-            curl -fsSI "$url" > /dev/null
-            echo "$platform: $VERSION yayında, $url"
-          done
+          mkdir -p outgoing
+          cp packages/LifeOS-Folio-* release/*.json outgoing/
+          bash tool/release/send_to_site.sh outgoing "$VERSION" windows-x64 linux-x64 android
       - name: Sürümü yayımla
         env:
           GH_TOKEN: ${{ github.token }}
@@ -316,8 +293,8 @@ jobs:
     secrets: inherit
 
   # The Mac, signed by Developer ID and notarized, put into the release once
-  # the others are out: slower, and no update manifest yet; a Mac that fails
-  # holds the others back in nothing.
+  # the others are out: slower, and a Mac that fails holds the others back
+  # in nothing.
   macos:
     needs: [version, publish]
     permissions:
@@ -326,3 +303,67 @@ jobs:
     with:
       release_tag: ${{ github.ref_name }}
     secrets: inherit
+
+  # The Mac's package signed for like the others and sent to lifeos.com.tr,
+  # where every Mac's Folio and the site's Mac link find it
+  # (surum/stable/macos-universal.json). On Linux, where the others were
+  # signed: a Mac's minutes cost ten of these.
+  macos-site:
+    needs: [version, macos]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Mac paketini sürümden al
+        # The release keeps it under one name for every version; the site,
+        # like the others, under its version's.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --pattern LifeOS-Folio-macOS.dmg \
+            --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP" --clobber
+          # Once, however often this job is run again.
+          grep -v ' LifeOS-Folio-macOS\.dmg$' "$RUNNER_TEMP/SHA256SUMS.txt" > release-sums.txt || true
+          (cd "$RUNNER_TEMP" && sha256sum LifeOS-Folio-macOS.dmg) >> release-sums.txt
+          mkdir -p outgoing release
+          mv release-sums.txt release/SHA256SUMS.txt
+          cat release/SHA256SUMS.txt
+          mv "$RUNNER_TEMP/LifeOS-Folio-macOS.dmg" "outgoing/LifeOS-Folio-$VERSION-macOS.dmg"
+      - name: Ses kitaplığı
+        # dart run builds every package's native code first, the recorder's
+        # included, and that links against ALSA.
+        timeout-minutes: 15
+        run: |
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+          sudo apt-get $apt_opts update
+          sudo apt-get $apt_opts install -y libasound2-dev
+      - name: Sürüm bilgisini imzala
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          notes="packaging/release/notes/$VERSION.json"
+          dart run tool/release/sign_manifest.dart --platform macos-universal \
+            --file "outgoing/LifeOS-Folio-$VERSION-macOS.dmg" \
+            --notes-tr "$(jq -r .tr "$notes")" --notes-en "$(jq -r .en "$notes")" \
+            > release/macos-universal.json
+          cp release/macos-universal.json outgoing/
+      - name: İmzalı sürüm bilgisini sürüme ekle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" release/* --clobber
+      - name: lifeos.com.tr'ye gönder, yayında mı
+        env:
+          DEPLOY_KEY: ${{ secrets.FOLIO_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.FOLIO_DEPLOY_KNOWN_HOSTS }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bash tool/release/send_to_site.sh outgoing "$VERSION" macos-universal

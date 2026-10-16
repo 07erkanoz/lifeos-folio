@@ -15,7 +15,8 @@ on:
         type: boolean
         default: false
   # A release (release.yml): the package goes into that release, under one
-  # name for every version, which the site's Mac link downloads.
+  # name for every version; release.yml's macos-site then signs for it and
+  # sends it to lifeos.com.tr, where the site and every Mac's Folio find it.
   workflow_call:
     inputs:
       release_tag:

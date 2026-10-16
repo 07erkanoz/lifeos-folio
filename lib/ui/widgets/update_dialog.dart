@@ -36,6 +36,9 @@ class _UpdateDialogState extends State<UpdateDialog> {
   File? _package;
   String? _error;
 
+  /// Asked once: on a Mac it tries writing beside the app.
+  late final bool _inPlace = UpdateInstaller.replacesInPlace;
+
   UpdateManifest get _m => widget.manifest;
 
   static String _size(int bytes) => bytes >= 1 << 20
@@ -74,11 +77,11 @@ class _UpdateDialogState extends State<UpdateDialog> {
     final package = _package;
     if (package == null) return;
     final companion = CompanionScope.maybeOf(context);
-    // On Linux the new Folio is put in place first and this one closes
-    // after: what is not saved is asked about before, not while the new one
-    // waits two seconds to start and finds this one still open.
+    // On Linux and a Mac the new Folio is put in place first and this one
+    // closes after: what is not saved is asked about before, not while the
+    // new one waits to start and finds this one still open.
     final ask = companion?.beforeClose;
-    if (Platform.isLinux && ask != null && !await ask()) return;
+    if (_inPlace && ask != null && !await ask()) return;
     if (!mounted) return;
     setState(() {
       _step = _Step.installing;
@@ -89,15 +92,16 @@ class _UpdateDialogState extends State<UpdateDialog> {
         package,
         restart: () async {
           if (companion != null) {
-            await companion.quit(ask: !Platform.isLinux);
+            await companion.quit(ask: !_inPlace);
           } else {
             exit(0);
           }
         },
       );
       if (!mounted) return;
-      if (Platform.isWindows) {
-        // The setup closes Folio itself, asking first.
+      if (Platform.isWindows || Platform.isMacOS) {
+        // The setup closes Folio itself, asking first; on a Mac, Finder
+        // shows the image to drag Folio from.
         Navigator.of(context).pop();
       } else {
         setState(() => _step = _Step.downloaded);
@@ -116,6 +120,8 @@ class _UpdateDialogState extends State<UpdateDialog> {
       ? 'Kurulumu başlat'
       : Platform.isAndroid
       ? 'Yükle'
+      : Platform.isMacOS && !_inPlace
+      ? 'Paketi aç'
       : 'Kur ve yeniden başlat';
 
   @override
@@ -167,10 +173,14 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      Platform.isLinux
+                      _inPlace
                           ? 'Paket indi ve doğrulandı. Folio kurulumdan sonra '
                                 'kapanıp yeni sürümle açılır; açık belgelerinizi '
                                 'kaydedin.'
+                          : Platform.isMacOS
+                          ? 'Paket indi ve doğrulandı. Folio’yu kapatın, '
+                                'açılan pencerede LifeOS Folio’yu Uygulamalar '
+                                'klasörüne sürükleyip eskisinin yerine koyun.'
                           : Platform.isWindows
                           ? 'Paket indi ve doğrulandı. Kurulum Folio’yu '
                                 'kapatmadan önce sorar.'
