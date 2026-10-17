@@ -922,46 +922,42 @@ class _EditorWidgetState extends State<EditorWidget>
   /// paragraph that needs it is being written, and leaving the document to
   /// go and find one means coming back having lost the thread.
   ///
-  /// The panel at the left of the page shows it, or the document's UYAP
-  /// case: one at a time, chosen by its tabs; null while it is closed.
-  _Side? _side;
-  bool get _caseLawOpen => _side == _Side.caseLaw;
+  /// Its own panel, right of the page, and the document's UYAP case its
+  /// own, left of it: two things a lawyer has open together, a precedent
+  /// looked for while the case's papers are read. Put in one panel behind
+  /// two tabs (12 Ekim 2026), the one closed the other.
+  bool _caseLawOpen = false;
 
   /// The UYAP case the document is written for, beside the page.
-  bool get _uyapOpen => _side == _Side.uyap;
+  bool _uyapOpen = false;
 
-  /// Opens the panel on [side], or closes it if it shows [side] already.
-  /// On a phone it is a sheet from below rather than a column beside a
-  /// page there is no room beside.
+  /// Opens [side]'s panel, or closes it if it is open. On a phone it is a
+  /// sheet from below rather than a column beside a page there is no room
+  /// beside.
   void _toggleSide(_Side side) {
     if (MediaQuery.sizeOf(context).width < 760) {
       unawaited(_sideSheet(side));
       return;
     }
-    setState(() => _side = _side == side ? null : side);
-    if (_side == _Side.uyap) unawaited(_uyap.bind(_documentPath));
+    setState(() {
+      if (side == _Side.uyap) {
+        _uyapOpen = !_uyapOpen;
+      } else {
+        _caseLawOpen = !_caseLawOpen;
+      }
+    });
+    if (side == _Side.uyap && _uyapOpen) unawaited(_uyap.bind(_documentPath));
   }
 
   Future<void> _sideSheet(_Side side) async {
     if (side == _Side.uyap) unawaited(_uyap.bind(_documentPath));
-    var shown = side;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (sheet) => StatefulBuilder(
-        builder: (sheet, setSheet) => SizedBox(
-          height: MediaQuery.sizeOf(sheet).height * .86,
-          child: _sidePanel(
-            sheet,
-            shown,
-            onSide: (next) {
-              setSheet(() => shown = next);
-              if (next == _Side.uyap) unawaited(_uyap.bind(_documentPath));
-            },
-            onClose: () => Navigator.pop(sheet),
-          ),
-        ),
+      builder: (sheet) => SizedBox(
+        height: MediaQuery.sizeOf(sheet).height * .86,
+        child: _sidePanel(sheet, side, onClose: () => Navigator.pop(sheet)),
       ),
     );
   }
@@ -983,85 +979,42 @@ class _EditorWidgetState extends State<EditorWidget>
     }
   }
 
-  /// The panel left of the page: its tabs over the document's case or the
-  /// case-law search.
+  /// [side]'s panel: the document's UYAP case, with its own heading and
+  /// close button, or the case-law search under one of its own.
   Widget _sidePanel(
     BuildContext context,
     _Side side, {
-    required ValueChanged<_Side> onSide,
     required VoidCallback onClose,
   }) {
-    final scheme = Theme.of(context).colorScheme;
-    Widget tab(_Side value, IconData icon, String label) {
-      final on = side == value;
-      return Expanded(
-        child: InkWell(
-          key: ValueKey('side-tab-${value.name}'),
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => onSide(value),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            decoration: BoxDecoration(
-              color: on ? scheme.surface : null,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: on
-                  ? const [
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        blurRadius: 3,
-                        offset: Offset(0, 1),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: on ? scheme.primary : scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: on ? FontWeight.w600 : FontWeight.w500,
-                    color: on ? scheme.primary : scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    if (side == _Side.uyap) {
+      return UyapCasePanel(
+        key: const ValueKey('editor-uyap-panel'),
+        controller: _uyap,
+        onOpen: (file, document) => setState(() {
+          _evrakPath = file.path;
+          _evrakTitle = document.title;
+        }),
+        onInsert: _writeHeard,
+        onClose: onClose,
       );
     }
-
+    final scheme = Theme.of(context).colorScheme;
     return Material(
-      key: const ValueKey('editor-side-panel'),
+      key: const ValueKey('editor-case-law-panel'),
       color: scheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 4, 10),
+            padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
             child: Row(
               children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        tab(_Side.uyap, Icons.folder_open_outlined, 'Dosya'),
-                        tab(_Side.caseLaw, Icons.gavel_rounded, 'Emsal'),
-                      ],
-                    ),
+                Icon(Icons.balance_outlined, size: 18, color: scheme.primary),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Emsal karar ara',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                 ),
                 IconButton(
@@ -1073,22 +1026,7 @@ class _EditorWidgetState extends State<EditorWidget>
             ),
           ),
           Divider(height: 1, color: scheme.outlineVariant),
-          Expanded(
-            child: switch (side) {
-              _Side.uyap => UyapCasePanel(
-                controller: _uyap,
-                onOpen: (file, document) => setState(() {
-                  _evrakPath = file.path;
-                  _evrakTitle = document.title;
-                }),
-                onInsert: _writeHeard,
-              ),
-              _Side.caseLaw => CaseLawSearchScreen(
-                bank: _caseLaw,
-                compact: true,
-              ),
-            },
-          ),
+          Expanded(child: CaseLawSearchScreen(bank: _caseLaw, compact: true)),
         ],
       ),
     );
@@ -1097,6 +1035,7 @@ class _EditorWidgetState extends State<EditorWidget>
   /// The ribbon shown for a moment in full screen; see [windowFullScreen].
   bool _ribbonPeek = false;
   double _uyapWidth = 380;
+  double _caseLawWidth = 420;
   late final _uyap = UyapCasePanelController()..onSaved = _uyapSaved;
 
   /// A document of that case, open beside the page to write from.
@@ -4053,6 +3992,41 @@ class _EditorWidgetState extends State<EditorWidget>
           ),
         ],
       ]),
+      // Research second, not last: at the end the row ran past a laptop's
+      // width, and "İçtihat ara" was there but out of sight.
+      ribbonGroup(context, 'Araştırma', [
+        [
+          ribbonButton(
+            context,
+            Icons.balance_outlined,
+            'İçtihat ara',
+            () => _toggleSide(_Side.caseLaw),
+            selected: _caseLawOpen,
+            key: const ValueKey('legal-case-law'),
+          ),
+          ribbonButton(
+            context,
+            Icons.bolt_outlined,
+            'Kalıp metin',
+            () => unawaited(_snippets()),
+          ),
+        ],
+        [
+          ribbonButton(
+            context,
+            Icons.history_rounded,
+            'Belge geçmişi',
+            () => unawaited(_history()),
+          ),
+          ribbonButton(
+            context,
+            Icons.compare_outlined,
+            'Karşılaştır',
+            () => unawaited(_history()),
+            tooltip: 'Kaydedilmiş sürümlerle karşılaştır',
+          ),
+        ],
+      ]),
       if (_desktop)
         ribbonGroup(context, 'Dosya', [
           [
@@ -4125,7 +4099,7 @@ class _EditorWidgetState extends State<EditorWidget>
           ],
         ],
       ]),
-      ribbonGroup(context, 'Ajanda', [
+      ribbonGroup(context, 'Ajanda', last: true, [
         [
           ribbonButton(
             context,
@@ -4151,39 +4125,6 @@ class _EditorWidgetState extends State<EditorWidget>
             tooltip: linked
                 ? 'Dosyanın UETS tebligatlarındaki süreler'
                 : unlinked,
-          ),
-        ],
-      ]),
-      ribbonGroup(context, 'Araştırma', last: true, [
-        [
-          ribbonButton(
-            context,
-            Icons.balance_outlined,
-            'İçtihat ara',
-            () => _toggleSide(_Side.caseLaw),
-            selected: _caseLawOpen,
-            key: const ValueKey('legal-case-law'),
-          ),
-          ribbonButton(
-            context,
-            Icons.bolt_outlined,
-            'Kalıp metin',
-            () => unawaited(_snippets()),
-          ),
-        ],
-        [
-          ribbonButton(
-            context,
-            Icons.history_rounded,
-            'Belge geçmişi',
-            () => unawaited(_history()),
-          ),
-          ribbonButton(
-            context,
-            Icons.compare_outlined,
-            'Karşılaştır',
-            () => unawaited(_history()),
-            tooltip: 'Kaydedilmiş sürümlerle karşılaştır',
           ),
         ],
       ]),
@@ -4715,7 +4656,7 @@ class _EditorWidgetState extends State<EditorWidget>
       if (widget.recovery == null) unawaited(_defaultLetterhead());
       final uyapCase = widget.uyapCase;
       if (uyapCase != null) {
-        _side = _Side.uyap;
+        _uyapOpen = true;
         unawaited(_uyap.attach(uyapCase));
       }
     }
@@ -5586,23 +5527,15 @@ class _EditorWidgetState extends State<EditorWidget>
             Expanded(
               child: Row(
                 children: [
-                  // The document's case and the case-law search, left of
-                  // the page, as a writing app keeps its outline; a phone
-                  // has them in a sheet.
-                  if (_side != null &&
-                      MediaQuery.sizeOf(context).width >= 760) ...[
+                  // The document's case, left of the page; a phone has it
+                  // in a sheet.
+                  if (_uyapOpen && MediaQuery.sizeOf(context).width >= 760) ...[
                     SizedBox(
                       width: _uyapWidth,
                       child: _sidePanel(
                         context,
-                        _side!,
-                        onSide: (side) {
-                          setState(() => _side = side);
-                          if (side == _Side.uyap) {
-                            unawaited(_uyap.bind(_documentPath));
-                          }
-                        },
-                        onClose: () => setState(() => _side = null),
+                        _Side.uyap,
+                        onClose: () => setState(() => _uyapOpen = false),
                       ),
                     ),
                     ResizeHandle(
@@ -5893,6 +5826,26 @@ class _EditorWidgetState extends State<EditorWidget>
                       ),
                     ),
                     SizedBox(width: _evrakWidth, child: _evrakPane(context)),
+                  ],
+                  // The case-law search on its own, right of the page.
+                  if (_caseLawOpen &&
+                      MediaQuery.sizeOf(context).width >= 760) ...[
+                    ResizeHandle(
+                      onDrag: (dx) => setState(
+                        () => _caseLawWidth = (_caseLawWidth - dx).clamp(
+                          340.0,
+                          720.0,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: _caseLawWidth,
+                      child: _sidePanel(
+                        context,
+                        _Side.caseLaw,
+                        onClose: () => setState(() => _caseLawOpen = false),
+                      ),
+                    ),
                   ],
                 ],
               ),
