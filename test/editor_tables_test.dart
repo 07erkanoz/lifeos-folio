@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show BoxParentData;
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -1060,6 +1061,202 @@ void main() {
     expect(table.rows.first.cells.length, 3);
     expect(saved.toPlainText(), contains('Özlem Şenoğlu'));
     await tester.pumpAndSettle();
+  });
+
+  group('the table\'s own changes are undone and redone', () {
+    Future<void> open(WidgetTester tester, String prefix) async {
+      tester.view.physicalSize = const Size(1400, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final file = await _file(tester, _withTable(), prefix);
+      await tester.pumpWidget(
+        _app(
+          EditorWidget(
+            initialFilePath: file.path,
+            initialFormat: EvrakFormat.udf,
+          ),
+        ),
+      );
+      await waitFor(
+        tester,
+        () => find.byType(EditorTableView).evaluate().isNotEmpty,
+      );
+      tester
+          .widgetList<QuillEditor>(find.byType(QuillEditor))
+          .firstWhere((e) => e.focusNode.debugLabel == 'table-cell')
+          .focusNode
+          .requestFocus();
+      await tester.pumpAndSettle();
+    }
+
+    List<EditorPagedCell> drawn(WidgetTester tester) =>
+        tester.widget<EditorPagedTable>(find.byType(EditorPagedTable)).cells;
+    int rows(WidgetTester tester) =>
+        drawn(tester).map((c) => c.row).toSet().length;
+    int columns(WidgetTester tester) =>
+        drawn(tester).where((c) => c.row == 0).length;
+
+    /// The cell with the cursor.
+    QuillController focused(WidgetTester tester) => tester
+        .widgetList<QuillEditor>(find.byType(QuillEditor))
+        .firstWhere(
+          (e) => e.focusNode.debugLabel == 'table-cell' && e.focusNode.hasFocus,
+        )
+        .controller;
+
+    testWidgets('a row and a column taken back with Ctrl+Z, put back with '
+        'Ctrl+Y and Ctrl+Shift+Z', (tester) async {
+      await open(tester, 'editor-undo-shape-');
+      await tester.tap(find.byTooltip('Satır ekle'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Sütun ekle'));
+      await tester.pumpAndSettle();
+      expect((rows(tester), columns(tester)), (3, 3));
+
+      await shortcut(tester, LogicalKeyboardKey.keyZ);
+      await tester.pumpAndSettle();
+      expect((rows(tester), columns(tester)), (3, 2));
+      await shortcut(tester, LogicalKeyboardKey.keyZ);
+      await tester.pumpAndSettle();
+      expect((rows(tester), columns(tester)), (2, 2));
+      // Nothing more of the table's: the text around it stays.
+      await shortcut(tester, LogicalKeyboardKey.keyZ);
+      await tester.pumpAndSettle();
+      expect((rows(tester), columns(tester)), (2, 2));
+      expect(
+        tester
+            .widgetList<QuillEditor>(find.byType(QuillEditor))
+            .firstWhere((e) => e.focusNode.debugLabel == 'document-editor')
+            .controller
+            .document
+            .toPlainText(),
+        contains('Taraflar'),
+      );
+
+      await shortcut(tester, LogicalKeyboardKey.keyY);
+      await tester.pumpAndSettle();
+      expect((rows(tester), columns(tester)), (3, 2));
+      await shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+      await tester.pumpAndSettle();
+      expect((rows(tester), columns(tester)), (3, 3));
+    });
+
+    testWidgets('what was typed in a cell is undone before the row added '
+        'before it; typing after an undo leaves nothing to redo', (
+      tester,
+    ) async {
+      await open(tester, 'editor-undo-order-');
+      await tester.tap(find.byTooltip('Satır ekle'));
+      await tester.pumpAndSettle();
+      expect(rows(tester), 3);
+      final cell = focused(tester);
+      final before = cell.document.toPlainText();
+      cell.replaceText(0, 0, 'yeni ', null);
+      await tester.pumpAndSettle();
+      expect(cell.document.toPlainText(), 'yeni $before');
+
+      await shortcut(tester, LogicalKeyboardKey.keyZ);
+      await tester.pumpAndSettle();
+      expect(cell.document.toPlainText(), before);
+      expect(rows(tester), 3);
+      await shortcut(tester, LogicalKeyboardKey.keyZ);
+      await tester.pumpAndSettle();
+      expect(rows(tester), 2);
+
+      focused(tester).replaceText(0, 0, 'x', null);
+      await tester.pumpAndSettle();
+      expect(focused(tester).hasRedo, isFalse);
+      await shortcut(tester, LogicalKeyboardKey.keyY);
+      await tester.pumpAndSettle();
+      expect(rows(tester), 2);
+    });
+  });
+
+  group('a cell merged down', () {
+    DocModel merged() => DocModel(
+      blocks: [
+        DocBlock(
+          type: DocBlockType.table,
+          plainText: '',
+          table: DocTable(
+            columnWidths: const [100, 100, 100],
+            rows: [
+              DocTableRow(
+                cells: [
+                  DocTableCell(
+                    rowspan: 2,
+                    blocks: [DocBlock(plainText: 'Birleşik')],
+                  ),
+                  _cell('A1'),
+                  _cell('A2'),
+                ],
+              ),
+              // The column the merged cell takes is left out, as Word and
+              // HTML write it.
+              DocTableRow(cells: [_cell('B1'), _cell('B2')]),
+              DocTableRow(cells: [_cell('C0'), _cell('C1'), _cell('C2')]),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    testWidgets('takes its rows: the cells beside it go on in their own '
+        'columns, and its box runs down through both rows', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final file = await _file(tester, merged(), 'editor-rowspan-');
+      await tester.pumpWidget(
+        _app(
+          EditorWidget(
+            initialFilePath: file.path,
+            initialFormat: EvrakFormat.udf,
+          ),
+        ),
+      );
+      await waitFor(
+        tester,
+        () => find.byType(EditorPagedTable).evaluate().isNotEmpty,
+      );
+      await tester.pumpAndSettle();
+      final cells = tester
+          .widget<EditorPagedTable>(find.byType(EditorPagedTable))
+          .cells;
+      final first = cells.first;
+      expect((first.row, first.rows, first.x), (0, 2, 0.0));
+      final b = cells.where((c) => c.row == 1).toList();
+      // Not under the merged cell: in the second and third columns.
+      expect(b.map((c) => c.x).toList(), [cells[1].x, cells[2].x]);
+      expect(b.first.x, greaterThan(0));
+      final c = cells.where((c) => c.row == 2).toList();
+      expect(c.first.x, 0.0);
+      expect(c.every((c) => c.rows == 1), isTrue);
+
+      // Laid out: the merged cell's box is the two rows' height, the third
+      // row below both.
+      final box = tester.renderObject(
+        find.byType(EditorPagedTable),
+      ) as RenderEditorPagedTable;
+      final children = <RenderBox>[];
+      box.visitChildren((c) => children.add(c as RenderBox));
+      Offset at(RenderBox child) => (child.parentData! as BoxParentData).offset;
+      expect(at(children[3]).dy, greaterThan(at(children[0]).dy));
+      expect(at(children[5]).dy, greaterThan(at(children[3]).dy));
+      expect(
+        tester
+            .widgetList<QuillEditor>(find.byType(QuillEditor))
+            .where((e) => e.focusNode.debugLabel == 'table-cell')
+            .first
+            .controller
+            .document
+            .toPlainText(),
+        'Birleşik\n',
+      );
+      await tester.pumpAndSettle();
+    });
   });
 
   testWidgets('a nested table is shown and left alone', (tester) async {

@@ -5167,6 +5167,7 @@ class _EditorWidgetState extends State<EditorWidget>
             ? (Map<String, dynamic>.of(model.metadata)
                 ..['hasSignature'] = false
                 ..remove('signatureBytes')
+                ..remove('signedContentBytes')
                 ..remove('signatureInfos'))
             : null;
         if (unsigned != null) {

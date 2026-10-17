@@ -214,6 +214,28 @@ abstract final class SyncClock {
     return id;
   }
 
+  static const _machineKey = 'senkron_makine';
+
+  /// [db] opened on the computer [machine] ([MachineIdentity]). A database
+  /// carried to another computer as it was — Folio's folder copied whole,
+  /// by hand or by a migration tool, the file beside it too, so that
+  /// nothing else tells — takes a new id there: else the two computers
+  /// wrote as one, and each took the other's long UYAP job for its own
+  /// (docs/denetim-2026-10-17.md D1). True when it took one. No [machine],
+  /// nothing is concluded.
+  static bool adoptMachine(PortalDatabase db, String? machine) {
+    if (machine == null || machine.isEmpty) return false;
+    final kept = db.meta(_machineKey);
+    if (kept == machine) return false;
+    db.setMeta(_machineKey, machine);
+    // The first opening that knows of computers: this one's.
+    if (kept == null || kept.isEmpty) return false;
+    db.setMeta(_deviceKey, '');
+    _clock = null;
+    _of = null;
+    return true;
+  }
+
   static HlcClock of(PortalDatabase db) {
     if (_clock == null || !identical(_of, db)) {
       _clock = SyncGeneration.clockFor(db, deviceId: localDeviceId(db));

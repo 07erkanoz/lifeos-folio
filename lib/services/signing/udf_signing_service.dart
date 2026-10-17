@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 import 'package:pointycastle/export.dart';
 
 import 'cades_builder.dart';
+import 'signed_data.dart';
 import 'x509_parser.dart';
 import 'pkcs11/pkcs11_bindings.dart';
 import 'pkcs11/pkcs11_discovery.dart';
@@ -194,6 +195,30 @@ class UdfSigningService {
     }
   }
 
+  /// Throws when [original] is signed by a signature that is not over its
+  /// text: a signature added to it would sit beside one that does not hold.
+  static void ensureCanAdd(Uint8List original) {
+    if (!isSigned(original)) return;
+    final existing = SignedData.signatureOf(original);
+    if (existing == null ||
+        !SignedData.covers(existing, SignedData.content(original))) {
+      throw StateError(
+        'Belgedeki mevcut imza bu metinle eşleşmiyor; imzanız eklenemez. '
+        'Belgenin imzasız bir kopyasını imzalayın.',
+      );
+    }
+  }
+
+  /// [original] with [signature]: the first one, or beside those signed
+  /// before (SignedData.sign).
+  static Uint8List signedWith(Uint8List original, Uint8List signature) {
+    try {
+      return SignedData.sign(original, signature);
+    } on FormatException catch (e) {
+      throw StateError(e.message);
+    }
+  }
+
   static Uint8List embed(Uint8List original, Uint8List signature) {
     final archive = ZipDecoder().decodeBytes(original);
     if (archive.any((e) => e.isFile && e.name.toLowerCase().endsWith('.sgn'))) {
@@ -272,10 +297,11 @@ String _sign(
   if (!listEquals(File(args.path).readAsBytesSync(), original)) {
     throw StateError('Belge değişti. İmzalamadan önce yeniden açın.');
   }
+  // A document signed before takes this signature beside the others, as a
+  // mobile signature's does; checked before the card is asked, so that no
+  // PIN is spent on a signature that could not be added.
+  UdfSigningService.ensureCanAdd(original);
   final archive = ZipDecoder().decodeBytes(original);
-  if (archive.any((e) => e.isFile && e.name.toLowerCase().endsWith('.sgn'))) {
-    throw StateError('Belge zaten imzalı; imzasız kopyayı seçin.');
-  }
   final xml = archive.findFile('content.xml');
   if (xml == null) {
     throw const FormatException('UDF içinde content.xml bulunamadı.');
@@ -313,7 +339,7 @@ String _sign(
         'Üretilen imza seçili sertifikayla doğrulanamadı. Dosya kaydedilmedi.',
       );
     }
-    final output = UdfSigningService.embed(
+    final output = UdfSigningService.signedWith(
       original,
       CadesBuilder.buildCadesSignature(params),
     );

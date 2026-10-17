@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/document_model.dart';
+import '../../services/signing/signed_data.dart';
 import '../../services/udf/signature_parser.dart';
 import '../theme/app_theme.dart';
 
@@ -18,9 +20,58 @@ class SignatureBanner extends StatelessWidget {
       ? 'Belirtilmemiş'
       : DateFormat('dd.MM.yyyy HH:mm').format(date.toLocal());
 
+  /// Whether [model]'s signature is over its content as it came, checked
+  /// once a signature apart from the screen; null when there is nothing to
+  /// check it with. A signature that does not check out is not said to be
+  /// broken: 64 of 487 filings UYAP gave (17 Ekim 2026) did not, the courts'
+  /// own, and to call them changed would be a false alarm.
+  static Future<bool>? verified(DocModel model) {
+    final signature = model.metadata['signatureBytes'];
+    final content = model.metadata['signedContentBytes'];
+    if (signature is! List<int> || content is! List<int>) return null;
+    return _checked[signature] ??= compute(_verify, (
+      signature,
+      content,
+    )).then((ok) => _known[signature] = ok);
+  }
+
+  /// The checks begun, and the ones done: shown at once when the banner is
+  /// built again.
+  static final _checked = Expando<Future<bool>>();
+  static final _known = Expando<bool>();
+
+  static bool _verify((List<int>, List<int>) request) {
+    final (signature, content) = request;
+    try {
+      return SignedData.covers(Uint8List.fromList(signature), content) &&
+          UdfSignatureParser.verifyDocument(signature, content);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Said in the details of a signature that did not check out.
+  static const notVerifiedNote =
+      'İmza bu belgenin içeriği üzerinde doğrulanamadı. UYAP’tan indirilen '
+      'evrakta bu sık görülür; tek başına belgenin imzadan sonra '
+      'değiştirildiği anlamına gelmez.';
+
   @override
   Widget build(BuildContext context) {
     if (model.metadata['hasSignature'] != true) return const SizedBox.shrink();
+    final check = verified(model);
+    if (check == null) return _build(context, null);
+    return FutureBuilder<bool>(
+      // Another document's banner in its place starts unchecked: kept, it
+      // showed the one before's word until its own came.
+      key: ObjectKey(model.metadata['signatureBytes']),
+      future: check,
+      initialData: _known[model.metadata['signatureBytes'] as Object],
+      builder: (context, done) => _build(context, done.data),
+    );
+  }
+
+  Widget _build(BuildContext context, bool? checked) {
     final infos =
         (model.metadata['signatureInfos'] as List?)
             ?.whereType<UdfSignatureInfo>()
@@ -40,6 +91,7 @@ class SignatureBanner extends StatelessWidget {
     final when = dates.isEmpty ? null : _date(dates.last);
     final who = names.isEmpty ? 'İmza ayrıntıları okunamadı' : names;
     final summary = [
+      if (checked == true) 'İmza doğrulandı',
       ?when,
       if (infos.length > 1) '${infos.length} imza',
     ].join('  ·  ');
@@ -92,6 +144,7 @@ class SignatureBanner extends StatelessWidget {
             child: Tooltip(
               message:
                   'Elektronik imzalı${names.isEmpty ? '' : ': $names'}'
+                  '${checked == true ? '\nİmza bu içerikle doğrulandı' : ''}'
                   '${when == null ? '' : '\nBeyan edilen imza zamanı: $when'}',
               child: Text.rich(
                 TextSpan(
@@ -187,6 +240,13 @@ class SignatureBanner extends StatelessWidget {
                             if (infos[i].issue != null) Text(infos[i].issue!),
                           ],
                           const Divider(height: 28),
+                          if (checked == true)
+                            const Text(
+                              'İmza bu belgenin içeriğiyle doğrulandı: imzadan '
+                              'sonra değiştirilmemiş.',
+                            ),
+                          if (checked == false) const Text(notVerifiedNote),
+                          if (checked != null) const SizedBox(height: 8),
                           const Text(
                             'Belgede kayıtlı elektronik imza ve sertifika bilgileri.',
                           ),

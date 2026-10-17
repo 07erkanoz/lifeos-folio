@@ -209,6 +209,40 @@ class _EditorTableViewState extends State<EditorTableView> {
   /// Whether the table is picked as a whole, so a format goes to every cell.
   bool _wholeTable = false;
 
+  /// The table as it was before each change of its shape, its lines, a
+  /// cell's fill or a column's width, the latest last; and those undone.
+  /// None of these is a cell's typing, which the cell's own history holds:
+  /// Ctrl+Z undoes the cell's first, then these (see [_CellController]).
+  final _before = <DocTable>[];
+  final _undone = <DocTable>[];
+  static const _remembered = 50;
+
+  late final _shapes = _ShapeHistory(
+    undoable: () => _before.isNotEmpty,
+    redoable: () => _undone.isNotEmpty,
+    undo: _undoShape,
+    redo: _redoShape,
+  );
+
+  /// The table as it is now, kept to come back to.
+  void _remember() {
+    _before.add(_current());
+    if (_before.length > _remembered) _before.removeAt(0);
+    _undone.clear();
+  }
+
+  void _undoShape() {
+    if (_before.isEmpty) return;
+    _undone.add(_current());
+    _reshape(_before.removeLast(), remember: false);
+  }
+
+  void _redoShape() {
+    if (_undone.isEmpty) return;
+    _before.add(_current());
+    _reshape(_undone.removeLast(), remember: false);
+  }
+
   /// What a printed table line looks like.
   static const _border = Color(0xFF9AA2B1);
 
@@ -243,6 +277,9 @@ class _EditorTableViewState extends State<EditorTableView> {
     _stamp++;
     _disposeCells();
     _table = widget.table;
+    // Another table in its place: what this one did is not undone on it.
+    _before.clear();
+    _undone.clear();
     _build();
   }
 
@@ -285,7 +322,12 @@ class _EditorTableViewState extends State<EditorTableView> {
     for (var r = 0; r < _cells.length; r++) {
       for (var c = 0; c < _cells[r].length; c++) {
         final cell = _cells[r][c];
-        cell.controller?.document.changes.listen((_) => _report());
+        (cell.controller as _CellController?)?.shapes = _shapes;
+        cell.controller?.document.changes.listen((_) {
+          // Typed after an undo: what was undone is not done again.
+          _undone.clear();
+          _report();
+        });
         final row = r, column = c;
         cell.focus?.addListener(() {
           if (!mounted) return;
@@ -407,7 +449,8 @@ class _EditorTableViewState extends State<EditorTableView> {
   /// Rows and columns change the shape, so the cells are rebuilt around them.
   /// The cursor goes back to where it was: adding a row and being thrown out
   /// of the table would mean clicking back in for every single one.
-  void _reshape(DocTable next) {
+  void _reshape(DocTable next, {bool remember = true}) {
+    if (remember) _remember();
     final row = _focusedRow, column = _focusedColumn;
     // Let the toolbar go of the cell before its controller is taken away.
     widget.onFocus(null);
@@ -475,6 +518,7 @@ class _EditorTableViewState extends State<EditorTableView> {
               if (identical(cell, last)) cell,
           ];
     if (touched.isEmpty) return;
+    _remember();
     for (final cell in touched) {
       cell.original = DocTableCell(
         blocks: cell.original.blocks,
@@ -671,6 +715,7 @@ class _EditorTableViewState extends State<EditorTableView> {
     final widths = _dragging;
     if (widths == null) return;
     _dragging = null;
+    _remember();
     _table = DocTable(
       rows: _table.rows,
       columnWidths: widths,
@@ -689,19 +734,55 @@ class _EditorTableViewState extends State<EditorTableView> {
     final focused = _focusedRow != null || _menuOpen;
     final cells = <EditorPagedCell>[];
     final children = <Widget>[];
-    for (var r = 0; r < _cells.length; r++) {
-      var column = 0;
+    // The columns a cell from a row above still takes, and for how many rows
+    // more: a cell merged down (rowspan) is left out of the rows below it,
+    // as Word and HTML write it.
+    final taken = <int, int>{};
+    double xOf(int column) {
       var x = 0.0;
+      for (var k = 0; k < column && k < columns; k++) {
+        x += widths[k];
+      }
+      return x;
+    }
+
+    for (var r = 0; r < _cells.length; r++) {
+      final covered = {
+        for (final e in taken.entries)
+          if (e.value > 0) e.key,
+      };
+      int spanOf(_Cell cell) =>
+          cell.original.colspan < 1 ? 1 : cell.original.colspan;
+      // A row that lists every column itself, the merged ones too, is
+      // drawn as it lists them: nothing is pushed off its end.
+      final needs = _cells[r].fold(0, (n, cell) => n + spanOf(cell));
+      final listsAll = needs > columns - covered.length;
+      if (listsAll) covered.clear();
+      final started = <int, int>{};
+      var column = 0;
       for (var c = 0; c < _cells[r].length && column < columns; c++) {
         final cell = _cells[r][c];
-        final span = cell.original.colspan < 1 ? 1 : cell.original.colspan;
+        while (column < columns && covered.contains(column)) {
+          column++;
+        }
+        if (column >= columns) break;
+        final span = spanOf(cell);
         var width = 0.0;
         for (var k = column; k < column + span && k < columns; k++) {
           width += widths[k];
         }
+        final down = (cell.original.rowspan < 1 ? 1 : cell.original.rowspan)
+            .clamp(1, _cells.length - r);
+        if (down > 1) {
+          for (var k = column; k < column + span && k < columns; k++) {
+            started[k] = down - 1;
+          }
+        }
+        final x = xOf(column);
         cells.add(
           EditorPagedCell(
             row: r,
+            rows: down,
             x: x,
             width: width,
             fill: _wholeTable
@@ -721,9 +802,15 @@ class _EditorTableViewState extends State<EditorTableView> {
             ),
           ),
         );
-        x += width;
         column += span;
       }
+      // A row on: the cells above it take one row less, those begun here
+      // the rows below.
+      if (listsAll) taken.clear();
+      taken
+        ..updateAll((_, rows) => rows - 1)
+        ..removeWhere((_, rows) => rows <= 0)
+        ..addAll(started);
     }
     return Listener(
       // Around the controls as well as the table: pressing one of those is
@@ -1099,6 +1186,28 @@ class _CellController extends QuillController with EditorClipboard {
   /// Null unless the table is picked as a whole.
   _CellGroup? group;
 
+  /// The table's own changes, undone after the cell's own: rows, columns,
+  /// lines, fills and widths are no cell's typing.
+  _ShapeHistory? shapes;
+
+  @override
+  bool get hasUndo => super.hasUndo || (shapes?.canUndo ?? false);
+
+  @override
+  bool get hasRedo => super.hasRedo || (shapes?.canRedo ?? false);
+
+  @override
+  void undo() {
+    if (super.hasUndo) return super.undo();
+    shapes?.undo();
+  }
+
+  @override
+  void redo() {
+    if (super.hasRedo) return super.redo();
+    shapes?.redo();
+  }
+
   // The flag is marked experimental upstream, but it is part of the method
   // being overridden and has to be passed along as it was given.
   @override
@@ -1126,6 +1235,23 @@ class _CellController extends QuillController with EditorClipboard {
       group.spreading = false;
     }
   }
+}
+
+/// What a table's cells undo and redo once their own typing is all undone.
+class _ShapeHistory {
+  _ShapeHistory({
+    required this.undoable,
+    required this.redoable,
+    required this.undo,
+    required this.redo,
+  });
+
+  final bool Function() undoable, redoable;
+  final VoidCallback undo, redo;
+
+  bool get canUndo => undoable();
+
+  bool get canRedo => redoable();
 }
 
 /// The cells of one table, while it is picked as a whole.

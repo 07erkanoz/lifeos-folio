@@ -12,10 +12,15 @@ class EditorPagedCell {
     required this.row,
     required this.x,
     required this.width,
+    this.rows = 1,
     this.fill,
   });
 
   final int row;
+
+  /// The rows it takes from [row] down: more than one for a cell merged
+  /// down (rowspan).
+  final int rows;
 
   /// From the table's left edge.
   final double x;
@@ -26,12 +31,13 @@ class EditorPagedCell {
   bool operator ==(Object other) =>
       other is EditorPagedCell &&
       other.row == row &&
+      other.rows == rows &&
       other.x == x &&
       other.width == width &&
       other.fill == fill;
 
   @override
-  int get hashCode => Object.hash(row, x, width, fill);
+  int get hashCode => Object.hash(row, rows, x, width, fill);
 }
 
 /// A table laid out the way UYAP lays one out on its pages: row under row,
@@ -135,12 +141,25 @@ class RenderEditorPagedTable extends RenderBox
     final moved = pages != _pages;
     _pages = pages;
     final rows = <({double top, double bottom})>[];
+    // Where a cell merged down needs the row it ends in to end, at least:
+    // a cell taller than the rows it takes makes its last one taller.
+    final ends = <int, double>{};
     var child = firstChild;
     var index = 0;
     var y = 0.0;
     var width = 0.0;
+    void close(int row, double top, double bottom) {
+      final end = math.max(bottom, ends.remove(row) ?? bottom);
+      rows.add((top: top, bottom: end));
+      y = end;
+    }
+
     while (child != null) {
       final row = _cells[index].row;
+      // Rows no cell begins in: taken by the cells above them.
+      while (rows.length < row) {
+        close(rows.length, y, y);
+      }
       final top = y;
       var bottom = top;
       // Every cell of the row, laid out from the row's top.
@@ -156,19 +175,36 @@ class RenderEditorPagedTable extends RenderBox
           BoxConstraints.tightFor(width: cell.width),
           parentUsesSize: true,
         );
-        bottom = math.max(bottom, top + child.size.height);
+        final reach = top + child.size.height;
+        if (cell.rows > 1) {
+          final last = row + cell.rows - 1;
+          ends[last] = math.max(ends[last] ?? reach, reach);
+        } else {
+          bottom = math.max(bottom, reach);
+        }
         width = math.max(width, cell.x + cell.width);
         child = data.nextSibling;
         index++;
       }
-      while (rows.length < row) {
-        rows.add((top: top, bottom: top));
-      }
-      rows.add((top: top, bottom: bottom));
-      y = bottom;
+      close(row, top, bottom);
+    }
+    // A cell merged down past the last row: the last row holds it.
+    if (ends.isNotEmpty && rows.isNotEmpty) {
+      final last = rows.removeLast();
+      final end = ends.values.fold(last.bottom, math.max);
+      rows.add((top: last.top, bottom: end));
+      y = end;
     }
     _rows = rows;
     size = constraints.constrain(Size(width, y));
+  }
+
+  /// Where [cell] starts and ends, from the table's top: its first row's top
+  /// to its last row's bottom.
+  ({double top, double bottom})? _spanOf(EditorPagedCell cell) {
+    if (cell.row >= _rows.length) return null;
+    final last = math.min(cell.row + cell.rows - 1, _rows.length - 1);
+    return (top: _rows[cell.row].top, bottom: _rows[last].bottom);
   }
 
   /// The parts of [top]..[bottom] that fall on a page's text area: all of it
@@ -192,12 +228,12 @@ class RenderEditorPagedTable extends RenderBox
   @override
   void paint(PaintingContext context, Offset offset) {
     final canvas = context.canvas;
-    // Fills first, a whole row tall and a page at a time.
+    // Fills first, as tall as the rows the cell takes, a page at a time.
     for (final cell in _cells) {
       final fill = cell.fill;
-      if (fill != null && cell.row < _rows.length) {
-        final row = _rows[cell.row];
-        for (final part in _onPages(row.top, row.bottom)) {
+      final span = _spanOf(cell);
+      if (fill != null && span != null) {
+        for (final part in _onPages(span.top, span.bottom)) {
           canvas.drawRect(
             Rect.fromLTRB(
               cell.x,
@@ -218,40 +254,26 @@ class RenderEditorPagedTable extends RenderBox
       ..color = _line
       ..strokeWidth = _lineWidth
       ..style = PaintingStyle.stroke;
-    for (var r = 0; r < _rows.length; r++) {
-      final row = _rows[r];
-      if (row.bottom <= row.top) continue;
-      final parts = _onPages(row.top, row.bottom);
-      final edges = <double>{};
-      var left = double.infinity, right = 0.0;
-      for (final cell in _cells) {
-        if (cell.row != r) continue;
-        edges
-          ..add(cell.x)
-          ..add(cell.x + cell.width);
-        left = math.min(left, cell.x);
-        right = math.max(right, cell.x + cell.width);
+    // Each cell's own box, as tall as the rows it takes: no line runs
+    // through a cell merged down. Its sides a page at a time.
+    // An edge two cells share is drawn once: twice, its line came out
+    // darker than the rest.
+    final drawn = <(double, double, double, double)>{};
+    void line(double x1, double y1, double x2, double y2) {
+      if (!drawn.add((x1, y1, x2, y2))) return;
+      lines.drawLine(offset + Offset(x1, y1), offset + Offset(x2, y2), paint);
+    }
+
+    for (final cell in _cells) {
+      final span = _spanOf(cell);
+      if (span == null || span.bottom <= span.top) continue;
+      final left = cell.x, right = cell.x + cell.width;
+      for (final part in _onPages(span.top, span.bottom)) {
+        line(left, part.top, left, part.bottom);
+        line(right, part.top, right, part.bottom);
       }
-      for (final part in parts) {
-        for (final x in edges) {
-          lines.drawLine(
-            offset + Offset(x, part.top),
-            offset + Offset(x, part.bottom),
-            paint,
-          );
-        }
-      }
-      lines
-        ..drawLine(
-          offset + Offset(left, row.top),
-          offset + Offset(right, row.top),
-          paint,
-        )
-        ..drawLine(
-          offset + Offset(left, row.bottom),
-          offset + Offset(right, row.bottom),
-          paint,
-        );
+      line(left, span.top, right, span.top);
+      line(left, span.bottom, right, span.bottom);
     }
   }
 

@@ -5,3 +5,6 @@
 native_tools/*/bin/* binary
 native_tools/*/tessdata/* binary
 native_tools/licenses/** -text -whitespace
+
+# Signed fixtures: the signature covers the bytes as they are.
+test/fixtures/signatures/** binary

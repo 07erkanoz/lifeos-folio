@@ -94,7 +94,13 @@ class UdfReader {
       if (xmlBytes == null) return null;
 
       final xmlContent = _smartDecode(xmlBytes);
-      return _parseXml(xmlContent, hasSignature, signatureBytes);
+      final model = _parseXml(xmlContent, hasSignature, signatureBytes);
+      // What the signature is over, as it came: the banner checks it when
+      // the document is shown, not every reading (the archive's indexing).
+      if (model != null && signatureBytes != null) {
+        model.metadata['signedContentBytes'] = xmlBytes;
+      }
+      return model;
     } catch (e) {
       debugPrint('UdfReader.readBytes hatası: $e');
       return null;

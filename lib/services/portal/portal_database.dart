@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../platform/app_directories.dart';
+import '../platform/machine_identity.dart';
 import 'case_sections.dart';
 import 'portal_case.dart';
 import 'portal_channel.dart';
@@ -365,6 +366,8 @@ class PortalDatabase {
           p.join((await folioSupportDirectory()).path, 'senkron-nesil.json'),
         ),
       );
+      // Carried to another computer: an id of its own there.
+      SyncClock.adoptMachine(db, MachineIdentity.current());
     } catch (_) {
       db.dispose();
       rethrow;
