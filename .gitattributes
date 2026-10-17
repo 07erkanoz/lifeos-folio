@@ -8,3 +8,6 @@ native_tools/licenses/** -text -whitespace
 
 # Signed fixtures: the signature covers the bytes as they are.
 test/fixtures/signatures/** binary
+
+# Decisions as Bedesten gave them: the measured offsets count their bytes.
+test/fixtures/decisions/** -text
