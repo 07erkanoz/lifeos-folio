@@ -48,6 +48,9 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
   List<UyapOption> _types = [];
   List<UyapOption> _courts = [];
   List<UyapCase> _cases = [];
+
+  /// The session [_cases] were listed in: their ids are its own.
+  Object? _casesSession;
   List<UyapDocumentType> _documentTypes = [];
   UyapOption? _type;
   UyapOption? _court;
@@ -235,6 +238,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
         'Mahkemeyi seçin. Esas numarası girerseniz dosya yılını da girin.',
       );
     }
+    final session = _web.session.value;
     final cases = await _web.cases(
       jurisdiction: _jurisdiction,
       courtType: _type!.id,
@@ -243,6 +247,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
       number: number,
       closed: _closed,
     );
+    _casesSession = session;
     if (cases.isEmpty) {
       throw StateError(
         'Bu ölçütlerde dosya bulunamadı. Açık/kapalı seçimini ve dosya yılını kontrol edin.',
@@ -262,6 +267,8 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
 
   Future<void> _loadMoreCases() => _run(() async {
     if (_type == null || _court == null || !_hasMoreCases) return;
+    // Listed in another session: none of them is trusted unasked.
+    if (!identical(_casesSession, _web.session.value)) _casesSession = null;
     final next = await _web.cases(
       jurisdiction: _jurisdiction,
       courtType: _type!.id,
@@ -282,19 +289,27 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
   });
 
   Future<void> _chooseCase(UyapCase selected) => _run(() async {
-    // Re-query through the current web session instead of trusting a cached ID.
+    // Re-query through the current web session instead of trusting a cached
+    // ID; a case just listed in this session has its ID already. The last
+    // check before sending asks again either way.
     final parsed = selected.parsedNumber;
     if (parsed == null) {
       throw StateError('Dosya numarası doğrulanamadı; bu dosya seçilemez.');
     }
-    final fresh = await _web.cases(
-      jurisdiction: _jurisdiction,
-      courtType: _type!.id,
-      court: _court!,
-      year: parsed.year,
-      number: parsed.sequence,
-      closed: _closed,
-    );
+    final listed =
+        selected.id.isNotEmpty &&
+        identical(_casesSession, _web.session.value) &&
+        _cases.any((c) => identical(c, selected));
+    final fresh = listed
+        ? [selected]
+        : await _web.cases(
+            jurisdiction: _jurisdiction,
+            courtType: _type!.id,
+            court: _court!,
+            year: parsed.year,
+            number: parsed.sequence,
+            closed: _closed,
+          );
     final match = fresh.where((c) => c.sameCase(selected)).toList();
     if (match.length != 1) {
       throw StateError('Dosya kimliği değişti; yeniden arayın.');

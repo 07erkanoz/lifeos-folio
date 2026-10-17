@@ -3,9 +3,11 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/fonts/document_fonts.dart';
 import '../../services/layout/page_numbers.dart';
+import '../../models/document_model.dart';
 import 'editor_image_embed.dart';
 import 'editor_line_layout.dart';
 import 'editor_tab_spans.dart';
+import 'editor_table_embed.dart';
 
 /// The header or footer strip, edited in place at the top or bottom of the
 /// page.
@@ -39,6 +41,13 @@ class EditorRegionBand extends StatefulWidget {
   /// Why the band does not print on this page, which shows it faded.
   final String? note;
 
+  /// The tables the band holds (a letterhead laid out as one), by the index
+  /// its table embeds carry. Shown as they print and kept; they are not
+  /// typed in here.
+  final List<DocBlock> Function() tables;
+
+  static List<DocBlock> _none() => const [];
+
   const EditorRegionBand({
     super.key,
     required this.controller,
@@ -50,6 +59,7 @@ class EditorRegionBand extends StatefulWidget {
     this.numbering,
     this.numberLabel,
     this.note,
+    this.tables = _none,
   });
 
   static const _labelStyle = TextStyle(
@@ -82,7 +92,19 @@ class _EditorRegionBandState extends State<EditorRegionBand> {
       controller: widget.controller,
       focusNode: widget.focusNode,
       config: QuillEditorConfig(
-        embedBuilders: [EditorImageEmbed()],
+        embedBuilders: [
+          EditorImageEmbed(),
+          // Without it a band holding a table could not be drawn at all.
+          EditorTableEmbed(
+            readOnly: () => true,
+            blocks: widget.tables,
+            onChanged: (_, _) {},
+            onFocus: (_) {},
+            onDelete: (_) {},
+            onCellsGone: () {},
+            onPointerInside: () {},
+          ),
+        ],
         lineLayoutBuilder: EditorLineLayout.builder(
           pageWidth: widget.pageWidth,
         ),

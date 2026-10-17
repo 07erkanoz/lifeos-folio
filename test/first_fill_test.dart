@@ -89,6 +89,7 @@ class _Web extends UyapWebService {
     int pageNumber = 1,
   }) async {
     // A whole kind of unit asked: its one court.
+    if (number != null) found.add(court.id);
     final id = court.id.isNotEmpty
         ? court.id
         : courtType == 'ICRA'
@@ -109,18 +110,24 @@ class _Web extends UyapWebService {
     DateTime to,
   ) async => const [];
 
+  /// The courts a case was looked for in by its number, and the cases
+  /// UYAP was asked what it shows of.
+  final found = <String>[], permitted = <String>[];
+
   @override
-  Future<UyapCasePermissions> permissions(UyapCase target) async =>
-      target.id == 'id-i1'
-      ? const UyapCasePermissions(2, {
-          'ayrinti_bilgileri',
-          'taraf_bilgileri',
-          'evrak_bilgileri',
-          'tahsilat_reddiyat_bilgileri',
-          'hesap_bilgileri',
-          'borclu_bilgileri',
-        })
-      : const UyapCasePermissions(1, null);
+  Future<UyapCasePermissions> permissions(UyapCase target) async {
+    permitted.add(target.id);
+    return target.id == 'id-i1'
+        ? const UyapCasePermissions(2, {
+            'ayrinti_bilgileri',
+            'taraf_bilgileri',
+            'evrak_bilgileri',
+            'tahsilat_reddiyat_bilgileri',
+            'hesap_bilgileri',
+            'borclu_bilgileri',
+          })
+        : const UyapCasePermissions(1, null);
+  }
 
   @override
   Future<UyapCaseDetails> caseDetails(UyapCase target) async {
@@ -287,6 +294,9 @@ class _Mobile extends UyapMobileApi {
   /// UYAP's notifications: a Vekil Kaydı for a case not in the portfolio.
   bool vekilKaydi = false;
 
+  /// Where that case is: a court by default.
+  String vekilUnit = 'Antalya 3. Asliye Ceza Mahkemesi';
+
   @override
   Future<List<Map<String, Object?>>> noticeRows({String? after}) async {
     noticesAsked++;
@@ -297,11 +307,21 @@ class _Mobile extends UyapMobileApi {
               'mesajId': 'm1',
               'baslik': 'Vekil Kaydı',
               'mesaj':
-                  'Antalya 3. Asliye Ceza Mahkemesi birimi, 2026/91 dosyasında '
+                  '$vekilUnit birimi, 2026/91 dosyasında '
                   ', Sanık Deniz Yılmaz vekili olarak Vekil Kaydı yapıldı.',
             },
           ]
         : const [];
+  }
+
+  /// Times every province was asked for its prosecutors' offices.
+  int provincesAsked = 0;
+
+  @override
+  Future<List<Map<String, Object?>>> provinces() {
+    provincesAsked++;
+    // Unanswered, as before it was counted.
+    return super.provinces();
   }
 
   /// The documents' answer: none, or (null) one without the list.
@@ -542,6 +562,35 @@ void main() {
     },
   );
 
+  test('a Vekil Kaydı asks every province\'s prosecutors only for a case at '
+      'a prosecutor\'s office not known yet', () async {
+    Future<int> provincesFor(String unit) async {
+      db.dispose();
+      db = PortalDatabase.memory();
+      final mobile = _Mobile()
+        ..vekilKaydi = true
+        ..vekilUnit = unit;
+      final sync = syncOf(_Web()..on = false, mobile);
+      await sync.setAutoFetch(true);
+      // The provinces were all asked last week, and the notices before.
+      db.setMeta(
+        'mobile_prosecutor_full_at',
+        DateTime.now().subtract(const Duration(days: 7)).toIso8601String(),
+      );
+      db.setMeta('uyap_notice_mobile', DateTime(2026).toIso8601String());
+      await sync.syncNotices(force: true);
+      for (var i = 0; i < 60 && db.meta('portfolio_at') == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      // The portfolio was read for the new case either way.
+      expect(db.meta('portfolio_at'), isNotNull, reason: unit);
+      return mobile.provincesAsked;
+    }
+
+    expect(await provincesFor('Antalya 3. Asliye Ceza Mahkemesi'), 0);
+    expect(await provincesFor('Manavgat Cumhuriyet Başsavcılığı'), 1);
+  });
+
   group('the lawyer\'s setup and the web\'s completion', () {
     test('the setup on UYAP Mobil reads the list, then each case\'s '
         'parties, then its documents\' list, on UYAP Mobil alone though the '
@@ -640,6 +689,25 @@ void main() {
       await sync.startSetup(PortalChannel.uyapMobile);
       expect(sync.job.value!.stopped, UyapJobStop.user);
       expect(mobile.asked, isEmpty);
+    });
+
+    test('the setup on the web looks for each case and asks what UYAP '
+        'shows of it once, not again for its documents\' list', () async {
+      final web = _Web();
+      final sync = syncOf(web, _Mobile()..on = false);
+      await sync.startSetup(PortalChannel.uyapWeb);
+      expect(sync.job.value!.done, isTrue);
+      expect(
+        web.asked,
+        containsAll([
+          'parties id-h1',
+          'parties id-i1',
+          'documents id-h1',
+          'documents id-i1',
+        ]),
+      );
+      expect(web.found..sort(), ['h1', 'i1']);
+      expect(web.permitted..sort(), ['id-h1', 'id-i1']);
     });
 
     test('the web\'s completion asks what only the web has, not the '
@@ -1125,6 +1193,24 @@ void main() {
       await settle(() => alone.hearingsAsked > 0 && alone.noticesAsked > 0);
       expect(alone.hearingsAsked, greaterThan(0));
       expect(alone.noticesAsked, greaterThan(0));
+    });
+
+    test('connected just as Folio starts, it waits for the other computer to '
+        'be found before reading of itself', () async {
+      PortalSync.ownLookForTesting = const Duration(milliseconds: 300);
+      addTearDown(() => PortalSync.ownLookForTesting = null);
+      final mobile = _Mobile();
+      // Not found yet when the session comes back; found a moment later.
+      String? other;
+      final sync = withReader(mobile, reader: (c) => other);
+      final connecting = sync.connectedForTesting(PortalChannel.uyapMobile);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(mobile.hearingsAsked, 0);
+      other = 'Ofis bilgisayarı';
+      await connecting;
+      await settle(() => mobile.hearingsAsked > 0 || mobile.noticesAsked > 0);
+      expect(mobile.hearingsAsked, 0);
+      expect(mobile.noticesAsked, 0);
     });
 
     test('a channel here the other does not read keeps the notifications '

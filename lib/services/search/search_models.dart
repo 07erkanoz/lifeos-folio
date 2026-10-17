@@ -1,20 +1,56 @@
 import '../../models/evrak_file.dart';
 import '../../models/json_shape.dart';
 
+/// The Turkish letters written as a letter and a mark after it (NFD, as
+/// macOS names files and some PDFs carry text), made one letter each: so
+/// written, "Şükrü" was never found by "şükrü" nor by "sukru".
+const _composed = {
+  'ç': 'ç',
+  'Ç': 'Ç',
+  'ş': 'ş',
+  'Ş': 'Ş',
+  'ğ': 'ğ',
+  'Ğ': 'Ğ',
+  'ö': 'ö',
+  'Ö': 'Ö',
+  'ü': 'ü',
+  'Ü': 'Ü',
+  'İ': 'İ',
+  // What a plain lower-casing makes of a dotted capital I.
+  'i̇': 'i',
+  'â': 'â',
+  'Â': 'Â',
+  'î': 'î',
+  'Î': 'Î',
+  'û': 'û',
+  'Û': 'Û',
+};
+final _mark = RegExp('[̧̂̆̇̈]');
+final _decomposed = RegExp('[cCsSgGoOuUIiaA][̧̂̆̇̈]');
+
+/// [value] with its Turkish letters each one character ([_composed]);
+/// [value] itself when none is written apart, as nearly always.
+String composeTurkish(String value) => !_mark.hasMatch(value)
+    ? value
+    : value.replaceAllMapped(_decomposed, (m) => _composed[m[0]!] ?? m[0]!);
+
 /// ASCII-folded Turkish search key. Original text is kept for display.
-String foldSearchText(String value) => value
-    .replaceAll('İ', 'i')
-    .replaceAll('I', 'i')
-    .replaceAll('ı', 'i')
-    .toLowerCase()
-    .replaceAll('ç', 'c')
-    .replaceAll('ğ', 'g')
-    .replaceAll('ö', 'o')
-    .replaceAll('ş', 's')
-    .replaceAll('ü', 'u')
-    .replaceAll('â', 'a')
-    .replaceAll('î', 'i')
-    .replaceAll('û', 'u');
+/// Each character of a text in composed form ([composeTurkish]) gives one
+/// character, so an offset in the key addresses the text.
+String foldSearchText(String value) =>
+    composeTurkish(value)
+        .replaceAll('İ', 'i')
+        .replaceAll('I', 'i')
+        .replaceAll('ı', 'i')
+        .toLowerCase()
+        .replaceAll('ç', 'c')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ö', 'o')
+        .replaceAll('ş', 's')
+        .replaceAll('ü', 'u')
+        .replaceAll('â', 'a')
+        .replaceAll('î', 'i')
+        .replaceAll('û', 'u');
 
 enum SearchMatch { all, phrase, any }
 

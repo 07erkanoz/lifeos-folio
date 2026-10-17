@@ -68,6 +68,79 @@ QuillController _body(WidgetTester tester) => tester
     .controller;
 
 void main() {
+  group('two pictures or tables brought onto one line', () {
+    DocBlock table(String text) => DocBlock(
+      type: DocBlockType.table,
+      plainText: '',
+      table: DocTable(
+        rows: [
+          DocTableRow(
+            cells: [
+              DocTableCell(blocks: [DocBlock(plainText: text)]),
+            ],
+          ),
+        ],
+      ),
+    );
+    final first = table('Birinci');
+    final second = table('İkinci');
+    // A one-pixel PNG, as the editor keeps a picture.
+    const png =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+    String kind(DocBlock b) => b.type == DocBlockType.table
+        ? 'tablo:${b.table!.rows.first.cells.first.blocks.first.plainText}'
+        : b.imageBase64 != null
+        ? 'görsel'
+        : 'metin:${b.plainText}';
+
+    // A backspace at the start of the second's line takes the break between
+    // them, and the two share one line.
+    test('two tables both stay, in their order', () {
+      final model = DocDeltaMap.deltadanModel(
+        Delta()
+          ..insert('Önce\n')
+          ..insert({DocDeltaMap.kTableEmbed: 0})
+          ..insert({DocDeltaMap.kTableEmbed: 1})
+          ..insert('\nSonra\n'),
+        korunanlar: [first, second],
+      );
+      expect(model.blocks.map(kind), [
+        'metin:Önce',
+        'tablo:Birinci',
+        'tablo:İkinci',
+        'metin:Sonra',
+      ]);
+    });
+
+    test('two pictures both stay', () {
+      final model = DocDeltaMap.deltadanModel(
+        Delta()
+          ..insert({DocDeltaMap.kImageEmbed: png})
+          ..insert({DocDeltaMap.kImageEmbed: png})
+          ..insert('\n'),
+      );
+      expect(model.blocks.map(kind), ['görsel', 'görsel']);
+    });
+
+    test('a table and a picture stay where they were, text typed on their '
+        'line before them', () {
+      final model = DocDeltaMap.deltadanModel(
+        Delta()
+          ..insert('Yazı')
+          ..insert({DocDeltaMap.kTableEmbed: 0})
+          ..insert({DocDeltaMap.kImageEmbed: png})
+          ..insert('\nSon\n'),
+        korunanlar: [first],
+      );
+      expect(model.blocks.map(kind), [
+        'metin:Yazı',
+        'tablo:Birinci',
+        'görsel',
+        'metin:Son',
+      ]);
+    });
+  });
+
   test('a table reaches the editor as a table, not a label', () {
     final mapped = DocDeltaMap.modeldenDelta(_withTable());
     final embed = mapped.delta.toList().firstWhere((op) => op.data is Map);

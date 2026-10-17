@@ -32,6 +32,7 @@ import '../services/speech/speech_session.dart';
 import '../services/platform/document_intents.dart';
 import '../services/platform/document_launch.dart';
 import '../services/platform/platform_capabilities.dart';
+import '../services/editor/document_lock.dart';
 import '../services/editor/editor_drafts.dart';
 import '../services/editor/text_anchor.dart';
 import '../services/editor/document_history.dart';
@@ -315,6 +316,26 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Timer? _mobileRefresh;
   Timer? _folderDebounce;
   final _openedEditors = <String>{};
+
+  /// Each kept editor's file as it last read or wrote it: changed on disk
+  /// since (a folder kept in step, another program), an editor with nothing
+  /// unsaved is made anew on the way back in, not left to save its old text
+  /// over the new.
+  final _editorStamps = <String, (DateTime, int)?>{};
+
+  /// Counted up to make a kept editor anew.
+  final _editorGenerations = <String, int>{};
+
+  static (DateTime, int)? _stampOf(String path) {
+    try {
+      final stat = File(path).statSync();
+      if (stat.type == FileSystemEntityType.notFound) return null;
+      return (stat.modified, stat.size);
+    } catch (_) {
+      return null;
+    }
+  }
+
   late final EditorDrafts _drafts = widget.drafts ?? EditorDrafts();
   int _newDocumentVersion = 0;
   EvrakFormat _newFormat = EvrakFormat.udf;
@@ -462,6 +483,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     setState(() {
       _viewerRevision[path] = (_viewerRevision[path] ?? 0) + 1;
+      // What the editor now holds is what is on disk.
+      _editorStamps[path] = _stampOf(path);
       if (_isNewDocument) _openedEditors.remove(path);
       final index = _files.indexWhere((file) => file.path == path);
       if (index >= 0 && File(path).existsSync()) {
@@ -542,10 +565,24 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       }
     }
     if (!mounted) return;
+    final entering = !_isEditorMode;
+    final stamp = entering ? _stampOf(file.path) : null;
     setState(() {
       _isEditorMode = !_isEditorMode;
       if (_isEditorMode) {
         _editorPanelsVisible = false;
+        if (entering) {
+          final kept = _openedEditors.contains(file.path);
+          final stale = kept && stamp != _editorStamps[file.path];
+          // Unsaved work stays in the editor kept; the stamp stays too, so
+          // that once that work is let go of the editor is made anew.
+          final renew = stale && !_fileDraft(file).hasChanges;
+          if (renew) {
+            _editorGenerations[file.path] =
+                (_editorGenerations[file.path] ?? 0) + 1;
+          }
+          if (!kept || renew) _editorStamps[file.path] = stamp;
+        }
         _openedEditors.add(file.path);
         if (at == null) {
           _revealAt.remove(file.path);
@@ -1263,7 +1300,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             : null;
         _isEditorMode = requestedEdit && pdfToEdit == null;
         if (_isEditorMode) {
-          _openedEditors.add(_selectedFile!.path);
+          final path = _selectedFile!.path;
+          if (!_openedEditors.contains(path)) {
+            _editorStamps[path] = _stampOf(path);
+          }
+          _openedEditors.add(path);
           _editorPanelsVisible = false;
         }
         _isNewDocument = false;
@@ -4106,7 +4147,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   (f) => _openedEditors.contains(f.path),
                 ))
                   TransitionPane(
-                    key: ValueKey('draft_${opened.path}'),
+                    key: ValueKey(
+                      'draft_${opened.path}_${_editorGenerations[opened.path] ?? 0}',
+                    ),
                     visible: _isEditorMode && opened.path == file.path,
                     child: TickerMode(
                       enabled:
@@ -4203,6 +4246,21 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// in this window's editor stays here: the new window then only reads it,
   /// and says why.
   Future<void> _openInNewWindow(EvrakFile file) async {
+    // An editor kept here from before, not being written in and with
+    // nothing unsaved, lets go of the document: it held its claim, and the
+    // new window opened it only to read.
+    final path = file.path;
+    final editing = _isEditorMode && _selectedFile?.path == path;
+    if (_openedEditors.contains(path) &&
+        !editing &&
+        !_fileDraft(file).hasChanges) {
+      setState(() => _openedEditors.remove(path));
+      await WidgetsBinding.instance.endOfFrame;
+      for (var i = 0; i < 100 && DocumentLock.holdsDocument(path); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      if (!mounted) return;
+    }
     try {
       await EditorWindow.open(file.path);
     } catch (e) {

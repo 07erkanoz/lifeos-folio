@@ -520,7 +520,7 @@ class DocxBridge {
         blocks.add(_imageToBlock(element.asInline));
       } else if (element is DocxList) {
         for (final item in element.items) {
-          blocks.add(_listItemToBlock(item, element.style));
+          blocks.add(_listItemToBlock(item, element));
         }
       } else if (element is DocxTable) {
         final tableRows = <DocTableRow>[];
@@ -593,11 +593,14 @@ class DocxBridge {
     imageHeight: image.height,
   );
 
-  static DocBlock _paragraphToBlock(DocxParagraph para) {
+  /// A run of Word inlines as text and its formatting: line breaks and
+  /// tabs as themselves, each text run's bold, italic, font, size and
+  /// colours as a span of its own. A paragraph's, and a list item's.
+  static (String, List<DocSpan>) _inlines(List<DocxInline> children) {
     final buffer = StringBuffer();
     final spans = <DocSpan>[];
 
-    for (final child in para.children) {
+    for (final child in children) {
       if (child is DocxLineBreak) buffer.write('\n');
       if (child is DocxTab) buffer.write('\t');
       if (child is DocxText) {
@@ -640,6 +643,11 @@ class DocxBridge {
         }
       }
     }
+    return (buffer.toString(), spans);
+  }
+
+  static DocBlock _paragraphToBlock(DocxParagraph para) {
+    final (text, spans) = _inlines(para.children);
 
     DocAlignment alignment = DocAlignment.left;
     switch (para.align) {
@@ -672,7 +680,7 @@ class DocxBridge {
     final hanging = first < 0 ? math.min(-first, left) : 0.0;
     return DocBlock(
       alignment: alignment,
-      plainText: buffer.toString(),
+      plainText: text,
       spans: spans,
       leftIndent: left - hanging,
       rightIndent: twipsToPt(para.indentRight),
@@ -684,32 +692,25 @@ class DocxBridge {
     );
   }
 
-  static DocBlock _listItemToBlock(DocxListItem item, DocxListStyle style) {
-    final buffer = StringBuffer();
-    for (final child in item.children) {
-      if (child is DocxText) {
-        buffer.write(child.content);
-      }
-    }
-    final text = buffer.toString();
-    final listType = _isOrderedStyle(style)
-        ? DocListType.ordered
-        : DocListType.unordered;
+  static DocBlock _listItemToBlock(DocxListItem item, DocxList list) {
+    final (text, spans) = _inlines(item.children);
+    // Numbered or bulleted by the item's own level where it has one, else
+    // by the list's first level. Not by comparing the style with Word's
+    // named ones: the reader makes a style of its own for each list, which
+    // equals none of them, and every numbered list came out bulleted.
+    final level = item.overrideStyle;
+    final ordered = level == null
+        ? list.isOrdered
+        : level.numberFormat != DocxNumberFormat.bullet &&
+              level.imageBulletBytes == null;
 
     return DocBlock(
       type: DocBlockType.listItem,
       plainText: text,
-      listType: listType,
+      spans: spans,
+      listType: ordered ? DocListType.ordered : DocListType.unordered,
       listLevel: item.level,
     );
-  }
-
-  static bool _isOrderedStyle(DocxListStyle style) {
-    return style == DocxListStyle.decimal ||
-        style == DocxListStyle.lowerAlpha ||
-        style == DocxListStyle.upperAlpha ||
-        style == DocxListStyle.lowerRoman ||
-        style == DocxListStyle.upperRoman;
   }
 
   /// [blocks] as Word blocks: the body's, or a header's or footer's.

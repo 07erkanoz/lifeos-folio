@@ -66,6 +66,14 @@ class UyapCaseLinks {
   final Directory? _directory;
   Map<String, Object?>? _all;
 
+  /// The file as [_all] was read from it: Folio and each editor window are
+  /// processes of their own, and each writes ties here. Read once and kept,
+  /// a window wrote its own old copy over another's new tie.
+  (DateTime, int)? _stamp;
+
+  /// This process's writes, one after another.
+  Future<void> _writing = Future.value();
+
   Future<File> _file() async => File(
     p.join(
       (_directory ?? await folioSharedDirectory()).path,
@@ -74,14 +82,34 @@ class UyapCaseLinks {
     ),
   );
 
-  Future<Map<String, Object?>> _read() async {
-    if (_all != null) return _all!;
+  static Future<(DateTime, int)?> _stampOf(File file) async {
     try {
-      final json = jsonDecode(await (await _file()).readAsString());
+      final stat = await file.stat();
+      if (stat.type == FileSystemEntityType.notFound) return null;
+      return (stat.modified, stat.size);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The ties, read again when another window changed the file since.
+  Future<Map<String, Object?>> _read({bool fresh = false}) async {
+    // No folder to keep them in: none are kept, as before.
+    final File file;
+    try {
+      file = await _file();
+    } catch (_) {
+      return _all ??= {};
+    }
+    final stamp = await _stampOf(file);
+    if (!fresh && _all != null && stamp == _stamp) return _all!;
+    try {
+      final json = jsonDecode(await file.readAsString());
       _all = json is Map ? json.cast<String, Object?>() : {};
     } catch (_) {
       _all = {};
     }
+    _stamp = stamp;
     return _all!;
   }
 
@@ -121,18 +149,35 @@ class UyapCaseLinks {
     return out..sort();
   }
 
-  /// Ties [path] to [link]; null unties it.
-  Future<void> link(String path, UyapCaseLink? link) async {
-    final all = await _read();
-    final key = DocumentHistory.documentKey(path);
-    if (link == null) {
-      all.remove(key);
-    } else {
-      // The path beside the tie: the key is a hash of it, and a case's
-      // page lists the petitions written for it by where they are.
-      all[key] = {...link.toJson(), 'yol': p.absolute(path)};
+  /// Ties [path] to [link]; null unties it. The file as it is now, read
+  /// under a claim the other windows wait on, with this one tie changed in
+  /// it: what another window tied meanwhile stays.
+  Future<void> link(String path, UyapCaseLink? link) {
+    final run = _writing.then((_) => _link(path, link));
+    _writing = run.catchError((Object _) {});
+    return run;
+  }
+
+  Future<void> _link(String path, UyapCaseLink? link) async {
+    final claim = await lockBeside(await _file());
+    try {
+      final all = await _read(fresh: true);
+      final key = DocumentHistory.documentKey(path);
+      if (link == null) {
+        all.remove(key);
+      } else {
+        // The path beside the tie: the key is a hash of it, and a case's
+        // page lists the petitions written for it by where they are.
+        all[key] = {...link.toJson(), 'yol': p.absolute(path)};
+      }
+      final file = await _file();
+      await replaceFileIfChanged(file, utf8.encode(jsonEncode(all)));
+      _stamp = await _stampOf(file);
+    } finally {
+      try {
+        await claim?.close();
+      } catch (_) {}
     }
-    await replaceFileIfChanged(await _file(), utf8.encode(jsonEncode(all)));
   }
 }
 

@@ -20,3 +20,27 @@ Future<bool> replaceFileIfChanged(File target, List<int> bytes) async {
     await staging.delete(recursive: true);
   }
 }
+
+/// A lock on a file beside [target], for one process at a time to read it,
+/// change it and write it back: waited for a little while another holds
+/// it; none when it cannot be had, and the caller goes on without it.
+/// Closing the handle lets it go.
+Future<RandomAccessFile?> lockBeside(File target) async {
+  final RandomAccessFile handle;
+  try {
+    await target.parent.create(recursive: true);
+    handle = await File('${target.path}.lock').open(mode: FileMode.append);
+  } catch (_) {
+    return null;
+  }
+  for (var i = 0; i < 80; i++) {
+    try {
+      await handle.lock(FileLock.exclusive);
+      return handle;
+    } on FileSystemException {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+  }
+  await handle.close();
+  return null;
+}

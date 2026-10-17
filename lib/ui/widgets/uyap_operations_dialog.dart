@@ -96,36 +96,77 @@ class _UyapOperationsDialogState extends State<UyapOperationsDialog> {
   }
 
   /// Re-query while a sent document is unfinished. An error stops following:
-  /// a failing or expired session must not be hammered.
+  /// a failing or expired session must not be hammered. Each follow-up that
+  /// finds nothing changed waits twice as long as the one before, up to
+  /// [_followAtMost]: a send UYAP takes hours over is not asked for 120
+  /// times an hour.
   void _scheduleFollow() {
     _follow?.cancel();
     _follow = null;
     if (!mounted || _error != null || !_web.connected || _open.isEmpty) return;
-    _follow = Timer(_followEvery, () {
-      if (mounted && !_busy) _refresh();
+    final wait = _followEvery * (1 << _quiet.clamp(0, 4));
+    _follow = Timer(wait > _followAtMost ? _followAtMost : wait, () {
+      if (mounted && !_busy) _run(() => _fetch(following: true));
     });
   }
 
-  Future<void> _refresh() => _run(_fetch);
+  static const _followAtMost = Duration(minutes: 5);
 
-  Future<void> _fetch() async {
+  /// Follow-ups one after another that found no send's record changed.
+  int _quiet = 0;
+
+  /// Asked by the lawyer: followed again from the shortest wait.
+  Future<void> _refresh() {
+    _quiet = 0;
+    return _run(_fetch);
+  }
+
+  /// The records of the last [_days], and of every send. A follow-up asks
+  /// only from the unfinished sends' day on; the rest of the list stays.
+  Future<void> _fetch({bool following = false}) async {
     if (!_web.connected) {
       throw StateError('UYAP web oturumu sona erdi. Yeniden bağlanın.');
     }
+    // What the editor windows sent, and an earlier run.
+    await _web.loadSent();
     final now = DateTime.now();
-    var from = now.subtract(Duration(days: _days));
-    for (final receipt in _web.sent) {
+    var from = following ? now : now.subtract(Duration(days: _days));
+    for (final receipt in following ? _open : _web.sent) {
       final day = receipt.startedAt.subtract(UyapSendReceipt.matchBefore);
       if (day.isBefore(from)) from = day;
     }
-    final rows = await _web.operations(from: from, to: now);
+    final fresh = await _web.operations(from: from, to: now);
+    // UYAP is asked by the day: what is before that day was not asked.
+    final asked = DateTime(from.year, from.month, from.day);
+    String id(UyapOperation op) =>
+        '${op.orderNumber}|${op.documentId}|${op.name}|${op.date}';
+    final ids = {for (final op in fresh) id(op)};
+    final rows = !following
+        ? fresh
+        : [
+            ...fresh,
+            for (final op in _rows)
+              if (op.time == null
+                  ? !ids.contains(id(op))
+                  : op.time!.isBefore(asked))
+                op,
+          ];
     // Newest first; a record without a readable date goes last.
     final epoch = DateTime(0);
     rows.sort((a, b) => (b.time ?? epoch).compareTo(a.time ?? epoch));
+    final matches = UyapSendReceipt.match(_web.sent, rows);
+    String state(Map<UyapSendReceipt, UyapOperation> m) =>
+        [for (final r in _web.sent) '${m[r]?.status}|${m[r]?.completed}']
+            .join(',');
+    if (following && state(matches) == state(_matches)) {
+      _quiet++;
+    } else {
+      _quiet = 0;
+    }
     if (mounted) {
       setState(() {
         _rows = rows;
-        _matches = UyapSendReceipt.match(_web.sent, rows);
+        _matches = matches;
         _checkedAt = now;
       });
     }

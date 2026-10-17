@@ -268,6 +268,80 @@ void main() {
     expect(controller.document.toPlainText(), startsWith('Giriş: DİL1'));
   });
 
+  testWidgets('a snippet expanded in mid-sentence keeps the sentence whole, '
+      'and one at the end adds no empty line', (tester) async {
+    final giris = await store.add(
+      'Dilekçe girişi',
+      Delta()
+        ..insert('SAYIN MAHKEMEYE', {'bold': true})
+        ..insert('\n'),
+    );
+    await store.update(giris.copyWith(keyword: 'dil1'));
+    final controller = await openEditor(tester);
+    await typeAtEnd(tester, controller, 'Önce DİL1 sonra');
+    controller.updateSelection(
+      const TextSelection.collapsed(offset: 'Önce DİL1'.length),
+      ChangeSource.local,
+    );
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(controller.document.toPlainText(), 'Önce SAYIN MAHKEMEYE sonra\n');
+    // The cursor right after the passage, ready to go on.
+    expect(controller.selection.baseOffset, 'Önce SAYIN MAHKEMEYE'.length);
+
+    final end = controller.document.length - 1;
+    controller.updateSelection(
+      TextSelection.collapsed(offset: end),
+      ChangeSource.local,
+    );
+    await typeAtEnd(tester, controller, ' dil1');
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(
+      controller.document.toPlainText(),
+      'Önce SAYIN MAHKEMEYE sonra SAYIN MAHKEMEYE\n',
+    );
+  });
+
+  test('a snippet keeps no tables or pictures', () {
+    final passage = Delta()
+      ..insert('Taraflar:', {'bold': true})
+      ..insert('\n')
+      ..insert({'doc-table': 0})
+      ..insert({'image': 'data:image/png;base64,AAAA'})
+      ..insert('\nSon\n');
+    expect(SnippetStore.holdsEmbeds(passage), isTrue);
+    final kept = SnippetStore.keepable(passage);
+    expect(SnippetStore.holdsEmbeds(kept), isFalse);
+    expect(kept.toList().map((op) => op.data).join(), 'Taraflar:\n\nSon\n');
+    expect(kept.toList().first.attributes?['bold'], isTrue);
+  });
+
+  testWidgets('a snippet an earlier Folio kept with a table puts in its text, '
+      'not another document\'s table', (tester) async {
+    final eski = await store.add(
+      'Eski kalıp',
+      Delta()
+        ..insert('Önce\n')
+        ..insert({'doc-table': 0})
+        ..insert('\nSonra\n'),
+    );
+    await store.update(eski.copyWith(keyword: 'eski1'));
+    final controller = await openEditor(tester);
+    await typeAtEnd(tester, controller, 'eski1');
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(
+      controller.document.toDelta().toList().any(
+        (op) => op.data is Map && (op.data as Map).containsKey('doc-table'),
+      ),
+      isFalse,
+    );
+    expect(controller.document.toPlainText(), startsWith('Önce\n'));
+    expect(controller.document.toPlainText(), contains('Sonra'));
+  });
+
   testWidgets('Tab without a keyword, or inside a word, is still a tab', (
     tester,
   ) async {

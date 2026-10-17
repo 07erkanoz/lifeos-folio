@@ -7,14 +7,17 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evrak_convert/models/document_model.dart';
 import 'package:evrak_convert/models/evrak_file.dart';
+import 'package:evrak_convert/services/editor/doc_delta_map.dart';
 import 'package:evrak_convert/services/editor/document_history.dart';
 import 'package:evrak_convert/services/editor/editor_drafts.dart';
 import 'package:evrak_convert/services/editor/letterheads.dart';
+import 'package:evrak_convert/services/fonts/document_fonts.dart';
 import 'package:evrak_convert/services/udf/udf_reader.dart';
 import 'package:evrak_convert/services/udf/udf_writer.dart';
 import 'package:evrak_convert/ui/widgets/editor_region_band.dart';
 import 'package:evrak_convert/ui/widgets/editor_widget.dart';
 
+import 'editor_recovery_test.dart' show io, ready;
 import 'editor_shortcuts_test.dart' show shortcut, waitFor;
 
 DocModel _withHeader() => DocModel(
@@ -33,6 +36,16 @@ DocModel _withHeader() => DocModel(
 );
 
 void main() {
+  // Every face read once, in real time: a face a table cell asks for on a
+  // test's fake clock was otherwise still on its way when the test ended,
+  // and the next document waited on it.
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    for (final face in DocumentFonts.faces) {
+      await DocumentFonts.loadFace('Times New Roman', face);
+    }
+  });
+
   test('a header keeps the settings that are not text', () {
     // Page numbering and the page a header starts on live only in these
     // attributes; a save that dropped them would restart numbering at one.
@@ -45,6 +58,137 @@ void main() {
       reopened.pageRegions['header']!.single.plainText,
       'T.C. ANKARA 3. ASLİYE HUKUK MAHKEMESİ',
     );
+  });
+
+  testWidgets('leaving without saving keeps the letterhead table in the '
+      'header, on screen and in the next save', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final dir = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('editor-regions-discard-'),
+    ))!;
+    DocumentHistory.instance = DocumentHistory(
+      directory: Directory('${dir.path}/history'),
+    );
+    final file = File('${dir.path}/belge.udf');
+    final letterhead = DocModel(
+      blocks: [DocBlock(plainText: 'Dilekçe gövdesi')],
+      pageRegions: {
+        'header': [
+          DocBlock(
+            type: DocBlockType.table,
+            plainText: '',
+            table: DocTable(
+              rows: [
+                DocTableRow(
+                  cells: [
+                    DocTableCell(
+                      blocks: [DocBlock(plainText: 'ANKARA BAROSU')],
+                    ),
+                    DocTableCell(
+                      blocks: [DocBlock(plainText: 'Av. Deniz Kaya')],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          DocBlock(plainText: 'Antet altı'),
+        ],
+      },
+      metadata: const {'formatId': '1.8'},
+    );
+    await tester.runAsync(
+      () => file.writeAsBytes(UdfWriter.writeBytes(letterhead)),
+    );
+    bool hasTable(List<DocBlock>? blocks) =>
+        blocks?.any(
+          (b) =>
+              b.type == DocBlockType.table &&
+              b.table!.rows.first.cells.first.blocks.first.plainText ==
+                  'ANKARA BAROSU',
+        ) ??
+        false;
+    // The file carries it: the editor is what is being tried.
+    expect(
+      hasTable(UdfReader.readFile(file.path)!.pageRegions['header']),
+      isTrue,
+    );
+
+    final draft = EditorDraft('belge.udf');
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          FlutterQuillLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: EditorWidget(
+            initialFilePath: file.path,
+            initialFormat: EvrakFormat.udf,
+            draft: draft,
+          ),
+        ),
+      ),
+    );
+    await waitFor(
+      tester,
+      () => find.byType(EditorRegionBand).evaluate().isNotEmpty,
+    );
+    QuillController header() => tester
+        .widgetList<EditorRegionBand>(find.byType(EditorRegionBand))
+        .firstWhere((b) => b.isHeader)
+        .controller;
+    bool headerHasTable() => header().document.toDelta().toList().any(
+      (op) =>
+          op.data is Map &&
+          (op.data as Map).containsKey(DocDeltaMap.kTableEmbed),
+    );
+    expect(headerHasTable(), isTrue);
+
+    // The line under the letterhead changed, then the change let go of.
+    final length = header().document.length;
+    header().replaceText(
+      length - 1,
+      0,
+      ' (değişti)',
+      TextSelection.collapsed(offset: length + 9),
+    );
+    await ready(tester, () => draft.hasChanges);
+    await io(tester, () => draft.discard!());
+    await ready(tester, () => !draft.hasChanges);
+    expect(headerHasTable(), isTrue);
+    expect(header().document.toPlainText(), isNot(contains('(değişti)')));
+
+    // The body edited and saved: the header goes with its table still.
+    final editor = tester
+        .widgetList<QuillEditor>(find.byType(QuillEditor))
+        .firstWhere((e) => e.focusNode.debugLabel == 'document-editor');
+    editor.controller.replaceText(
+      0,
+      0,
+      'Yeni ',
+      const TextSelection.collapsed(offset: 5),
+    );
+    editor.focusNode.requestFocus();
+    await tester.pump();
+    await shortcut(tester, LogicalKeyboardKey.keyS);
+    await waitFor(
+      tester,
+      () => find.textContaining('Başarıyla kaydedildi:').evaluate().isNotEmpty,
+    );
+    final saved = (await tester.runAsync(
+      () async => UdfReader.readFile(file.path),
+    ))!;
+    expect(saved.toPlainText(), startsWith('Yeni Dilekçe'));
+    expect(hasTable(saved.pageRegions['header']), isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => dir.delete(recursive: true));
   });
 
   testWidgets('the header and footer are shown, edited and saved', (

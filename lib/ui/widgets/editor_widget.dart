@@ -1587,16 +1587,33 @@ class _EditorWidgetState extends State<EditorWidget>
     _quillController.document = Document.fromJson(
       jsonDecode(_baselineDelta) as List,
     );
-    final regions = jsonDecode(_baselineRegions) as Map<String, dynamic>;
-    for (final key in _regions.keys.toList()) {
-      if (!regions.containsKey(key)) _closeRegion(key);
+    if (model != null) {
+      // The bands as saved, their tables with them: rebuilt from the saved
+      // deltas alone, a letterhead's table came back as an empty line, and
+      // the editor kept open saved it so.
+      for (final key in _regions.keys.toList()) {
+        if (!model.pageRegions.containsKey(key)) _closeRegion(key);
+      }
+      for (final entry in model.pageRegions.entries) {
+        _openRegion(entry.key, entry.value);
+      }
+      // Untouched from here, they are handed back as they were saved.
+      _loadedRegions = _baselineRegions = _regionSnapshot();
+    } else {
+      final regions = jsonDecode(_baselineRegions) as Map<String, dynamic>;
+      for (final key in _regions.keys.toList()) {
+        if (!regions.containsKey(key)) _closeRegion(key);
+      }
+      regions.forEach((key, delta) {
+        _openRegion(
+          key,
+          DocDeltaMap.deltadanModel(
+            Delta.fromJson(delta as List),
+            korunanlar: _regionKorunan[key] ?? const [],
+          ).blocks,
+        );
+      });
     }
-    regions.forEach((key, delta) {
-      _openRegion(
-        key,
-        DocDeltaMap.deltadanModel(Delta.fromJson(delta as List)).blocks,
-      );
-    });
     _regionAttrs = _attrsOf(jsonDecode(_baselineRegionAttrs));
     setState(() => _pageProperties = _baselinePage);
     _measureRegions();
@@ -2077,10 +2094,18 @@ class _EditorWidgetState extends State<EditorWidget>
         await store.reached(snippet.id);
       case KeepSelection(:final name):
         if (selection.isCollapsed) return;
-        await store.add(
-          name,
-          into.document.toDelta().slice(selection.start, selection.end),
+        final passage = into.document.toDelta().slice(
+          selection.start,
+          selection.end,
         );
+        await store.add(name, SnippetStore.keepable(passage));
+        if (mounted && SnippetStore.holdsEmbeds(passage)) {
+          showNotice(
+            context,
+            'Seçimdeki tablo ve görseller kalıba alınmadı.',
+            detail: 'Kalıp yalnız metni ve biçimini tutar.',
+          );
+        }
       case HarvestArchive():
         await _harvest(store);
       case ManageSnippets():
@@ -2194,10 +2219,31 @@ class _EditorWidgetState extends State<EditorWidget>
   void _putSnippet(QuillController into, Delta passage) {
     final selection = into.selection;
     if (!selection.isValid) return;
+    final operations = [
+      for (final operation in passage.toList())
+        // A table names a table of the document it came from by its
+        // number: here it would be another, or none.
+        if (operation.isInsert &&
+            !(operation.data is Map &&
+                (operation.data as Map).containsKey(DocDeltaMap.kTableEmbed)))
+          operation,
+    ];
+    // The line break every passage kept from an editor ends with: put in
+    // as it is, a snippet expanded in mid-sentence broke the sentence in
+    // two, and one at a line's end left an empty line after it.
+    if (operations.isNotEmpty && operations.last.data is String) {
+      final last = operations.removeLast();
+      final text = last.data as String;
+      final kept = text.endsWith('\n')
+          ? text.substring(0, text.length - 1)
+          : text;
+      if (kept.isNotEmpty) {
+        operations.add(Operation.insert(kept, last.attributes));
+      }
+    }
     final body = Delta();
     var length = 0;
-    for (final operation in passage.toList()) {
-      if (!operation.isInsert) continue;
+    for (final operation in operations) {
       body.insert(operation.data, operation.attributes);
       final data = operation.data;
       length += data is String ? data.length : 1;
@@ -2212,7 +2258,14 @@ class _EditorWidgetState extends State<EditorWidget>
       selection.start,
       selection.end - selection.start,
       body,
+      null,
+    );
+    // Set after, not with it: given a delta, Quill counts the passage as one
+    // character when it moves the cursor, and the cursor landed at the
+    // line's end instead of after the passage.
+    into.updateSelection(
       TextSelection.collapsed(offset: selection.start + length),
+      ChangeSource.local,
     );
     history.lastRecorded = 0;
     setState(() {});
@@ -2531,12 +2584,37 @@ class _EditorWidgetState extends State<EditorWidget>
       var length = texts[i].length;
       final text = fix.text;
       if (text != null && text != texts[i]) {
-        final leaf = lines[i].children.firstOrNull;
-        final style = leaf is Leaf ? leaf.style.toJson() : null;
+        // Only what changed, the spaces or tab between a label and its
+        // colon: the line written over whole in its first run's style, a
+        // bold "DAVACI" made its plain value bold too.
+        final old = texts[i];
+        var head = 0;
+        while (head < old.length &&
+            head < text.length &&
+            old.codeUnitAt(head) == text.codeUnitAt(head)) {
+          head++;
+        }
+        var tail = 0;
+        while (tail < old.length - head &&
+            tail < text.length - head &&
+            old.codeUnitAt(old.length - 1 - tail) ==
+                text.codeUnitAt(text.length - 1 - tail)) {
+          tail++;
+        }
+        final middle = text.substring(head, text.length - tail);
+        final gone = old.length - head - tail;
+        // What is written takes the style of what it follows.
+        final node = lines[i].queryChild(math.max(0, head - 1), false).node;
+        final style = node is Leaf ? node.style.toJson() : null;
         controller.replaceText(
-          start,
-          length,
-          Delta()..insert(text, style == null || style.isEmpty ? null : style),
+          start + head,
+          gone,
+          middle.isEmpty
+              ? ''
+              : (Delta()..insert(
+                  middle,
+                  style == null || style.isEmpty ? null : style,
+                )),
           null,
         );
         length = text.length;
@@ -2552,10 +2630,14 @@ class _EditorWidgetState extends State<EditorWidget>
         _ => null,
       };
       if (align != null) controller.formatText(start, 0, align);
-      if (fix.left != null ||
-          fix.first != null ||
-          fix.hanging != null ||
-          fix.tabs != null) {
+      // A list item keeps its own indent: a long one was taken for the
+      // petition's text, and lost its place in the list.
+      final listed = lines[i].style.attributes[Attribute.list.key] != null;
+      if (!listed &&
+          (fix.left != null ||
+              fix.first != null ||
+              fix.hanging != null ||
+              fix.tabs != null)) {
         final line = _lines(controller.document.root).elementAt(i);
         final had = line.style.attributes['doc-layout']?.value;
         final map = <String, dynamic>{
@@ -3375,6 +3457,7 @@ class _EditorWidgetState extends State<EditorWidget>
         numbering: numbering,
         numberLabel: label,
         note: note,
+        tables: () => _regionKorunan[key] ?? const [],
         onRemove: () => _toggleRegion(key),
       );
     }
@@ -3409,6 +3492,7 @@ class _EditorWidgetState extends State<EditorWidget>
             numbering: numbering,
             numberLabel: label,
             note: note,
+            tables: () => _regionKorunan[key] ?? const [],
             onRemove: () {},
           ),
         ),
@@ -5641,34 +5725,44 @@ class _EditorWidgetState extends State<EditorWidget>
                                                   ),
                                                   // The caret's paragraph on
                                                   // it, as the caret moves.
-                                                  child: ListenableBuilder(
-                                                    listenable:
-                                                        _quillController,
-                                                    builder: (context, _) =>
-                                                        DocumentRuler(
-                                                          axis: Axis.horizontal,
-                                                          pagePoints:
-                                                              widthPoints,
-                                                          pixels: paperWidth,
-                                                          leading:
-                                                              _pageProperties
-                                                                  .marginLeft,
-                                                          trailing:
-                                                              _pageProperties
-                                                                  .marginRight,
-                                                          onChanged:
-                                                              (start, end) =>
-                                                                  margins(
+                                                  child:
+                                                      DistinctBuilder<
+                                                        RulerParagraph?
+                                                      >(
+                                                        listenable:
+                                                            _quillController,
+                                                        value: _rulerParagraph,
+                                                        builder:
+                                                            (
+                                                              context,
+                                                              now,
+                                                            ) => DocumentRuler(
+                                                              axis: Axis
+                                                                  .horizontal,
+                                                              pagePoints:
+                                                                  widthPoints,
+                                                              pixels:
+                                                                  paperWidth,
+                                                              leading:
+                                                                  _pageProperties
+                                                                      .marginLeft,
+                                                              trailing:
+                                                                  _pageProperties
+                                                                      .marginRight,
+                                                              onChanged:
+                                                                  (
+                                                                    start,
+                                                                    end,
+                                                                  ) => margins(
                                                                     true,
                                                                     start,
                                                                     end,
                                                                   ),
-                                                          paragraph:
-                                                              _rulerParagraph(),
-                                                          onParagraph:
-                                                              _applyRuler,
-                                                        ),
-                                                  ),
+                                                              paragraph: now,
+                                                              onParagraph:
+                                                                  _applyRuler,
+                                                            ),
+                                                      ),
                                                 ),
                                               Row(
                                                 crossAxisAlignment:

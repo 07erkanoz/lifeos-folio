@@ -4,6 +4,7 @@
 /// Token algılama, PIN ile giriş, sertifika okuma ve imzalama işlemleri.
 library;
 
+import 'dart:convert';
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
@@ -197,7 +198,9 @@ class Pkcs11Session {
   void login(String pin) {
     _ensureSession();
 
-    final pinBytes = Uint8List.fromList(pin.codeUnits);
+    // PKCS#11 takes the PIN as UTF-8: code units would cut a letter past
+    // ASCII to its low byte. A digits' PIN is the same either way.
+    final pinBytes = Uint8List.fromList(utf8.encode(pin));
     final pPin = uint8ListToPointer(pinBytes);
     try {
       final rv = _module.cLogin(
@@ -457,9 +460,10 @@ class Pkcs11Session {
       } finally {
         calloc.free(pObjects);
         calloc.free(pCount);
+        // Ended whether the search came through or not: a search left open
+        // makes the session refuse the next one.
+        _module.cFindObjectsFinal(_sessionHandle);
       }
-
-      _module.cFindObjectsFinal(_sessionHandle);
     } finally {
       calloc.free(pTemplate);
       calloc.free(pClass);
@@ -504,68 +508,74 @@ class Pkcs11Session {
 
       // Buffer'lar tahsis et
       final buffers = <Pointer<Uint8>>[];
-      for (var i = 0; i < attrTypes.length; i++) {
-        final len = pTemplate[i].ulValueLen;
-        if (len > 0 && len < 0x80000000) {
-          // Geçerli uzunluk - 2GB altı
-          final buf = calloc<Uint8>(len);
-          pTemplate[i].pValue = buf.cast();
-          buffers.add(buf);
-        } else {
-          pTemplate[i].pValue = nullptr;
-          pTemplate[i].ulValueLen = 0;
-          buffers.add(nullptr);
+      final sizes = <int>[];
+      try {
+        for (var i = 0; i < attrTypes.length; i++) {
+          final len = pTemplate[i].ulValueLen;
+          if (len > 0 && len < 0x80000000) {
+            // Geçerli uzunluk - 2GB altı
+            final buf = calloc<Uint8>(len);
+            pTemplate[i].pValue = buf.cast();
+            buffers.add(buf);
+            sizes.add(len);
+          } else {
+            pTemplate[i].pValue = nullptr;
+            pTemplate[i].ulValueLen = 0;
+            buffers.add(nullptr);
+            sizes.add(0);
+          }
+        }
+
+        // İkinci geçiş: verileri oku
+        rv = _module.cGetAttributeValue(
+          _sessionHandle,
+          handle,
+          pTemplate,
+          attrTypes.length,
+        );
+
+        // Verileri Dart'a kopyala. The second pass's length is trusted only
+        // up to the buffer given for it: an attribute the module could not
+        // give comes back as CK_UNAVAILABLE_INFORMATION, on Windows
+        // 0xFFFFFFFF, and was read as four gigabytes past the buffer.
+        Uint8List readAttr(int index) {
+          final len = pTemplate[index].ulValueLen;
+          if (len <= 0 || len > sizes[index] || buffers[index] == nullptr) {
+            return Uint8List(0);
+          }
+          return Uint8List.fromList(buffers[index].asTypedList(len));
+        }
+
+        String readStringAttr(int index) {
+          final bytes = readAttr(index);
+          if (bytes.isEmpty) return '';
+          // PKCS#11'in etiketleri UTF-8'dir.
+          return utf8.decode(bytes, allowMalformed: true).trim();
+        }
+
+        final keyId = readAttr(0);
+        final derBytes = readAttr(1);
+        final label = readStringAttr(2);
+        final issuerDer = readAttr(3);
+        final serialNumberDer = readAttr(4);
+        final subjectDer = readAttr(5);
+
+        if (derBytes.isEmpty) return null;
+
+        return CertificateInfo(
+          keyId: keyId,
+          derBytes: derBytes,
+          label: label,
+          issuerDer: issuerDer,
+          serialNumberDer: serialNumberDer,
+          subjectDer: subjectDer,
+        );
+      } finally {
+        // Buffer'ları temizle, whatever happened reading them.
+        for (final buf in buffers) {
+          if (buf != nullptr) calloc.free(buf);
         }
       }
-
-      // İkinci geçiş: verileri oku
-      rv = _module.cGetAttributeValue(
-        _sessionHandle,
-        handle,
-        pTemplate,
-        attrTypes.length,
-      );
-
-      // Verileri Dart'a kopyala
-      Uint8List readAttr(int index) {
-        final len = pTemplate[index].ulValueLen;
-        if (len <= 0 || buffers[index] == nullptr) return Uint8List(0);
-        final bytes = Uint8List(len);
-        final ptr = buffers[index];
-        for (var i = 0; i < len; i++) {
-          bytes[i] = ptr[i];
-        }
-        return bytes;
-      }
-
-      String readStringAttr(int index) {
-        final bytes = readAttr(index);
-        if (bytes.isEmpty) return '';
-        return String.fromCharCodes(bytes).trim();
-      }
-
-      final keyId = readAttr(0);
-      final derBytes = readAttr(1);
-      final label = readStringAttr(2);
-      final issuerDer = readAttr(3);
-      final serialNumberDer = readAttr(4);
-      final subjectDer = readAttr(5);
-
-      // Buffer'ları temizle
-      for (final buf in buffers) {
-        if (buf != nullptr) calloc.free(buf);
-      }
-
-      if (derBytes.isEmpty) return null;
-
-      return CertificateInfo(
-        keyId: keyId,
-        derBytes: derBytes,
-        label: label,
-        issuerDer: issuerDer,
-        serialNumberDer: serialNumberDer,
-        subjectDer: subjectDer,
-      );
     } finally {
       calloc.free(pTemplate);
     }

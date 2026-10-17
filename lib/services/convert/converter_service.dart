@@ -138,14 +138,15 @@ class ConverterService {
       case EvrakFormat.pdf:
         return await PdfService.modelToPdfBytes(model, title: title);
 
+      // Written apart from the screen: a long filing held it still.
       case EvrakFormat.udf:
-        return Uint8List.fromList(UdfWriter.writeBytes(model));
+        return compute(_writeUdf, model);
 
       case EvrakFormat.docx:
-        return await DocxBridge.writeBytes(model);
+        return compute(DocxBridge.writeBytes, model);
 
       case EvrakFormat.rtf:
-        return Uint8List.fromList(RtfWriter.writeBytes(model));
+        return compute(_writeRtf, model);
 
       case EvrakFormat.text:
         return Uint8List.fromList(utf8.encode(model.toPlainText()));
@@ -282,10 +283,37 @@ class ConverterService {
   }
 }
 
-/// A picture as a document: each frame of it a page's image.
+Uint8List _writeUdf(DocModel model) =>
+    Uint8List.fromList(UdfWriter.writeBytes(model));
+
+Uint8List _writeRtf(DocModel model) =>
+    Uint8List.fromList(RtfWriter.writeBytes(model));
+
+/// A picture as a document: each frame of it a page's image. A JPEG is
+/// kept as it came, not made a PNG several times its size; one its camera
+/// turned (EXIF) is drawn as before.
 DocModel _imageModel(Uint8List bytes) {
   final image = img.decodeImage(bytes);
   if (image == null) throw const FormatException('Görsel okunamadı.');
+  final jpeg =
+      bytes.length > 3 &&
+      bytes[0] == 0xFF &&
+      bytes[1] == 0xD8 &&
+      bytes[2] == 0xFF &&
+      image.frames.length == 1 &&
+      (image.exif.imageIfd.orientation ?? 1) == 1;
+  if (jpeg) {
+    return DocModel(
+      blocks: [
+        DocBlock(
+          type: DocBlockType.image,
+          plainText: '',
+          imageBase64: base64Encode(bytes),
+          imageMime: 'image/jpeg',
+        ),
+      ],
+    );
+  }
   return DocModel(
     blocks: [
       for (final frame in image.frames)

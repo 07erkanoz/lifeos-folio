@@ -13,6 +13,7 @@ import 'tray_recovery.dart';
 import 'uyap_enforcement.dart';
 import 'uyap_errors.dart';
 import 'uyap_pace.dart';
+import 'uyap_sent_log.dart';
 import 'uyap_case_data.dart';
 
 export 'uyap_case_data.dart';
@@ -20,12 +21,16 @@ export 'uyap_case_data.dart';
 /// A session for the Avukat Portal. Login signatures are made by the official
 /// Adalet E-İmza tray; the UDF signature is a separate operation.
 class UyapWebService {
-  UyapWebService._() : _portal = _avukatPortal;
+  UyapWebService._()
+    : _portal = _avukatPortal,
+      _sentLog = (() => UyapSentLog.instance);
 
   /// For a stand-in that answers without UYAP: screenshots and dialog tests,
   /// and a local server standing in for [portal].
   @visibleForTesting
-  UyapWebService.forTesting({Uri? portal}) : _portal = portal ?? _avukatPortal;
+  UyapWebService.forTesting({Uri? portal, UyapSentLog? sentLog})
+    : _portal = portal ?? _avukatPortal,
+      _sentLog = (() => sentLog);
 
   static UyapWebService _instance = UyapWebService._();
   static UyapWebService get instance => _instance;
@@ -65,6 +70,9 @@ class UyapWebService {
 
   final _cookies = <String, String>{};
   final _sent = <UyapSendReceipt>[];
+
+  /// Where the sends are kept for the other windows; none for a stand-in.
+  final UyapSentLog? Function() _sentLog;
   String _tckn = '';
 
   /// The TC number of the card the web portal was entered with; empty
@@ -84,12 +92,32 @@ class UyapWebService {
   /// ends is seen to end everywhere at once.
   final session = ValueNotifier<UyapSession?>(null);
 
-  /// Documents sent (or possibly sent) in this app run, newest first. Kept in
-  /// memory only and independent of the web session, so a sent document stays
-  /// tracked across a reconnect.
+  /// Documents sent (or possibly sent), newest first: in this app run, and
+  /// those [loadSent] brought from the other windows. Independent of the
+  /// web session, so a sent document stays tracked across a reconnect.
   List<UyapSendReceipt> get sent => List.unmodifiable(_sent.reversed);
 
-  void track(UyapSendReceipt receipt) => _sent.add(receipt);
+  /// Tracks [receipt], and keeps it for the other windows and the next run.
+  void track(UyapSendReceipt receipt) {
+    _sent.add(receipt);
+    unawaited(_sentLog()?.add(receipt).catchError((Object _) {}));
+  }
+
+  /// The sends kept by the other windows, and by an earlier run, added to
+  /// [sent].
+  Future<void> loadSent() async {
+    final log = _sentLog();
+    if (log == null) return;
+    final known = {for (final r in _sent) r.key};
+    final more = [
+      for (final r in await log.read())
+        if (known.add(r.key)) r,
+    ];
+    if (more.isEmpty) return;
+    _sent
+      ..addAll(more)
+      ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
+  }
 
   /// The session as it may be kept between runs: its cookies, whose it is
   /// and since when. Null when there is none. Kept only in this computer's
@@ -1498,6 +1526,36 @@ class UyapSendReceipt {
   final String documentType;
   final DateTime startedAt;
   final bool confirmed;
+
+  /// The same send, read back in another window.
+  String get key =>
+      '${startedAt.toIso8601String()}|${target.courtId}|${target.number}|'
+      '$documentName';
+
+  Map<String, Object?> toJson() => {
+    'dosyaId': target.id,
+    'dosyaNo': target.number,
+    'birimId': target.courtId,
+    'birimAdi': target.courtName,
+    'evrak': documentName,
+    'tur': documentType,
+    'baslangic': startedAt.toIso8601String(),
+    'onaylandi': confirmed,
+  };
+
+  static UyapSendReceipt? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final at = DateTime.tryParse('${json['baslangic'] ?? ''}');
+    if (at == null) return null;
+    String s(String k) => '${json[k] ?? ''}';
+    return UyapSendReceipt(
+      target: UyapCase(s('dosyaId'), s('dosyaNo'), s('birimId'), s('birimAdi')),
+      documentName: s('evrak'),
+      documentType: s('tur'),
+      startedAt: at,
+      confirmed: json['onaylandi'] == true,
+    );
+  }
 
   /// Pairs each receipt with its "İşlemlerim" record. `evrakId` cannot be used:
   /// UYAP issues it anew in every response. A record belongs to a receipt when

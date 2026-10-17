@@ -35,6 +35,19 @@ void main() {
     return process;
   }
 
+  test('a lock that could not be had once, its folder not there, is had '
+      'when the folder can be made', () async {
+    var tries = 0;
+    DocumentLock.folder = () async {
+      if (tries++ == 0) throw const FileSystemException('yok');
+      return Directory('${root.path}/acik');
+    };
+    await expectLater(DocumentLock.acquire('belge-c'), throwsA(anything));
+    final lock = await DocumentLock.acquire('belge-c');
+    expect(lock, isNotNull);
+    await lock!.release();
+  });
+
   test('within a window a claim is shared, and let go of with its last '
       'holder', () async {
     final first = await DocumentLock.acquire('belge-a');

@@ -488,11 +488,28 @@ CellRange? _range(String span) {
   }
 }
 
-DateTime _fromSerial(double days) => DateTime(
-  1899,
-  12,
-  30,
-).add(Duration(milliseconds: (days * 86400000).round()));
+/// Excel's day [days], counted on the calendar alone: counted from a local
+/// 30 Aralık 1899, a winter day before 2016 in Türkiye came out a day
+/// early, its clock offset not that of 1899 (local mean time).
+@visibleForTesting
+DateTime fromSerialForTesting(double days) => _fromSerial(days);
+
+DateTime _fromSerial(double days) {
+  final at = DateTime.utc(
+    1899,
+    12,
+    30,
+  ).add(Duration(milliseconds: (days * 86400000).round()));
+  return DateTime(
+    at.year,
+    at.month,
+    at.day,
+    at.hour,
+    at.minute,
+    at.second,
+    at.millisecond,
+  );
+}
 
 CellValue? _fromExcel(xl.CellValue? value) => switch (value) {
   null => null,

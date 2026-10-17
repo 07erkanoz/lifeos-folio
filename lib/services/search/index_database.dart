@@ -242,20 +242,31 @@ class IndexDatabase {
     int most = 200,
   }) {
     final counts = <String, int>{};
-    for (final row in db.select(
+    // A document at a time: the whole archive's text read at once was held
+    // in memory together.
+    final query = db.prepare(
       "SELECT text FROM documents WHERE state IN ('ready','partial') "
       "AND length(text) > 0",
-    )) {
-      final text = row['text'] as String;
-      final seen = <String>{};
-      for (final piece in text.split(RegExp(r'\n\s*\n'))) {
-        final passage = piece.replaceAll(RegExp(r'\s+'), ' ').trim();
-        if (passage.length < shortest || passage.length > longest) continue;
-        seen.add(passage);
+    );
+    try {
+      final rows = query.selectCursor();
+      while (rows.moveNext()) {
+        final text = rows.current['text'] as String;
+        final seen = <String>{};
+        for (final piece in text.split(RegExp(r'\n\s*\n'))) {
+          final passage = piece.replaceAll(RegExp(r'\s+'), ' ').trim();
+          if (passage.length < shortest || passage.length > longest) continue;
+          seen.add(passage);
+        }
+        for (final passage in seen) {
+          counts[passage] = (counts[passage] ?? 0) + 1;
+        }
+        // Kept bounded on a very large archive: passages met once so far
+        // are let go when there are too many.
+        if (counts.length > 400000) counts.removeWhere((_, n) => n < 2);
       }
-      for (final passage in seen) {
-        counts[passage] = (counts[passage] ?? 0) + 1;
-      }
+    } finally {
+      query.dispose();
     }
     final out = [
       for (final entry in counts.entries)
@@ -754,6 +765,9 @@ class IndexDatabase {
   ) {
     final row = db.select('SELECT name FROM documents WHERE id=?', [id]);
     if (row.isEmpty) return; // Source removed during extraction.
+    // Kept with its Turkish letters each one character: the excerpts are
+    // found in its search key by offset (foldSearchText).
+    text = composeTurkish(text);
     db.execute('UPDATE documents SET text=?,state=?,note=?,ocr=? WHERE id=?', [
       text,
       state,
@@ -974,6 +988,12 @@ class IndexDatabase {
   // the end of a large document. Map it back to the original Turkish text.
   static String _excerpt(String text, List<String> terms, String fragment) {
     if (text.isEmpty) return '';
+    // Nothing searched: the opening, the whole text not folded for it.
+    if (terms.isEmpty && fragment.trim().isEmpty) {
+      final end = text.length < 300 ? text.length : 300;
+      return '${text.substring(0, end).replaceAll(RegExp(r'\s+'), ' ')}'
+          '${end < text.length ? ' …' : ''}';
+    }
     final normalized = foldSearchText(text);
     final passages = fragment
         .split(' … ')

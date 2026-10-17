@@ -11,6 +11,51 @@ import 'package:evrak_convert/services/udf/udf_writer.dart';
 /// of an archive against itself after a round trip, and each was losing
 /// formatting on most of the documents it applied to.
 void main() {
+  test('a Word list keeps whether it is numbered, and its items keep their '
+      'bold, italics and tabs', () async {
+    final model = DocModel(
+      blocks: [
+        DocBlock(
+          type: DocBlockType.listItem,
+          listType: DocListType.ordered,
+          plainText: 'Birinci\tmadde',
+          spans: [DocSpan(startOffset: 0, length: 7, bold: true)],
+        ),
+        DocBlock(
+          type: DocBlockType.listItem,
+          listType: DocListType.ordered,
+          plainText: 'İkinci madde',
+          spans: [DocSpan(startOffset: 7, length: 5, italic: true)],
+        ),
+        DocBlock(plainText: 'Ara paragraf'),
+        DocBlock(
+          type: DocBlockType.listItem,
+          listType: DocListType.unordered,
+          plainText: 'Madde işaretli',
+        ),
+      ],
+    );
+    final read = (await DocxBridge.readBytes(
+      await DocxBridge.writeBytes(model),
+    ))!;
+    final items = [
+      for (final b in read.blocks)
+        if (b.type == DocBlockType.listItem) b,
+    ];
+    expect(items.map((b) => b.plainText), [
+      'Birinci\tmadde',
+      'İkinci madde',
+      'Madde işaretli',
+    ]);
+    expect(items.map((b) => b.listType), [
+      DocListType.ordered,
+      DocListType.ordered,
+      DocListType.unordered,
+    ]);
+    expect(items[0].spans.where((s) => s.bold).map((s) => s.startOffset), [0]);
+    expect(items[1].spans.any((s) => s.italic && s.startOffset == 7), isTrue);
+  });
+
   group('UDF', () {
     test('a paragraph keeps the style it resolves to', () {
       // UYAP writes its body paragraphs against names of its own and carries

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -45,6 +46,19 @@ class RulerParagraph {
       firstRow >= otherRows
       ? (left: otherRows, first: firstRow - otherRows, hanging: 0)
       : (left: firstRow, first: 0, hanging: otherRows - firstRow);
+
+  @override
+  bool operator ==(Object other) =>
+      other is RulerParagraph &&
+      other.firstRow == firstRow &&
+      other.otherRows == otherRows &&
+      other.right == right &&
+      other.origin == origin &&
+      listEquals(other.stops, stops);
+
+  @override
+  int get hashCode =>
+      Object.hash(firstRow, otherRows, right, origin, Object.hashAll(stops));
 
   /// The stops as a UDF's TabSet writes them: "points:kind,…".
   String get tabSet => [
@@ -600,4 +614,59 @@ class _RulerPainter extends CustomPainter {
       old.points != points ||
       old.scheme != scheme ||
       old.axis != axis;
+}
+
+/// [builder] with [value] as it is read whenever [listenable] changes, built
+/// again only when it reads otherwise: the caret's paragraph is read at
+/// every key, and the ruler, the same for the whole paragraph, was drawn
+/// again with each.
+class DistinctBuilder<T> extends StatefulWidget {
+  const DistinctBuilder({
+    super.key,
+    required this.listenable,
+    required this.value,
+    required this.builder,
+  });
+
+  final Listenable listenable;
+  final T Function() value;
+  final Widget Function(BuildContext context, T value) builder;
+
+  @override
+  State<DistinctBuilder<T>> createState() => _DistinctBuilderState<T>();
+}
+
+class _DistinctBuilderState<T> extends State<DistinctBuilder<T>> {
+  late T _value = widget.value();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(DistinctBuilder<T> old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.listenable, widget.listenable)) {
+      old.listenable.removeListener(_changed);
+      widget.listenable.addListener(_changed);
+    }
+    // Built again from above: read anew, as everything else is.
+    _value = widget.value();
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    final next = widget.value();
+    if (next != _value) setState(() => _value = next);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _value);
 }

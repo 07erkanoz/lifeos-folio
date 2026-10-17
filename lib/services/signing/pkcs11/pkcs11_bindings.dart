@@ -8,6 +8,7 @@
 /// Yalnızca e-imza işlemleri için gereken fonksiyon/struct alt kümesi.
 library;
 
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io' show Platform;
 import 'dart:typed_data';
@@ -128,8 +129,10 @@ final class CkVersion extends Struct {
 /// CK_TOKEN_INFO (padded string alanları 32/16 byte)
 ///
 /// Windows: PKCS#11 pack(1), Linux: natural alignment.
-/// @Packed(1) her iki platformda da doğru çalışır çünkü
-/// Linux 64-bit'te CK_ULONG=8 byte, tüm alanlar zaten hizalı.
+/// @Packed(1) her iki platformda da alanların yerini doğru verir, çünkü
+/// Linux 64-bit'te CK_ULONG=8 byte, tüm alanlar zaten hizalı. Ama doğal
+/// hizalamada yapı 8'in katına tamamlanır: sürücü 208 bayt yazar, packed
+/// yapı 204'tür. Sondaki 4 bayt onu ayırır; Windows'ta zararsız fazladır.
 @Packed(1)
 final class CkTokenInfo extends Struct {
   // label: 32 byte UTF-8 padded
@@ -187,6 +190,10 @@ final class CkTokenInfo extends Struct {
   // utcTime: 16 byte
   @Array(16)
   external Array<Uint8> utcTime;
+
+  // The natural alignment's tail on 64-bit Linux and macOS.
+  @Array(4)
+  external Array<Uint8> tail;
 }
 
 /// CK_SLOT_INFO
@@ -203,6 +210,10 @@ final class CkSlotInfo extends Struct {
 
   external CkVersion hardwareVersion;
   external CkVersion firmwareVersion;
+
+  // The natural alignment's tail on 64-bit Linux and macOS: 112, not 108.
+  @Array(4)
+  external Array<Uint8> tail;
 }
 
 /// CK_ATTRIBUTE - Nesne attribute'u (anahtar, sertifika vb.)
@@ -595,7 +606,8 @@ String paddedBytesToString(Array<Uint8> arr, int length) {
   while (bytes.isNotEmpty && (bytes.last == 0x20 || bytes.last == 0x00)) {
     bytes.removeLast();
   }
-  return String.fromCharCodes(bytes);
+  // PKCS#11'in metin alanları UTF-8'dir: "TÜBİTAK" bayt bayt okunursa bozulur.
+  return utf8.decode(bytes, allowMalformed: true);
 }
 
 /// Uint8List'i native `Pointer<Uint8>`'e kopyala.

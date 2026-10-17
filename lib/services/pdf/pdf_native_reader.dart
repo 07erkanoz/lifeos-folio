@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:math' as math;
 
@@ -115,7 +116,7 @@ abstract final class PdfNativeReader {
               flags,
             );
             final rawName = length > 0 && length <= 1024
-                ? name.cast<Utf8>().toDartString()
+                ? fontName(name.asTypedList(1024))
                 : 'Times New Roman';
             final family = _family(rawName);
             final hasColor =
@@ -226,6 +227,16 @@ abstract final class PdfNativeReader {
       blocks: blocks,
       pageProperties: properties ?? const DocPageProperties(),
     );
+  }
+
+  /// A font's name as PDFium gives it, up to its end: a name that is not
+  /// UTF-8 is read as far as it goes, not thrown on. A throw there left the
+  /// whole PDF's text unread.
+  @visibleForTesting
+  static String fontName(Uint8List bytes) {
+    var end = bytes.indexOf(0);
+    if (end < 0) end = bytes.length;
+    return utf8.decode(bytes.sublist(0, end), allowMalformed: true);
   }
 
   static String _family(String name) {

@@ -236,6 +236,16 @@ class MainActivity : FlutterActivity() {
         intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.toList() ?: emptyList()
     /** [uri] copied into Folio's cache under its own name; its path. */
     private fun keep(uri: Uri): String {
+        // A file:// another app hands over may name one of Folio's own private
+        // files (its settings, its databases): those are never opened this way.
+        if (uri.scheme == "file") {
+            val path = File(uri.path ?: throw IllegalArgumentException("Belge okunamıyor")).canonicalPath
+            val own = listOfNotNull(File(applicationInfo.dataDir), cacheDir, filesDir, externalCacheDir, getExternalFilesDir(null))
+                .map { it.canonicalPath }
+            if (own.any { path == it || path.startsWith(it + File.separator) }) {
+                throw IllegalArgumentException("Folio'nun kendi dosyaları bu yoldan açılmaz")
+            }
+        }
         var name = uri.lastPathSegment ?: "belge"
         if (uri.scheme == "content") contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
             if (it.moveToFirst()) name = it.getString(0) ?: name
@@ -308,7 +318,10 @@ class MainActivity : FlutterActivity() {
                         val size = it.getLong(3)
                         val modified = it.getLong(4)
                         seen.add(target.absolutePath)
-                        if (!target.exists() || modified == 0L || target.length() != size || target.lastModified() != modified) {
+                        // A source that gives no time of change is known by its size alone:
+                        // copied again at every scan, a large archive was read whole each time.
+                        val changed = if (modified == 0L) target.length() != size else target.lastModified() != modified || target.length() != size
+                        if (!target.exists() || changed) {
                             copy(DocumentsContract.buildDocumentUriUsingTree(tree, childId), target)
                             if (modified > 0) target.setLastModified(modified)
                         }

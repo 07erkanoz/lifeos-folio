@@ -39,6 +39,10 @@ class DocumentLock {
   static Future<DocumentLock?> document(String path) =>
       acquire('belge-${DocumentHistory.documentKey(path)}');
 
+  /// Whether this window holds the claim on editing the document at [path].
+  static bool holdsDocument(String path) =>
+      _held.containsKey('belge-${DocumentHistory.documentKey(path)}');
+
   /// Whether another window is editing the document at [path].
   static Future<bool> documentHeld(String path) =>
       heldElsewhere('belge-${DocumentHistory.documentKey(path)}');
@@ -51,8 +55,14 @@ class DocumentLock {
       return DocumentLock._(name);
     }
     final pending = _pending[name] ??= _open(name);
-    final handle = await pending;
-    _pending.remove(name);
+    final RandomAccessFile? handle;
+    try {
+      handle = await pending;
+    } finally {
+      // A folder that could not be made fails this try alone: kept, the
+      // failure was given to every later one until Folio was opened again.
+      if (identical(_pending[name], pending)) _pending.remove(name);
+    }
     if (handle == null) return null;
     final again = _held[name];
     _held[name] = again == null ? (handle, 1) : (again.$1, again.$2 + 1);

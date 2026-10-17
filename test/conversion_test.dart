@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -6,9 +7,47 @@ import 'package:evrak_convert/models/evrak_file.dart';
 import 'package:evrak_convert/services/convert/converter_service.dart';
 import 'package:evrak_convert/services/udf/udf_reader.dart';
 import 'package:evrak_convert/services/udf/udf_writer.dart';
+import 'package:image/image.dart' as img;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'a photo becomes a document as the JPEG it is; a PNG stays a PNG',
+    () async {
+      final photo = img.Image(width: 40, height: 30)
+        ..clear(img.ColorRgb8(200, 120, 40));
+      final jpeg = Uint8List.fromList(img.encodeJpg(photo));
+      final model = (await ConverterService.extractDocModel(
+        jpeg,
+        EvrakFormat.image,
+      ))!;
+      expect(model.blocks.single.imageMime, 'image/jpeg');
+      expect(base64Decode(model.blocks.single.imageBase64!), jpeg);
+      final png = Uint8List.fromList(img.encodePng(photo));
+      final drawn = (await ConverterService.extractDocModel(
+        png,
+        EvrakFormat.image,
+      ))!;
+      expect(drawn.blocks.single.imageMime, 'image/png');
+      // To PDF, the one document a picture converts to; and kept as UDF
+      // when opened in the editor, the picture as it came.
+      final pdf = await ConverterService.convertBytes(
+        bytes: jpeg,
+        sourceFormat: EvrakFormat.image,
+        targetFormat: EvrakFormat.pdf,
+      );
+      expect(String.fromCharCodes(pdf!.take(5)), '%PDF-');
+      final back = UdfReader.readBytes(
+        Uint8List.fromList(UdfWriter.writeBytes(model)),
+      )!;
+      final picture = back.blocks.singleWhere(
+        (b) => b.type == DocBlockType.image,
+      );
+      expect(picture.imageMime, 'image/jpeg');
+      expect(base64Decode(picture.imageBase64!), jpeg);
+    },
+  );
 
   group('UDF & Converter Motoru Testleri', () {
     test('viewer PDF text stays exact without opening the PDF again', () async {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:evrak_convert/models/document_model.dart';
 import 'package:evrak_convert/models/evrak_file.dart';
@@ -21,6 +22,18 @@ DocSpan spanOf(DocModel model, String word) {
 }
 
 void main() {
+  test('a font name that is not UTF-8 is read as far as it goes', () {
+    final bytes = Uint8List(1024)
+      ..setAll(0, [...utf8.encode('Arial-Bold'), 0xFF, 0xFE, 0]);
+    expect(PdfNativeReader.fontName(bytes), 'Arial-Bold��');
+    expect(
+      PdfNativeReader.fontName(
+        Uint8List(1024)..setAll(0, [...utf8.encode('Times'), 0]),
+      ),
+      'Times',
+    );
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
   configurePdfiumForTest();
   test(

@@ -37,6 +37,20 @@ const _a1 = CellCoordinate(0, 0),
 Future<void> _settle() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  test('an Excel day is that day, winter or summer, in any year', () {
+    // 1 Ocak 2000, 15 Şubat 1975, 1 Temmuz 2010, 1 Mart 1902 and the
+    // afternoon of 1 Ocak 2000.
+    for (final (serial, day) in [
+      (36526.0, DateTime(2000)),
+      (27440.0, DateTime(1975, 2, 15)),
+      (40360.0, DateTime(2010, 7)),
+      (791.0, DateTime(1902, 3)),
+      (36526.75, DateTime(2000, 1, 1, 18)),
+    ]) {
+      expect(fromSerialForTesting(serial), day, reason: '$serial');
+    }
+  });
+
   test('Turkish formulas are kept the way a file needs them', () {
     expect(excelFormula('=TOPLA(A1;A9)'), '=SUM(A1,A9)');
     expect(

@@ -440,6 +440,11 @@ class OcrService {
     return out;
   }
 
+  /// Told when a Tesseract starts ([running]) and when it is done: the
+  /// indexer, which reads in an isolate it kills when a document takes too
+  /// long, kills these with it. A process an isolate started outlives it.
+  static void Function(int pid, {required bool running})? onProcess;
+
   static Future<String> _run(
     String language, {
     String? imagePath,
@@ -465,6 +470,7 @@ class OcrService {
       process.stdin.add(input);
     }
     unawaited(process.stdin.close().catchError((Object _) {}));
+    onProcess?.call(process.pid, running: true);
     try {
       final bytes = await stdoutFuture.timeout(budget);
       await stderrFuture;
@@ -476,6 +482,8 @@ class OcrService {
     } on TimeoutException {
       process.kill(ProcessSignal.sigkill);
       rethrow;
+    } finally {
+      onProcess?.call(process.pid, running: false);
     }
   }
 

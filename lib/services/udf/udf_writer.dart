@@ -71,8 +71,14 @@ class UdfWriter {
           }),
         );
       }
+      // The closing line break with its own size and font: UYAP lays it out
+      // with the paragraph's last row, so it sets an empty line's height.
+      // Written bare, a blank line read at 14 points came back at the
+      // style's 12, and the pages after it broke elsewhere.
       result.add(
         element('content', {
+          'family': ?block.endFontFamily,
+          'size': ?block.endFontSize,
           'startOffset': offset + block.plainText.length,
           'length': 1,
         }),

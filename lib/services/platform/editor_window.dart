@@ -14,8 +14,11 @@ abstract final class EditorWindow {
   static bool get available =>
       Platform.isLinux || Platform.isWindows || Platform.isMacOS;
 
-  /// Opens [path], or a new document when there is none.
-  static Future<void> open([String? path]) async {
+  /// Opens [path], or a new document when there is none; replaced under
+  /// test, where no window is started.
+  static Future<void> Function([String? path]) open = _open;
+
+  static Future<void> _open([String? path]) async {
     if (!available) return;
     await Process.start(Platform.resolvedExecutable, [
       editorFlag,

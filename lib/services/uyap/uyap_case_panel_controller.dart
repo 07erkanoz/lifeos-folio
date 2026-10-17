@@ -341,10 +341,48 @@ class UyapCasePanelController extends ChangeNotifier {
     }
     final session = web.session.value;
     if (_live != null && identical(session, _liveSession)) return _live!;
-    _live = await web.findCase(_link!);
+    final key = _foundKey(_link!);
+    final found = background ? _foundIn(session)[key] : null;
+    _live = found?.$1 ?? await web.findCase(_link!);
+    if (background && found == null) _found[key] = (_live!, null);
     _liveSession = session;
     _liveDocuments = const {};
     return _live!;
+  }
+
+  /// The cases a sync's readings found in this session, with what UYAP
+  /// said it shows of each: a setup reads a case's parties and its
+  /// documents' list in stages apart, and looked for it and asked that
+  /// twice. A new session finds them anew.
+  static final _found = <String, (UyapCase, UyapCasePermissions?)>{};
+  static Object? _foundSession;
+
+  static Map<String, (UyapCase, UyapCasePermissions?)> _foundIn(
+    Object? session,
+  ) {
+    if (!identical(session, _foundSession)) {
+      _found.clear();
+      _foundSession = session;
+    }
+    return _found;
+  }
+
+  static String _foundKey(UyapCaseLink link) =>
+      '${link.jurisdiction}|${link.courtId}|'
+      '${UyapWebService.fold(link.number)}|${link.closed}';
+
+  /// What UYAP shows of [live]: asked once a session for a sync's readings.
+  Future<UyapCasePermissions> _permissionsOf(UyapCase live) async {
+    final key = _foundKey(_link!);
+    final found = background ? _foundIn(web.session.value)[key] : null;
+    if (found != null && identical(found.$1, live) && found.$2 != null) {
+      return found.$2!;
+    }
+    final permissions = await web.permissions(live);
+    if (background && identical(_found[key]?.$1, live)) {
+      _found[key] = (live, permissions);
+    }
+    return permissions;
   }
 
   Future<T?> _doing<T>(String what, Future<T> Function() work) async {
@@ -470,7 +508,7 @@ class UyapCasePanelController extends ChangeNotifier {
       _changed();
       UyapCasePermissions permissions;
       try {
-        permissions = await web.permissions(live);
+        permissions = await _permissionsOf(live);
       } catch (_) {
         // Not answered: everything is asked for, as before; the money and
         // an icra file's account, which it tells, wait for the next time.
@@ -499,6 +537,8 @@ class UyapCasePanelController extends ChangeNotifier {
           return await read();
         } catch (_) {
           if (!web.connected) lost = true;
+          // Its id may be old: looked for anew next time.
+          if (background) _found.remove(_foundKey(_link!));
           failed.add(section);
           whole = false;
           return null;
@@ -1071,6 +1111,7 @@ class UyapCasePanelController extends ChangeNotifier {
       await _placeOnWeb();
     } catch (_) {}
     if (!_useWeb) return _fetchMobile(document);
+    final link = _tied();
     await _liveCase();
     var live = _liveDocuments[document.key];
     if (live == null) {
@@ -1084,17 +1125,64 @@ class UyapCasePanelController extends ChangeNotifier {
     }
     // Each try is in the one line of documents (UyapPace.document): three
     // seconds after the download before it.
-    final bytes = await web.caseDocumentBytes(
-      live,
-      caseId: (await _liveCase()).id,
-    );
-    final (record, file) = await store.save(_record!, document, bytes);
-    _record = await store.seen(record, document.key);
-    onSaved?.call(file);
+    Uint8List bytes;
+    try {
+      bytes = await web.caseDocumentBytes(
+        live,
+        caseId: (await _liveCase()).id,
+      );
+    } on UyapStaleDocument {
+      // The ids UYAP gave no longer answer: the case and its list looked
+      // up again, once, as the lawyer's own Yenile would.
+      if (!identical(_link, link)) rethrow;
+      _live = null;
+      _liveDocuments = const {};
+      _found.remove(_foundKey(link));
+      await _refreshWeb({CaseSection.documents});
+      final again = _liveDocuments[document.key];
+      if (again == null || !identical(_link, link)) rethrow;
+      bytes = await web.caseDocumentBytes(
+        again,
+        caseId: (await _liveCase()).id,
+      );
+    }
+    return _keep(link, document, bytes);
+  }
+
+  /// The case the panel is tied to as a download begins.
+  UyapCaseLink _tied() {
+    final link = _link;
+    if (link == null || _record == null) {
+      throw StateError('Dosya bağı kaldırıldı; evrak indirilmedi.');
+    }
+    return link;
+  }
+
+  /// [bytes] kept as [document]'s file with the case's record. The tie
+  /// taken off or changed while it came: kept with the case all the same,
+  /// the panel, showing another now, left as it is.
+  Future<File> _keep(
+    UyapCaseLink link,
+    UyapCaseDocument document,
+    Uint8List bytes,
+  ) async {
+    final record = identical(_link, link)
+        ? _record
+        : await store.load(link.court, link.number);
+    if (record == null) {
+      throw StateError('Dosya bağı kaldırıldı; evrak kaydedilmedi.');
+    }
+    final (saved, file) = await store.save(record, document, bytes);
+    final seen = await store.seen(saved, document.key);
+    if (identical(_link, link)) {
+      _record = seen;
+      onSaved?.call(file);
+    }
     return file;
   }
 
   Future<File> _fetchMobile(UyapCaseDocument document) async {
+    final link = _tied();
     final id = await _mobileId();
     var live = _liveDocuments[document.key];
     if (live == null) {
@@ -1114,25 +1202,28 @@ class UyapCasePanelController extends ChangeNotifier {
     } catch (_) {
       // Both ids are the session's: looked up again, once; the list
       // alone, not the parties.
+      if (!identical(_link, link)) rethrow;
       _mobileCaseId = null;
-      sync.forgetMobileId(caseKey(_link!.number, _link!.court));
+      sync.forgetMobileId(caseKey(link.number, link.court));
       await _refreshMobile({CaseSection.documents});
       final again = _liveDocuments[document.key];
-      if (again == null || _mobileCaseId == null) rethrow;
+      if (again == null || _mobileCaseId == null || !identical(_link, link)) {
+        rethrow;
+      }
       bytes = _checked(
         await mobile.documentBytes(again.documentId, _mobileCaseId!),
       );
     }
-    if (store.sameAsAnother(_record!, document.key, bytes)) {
+    final record = identical(_link, link)
+        ? _record
+        : await store.load(link.court, link.number);
+    if (record != null && store.sameAsAnother(record, document.key, bytes)) {
       throw StateError(
         '${document.title}: UYAP Mobil başka bir evrakın içeriğini döndürdü; '
         'kaydedilmedi. UYAP Web ile deneyin.',
       );
     }
-    final (record, file) = await store.save(_record!, document, bytes);
-    _record = await store.seen(record, document.key);
-    onSaved?.call(file);
-    return file;
+    return _keep(link, document, bytes);
   }
 
   /// UYAP's document store's own failure, sent as a document's content

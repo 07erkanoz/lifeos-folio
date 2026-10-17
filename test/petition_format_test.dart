@@ -159,4 +159,98 @@ void main() {
     await tester.pump(const Duration(minutes: 4));
     await tester.runAsync(() => dir.delete(recursive: true));
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets('Biçimlendir keeps a bold label bold and its value plain, and '
+      'leaves a list item where it was', (tester) async {
+    tester.view.physicalSize = const Size(1700, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    addTearDown(() => editorRibbonTab.value = RibbonTab.home);
+    final dir = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('folio-format-styles-'),
+    ))!;
+    final file = File('${dir.path}/dilekce.udf');
+    const item =
+        'Rapor tarafımıza süresi içinde tebliğ edilmemiştir ve bu nedenle '
+        'itiraz süresi işlemeye başlamamıştır.';
+    await tester.runAsync(
+      () => file.writeAsBytes(
+        UdfWriter.writeBytes(
+          DocModel(
+            blocks: [
+              DocBlock(plainText: "ANTALYA 3. ASLİYE HUKUK MAHKEMESİ'NE"),
+              DocBlock(
+                plainText: 'DAVACI      : Ayşe Karaca',
+                spans: [DocSpan(startOffset: 0, length: 6, bold: true)],
+              ),
+              DocBlock(plainText: 'VEKİLİ : Av. Deniz Kaya'),
+              DocBlock(
+                type: DocBlockType.listItem,
+                listType: DocListType.ordered,
+                listLevel: 1,
+                leftIndent: 25,
+                plainText: item,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          FlutterQuillLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: EditorWidget(
+            initialFilePath: file.path,
+            initialFormat: EvrakFormat.udf,
+          ),
+        ),
+      ),
+    );
+    await waitFor(
+      tester,
+      () => find.byKey(const ValueKey('editor-paper')).evaluate().isNotEmpty,
+    );
+    final controller = tester
+        .widget<QuillEditor>(find.byType(QuillEditor).first)
+        .controller;
+    Line line(int n) {
+      final all = <Line>[
+        for (final node in controller.document.root.children)
+          if (node is Line)
+            node
+          else if (node is Block)
+            ...node.children.whereType<Line>(),
+      ];
+      return all[n];
+    }
+
+    Object? itemLayout() => line(3).style.attributes['doc-layout']?.value;
+    final itemBefore = itemLayout();
+    editorRibbonTab.value = RibbonTab.legal;
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('legal-format')));
+    await tester.pump();
+
+    final label = line(1);
+    expect(label.toPlainText(), 'DAVACI\t: Ayşe Karaca\n');
+    bool boldAt(String part) {
+      final at = label.toPlainText().indexOf(part);
+      final leaf = label.queryChild(at, false).node as Leaf;
+      return leaf.style.attributes[Attribute.bold.key] != null;
+    }
+
+    expect(boldAt('DAVACI'), isTrue);
+    expect(boldAt('Ayşe'), isFalse);
+    expect(line(3).toPlainText(), '$item\n');
+    expect(itemLayout(), itemBefore);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(minutes: 4));
+    await tester.runAsync(() => dir.delete(recursive: true));
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -33,6 +34,15 @@ class _Portal {
       'ayrinti_bilgileri,taraf_bilgileri,evrak_bilgileri,'
       'tahsilat_reddiyat_bilgileri';
   final asked = <String>[];
+
+  /// The documents' ids made anew by every listing of them, as UYAP's
+  /// `evrakId`s are: those of a listing before answer nothing.
+  var rotates = false;
+  var listed = 0;
+  String get _batch => rotates ? '-l$listed' : '';
+
+  /// A download held until it is let go.
+  Completer<void>? hold;
 
   Uri get uri => Uri.parse('http://${server.address.host}:${server.port}');
 
@@ -167,6 +177,7 @@ class _Portal {
             {'adi': 'Ayten Veli', 'rol': 'Davalı', 'vekil': ''},
           ];
         case '/list_dosya_evraklar.ajx':
+          listed++;
           body = {
             'pageTotal': 1,
             'tumEvraklar': {
@@ -174,7 +185,7 @@ class _Portal {
                 '2025/686(Hukuk Dava Dosyası)##y': [
                   for (final n in related)
                     {
-                      'evrakId': '$id-evrak$n',
+                      'evrakId': '$id$_batch-evrak$n',
                       'dosyaId': 'dava-$id',
                       'evrakTuruAciklama': 'Görevsizlik Kararı',
                       'birimEvrakNo': n,
@@ -185,7 +196,7 @@ class _Portal {
               '2026/1204(Hukuk Dava Dosyası)##x': [
                 for (final n in documents)
                   {
-                    'evrakId': '$id-evrak$n',
+                    'evrakId': '$id$_batch-evrak$n',
                     'dosyaId': 'dava-$id',
                     'evrakTuruAciklama': n == '2'
                         ? 'Bilirkişi Raporu'
@@ -203,7 +214,8 @@ class _Portal {
           // As the portal's own "Evrak İndir": by the case opened.
           if (request.uri.queryParameters['dosyaId'] != 'dava-$id') break;
           // Only this session's ids are answered; an old one gets nothing.
-          if (!evrak.startsWith(id)) break;
+          if (!evrak.startsWith('$id$_batch-')) break;
+          await hold?.future;
           fetched.add(evrak);
           if (udf) {
             r.headers.set('Content-Type', 'application/octet-stream');
@@ -450,6 +462,44 @@ void main() {
       expect(again.isSaved('2'), isTrue);
     },
   );
+
+  test('a document whose ids UYAP has given anew since its list is fetched '
+      'after the list is read again, once', () async {
+    portal.rotates = true;
+    await portal.login(web);
+    final c = panel();
+    await c.bind('${root.path}/cevap.udf');
+    await c.choose(link, await web.findCase(link));
+    final listed = portal.listed;
+    // Listed again elsewhere: the ids this panel holds answer nothing.
+    portal.listed++;
+    final file = await c.open(c.documents.last);
+    expect(file, isNotNull, reason: c.error);
+    expect(await file!.readAsString(), startsWith('%PDF-1.4 oturum1-l'));
+    expect(portal.listed, listed + 2);
+  });
+
+  test('a document coming while its tie is taken off is kept with the case, '
+      'the panel left untied', () async {
+    await portal.login(web);
+    final c = panel();
+    await c.bind('${root.path}/cevap.udf');
+    await c.choose(link, await web.findCase(link));
+    final report = c.documents.last;
+    portal.hold = Completer<void>();
+    final opening = c.open(report);
+    while (!portal.asked.contains('/download_document_brd.uyap')) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    await c.unlink();
+    portal.hold!.complete();
+    final file = await opening;
+    expect(file, isNotNull, reason: c.error);
+    expect(c.link, isNull);
+    expect(c.record, isNull);
+    final kept = await store.load(link.court, link.number);
+    expect(store.fileOf(kept!, report.key)?.path, file!.path);
+  });
 
   test('what came since the last fetch is new; everything is downloaded '
       'once', () async {

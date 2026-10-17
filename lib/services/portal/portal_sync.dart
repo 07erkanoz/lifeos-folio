@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 
 import '../editor/lawyer_profile.dart';
 import '../editor/profile_autofill.dart';
+import '../editor/suggestions/phrases.dart' show foldPhrase;
 import '../platform/app_directories.dart';
 import '../legal/deadlines/aidiyet.dart';
 import '../security/secret_store.dart';
@@ -499,6 +500,8 @@ class PortalSync extends ChangeNotifier {
     }
     final sync = channel == PortalChannel.uyapWeb ? syncWeb : syncMobile;
     if (autoFetch) {
+      await _ownLooked();
+      if (_disposed || quiet || !autoFetch) return;
       if (!_readElsewhere(channel)) unawaited(sync());
       if (!_noticesElsewhere) unawaited(syncNotices());
       return;
@@ -507,6 +510,29 @@ class PortalSync extends ChangeNotifier {
     final neverRead =
         db.meta(_portfolioKey) == null && db.meta(_webOnlyKey) == null;
     if (neverRead && j == null) setupOffer.value = true;
+  }
+
+  /// When this sync was made: Folio's start, as near as it is known.
+  final _born = DateTime.now();
+
+  /// How long after Folio starts a session taken up again waits before
+  /// reading of itself: Senkron has not yet found the person's other
+  /// computers on the network, and two that both read of themselves read
+  /// both, neither knowing of the other
+  /// (docs/uyap-otomatik-okuma-tek-cihaz.md). Not in tests, but when one
+  /// sets it.
+  @visibleForTesting
+  static Duration? ownLookForTesting;
+  static const ownLookFor = Duration(seconds: 30);
+
+  Future<void> _ownLooked() async {
+    final wait =
+        ownLookForTesting ??
+        (Platform.environment.containsKey('FLUTTER_TEST')
+            ? Duration.zero
+            : ownLookFor);
+    final left = wait - DateTime.now().difference(_born);
+    if (left > Duration.zero) await Future<void>.delayed(left);
   }
 
   /// For tests: [channel] connected, as its session's listener tells it.
@@ -1915,7 +1941,18 @@ class PortalSync extends ChangeNotifier {
       ]);
       // At once, whenever the last reading was: a new case is not kept
       // waiting. A notification is new only once, so none reads twice.
-      if (rows.any((r) => uyapNoticeNamesNewCase(r, keys))) {
+      final named = [
+        for (final r in rows)
+          if (uyapNoticeNamesNewCase(r, keys)) r,
+      ];
+      if (named.isNotEmpty) {
+        // Every province's offices asked only for a case at a prosecutor's
+        // office not known yet: the known ones are asked at each reading,
+        // and a court's case is in the courts' lists. Asked for each new
+        // case alike, a Vekil Kaydı cost hundreds of requests to UYAP.
+        if (named.any((r) => _atUnknownProsecutor(db, r))) {
+          _newCaseAtProsecutor = true;
+        }
         // Read of itself only while the lawyer has Folio read UYAP of
         // itself; else they are told, and read the portfolio when they
         // will (docs/uyap-hedef-harita.md §5).
@@ -2515,7 +2552,7 @@ class PortalSync extends ChangeNotifier {
         db,
         webOnly: webOnly,
         // A new case may be in a prosecutor's office not yet known.
-        everyProvince: newCase || closed,
+        everyProvince: (newCase && _newCaseAtProsecutor) || closed,
         includeClosed: closed,
         onChanged: () => portfolioVersion.value++,
         onProgress: (done, total) => _progress(
@@ -2744,12 +2781,42 @@ class PortalSync extends ChangeNotifier {
 
   /// The portfolio read again from whichever portal is connected, UYAP
   /// Mobil first; [full] as the lawyer's Senkronize et, [newCase] at once.
-  Future<void> syncPortfolio({bool full = false, bool newCase = false}) =>
-      Future.wait([
-        if (_mobile.connected) syncMobile(full: full, newCase: newCase),
-        // Alone, the web reads it all; beside UYAP Mobil, what only it has.
-        if (_web.connected) syncWeb(force: full, newCase: newCase),
-      ]);
+  Future<void> syncPortfolio({bool full = false, bool newCase = false}) async {
+    await Future.wait([
+      if (_mobile.connected) syncMobile(full: full, newCase: newCase),
+      // Alone, the web reads it all; beside UYAP Mobil, what only it has.
+      if (_web.connected) syncWeb(force: full, newCase: newCase),
+    ]);
+    if (newCase) _newCaseAtProsecutor = false;
+  }
+
+  /// Set when a Vekil Kaydı names a new case at a prosecutor's office not
+  /// known yet: the next new case's reading asks every province's offices.
+  bool _newCaseAtProsecutor = false;
+
+  /// Whether [r]'s new case is at a prosecutor's office neither portal has
+  /// found the lawyer a case at yet.
+  static bool _atUnknownProsecutor(PortalDatabase db, UyapNoticeRow r) {
+    final court = uyapNoticeCase(r.body)?.court;
+    if (court == null) return false;
+    final folded = foldPhrase(court);
+    if (!folded.contains('savcilig')) return false;
+    final known = <String>{};
+    try {
+      final mobile = jsonDecode(db.meta(_mobileOfficesKey) ?? '{}');
+      if (mobile is Map) known.addAll(mobile.values.map((v) => '$v'));
+    } catch (_) {}
+    try {
+      final web = jsonDecode(db.meta(_prosecutorOfficesKey) ?? '[]');
+      if (web is List) {
+        known.addAll([
+          for (final o in web)
+            if (o is Map) '${o['ad'] ?? ''}',
+        ]);
+      }
+    } catch (_) {}
+    return !known.any((name) => foldPhrase(name) == folded);
+  }
 
   /// Whether the portfolio is being read, by either portal.
   bool get portfolioRunning =>
@@ -2843,7 +2910,7 @@ class PortalSync extends ChangeNotifier {
         _mobile,
         db,
         // A new case may be in a prosecutor's office not yet known.
-        everyProvince: newCase || closed,
+        everyProvince: (newCase && _newCaseAtProsecutor) || closed,
         includeClosed: closed,
         onChanged: () => portfolioVersion.value++,
         onCaseId: (key, id) => ids[key] = id,

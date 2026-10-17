@@ -268,6 +268,24 @@ class SnippetStore extends ChangeNotifier {
     return id;
   }
 
+  /// [passage] as a snippet keeps it: its tables and pictures left out.
+  /// A table goes in a document by the number of its own list there, and
+  /// the snippet editor can draw neither; a snippet saved from a selection
+  /// that held one broke the editor, or put another document's table in.
+  static Delta keepable(Delta passage) {
+    final out = Delta();
+    for (final operation in passage.toList()) {
+      if (!operation.isInsert || operation.data is! String) continue;
+      out.insert(operation.data, operation.attributes);
+    }
+    return out;
+  }
+
+  /// Whether [passage] holds what [keepable] leaves out.
+  static bool holdsEmbeds(Delta passage) => passage.toList().any(
+    (operation) => operation.isInsert && operation.data is! String,
+  );
+
   Future<Snippet> add(String name, Delta body) async {
     final one = Snippet(
       id: _newId(),

@@ -203,6 +203,72 @@ void main() {
     },
   );
 
+  test('Turkish letters written as a letter and its mark are found as '
+      'written in one', () {
+    final db = IndexDatabase(':memory:');
+    addTearDown(db.close);
+    final source = db.addSource('/archive', true, true);
+    // As macOS names files, and some PDFs carry their text.
+    final id = db.registerFile(
+      sourceId: source,
+      token: 1,
+      path: '/archive/Şükrü Doğan.txt',
+      size: 100,
+      modified: 100,
+      changed: 10,
+      changedContent: true,
+    );
+    db.setContent(id, 'Davacı Şükrü vekili, İzmir', 'ready', null);
+    for (final query in ['şükrü', 'sukru', 'Şükrü', 'izmir']) {
+      expect(
+        db.search(SearchQuery(text: query).toMap())['total'],
+        1,
+        reason: query,
+      );
+    }
+    expect(
+      db.search(
+        const SearchQuery(text: 'doğan', namesOnly: true).toMap(),
+      )['total'],
+      1,
+    );
+    final excerpt =
+        (db.search(const SearchQuery(text: 'sukru').toMap())['hits'] as List)
+                .single['excerpt']
+            as String;
+    expect(excerpt, contains('Şükrü vekili'));
+    expect(foldSearchText('Şükrü'), 'sukru');
+  });
+
+  test('with nothing searched each document shows its opening', () {
+    final db = IndexDatabase(':memory:');
+    addTearDown(db.close);
+    final source = db.addSource('/archive', true, true);
+    final id = db.registerFile(
+      sourceId: source,
+      token: 1,
+      path: '/archive/uzun.txt',
+      size: 100,
+      modified: 100,
+      changed: 10,
+      changedContent: true,
+    );
+    db.setContent(
+      id,
+      'İhtiyati  tedbir\nkararı ${'ve gerekçesi ' * 60}',
+      'ready',
+      null,
+    );
+    final excerpt =
+        (db.search(const SearchQuery().toMap())['hits'] as List)
+                .single['excerpt']
+            as String;
+    expect(excerpt, startsWith('İhtiyati tedbir kararı ve gerekçesi'));
+    expect(excerpt, endsWith(' …'));
+    // 300 characters, the double space made one, and the mark.
+    expect(excerpt.length, 301);
+  });
+
   test('persistent index updates and removes changed files without touching sources', () async {
     final dir = await Directory.systemTemp.createTemp('evrak-index-');
     IndexService? service;

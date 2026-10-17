@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/editor/snippets.dart';
+import 'editor_image_embed.dart';
 import 'notice.dart';
 import 'folio_select.dart';
 
@@ -463,10 +464,14 @@ class _SnippetEditorState extends State<SnippetEditor> {
                   child: QuillEditor.basic(
                     controller: _body,
                     focusNode: _focus,
-                    config: const QuillEditorConfig(
+                    config: QuillEditorConfig(
                       placeholder:
                           'Kalıbın metni. Doldurulacak yerleri [MÜVEKKİL] gibi '
                           'köşeli parantez ve büyük harfle yazın.',
+                      // A snippet an earlier Folio kept with a picture or a
+                      // table in it opens, rather than breaking the editor.
+                      embedBuilders: [EditorImageEmbed()],
+                      unknownEmbedBuilder: _LeftOutEmbed(),
                     ),
                   ),
                 ),
@@ -506,4 +511,24 @@ class _SnippetEditorState extends State<SnippetEditor> {
       ],
     );
   }
+}
+
+/// What a snippet does not carry, shown where it was: a table, kept by an
+/// earlier Folio, that goes in no document from here.
+class _LeftOutEmbed extends EmbedBuilder {
+  @override
+  String get key => 'kalipta-yok';
+
+  @override
+  bool get expanded => false;
+
+  @override
+  Widget build(BuildContext context, EmbedContext embedContext) =>
+      const Padding(
+        padding: EdgeInsets.symmetric(vertical: 4),
+        child: Text(
+          '〔Tablo — kalıpla eklenmez〕',
+          style: TextStyle(fontStyle: FontStyle.italic, color: Colors.black54),
+        ),
+      );
 }

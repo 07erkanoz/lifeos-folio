@@ -25,6 +25,8 @@ import 'package:evrak_convert/ui/widgets/document_ruler.dart';
 import 'package:evrak_convert/ui/widgets/document_preview_widget.dart';
 import 'package:evrak_convert/ui/widgets/drop_zone.dart';
 import 'package:evrak_convert/services/desktop/desktop_companion.dart';
+import 'package:evrak_convert/services/editor/document_lock.dart';
+import 'package:evrak_convert/services/platform/editor_window.dart';
 
 // Navigation tests exercise the real source document but not native PDF textures.
 class _NoPdfRenderer extends Fake implements PdfrxEntryFunctions {
@@ -79,6 +81,97 @@ void main() {
     Pdfrx.cacheDirectoryPath = Directory.systemTemp.path;
     PdfrxEntryFunctions.instance = _NoPdfRenderer();
   });
+  testWidgets(
+    'an editor kept behind the preview reads the file again when it changed '
+    'on disk, and lets go of it for a new window',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final dir = (await tester.runAsync(
+        () => Directory.systemTemp.createTemp('folio-kept-editor-'),
+      ))!;
+      DocumentHistory.instance = DocumentHistory(
+        directory: Directory('${dir.path}/history'),
+      );
+      final file = File('${dir.path}/belge.udf');
+      Future<void> write(String text, DateTime at) => tester.runAsync(() async {
+        await file.writeAsBytes(
+          UdfWriter.writeBytes(DocModel(blocks: [DocBlock(plainText: text)])),
+        );
+        await file.setLastModified(at);
+      });
+      await write('Özgün belge', DateTime(2026, 10, 1, 9));
+      final library = LibraryController(
+        databasePath: '${dir.path}/index.sqlite',
+        watchFolders: false,
+      );
+      final lockFolder = DocumentLock.folder;
+      DocumentLock.folder = () async => Directory('${dir.path}/acik');
+      addTearDown(() => DocumentLock.folder = lockFolder);
+      final opened = <String?>[];
+      bool? heldWhenOpened;
+      final realOpen = EditorWindow.open;
+      EditorWindow.open = ([path]) async {
+        opened.add(path);
+        heldWhenOpened = DocumentLock.holdsDocument(path!);
+      };
+      addTearDown(() => EditorWindow.open = realOpen);
+      await tester.pumpWidget(
+        EvrakConvertApp(initialPaths: [file.path], library: library),
+      );
+      await ready(tester, () => find.text('Düzenle').evaluate().isNotEmpty);
+      QuillController editor() =>
+          tester.widget<QuillEditor>(find.byType(QuillEditor)).controller;
+
+      await click(tester, 'Düzenle');
+      await ready(
+        tester,
+        () =>
+            find.byType(QuillEditor).evaluate().isNotEmpty &&
+            editor().document.toPlainText().startsWith('Özgün'),
+      );
+      final first = editor();
+      await click(tester, 'Önizlemeye Dön');
+      // Kept behind the preview, holding its claim on the document.
+      expect(find.byType(EditorWidget, skipOffstage: false), findsOneWidget);
+      await ready(tester, () => DocumentLock.holdsDocument(file.path));
+
+      // Changed by another program meanwhile: back in the editor, the new
+      // text, not the old one to be saved over it.
+      await write('Dışarıda değişti', DateTime(2026, 10, 1, 10));
+      await click(tester, 'Düzenle');
+      await ready(
+        tester,
+        () =>
+            find.byType(QuillEditor).evaluate().isNotEmpty &&
+            editor().document.toPlainText().startsWith('Dışarıda'),
+      );
+      expect(identical(editor(), first), isFalse);
+
+      // Unchanged on disk, the editor kept is the same one.
+      final second = editor();
+      await click(tester, 'Önizlemeye Dön');
+      await click(tester, 'Düzenle');
+      expect(identical(editor(), second), isTrue);
+
+      // Opened in a window of its own from the preview: this window has let
+      // go of it by then, so that one can write in it.
+      await click(tester, 'Önizlemeye Dön');
+      await tester.tap(find.byKey(const ValueKey('preview-new-window')));
+      await ready(tester, () => opened.isNotEmpty);
+      expect(opened.single, file.path);
+      expect(heldWhenOpened, isFalse);
+      expect(find.byType(EditorWidget, skipOffstage: false), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      library.dispose();
+      await removeTemporaryDirectory(tester, dir);
+    },
+  );
+
   testWidgets(
     'preview, external document and back navigation honor save/discard/cancel',
     (tester) async {

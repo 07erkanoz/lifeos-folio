@@ -250,7 +250,10 @@ class DocDeltaMap {
       );
     }
 
-    String? bekleyenGorsel;
+    // The pictures and tables of the line being read, in their order. One
+    // each, the second of two that a deleted line break brought onto one
+    // line wrote over the first, and the first was lost on saving.
+    final bekleyenGomulu = <DocBlock Function(Map<String, dynamic>? a)>[];
 
     // A list made in the editor names no list of its own. UYAP numbers an
     // item among its list's (ListId), so each run of such items is given a
@@ -263,7 +266,6 @@ class DocDeltaMap {
       if (id is int && id > nextListId) nextListId = id;
     }
     var madeListId = 0;
-    DocBlock? bekleyenKorunan;
 
     void paragrafEkle(Map<String, dynamic>? a) {
       final hiza = _alignOf(a?['align']);
@@ -340,22 +342,16 @@ class DocDeltaMap {
     }
 
     void blokKapat(Map<String, dynamic>? a) {
-      final korunan = bekleyenKorunan;
-      bekleyenKorunan = null;
-      if (korunan != null) {
+      if (bekleyenGomulu.isNotEmpty) {
+        final gomulu = List.of(bekleyenGomulu);
+        bekleyenGomulu.clear();
+        // Text typed on the same line as a picture or a table becomes the
+        // paragraph before it: UDF and DOCX both give each of them a
+        // paragraph of its own.
         if (buffer.isNotEmpty) paragrafEkle(a);
-        blocks.add(korunan);
-        buffer = StringBuffer();
-        spans = <DocSpan>[];
-        return;
-      }
-      final gorsel = bekleyenGorsel;
-      bekleyenGorsel = null;
-      if (gorsel != null) {
-        // Text typed on the same line as a picture becomes the paragraph
-        // before it: UDF and DOCX both give an image a paragraph of its own.
-        if (buffer.isNotEmpty) paragrafEkle(a);
-        blocks.add(_imageBlock(gorsel, a));
+        for (final block in gomulu) {
+          blocks.add(block(a));
+        }
         buffer = StringBuffer();
         spans = <DocSpan>[];
         return;
@@ -378,10 +374,11 @@ class DocDeltaMap {
       // with the newline that follows it, which carries the size and alignment.
       if (veri is Map) {
         final data = veri[kImageEmbed];
-        if (data is String) bekleyenGorsel = data;
+        if (data is String) bekleyenGomulu.add((a) => _imageBlock(data, a));
         final table = veri[kTableEmbed];
         if (table is int && table >= 0 && table < korunanlar.length) {
-          bekleyenKorunan = korunanlar[table];
+          final block = korunanlar[table];
+          bekleyenGomulu.add((_) => block);
         }
         continue;
       }
@@ -398,11 +395,7 @@ class DocDeltaMap {
         kalan = kalan.substring(ni + 1);
       }
     }
-    if (buffer.isNotEmpty ||
-        bekleyenGorsel != null ||
-        bekleyenKorunan != null) {
-      blokKapat(null);
-    }
+    if (buffer.isNotEmpty || bekleyenGomulu.isNotEmpty) blokKapat(null);
 
     if (blocks.isEmpty) blocks.add(DocBlock(plainText: ''));
     return DocModel(

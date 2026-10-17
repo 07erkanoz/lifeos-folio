@@ -19,6 +19,47 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'editor_shortcuts_test.dart' show waitFor;
 
 void main() {
+  test('one paragraph is one paragraph however it was read', () {
+    const stops = [TabStop(72, TabAlign.right)];
+    expect(
+      const RulerParagraph(firstRow: 10, stops: stops),
+      RulerParagraph(firstRow: 10, stops: [...stops]),
+    );
+    expect(
+      const RulerParagraph(firstRow: 10),
+      isNot(const RulerParagraph(firstRow: 12)),
+    );
+  });
+
+  testWidgets('what is read at every change is built again only when it '
+      'reads otherwise', (tester) async {
+    final changes = ValueNotifier(0);
+    var paragraph = const RulerParagraph(firstRow: 10);
+    var built = 0;
+    await tester.pumpWidget(
+      DistinctBuilder<RulerParagraph>(
+        listenable: changes,
+        value: () => paragraph,
+        builder: (context, now) {
+          built++;
+          return Text('${now.firstRow}', textDirection: TextDirection.ltr);
+        },
+      ),
+    );
+    expect(built, 1);
+    // Keys typed in the same paragraph.
+    for (var i = 0; i < 5; i++) {
+      changes.value++;
+      await tester.pump();
+    }
+    expect(built, 1);
+    paragraph = const RulerParagraph(firstRow: 20);
+    changes.value++;
+    await tester.pump();
+    expect(built, 2);
+    expect(find.text('20.0'), findsOneWidget);
+  });
+
   test('the triangles as the model holds them: a first row further in is '
       'a first line indent, one further out a hanging indent', () {
     expect(const RulerParagraph(firstRow: 50, otherRows: 20).indents, (

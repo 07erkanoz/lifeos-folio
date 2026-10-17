@@ -8,6 +8,7 @@ import '../library/file_library.dart';
 import 'index_database.dart';
 import 'search_models.dart';
 import 'text_extractor.dart';
+import '../ocr/ocr_service.dart';
 import '../pdf/pdf_pages.dart';
 
 class IndexService {
@@ -599,7 +600,17 @@ class _ExtractionJob {
   Completer<Map<String, Object?>>? _done;
   bool _cancelled = false;
 
+  /// The Tesseracts the isolate runs now: killed with it, else a long scan
+  /// went on reading for minutes after the document was given up.
+  final _processes = <int>{};
+
   void _stop() {
+    for (final pid in _processes) {
+      try {
+        Process.killPid(pid, ProcessSignal.sigkill);
+      } catch (_) {}
+    }
+    _processes.clear();
     _isolate?.kill(priority: Isolate.immediate);
     _isolate = null;
     _commands = null;
@@ -631,6 +642,12 @@ class _ExtractionJob {
     port.listen((dynamic message) {
       if (message is SendPort) {
         if (!ready.isCompleted) ready.complete(message);
+      } else if (message is _ToolProcess) {
+        if (message.running) {
+          _processes.add(message.pid);
+        } else {
+          _processes.remove(message.pid);
+        }
       } else if (message is Map) {
         if (_done?.isCompleted == false) {
           _done!.complete(Map<String, Object?>.from(message));
@@ -699,9 +716,18 @@ class _ExtractionJob {
   }
 }
 
+/// A Tesseract the extraction isolate started or saw end.
+class _ToolProcess {
+  const _ToolProcess(this.pid, {required this.running});
+  final int pid;
+  final bool running;
+}
+
 void _extractEntry(({SendPort output, SendPort? pdfium}) args) {
   final output = args.output;
   PdfPages.host = args.pdfium;
+  OcrService.onProcess = (pid, {required running}) =>
+      output.send(_ToolProcess(pid, running: running));
   final input = ReceivePort();
   output.send(input.sendPort);
   input.listen((dynamic message) async {

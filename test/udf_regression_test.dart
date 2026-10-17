@@ -56,6 +56,32 @@ String xml(
     '<template><content><![CDATA[$text]]></content><elements resolver="$resolver">$elements</elements><styles>$styles</styles></template>';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('a paragraph keeps the size and font of its closing line break '
+      'through a save: a blank 14 pt line stays 14 pt', () {
+    final model = DocModel(
+      blocks: [
+        DocBlock(plainText: 'Gövde'),
+        DocBlock(plainText: '', endFontSize: 14, endFontFamily: 'Arial'),
+        DocBlock(
+          plainText: 'Metin',
+          spans: [DocSpan(startOffset: 0, length: 5, fontSize: 16)],
+          endFontSize: 16,
+        ),
+      ],
+    );
+    final reopened = UdfReader.readBytes(UdfWriter.writeBytes(model))!;
+    final blank = reopened.blocks[1];
+    expect(blank.plainText, '');
+    expect(blank.endFontSize, 14);
+    expect(blank.endFontFamily, 'Arial');
+    expect(reopened.blocks[2].endFontSize, 16);
+    // Saved again, it is written the same way.
+    final twice = UdfReader.readBytes(UdfWriter.writeBytes(reopened))!;
+    expect(twice.blocks[1].endFontSize, 14);
+    // None given, none written: read as the style's size, as before.
+    expect(reopened.blocks[0].endFontSize, 12);
+  });
+
   test('a paragraph takes the layout its style gives it, as UYAP does', () {
     // hvl-default justifies; the first paragraph says nothing, the second
     // sets its own, the third has a style of its own that centres.
