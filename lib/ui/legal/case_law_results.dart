@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/legal/case_law_search.dart';
+import '../../services/legal/decision_anatomy.dart' show OutcomeKind;
 import '../widgets/editor_citations.dart' show citationInk;
 import '../widgets/notice.dart';
 
@@ -186,6 +187,10 @@ class _Row extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (hit.outcome case final outcome?) ...[
+                    const SizedBox(width: 6),
+                    _OutcomeTag(outcome),
+                  ],
                   const SizedBox(width: 4),
                   IconButton(
                     tooltip: 'Künyeyi kopyala',
@@ -235,6 +240,44 @@ class _Row extends StatelessWidget {
                 ),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What a decision decided, as its operative part says: "Bozma", "Onama",
+/// "Esastan ret".
+///
+/// Read from the operative part alone. A word searched for anywhere in the
+/// text called a reversal a dismissal, because the reversal quoted the
+/// court below dismissing the claim; said here, so the reader knows where
+/// the word came from and can check it.
+class _OutcomeTag extends StatelessWidget {
+  const _OutcomeTag(this.outcome);
+
+  final OutcomeKind outcome;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message:
+          'Kararın hüküm fıkrasından okundu. Kararı açıp “Karar anatomisi” '
+          'bölümünden fıkranın kendisine gidebilirsiniz.',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(4),
+          color: theme.colorScheme.secondaryContainer,
+        ),
+        child: Text(
+          outcome.label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSecondaryContainer,
           ),
         ),
       ),

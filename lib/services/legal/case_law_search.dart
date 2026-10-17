@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'constitutional_court.dart';
+import 'decision_anatomy.dart' show DecisionAnatomy, OutcomeKind;
 import 'relevance.dart';
 import 'rich_text.dart' show decisionReference;
 
@@ -261,6 +262,7 @@ class CaseLawHit {
     this.snippet = '',
     this.alike = 0,
     this.reference = '',
+    this.outcome,
   });
 
   final String documentId;
@@ -284,6 +286,10 @@ class CaseLawHit {
   /// [citationReference].
   final String reference;
 
+  /// What the decision decided, read from its operative part once its text
+  /// has been fetched; null before then, or where it could not be read.
+  final OutcomeKind? outcome;
+
   /// The reference a lawyer copies into a filing: "Yargıtay 15. Hukuk
   /// Dairesi, 2016/1531 E., 2017/3344 K., 21.09.2017 T.", or the
   /// Constitutional Court's own form.
@@ -299,19 +305,24 @@ class CaseLawHit {
       ? [court, 'B. No: $esas', if (date.isNotEmpty) date].join(' ')
       : [court, 'E.$esas', 'K.$karar', if (date.isNotEmpty) date].join(' ');
 
-  CaseLawHit ranked(double score, String snippet, {int alike = 0}) =>
-      CaseLawHit(
-        documentId: documentId,
-        court: court,
-        kind: kind,
-        esas: esas,
-        karar: karar,
-        date: date,
-        score: score,
-        snippet: snippet,
-        alike: alike,
-        reference: reference,
-      );
+  CaseLawHit ranked(
+    double score,
+    String snippet, {
+    int alike = 0,
+    OutcomeKind? outcome,
+  }) => CaseLawHit(
+    documentId: documentId,
+    court: court,
+    kind: kind,
+    esas: esas,
+    karar: karar,
+    date: date,
+    score: score,
+    snippet: snippet,
+    alike: alike,
+    reference: reference,
+    outcome: outcome ?? this.outcome,
+  );
 
   /// A decision of the Constitutional Court in a list of results: its case
   /// numbers, or its application number, and what it was about.
@@ -498,7 +509,15 @@ class CaseLawRanking {
     for (final hit in hits) {
       final text = textById[hit.documentId] ?? '';
       final found = Relevances.score(query, text);
-      scored.add(hit.ranked(found.score, found.snippet));
+      scored.add(
+        hit.ranked(
+          found.score,
+          found.snippet,
+          outcome: text.isEmpty
+              ? null
+              : DecisionAnatomy.outcomeOf(text)?.primary,
+        ),
+      );
       matched.add(found.matched);
     }
 

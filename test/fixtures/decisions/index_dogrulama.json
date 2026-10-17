@@ -1,0 +1,172 @@
+[
+  {
+    "id": "dogrulama_yargitay_yeni_01",
+    "documentId": "1221505100",
+    "court": "9. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2026/368",
+    "karar": "2026/2807",
+    "date": "30.03.2026",
+    "query": "işe iade"
+  },
+  {
+    "id": "dogrulama_yargitay_yeni_02",
+    "documentId": "1172915200",
+    "court": "9. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/4197",
+    "karar": "2025/5664",
+    "date": "02.07.2025",
+    "query": "işe iade"
+  },
+  {
+    "id": "dogrulama_yargitay_yeni_03",
+    "documentId": "1177995700",
+    "court": "1. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/5050",
+    "karar": "2025/4528",
+    "date": "16.10.2025",
+    "query": "ecrimisil"
+  },
+  {
+    "id": "dogrulama_yargitay_yeni_04",
+    "documentId": "1179716200",
+    "court": "3. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/3413",
+    "karar": "2025/3541",
+    "date": "25.06.2025",
+    "query": "tahliye"
+  },
+  {
+    "id": "dogrulama_yargitay_eski_01",
+    "documentId": "216037200",
+    "court": "1. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2016/973",
+    "karar": "2016/1011",
+    "date": "02.02.2016",
+    "query": "muris muvazaası"
+  },
+  {
+    "id": "dogrulama_yargitay_eski_02",
+    "documentId": "223213200",
+    "court": "1. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2014/10778",
+    "karar": "2016/7261",
+    "date": "14.06.2016",
+    "query": "muris muvazaası"
+  },
+  {
+    "id": "dogrulama_yargitay_eski_03",
+    "documentId": "99914200",
+    "court": "9. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2013/6829",
+    "karar": "2014/4579",
+    "date": "17.02.2014",
+    "query": "fazla mesai"
+  },
+  {
+    "id": "dogrulama_hgk_01",
+    "documentId": "792555200",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2020/268",
+    "karar": "2022/753",
+    "date": "26.05.2022",
+    "query": "manevi tazminat"
+  },
+  {
+    "id": "dogrulama_hgk_02",
+    "documentId": "638578000",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2017/34",
+    "karar": "2020/870",
+    "date": "11.11.2020",
+    "query": "manevi tazminat"
+  },
+  {
+    "id": "dogrulama_bam_01",
+    "documentId": "1149979300",
+    "court": "Bursa Bölge Adliye Mahkemesi 1. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2024/1353",
+    "karar": "2024/1191",
+    "date": "11.09.2024",
+    "query": "ecrimisil"
+  },
+  {
+    "id": "dogrulama_bam_02",
+    "documentId": "1188757600",
+    "court": "İstanbul Bölge Adliye Mahkemesi 45. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2022/218",
+    "karar": "2026/58",
+    "date": "14.01.2026",
+    "query": "işçilik alacağı"
+  },
+  {
+    "id": "dogrulama_bam_03",
+    "documentId": "1224477300",
+    "court": "Bursa Bölge Adliye Mahkemesi 17. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2025/2315",
+    "karar": "2025/281",
+    "date": "29.12.2025",
+    "query": "vekalet ücreti"
+  },
+  {
+    "id": "dogrulama_yerel_01",
+    "documentId": "533160300",
+    "court": "İstanbul 1. Asliye Ticaret Mahkemesi",
+    "kind": "YERELHUKUK",
+    "esas": "2019/528",
+    "karar": "2019/658",
+    "date": "06.09.2019",
+    "query": "menfi tespit"
+  },
+  {
+    "id": "dogrulama_yerel_02",
+    "documentId": "1228593900",
+    "court": "İstanbul 1. Asliye Ticaret Mahkemesi",
+    "kind": "YERELHUKUK",
+    "esas": "2026/1200",
+    "karar": "2026/838",
+    "date": "28.09.2026",
+    "query": "itirazın iptali"
+  },
+  {
+    "id": "dogrulama_danistay_01",
+    "documentId": "1041650700",
+    "court": "13. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2022/4013",
+    "karar": "2023/5243",
+    "date": "05.12.2023",
+    "query": "yıkım kararı"
+  },
+  {
+    "id": "dogrulama_danistay_02",
+    "documentId": "926734000",
+    "court": "8. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2021/7441",
+    "karar": "2022/8442",
+    "date": "29.12.2022",
+    "query": "öğrenci disiplin"
+  },
+  {
+    "id": "dogrulama_danistay_03",
+    "documentId": "1094562900",
+    "court": "13. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2023/886",
+    "karar": "2023/5005",
+    "date": "23.11.2023",
+    "query": "ihale"
+  }
+]

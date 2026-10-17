@@ -20,6 +20,14 @@ bir bankada yayımlanıp yayımlanmadığını, `kaynak` nereden isteneceğini
 numarasının yazılışıdır ("15.", "15", "On Beşinci"). Kalıplar büyük harfli
 yazımı da bulsun diye motor İ/ı harflerini kendisi genişletir.
 
+`karar_kaliplari.json` — birçok kararda kelimesi kelimesine geçen
+cümlelerin işaretleri (`DecisionBoilerplate.keyOf`: küçük harf, rakamlar
+ve anonimleştirme "..."sı çıkarılmış cümlenin FNV-1a özeti). Karar
+anatomisi "öne çıkan bölüm" seçerken bu cümleleri eler. Bedesten'den bu iş
+için indirilen kararlarda en az üç kararda geçen cümleler sayılır; ölçümde
+kullanılan kararlar (`test/fixtures/decisions`) sayıma girmez.
+`tool/olcum/karar_kaliplari_test.dart` yeniden üretir.
+
 `mevzuat-chain.pem` — mevzuat.gov.tr'nin ara sertifikası.
 
 Sunucu TLS el sıkışmasında ara sertifikayı göndermiyor. Tarayıcılar bunu

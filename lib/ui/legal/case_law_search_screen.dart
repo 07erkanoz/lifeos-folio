@@ -131,7 +131,7 @@ class _CaseLawSearchScreenState extends State<CaseLawSearchScreen> {
         );
       return;
     }
-    await showFoundDecision(context, found);
+    await showFoundDecision(context, found, query: _query.words);
   }
 
   Future<void> _pickRange() async {

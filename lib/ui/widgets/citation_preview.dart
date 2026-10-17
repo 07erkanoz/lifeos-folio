@@ -11,12 +11,14 @@ import '../../services/docx/docx_bridge.dart';
 import '../../services/legal/case_law.dart';
 import '../../services/legal/citation.dart';
 import '../../services/legal/decision.dart';
+import '../../services/legal/decision_anatomy.dart';
 import '../../services/legal/decision_insert.dart';
 import '../../services/legal/legislation.dart';
 import '../../services/legal/rich_text.dart';
 import '../../services/pdf/pdf_service.dart';
 import '../../services/platform/rich_clipboard.dart';
 import '../../services/udf/udf_writer.dart';
+import '../legal/decision_anatomy_view.dart';
 import 'notice.dart';
 
 /// What a preview shows, whether of an article or of a decision.
@@ -298,10 +300,22 @@ String _notFound(DecisionCitation citation, LookupOutcome outcome) {
 /// The text of an official source, laid out to be read: the typeface of a
 /// filing, a paragraph at a time, bold where the source set it.
 class RichBody extends StatelessWidget {
-  const RichBody({super.key, required this.paragraphs, this.size = 14.5});
+  const RichBody({
+    super.key,
+    required this.paragraphs,
+    this.size = 14.5,
+    this.keys,
+    this.marked,
+  });
 
   final List<RichParagraph> paragraphs;
   final double size;
+
+  /// One for each paragraph, so that a paragraph can be scrolled to.
+  final List<GlobalKey>? keys;
+
+  /// The paragraph the reader was taken to, shown marked.
+  final int? marked;
 
   static TextAlign _align(DocAlignment alignment) => switch (alignment) {
     DocAlignment.center => TextAlign.center,
@@ -318,30 +332,49 @@ class RichBody extends StatelessWidget {
       height: 1.55,
       color: Theme.of(context).colorScheme.onSurface,
     );
+    final scheme = Theme.of(context).colorScheme;
+    Widget placed(int i, Widget child) {
+      final key = keys != null && i < keys!.length ? keys![i] : null;
+      final shown = i == marked
+          ? DecoratedBox(
+              key: const ValueKey('decision-paragraph-marked'),
+              decoration: BoxDecoration(
+                color: scheme.tertiaryContainer.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: child,
+            )
+          : child;
+      return key == null ? shown : KeyedSubtree(key: key, child: shown);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final paragraph in paragraphs)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 7),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  for (final run in paragraph.runs)
-                    TextSpan(
-                      text: run.text,
-                      style: base.copyWith(
-                        fontWeight: run.bold ? FontWeight.w700 : null,
-                        fontStyle: run.italic ? FontStyle.italic : null,
-                        decoration: run.underline
-                            ? TextDecoration.underline
-                            : null,
+        for (final (i, paragraph) in paragraphs.indexed)
+          placed(
+            i,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    for (final run in paragraph.runs)
+                      TextSpan(
+                        text: run.text,
+                        style: base.copyWith(
+                          fontWeight: run.bold ? FontWeight.w700 : null,
+                          fontStyle: run.italic ? FontStyle.italic : null,
+                          decoration: run.underline
+                              ? TextDecoration.underline
+                              : null,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
+                style: base,
+                textAlign: _align(paragraph.alignment),
               ),
-              style: base,
-              textAlign: _align(paragraph.alignment),
             ),
           ),
       ],
@@ -416,10 +449,24 @@ class ReferenceBlock extends StatelessWidget {
 /// Everything under the heading of a preview: the reference, a warning,
 /// then the text or why there is none. Selectable as one.
 class PreviewContent extends StatelessWidget {
-  const PreviewContent({super.key, required this.data, this.size = 14.5});
+  const PreviewContent({
+    super.key,
+    required this.data,
+    this.size = 14.5,
+    this.above,
+    this.paragraphKeys,
+    this.marked,
+  });
 
   final PreviewData data;
   final double size;
+
+  /// Set between the reference and the text: a decision's anatomy.
+  final Widget? above;
+
+  /// See [RichBody.keys] and [RichBody.marked].
+  final List<GlobalKey>? paragraphKeys;
+  final int? marked;
 
   @override
   Widget build(BuildContext context) {
@@ -464,6 +511,7 @@ class PreviewContent extends StatelessWidget {
               ),
             ),
           ],
+          if (above != null) ...[const SizedBox(height: 12), above!],
           const SizedBox(height: 14),
           if (data.loading != null && !data.hasText)
             Column(
@@ -490,7 +538,12 @@ class PreviewContent extends StatelessWidget {
               ),
             )
           else
-            RichBody(paragraphs: data.paragraphs, size: size),
+            RichBody(
+              paragraphs: data.paragraphs,
+              size: size,
+              keys: paragraphKeys,
+              marked: marked,
+            ),
         ],
       ),
     );
@@ -870,10 +923,30 @@ class _CitationPreviewCardState extends State<CitationPreviewCard> {
 /// press on a citation opens this rather than a card over the document,
 /// which would have no room.
 class CitationPreviewScreen extends StatefulWidget {
-  const CitationPreviewScreen({super.key, required this.data, this.load});
+  const CitationPreviewScreen({
+    super.key,
+    required this.data,
+    this.load,
+    this.query = '',
+    this.readAnatomy = _readAnatomy,
+  });
 
   final PreviewData data;
   final Future<PreviewData> Function()? load;
+
+  /// The words a search asked for, which decide what of the decision's
+  /// reasoning is pointed at.
+  final String query;
+
+  /// How a decision's anatomy is read. A test hands in one that does not
+  /// load the app's tables.
+  final Future<DecisionAnatomy> Function(Decision decision, String query)
+  readAnatomy;
+
+  static Future<DecisionAnatomy> _readAnatomy(
+    Decision decision,
+    String query,
+  ) => DecisionAnatomist.read(decision.text, query: query);
 
   /// Whether a preview should take the whole screen rather than a card:
   /// the width the rest of the app treats as a phone's.
@@ -888,10 +961,78 @@ class _CitationPreviewScreenState extends State<CitationPreviewScreen> {
   late PreviewData _data = widget.data;
   int _asked = 0;
 
+  /// The anatomy of the decision shown, read once its text is here.
+  Future<DecisionAnatomy>? _anatomy;
+  Decision? _anatomyOf;
+
+  /// A key for each paragraph, and the one the reader was taken to.
+  var _keys = <GlobalKey>[];
+  int? _marked;
+
   @override
   void initState() {
     super.initState();
     if (widget.load != null) unawaited(_ask());
+  }
+
+  /// The anatomy of what is shown now, read again only when that changes.
+  Future<DecisionAnatomy>? _anatomyFor(PreviewData data) {
+    final decision = data.decision;
+    if (decision == null || !data.hasText) return null;
+    if (!identical(decision, _anatomyOf)) {
+      _anatomyOf = decision;
+      _anatomy = widget.readAnatomy(decision, widget.query);
+      _marked = null;
+    }
+    return _anatomy;
+  }
+
+  /// The paragraph [quote] stands in.
+  ///
+  /// The anatomy is read from the decision's plain text and the page shows
+  /// the bank's own paragraphs, so the quotation is found again by its
+  /// words: the paragraph that holds its opening. Failing that, the same
+  /// share of the way down.
+  static int _paragraphOf(
+    List<RichParagraph> paragraphs,
+    Decision decision,
+    Quote quote,
+  ) {
+    String flat(String value) => value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final words = flat(quote.text);
+    for (final length in [60, 25]) {
+      final needle = words.length > length ? words.substring(0, length) : words;
+      if (needle.isEmpty) break;
+      for (var i = 0; i < paragraphs.length; i++) {
+        final text = flat(paragraphs[i].runs.map((r) => r.text).join());
+        if (text.contains(needle)) return i;
+      }
+    }
+    if (paragraphs.isEmpty) return 0;
+    final share = decision.text.isEmpty
+        ? 0.0
+        : quote.start / decision.text.length;
+    return (share * (paragraphs.length - 1)).round();
+  }
+
+  void _go(Quote quote) {
+    final data = _data;
+    final decision = data.decision;
+    if (decision == null) return;
+    final index = _paragraphOf(data.paragraphs, decision, quote);
+    setState(() => _marked = index);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final place = index < _keys.length ? _keys[index].currentContext : null;
+      if (place == null || !place.mounted) return;
+      unawaited(
+        Scrollable.ensureVisible(
+          place,
+          alignment: 0.15,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        ),
+      );
+    });
   }
 
   Future<void> _ask() async {
@@ -913,6 +1054,10 @@ class _CitationPreviewScreenState extends State<CitationPreviewScreen> {
     final theme = Theme.of(context);
     final data = _data;
     final phone = CitationPreviewScreen.wanted(context);
+    final anatomy = _anatomyFor(data);
+    if (anatomy != null && _keys.length != data.paragraphs.length) {
+      _keys = [for (final _ in data.paragraphs) GlobalKey()];
+    }
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -943,7 +1088,27 @@ class _CitationPreviewScreenState extends State<CitationPreviewScreen> {
                     padding: phone
                         ? const EdgeInsets.fromLTRB(16, 14, 16, 28)
                         : const EdgeInsets.fromLTRB(28, 22, 28, 40),
-                    child: PreviewContent(data: data, size: phone ? 15 : 15.5),
+                    child: PreviewContent(
+                      data: data,
+                      size: phone ? 15 : 15.5,
+                      paragraphKeys: anatomy == null ? null : _keys,
+                      marked: _marked,
+                      above: anatomy == null
+                          ? null
+                          : FutureBuilder<DecisionAnatomy>(
+                              future: anatomy,
+                              builder: (context, read) {
+                                final found = read.data;
+                                if (found == null || found.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+                                return DecisionAnatomyView(
+                                  anatomy: found,
+                                  onGo: _go,
+                                );
+                              },
+                            ),
+                    ),
                   ),
                 ),
               ),

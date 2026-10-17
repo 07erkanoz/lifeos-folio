@@ -72,6 +72,26 @@ class TurkishStem {
     if (stem.length >= 6 && _vowels.contains(stem[stem.length - 1])) {
       stem = stem.substring(0, stem.length - 1);
     }
+    // A shorter word whose last consonant softened before the vowel, as
+    // "ağacı" did from "ağaç": the vowel goes so the consonant can be put
+    // back. Only between two vowels, so "madde" keeps its double d.
+    final n = stem.length;
+    if (n >= 5 &&
+        _vowels.contains(stem[n - 1]) &&
+        _softened.containsKey(stem[n - 2]) &&
+        _vowels.contains(stem[n - 3])) {
+      stem = stem.substring(0, n - 1);
+    }
+    // And then put back: "mahsubu" and "mahsup", "talebi" and "talep" are
+    // one word, and a search for the one did not find the other.
+    final last = stem.isEmpty ? '' : stem[stem.length - 1];
+    final hard = _softened[last];
+    if (stem.length >= 4 && hard != null) {
+      stem = '${stem.substring(0, stem.length - 1)}$hard';
+    }
     return stem;
   }
+
+  /// A consonant as it softens before a vowel, and what it was.
+  static const _softened = {'b': 'p', 'c': 'ç', 'd': 't', 'ğ': 'k'};
 }

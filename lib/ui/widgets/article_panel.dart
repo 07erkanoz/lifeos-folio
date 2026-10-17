@@ -161,13 +161,19 @@ class DecisionCard extends StatelessWidget {
   );
 }
 
-/// A decision found by searching, read with nothing else on screen.
-Future<void> showFoundDecision(BuildContext context, Decision decision) =>
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => CitationPreviewScreen(data: decisionFound(decision)),
-      ),
-    );
+/// A decision found by searching, read with nothing else on screen, its
+/// anatomy above it. [query] is what was searched for, which decides what
+/// of its reasoning is pointed at.
+Future<void> showFoundDecision(
+  BuildContext context,
+  Decision decision, {
+  String query = '',
+}) => Navigator.of(context).push(
+  MaterialPageRoute<void>(
+    builder: (_) =>
+        CitationPreviewScreen(data: decisionFound(decision), query: query),
+  ),
+);
 
 /// What a term of art means, shown over the document.
 class TermPanel {

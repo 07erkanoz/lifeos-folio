@@ -1,0 +1,2127 @@
+{
+  "yargitay_yeni_01": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Trabzon Bölge Adliye Mahkemesi 5. Hukuk Dairesi"
+      },
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Trabzon 2. İş Mahkemesi"
+      }
+    ],
+    "konu": [
+      "kıdem tazminatı"
+    ],
+    "konu_cumlesi": "Uyuşmazlık, kıdem tazminatı, ihbar tazminatı, yıll",
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "kaldirma",
+      "bozma"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. TEMYİZ",
+      "VI. KARAR"
+    ],
+    "mevzuat": [
+      "1475:14"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Mülga 1475 sayılı İş Kanunu'nun 14/2 hükmü işçinin aynı işve",
+      "Ancak aynı işverene ait bir ya da değişik işyerlerinde çalış",
+      "Fasılalı çalışmada bir döneme ilişkin kıdem tazminatının eks",
+      "Bu sebeple ilk çalışma döneminin tasfiye edildiğinden bahsed"
+    ],
+    "not": "4857 sayılı İş Kanunu madde numarasız geçiyor, yazılmadı."
+  },
+  "yargitay_yeni_02": {
+    "zincir": [],
+    "konu": [
+      "kıdem tazminatı"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "uyusmazlik_giderme",
+    "sonuc_tumu": [
+      "uyusmazlik_giderme"
+    ],
+    "bolumler": [
+      "I. BAŞVURU",
+      "II. BÖLGE ADLİYE MAHKEMESİ HUKUK DAİRELERİ BAŞKANLAR KURULU KARARI",
+      "III. UYUŞMAZLIĞIN GİDERİLMESİ İSTEMİNE KONU KARARLAR",
+      "IV. GEREKÇE",
+      "V. KARAR"
+    ],
+    "mevzuat": [
+      "5235:35",
+      "1475:14",
+      "4857:120"
+    ],
+    "kararlar": [
+      "2025/8|2025/14",
+      "2023/1231|2025/517",
+      "2023/1030|2025/453"
+    ],
+    "one_cikan": [
+      "İşçinin iş sözleşmesi son bulmamasına karşın çeşitli nedenle",
+      "Bu durumda iş sözleşmesi son bulmadığı hâlde çeşitli sebeple",
+      "İşçinin önceki çalışmaları sebebiyle kıdem tazminatı ödenmiş",
+      "1475 sayılı Kanun’un 14/2 hükmü, işçinin aynı işverene bağlı"
+    ],
+    "not": "Uyuşmazlık giderme; başlıkta alt mahkeme yok. Konu cümlesi 'Uyuşmazlık, ... ilişkindir' kalıbında değil ('...arasındaki uyuşmazlık, ... noktasındadır'), bu yüzden null; konu oradan alındı. 2025/8|2025/14 Başkanlar Kurulu kararıdır (temyiz edilen karar değil, dahil edildi)."
+  },
+  "yargitay_yeni_03": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Asliye Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "tapu iptali ve tescil",
+      "yolsuz tescil"
+    ],
+    "konu_cumlesi": "Dava; yolsuz tescil hukuki nedenine dayalı tapu ip",
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. BOZMA VE BOZMADAN SONRAKİ YARGILAMA SÜRECİ",
+      "VI. TEMYİZ",
+      "VII. KARAR"
+    ],
+    "mevzuat": [
+      "6100:114",
+      "6100:353"
+    ],
+    "kararlar": [
+      "1968/100|1968/73",
+      "2024/527|2024/2143"
+    ],
+    "one_cikan": [
+      "Somut olayda; Mahkemece, hükmün gerekçesinde davacının asli ",
+      "Davacının, dava konusu taşınmazın tapu kaydının iptali ile ö",
+      "Diğer yandan, harç kamu düzeni ile ilgili ve temyiz edenin s"
+    ],
+    "not": "Konu cümlesi 'Dava;' (noktalı virgül) ile başlıyor. 2024/527|2024/2143 Dairenin önceki bozma kararı."
+  },
+  "yargitay_yeni_04": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Antalya Bölge Adliye Mahkemesi 1. Hukuk Dairesi"
+      },
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "1. Asliye Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "tapu iptali ve tescil"
+    ],
+    "konu_cumlesi": "Dava, yolsuz tescile dayalı tapu iptali ve tescil ",
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. TEMYİZ",
+      "VI. KARAR"
+    ],
+    "mevzuat": [
+      "4721:1027",
+      "2644:3",
+      "6100:371",
+      "6100:370"
+    ],
+    "kararlar": [
+      "1986/8|1987/31"
+    ],
+    "one_cikan": [],
+    "not": "Değerlendirme yalnız HMK 371 aktarımı ve onama kalıbından ibaret."
+  },
+  "yargitay_yeni_05": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Erzurum Bölge Adliye Mahkemesi 5. Hukuk Dairesi"
+      },
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Artvin 1. Asliye Hukuk (Aile) Mahkemesi"
+      }
+    ],
+    "konu": [
+      "boşanma"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma",
+      "onama"
+    ],
+    "bolumler": [
+      "KARAR"
+    ],
+    "mevzuat": [
+      "6100:370"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Ancak erkeğin boşanma davasında verilen boşanma hükmü kesinl",
+      "Bu dava hakkında konusuz kaldığından karar verilmesine yer o",
+      "Dolayısı ile davalı- karşı davacı kadının davasının kabulü k"
+    ]
+  },
+  "yargitay_yeni_06": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Gaziantep Bölge Adliye Mahkemesi 2. Hukuk Dairesi"
+      },
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Gölbaşı (Adıyaman) 2. Asliye Hukuk (Aile) Mahkemesi"
+      }
+    ],
+    "konu": [
+      "boşanma"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma",
+      "onama"
+    ],
+    "bolumler": [
+      "KARAR"
+    ],
+    "mevzuat": [
+      "4721:175",
+      "6100:119",
+      "6100:31",
+      "6100:370"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Yoksulluk nafakası boşanmanın eşlerle ilgili mali sonuçların",
+      "Yoksulluk nafakasının maddî koşulları; nafaka isteyenin ağır",
+      "Bu nedenle hâkim; taleple bağlı olup, kendiliğinden yoksullu",
+      "Davacı kadının süresinde ve usule uygun şekilde yoksulluk na"
+    ]
+  },
+  "yargitay_yeni_07": {
+    "zincir": [],
+    "konu": [
+      "kira bedelinin tespiti"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "uyusmazlik_giderme",
+    "sonuc_tumu": [
+      "uyusmazlik_giderme"
+    ],
+    "bolumler": [
+      "I. BAŞVURU",
+      "II.BÖLGE ADLİYE MAHKEMESİ HUKUK DAİRELERİ BAŞKANLAR KURULU KARARI",
+      "III. UYUŞMAZLIĞIN GİDERİLMESİ İSTEMİNE KONU KARARLAR",
+      "IV. GEREKÇE",
+      "KARAR"
+    ],
+    "mevzuat": [
+      "6098:345",
+      "6098:347",
+      "6100:331",
+      "5235:35",
+      "6100:323",
+      "6100:326"
+    ],
+    "kararlar": [
+      "2026/2|2026/2",
+      "2023/4231|2025/3135",
+      "2023/427|2023/2359",
+      "2020/253|2020/1404",
+      "2019/250|2019/1380",
+      "2020/707|2022/204",
+      "2019/1343|2020/287",
+      "2023/2391|2025/368",
+      "2023/665|2023/1051"
+    ],
+    "one_cikan": [
+      "Yukarıda açıklanan yasal düzenlemelere göre; kira tespit dav",
+      "Yeni kira dönemi başlamadan önce kira sözleşmesi sonlandırıl",
+      "Kira bedelinin tespiti davası açıldıktan sonra, kiracının Ka",
+      "Bu itibarla, kira bedelinin tespiti davalarında, davanın, ki"
+    ],
+    "not": "Başlıktaki '(BÖLGE ADLİYE MAHKEMELERİ KARARLARI ARASINDAKİ UYUŞMAZLIĞIN GİDERİLMESİ İSTEMİNE DAİR)' künye sayıldı. Konu cümlesi kalıba uymuyor ('...arasındaki uyuşmazlık; ... noktasında toplanmaktadır'). 'II.BÖLGE' metinde boşluksuz."
+  },
+  "yargitay_yeni_08": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "İstanbul Bölge Adliye Mahkemesi 36. Hukuk Dairesi"
+      },
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İstanbul Anadolu 18. Sulh Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "kira bedelinin tespiti"
+    ],
+    "konu_cumlesi": "Uyuşmazlık, kira bedelinin tespiti istemine ilişki",
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. TEMYİZ",
+      "VI. KARAR"
+    ],
+    "mevzuat": [
+      "6098:345",
+      "6098:344",
+      "6100:370"
+    ],
+    "kararlar": [],
+    "one_cikan": []
+  },
+  "yargitay_yeni_09": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Asliye Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "maddi ve manevi tazminat"
+    ],
+    "konu_cumlesi": "Uyuşmazlık, davalıların işleteni, trafik sigortacı",
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP ve KARŞI DAVA",
+      "III. MAHKEME KARARI",
+      "IV. BOZMA VE BOZMADAN SONRAKİ YARGILAMA SÜRECİ",
+      "V. TEMYİZ",
+      "VI. KARAR"
+    ],
+    "mevzuat": [],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "Gövdedeki karar numaraları anonimleştirilmiş ya da yalnız esas numarası."
+  },
+  "yargitay_yeni_10": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge Adliye Mahkemesi 8. Hukuk Dairesi"
+      }
+    ],
+    "konu": [
+      "destekten yoksun kalma",
+      "manevi tazminat"
+    ],
+    "konu_cumlesi": "Uyuşmazlık, davalıların işleteni ve sürücüsü olduğ",
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "temyiz_reddi",
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. TEMYİZ",
+      "VI. KARAR"
+    ],
+    "mevzuat": [
+      "6100:362",
+      "6100:366",
+      "6100:352",
+      "6100:371",
+      "6100:370"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "İhtiyari dava arkadaşı olan davacılar bakımından temyiz sını"
+    ],
+    "not": "Bir kısım davacılar yönünden temyiz dilekçesinin miktardan reddi, kalan yönden onama."
+  },
+  "yargitay_yeni_11": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge Adliye Mahkemesi 1. Hukuk Dairesi"
+      }
+    ],
+    "konu": [
+      "kamulaştırmasız el atılan taşınmaz bedeli",
+      "ecrimisil"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "temyiz_reddi",
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. TEMYİZ",
+      "VI. KARAR"
+    ],
+    "mevzuat": [
+      "6100:362",
+      "6100:352",
+      "7531:22",
+      "7550:20",
+      "2942:11",
+      "6100:370"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Dosya içeriğine göre; Bölge Adliye Mahkemesi karar tarihinin"
+    ],
+    "not": "Konu 'Taraflar arasındaki ... tahsili istemine ilişkin asıl ve birleştirilen davalarda' ifadesinden. 'Uyuşmazlık, ... hususundadır' kalıba uymadığından konu_cumlesi null. Başlıktaki 'KARAR : Esastan ret' künye."
+  },
+  "yargitay_yeni_12": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge Adliye Mahkemesi 3. Hukuk Dairesi"
+      },
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "2. Asliye Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "kamulaştırmasız el atılan taşınmaz bedelinin tahsili"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. TEMYİZ",
+      "VI. KARAR"
+    ],
+    "mevzuat": [
+      "6100:371",
+      "6100:370"
+    ],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "2942 sayılı Kanun 'Ek Madde 1' istinaf özetinde geçiyor; ek madde olduğu için yazılmadı."
+  },
+  "yargitay_yeni_13": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bursa Bölge Adliye Mahkemesi 10. Hukuk Dairesi"
+      },
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "1. Asliye Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "muhdesat aidiyetinin tespiti"
+    ],
+    "konu_cumlesi": "Uyuşmazlık, muhdesat aidiyetinin tespiti istemine ",
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. TEMYİZ",
+      "VI. KARAR"
+    ],
+    "mevzuat": [
+      "6100:371",
+      "6100:370"
+    ],
+    "kararlar": [],
+    "one_cikan": []
+  },
+  "yargitay_yeni_14": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Sulh Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "elbirliği mülkiyetinin paylı mülkiyete çevrilmesi",
+      "ortaklığın giderilmesi"
+    ],
+    "konu_cumlesi": "Uyuşmazlık, asıl davada elbirliği mülkiyetinin pay",
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. MAHKEME KARARI",
+      "IV. TEMYİZ",
+      "V. KARAR"
+    ],
+    "mevzuat": [
+      "1086:428",
+      "1086:439"
+    ],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "6100 geçici 3. madde yazılmadı."
+  },
+  "yargitay_yeni_15": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İstanbul Bölge Adliye Mahkemesi 14. Hukuk Dairesi"
+      }
+    ],
+    "konu": [
+      "hakem kararının iptali"
+    ],
+    "konu_cumlesi": "Dava, hakem kararının iptali istemine ilişkindir.",
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "KARAR",
+      "I. DAVA",
+      "II. CEVAP",
+      "III. MAHKEME KARARI",
+      "IV. TEMYİZ",
+      "V. SONUÇ"
+    ],
+    "mevzuat": [],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "BAM (İlk Derece sıfatıyla). Başlıktaki 'HÜKÜM : Ret' künye. Konu cümlesi 49 karakter, tamamı."
+  },
+  "yargitay_yeni_16": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Ticaret Mahkemesi"
+      }
+    ],
+    "konu": [
+      "itirazın iptali"
+    ],
+    "konu_cumlesi": "Dava, itirazın iptali istemine ilişkin olup, uyuşm",
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "KARAR",
+      "I. DAVA",
+      "II. CEVAP",
+      "III.MAHKEME KARARI",
+      "IV. TEMYİZ",
+      "V.SONUÇ"
+    ],
+    "mevzuat": [
+      "2004:67"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Dava açılması için Kanun'da 1 yıllık hak düşürücü sürenin ön",
+      "Bu durumda Mahkemece, itirazın iptali davasının hak düşürücü"
+    ],
+    "not": "Başlıktaki 'HÜKÜM : Hak düşürücü süreden ret' künye."
+  },
+  "yargitay_yeni_17": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Ankara Bölge Adliye Mahkemesi 32. Hukuk Dairesi"
+      }
+    ],
+    "konu": [],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [
+      "2004:72",
+      "6100:397",
+      "2004:364",
+      "6100:373"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "6100 sayılı HMK'nın 397. maddenin 2. fıkrası uyarınca genel ",
+      "Somut olayda, Ankara 13. Sulh Hukuk Mahkemesi'nin 2023/475 E",
+      "O halde, Bölge Adliye Mahkemesince istinaf başvurusunun esas"
+    ],
+    "not": "Başlıkta 'MAHKEMESİ' iki noktasız. Konu satırı/kalıbı yok (icra şikâyeti). 2024/1463|2025/692 incelenen BAM kararı, yazılmadı."
+  },
+  "yargitay_eski_01": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İŞ MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "kıdem tazminatı"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [],
+    "mevzuat": [
+      "1475:14"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Mahkemece fiili çalışma süresi yanında çalışılmayan süre içi",
+      "İş sözleşmesinin askıya alındığı ve işçinin fiili çalışmasın",
+      "Davalı işverence birkaç işçiye hatalı olarak askıda geçen sü",
+      "Hatalı ödeme durumu, çalışmış olan ve halen çalışmaya devam "
+    ],
+    "not": "Harfli alt başlıklar (A) ... F) Sonuç) birinci düzey sayılmadı."
+  },
+  "yargitay_eski_02": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İŞ MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "kıdem tazminatı"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [],
+    "mevzuat": [
+      "1475:14"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Mahkemece fiili çalışma süresi yanında çalışılmayan süre içi",
+      "İş sözleşmesinin askıya alındığı ve işçinin fiili çalışmasın",
+      "Davalı işverence birkaç işçiye hatalı olarak askıda geçen sü",
+      "Hatalı ödeme durumu, çalışmış olan ve halen çalışmaya devam "
+    ],
+    "not": "Harfli alt başlıklar birinci düzey sayılmadı."
+  },
+  "yargitay_eski_03": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "ASLİYE HUKUK MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "tapu iptali ve tescil"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "duzeltilerek_onama",
+    "sonuc_tumu": [
+      "duzeltilerek_onama"
+    ],
+    "bolumler": [],
+    "mevzuat": [
+      "6100:26",
+      "1086:438"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Bilindiği üzere, 6100 sayılı HMK’nun (Hukuk Muhakemeleri Kan",
+      "HMK'nun 26 maddesi ve doğru sicil oluşturma ilkesi uyarınca ",
+      "Buna usul hukukunda taleple bağlılık ilkesi denilmektedir."
+    ],
+    "not": "'-KARAR-' künye benzeri ('-K A R A R-') sayılıp bölüme alınmadı. HMK geçici 3 yazılmadı."
+  },
+  "yargitay_eski_04": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "ASLİYE HUKUK MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "tapu iptali ve tescil"
+    ],
+    "konu_cumlesi": "Dava, muris muvazaası hukuksal nedenine dayalı tap",
+    "sonuc": "duzeltilerek_onama",
+    "sonuc_tumu": [
+      "duzeltilerek_onama"
+    ],
+    "bolumler": [],
+    "mevzuat": [
+      "4721:28",
+      "1086:438"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Ancak, 4721 sayılı TMK'nın 28. maddesi uyarınca ölümle hukuk",
+      "Diğer taraftan kamu düzenine ilişkin bulunan doğru sicil tut",
+      "O halde mahkemece, (terekeye döndürme istekli dava açıldığın"
+    ],
+    "not": "'-KARAR-' bölüme alınmadı."
+  },
+  "yargitay_eski_05": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "SULH HUKUK MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "kira bedelinin tespiti"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [
+      "6098:344",
+      "1086:428",
+      "1086:440"
+    ],
+    "kararlar": [
+      "2014/12135|2014/14301"
+    ],
+    "one_cikan": [
+      "Şartlar değişmediği ve özel nedenlerin varlığı iddia ve ispa",
+      "Dört yıldan sonra ise, taşınmazın boş olarak yeniden kiralan",
+      "Hak ve nesafete uygun kira belirlenirken en son ödenen aylık",
+      "Bu durumda mahkemece yukarıda açıklanan esas ve ilkeler doğr"
+    ],
+    "not": "2014/12135-2014/14301 aynı dosyadaki önceki Yargıtay 6. HD bozma ilamı; alt mahkeme kararı olmadığından yazıldı."
+  },
+  "yargitay_eski_06": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "SULH HUKUK MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "kira bedelinin tespiti"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [
+      "6098:344",
+      "6098:345",
+      "1086:428",
+      "1086:440"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Şartlar değişmediği ve özel nedenlerin varlığı iddia ve ispa",
+      "Taraflar arasında yazılı sözleşme bulunmamakla davacı malikl",
+      "18.11.1964 gün ve 2/4 sayılı Y.İ.B.K. ve yerleşik Yargıtay u",
+      "Mahkemece, taraf emsalleri değerlendirilerek gerekirse resen"
+    ],
+    "not": "YİBK 2/4 esas|karar biçiminde olmadığından kararlara alınmadı."
+  },
+  "yargitay_eski_07": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "TİCARET MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "bonolara dayalı alacak davası"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [
+      "6100:165"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Dava, zayi nedeniyle iptaline karar verilen bonolara dayalı ",
+      "Her ne kadar davacı tarafından bu dava açılmadan önce böyle ",
+      "Bu itibarla mahkemece davacıya zayi nedeniyle iptal kararını"
+    ],
+    "not": "'Dava, ... alacak davası olup' cümlesi 'ilişkindir' kalıbında değil; konu_cumlesi null. 2012/105-2014/189 incelenen karar."
+  },
+  "yargitay_eski_08": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "TİCARET MAHKEMESİ"
+      }
+    ],
+    "konu": [],
+    "konu_cumlesi": null,
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "Gerekçe yalnız basmakalıp cümle; 2014/551-2015/198 incelenen karar."
+  },
+  "yargitay_eski_09": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Ticaret Mahkemesi"
+      }
+    ],
+    "konu": [
+      "maddi tazminat"
+    ],
+    "konu_cumlesi": "Dava, trafik kazasından kaynaklanan cismani zarar ",
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [],
+    "kararlar": [],
+    "one_cikan": [
+      "Eksik inceleme ile karar verilemez.",
+      "Bu durumda mahkemece yapılacak iş; 2010/ 6457 soruşturma num"
+    ],
+    "not": "'-K A R A R-' bölüme alınmadı."
+  },
+  "yargitay_eski_10": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Ticaret Mahkemesi"
+      }
+    ],
+    "konu": [
+      "maddi tazminat"
+    ],
+    "konu_cumlesi": "Dava, trafik kazası sonucu maddi tazminat istemine",
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [],
+    "kararlar": [],
+    "one_cikan": [
+      "Dosya kapsamındaki davacının olay sonrası hastane kayıtları ",
+      "Maluliyete ilişkin rapor incelendiğinde davacıda meydana gel",
+      "Bu durumda mahkemece; kusur durumunun netleştirilmesi amacıy"
+    ]
+  },
+  "hgk_01": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Erzurum Bölge Adliye Mahkemesi 6. Hukuk Dairesi"
+      },
+      {
+        "rol": "ozel_daire",
+        "mahkeme": "Yargıtay 10. Hukuk Dairesi"
+      }
+    ],
+    "konu": [
+      "tespit"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "gonderme",
+    "sonuc_tumu": [
+      "gonderme"
+    ],
+    "bolumler": [
+      "KARAR"
+    ],
+    "mevzuat": [
+      "5510:13"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Bilindiği üzere direnme kararının varlığından söz edilebilme",
+      "Başka bir anlatımla, mahkemenin yeni bir delile dayanmak vey",
+      "Yargıtayın istikrar kazanmış içtihatlarına göre, mahkemece d",
+      "Bu durumda Mahkemenin direnme olarak adlandırdığı kararın us"
+    ],
+    "not": "Özel Daire bozma kararı numarası yalnız başlıkta. 'A. Ön Sorun', 'B. Gerekçe' alt başlık."
+  },
+  "hgk_02": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Ankara Bölge Adliye Mahkemesi 27. Hukuk Dairesi"
+      },
+      {
+        "rol": "ozel_daire",
+        "mahkeme": "Yargıtay 6. Hukuk Dairesi"
+      }
+    ],
+    "konu": [
+      "alacak",
+      "teminat mektubu bedellerinin iadesi",
+      "tazminat"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. BOZMA VE BOZMADAN SONRAKİ YARGILAMA SÜRECİ",
+      "VI. TEMYİZ",
+      "VII. KARAR"
+    ],
+    "mevzuat": [
+      "6100:353",
+      "6100:371",
+      "6100:373"
+    ],
+    "kararlar": [
+      "2021/3058|2022/663"
+    ],
+    "one_cikan": [
+      "Somut olayda taraflar arasında imzalanan 18.12.2009 tarihli ",
+      "Bu durumda mahkemece sözleşmede yer alan bu maddeler ile söz"
+    ],
+    "not": "Özel Daire bozma kararı (2021/3058-2022/663) gövdede de geçtiği için yazıldı; ilk derece (2013/861-2016/784) ve BAM (2018/2046-2021/93) kararları alt mahkeme kararı olarak yazılmadı. Küçük harfli 'gönderilmesine' gonderme sayılmadı."
+  },
+  "hgk_03": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Aile Mahkemesi"
+      },
+      {
+        "rol": "ozel_daire",
+        "mahkeme": "Yargıtay 2. Hukuk Dairesi"
+      }
+    ],
+    "konu": [
+      "boşanma"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP VE KARŞI DAVA",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. BOZMA VE BOZMADAN SONRAKİ YARGILAMA SÜRECİ",
+      "VI. TEMYİZ",
+      "VII. KARAR"
+    ],
+    "mevzuat": [
+      "4721:174",
+      "4721:4",
+      "6098:50",
+      "6098:51"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Görülüyor ki hâkim, boşanmaya sebep olan olaylarda kusursuz ",
+      "Maddi tazminatın ön koşulu, talep edenin boşanma yüzünden me",
+      "O hâlde hâkim; manevi tazminatın miktarını belirlerken, kişi",
+      "Hâl böyle olunca; evliliğin süresi, tarafların ekonomik ve s"
+    ],
+    "not": "İlk derece (2020/609-2022/126) ve BAM (2022/744-2023/711) kararları yazılmadı."
+  },
+  "hgk_04": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Ticaret Mahkemesi"
+      },
+      {
+        "rol": "ozel_daire",
+        "mahkeme": "17. Hukuk Dairesi"
+      }
+    ],
+    "konu": [
+      "maddi ve manevi tazminat"
+    ],
+    "konu_cumlesi": "Dava, trafik kazasından maddi ve manevi tazminat i",
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "I. YARGILAMA SÜRECİ",
+      "II. UYUŞMAZLIK",
+      "III. GEREKÇE",
+      "IV. KARAR"
+    ],
+    "mevzuat": [
+      "6098:56",
+      "4721:2",
+      "4721:3",
+      "1086:429",
+      "1086:440"
+    ],
+    "kararlar": [
+      "2016/13989|2017/11279",
+      "2006/2-14|2006/26",
+      "2018/1616|2019/743",
+      "2020/724|2021/1336",
+      "2016/22(7)-603|2020/462",
+      "2017/(13)3-2501|2021/233",
+      "2018/(6)3-634|2021/1171"
+    ],
+    "one_cikan": [
+      "Manevi zarar, haksız eylemin sonucunda, uğranılan kişilik de",
+      "Bir hakkın dürüstlük kuralına aykırı olarak kullanılması sur",
+      "Bununla birlikte davacılar vekilinin, vekâletnamesinde ibran",
+      "Bu durumda davacılar vekili ile davalı ... arasında düzenlen"
+    ],
+    "not": "konu_cumlesi alıntılanan Özel Daire kararı içinde. Alıntı içindeki 'SONUÇ:' bölüm sayılmadı. Özel Daire kararları (2016/13989, 2018/1616, 2020/724) gövdede geçtiği için yazıldı; ilk derece kararları (2014/552-2016/408, 2019/293-2019/796) ve incelenen direnme kararı (2021/1115-2022/274) yazılmadı."
+  },
+  "hgk_05": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Asliye Hukuk Mahkemesi"
+      },
+      {
+        "rol": "ozel_daire",
+        "mahkeme": "Yargıtay 5. Hukuk Dairesi"
+      }
+    ],
+    "konu": [
+      "tazminat"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "gonderme",
+    "sonuc_tumu": [
+      "gonderme"
+    ],
+    "bolumler": [
+      "I. DAVA",
+      "II. CEVAP",
+      "III. İLK DERECE MAHKEMESİ KARARI",
+      "IV. İSTİNAF",
+      "V. BOZMA VE BOZMADAN SONRAKİ YARGILAMA SÜRECİ",
+      "VI. TEMYİZ",
+      "VII. KARAR"
+    ],
+    "mevzuat": [
+      "4721:1007",
+      "6100:371"
+    ],
+    "kararlar": [
+      "2012/65|2013/272",
+      "2012/229|2014/6",
+      "2012/229|2014/655"
+    ],
+    "one_cikan": [
+      "Devletin sorumluluğundan söz edebilmek için, tapu sicilinin ",
+      "Başka bir anlatımla Devletin sorumluluğu, kusursuz bir sorum",
+      "TMK’nın 1007. maddesinde, Devletin tapu sicilinin tutulmasın",
+      "Bu itibarla, arsa niteliğindeki taşınmazın tespit edilen bed"
+    ],
+    "not": "Ağır ceza ve önceki tapu iptali davası kararları başka dosyalar olduğundan yazıldı; ilk derece (2017/291-2020/311) ve BAM (2021/675-2023/999) yazılmadı; Özel Daire kararı yalnız başlıkta."
+  },
+  "hgk_06": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Asliye Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "tapu iptali ve tescil",
+      "taşınmaz bedelinin tahsili"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "I. YARGILAMA SÜRECİ",
+      "II. UYUŞMAZLIK",
+      "III. GEREKÇE",
+      "IV. SONUÇ",
+      "KARŞI OY",
+      "KARŞI OY"
+    ],
+    "mevzuat": [
+      "4721:705",
+      "4721:706",
+      "6098:237",
+      "4721:716",
+      "2004:28",
+      "6100:371"
+    ],
+    "kararlar": [
+      "2009/322|2010/126",
+      "1957/863|1957/1205",
+      "2018/3274|2019/4320",
+      "1057/863|1057/1205",
+      "2007/127|2008/129",
+      "2008/11377|2009/757",
+      "1958/117|2082",
+      "2010/1179|2010/12344"
+    ],
+    "one_cikan": [
+      "Öte yandan; kesinleşen kadastro tespitinden sonra çaplı taşı",
+      "Yine, çifte tapunun bulunduğu hâllerde, başka bir deyişle, a",
+      "Zira, çaplı taşınmazlarda temliki işlemlerin çap kapsamı iti",
+      "Çaplı taşınmazı temellük eden kişi, çap sınırları kapsamında"
+    ],
+    "not": "Tek 'Dava ... ilişkindir' cümlesi karşı oyda ve virgülsüz; null bırakıldı. '1057/863' metindeki yazım hatası aynen. İlk derece (2015/316-2017/477), BAM (2018/334-2018/519), incelenen direnme (2019/393-2019/541) yazılmadı."
+  },
+  "hgk_07": {
+    "zincir": [],
+    "konu": [
+      "kadastro tespitine itiraz"
+    ],
+    "konu_cumlesi": "Dava, kadastro tespitine itiraz isteğine ilişkindi",
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [
+      "3402:28",
+      "1086:193"
+    ],
+    "kararlar": [
+      "2012/8585|2012/9465",
+      "2008/15-278|2008/254",
+      "2009/9-397|2009/453",
+      "2013/4-1121|2014/626"
+    ],
+    "one_cikan": [
+      "Direnme kararları, yapıları gereği, kanunun hukuka uygunluk ",
+      "Bu itibarla, kurulan ilk direnme hükmü ile Hukuk Genel Kurul",
+      "Nitekim, aynı ilkeler Yargıtay Hukuk Genel Kurulunun 19.03.2"
+    ],
+    "not": "Başlıkta etiketli alt mahkeme yok. 'HUKUK GENEL KURULU KARARI' künye satırı sayıldı. Yargıtay 7. HD bozma ilamı yazıldı; incelenen 1989/826-1990/59-1 yazılmadı."
+  },
+  "hgk_08": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Asliye Hukuk Mahkemesi"
+      }
+    ],
+    "konu": [
+      "tapu iptali ve tescil"
+    ],
+    "konu_cumlesi": "Dava, 4342 sayılı Mera Kanununun geçici 3. maddesi",
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "SONUÇ"
+    ],
+    "mevzuat": [
+      "6100:294",
+      "6100:297",
+      "6100:363",
+      "1086:429",
+      "1086:439",
+      "1086:440"
+    ],
+    "kararlar": [
+      "2013/8771|2013/12672",
+      "2014/14-1320|2014/981"
+    ],
+    "one_cikan": [
+      "Öncelikle belirtelim ki, yerel mahkemelerin direnme kararlar",
+      "Direnme kararı ile mahkeme davadan elini çeker ve davayı son",
+      "Bu bakımdan direnme kararından dönme (rücu) mümkün değildir.",
+      "Tüm bu hususlar bir arada değerlendirildiğinde somut olayda "
+    ],
+    "not": "'HUKUK GENEL KURULU KARARI' künye satırı sayıldı. Yılsız 'tarih 323-391 sayılı' gibi atıflar yazılmadı. İncelenen 2011/177-2012/153 ve 2015/217-2015/132 yazılmadı."
+  },
+  "bam_01": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Antalya 3. Asliye Ticaret Mahkemesi"
+      }
+    ],
+    "konu": [
+      "alacak",
+      "kıdem tazminatı"
+    ],
+    "konu_cumlesi": "Dava, davalı asıl işveren tarafından dava dışı işç",
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": [
+      "esastan_ret"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "DAVACININ İDDİALARININ ÖZETİ",
+      "DAVALININ SAVUNMALARININ ÖZETİ",
+      "İLK DERECE MAHKEMESİ KARARININ ÖZETİ",
+      "İLERİ SÜRÜLEN İSTİNAF SEBEPLERİ",
+      "DELİLLERİN DEĞERLENDİRİLMESİ ve GEREKÇE",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "4857:2",
+      "4857:112",
+      "6100:341",
+      "6100:359",
+      "6100:355",
+      "6100:353"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "6100 sayılı HMK'nın 359/3. maddesi uyarınca; dosya kapsamınd"
+    ],
+    "not": "Gerekçe tek uzun cümle; Yargıtay ve AYM kararları anonim (... E. ... K.)."
+  },
+  "bam_02": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "SAMSUN ASLİYE TİCARET"
+      }
+    ],
+    "konu": [
+      "rücuen alacak",
+      "tahkim"
+    ],
+    "konu_cumlesi": "Dava, rücuen alacak istemine ilişkindir.",
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": [
+      "esastan_ret"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "KARAR"
+    ],
+    "mevzuat": [
+      "1475:14",
+      "6111:166",
+      "4857:112",
+      "4857:6",
+      "6100:353",
+      "3533:6"
+    ],
+    "kararlar": [
+      "2022/4335|2023/2559",
+      "2023/1377|2024/57",
+      "2018/4089|2018/9860"
+    ],
+    "one_cikan": [],
+    "not": "Başlıkta 'TİCARETMAHKEMESİ' bitişik. Gerekçeli değerlendirme yalnız ilk derece kararının alıntısında; BAM'ın kendi değerlendirmesi basmakalıp, one_cikan boş. Atıf yapılan kararlar ilk derece alıntısı içinde."
+  },
+  "bam_03": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "ANKARA 7. ASLİYE TİCARET MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "itirazın iptali"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "kaldirma",
+    "sonuc_tumu": [
+      "kaldirma",
+      "gonderme"
+    ],
+    "bolumler": [
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "6098:325",
+      "6098:112",
+      "6098:52",
+      "6100:190",
+      "4721:6",
+      "6100:200"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Kiracı, sözleşme süresine veya fesih dönemine uymaksızın kir",
+      "Kiralananın tahliye edildiğinin kabul edilebilmesi için, kir",
+      "Kiralananın anahtar teslimi yapılmadan tahliye edilerek boşa",
+      "Ancak Sözleşmenin özel şartlar 31. Maddesindeki düzenleme uy"
+    ],
+    "not": "'Dava, ... ilişkindir.' cümlesi yok. GÖNDERİLMESİNE büyük harfle."
+  },
+  "bam_04": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İstanbul Anadolu 2. Asliye Ticaret Mahkemesi"
+      }
+    ],
+    "konu": [
+      "iflasına karar verilmesi",
+      "kira sözleşmesinden kaynaklandığı bildirilen alacağın tahsili"
+    ],
+    "konu_cumlesi": "Dava; taraflar arasındaki kira sözleşmesinden kayn",
+    "sonuc": "kaldirma",
+    "sonuc_tumu": [
+      "kaldirma",
+      "gonderme"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "CEVAP",
+      "İLK DERECE MAHKEMESİ KARARI",
+      "İSTİNAF NEDENLERİ",
+      "DELİLLERİN TARTIŞILMASI VE GEREKÇE",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "6100:355",
+      "6100:357",
+      "2004:155",
+      "2004:156",
+      "2004:158",
+      "6100:353"
+    ],
+    "kararlar": [
+      "2021/2936|2023/1143",
+      "2023/5266|2023/5847",
+      "2021/737|2024/397",
+      "2020/502|2024/777"
+    ],
+    "one_cikan": [
+      "Yukarıda da belirtildiği üzere, davalı tarafından davacı ale",
+      "Bu durumda ilk derece Mahkemesince anılan dosyaların kesinle"
+    ],
+    "not": "Konu cümlesi 'Dava;' (noktalı virgül) ile, aynı satırda '...neticesinde;' sonrasında başlıyor. 'mal Mahkemesine İADESİNE' → gonderme. Başlık 'H Ü K Ü M :' aralıklı."
+  },
+  "bam_05": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İSTANBUL ANADOLU 6. ASLİYE TİCARET MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "itirazın iptali",
+      "ticari bankacılık işlemlerinden kaynaklanan davalar"
+    ],
+    "konu_cumlesi": "Dava, kredi sözleşmesinden kaynaklanan alacağın ta",
+    "sonuc": "kaldirma",
+    "sonuc_tumu": [
+      "kaldirma"
+    ],
+    "bolumler": [
+      "TARAFLARIN İDDİA VE SAVUNMALARININ ÖZETİ",
+      "DAVA",
+      "CEVAP",
+      "İLK DERECE MAHKEMESİ KARARI",
+      "İLERİ SÜRÜLEN İSTİNAF SEBEPLERİ",
+      "GEREKÇE",
+      "KARAR"
+    ],
+    "mevzuat": [
+      "2004:67",
+      "2004:60",
+      "2004:61",
+      "2004:62",
+      "6100:355",
+      "6100:353"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Bu durumda yapılan itirazın geçerli olduğu ve alacaklı olduğ",
+      "Maddenin 1.fıkrasında icra müdürünün takip talebinin bu kanu"
+    ],
+    "not": "Gövdede 'DAVA: Davacı vekili...' satır içi bölüm başlığı (künye DAVA: satırı değil). 'gönderilmesine' küçük harfli → gonderme yok. Mahkeme adı başında '(KAPATILAN)'."
+  },
+  "bam_06": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İSTANBUL 20. ASLİYE TİCARET MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "itirazın iptali",
+      "ticari satımdan kaynaklanan"
+    ],
+    "konu_cumlesi": "Dava, icra takibine vaki itirazın iptali ve takibi",
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": [
+      "esastan_ret"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "CEVAP",
+      "İLK DERECE MAHKEMESİ KARARI",
+      "İSTİNAF NEDENLERİ",
+      "DELİLLERİN DEĞERLENDİRİLMESİ VE HUKUKİ NİTELENDİRME",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "6100:353",
+      "6100:362",
+      "818:84",
+      "818:100"
+    ],
+    "kararlar": [
+      "2011/19-532|2011/640",
+      "2017/19-910|2018/1111",
+      "2017/19-822|2018/1754",
+      "2020/(19)11-445|2022/1077",
+      "2012/14401|2013/2607"
+    ],
+    "one_cikan": [
+      "Borçlu, itirazın iptali davası açılmamışken, itirazına konu ",
+      "Sonuç itibariyle; icra takibinden sonra ve itirazın iptali d",
+      "Yukarıda belirtilen Yargıtay HGK kararı ve Yargıtay 19. HD'n"
+    ],
+    "not": "Gerekçenin bir kısmı HGK kararından alıntı. 'BK' eski BK (818) sayıldı."
+  },
+  "bam_07": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İstanbul Anadolu 2. Asliye Ticaret Mahkemesi"
+      }
+    ],
+    "konu": [
+      "menfi tespit",
+      "kambiyo senetlerinden kaynaklanan"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": [
+      "esastan_ret"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "DAVA",
+      "CEVAP",
+      "İLK DERECE MAHKEMESİ KARARI",
+      "İSTİNAF SEBEPLERİ",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "6100:355",
+      "6100:203",
+      "6100:353",
+      "6100:362"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Diğer yandan taraflar daha önce eş olup, her ne kadar HMK'nu",
+      "Davacının sunmuş olduğu anlaşmalı boşanma protokolünde daval",
+      "Davalı; davacının, müşterek çocuklarının okula gidiş gelişle"
+    ],
+    "not": "Konu cümlesi 'Dava, kambiyo senedinden kaynaklanan menfi tespit davasıdır.' — '...davasıdır' kalıbı yönergede sayılmadığından null. DAVA/CEVAP/İLK DERECE MAHKEMESİ KARARI/İSTİNAF SEBEPLERİ başlıkları iki noktasız, metinle aynı satırda. Sorgu 'boşanma' ama dava menfi tespit (boşanma protokolü teminat senedi)."
+  },
+  "bam_08": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İSTANBUL 4. ASLİYE TİCARET MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "ticari şirket",
+      "ortaklıktan çıkma"
+    ],
+    "konu_cumlesi": "Dava, limited şirket ortaklığından çıkma talebine ",
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": [
+      "esastan_ret"
+    ],
+    "bolumler": [
+      "TARAFLARIN İDDİA VE SAVUNMASININ ÖZETİ",
+      "İLK DERECE MAHKEMESİNİN KARARININ ÖZETİ",
+      "İLERİ SÜRÜLEN İSTİNAF SEBEPLERİ",
+      "İSTİNAF SEBEPLERİNİN DEĞERLENDİRİLMESİ VE GEREKÇE",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "6102:638",
+      "6102:245",
+      "4721:2",
+      "6100:355",
+      "6100:353",
+      "6100:361"
+    ],
+    "kararlar": [
+      "2019/3224|2020/2963",
+      "2015/9114|2016/6883"
+    ],
+    "one_cikan": [
+      "Davalı şirketin ortakları olan davacı ile dava dışı eşi aras",
+      "İş bu davanın konusunun haklı sebeple ortaklıktan çıkmaya il",
+      "Anılan maddede ortağa haklı sebeplerin varlığı halinde çıkma"
+    ],
+    "not": "İlk 'Dava,' cümlesi ilk derece kararı alıntısında (başında tırnak var); BAM'ın kendi cümlesi 'Dava; 6102 sayılı TTK’nun 638/2. maddesi uyarınca...'. Atıf yapılan kararlar ilk derece alıntısı içinde."
+  },
+  "bam_09": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "BURSA ... ASLİYE TİCARET MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "menfi tespit",
+      "ihtiyati tedbir isteminin reddi"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": [
+      "esastan_ret"
+    ],
+    "bolumler": [
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "2004:72",
+      "6100:355",
+      "6100:353",
+      "6100:362"
+    ],
+    "kararlar": [
+      "2012/17902|2013/3584",
+      "2012/14719|2013/2145",
+      "2012/18660|2013/1254"
+    ],
+    "one_cikan": [
+      "Davacı borçlu vekilince dava dilekçesinde belirtilen nedenle",
+      "Ayrıca her ne kadar; İİK'nın 72/3 maddesi gereğince, icra ta",
+      "Bu maddeye göre, borçlu, icra takibinden önce veya takip sır"
+    ],
+    "not": "Konu cümlesi 'Dava, icra takibi sonrası açılan menfi tespit, talep ise takibin durdurulması istemine yöneliktir.' — '...yöneliktir' kalıbı yönergede sayılmadığından null. Künye anonim (daire, sayılar '...'). Ara karara karşı istinaf."
+  },
+  "bam_10": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "BURSA 3. ASLİYE TİCARET MAHKEMESİ"
+      }
+    ],
+    "konu": [
+      "menfi tespit",
+      "kambiyo senetlerinden kaynaklanan"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "geri_cevirme",
+    "sonuc_tumu": [
+      "geri_cevirme",
+      "usulden_ret"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "6100:310",
+      "6100:349"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Buna göre; hüküm ilk derece mahkemesince verildikten sonra f",
+      "HMK'nın 310. maddede değişiklik yapılarak; karar verildikten",
+      "Davacı vekilinin istinaf başvurusu hakkında vekaletnamede is"
+    ],
+    "not": "Başlıkta çok sayıda 'BİRLEŞEN BURSA n.ASLİYE TİCARET MAHKEMESİNE AİT ... ESAS ... K.SAYILI DAVA DOSYASI' satırı var; etiketli mahkeme değil, zincire ve kararlara alınmadı. Konu cümlesi 'Asıl ve birleşen davalar yönünden dava; ... tespiti davasıdır.' kalıba uymuyor. Davalı istinafının feragat nedeniyle reddi = usulden_ret (gerekçe 'usulden reddine' diyor). 'karar verilmesine yer olmadığına' istinaf başvurusu hakkında, karari_yer_olmadigi değil."
+  },
+  "bam_11": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İstanbul Anadolu 12. Asliye Ticaret Mahkemesi"
+      }
+    ],
+    "konu": [
+      "maddi tazminat",
+      "değer kaybı tazminatı"
+    ],
+    "konu_cumlesi": "Dava, trafik kazasından kaynaklanan değer kaybı ta",
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": [
+      "esastan_ret"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "KARAR"
+    ],
+    "mevzuat": [
+      "2918:109",
+      "6100:107",
+      "6100:355",
+      "6100:353",
+      "6100:361"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "KTK'nin 109/1 maddesi uyarınca; motorlu araç kazalarından do",
+      "Somut uyuşmazlıkta, ölümlü/yaralanmalı trafik kazası tespit ",
+      "Meydana gelen kaza maddi hasarlı trafik kazası olduğundan, K",
+      "Bu durumda 10/02/2022 tarihinden davanın açıldığı 30/07/2024"
+    ],
+    "not": "Gövde tek paragraf; konu cümlesi paragraf ortasında."
+  },
+  "bam_12": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "İstanbul Anadolu 6. Asliye Ticaret Mahkemesi"
+      }
+    ],
+    "konu": [
+      "ölüm ve cismani zarar sebebiyle açılan tazminat",
+      "maddi tazminat"
+    ],
+    "konu_cumlesi": "Dava, yaralamalı trafik kazası nedeniyle maddi taz",
+    "sonuc": "kaldirma",
+    "sonuc_tumu": [
+      "kaldirma",
+      "gonderme"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "KARAR"
+    ],
+    "mevzuat": [
+      "6100:107",
+      "5718:48",
+      "6100:355",
+      "6100:353"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "İlk Derece Mahkemesince \"... tedavi evraklarının celp edilme",
+      "O halde İlk Derece Mahkemesince yapılması gereken, ATK'dan y"
+    ],
+    "not": "Başlık 'İNCELENEN DOSYANIN / MAHKEMESİ'. Konu cümlesi '...istemine ilişkin olup ... olmadığıdır.' biçiminde. MÖHUK=5718."
+  },
+  "yerel_01": {
+    "zincir": [],
+    "konu": [
+      "sıra cetveline itiraz",
+      "kayıt kabul"
+    ],
+    "konu_cumlesi": "Dava Kayıt Kabul talebine ilişkindir.",
+    "sonuc": "kismen_kabul",
+    "sonuc_tumu": [
+      "kismen_kabul",
+      "ret"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "2004:235",
+      "2004:223",
+      "6102:329",
+      "6102:405",
+      "2004:196"
+    ],
+    "kararlar": [
+      "2018/1539|2020/406",
+      "2014/10329|2015/6925"
+    ],
+    "one_cikan": [
+      "Kayıt kabul davalarında ispat yükü kural olarak hakkının tan",
+      "Davacı alacağının mevcudiyetini gerçek bir hukukî ilişkiye d",
+      "Bu nedenle, anonim şirket ortağı ödediği sermaye miktarı içi",
+      "Teminat mektubu lehtarının müracaatı halinde alacak kaydının"
+    ],
+    "not": "Metinde yalnız 'TTK' yazıyor (madde numaraları eski 6762 numaralarına uyuyor); kısaltma kuralına göre 6102 yazıldı. Konu cümlesi virgülsüz 'Dava Kayıt Kabul talebine ilişkindir.'; 37 karakter olduğundan tamamı yazıldı."
+  },
+  "yerel_04": {
+    "zincir": [],
+    "konu": [
+      "destekten yoksun kalma tazminatı",
+      "ölüm ve cismani zarar"
+    ],
+    "konu_cumlesi": "Dava, haksız fiilden kaynaklanan destekten yoksun ",
+    "sonuc": "kabul",
+    "sonuc_tumu": [
+      "kabul"
+    ],
+    "bolumler": [
+      "DAVA",
+      "CEVAP",
+      "DELİLLER",
+      "DELİLLERİN DEĞERLENDİRİLMESİ VE KANAAT",
+      "HÜKÜM"
+    ],
+    "mevzuat": [],
+    "kararlar": [],
+    "one_cikan": [
+      "Dosyada mevcut tüm delillerin incelenerek değerlendirilmesin"
+    ],
+    "not": "Konu cümlesi 'davasıdır' ile bitiyor, 'Dava, ...' kalıbı olduğu için alındı. Gerekçe kısmı büyük ölçüde bilirkişi raporu özeti; tek uygun cümle sonuç paragrafı."
+  },
+  "yerel_05": {
+    "zincir": [],
+    "konu": [
+      "tapu iptali ve tescil",
+      "kooperatif hukukundan kaynaklı tapu iptali"
+    ],
+    "konu_cumlesi": "Dava, kooperatif hukukundan kaynaklı tapu iptali v",
+    "sonuc": "kabul",
+    "sonuc_tumu": [
+      "kabul"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "DELİLLERİN DEĞERLENDİRİLMESİ VE GEREKÇE",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "1163:23",
+      "2004:28",
+      "6100:333"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Somut olayın incelemesinde; davaya konu uyuşmazlığın koopera"
+    ],
+    "not": "1163:23 bilirkişi raporu alıntısında geçiyor; 2004:28 ve 6100:333 hüküm fıkrasında. Hükümdeki küçük harfli 'Tapu Müdürlüğüne gönderilmesine' gonderme sayılmadı."
+  },
+  "yerel_06": {
+    "zincir": [],
+    "konu": [
+      "tapu iptali ve tescil"
+    ],
+    "konu_cumlesi": "Dava, ... üyesi olan davacı adına tahsis edilen ba",
+    "sonuc": "ret",
+    "sonuc_tumu": [
+      "ret"
+    ],
+    "bolumler": [
+      "DAVA",
+      "CEVAP",
+      "DELİLLER VE GEREKÇE",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "1163:23",
+      "4721:2",
+      "492:30",
+      "6100:150"
+    ],
+    "kararlar": [
+      "2019/527|2024/131"
+    ],
+    "one_cikan": [
+      "Davacının iş bu davaya açmakta amacı, ... tarafından kendisi",
+      "Davalı ... 01/06/2025 tarihli genel kuruldaki tahsis kararı ",
+      "HMK gereğince feragat kesin hüküm sonuçlarını doğurmaktadır,"
+    ],
+    "not": "Hüküm: bir kısım davalılar yönünden 'açılmamış sayılmasına' (etiket yok), feragat nedeniyle reddine ve hukuki yarar yokluğundan usulden reddine (davanın reddi -> ret). 'DAVA: Davacı vekilince...' 9. satır gövde başlığı (künyedeki 'DAVA:Tapu İptali' ayrı). index.json tarihi 02.07.2026, künyedeki KARAR TARİHİ 01/07/2026."
+  },
+  "yerel_08": {
+    "zincir": [],
+    "konu": [
+      "kira alacağı",
+      "aidat alacağı",
+      "cezai şart alacağı"
+    ],
+    "konu_cumlesi": "uyuşmazlık, taraf arasındaki kira sözleşmesinden k",
+    "sonuc": "gorevsizlik",
+    "sonuc_tumu": [
+      "gorevsizlik"
+    ],
+    "bolumler": [
+      "GEREĞİ DÜŞÜNÜLDÜ",
+      "DELİLLERİN DEĞERLENDİRİLMESİ VE GEREKÇE",
+      "HÜKÜM"
+    ],
+    "mevzuat": [
+      "6100:4",
+      "6098:357",
+      "6100:114",
+      "6100:115",
+      "6100:331",
+      "6100:20"
+    ],
+    "kararlar": [
+      "2021/287|2021/3719"
+    ],
+    "one_cikan": [
+      "Buna göre, taraflar arasındaki somut uyuşmazlığın kira sözle"
+    ],
+    "not": "'Dava,' cümlesi yok; 'uyuşmazlık, ... ilişkindir' cümlesi noktalı virgülden sonra başlıyor. 6100:345 de var (sınır 6)."
+  },
+  "danistay_01": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge İdare Mahkemesi .... İdare Dava Dairesi"
+      }
+    ],
+    "konu": [
+      "para cezası",
+      "yıkım"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma",
+      "onama"
+    ],
+    "bolumler": [
+      "YARGILAMA SÜRECİ",
+      "TEMYİZ EDEN DAVACININ İDDİALARI",
+      "TEMYİZ EDEN DAVALININ İDDİALARI",
+      "DAVACININ SAVUNMASI",
+      "DAVALININ SAVUNMASI",
+      "DÜŞÜNCESİ",
+      "İNCELEME VE GEREKÇE",
+      "KARAR SONUCU",
+      "KARŞI OY"
+    ],
+    "mevzuat": [
+      "3194:42",
+      "2960:13",
+      "2577:45",
+      "2577:49",
+      "213:298"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Yukarıda yer verilen mevzuatın değerlendirilmesinden, 3194 s",
+      "3194 sayılı İmar Kanununun 42. maddesinin 2. fıkrasının (ç) ",
+      "İmar mevzuatına aykırılık teşkil eden fiil ve hallerin, mevz",
+      "Bu nedenle mahiyeti itibarıyla ilave bir ceza niteliğinde ol"
+    ],
+    "not": "Konu 'Dava konusu istem:' satırından (yıkımına ve ... para cezası verilmesine ilişkin). 'TETKİK HÂKİMİ : ...' (isim satırı) ve 'TÜRK MİLLETİ ADINA' başlığa alınmadı. 'dosyanın İdare Dava Dairesine gönderilmesine' küçük harf."
+  },
+  "danistay_02": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge İdare Mahkemesi … İdari Dava Dairesi"
+      }
+    ],
+    "konu": [
+      "idari para cezası"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma",
+      "onama"
+    ],
+    "bolumler": [
+      "YARGILAMA SÜRECİ",
+      "TEMYİZ EDENİN İDDİALARI",
+      "KARŞI TARAFIN SAVUNMASI",
+      "DANIŞTAY TETKİK HAKİMİ…'ÜN DÜŞÜNCESİ",
+      "İNCELEME VE GEREKÇE",
+      "MADDİ OLAY",
+      "İLGİLİ MEVZUAT",
+      "HUKUKİ DEĞERLENDİRME",
+      "KARAR SONUCU",
+      "KARŞI OY"
+    ],
+    "mevzuat": [
+      "3194:42",
+      "2577:45",
+      "3194:32",
+      "2577:49"
+    ],
+    "kararlar": [
+      "2021/2308|2022/921",
+      "2022/6565|2023/4277"
+    ],
+    "one_cikan": [
+      "Yukarıda aktarılan mevzuat hükümlerinin birlikte değerlendir",
+      "Diğer yandan, ruhsat alınmadan veya ruhsat ve eklerine aykır",
+      "Yukarıda yer verilen mevzuat hükümlerinin değerlendirilmesin",
+      "Kanunda, para cezasının verilebilmesi için yasal sürenin bit"
+    ],
+    "not": "Tek 'Dava, ...' cümlesi KARŞI OY içinde ve 'açılmıştır' ile bitiyor; konu_cumlesi null. Anonim '…' karakteri tek karakterli üç nokta (U+2026). Kültür ve Tabiat Varlıklarını Koruma Kanunu 16. madde numarasız anıldığı için yazılmadı."
+  },
+  "danistay_03": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge İdare Mahkemesi ... İdari Dava Dairesi"
+      }
+    ],
+    "konu": [
+      "meslekten çıkarılma cezası",
+      "disiplin cezası"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "YARGILAMA SÜRECİ",
+      "TEMYİZ EDENİN İDDİALARI",
+      "KARŞI TARAFIN CEVABI",
+      "DÜŞÜNCESİ",
+      "İNCELEME VE GEREKÇE",
+      "MADDİ OLAY",
+      "İLGİLİ MEVZUAT",
+      "HUKUKİ DEĞERLENDİRME",
+      "KARAR SONUCU"
+    ],
+    "mevzuat": [
+      "7068:12",
+      "657:130",
+      "657:129",
+      "7068:31",
+      "7068:17",
+      "7068:18"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "7068 sayılı Kanun'un 17. ve 18. maddelerinde; kuruldukları i",
+      "Bu durumda, dava konusu meslekten çıkarma cezasını vermeye y"
+    ],
+    "not": "'Dava; ...' (noktalı virgül) cümlesi 'açılmıştır' ile bitiyor; konu_cumlesi null. 2577:49/50 ve 7068:34 de geçiyor (sınır 6). 'DAVALI İDARENİN TEMYİZ İSTEMİNİN KABULÜNE' etiket değil."
+  },
+  "danistay_04": {
+    "zincir": [
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge İdare Mahkemesi... İdari Dava Dairesi"
+      }
+    ],
+    "konu": [
+      "meslekten çıkarma"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma"
+    ],
+    "bolumler": [
+      "YARGILAMA SÜRECİ",
+      "TEMYİZ EDENİN İDDİALARI",
+      "KARŞI TARAFIN CEVABI",
+      "DÜŞÜNCESİ",
+      "İNCELEME VE GEREKÇE",
+      "MADDİ OLAY",
+      "İLGİLİ MEVZUAT",
+      "HUKUKİ DEĞERLENDİRME",
+      "KARAR SONUCU",
+      "KARŞI OY"
+    ],
+    "mevzuat": [
+      "7068:8",
+      "7068:9",
+      "7068:17",
+      "7068:18",
+      "7068:26",
+      "657:126"
+    ],
+    "kararlar": [
+      "2015/85|2016/3"
+    ],
+    "one_cikan": [
+      "Bu bağlamda; İçişleri Bakanlığı Yüksek Disiplin Kurulunun, i",
+      "Somut olayda davacının yukarıda belirtilen istisnai durumlar",
+      "Diğer taraftan, 7068 sayılı Kanun'un 17/1-a maddesinde, poli"
+    ],
+    "not": "Kararlar: Anayasa Mahkemesi E:2015/85, K:2016/3. Mevzuatta ayrıca 3201:83, 7068:27 (karşı oy), 3152 ek 5 geçiyor (sınır 6)."
+  },
+  "danistay_05": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Vergi Mahkemesi"
+      },
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge İdare Mahkemesi ... Vergi Dava Dairesi"
+      }
+    ],
+    "konu": [
+      "katma değer vergisi",
+      "vergi ziyaı cezası"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "onama",
+    "sonuc_tumu": [
+      "onama"
+    ],
+    "bolumler": [
+      "TEMYİZ EDENİN İDDİALARI",
+      "KARŞI TARAFIN SAVUNMASI",
+      "DANIŞTAY TETKİK HÂKİMİ ...'IN DÜŞÜNCESİ",
+      "KARŞI OY"
+    ],
+    "mevzuat": [
+      "213:331",
+      "213:341",
+      "213:344",
+      "213:339",
+      "3065:40",
+      "2577:50"
+    ],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "Kısa ret-onama kararı; Dairenin kendi gerekçesi yalnız basmakalıp 'İleri sürülen iddialar ... bozulmasını sağlayacak durumda bulunmadığından' cümlesi. Mevzuatın çoğu Tetkik Hâkimi düşüncesinde (karşı oyda da tekrarlanıyor). 'dosyanın ...Vergi Mahkemesine gönderilmesine' küçük harf."
+  },
+  "danistay_06": {
+    "zincir": [
+      {
+        "rol": "ilk_derece",
+        "mahkeme": "Vergi Mahkemesi"
+      },
+      {
+        "rol": "istinaf",
+        "mahkeme": "Bölge İdare Mahkemesi … Vergi Dava Dairesi"
+      }
+    ],
+    "konu": [
+      "vergi ziyaı cezası",
+      "geçici vergi",
+      "kurumlar vergi"
+    ],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": [
+      "bozma",
+      "onama"
+    ],
+    "bolumler": [
+      "YARGILAMA SÜRECİ",
+      "TEMYİZ EDENLERİN İDDİALARI",
+      "TARAFLARIN SAVUNMASI",
+      "DANIŞTAY TETKİK HÂKİMİ…'ÜN DÜŞÜNCESİ",
+      "İNCELEME VE GEREKÇE",
+      "MADDİ OLAY",
+      "İLGİLİ MEVZUAT",
+      "HUKUKİ DEĞERLENDİRME",
+      "KARAR SONUCU",
+      "KARŞI OY"
+    ],
+    "mevzuat": [
+      "213:339",
+      "193:120",
+      "7338:38",
+      "2575:23",
+      "213:359"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "193 sayılı Kanun'un geçici vergiye ilişkin mükerrer 120. mad",
+      "Öte yandan, yapılacak incelemelerde geçmiş dönemlere ait geç",
+      "Ceza hukukunun genel ilkelerinden olan lehe kanun ilkesi ger"
+    ],
+    "not": "'Dava konusu istem: Davacı adına ... istemine ilişkindir.' cümlesi 'Dava,' ile başlamadığı için konu_cumlesi null. Konu satırında 'kurumlar vergi' (yazım hatasıyla) geçiyor. Karşı oy başlığı '(X)-KARŞI OY :'."
+  },
+  "danistay_07": {
+    "zincir": [],
+    "konu": [],
+    "konu_cumlesi": null,
+    "sonuc": null,
+    "sonuc_tumu": [],
+    "bolumler": [],
+    "mevzuat": [
+      "2577:43",
+      "2577:12",
+      "2577:36"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Bu durumda; iptal kararına dayalı olarak açılan ve iptal edi"
+    ],
+    "not": "Yetkili yargı yerinin belirlenmesi kararı: başlıkta etiketli alt mahkeme yok (Ankara 7. / Elazığ 2. İdare Mahkemesi gövdede). Hüküm 'Ankara İdare Mahkemesinin yetkili olduğuna, ... gönderilmesine' — tablodaki hiçbir etikete uymuyor (yetkisizlik değil, gönderme küçük harf). 'YETKİLİ YARGI YERİNİN BELİRLENMESİ KARARI' künye/başlık satırı sayıldı."
+  },
+  "danistay_08": {
+    "zincir": [],
+    "konu": [],
+    "konu_cumlesi": null,
+    "sonuc": null,
+    "sonuc_tumu": [],
+    "bolumler": [],
+    "mevzuat": [
+      "2577:43",
+      "2577:12",
+      "2577:36"
+    ],
+    "kararlar": [],
+    "one_cikan": [
+      "Bu durumda; iptal kararına dayalı olarak açılan ve iptal edi"
+    ],
+    "not": "danistay_07 ile aynı yapı (Ağrı İdare / Ankara 20. İdare Mahkemesi yetki uyuşmazlığı). Hüküm hiçbir etikete uymuyor."
+  }
+}

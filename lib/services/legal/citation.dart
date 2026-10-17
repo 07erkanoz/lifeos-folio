@@ -300,26 +300,39 @@ const _suffix = "a-zçğıöşüâîûİ";
 final _ordinal =
     '(?:${trLoose('inci')}|${trLoose('ıncı')}|[uüUÜ]nc[uüUÜ]|nc[iİıIuüUÜ])';
 
-/// The words that say an article is meant.
+/// The words that say an article is meant. "md" goes without its full stop
+/// as often as with it: "HMK md 114/1-c".
 final _marker =
-    '(?:m\\.|md\\.|mad\\.|madde(?:${trLoose('si')}|${trLoose('sinde')}|'
+    '(?:m\\.|md\\.?(?![$_letters])|mad\\.|madde(?:${trLoose('si')}|${trLoose('sinde')}|'
     '${trLoose('since')}|ye|${trLoose('nin')})?)';
 
 /// Geçici and ek articles are numbered on their own.
 final _special = '(?:(?<ozel>${trLoose('geçici')}|ek)\\s+)?';
 
-/// "madde", "maddesi", "maddesinin", "MADDESİ" — after the number.
-const _articleWord = 'madde[$_suffix]*';
+/// "madde", "maddesi", "maddesinin", "MADDESİ" — after the number; and the
+/// courts' "hükmü", as in "6100 sayılı Kanun'un 370/1 hükmü uyarınca", the
+/// closing line of nearly every decision the Court of Cassation upholds.
+const _articleWord = '(?:madde[$_suffix]*|h[üu]km[$_suffix]*)';
+
+/// "341 ve devamı maddeleri" — an article and the ones after it.
+const _andAfter = '(?:\\s+ve\\s+(?:devam[ıi]|sonras[ıi]|izleyen))?';
 
 /// What may follow an article number: the letter of a lettered article
 /// (68/a), the fıkra (/1, /II) and the bent (-a).
+///
+/// The bent is written every way there is — "353/1-b", "353/1.a", "353/1b",
+/// "114/1.(i)" — and a decision goes one level further still, "353/1-b-1",
+/// "353/1-b.2". That last level was not read, and the pattern then took
+/// the "1" after the bent for the article: "HMK'nın 353/1-b-1 maddesi" was
+/// cited as article 1.
 String _tail([String n = '']) =>
     '(?![0-9])'
     '(?:\\s*/\\s*(?<harf$n>[$_letters])$_after'
     '(?:\\s*-\\s*(?<hfikra$n>[0-9]{1,3})(?![0-9]))?)?'
     '(?:\\s*/\\s*(?:(?<fikra$n>[0-9]{1,3})|(?<roma$n>(?:IX|IV|V?I{1,3}|V|X))'
     '(?![$_letters]))(?![0-9]))?'
-    '(?:\\s*-\\s*(?<bent$n>[a-zçğıöşü])$_after)?';
+    '(?:(?:\\s*[-.]\\s*)?\\(?(?<bent$n>[a-zçğıöşü])\\)?$_after'
+    '(?:\\s*[-.]\\s*[0-9]{1,2}(?![0-9]))?)?';
 
 /// TMK m. 166/1-a, İİK 89/1, HMK'nın 297. maddesi, H.M.K. 193. maddesi.
 ///
@@ -328,7 +341,9 @@ String _tail([String n = '']) =>
 final _short = RegExp(
   '(?<kisa>(?<![${_letters}0-9])[0-9]{3,5}'
   '|(?<![$_letters])(?:[A-ZÇĞİÖŞÜ]\\.){2,5}|(?<![$_letters])[$_letters]{2,8})'
-  "(?:['’][$_letters]{1,5})?"
+  // The suffix as decisions write it: "HMK'nın", "TBK' nun", and with a
+  // full stop for the apostrophe, "HUMK.nun 428.", or alone, "HMK. 353".
+  "(?:\\s?['’]\\s?[$_letters]{1,5}|\\.(?:[$_letters]{2,5})?)?"
   '\\s*$_special'
   '(?<isaret>$_marker)?\\s*'
   '(?<no>[0-9]{1,4})${_tail()}'
@@ -351,7 +366,9 @@ String _between(int most) =>
 final _long = RegExp(
   '$_numbered'
   '${_between(90)}'
-  '(?<no>[0-9]{1,4})${_tail()}\\s*\\.?\\s*$_ordinal?\\s*$_articleWord',
+  // Never a number inside another: the 1 of "353/1-b-1" is not an article.
+  '(?<![0-9/.\\-])(?<no>[0-9]{1,4})${_tail()}$_andAfter'
+  '\\s*\\.?\\s*$_ordinal?\\s*$_articleWord',
   caseSensitive: false,
 );
 
@@ -417,7 +434,10 @@ final _saysLaw = RegExp('kanun|yasa', caseSensitive: false);
 RegExp _continuation({required bool dash}) => RegExp(
   '(?<on>(?:\\.|\\s*$_ordinal)?\\s*(?:,|ve|ile|veya|ila${dash ? '|-|–' : ''})\\s*'
   '(?:(?:m\\.|md\\.)\\s*)?)'
-  '(?<no>[0-9]{1,4})(?![0-9]|[.,/][0-9])'
+  // A slash after the number is its fıkra, read just below: "114/1-c ve
+  // 115/2. maddeleri". Refusing it here lost every listed article that
+  // carried one.
+  '(?<no>[0-9]{1,4})(?![0-9]|[.,][0-9])'
   '(?:\\s*/\\s*(?<fikra>[0-9]{1,3}))?'
   '(?:\\s*-\\s*(?<bent>[a-zçğıöşü])$_after)?'
   '(?=(?:\\s*$_ordinal)?\\s*(?:[,;:)]|\\.(?!\\s*(?:f[ıi]kra|bent|c[üu]mle|sat[ıi]r|sayfa))'
@@ -532,9 +552,12 @@ class CitationScanner {
   late final RegExp _named = RegExp(
     '$_before'
     '(?<ad>${[for (final pair in _namesLongestFirst) _namePattern(pair.$1)].join('|')})'
-    "(?:['’]?[$_suffix]{0,5})?\\s*$_special"
+    "(?:['’]?[$_suffix]{0,5})?"
+    // "Hukuk Muhakemeleri Kanunu'nun (HMK) 353/1-b.2 maddesi".
+    '(?:\\s*\\([$_letters.]{2,8}\\))?\\s*$_special'
     '(?:$_marker\\s*(?<no1>[0-9]{1,4})${_tail('1')}'
-    '|(?<no2>[0-9]{1,4})${_tail('2')}\\s*\\.?\\s*$_ordinal?\\s*$_articleWord)',
+    '|(?<no2>[0-9]{1,4})${_tail('2')}$_andAfter'
+    '\\s*\\.?\\s*$_ordinal?\\s*$_articleWord)',
     caseSensitive: false,
   );
 

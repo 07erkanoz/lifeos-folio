@@ -1,0 +1,293 @@
+{
+  "dogrulama_yargitay_yeni_01": {
+    "zincir": [
+      {"rol": "istinaf", "mahkeme": "Diyarbakır Bölge Adliye Mahkemesi 8. Hukuk Dairesi"},
+      {"rol": "ilk_derece", "mahkeme": "Diyarbakır 5. İş Mahkemesi"}
+    ],
+    "konu": ["kıdem ve ihbar tazminatı", "arabuluculuk dava şartı"],
+    "konu_cumlesi": "Uyuşmazlık, hizmet süresi, hesaba esas ücret mikta",
+    "sonuc": "bozma",
+    "sonuc_tumu": ["kaldirma", "bozma"],
+    "bolumler": ["I. DAVA", "II. CEVAP", "III. İLK DERECE MAHKEMESİ KARARI", "IV. İSTİNAF", "V. TEMYİZ", "VI. KARAR"],
+    "mevzuat": ["4857:20", "4857:21"],
+    "kararlar": ["2024/5116|2024/7086", "2021/521|2022/69", "2022/1601|2023/968", "2016/32395|2020/4288"],
+    "one_cikan": [
+      "İşçinin süresinde işe iade başvurusunda bulunması hâlinde, f",
+      "Açıklanan nedenlerle, işe iade davasından önce düzenlenen ve",
+      "Yukarıda yer verilen açıklamalar da dikkate alınarak somut u"
+    ],
+    "not": "2021/521|2022/69 ve 2022/1601|2023/968 önceki işe iade davasına ait (başka dava), incelenen karar değil; ikincisi metinde bir yerde '2023/ 968' diye boşluklu."
+  },
+  "dogrulama_yargitay_yeni_02": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "Asliye Hukuk (İş) Mahkemesi"}
+    ],
+    "konu": ["boşta geçen süre ücreti"],
+    "konu_cumlesi": "Uyuşmazlık, boşta geçen süre ücreti alacağına iliş",
+    "sonuc": "onama",
+    "sonuc_tumu": ["onama"],
+    "bolumler": ["I. DAVA", "II. CEVAP", "III. MAHKEME KARARI", "IV. TEMYİZ", "V. KARAR"],
+    "mevzuat": ["1086:428", "1086:439"],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "HMK geçici 3/2 (geçici madde) mevzuata yazılmadı. Değerlendirme yalnız usul hükmü + basmakalıp onama cümlesi; one_cikan boş."
+  },
+  "dogrulama_yargitay_yeni_03": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "Asliye Hukuk Mahkemesi"}
+    ],
+    "konu": [],
+    "konu_cumlesi": null,
+    "sonuc": "gonderme",
+    "sonuc_tumu": ["gonderme"],
+    "bolumler": ["KARAR"],
+    "mevzuat": ["2797:40", "2797:60"],
+    "kararlar": ["2015/393|2017/3183"],
+    "one_cikan": [],
+    "not": "Görev (iş bölümü) nedeniyle 7. HD'ye GÖNDERİLMESİNE kararı. Konu kalıplı bir cümlede/satırda yazılmadığından konu boş (metinde muris muvazaası, ecrimisil geçiyor). 2015/393|2017/3183 aynı dosyadaki önceki Daire bozma kararı."
+  },
+  "dogrulama_yargitay_yeni_04": {
+    "zincir": [
+      {"rol": "istinaf", "mahkeme": "Antalya Bölge Adliye Mahkemesi 6. Hukuk Dairesi"},
+      {"rol": "ilk_derece", "mahkeme": "Manavgat 1. Sulh Hukuk Mahkemesi"}
+    ],
+    "konu": ["tahliye taahhütnamesi", "itirazın iptali", "kiralananın tahliyesi"],
+    "konu_cumlesi": "Uyuşmazlık, tahliye taahhütnamesine dayalı olarak ",
+    "sonuc": "onama",
+    "sonuc_tumu": ["onama"],
+    "bolumler": ["I. DAVA", "II. CEVAP", "III. İLK DERECE MAHKEMESİ KARARI", "IV. İSTİNAF", "V. TEMYİZ", "VI. KARAR"],
+    "mevzuat": ["6098:31", "6100:370"],
+    "kararlar": [],
+    "one_cikan": [
+      "Temyizen incelenen kararda belirtilen gerekçeye, imzaya itir"
+    ],
+    "not": "Hüküm fıkrası 'İlk Derece Mahkemesi kararının ... ONANMASINA' diyor. one_cikan cümlesi kalıp değil, somut gerekçe sayımı."
+  },
+  "dogrulama_yargitay_eski_01": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "ASLİYE HUKUK MAHKEMESİ"}
+    ],
+    "konu": ["muris muvazaası", "tapu iptali-tescil"],
+    "konu_cumlesi": "Dava, tapu iptali-tescil isteğine ilişkin olup; da",
+    "sonuc": "bozma",
+    "sonuc_tumu": ["bozma"],
+    "bolumler": [],
+    "mevzuat": ["1086:428"],
+    "kararlar": [],
+    "one_cikan": [
+      "Ne var ki, dava dilekçesinin içeriği ve iddianın ileri sürül",
+      "Diğer taraftan, murisin yeğeni olan davacının yasal mirasçıl",
+      "Hâl böyle olunca, muris muvazaası yönünden gerekli araştırma"
+    ],
+    "not": "'-KARAR-' yönerge gereği bölüm sayılmadı. Konu cümlesi 'ilişkin olup;' ile sürüyor. 6100 geçici 3 yazılmadı."
+  },
+  "dogrulama_yargitay_eski_02": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "ASLİYE HUKUK MAHKEMESİ"}
+    ],
+    "konu": ["ecrimisil"],
+    "konu_cumlesi": "Dava, ecrimisil isteğine ilişkindir.",
+    "sonuc": "bozma",
+    "sonuc_tumu": ["bozma"],
+    "bolumler": [],
+    "mevzuat": ["1086:428"],
+    "kararlar": [],
+    "one_cikan": [
+      "Hemen belirtilmelidir ki, muris muvazaası hukuksal nedenine ",
+      "O halde; somut olayda davacı ...'nin, çekişmeye konu 2 ve 4 ",
+      "Hâl böyle olunca, murisin ölüm tarihi ile dava tarihi arasın"
+    ],
+    "not": "'2007/479 esas' yalnız esas numarası, yazılmadı."
+  },
+  "dogrulama_yargitay_eski_03": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "YALOVA İŞ MAHKEMESİ"}
+    ],
+    "konu": ["fazla mesai", "bayram genel tatil çalışmaları"],
+    "konu_cumlesi": null,
+    "sonuc": "bozma",
+    "sonuc_tumu": ["bozma"],
+    "bolumler": ["SONUÇ"],
+    "mevzuat": [],
+    "kararlar": [],
+    "one_cikan": [
+      "Dairemiz uygulamasına göre imzalı ücret bordrolarında fazla ",
+      "Ancak, işçinin fazla çalışma alacağının daha fazla olduğu yö",
+      "Bordroların imzalı ve ihtirazı kayıtsız olması durumunda, iş",
+      "Somut uyuşmazlıkta davacının çıplak ücreti bordroda açık old"
+    ],
+    "not": "'Y A R G I T A Y K A R A R I' bölüm sayılmadı."
+  },
+  "dogrulama_hgk_01": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "Asliye Hukuk Mahkemesi"}
+    ],
+    "konu": ["manevi tazminat"],
+    "konu_cumlesi": "Dava, ölümlü trafik kazası nedeniyle, ölenin yakın",
+    "sonuc": "onama",
+    "sonuc_tumu": ["onama"],
+    "bolumler": ["I. YARGILAMA SÜRECİ", "II. UYUŞMAZLIK", "III. GEREKÇE", "IV. SONUÇ"],
+    "mevzuat": ["6098:56", "818:47", "4721:4", "1086:440", "6217:30"],
+    "kararlar": ["2015/9530|2018/4961", "1966/7|1966/7", "2017/17-1098|2018/1384", "2020/17-41|2021/182"],
+    "one_cikan": [
+      "Hâkimin özel hâlleri göz önünde tutarak, manevi zarar adı il",
+      "Hâkim manevi tazminatın miktarını tayin ederken saldırı teşk",
+      "Manevi tazminat bir ceza olmadığı gibi mal varlığı hukukuna ",
+      "Yukarıda yapılan bu kısa açıklamalar çerçevesinde somut olay"
+    ],
+    "not": "konu_cumlesi yönerge gereği ilk 'Dava,' cümlesi: alıntılanan Özel Daire kararındaki '2-Dava, ...'. HGK'nın kendi cümlesi: 'Dava, trafik kazasından kaynaklanan manevi tazminat istemine ilişkindir.' Alt mahkemenin kendi kararları (2012/444-2013/331, 2013/568-2014/556, direnme 2018/562-2018/495) kararlara yazılmadı; Özel Daire bozma kararı yazıldı."
+  },
+  "dogrulama_hgk_02": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "Ticaret Mahkemesi"}
+    ],
+    "konu": ["manevi tazminat", "yolcu taşıma sözleşmesi"],
+    "konu_cumlesi": "Dava, havayolu ile yolcu taşıma sözleşmesinden kay",
+    "sonuc": "bozma",
+    "sonuc_tumu": ["bozma"],
+    "bolumler": ["I. YARGILAMA SÜRECİ", "II. UYUŞMAZLIK", "III. GEREKÇE", "IV. SONUÇ", "KARŞI OY"],
+    "mevzuat": ["6098:58", "6098:114", "4721:24", "6098:56", "818:49", "1086:429"],
+    "kararlar": ["2015/3644|2016/1535", "1966/7|1966/7", "2017/11-44|2019/508"],
+    "one_cikan": [
+      "Ayrıca sözleşmeye aykırılık tek başına manevi tazminat gerek",
+      "6098 sayılı TBK’nin 58. maddesi gereğince manevi tazminata k",
+      "Gerçekten de yansıma yoluyla manevi tazminat sadece 6098 say",
+      "Kaldı ki 6098 sayılı TBK’nin 58. maddesi gereğince manevi ta"
+    ],
+    "not": "Mevzuat 6 ile sınırlandı (ayrıca 818:47, 1086:440, 4721:25 geçiyor). 2017/11-44|2019/508 karşı oy yazısında. Alt mahkeme kararları (2013/520-2014/679, 2016/422-2016/423) yazılmadı."
+  },
+  "dogrulama_bam_01": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "BURSA 2. ASLİYE TİCARET MAHKEMESİ"}
+    ],
+    "konu": ["elatmanın önlenmesi", "ecrimisil"],
+    "konu_cumlesi": "Dava el atmanın önlenmesi ve ecrimisil istemine il",
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": ["esastan_ret"],
+    "bolumler": ["KARAR", "İDDİA VE SAVUNMA", "İLK DERECE MAHKEMESİ KARARI", "İSTİNAF BAŞVURUSU", "DEĞERLENDİRME VE GEREKÇE", "HÜKÜM"],
+    "mevzuat": ["6100:115", "6325:18/A", "6100:353", "6100:362"],
+    "kararlar": ["2020/1943|4052", "2019/6709|16629"],
+    "one_cikan": [
+      "Somut olayda her iki tarafın tacir ve ticari işletmesiyle il"
+    ],
+    "not": "Konu cümlesi virgülsüz 'Dava el atmanın ... ilişkindir.' Kararlar metinde '2020/1943-4052 EK', '2019/6709-16629 EK' (karar yılı yazılmamış; örtük 2020/4052, 2019/16629); ilk derece özetinde geçiyor. 6325 madde 18/A."
+  },
+  "dogrulama_bam_02": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "İSTANBUL 12. ASLİYE TİCARET MAHKEMESİ"}
+    ],
+    "konu": ["kayıt kabul", "işçilik alacağı"],
+    "konu_cumlesi": "Dava, kayıt talebi reddidedilen bir kısım alacağın",
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": ["esastan_ret"],
+    "bolumler": ["GEREĞİ DÜŞÜNÜLDÜ", "DAVA", "CEVAP", "İLK DERECE MAHKEMESİ KARARI", "İSTİNAF SEBEPLERİ", "DELİLLERİN DEĞERLENDİRMESİ VE GEREKÇE", "HÜKÜM"],
+    "mevzuat": ["6100:353", "6100:341", "6100:355", "2004:235", "2004:206", "6100:362"],
+    "kararlar": [],
+    "one_cikan": [
+      "Yani tüm işçilik alacakları birinci sıraya kaydı gereken imt",
+      "Bu kapsamda yapılan değerlendirmede davacının 33.307,61 TL i",
+      "2004 sayılı Kanunun 206 ncı maddesinin dördüncü fıkrasında b"
+    ],
+    "not": "'DAVA:' ve 'CEVAP:' künyede değil gövdede satır içi başlık olduğu için bölüm sayıldı. Konu cümlesi satır ortasında başlıyor. Ayrıca 6100:114 (istinaf sebeplerinde) geçiyor."
+  },
+  "dogrulama_bam_03": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "BURSA ... ASLİYE TİCARET MAHKEMESİ"}
+    ],
+    "konu": ["itirazın iptali"],
+    "konu_cumlesi": null,
+    "sonuc": "esastan_ret",
+    "sonuc_tumu": ["esastan_ret"],
+    "bolumler": ["HÜKÜM"],
+    "mevzuat": ["6100:353", "6100:359", "6100:362"],
+    "kararlar": [],
+    "one_cikan": [
+      "Kural olarak davadan feragat, mahkemeye ulaştığı anda hüküm ",
+      "Feragat anında davalı vekili tarafından vekalet sunulmamış i",
+      "Halbuki dikkat edilmesi gereken tarih cevap dilekçesinin tar",
+      "Haksız ve/veya yanlış bir dava açılmış ve davalı taraf bu yü"
+    ],
+    "not": "Gövde başlıkları ('İstinaf Öncesi Sürecin Özeti:' vb.) büyük harfli değil."
+  },
+  "dogrulama_yerel_01": {
+    "zincir": [],
+    "konu": ["menfi tespit"],
+    "konu_cumlesi": "Dava, 2004 sayılı İİK m.72/3 kapsamında icra takib",
+    "sonuc": "ret",
+    "sonuc_tumu": ["ret"],
+    "bolumler": ["GEREĞİ DÜŞÜNÜLDÜ", "DAVA", "SAVUNMA", "DELİLLER VE GEREKÇE", "HÜKÜM"],
+    "mevzuat": ["2004:72", "7155:20", "6102:5/A", "2004:67", "6100:320", "2004:73"],
+    "kararlar": ["2019/521|2019/423", "2008/4972|2008/6600"],
+    "one_cikan": [
+      "Ancak mahkememizce yapılan değerlendirmede TTK m.5/a’da yer ",
+      "Bundan da önemlisi, açılmış olan bir menfi tespit davasında,",
+      "Tüm bu nedenlerden mahkememizce menfi tespit davalarının da ",
+      "Davacı taraf her ne kadar takibin durdurulması yönünde tedbi"
+    ],
+    "not": "Başlıklar metinde 'DAVA/', 'SAVUNMA/', 'DELİLLER VE GEREKÇE/' (sondaki / atıldı). Konu cümlesi '...davasıdır.' ile bitiyor. 'davanın usulden REDDİNE' ilk derece kararı olduğundan ret (usulden_ret istinaf içindir); tedbir talebinin reddi de ret. Mevzuat 6 ile sınırlandı (ayrıca 6100:316)."
+  },
+  "dogrulama_yerel_02": {
+    "zincir": [],
+    "konu": ["alacak", "ticari satım"],
+    "konu_cumlesi": null,
+    "sonuc": "ret",
+    "sonuc_tumu": ["ret"],
+    "bolumler": ["GEREĞİ DÜŞÜNÜLDÜ", "KARARIN HUKUKİ GEREKÇELERİ", "HÜKÜM"],
+    "mevzuat": ["6102:5/A", "2004:67", "6100:114", "6100:115", "6102:21"],
+    "kararlar": [],
+    "one_cikan": [
+      "Bilindiği üzere itirazın iptali davası 2004 sayılı Kanun'un ",
+      "Alacak davasında verilen hüküm icra dosyasında itirazın ipta",
+      "Yine itirazın iptaline dair dava yönünden yapılan arabulucul",
+      "Bu bağlamda davacı ve davalı arasında \"... 12. İcra Müdürlüğ"
+    ],
+    "not": "'dava şartı yokluğu sebebiyle USULDEN REDDİNE' ilk derece kararı, ret. 6102:21 davacı iddiasında."
+  },
+  "dogrulama_danistay_01": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "İdare Mahkemesi"}
+    ],
+    "konu": ["ihalesinin iptali", "idari şartname"],
+    "konu_cumlesi": "Uyuşmazlık, Mahkeme kararında da belirtildiği şeki",
+    "sonuc": "bozma",
+    "sonuc_tumu": ["bozma", "ret"],
+    "bolumler": ["YARGILAMA SÜRECİ", "TEMYİZ EDENLERİN İDDİALARI", "KARŞI TARAFIN SAVUNMALARI", "DANIŞTAY TETKİK HÂKİMİ ... 'NİN DÜŞÜNCESİ", "İNCELEME VE GEREKÇE", "ESAS YÖNÜNDEN", "MADDİ OLAY", "İLGİLİ MEVZUAT", "HUKUKİ DEĞERLENDİRME", "KARAR SONUCU"],
+    "mevzuat": ["2886:36", "2886:2", "2886:7", "2577:49", "492:13", "2577:20/A"],
+    "kararlar": [],
+    "one_cikan": [
+      "İhale sonrası ihale uhdesinde kalan yüklenicinin de yıkım fa",
+      "İhale konusu taşınmazın bulunduğu yerde yürürlükte bulunan İ",
+      "Bu düzenlemeden \"yıkım işleminin\" ilgili belediyenin gözetim",
+      "Bu itibarla, kamunun can ve mal güvenliğini, çevrenin korunm"
+    ],
+    "not": "Satır içi büyük harfli başlıklar (TEMYİZ EDENLERİN İDDİALARI, KARŞI TARAFIN SAVUNMALARI, TETKİK HÂKİMİ DÜŞÜNCESİ) bölüm sayıldı; 'TÜRK MİLLETİ ADINA' sayılmadı. Konu ifadeleri 'Dava konusu istem' ve 'Uyuşmazlık,' cümlesinden."
+  },
+  "dogrulama_danistay_02": {
+    "zincir": [
+      {"rol": "istinaf", "mahkeme": "Bölge İdare Mahkemesi .... İdari Dava Dairesi"}
+    ],
+    "konu": ["ilişiğinin kesilmesi", "disiplin puanının tamamen kaybı"],
+    "konu_cumlesi": null,
+    "sonuc": "onama",
+    "sonuc_tumu": ["onama"],
+    "bolumler": ["YARGILAMA SÜRECİ", "TEMYİZ EDENİN İDDİALARI", "KARŞI TARAFIN SAVUNMASI", "DANIŞTAY TETKİK HÂKİMİ ....'NIN DÜŞÜNCESİ", "HUKUKİ DEĞERLENDİRME", "KARAR SONUCU", "KARŞI OY"],
+    "mevzuat": ["2577:45", "2577:17", "2577:49", "4566:38"],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "Çoğunluk gerekçesi yalnız usul hükmü + basmakalıp onama; somut gerekçe yalnız karşı oyda, one_cikan boş. 4566:38 karşı oyda."
+  },
+  "dogrulama_danistay_03": {
+    "zincir": [
+      {"rol": "ilk_derece", "mahkeme": "İdare Mahkemesi"}
+    ],
+    "konu": ["teminatının irat kaydedilmesi", "arama ruhsatı ihalesi"],
+    "konu_cumlesi": null,
+    "sonuc": "onama",
+    "sonuc_tumu": ["onama"],
+    "bolumler": ["YARGILAMA SÜRECİ", "TEMYİZ EDENİN İDDİALARI", "KARŞI TARAFIN SAVUNMASI", "DANIŞTAY TETKİK HÂKİMİ ...'IN DÜŞÜNCESİ", "HUKUKİ DEĞERLENDİRME", "KARAR SONUCU", "KARŞI OY"],
+    "mevzuat": ["2577:49", "2577:20/A"],
+    "kararlar": [],
+    "one_cikan": [],
+    "not": "Çoğunluk gerekçesi basmakalıp; somut gerekçe karşı oyda, one_cikan boş. 3213 sayılı Kanun Ek 18. madde (ek madde, davacı iddiasında) yazılmadı."
+  }
+}

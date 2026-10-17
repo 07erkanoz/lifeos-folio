@@ -46,6 +46,13 @@ void main() {
       'sözleşmenin',
       'sözleşmesinin',
     ]);
+    // Yumuşayan son ünsüz: "mahsup" araması "mahsubu"yu, "talep"
+    // "talebin"i bulmuyordu.
+    onlyOne('mahsup', ['mahsup', 'mahsubu', 'mahsubun', 'mahsuba']);
+    onlyOne('talep', ['talep', 'talebi', 'talebin', 'talebe', 'talepler']);
+    onlyOne('kitap', ['kitap', 'kitabı', 'kitabın']);
+    onlyOne('ağaç', ['ağaç', 'ağacı', 'ağacın']);
+    onlyOne('tespit', ['tespit', 'tespiti', 'tespitin']);
   });
 
   group('a short word keeps its shape', () {

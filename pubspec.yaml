@@ -94,6 +94,7 @@ flutter:
     - assets/mevzuat/laws.json
     - assets/mevzuat/terms.json
     - assets/mevzuat/courts.json
+    - assets/mevzuat/karar_kaliplari.json
     - assets/mevzuat/faiz.json
     - assets/sozluk/terms.json
     - assets/ses/okuma.json

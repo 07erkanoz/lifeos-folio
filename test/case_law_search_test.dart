@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evrak_convert/services/legal/case_law_search.dart';
+import 'package:evrak_convert/services/legal/decision_anatomy.dart'
+    show OutcomeKind;
 
 Map<String, Object?> _data(CaseLawQuery query) =>
     (jsonDecode(CaseLawQueryBuilder.body(query)) as Map)['data']
@@ -276,6 +278,28 @@ void main() {
 
     test('nothing in, nothing out', () {
       expect(CaseLawRanking.of('kira', const [], const {}), isEmpty);
+    });
+
+    test('what each decided is read from its operative part', () {
+      // Bütün metinde "reddine" aramak, alt mahkemenin reddini anlatan bir
+      // bozma kararını "ret" diye gösteriyordu; yalnız hüküm fıkrası okunur.
+      final order = CaseLawRanking.of(
+        'kıdem tazminatı',
+        [hit('a'), hit('b')],
+        {
+          'a':
+              'Mahkemece kıdem tazminatı davasının reddine karar verilmiştir.\n'
+              'VI. KARAR\n'
+              'Açıklanan sebeplerle;\n'
+              'İlk Derece Mahkemesi kararının BOZULMASINA,',
+          'b': 'Kıdem tazminatı talebi yerinde görülmüştür.',
+        },
+      );
+      expect(
+        order.firstWhere((h) => h.documentId == 'a').outcome,
+        OutcomeKind.bozma,
+      );
+      expect(order.firstWhere((h) => h.documentId == 'b').outcome, isNull);
     });
   });
 

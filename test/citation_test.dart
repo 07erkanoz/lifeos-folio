@@ -401,4 +401,69 @@ void main() {
     // Cümle sonu noktası bir sıralama açmaz.
     expect(short(_scanner().scan('TMK m. 166. Ve 2023 yılında')), ['4721/166']);
   });
+
+  group('how court decisions write a citation', () {
+    // Bedesten'den indirilen kararlarda ölçüldü: bu yazımlar okunmuyordu,
+    // biri yanlış maddeye gidiyordu.
+    test('"hükmü" in place of "maddesi"', () {
+      final found = _scanner().scan(
+        "kararının 6100 sayılı Kanun'un 370/1 hükmü uyarınca ONANMASINA",
+      );
+      expect(short(found), ['6100/370']);
+      expect(found.single.paragraph, 1);
+      expect(short(_scanner().scan("1475 sayılı İş Kanunu'nun 14/2 hükmü")), [
+        '1475/14',
+      ]);
+    });
+
+    test('a bent divided once more is not read as an article', () {
+      // "353/1-b-1" eskiden "m. 1" diye okunuyordu.
+      for (final text in [
+        "6100 sayılı HMK'nın 353/1-b-1 maddesi uyarınca",
+        '6100 sayılı HMK’nın 353/1-b-1 maddesi uyarınca',
+        'HMK. 353/1-b.1. maddesi gereğince',
+        "Hukuk Muhakemeleri Kanunu'nun (HMK) 353/1-b.2 maddesi gereğince",
+      ]) {
+        final found = _scanner().scan(text);
+        expect(short(found), ['6100/353'], reason: text);
+        expect(found.single.clause, 'b', reason: text);
+      }
+    });
+
+    test('the suffix written with a full stop or a space', () {
+      expect(short(_scanner().scan('hükmün HUMK.nun 428. maddesi')), [
+        '1086/428',
+      ]);
+      expect(short(_scanner().scan("TBK' nun 345. maddesinde")), ['6098/345']);
+    });
+
+    test('a listed article that carries its own fıkra', () {
+      for (final text in [
+        "HMK'nın 114/1-c ve 115/2. maddeleri uyarınca",
+        'HMK md 114/1-c ve 115/2 uyarınca',
+      ]) {
+        expect(short(_scanner().scan(text)), [
+          '6100/114',
+          '6100/115',
+        ], reason: text);
+      }
+    });
+
+    test('a bent in brackets, and "ve devamı"', () {
+      final bracketed = _scanner().scan(
+        "6100 sayılı Hukuk Muhakemeleri Kanunu'nun 114/1.(i) maddesi",
+      );
+      expect(short(bracketed), ['6100/114']);
+      expect(bracketed.single.clause, 'i');
+      expect(
+        short(
+          _scanner().scan(
+            "6100 sayılı Hukuk Muhakemeleri Kanunu'nun 341 ve devamı "
+            'maddeleri',
+          ),
+        ),
+        ['6100/341'],
+      );
+    });
+  });
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evrak_convert/services/legal/case_law_search.dart';
+import 'package:evrak_convert/services/legal/decision_anatomy.dart'
+    show OutcomeKind;
 import 'package:evrak_convert/ui/legal/case_law_results.dart';
 
 CaseLawHit _hit({
@@ -8,7 +10,9 @@ CaseLawHit _hit({
   String court = '9. Hukuk Dairesi',
   String snippet = 'para ile ölçülebilen menfaatler göz önünde tutulur',
   int alike = 0,
+  OutcomeKind? outcome,
 }) => CaseLawHit(
+  outcome: outcome,
   documentId: id,
   court: court,
   kind: 'YARGITAYKARARI',
@@ -108,6 +112,32 @@ void main() {
       );
       expect(find.textContaining('bu sayfada 1 tanesi'), findsOneWidget);
       expect(find.textContaining('birleştirildi'), findsNothing);
+    });
+
+    testWidgets('what it decided is shown, and where that was read', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          CaseLawResultList(
+            results: CaseLawResults(
+              hits: [
+                _hit(outcome: OutcomeKind.bozma),
+                _hit(id: '2'),
+              ],
+              total: 2,
+              page: 1,
+            ),
+            asked: true,
+            onOpen: (_) {},
+          ),
+        ),
+      );
+      expect(find.text('Bozma'), findsOneWidget);
+      final tip = tester.widget<Tooltip>(
+        find.ancestor(of: find.text('Bozma'), matching: find.byType(Tooltip)),
+      );
+      expect(tip.message, contains('hüküm fıkrasından'));
     });
 
     testWidgets('pressing one opens it', (tester) async {

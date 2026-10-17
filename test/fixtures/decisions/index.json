@@ -1,0 +1,602 @@
+[
+  {
+    "id": "yargitay_yeni_01",
+    "documentId": "1202944000",
+    "court": "9. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/9394",
+    "karar": "2026/696",
+    "date": "02.02.2026",
+    "query": "kıdem tazminatı"
+  },
+  {
+    "id": "yargitay_yeni_02",
+    "documentId": "1201737300",
+    "court": "9. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/5419",
+    "karar": "2025/6183",
+    "date": "10.09.2025",
+    "query": "kıdem tazminatı"
+  },
+  {
+    "id": "yargitay_yeni_03",
+    "documentId": "1135170400",
+    "court": "1. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/985",
+    "karar": "2025/1440",
+    "date": "17.03.2025",
+    "query": "tapu iptal tescil"
+  },
+  {
+    "id": "yargitay_yeni_04",
+    "documentId": "1175951500",
+    "court": "1. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/3734",
+    "karar": "2025/4140",
+    "date": "01.10.2025",
+    "query": "tapu iptal tescil"
+  },
+  {
+    "id": "yargitay_yeni_05",
+    "documentId": "1188396000",
+    "court": "2. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/2783",
+    "karar": "2025/10012",
+    "date": "20.11.2025",
+    "query": "nafaka boşanma"
+  },
+  {
+    "id": "yargitay_yeni_06",
+    "documentId": "1149548500",
+    "court": "2. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/4442",
+    "karar": "2025/1392",
+    "date": "13.02.2025",
+    "query": "nafaka boşanma"
+  },
+  {
+    "id": "yargitay_yeni_07",
+    "documentId": "1231468300",
+    "court": "3. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2026/2389",
+    "karar": "2026/3804",
+    "date": "15.06.2026",
+    "query": "kira tespit"
+  },
+  {
+    "id": "yargitay_yeni_08",
+    "documentId": "1185014500",
+    "court": "3. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/1614",
+    "karar": "2025/5007",
+    "date": "21.10.2025",
+    "query": "kira tespit"
+  },
+  {
+    "id": "yargitay_yeni_09",
+    "documentId": "1226397300",
+    "court": "4. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/14688",
+    "karar": "2026/3981",
+    "date": "09.04.2026",
+    "query": "manevi tazminat"
+  },
+  {
+    "id": "yargitay_yeni_10",
+    "documentId": "1227971500",
+    "court": "4. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/3433",
+    "karar": "2026/3539",
+    "date": "01.04.2026",
+    "query": "manevi tazminat"
+  },
+  {
+    "id": "yargitay_yeni_11",
+    "documentId": "1223517200",
+    "court": "5. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2026/1332",
+    "karar": "2026/8137",
+    "date": "04.05.2026",
+    "query": "kamulaştırmasız el atma"
+  },
+  {
+    "id": "yargitay_yeni_12",
+    "documentId": "1230142800",
+    "court": "5. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2026/612",
+    "karar": "2026/10503",
+    "date": "08.06.2026",
+    "query": "kamulaştırmasız el atma"
+  },
+  {
+    "id": "yargitay_yeni_13",
+    "documentId": "1169004600",
+    "court": "7. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/4556",
+    "karar": "2025/2699",
+    "date": "20.05.2025",
+    "query": "ortaklığın giderilmesi"
+  },
+  {
+    "id": "yargitay_yeni_14",
+    "documentId": "1127351100",
+    "court": "7. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/5191",
+    "karar": "2025/428",
+    "date": "03.02.2025",
+    "query": "ortaklığın giderilmesi"
+  },
+  {
+    "id": "yargitay_yeni_15",
+    "documentId": "1136981800",
+    "court": "11. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/330",
+    "karar": "2025/1795",
+    "date": "13.03.2025",
+    "query": "itirazın iptali"
+  },
+  {
+    "id": "yargitay_yeni_16",
+    "documentId": "1140193300",
+    "court": "11. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/6039",
+    "karar": "2025/1034",
+    "date": "18.02.2025",
+    "query": "itirazın iptali"
+  },
+  {
+    "id": "yargitay_yeni_17",
+    "documentId": "1201023700",
+    "court": "12. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/7629",
+    "karar": "2026/411",
+    "date": "02.02.2026",
+    "query": "menfi tespit icra"
+  },
+  {
+    "id": "yargitay_eski_01",
+    "documentId": "169627900",
+    "court": "9. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2013/15932",
+    "karar": "2015/12395",
+    "date": "30.03.2015",
+    "query": "kıdem tazminatı"
+  },
+  {
+    "id": "yargitay_eski_02",
+    "documentId": "159942600",
+    "court": "9. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2013/15595",
+    "karar": "2015/10334",
+    "date": "12.03.2015",
+    "query": "kıdem tazminatı"
+  },
+  {
+    "id": "yargitay_eski_03",
+    "documentId": "406980100",
+    "court": "1. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2015/7397",
+    "karar": "2018/1002",
+    "date": "19.02.2018",
+    "query": "tapu iptal tescil"
+  },
+  {
+    "id": "yargitay_eski_04",
+    "documentId": "429647500",
+    "court": "1. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2018/2570",
+    "karar": "2018/11600",
+    "date": "28.06.2018",
+    "query": "tapu iptal tescil"
+  },
+  {
+    "id": "yargitay_eski_05",
+    "documentId": "318461800",
+    "court": "3. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2017/1502",
+    "karar": "2017/1318",
+    "date": "14.02.2017",
+    "query": "kira tespit"
+  },
+  {
+    "id": "yargitay_eski_06",
+    "documentId": "490459100",
+    "court": "3. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2017/6028",
+    "karar": "2019/1792",
+    "date": "07.03.2019",
+    "query": "kira tespit"
+  },
+  {
+    "id": "yargitay_eski_07",
+    "documentId": "168915500",
+    "court": "11. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2014/15389",
+    "karar": "2015/1671",
+    "date": "11.02.2015",
+    "query": "itirazın iptali"
+  },
+  {
+    "id": "yargitay_eski_08",
+    "documentId": "421224900",
+    "court": "11. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2018/50",
+    "karar": "2018/3109",
+    "date": "25.04.2018",
+    "query": "itirazın iptali"
+  },
+  {
+    "id": "yargitay_eski_09",
+    "documentId": "518592900",
+    "court": "17. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2016/4174",
+    "karar": "2019/442",
+    "date": "22.01.2019",
+    "query": "trafik kazası tazminat"
+  },
+  {
+    "id": "yargitay_eski_10",
+    "documentId": "516293700",
+    "court": "17. Hukuk Dairesi",
+    "kind": "YARGITAYKARARI",
+    "esas": "2016/1220",
+    "karar": "2019/1515",
+    "date": "14.02.2019",
+    "query": "trafik kazası tazminat"
+  },
+  {
+    "id": "hgk_01",
+    "documentId": "1157514900",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/150",
+    "karar": "2025/384",
+    "date": "18.06.2025",
+    "query": "işe iade"
+  },
+  {
+    "id": "hgk_02",
+    "documentId": "1200903100",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/614",
+    "karar": "2025/745",
+    "date": "26.11.2025",
+    "query": "işe iade"
+  },
+  {
+    "id": "hgk_03",
+    "documentId": "1228919200",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/453",
+    "karar": "2026/353",
+    "date": "10.06.2026",
+    "query": "tazminat"
+  },
+  {
+    "id": "hgk_04",
+    "documentId": "1178750800",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2024/41",
+    "karar": "2025/523",
+    "date": "17.09.2025",
+    "query": "tazminat"
+  },
+  {
+    "id": "hgk_05",
+    "documentId": "1228903500",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2025/363",
+    "karar": "2026/275",
+    "date": "29.04.2026",
+    "query": "tapu iptal"
+  },
+  {
+    "id": "hgk_06",
+    "documentId": "857405200",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2020/630",
+    "karar": "2022/1286",
+    "date": "11.10.2022",
+    "query": "tapu iptal"
+  },
+  {
+    "id": "hgk_07",
+    "documentId": "112853600",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2015/30",
+    "karar": "2015/2014",
+    "date": "30.09.2015",
+    "query": "direnme kararı"
+  },
+  {
+    "id": "hgk_08",
+    "documentId": "538783300",
+    "court": "Hukuk Genel Kurulu",
+    "kind": "YARGITAYKARARI",
+    "esas": "2019/451",
+    "karar": "2019/928",
+    "date": "24.09.2019",
+    "query": "direnme kararı"
+  },
+  {
+    "id": "bam_01",
+    "documentId": "1190640900",
+    "court": "Antalya Bölge Adliye Mahkemesi 11. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2022/2394",
+    "karar": "2025/1404",
+    "date": "25.12.2025",
+    "query": "kıdem tazminatı"
+  },
+  {
+    "id": "bam_02",
+    "documentId": "1228695700",
+    "court": "Samsun Bölge Adliye Mahkemesi 5. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2026/419",
+    "karar": "2026/1276",
+    "date": "17.09.2026",
+    "query": "kıdem tazminatı"
+  },
+  {
+    "id": "bam_03",
+    "documentId": "1158001800",
+    "court": "Ankara Bölge Adliye Mahkemesi 37. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2025/1490",
+    "karar": "2025/1291",
+    "date": "22.05.2025",
+    "query": "kira tahliye"
+  },
+  {
+    "id": "bam_04",
+    "documentId": "1174896600",
+    "court": "İstanbul Bölge Adliye Mahkemesi 17. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2025/953",
+    "karar": "2025/1320",
+    "date": "16.10.2025",
+    "query": "kira tahliye"
+  },
+  {
+    "id": "bam_05",
+    "documentId": "1219792100",
+    "court": "İstanbul Bölge Adliye Mahkemesi 43. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2026/1205",
+    "karar": "2026/1514",
+    "date": "14.07.2026",
+    "query": "itirazın iptali"
+  },
+  {
+    "id": "bam_06",
+    "documentId": "1074293300",
+    "court": "İstanbul Bölge Adliye Mahkemesi 17. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2021/749",
+    "karar": "2024/1113",
+    "date": "10.10.2024",
+    "query": "itirazın iptali"
+  },
+  {
+    "id": "bam_07",
+    "documentId": "1023481800",
+    "court": "İstanbul Bölge Adliye Mahkemesi 44. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2021/1028",
+    "karar": "2024/771",
+    "date": "02.05.2024",
+    "query": "boşanma"
+  },
+  {
+    "id": "bam_08",
+    "documentId": "1209165500",
+    "court": "İstanbul Bölge Adliye Mahkemesi 13. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2023/1791",
+    "karar": "2026/781",
+    "date": "16.04.2026",
+    "query": "boşanma"
+  },
+  {
+    "id": "bam_09",
+    "documentId": "1223672100",
+    "court": "Bursa Bölge Adliye Mahkemesi 17. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2025/2181",
+    "karar": "2025/154",
+    "date": "20.11.2025",
+    "query": "menfi tespit"
+  },
+  {
+    "id": "bam_10",
+    "documentId": "1217410900",
+    "court": "Bursa Bölge Adliye Mahkemesi 5. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2023/2525",
+    "karar": "2024/619",
+    "date": "17.04.2024",
+    "query": "menfi tespit"
+  },
+  {
+    "id": "bam_11",
+    "documentId": "1178023900",
+    "court": "İstanbul Bölge Adliye Mahkemesi 40. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2025/1147",
+    "karar": "2025/1641",
+    "date": "06.11.2025",
+    "query": "trafik kazası"
+  },
+  {
+    "id": "bam_12",
+    "documentId": "1173476600",
+    "court": "İstanbul Bölge Adliye Mahkemesi 9. Hukuk Dairesi",
+    "kind": "ISTINAFHUKUK",
+    "esas": "2022/2296",
+    "karar": "2025/1551",
+    "date": "02.10.2025",
+    "query": "trafik kazası"
+  },
+  {
+    "id": "yerel_01",
+    "documentId": "716566100",
+    "court": "İstanbul 3. Asliye Ticaret Mahkemesi",
+    "kind": "YERELHUKUK",
+    "esas": "2020/661",
+    "karar": "2021/749",
+    "date": "10.12.2021",
+    "query": "alacak"
+  },
+  {
+    "id": "yerel_04",
+    "documentId": "545511900",
+    "court": "İstanbul Anadolu 9. Asliye Ticaret Mahkemesi",
+    "kind": "YERELHUKUK",
+    "esas": "2015/1167",
+    "karar": "2019/770",
+    "date": "18.07.2019",
+    "query": "tazminat"
+  },
+  {
+    "id": "yerel_05",
+    "documentId": "999101800",
+    "court": "Bakırköy 6. Asliye Ticaret Mahkemesi",
+    "kind": "YERELHUKUK",
+    "esas": "2020/766",
+    "karar": "2023/1179",
+    "date": "20.12.2023",
+    "query": "tapu iptal"
+  },
+  {
+    "id": "yerel_06",
+    "documentId": "1216804100",
+    "court": "İstanbul 18. Asliye Ticaret Mahkemesi",
+    "kind": "YERELHUKUK",
+    "esas": "2024/303",
+    "karar": "2026/513",
+    "date": "02.07.2026",
+    "query": "tapu iptal"
+  },
+  {
+    "id": "yerel_08",
+    "documentId": "861015800",
+    "court": "İstanbul 21. Asliye Ticaret Mahkemesi",
+    "kind": "YERELHUKUK",
+    "esas": "2022/644",
+    "karar": "2023/67",
+    "date": "31.01.2023",
+    "query": "kira"
+  },
+  {
+    "id": "danistay_01",
+    "documentId": "1218428900",
+    "court": "4. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2025/1268",
+    "karar": "2025/6853",
+    "date": "22.12.2025",
+    "query": "imar para cezası"
+  },
+  {
+    "id": "danistay_02",
+    "documentId": "992564200",
+    "court": "6. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2021/9889",
+    "karar": "2023/4276",
+    "date": "02.05.2023",
+    "query": "imar para cezası"
+  },
+  {
+    "id": "danistay_03",
+    "documentId": "1231244100",
+    "court": "2. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2021/17740",
+    "karar": "2025/6404",
+    "date": "31.12.2025",
+    "query": "disiplin cezası"
+  },
+  {
+    "id": "danistay_04",
+    "documentId": "1230897800",
+    "court": "2. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2023/828",
+    "karar": "2025/6341",
+    "date": "30.12.2025",
+    "query": "disiplin cezası"
+  },
+  {
+    "id": "danistay_05",
+    "documentId": "1169072600",
+    "court": "9. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2023/3225",
+    "karar": "2024/5301",
+    "date": "16.10.2024",
+    "query": "vergi ziyaı"
+  },
+  {
+    "id": "danistay_06",
+    "documentId": "776653600",
+    "court": "3. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2021/2412",
+    "karar": "2022/2250",
+    "date": "12.05.2022",
+    "query": "vergi ziyaı"
+  },
+  {
+    "id": "danistay_07",
+    "documentId": "1223215700",
+    "court": "12. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2025/2318",
+    "karar": "2025/2601",
+    "date": "21.05.2025",
+    "query": "tam yargı"
+  },
+  {
+    "id": "danistay_08",
+    "documentId": "1223215900",
+    "court": "12. Daire",
+    "kind": "DANISTAYKARAR",
+    "esas": "2025/2432",
+    "karar": "2025/2603",
+    "date": "21.05.2025",
+    "query": "tam yargı"
+  }
+]
