@@ -168,6 +168,9 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
       library.dispose();
+      // The search engine waits three seconds at most for its worker to
+      // close; on this test's clock the answer never comes.
+      await tester.pump(const Duration(seconds: 4));
       await removeTemporaryDirectory(tester, dir);
     },
   );

@@ -18,8 +18,11 @@ class UyapSentLog {
 
   final Directory? _directory;
 
-  /// This process's writes, one after another.
-  Future<void> _writing = Future.value();
+  /// This process's writes, one after another, whichever log made them: the
+  /// lock beside the file keeps other processes out, not another handle in
+  /// this one (POSIX locks are the process's), so two logs here writing at
+  /// once each read the file before the other wrote and one send was lost.
+  static Future<void> _writing = Future.value();
 
   /// How long a send is kept: as long as "İşlemlerim" follows it.
   static const keep = Duration(days: 2);

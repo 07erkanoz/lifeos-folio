@@ -266,13 +266,16 @@ void main() {
       findsOneWidget,
     );
 
-    // UYAP read anew shows it.
+    // UYAP read anew shows it, the day it was written (UYAP's own days
+    // before the entry's by more than three are another payment).
+    final today = DateTime.now();
+    String two(int n) => '$n'.padLeft(2, '0');
     await tester.pumpWidget(
       view(
-        record(const [
+        record([
           UyapMoneyItem(
             kind: 'Haricen Tahsilat',
-            date: '14.10.2026',
+            date: '${two(today.day)}.${two(today.month)}.${today.year}',
             amount: 10000,
             receipt: 'M-9',
           ),

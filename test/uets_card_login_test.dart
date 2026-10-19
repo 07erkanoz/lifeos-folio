@@ -11,18 +11,26 @@ void main() {
   late UetsApi api;
   final posted = <String, Object?>{};
   var polls = 0;
+  // As UETS: the steps after the first are known by the cookie it set.
+  final cookies = <String>[];
 
   setUp(() async {
     posted.clear();
     polls = 0;
+    cookies.clear();
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((r) async {
       final text = await utf8.decoder.bind(r).join();
       final body = text.isEmpty ? null : jsonDecode(text) as Map;
       final path = r.uri.path.replaceFirst('/v1/', '');
+      final cookie = r.cookies.where((c) => c.name == 'UETSSESSION');
+      cookies.add(cookie.isEmpty ? '' : cookie.first.value);
       Object? answer = const {};
       if (path == 'clients/_authentication' && body?['transactionID'] == null) {
+        r.response.cookies.add(Cookie('UETSSESSION', 's-1'));
         answer = {'transactionID': 4711};
+      } else if (cookie.isEmpty) {
+        answer = {'status': 'error', 'message': 'İşlem bulunamadı'};
       } else if (path == 'auth/_eimza' && r.method == 'GET') {
         answer = {
           'data': base64Encode(utf8.encode('imzalanacak')),
@@ -77,6 +85,20 @@ void main() {
     expect(posted['identityNumber'], '10000000146');
     expect(s.method, 'eimza');
     expect(api.connected, isTrue);
+    expect(cookies.first, '', reason: 'the first step has none yet');
+    expect(cookies.skip(1), everyElement('s-1'));
+
+    // Kept and taken up again: its cookie with it.
+    final kept = api.exportSession()!;
+    final again = UetsApi.forTesting(
+      Uri.parse('http://127.0.0.1:${server.port}/v1/'),
+    );
+    cookies.clear();
+    await again.restoreSession(kept);
+    expect(cookies, ['s-1']);
+    // Logged out: nothing of it left.
+    api.logout();
+    expect(api.exportSession(), isNull);
   });
 
   test('a certificate without a TC number is refused before UETS', () async {

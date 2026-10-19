@@ -35,6 +35,13 @@ class UetsApi {
   DateTime? _expires;
   int _generation = 0;
 
+  /// What UETS set in its answers, sent back with every request. The card
+  /// login's four steps are tied by these (banaozel measured it, uets_web
+  /// `_ham`): without them the signature reaches UETS and the session never
+  /// opens, the login waiting on a transaction UETS keeps elsewhere. The
+  /// mobile signature does without, and is not harmed by them.
+  final _cookies = <String, String>{};
+
   /// Who is logged in and until when; null when no one is.
   final session = ValueNotifier<UetsSession?>(null);
 
@@ -158,6 +165,7 @@ class UetsApi {
   /// The card login's steps (UYGULAMAPLANI P05): open a transaction for
   /// [tckn], and get what the card must sign.
   Future<CardChallenge> startCard(String tckn) async {
+    _cookies.clear();
     final opened = await _send('POST', 'clients/_authentication', {
       'method': 'eimza',
       'ext_id': tckn,
@@ -219,6 +227,14 @@ class UetsApi {
       if (data is Map && '${data['access_token'] ?? ''}'.isNotEmpty) {
         return _open(data, challenge.tckn);
       }
+      // Done, the token set as a cookie rather than written in the body.
+      final kept = _cookies['access_token'] ?? '';
+      if (answer.code == 201 && kept.isNotEmpty) {
+        return _open({
+          ...?(data is Map ? data : null),
+          'access_token': kept,
+        }, challenge.tckn);
+      }
       final state = data is Map ? '${data['status'] ?? ''}'.toLowerCase() : '';
       if (answer.code >= 400 ||
           state.contains('error') ||
@@ -235,6 +251,7 @@ class UetsApi {
     _generation++;
     _token = null;
     _expires = null;
+    _cookies.clear();
     session.value = null;
   }
 
@@ -251,6 +268,7 @@ class UetsApi {
       'expires': _expires!.toUtc().toIso8601String(),
       'method': s.method,
       'accounts': s.accounts,
+      if (_cookies.isNotEmpty) 'cookies': Map<String, String>.of(_cookies),
     };
   }
 
@@ -268,6 +286,12 @@ class UetsApi {
     }
     _token = token;
     _expires = expires;
+    _cookies
+      ..clear()
+      ..addAll({
+        for (final e in ((kept['cookies'] as Map?) ?? const {}).entries)
+          '${e.key}': '${e.value}',
+      });
     session.value = UetsSession(
       expires: expires,
       method: '${kept['method'] ?? ''}',
@@ -459,6 +483,7 @@ class UetsApi {
   Future<Uint8List> _bytes(String path) async {
     final request = await _request('GET', path, null, authorized: true);
     final response = await request.close().timeout(const Duration(seconds: 90));
+    _keepCookies(response);
     final bytes = BytesBuilder(copy: false);
     // A pause between chunks, and the whole, each have their limit: a
     // slow trickle does not hold the sync for hours.
@@ -525,6 +550,12 @@ class UetsApi {
         .timeout(const Duration(seconds: 20));
     request.headers.set('Accept', 'application/json');
     if (authorized) request.headers.set('Authorization', 'Bearer $_token');
+    if (_cookies.isNotEmpty) {
+      request.headers.set(
+        HttpHeaders.cookieHeader,
+        [for (final e in _cookies.entries) '${e.key}=${e.value}'].join('; '),
+      );
+    }
     if (body != null) {
       request.headers.set('Content-Type', 'application/json; charset=UTF-8');
       request.add(utf8.encode(jsonEncode(body)));
@@ -540,6 +571,7 @@ class UetsApi {
   }) async {
     final request = await _request(method, path, body, authorized: authorized);
     final response = await request.close().timeout(const Duration(seconds: 90));
+    _keepCookies(response);
     // The body is waited for too: headers come, the rest never, and a sync
     // stood still for good (its next ones not even begun).
     final text = await response
@@ -547,6 +579,16 @@ class UetsApi {
         .join()
         .timeout(const Duration(seconds: 90));
     return (code: response.statusCode, body: text);
+  }
+
+  void _keepCookies(HttpClientResponse response) {
+    try {
+      for (final c in response.cookies) {
+        _cookies[c.name] = c.value;
+      }
+    } on Exception {
+      // A cookie Dart cannot read: the rest of the answer still counts.
+    }
   }
 
   static Object? _json(String text) {
