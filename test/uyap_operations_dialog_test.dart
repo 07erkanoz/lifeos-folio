@@ -8,7 +8,11 @@ const _court = 'Ankara 3. Asliye Hukuk Mahkemesi';
 UyapOperation _op(String name, DateTime at, String status, String number) =>
     UyapOperation(
       orderNumber: name,
-      date: '${at.day}.${at.month}.${at.year} ${at.hour}:${at.minute}',
+      // As UYAP writes it: "15:09", not "15:9", which reads as no hour at
+      // all (the test failed in the first ten minutes of every hour).
+      date:
+          '${at.day}.${at.month}.${at.year} '
+          '${'${at.hour}'.padLeft(2, '0')}:${'${at.minute}'.padLeft(2, '0')}',
       court: _court,
       caseNumber: number,
       caseId: '',
