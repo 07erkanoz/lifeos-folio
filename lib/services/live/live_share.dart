@@ -623,6 +623,28 @@ class LiveShareHost {
         this,
         title: title,
         onGuest: (grant, name, office) {
+          // One of the person's own devices, or the office's, that joined
+          // by the code: shown it the way it is known, not as a guest. As a
+          // guest the network would not open it the channel at all (it is
+          // no guest), and the code matched on both screens while nothing
+          // came (21 Ekim 2026).
+          final known = _net.knownByGrant(grant);
+          if (known != null) {
+            final member = _net.ledger.member(grant.deviceId);
+            final own = _net.ownKnown.any((d) => d.deviceId == grant.deviceId);
+            final named = own
+                ? (known.device.trim().isNotEmpty ? known.device : known.name)
+                : (member?.name ?? known.name);
+            unawaited(() async {
+              await invite(
+                grant.deviceId,
+                named.trim().isEmpty ? 'Cihazınız' : named,
+                office: !own && member != null,
+              );
+              await _net.forgetGuest(grant.deviceId, grant);
+            }());
+            return;
+          }
           final named = [
             if (name.isNotEmpty) name else 'Misafir',
             if (office.isNotEmpty) '($office)',

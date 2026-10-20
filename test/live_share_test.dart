@@ -411,6 +411,47 @@ void main() {
     expect(deniz.guestsOpen, isFalse);
   });
 
+  test('one\'s own device joining by the code is shown the document the way '
+      'it is known, not turned away as no guest', () async {
+    final (pc, tablet) = await pair();
+    final host = LiveShareHost(
+      title: 'Kira sözleşmesi',
+      snapshot: () => (
+        delta: (Delta()..insert('Kiraya veren ve kiracı\n')).toJson(),
+        blocks: <DocBlock>[],
+      ),
+      blockCount: () => 0,
+      network: pc,
+    );
+    await host.takeGuests(true);
+    tablet.seenForTesting(pc.self!);
+    final joining = tablet.joinAsGuest(pc.self!, name: 'Tablet')!;
+    await until(() => pc.guestPairing.value?.code != null);
+    await until(() => joining.code != null);
+    expect(joining.code, pc.guestPairing.value!.code);
+    pc.guestPairing.value!.confirm();
+    joining.confirm();
+    // It came: before, the code matched and the sharer found it
+    // unreachable, its guest's door shut to a device it knows.
+    await until(
+      () => LiveShare.instance.incoming.value.any(
+        (s) => s.fromDevice == pc.self!.deviceId,
+      ),
+    );
+    final session = LiveShare.instance.incoming.value.singleWhere(
+      (s) => s.fromDevice == pc.self!.deviceId,
+    );
+    await until(() => session.ready);
+    expect(session.document!.toPlainText(), 'Kiraya veren ve kiracı\n');
+    expect(session.asGuest, isFalse);
+    await until(
+      () => host.peers.value.any((p) => p.state == LivePeerState.watching),
+    );
+    expect(pc.isGuestOnly(tablet.self!.deviceId), isFalse);
+    await host.close();
+    await until(() => session.ended);
+  });
+
   /// A sharer taking guests and a guest seeing it on the network.
   Future<(OfficeNetwork, OfficeNetwork, LiveShareHost)> guests() async {
     final deniz = await folio('deniz-pc', name: 'Av. Deniz Kaya');

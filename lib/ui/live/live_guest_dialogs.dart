@@ -290,8 +290,9 @@ class _LiveJoinDialogState extends State<LiveJoinDialog> {
     if (_pairing?.state != PairingState.done) return;
     final session = _share.incoming.value
         .where(
+          // As a guest, or, when the sharer knows this device already (one
+          // of the person's own, the office's), the way it knows it.
           (s) =>
-              s.asGuest &&
               s.fromDevice == asked.deviceId &&
               !s.ended &&
               !_before.contains(s),

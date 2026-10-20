@@ -1552,6 +1552,19 @@ class OfficeNetwork extends ChangeNotifier {
   /// one live document, in memory, by a code both screens showed; not
   /// the person's, not the office's, not a device known. What a device
   /// says of itself on the network does not change it.
+  /// The device [grant] was paired by, when this one knows it already by
+  /// the very same key: one of the person's own, or a member of the office,
+  /// who joined a live document by its code. Not a guest then; one only
+  /// saying it is such a device has not its key, and stays a guest.
+  KnownDevice? knownByGrant(KnownDevice grant) {
+    final known = _knownDevices[grant.deviceId];
+    return known != null &&
+            known.publicKey.isNotEmpty &&
+            known.publicKey == grant.publicKey
+        ? known
+        : null;
+  }
+
   bool isGuestOnly(String deviceId) =>
       _guests.containsKey(deviceId) &&
       !_knownDevices.containsKey(deviceId) &&
