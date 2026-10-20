@@ -199,6 +199,14 @@ class DesktopCompanion extends ChangeNotifier
     }
   }
 
+  /// Waits, a second at most, for the compositor to have done what was
+  /// asked of the window.
+  static Future<void> _settled(Future<bool> Function() done) async {
+    for (var i = 0; i < 20 && !await done(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
   Future<void> _present(String? token) async {
     await windowManager.show();
     await windowManager.focus();
@@ -223,6 +231,18 @@ class DesktopCompanion extends ChangeNotifier
         _wasFullscreen = await windowManager.isFullScreen();
         if (!_wasMaximized && !_wasFullscreen) {
           mainBounds = await windowManager.getBounds();
+        }
+        // Out of full screen and maximized while still shown: a hidden
+        // window's are not changed on Wayland (KWin), and the palette came
+        // at the main window's size, a small search inside a large window
+        // (measured under a virtual KWin, 21 Ekim 2026).
+        if (_wasFullscreen) {
+          await windowManager.setFullScreen(false);
+          await _settled(() async => !await windowManager.isFullScreen());
+        }
+        if (_wasMaximized) {
+          await windowManager.unmaximize();
+          await _settled(() async => !await windowManager.isMaximized());
         }
       }
       await windowManager.hide();
