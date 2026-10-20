@@ -1352,6 +1352,9 @@ class PortalSync extends ChangeNotifier {
     if (!_uets.connected) return null;
     final refused = await _checkUetsAccount(db);
     if (refused != null) {
+      // Said in the log too: a login that "closes and does not connect"
+      // was this, and nothing showed it but the channel's line.
+      unawaited(SyncLog.note('UETS girişi kapatıldı: $refused'));
       _uets.logout();
       return refused;
     }
@@ -1612,10 +1615,30 @@ class PortalSync extends ChangeNotifier {
     // there must be some. An office's box two lawyers share is not enough,
     // since then the key would not have been lost.
     if (keyLost) {
-      final known = {for (final n in db.notices()) n.message.id};
-      final page = await _uets.messages(count: 50);
-      final shared = page.where((m) => known.contains(m.id)).length;
-      if (shared > 0 && shared == page.length) {
+      final kept = db.notices();
+      final known = {for (final n in kept) n.message.id};
+      // Only what came before Folio last read the box tells it: whatever
+      // came since is not known yet by any box. Asking that the newest
+      // fifty be all known shut the lawyer out of their own box for good
+      // as soon as one notice came after the key was lost (20 Ekim 2026).
+      DateTime? newest;
+      for (final n in kept) {
+        final at = n.message.sent;
+        if (at != null && (newest == null || at.isAfter(newest))) newest = at;
+      }
+      var before = <UetsMessage>[];
+      for (var start = 0; known.isNotEmpty && start < 250; start += 50) {
+        final page = await _uets.messages(count: 50, start: start);
+        before = [
+          for (final m in page)
+            if (newest == null || m.sent == null || !m.sent!.isAfter(newest)) m,
+        ];
+        if (before.isNotEmpty || page.length < 50) break;
+      }
+      final shared = before.where((m) => known.contains(m.id)).length;
+      // Nothing kept, nothing to mix with; else the box's older notices
+      // must be the ones Folio kept.
+      if (known.isEmpty || (shared > 0 && shared == before.length)) {
         db.setMeta('uets_account', id);
         db.setMeta('uets_account_rekey', '');
         return null;

@@ -47,10 +47,13 @@ void main() {
   var box = '';
   // The start time each listing of the inbox asked from.
   final starts = <String?>[];
+  // A notice come to the first box after Folio last read it.
+  var arrived = false;
 
   setUp(() async {
     asked.clear();
     starts.clear();
+    arrived = false;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((r) async {
       final text = await utf8.decoder.bind(r).join();
@@ -86,6 +89,14 @@ void main() {
           answer = [];
         } else {
           answer = [
+            if (arrived && box == '10000000146')
+              {
+                'id': 'm2',
+                'subject': 'Antalya 3. Asliye Hukuk Mahkemesi [2025/412] [y]',
+                'inserttime':
+                    DateTime.utc(2026, 10, 15, 9).millisecondsSinceEpoch ~/
+                    1000,
+              },
             {
               'id': box == '10000000146' ? 'm1' : 'b-$box',
               'subject': 'Antalya 3. Asliye Hukuk Mahkemesi [2025/412] [x]',
@@ -215,6 +226,33 @@ void main() {
     await s.syncUets();
     expect(s.state(PortalChannel.uets).problem, isNull);
     expect(db.meta('uets_account'), isNot(before));
+    s.dispose();
+  });
+
+  test('a lost key and a notice come since: the lawyer\'s own box is still '
+      'theirs, another box still refused', () async {
+    final secrets = _MemorySecrets();
+    final s = sync(secrets);
+    await login('10000000146');
+    await s.syncUets();
+    // The key lost, and meanwhile a notice came that Folio has not read.
+    secrets.values.clear();
+    arrived = true;
+    uets.logout();
+    await login('20000000082');
+    await s.syncUets();
+    expect(
+      s.state(PortalChannel.uets).problem,
+      contains('başka bir UETS hesabının'),
+    );
+    expect(uets.connected, isFalse);
+    await login('10000000146');
+    await s.syncUets();
+    expect(s.state(PortalChannel.uets).problem, isNull);
+    expect(uets.connected, isTrue);
+    expect({
+      for (final n in db.notices()) n.message.id,
+    }, containsAll(['m1', 'm2']));
     s.dispose();
   });
 
