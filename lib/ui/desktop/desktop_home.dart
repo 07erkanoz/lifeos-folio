@@ -75,6 +75,8 @@ class DesktopHome extends StatefulWidget {
     required this.onDrafts,
     required this.onAgenda,
     required this.onUets,
+    this.onNewDocument,
+    this.onOpenToEdit,
     this.onNotices,
     this.search,
     this.onFound,
@@ -104,6 +106,11 @@ class DesktopHome extends StatefulWidget {
   final ValueChanged<String>? onShowCases;
   final ValueChanged<EvrakFile> onOpen, onEdit, onSendUyap;
   final VoidCallback onArchive, onDrafts, onAgenda, onUets;
+
+  /// The header's Editör (20 Ekim 2026, approved mockup): a new document,
+  /// and one chosen on the computer, each in this window's editor, where
+  /// live sharing, the UYAP panel and the network are.
+  final VoidCallback? onNewDocument, onOpenToEdit;
 
   /// UYAP Bildirimleri; null where it is not shown.
   final VoidCallback? onNotices;
@@ -517,8 +524,123 @@ class _DesktopHomeState extends State<DesktopHome> {
             ),
           ),
         ),
+        if (widget.onNewDocument != null) ...[
+          const SizedBox(width: 10),
+          _editorButton(context),
+        ],
         const SizedBox(width: 4),
         const HelpButton(Help.home),
+      ],
+    );
+  }
+
+  /// Editör: the document left off in this window's editor, or a new one
+  /// when there is none; its arrow lists the rest.
+  Widget _editorButton(BuildContext context) {
+    final editable = [
+      for (final f in widget.recent)
+        if (f.format.canEdit) f,
+    ];
+    final last = editable.firstOrNull;
+    void openDefault() =>
+        last == null ? widget.onNewDocument!() : widget.onEdit(last);
+    MenuItemButton item(
+      Key key,
+      IconData icon,
+      String label,
+      VoidCallback? onPressed, {
+      String? detail,
+    }) => MenuItemButton(
+      key: key,
+      leadingIcon: Icon(icon, size: 18),
+      onPressed: onPressed,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 260),
+        child: detail == null
+            ? Text(label)
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label),
+                  Text(
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+                  ),
+                ],
+              ),
+      ),
+    );
+    final scheme = Theme.of(context).colorScheme;
+    const left = BorderRadius.horizontal(left: Radius.circular(10));
+    const right = BorderRadius.horizontal(right: Radius.circular(10));
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: last == null
+              ? 'Yeni belge'
+              : 'Kaldığım yerden: ${last.name}',
+          child: FilledButton.icon(
+            key: const ValueKey('home-editor'),
+            style: FilledButton.styleFrom(
+              shape: const RoundedRectangleBorder(borderRadius: left),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+            ),
+            onPressed: openDefault,
+            icon: const Icon(Icons.edit_note_rounded, size: 19),
+            label: const Text('Editör'),
+          ),
+        ),
+        const SizedBox(width: 1),
+        MenuAnchor(
+          menuChildren: [
+            if (last != null)
+              item(
+                const ValueKey('home-editor-last'),
+                Icons.play_arrow_rounded,
+                'Kaldığım yerden',
+                () => widget.onEdit(last),
+                detail: last.name,
+              ),
+            item(
+              const ValueKey('home-editor-new'),
+              Icons.note_add_outlined,
+              'Yeni belge…',
+              widget.onNewDocument,
+            ),
+            item(
+              const ValueKey('home-editor-open'),
+              Icons.folder_open_outlined,
+              'Bilgisayardan aç…',
+              widget.onOpenToEdit,
+            ),
+            if (editable.length > 1) ...[
+              const Divider(height: 8),
+              for (final f in editable.skip(1).take(5))
+                item(
+                  ValueKey('home-editor-recent-${f.path}'),
+                  Icons.description_outlined,
+                  f.name,
+                  () => widget.onEdit(f),
+                ),
+            ],
+          ],
+          builder: (context, controller, _) => FilledButton(
+            key: const ValueKey('home-editor-menu'),
+            style: FilledButton.styleFrom(
+              shape: const RoundedRectangleBorder(borderRadius: right),
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(34, 40),
+              backgroundColor: scheme.primary,
+            ),
+            onPressed: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            child: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+          ),
+        ),
       ],
     );
   }

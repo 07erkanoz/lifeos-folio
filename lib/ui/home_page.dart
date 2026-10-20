@@ -1227,14 +1227,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  Future<void> _pickFiles() async {
+  /// [edit]: chosen from the home's Editör, straight into this window's
+  /// editor.
+  Future<void> _pickFiles({bool edit = false}) async {
     final result = await FilePicker.pickFiles(
-      allowMultiple: true,
+      allowMultiple: !edit,
       type: FileType.custom,
       allowedExtensions: EvrakFormat.supportedExtensions,
     );
     if (mounted && result != null) {
-      _addFiles(result.paths.whereType<String>().toList());
+      _addFiles(result.paths.whereType<String>().toList(), edit: edit);
     }
   }
 
@@ -1867,6 +1869,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onAgenda: () => unawaited(_selectGroup('agenda')),
     onUets: () => unawaited(_selectGroup('uets')),
     onNotices: () => unawaited(_selectGroup('bildirim')),
+    onNewDocument: () => unawaited(_newDocument()),
+    onOpenToEdit: () => unawaited(_pickFiles(edit: true)),
   );
 
   Widget _agendaPage() => AgendaPage(

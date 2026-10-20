@@ -56,6 +56,8 @@ void main() {
             onDrafts: () => calls.add('drafts'),
             onAgenda: () => calls.add('agenda'),
             onUets: () => calls.add('uets'),
+            onNewDocument: () => calls.add('new'),
+            onOpenToEdit: () => calls.add('openToEdit'),
           ),
         ),
       ),
@@ -150,6 +152,31 @@ void main() {
     );
     expect(find.text('SIRADAKİ'), findsOne);
     expect(find.textContaining('9 Ekim Cuma 10:15'), findsOne);
+  });
+
+  testWidgets('the header\'s Editör opens the document left off in this '
+      'window\'s editor; its arrow lists a new one, the computer\'s and the '
+      'others', (tester) async {
+    final calls = await pump(tester, const Size(1440, 900));
+    await tester.tap(find.byKey(const ValueKey('home-editor')));
+    expect(calls, ['edit:${p.basename(recent.first.path)}']);
+    calls.clear();
+    await tester.tap(find.byKey(const ValueKey('home-editor-menu')));
+    await tester.pumpAndSettle();
+    expect(find.text('Kaldığım yerden'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-editor-new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('home-editor-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('home-editor-open')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('home-editor-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(ValueKey('home-editor-recent-${recent[1].path}')),
+    );
+    await tester.pumpAndSettle();
+    expect(calls, ['new', 'openToEdit', 'edit:${p.basename(recent[1].path)}']);
   });
 
   testWidgets('continues, searches and filters', (tester) async {

@@ -19,6 +19,7 @@ import 'services/editor/suggestions/phrase_memory.dart';
 import 'services/preview/pdf_fonts.dart';
 import 'services/library/recent_documents.dart';
 import 'services/platform/document_launch.dart';
+import 'services/platform/editor_window.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
 import 'ui/widgets/desktop_frame.dart';
@@ -270,6 +271,16 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
 
   /// Unsaved work left by an editor that closed without a decision. Only a
   /// rich-text draft opens here; a text or table draft is Folio's.
+  /// Shared live from Folio's own window, where the network is: the
+  /// document (saved and let go of by the editor) handed there, and this
+  /// window closed.
+  Future<void> _shareInFolio(String path) async {
+    await EditorWindow.inFolio(path);
+    if (!widget.desktopChrome) return;
+    await windowManager.setPreventClose(false);
+    await windowManager.destroy();
+  }
+
   Future<void> _openRecovery() async {
     final context = _navigator.currentState?.overlay?.context;
     if (context == null) return;
@@ -399,6 +410,7 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
               recent: () => _recent.files,
               onOpenRecent: (file) => unawaited(_openRecent(file)),
               onRecovery: () => unawaited(_openRecovery()),
+              onShareInFolio: _shareInFolio,
             ),
             onSaved: _saved,
             onSigned: _signed,

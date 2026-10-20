@@ -303,6 +303,42 @@ class _EditorWidgetState extends State<EditorWidget>
     _live?.selection(s.baseOffset, s.extentOffset);
   }
 
+  Future<void> _shareInFolio(
+    Future<void> Function(String path) handOver,
+  ) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Folio’da paylaşılır'),
+        content: const Text(
+          'Canlı paylaşım Folio’nun ana penceresinde çalışır. Belge '
+          'kaydedilir, bu pencere kapanır ve belge Folio’da açılır; '
+          'paylaşımı oradan başlatırsınız.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('live-in-folio'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Folio’da aç'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    if ((_hasChanges || _documentPath == null) && !await _save()) return;
+    final path = _documentPath;
+    if (path == null || !mounted) return;
+    // Let go of first: Folio's window opens it to edit, not to read.
+    final lock = _pathLock;
+    _pathLock = null;
+    await lock?.release();
+    await handOver(path);
+  }
+
   /// Another's document shown here live, joined as a guest.
   Future<void> _joinLive() async {
     final session = await LiveJoinDialog.show(context);
@@ -312,6 +348,16 @@ class _EditorWidgetState extends State<EditorWidget>
   }
 
   Future<void> _openLive() async {
+    // A window of its own (LifeOS Editör) is not where the network is: it
+    // joined it under this computer's very identity beside Folio's own
+    // window, and a device reached either at random. The code matched on
+    // both screens and nothing came (21 Ekim 2026). Handed to Folio's
+    // window instead, which shares it.
+    final handOver = widget.fileHost?.onShareInFolio;
+    if (handOver != null && !LiveShare.instance.listening) {
+      await _shareInFolio(handOver);
+      return;
+    }
     final path = _documentPath;
     // A sharing closed is not taken up again: a new one is made.
     if (_live?.closed ?? false) {

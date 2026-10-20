@@ -15,6 +15,7 @@ class EditorFileHost {
     this.recent,
     this.onOpenRecent,
     this.onRecovery,
+    this.onShareInFolio,
   });
 
   final VoidCallback? onNew;
@@ -24,6 +25,11 @@ class EditorFileHost {
   final List<EvrakFile> Function()? recent;
   final ValueChanged<EvrakFile>? onOpenRecent;
   final VoidCallback? onRecovery;
+
+  /// A window of its own has not the office's network: sharing live, the
+  /// document saved and let go of is handed to Folio's own window, which
+  /// shares it (the window then closes). Null in Folio's own window.
+  final Future<void> Function(String path)? onShareInFolio;
 }
 
 /// The editor's Dosya menu: the host's commands, then the editor's own —

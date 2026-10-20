@@ -998,6 +998,8 @@ void main() {
               onAgenda: () {},
               onUets: () {},
               onNotices: () {},
+              onNewDocument: () {},
+              onOpenToEdit: () {},
             ),
           ),
         ),

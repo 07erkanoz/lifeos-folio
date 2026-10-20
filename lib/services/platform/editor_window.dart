@@ -18,6 +18,19 @@ abstract final class EditorWindow {
   /// test, where no window is started.
   static Future<void> Function([String? path]) open = _open;
 
+  /// [path] handed to Folio's own window, to be edited there: the running
+  /// one takes it (DesktopInstance), or Folio starts. Replaced under test.
+  static Future<void> Function(String path) inFolio = _inFolio;
+
+  static Future<void> _inFolio(String path) async {
+    if (!available) return;
+    await Process.start(Platform.resolvedExecutable, [
+      '--edit',
+      '--',
+      path,
+    ], mode: ProcessStartMode.detached);
+  }
+
   static Future<void> _open([String? path]) async {
     if (!available) return;
     await Process.start(Platform.resolvedExecutable, [
