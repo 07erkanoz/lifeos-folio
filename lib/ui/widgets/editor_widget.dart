@@ -21,6 +21,8 @@ import 'document_versions_window.dart';
 import 'draft_prompts.dart';
 import 'notice.dart';
 import 'save_folder_sheet.dart';
+import 'share_as.dart';
+import 'share_document_dialog.dart';
 import 'print_screen.dart';
 
 import 'package:path/path.dart' as p;
@@ -338,6 +340,55 @@ class _EditorWidgetState extends State<EditorWidget>
     _pathLock = null;
     await lock?.release();
     await handOver(path);
+  }
+
+  /// The document's file sent on as it is on disk (approved mockup, 21 Ekim
+  /// 2026): a signed one with its signature, which a save as would drop.
+  /// What is not saved yet is asked about first: what goes is the file.
+  Future<void> _share() async {
+    if (_documentPath == null) {
+      if (!await _save() || !mounted) return;
+    } else if (_hasChanges) {
+      final choice = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Kaydedilmemiş değişiklikler var'),
+          content: const Text('Paylaşılan, belgenin kaydedilmiş hâlidir.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Vazgeç'),
+            ),
+            OutlinedButton(
+              key: const ValueKey('share-saved'),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Kaydedilmiş hâlini paylaş'),
+            ),
+            FilledButton(
+              key: const ValueKey('share-save-first'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Kaydet ve paylaş'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+      if (choice && (!await _save() || !mounted)) return;
+    }
+    final path = _documentPath;
+    if (path == null || !mounted) return;
+    if (Platform.isAndroid || Platform.isIOS) {
+      // A UDF or Word file asks whether it goes as it is or as a PDF.
+      await shareAs(context, path);
+      return;
+    }
+    final message = await showDialog<String>(
+      context: context,
+      builder: (_) => ShareDocumentDialog(path: path),
+    );
+    if (mounted && message != null && message.isNotEmpty) {
+      showNotice(context, message, kind: NoticeKind.success);
+    }
   }
 
   /// Another's document shown here live, joined as a guest.
@@ -5388,6 +5439,7 @@ class _EditorWidgetState extends State<EditorWidget>
                         onLiveJoin: LiveShare.instance.listening
                             ? () => unawaited(_joinLive())
                             : null,
+                        onShare: () => unawaited(_share()),
                         onPrint: () => unawaited(_print()),
                         onHistory: () => unawaited(_history()),
                         onSign: _canSignNew

@@ -52,6 +52,7 @@ class EditorFileMenu extends StatelessWidget {
     this.onNewWindow,
     this.onLiveShare,
     this.onLiveJoin,
+    this.onShare,
     this.compact = false,
   });
 
@@ -80,6 +81,10 @@ class EditorFileMenu extends StatelessWidget {
 
   /// Another's document, shown live here as a guest, by a code.
   final VoidCallback? onLiveJoin;
+
+  /// The document's file sent on as it is, its signature kept: to a folder,
+  /// an app, an e-mail.
+  final VoidCallback? onShare;
 
   /// An icon alone, for a narrow window.
   final bool compact;
@@ -201,6 +206,8 @@ class EditorFileMenu extends StatelessWidget {
             onLiveJoin,
           ),
         _item('Farklı kaydet…', Icons.save_as_outlined, busy ? null : onSaveAs),
+        if (onShare != null)
+          _item('Paylaş…', Icons.ios_share_rounded, busy ? null : onShare),
         _item(
           'UYAP UDF Olarak Kaydet',
           Icons.edit_note_rounded,

@@ -16,6 +16,7 @@ void main() {
     EditorFileHost? host,
     String? current,
     ValueChanged<EvrakFormat>? onSaveIn,
+    VoidCallback? onShare,
   }) async {
     tester.view.physicalSize = const Size(1400, 1000);
     tester.view.devicePixelRatio = 1;
@@ -34,6 +35,7 @@ void main() {
               onSaveIn: onSaveIn ?? (_) {},
               onPrint: () {},
               onHistory: () {},
+              onShare: onShare,
             ),
           ),
         ),
@@ -98,5 +100,15 @@ void main() {
     expect(find.text('Kaydet'), findsOneWidget);
     expect(find.text('Son açılanlar'), findsNothing);
     expect(find.text('Yeni belge'), findsNothing);
+  });
+
+  testWidgets('Paylaş sends the document on, after Farklı kaydet', (
+    tester,
+  ) async {
+    var shared = 0;
+    await pump(tester, onShare: () => shared++);
+    await tester.tap(find.text('Paylaş…'));
+    await tester.pumpAndSettle();
+    expect(shared, 1);
   });
 }
