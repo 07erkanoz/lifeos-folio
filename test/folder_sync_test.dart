@@ -42,11 +42,12 @@ void main() {
     return net;
   }
 
-  Future<void> until(bool Function() done) async {
+  /// [step] named: on a slow runner the one it stopped at is said.
+  Future<void> until(bool Function() done, String step) async {
     for (var i = 0; i < 1500 && !done(); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
-    expect(done(), isTrue);
+    expect(done(), isTrue, reason: step);
   }
 
   FolderSync folders(OfficeNetwork net, String device) => FolderSync(
@@ -65,10 +66,11 @@ void main() {
       final asking = pc.pair(phone.self!)!;
       await until(
         () => phone.incoming.value?.code != null && asking.code != null,
+        'kod iki cihazda',
       );
       phone.incoming.value!.confirm();
       asking.confirm();
-      await until(() => pc.self!.userId == phone.self!.userId);
+      await until(() => pc.self!.userId == phone.self!.userId, 'aynı kişi');
       pc.seenForTesting(phone.self!);
       phone.seenForTesting(pc.self!);
       final onPc = folders(pc, 'masaustu'), onPhone = folders(phone, 'telefon');
@@ -83,12 +85,15 @@ void main() {
       // One inside another is not kept alike.
       expect(onPc.whyNot('${shared.path}/2026'), isNotNull);
       await pc.syncOwn();
-      await until(() => onPhone.offered.containsKey(f.id));
+      await until(() => onPhone.offered.containsKey(f.id), 'paylaşım teklifi');
       await onPhone.join(f.id);
       final there = onPhone.folders[f.id]!.path;
       await phone.syncOwn();
-      await until(() => File('$there/2026/Cevap.udf').existsSync());
-      await until(() => File('$there/İtiraz.pdf').existsSync());
+      await until(
+        () => File('$there/2026/Cevap.udf').existsSync(),
+        'alt klasördeki dosya geldi',
+      );
+      await until(() => File('$there/İtiraz.pdf').existsSync(), 'dosya geldi');
       expect(File('$there/notlar.tmp').existsSync(), isFalse);
       // Changed on the phone: the computer's is replaced.
       await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -98,11 +103,15 @@ void main() {
         () =>
             File('${shared.path}/İtiraz.pdf').readAsStringSync() ==
             'telefonda düzeltildi',
+        'telefondaki değişiklik masaüstüne',
       );
       // Taken off on the computer: to the bin on the phone.
       File('${shared.path}/2026/Cevap.udf').deleteSync();
       await pc.syncOwn();
-      await until(() => !File('$there/2026/Cevap.udf').existsSync());
+      await until(
+        () => !File('$there/2026/Cevap.udf').existsSync(),
+        'silinen telefondan kalktı',
+      );
       final bin = Directory('${dir.path}/telefon/cop');
       expect(
         bin
@@ -114,7 +123,10 @@ void main() {
       // Brought back on the computer: it comes again, and stays on both.
       File('${shared.path}/2026/Cevap.udf').writeAsStringSync('cevap');
       await pc.syncOwn();
-      await until(() => File('$there/2026/Cevap.udf').existsSync());
+      await until(
+        () => File('$there/2026/Cevap.udf').existsSync(),
+        'geri getirilen geldi',
+      );
       for (var i = 0; i < 2; i++) {
         await phone.syncOwn();
         await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -138,7 +150,10 @@ void main() {
         expect(File('${shared.path}/2026/Cevap.udf').existsSync(), isFalse);
         Process.runSync('chmod', ['755', '$there/2026']);
         await pc.syncOwn();
-        await until(() => !File('$there/2026/Cevap.udf').existsSync());
+        await until(
+          () => !File('$there/2026/Cevap.udf').existsSync(),
+          'yazılabilince kalktı',
+        );
         expect(File('${shared.path}/2026/Cevap.udf').existsSync(), isFalse);
       }
       // Changed on both before they met: both kept.
@@ -156,6 +171,7 @@ void main() {
       ]..sort();
       await until(
         () => words(shared.path).length == 2 && words(there).length == 2,
+        'iki taraftaki değişiklik ikisinde de',
       );
       expect(words(shared.path), ['masaüstünde', 'telefonda']);
       expect(words(there), words(shared.path));
