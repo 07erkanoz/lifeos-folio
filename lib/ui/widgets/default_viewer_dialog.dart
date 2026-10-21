@@ -82,6 +82,8 @@ class _DefaultViewerDialogState extends State<DefaultViewerDialog> {
                       ? 'Seçiminiz Windows ayarlarına hazırlanır. Atamayı açılan Windows ekranında onaylayın.'
                       : Platform.isLinux
                       ? 'Yalnızca seçtiğiniz türler atanır. Linux aynı içerik türünü kullanan uzantıları birlikte yönetir; örneğin TXT ve LOG.'
+                      : Platform.isMacOS
+                      ? 'Seçtiğiniz türler Finder’da çift tıklanınca LifeOS Folio ile açılır. Her tür ayrı atanır; istediğiniz zaman Finder › Bilgi Al › Birlikte Aç ile geri alabilirsiniz.'
                       : 'Android son seçimi belge açılırken yapar. İstediğiniz türde bir dosyayı açıp Folio → Her zaman seçin.',
                   style: TextStyle(
                     fontSize: 12,

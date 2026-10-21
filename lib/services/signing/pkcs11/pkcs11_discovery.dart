@@ -146,6 +146,12 @@ List<_ModuleCandidate> _macosModules() {
       '/usr/local/lib/libaetpkss1.dylib',
       '/Library/Frameworks/libaetpkss1.dylib',
     ]),
+    // Gemalto Classic Client for Mac; Windows and Linux had it, a Mac did
+    // not look for it.
+    _ModuleCandidate('GemSafe', 'Gemalto/Thales', [
+      '/usr/local/lib/libgclib.dylib',
+      '/usr/local/lib/ClassicClient/libgclib.dylib',
+    ]),
     _ModuleCandidate('SafeNet eToken', 'Thales', [
       '/usr/local/lib/libeTPkcs11.dylib',
     ]),

@@ -69,18 +69,31 @@ class _ShareDocumentDialogState extends State<ShareDocumentDialog> {
                 return 'Dosya kopyalandı. Hedef uygulamaya yapıştırabilirsiniz.';
               }),
             ),
-            if (defaultTargetPlatform == TargetPlatform.windows)
+            // The system's own share: Windows's, and a Mac's (AirDrop,
+            // Mesajlar, Notlar…; macos/Runner FileActions "share").
+            if (defaultTargetPlatform == TargetPlatform.windows ||
+                defaultTargetPlatform == TargetPlatform.macOS)
               ListTile(
                 leading: const Icon(Icons.ios_share_rounded),
-                title: const Text('Windows ile paylaş'),
-                subtitle: const Text('Yüklü paylaşım uygulamalarından seçin'),
+                title: Text(
+                  defaultTargetPlatform == TargetPlatform.macOS
+                      ? 'Paylaş'
+                      : 'Windows ile paylaş',
+                ),
+                subtitle: Text(
+                  defaultTargetPlatform == TargetPlatform.macOS
+                      ? 'AirDrop, Mesajlar ve yüklü uygulamalar'
+                      : 'Yüklü paylaşım uygulamalarından seçin',
+                ),
                 enabled: !_busy,
                 onTap: () => _run(() async {
                   await FileActions.invoke('share', widget.path);
                   return '';
                 }),
               ),
-            if (defaultTargetPlatform == TargetPlatform.linux)
+            // Linux by xdg-email; a Mac by Mail's compose ("email").
+            if (defaultTargetPlatform == TargetPlatform.linux ||
+                defaultTargetPlatform == TargetPlatform.macOS)
               ListTile(
                 leading: const Icon(Icons.mail_outline),
                 title: const Text('E-postaya ekle'),

@@ -8,11 +8,13 @@ class FolioShortcut {
   final String key;
   final int modifiers;
   const FolioShortcut({this.key = 'space', this.modifiers = 3});
+
+  /// A Mac's keys by its own names: its ⌘ is the Super bit.
   String get label => [
-    if (modifiers & 1 != 0) 'Ctrl',
-    if (modifiers & 2 != 0) 'Alt',
+    if (modifiers & 1 != 0) Platform.isMacOS ? 'Control' : 'Ctrl',
+    if (modifiers & 2 != 0) Platform.isMacOS ? 'Option' : 'Alt',
     if (modifiers & 4 != 0) 'Shift',
-    if (modifiers & 8 != 0) 'Super',
+    if (modifiers & 8 != 0) Platform.isMacOS ? '⌘' : 'Super',
     key == 'space' ? 'Space' : key.toUpperCase(),
   ].join(' + ');
   String get trigger => [

@@ -135,6 +135,23 @@ MimeType=$mimeTypes
     if (Platform.isAndroid) {
       return configureAndroidDefaultViewer();
     }
+    if (Platform.isMacOS) {
+      // NSWorkspace.setDefaultApplication (macos/Runner FileActions).
+      final extensions = [for (final t in types) ...t.extensions];
+      final failed =
+          await const MethodChannel('lifeos_evrak/file_actions')
+              .invokeListMethod<String>('setDefaultViewer', {
+                'extensions': extensions,
+              }) ??
+          const <String>[];
+      final done = extensions.where((e) => !failed.contains(e));
+      if (done.isEmpty) {
+        throw StateError('macOS varsayılan uygulamayı değiştirmedi.');
+      }
+      return '${done.map((e) => '.$e').join(', ')} dosyaları artık Finder’da '
+          'LifeOS Folio ile açılır.'
+          '${failed.isEmpty ? '' : ' Değiştirilemeyenler: ${failed.map((e) => '.$e').join(', ')}.'}';
+    }
     return 'Bu platformda varsayılan önizleyici kaydı desteklenmiyor.';
   }
 

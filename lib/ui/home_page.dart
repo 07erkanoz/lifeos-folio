@@ -440,6 +440,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// A normal tray activation changes the visible screen only. Editors stay
   /// mounted with their drafts; native close still uses the shared save guard.
+  /// A Mac's app menu, Ayarlar… (⌘,): the settings, as the sidebar's.
+  void showSettings() {
+    if (_group != 'ayarlar') _pickFolder();
+  }
+
   void showHomeFromTray() {
     if (!mounted) return;
     HoverDocumentPreview.dismissActive();
@@ -2499,7 +2504,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               ),
                                             if (!mobile &&
                                                 (Platform.isLinux ||
-                                                    Platform.isWindows))
+                                                    Platform.isWindows ||
+                                                    Platform.isMacOS))
                                               IconButton(
                                                 tooltip:
                                                     'UYAP Devam Eden İşlemler',

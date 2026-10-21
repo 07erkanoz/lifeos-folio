@@ -11,6 +11,11 @@ class AppDelegate: FlutterAppDelegate {
     return true
   }
 
+  /// Ayarlar… (⌘,) in the app's menu: Folio's own settings page.
+  @IBAction func showFolioSettings(_ sender: Any?) {
+    AppQuit.channel?.invokeMethod("settings", arguments: nil)
+  }
+
   /// ⌘Q ends the app without its window's close, which is where Folio asks
   /// about unsaved work: Folio is asked first (lib/services/desktop/
   /// mac_quit.dart), and the app ends once it says it may. Once approved,
@@ -71,7 +76,8 @@ enum OpenedDocuments {
   }
 }
 
-/// Folio asked whether the app may end (AppDelegate.applicationShouldTerminate).
+/// Folio's own channel for the app's menu: whether the app may end
+/// (AppDelegate.applicationShouldTerminate), and its settings shown.
 enum AppQuit {
   static var channel: FlutterMethodChannel?
 

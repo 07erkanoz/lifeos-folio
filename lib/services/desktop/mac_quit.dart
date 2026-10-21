@@ -9,9 +9,17 @@ import 'package:flutter/services.dart';
 abstract final class MacQuit {
   static const channel = MethodChannel('com.erkanoz.folio/app');
 
-  static void handle(Future<bool> Function() approve) {
+  /// [onSettings]: the app menu's Ayarlar… (⌘,), in Folio's own window.
+  static void handle(
+    Future<bool> Function() approve, {
+    void Function()? onSettings,
+  }) {
     if (!Platform.isMacOS) return;
     channel.setMethodCallHandler((call) async {
+      if (call.method == 'settings') {
+        onSettings?.call();
+        return null;
+      }
       if (call.method != 'quit') return null;
       try {
         return await approve();

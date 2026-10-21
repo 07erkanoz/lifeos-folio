@@ -291,7 +291,13 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
           widget.instance?.close();
         },
       );
-      MacQuit.handle(companion!.approveQuit);
+      MacQuit.handle(
+        companion!.approveQuit,
+        onSettings: () async {
+          await companion!.showMain(showHome: false);
+          _homeKey.currentState?.showSettings();
+        },
+      );
       _launchRequests = widget.instance!.requests.listen((args) {
         if (args.contains('--quick-search')) {
           _openQuick();

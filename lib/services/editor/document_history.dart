@@ -92,10 +92,25 @@ class DocumentHistory {
         utf8.encode(
           Platform.isWindows
               ? p.normalize(p.absolute(path)).toLowerCase()
+              : Platform.isMacOS
+              ? _asOnDisk(p.normalize(p.absolute(path)))
               : p.normalize(p.absolute(path)),
         ),
       )
       .toString();
+
+  /// A Mac's disk does not tell "Dava.udf" from "dava.udf": one document,
+  /// split between two histories by the case it was opened with. The name
+  /// as the disk writes it, for a file that is there; as given otherwise.
+  /// Not lower-cased as on Windows: histories kept so far would be lost.
+  static String _asOnDisk(String path) {
+    try {
+      return File(path).resolveSymbolicLinksSync();
+    } catch (_) {
+      return path;
+    }
+  }
+
   static String newKey() => 'new-${DateTime.now().microsecondsSinceEpoch}';
 
   /// A recovery slot of its own for one editor, for as long as it is open.

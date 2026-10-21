@@ -92,6 +92,10 @@ jobs:
             mkdir -p "$app/Contents/Resources/tools"
             cp -R native_tools/macos-universal/bin native_tools/macos-universal/tessdata \
               "$app/Contents/Resources/tools/"
+            # The tools' licenses with them, as Windows and Linux install them.
+            if [ -d native_tools/licenses ]; then
+              cp -R native_tools/licenses "$app/Contents/Resources/tools/"
+            fi
           else
             echo "::warning::native_tools/macos-universal yok: OCR ve PDF küçültme bu pakette çalışmaz."
           fi
