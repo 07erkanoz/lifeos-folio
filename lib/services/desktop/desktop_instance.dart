@@ -13,7 +13,7 @@ import '../platform/atomic_file.dart';
 /// loopback-only socket authenticated with a per-run random token.
 class DesktopInstance {
   /// [message] told with no window of Folio's own: Windows's message box,
-  /// the desktop's notification on Linux; never a reason to fail.
+  /// the desktop's notification on Linux and a Mac; never a reason to fail.
   static void tellStuck(String message) {
     stderr.writeln(message);
     try {
@@ -35,6 +35,17 @@ class DesktopInstance {
           ..free(title);
       } else if (Platform.isLinux) {
         Process.runSync('notify-send', ['LifeOS Folio', message]);
+      } else if (Platform.isMacOS) {
+        // The message given as an argument, never put into the script.
+        Process.runSync('osascript', [
+          '-e',
+          'on run argv',
+          '-e',
+          'display notification (item 1 of argv) with title "LifeOS Folio"',
+          '-e',
+          'end run',
+          message,
+        ]);
       }
     } catch (_) {}
   }

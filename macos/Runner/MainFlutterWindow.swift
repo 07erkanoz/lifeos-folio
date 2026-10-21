@@ -15,6 +15,7 @@ class MainFlutterWindow: NSWindow {
     SpellCheck.register(messenger)
     FileActions.register(messenger, view: flutterViewController.view)
     OpenedDocuments.register(messenger)
+    AppQuit.register(messenger)
     // Finder's Hizmetler › "Folio'da aç", and the iPhone as a scanner.
     NSApp.servicesProvider = FolioServices.shared
     NSUpdateDynamicServices()

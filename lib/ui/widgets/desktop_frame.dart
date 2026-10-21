@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
@@ -207,6 +209,10 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
     ),
   );
 
+  /// A Mac keeps its own traffic lights at the caption's left, and resizes
+  /// a window by its edges itself: Folio draws neither there.
+  static bool get _mac => Platform.isMacOS;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -241,7 +247,9 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                           ),
                           child: Row(
                             children: [
-                              const SizedBox(width: 12),
+                              // Room for the traffic lights on a Mac; none
+                              // in full screen, where they are not shown.
+                              SizedBox(width: _mac && !_fullScreen ? 78 : 12),
                               InkWell(
                                 onTap: widget.onAbout,
                                 borderRadius: BorderRadius.circular(6),
@@ -343,31 +351,34 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                                     : Icons.fullscreen_rounded,
                                 _toggleFullScreen,
                               ),
-                              const VerticalDivider(
-                                indent: 11,
-                                endIndent: 11,
-                                width: 1,
-                              ),
-                              _control(
-                                'Simge durumuna küçült',
-                                Icons.remove_rounded,
-                                () => _run(windowManager.minimize),
-                              ),
-                              _control(
-                                _maximized ? 'Önceki boyut' : 'Ekranı kapla',
-                                _maximized
-                                    ? Icons.filter_none_rounded
-                                    : Icons.crop_square_rounded,
-                                () => _run(_toggleMaximize),
-                              ),
-                              _control(
-                                widget.closeToTray
-                                    ? 'Tepsiye gizle'
-                                    : 'Uygulamayı kapat',
-                                Icons.close_rounded,
-                                () => _run(windowManager.close),
-                                close: true,
-                              ),
+                              if (!_mac) ...[
+                                const VerticalDivider(
+                                  indent: 11,
+                                  endIndent: 11,
+                                  width: 1,
+                                ),
+                                _control(
+                                  'Simge durumuna küçült',
+                                  Icons.remove_rounded,
+                                  () => _run(windowManager.minimize),
+                                ),
+                                _control(
+                                  _maximized ? 'Önceki boyut' : 'Ekranı kapla',
+                                  _maximized
+                                      ? Icons.filter_none_rounded
+                                      : Icons.crop_square_rounded,
+                                  () => _run(_toggleMaximize),
+                                ),
+                                _control(
+                                  widget.closeToTray
+                                      ? 'Tepsiye gizle'
+                                      : 'Uygulamayı kapat',
+                                  Icons.close_rounded,
+                                  () => _run(windowManager.close),
+                                  close: true,
+                                ),
+                              ],
+                              if (_mac) const SizedBox(width: 6),
                             ],
                           ),
                         ),
@@ -378,7 +389,7 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
               ),
               // Only these narrow edge rectangles participate in hit testing.
               // No full-window overlay sits above the caption or document.
-              if (!_maximized && !_fullScreen) ...[
+              if (!_mac && !_maximized && !_fullScreen) ...[
                 _resizeEdge(
                   ResizeEdge.top,
                   SystemMouseCursors.resizeUp,

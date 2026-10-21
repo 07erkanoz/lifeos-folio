@@ -25,10 +25,11 @@ Future<void> runPreviewApp(List<String> arguments) async {
   if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
     try {
       await windowManager.ensureInitialized();
-      chrome = Platform.isLinux || Platform.isWindows;
+      // A Mac too, its traffic lights kept (lib/main.dart).
+      chrome = true;
       options = WindowOptions(
-        titleBarStyle: chrome ? TitleBarStyle.hidden : TitleBarStyle.normal,
-        windowButtonVisibility: !chrome,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: Platform.isMacOS,
         size: const Size(860, 980),
         minimumSize: const Size(480, 420),
         center: true,

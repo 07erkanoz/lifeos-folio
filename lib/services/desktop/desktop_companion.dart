@@ -336,6 +336,28 @@ class DesktopCompanion extends ChangeNotifier
   /// before it put the new Folio in place).
   Future<void> quit({bool ask = true}) => _close(completely: true, ask: ask);
 
+  /// A Mac's ⌘Q, which ends the app without closing its window first:
+  /// whether it may, unsaved work asked about as the close button asks, and
+  /// what Folio lets go of on quitting let go of. The app then ends itself
+  /// (macos/Runner/AppDelegate.swift). Already quitting by its own close
+  /// button, it is not asked twice.
+  Future<bool> approveQuit() async {
+    if (_quitting) return true;
+    if (_closing) return false;
+    _closing = true;
+    try {
+      if (beforeClose != null && !await beforeClose!()) return false;
+      await windowSession?.save();
+      _quitting = true;
+      await _global.unregister();
+      await trayManager.destroy();
+      onQuit?.call();
+      return true;
+    } finally {
+      _closing = false;
+    }
+  }
+
   @override
   void onWindowClose() => _close(completely: false);
 

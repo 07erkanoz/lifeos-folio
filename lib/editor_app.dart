@@ -19,6 +19,7 @@ import 'services/editor/suggestions/phrase_memory.dart';
 import 'services/preview/pdf_fonts.dart';
 import 'services/library/recent_documents.dart';
 import 'services/platform/document_launch.dart';
+import 'services/desktop/mac_quit.dart';
 import 'services/platform/editor_window.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
@@ -52,10 +53,11 @@ Future<void> runEditorApp(List<String> arguments) async {
   if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
     try {
       await windowManager.ensureInitialized();
-      chrome = Platform.isLinux || Platform.isWindows;
+      // A Mac too, its traffic lights kept (lib/main.dart).
+      chrome = true;
       options = WindowOptions(
-        titleBarStyle: chrome ? TitleBarStyle.hidden : TitleBarStyle.normal,
-        windowButtonVisibility: !chrome,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: Platform.isMacOS,
         size: const Size(1150, 820),
         minimumSize: const Size(720, 520),
         center: true,
@@ -160,6 +162,7 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
     unawaited(_appearance.load());
     _draft = _draftFor(widget.path);
     if (widget.desktopChrome) windowManager.addListener(this);
+    MacQuit.handle(_approveQuit);
     unawaited(
       _recent.load().then((_) async {
         final path = widget.path;
@@ -187,11 +190,27 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
       final context = _navigator.currentState?.overlay?.context;
       if (context == null || !context.mounted) return;
       if (!await _drafts.confirm(context)) return;
+      _quitApproved = true;
       await windowManager.setPreventClose(false);
       await windowManager.destroy();
     } finally {
       _closing = false;
     }
+  }
+
+  /// Closing approved: a Mac's quit that follows is not asked about again.
+  bool _quitApproved = false;
+
+  /// A Mac's ⌘Q (lib/services/desktop/mac_quit.dart): unsaved work asked
+  /// about as the close button asks it.
+  Future<bool> _approveQuit() async {
+    if (_quitApproved) return true;
+    if (_closing) return false;
+    final context = _navigator.currentState?.overlay?.context;
+    if (context == null || !context.mounted) return true;
+    final ok = await _drafts.confirm(context);
+    if (ok) _quitApproved = true;
+    return ok;
   }
 
   EditorDraft _draftFor(String? path) => _drafts.draft(

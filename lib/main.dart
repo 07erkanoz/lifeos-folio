@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:async';
 
 import 'services/desktop/desktop_instance.dart';
+import 'services/desktop/mac_quit.dart';
 import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
 import 'services/platform/onboarding_store.dart';
@@ -82,11 +83,14 @@ void main(List<String> arguments) async {
   unawaited(EditorSettings.instance.load());
 
   final startup = Stopwatch()..start();
-  final sessionFuture = Platform.isLinux || Platform.isWindows
+  final sessionFuture =
+      Platform.isLinux || Platform.isWindows || Platform.isMacOS
       ? WindowSession.load()
       : Future<WindowSession?>.value();
   DesktopInstance? instance;
-  if (Platform.isLinux || Platform.isWindows) {
+  // A Mac too: an editor's "Folio'da aç" and a preview's "Düzenle" start
+  // Folio again, and that second one hands its document to the first.
+  if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
     try {
       instance = await DesktopInstance.acquire(
         arguments.contains('--quick-search')
@@ -107,12 +111,12 @@ void main(List<String> arguments) async {
   if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
     try {
       await windowManager.ensureInitialized();
-      desktopChrome = Platform.isLinux || Platform.isWindows;
+      // Folio's own caption on a Mac too, over a hidden title bar: the
+      // ribbon's tabs are in it. The system's traffic lights are kept.
+      desktopChrome = true;
       final windowOptions = WindowOptions(
-        titleBarStyle: desktopChrome
-            ? TitleBarStyle.hidden
-            : TitleBarStyle.normal,
-        windowButtonVisibility: !desktopChrome,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: Platform.isMacOS,
         size: windowSession?.data.size ?? const Size(1200, 800),
         minimumSize: const Size(900, 600),
         center: true,
@@ -287,6 +291,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
           widget.instance?.close();
         },
       );
+      MacQuit.handle(companion!.approveQuit);
       _launchRequests = widget.instance!.requests.listen((args) {
         if (args.contains('--quick-search')) {
           _openQuick();
