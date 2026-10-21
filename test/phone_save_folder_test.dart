@@ -107,4 +107,25 @@ void main() {
       expect(kept, isEmpty);
     },
   );
+
+  test('an iPhone keeps the signed document, as it is, in the folder the '
+      'Files app shows; signed again, the newer one', () async {
+    final signed = File('${dir.path}/özel/İtiraz.udf')
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([7, 7]);
+    final documents = Directory('${dir.path}/Documents');
+    final shown = await PhoneDocumentSave.keepSignedInFiles(
+      signed.path,
+      documents: documents,
+    );
+    expect(shown, 'LifeOS Folio/İmzalı Belgeler/İtiraz.udf');
+    final kept = File('${documents.path}/İmzalı Belgeler/İtiraz.udf');
+    expect(kept.readAsBytesSync(), [7, 7]);
+    signed.writeAsBytesSync([8]);
+    await PhoneDocumentSave.keepSignedInFiles(
+      signed.path,
+      documents: documents,
+    );
+    expect(kept.readAsBytesSync(), [8]);
+  });
 }

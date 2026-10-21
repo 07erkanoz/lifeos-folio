@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/evrak_file.dart';
 import '../../services/platform/editor_window.dart';
+import '../../services/platform/phone_document_save.dart';
 import '../../services/platform/platform_capabilities.dart';
 
 /// Whether [file] opens in an editor window of its own: what LifeOS Editör
@@ -48,6 +49,10 @@ class DocumentActionsDialog extends StatelessWidget {
       if (EditorWindow.available && opensInEditorWindow(file))
         ('newWindow', 'Yeni pencerede düzenle', Icons.open_in_new_rounded),
       if (canPrint(file)) ('print', 'Yazdır', Icons.print_outlined),
+      // A phone: the file as it is, signed or not, into a folder of the
+      // lawyer's (approved mockup, 21 Ekim 2026).
+      if (PhoneDocumentSave.here)
+        ('saveCopy', 'Klasöre kaydet', Icons.folder_outlined),
       ('share', 'Paylaş / Gönder', Icons.ios_share_rounded),
       ('openWith', 'Birlikte aç…', Icons.apps_rounded),
       if (desktopSigningAvailable)

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'app_directories.dart';
 import 'viewer_file_types.dart';
@@ -68,6 +69,23 @@ class PhoneDocumentSave {
       rethrow;
     }
   }
+
+  /// An iPhone: a signed document copied into Folio's own folder, which the
+  /// Files app shows ("On My iPhone > LifeOS Folio"; UIFileSharingEnabled):
+  /// the signature is put on Folio's private copy, where nothing else
+  /// looks (21 Ekim 2026). Where it went, as the lawyer would look for it.
+  static Future<String> keepSignedInFiles(
+    String path, {
+    Directory? documents,
+  }) async {
+    final base = documents ?? await getApplicationDocumentsDirectory();
+    final folder = Directory(p.join(base.path, signedFolder));
+    await folder.create(recursive: true);
+    await File(path).copy(p.join(folder.path, p.basename(path)));
+    return 'LifeOS Folio/$signedFolder/${p.basename(path)}';
+  }
+
+  static const signedFolder = 'İmzalı Belgeler';
 
   static Future<String?> save({
     required String fileName,

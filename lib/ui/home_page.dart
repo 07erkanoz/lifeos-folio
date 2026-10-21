@@ -504,7 +504,93 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     await _addFiles([path], index: false);
     await _library.updatePaths([path]);
-    if (PhoneSaveFolder.available && mounted) await _signedToFolder(path);
+    if (!mounted) return;
+    if (PhoneSaveFolder.available) {
+      await _signedToFolder(path);
+    } else if (Platform.isIOS) {
+      await _signedToFiles(path);
+    }
+  }
+
+  /// An iPhone: the signed document into Folio's folder the Files app shows.
+  Future<void> _signedToFiles(String path) async {
+    try {
+      final shown = await PhoneDocumentSave.keepSignedInFiles(path);
+      if (!mounted) return;
+      showNotice(
+        context,
+        'İmzalandı ve kaydedildi',
+        detail: 'Dosyalar › $shown',
+        kind: NoticeKind.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showNotice(
+        context,
+        'İmzalı belge Dosyalar’a kaydedilemedi',
+        detail: '$e',
+        kind: NoticeKind.error,
+      );
+    }
+  }
+
+  /// A phone: [file] as it is, its signature kept, into a folder of the
+  /// lawyer's: the save folder on Android (another place by the notice's
+  /// button), the Files screen on an iPhone.
+  Future<void> _saveCopy(EvrakFile file) async {
+    final name = p.basename(file.path);
+    final List<int> bytes;
+    try {
+      bytes = await File(file.path).readAsBytes();
+    } catch (e) {
+      if (mounted) {
+        showNotice(
+          context,
+          'Belge okunamadı',
+          detail: '$e',
+          kind: NoticeKind.error,
+        );
+      }
+      return;
+    }
+    Future<void> elsewhere() async {
+      final saved = await PhoneDocumentSave.save(fileName: name, bytes: bytes);
+      if (saved != null && mounted) {
+        showNotice(context, 'Kaydedildi', kind: NoticeKind.success);
+      }
+    }
+
+    if (!PhoneSaveFolder.available) {
+      await elsewhere();
+      return;
+    }
+    if (!mounted) return;
+    final folder = await ensureSaveFolder(context);
+    if (folder == null || !mounted) return;
+    try {
+      final saved = await PhoneDocumentSave.saveToFolder(
+        fileName: name,
+        bytes: bytes,
+        folder: folder,
+      );
+      if (!mounted) return;
+      showNotice(
+        context,
+        'Kaydedildi',
+        detail: saved.shown,
+        kind: NoticeKind.success,
+        actionLabel: 'Başka yere kaydet',
+        onAction: () => unawaited(elsewhere()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showNotice(
+        context,
+        'Klasöre kaydedilemedi',
+        detail: '$e'.replaceFirst('Bad state: ', ''),
+        kind: NoticeKind.error,
+      );
+    }
   }
 
   /// On a phone the signature is put on Folio's own copy, out of the file
@@ -3860,7 +3946,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _previewAction(String action, EvrakFile file) async {
-    if (['share', 'external', 'openWith', 'sign'].contains(action) &&
+    if ([
+          'share',
+          'saveCopy',
+          'external',
+          'openWith',
+          'sign',
+        ].contains(action) &&
         _activeDraft != null) {
       final draft = _activeDraft!;
       if (!await _leaveEditor()) return;
@@ -3899,6 +3991,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await _fileAction('openWith', file);
       case 'folder':
         await _fileAction('showFolder', file);
+      case 'saveCopy':
+        await _saveCopy(file);
       case 'share':
         if (Platform.isAndroid || Platform.isIOS) {
           // A UDF or Word file asks whether it goes as it is or as a PDF.
