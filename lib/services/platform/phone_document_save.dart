@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -18,11 +19,20 @@ class PhoneDocumentSave {
   /// Whether documents are saved this way here: on a phone.
   static bool get here => Platform.isAndroid || Platform.isIOS;
 
-  static Future<String?> save({
-    required String fileName,
-    required List<int> bytes,
+  static String _mimeOf(String fileName) {
+    final extension = p.extension(fileName).replaceFirst('.', '').toLowerCase();
+    final type = ViewerFileType.supported
+        .where((type) => type.extensions.contains(extension))
+        .firstOrNull;
+    return type?.mimeTypes.first ?? 'application/octet-stream';
+  }
+
+  /// The readable local copy a save keeps, in a folder of its own.
+  static Future<(Directory, File)> _copy(
+    String fileName,
+    List<int> bytes,
     Directory? supportDirectory,
-  }) async {
+  ) async {
     final root = Directory(
       p.join(
         (supportDirectory ?? await folioSupportDirectory()).path,
@@ -32,16 +42,41 @@ class PhoneDocumentSave {
     await root.create(recursive: true);
     final directory = await root.createTemp('document-');
     final file = File(p.join(directory.path, p.basename(fileName)));
+    await file.writeAsBytes(bytes, flush: true);
+    return (directory, file);
+  }
+
+  /// Saved into the folder chosen for it ([PhoneSaveFolder]), under its own
+  /// name, over one of that name: no save screen. The local copy, and where
+  /// it went as the lawyer would look for it ("Dilekçeler/İtiraz.udf").
+  static Future<({String path, String shown})> saveToFolder({
+    required String fileName,
+    required List<int> bytes,
+    required PhoneSaveFolder folder,
+    Directory? supportDirectory,
+  }) async {
+    final (directory, file) = await _copy(fileName, bytes, supportDirectory);
+    try {
+      final shown = await folder.write(
+        file.path,
+        name: p.basename(fileName),
+        mimeType: _mimeOf(fileName),
+      );
+      return (path: file.path, shown: shown);
+    } catch (_) {
+      await directory.delete(recursive: true);
+      rethrow;
+    }
+  }
+
+  static Future<String?> save({
+    required String fileName,
+    required List<int> bytes,
+    Directory? supportDirectory,
+  }) async {
+    final (directory, file) = await _copy(fileName, bytes, supportDirectory);
     var published = false;
     try {
-      await file.writeAsBytes(bytes, flush: true);
-      final extension = p
-          .extension(fileName)
-          .replaceFirst('.', '')
-          .toLowerCase();
-      final type = ViewerFileType.supported
-          .where((type) => type.extensions.contains(extension))
-          .firstOrNull;
       final String? uri;
       if (Platform.isIOS) {
         // The Files screen, given the copy written here: the lawyer chooses
@@ -52,7 +87,7 @@ class PhoneDocumentSave {
       } else {
         uri = await channel.invokeMethod<String>('saveDocument', {
           'path': file.path,
-          'mimeType': type?.mimeTypes.first ?? 'application/octet-stream',
+          'mimeType': _mimeOf(fileName),
         });
       }
       if (uri == null) return null;
@@ -61,5 +96,79 @@ class PhoneDocumentSave {
     } finally {
       if (!published) await directory.delete(recursive: true);
     }
+  }
+}
+
+/// The folder a phone saves documents into, chosen once with a lasting grant
+/// to write it (Android's ACTION_OPEN_DOCUMENT_TREE; android SaveFolder.kt).
+/// The save screen asked again at every save, and a document signed in
+/// Folio stayed in Folio's own folder, where the file manager does not look
+/// (21 Ekim 2026). Kept beside Folio's data: the folder's address and name.
+class PhoneSaveFolder {
+  PhoneSaveFolder({Future<File> Function()? file, MethodChannel? channel})
+    : _file = file ?? _defaultFile,
+      _channel = channel ?? PhoneDocumentSave.channel;
+
+  static PhoneSaveFolder instance = PhoneSaveFolder();
+
+  /// Only Android grants a folder for good; an iPhone's Files screen does
+  /// not keep one.
+  static bool get available => Platform.isAndroid;
+
+  static Future<File> _defaultFile() async =>
+      File(p.join((await folioSupportDirectory()).path, 'kayit-klasoru.json'));
+
+  final Future<File> Function() _file;
+  final MethodChannel _channel;
+
+  /// The folder chosen, while it may still be written to; null when none
+  /// is, or its grant was taken back.
+  Future<({String uri, String name})?> current() async {
+    try {
+      final json = jsonDecode(await (await _file()).readAsString());
+      if (json is! Map || json['uri'] is! String) return null;
+      final uri = json['uri'] as String;
+      final usable = await _channel.invokeMethod<bool>('saveFolderUsable', {
+        'uri': uri,
+      });
+      if (usable != true) return null;
+      return (uri: uri, name: '${json['ad'] ?? 'Klasör'}');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The system's folder screen; null when nothing was chosen.
+  Future<({String uri, String name})?> choose() async {
+    final chosen = await _channel.invokeMapMethod<String, Object?>(
+      'pickSaveFolder',
+    );
+    final uri = chosen?['uri'];
+    if (uri is! String) return null;
+    final name = '${chosen?['name'] ?? 'Klasör'}';
+    final file = await _file();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(jsonEncode({'uri': uri, 'ad': name}));
+    return (uri: uri, name: name);
+  }
+
+  /// [path], one of Folio's saved copies, written into the folder as
+  /// [name]; where it went, "Dilekçeler/İtiraz.udf".
+  Future<String> write(
+    String path, {
+    required String name,
+    required String mimeType,
+  }) async {
+    final folder = await current();
+    if (folder == null) {
+      throw StateError('Kayıt klasörüne yazılamıyor; klasörü yeniden seçin.');
+    }
+    final shown = await _channel.invokeMethod<String>('writeToSaveFolder', {
+      'uri': folder.uri,
+      'path': path,
+      'name': name,
+      'mimeType': mimeType,
+    });
+    return shown ?? '${folder.name}/$name';
   }
 }

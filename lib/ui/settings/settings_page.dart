@@ -11,6 +11,7 @@ import '../../services/editor/snippets.dart';
 import '../../services/editor/suggestions/phrases.dart';
 import '../../services/legal/legal_settings.dart';
 import '../../services/platform/context_menu_registration.dart';
+import '../../services/platform/phone_document_save.dart';
 import '../../services/platform/platform_capabilities.dart';
 import '../../services/platform/system_notices.dart';
 import '../../services/desktop/desktop_companion.dart';
@@ -146,6 +147,20 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _scroll.addListener(_followScroll);
     unawaited(_load());
+    if (PhoneSaveFolder.available) unawaited(_loadSaveFolder());
+  }
+
+  /// The folder a phone saves into (Android); null while none is chosen.
+  ({String uri, String name})? _saveFolder;
+
+  Future<void> _loadSaveFolder() async {
+    final folder = await PhoneSaveFolder.instance.current();
+    if (mounted) setState(() => _saveFolder = folder);
+  }
+
+  Future<void> _chooseSaveFolder() async {
+    final folder = await PhoneSaveFolder.instance.choose();
+    if (folder != null && mounted) setState(() => _saveFolder = folder);
   }
 
   @override
@@ -1028,6 +1043,28 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
       ], lead: 'Metindeki kanun ve karar atıfları.'),
+      if (PhoneSaveFolder.available)
+        _Section(
+          'documents',
+          'Belgeler',
+          Icons.folder_outlined,
+          lead: 'Kaydet ve imzalanan belgeler bu klasöre yazılır.',
+          [
+            _Entry(
+              'kayıt klasörü kaydet klasör dosya gezgini imza',
+              SettingsRow(
+                key: const ValueKey('settings-save-folder'),
+                icon: Icons.folder_outlined,
+                title: 'Kayıt klasörü',
+                subtitle: _saveFolder?.name ?? 'Seçilmedi',
+                trailing: OutlinedButton(
+                  onPressed: () => unawaited(_chooseSaveFolder()),
+                  child: Text(_saveFolder == null ? 'Seç' : 'Değiştir'),
+                ),
+              ),
+            ),
+          ],
+        ),
       _Section('signing', 'E-imza', Icons.verified_outlined, [
         if (_desktop && desktopSigningAvailable)
           _Entry(

@@ -27,6 +27,7 @@ class MainActivity : FlutterActivity() {
     private val previewIo = Executors.newSingleThreadExecutor()
     private var fileActions: FileActions? = null
     private var documentSave: DocumentSave? = null
+    private var saveFolder: SaveFolder? = null
     private var defaultViewerSetup: DefaultViewerSetup? = null
     private var richClipboard: RichClipboard? = null
     private lateinit var channel: MethodChannel
@@ -44,6 +45,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(engine)
         fileActions = FileActions(this, engine.dartExecutor.binaryMessenger)
         documentSave = DocumentSave(this)
+        saveFolder = SaveFolder(this)
         defaultViewerSetup = DefaultViewerSetup(this)
         richClipboard = RichClipboard(this, engine.dartExecutor.binaryMessenger)
         channel = MethodChannel(engine.dartExecutor.binaryMessenger, "lifeos_evrak/documents")
@@ -57,6 +59,15 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "saveDocument" -> documentSave!!.start(call.argument<String>("path"), call.argument<String>("mimeType"), result)
+                "pickSaveFolder" -> saveFolder!!.pick(result)
+                "saveFolderUsable" -> result.success(saveFolder!!.usable(call.argument<String>("uri")))
+                "writeToSaveFolder" -> saveFolder!!.write(
+                    call.argument<String>("uri"),
+                    call.argument<String>("path"),
+                    call.argument<String>("name"),
+                    call.argument<String>("mimeType"),
+                    result
+                )
                 "configureDefaultViewer" -> defaultViewerSetup!!.start(result)
                 // The gallery asks for this one: the chosen folder is read
                 // where it is when that is possible, because a camera roll is
@@ -265,6 +276,7 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Android callback retained for Flutter Activity compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (documentSave?.onActivityResult(requestCode, resultCode, data) == true) return
+        if (saveFolder?.onActivityResult(requestCode, resultCode, data) == true) return
         if (defaultViewerSetup?.onActivityResult(requestCode, resultCode, data) == true) return
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != 4107) return
@@ -360,5 +372,5 @@ class MainActivity : FlutterActivity() {
     }
     private fun safeName(value: String): String = value.replace(Regex("[\\\\/\\x00-\\x1f]"), "_").let { if (it == "." || it == ".." || it.isBlank()) "belge" else it }
     private fun hash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).take(12).joinToString("") { "%02x".format(it) }
-    override fun onDestroy() { defaultViewerSetup?.dispose(); defaultViewerSetup = null; documentSave?.dispose(); documentSave = null; fileActions?.dispose(); fileActions = null; observers.values.forEach { contentResolver.unregisterContentObserver(it) }; observers.clear(); ready = false; io.shutdown(); previewIo.shutdown(); super.onDestroy() }
+    override fun onDestroy() { defaultViewerSetup?.dispose(); defaultViewerSetup = null; documentSave?.dispose(); documentSave = null; saveFolder?.dispose(); saveFolder = null; fileActions?.dispose(); fileActions = null; observers.values.forEach { contentResolver.unregisterContentObserver(it) }; observers.clear(); ready = false; io.shutdown(); previewIo.shutdown(); super.onDestroy() }
 }

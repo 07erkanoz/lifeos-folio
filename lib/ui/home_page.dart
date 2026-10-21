@@ -40,6 +40,8 @@ import 'widgets/document_history_dialog.dart';
 import 'widgets/document_versions_window.dart';
 import 'widgets/draft_prompts.dart' show draftDate;
 import 'widgets/notice.dart';
+import 'widgets/save_folder_sheet.dart';
+import '../services/platform/phone_document_save.dart';
 import 'widgets/print_screen.dart';
 import 'widgets/new_document_dialog.dart';
 import 'widgets/speech_actions.dart';
@@ -502,6 +504,47 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     await _addFiles([path], index: false);
     await _library.updatePaths([path]);
+    if (PhoneSaveFolder.available && mounted) await _signedToFolder(path);
+  }
+
+  /// On a phone the signature is put on Folio's own copy, out of the file
+  /// manager's sight: the signed document is written into the save folder
+  /// too, as it is (21 Ekim 2026).
+  Future<void> _signedToFolder(String path) async {
+    final folder = await ensureSaveFolder(context);
+    if (!mounted) return;
+    if (folder == null) {
+      showNotice(
+        context,
+        'İmzalandı',
+        detail:
+            'Kayıt klasörü seçilmedi; imzalı belge Folio’da duruyor. '
+            'Paylaş ile dışarı aktarabilirsiniz.',
+      );
+      return;
+    }
+    try {
+      final saved = await PhoneDocumentSave.saveToFolder(
+        fileName: p.basename(path),
+        bytes: await File(path).readAsBytes(),
+        folder: folder,
+      );
+      if (!mounted) return;
+      showNotice(
+        context,
+        'İmzalandı ve kaydedildi',
+        detail: saved.shown,
+        kind: NoticeKind.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showNotice(
+        context,
+        'İmzalı belge klasöre kaydedilemedi',
+        detail: '$e'.replaceFirst('Bad state: ', ''),
+        kind: NoticeKind.error,
+      );
+    }
   }
 
   /// Where each document's preview was double-clicked, for its editor to

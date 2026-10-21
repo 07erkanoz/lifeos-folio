@@ -20,6 +20,7 @@ import '../../services/platform/editor_window.dart';
 import 'document_versions_window.dart';
 import 'draft_prompts.dart';
 import 'notice.dart';
+import 'save_folder_sheet.dart';
 import 'print_screen.dart';
 
 import 'package:path/path.dart' as p;
@@ -4591,7 +4592,13 @@ class _EditorWidgetState extends State<EditorWidget>
           : _saveAs(target);
     }
     final path = _savedPath ?? (_sourceSigned ? null : source);
-    return _saveAs(target, destination: PhoneDocumentSave.here ? null : path);
+    // On Android, Kaydet writes into the folder chosen once; Farklı kaydet
+    // keeps the system's save screen.
+    return _saveAs(
+      target,
+      destination: PhoneDocumentSave.here ? null : path,
+      toFolder: PhoneSaveFolder.available,
+    );
   }
 
   Future<_SignedSave?> _askSignedSave() => showDialog<_SignedSave>(
@@ -5017,6 +5024,7 @@ class _EditorWidgetState extends State<EditorWidget>
     EvrakFormat targetFormat, {
     String? destination,
     bool overwriteSigned = false,
+    bool toFolder = false,
   }) async {
     if (_isSaving || _isLoading || _loadError != null) return false;
     setState(() => _isSaving = true);
@@ -5058,7 +5066,24 @@ class _EditorWidgetState extends State<EditorWidget>
         outBytes = utf8.encode(model.toPlainText());
       }
 
-      final savePath = PhoneDocumentSave.here
+      // Where a phone's save went, as the lawyer would look for it: said
+      // when it went into the save folder.
+      String? savedAt;
+      if (!mounted) return false;
+      final folder = PhoneDocumentSave.here && toFolder
+          ? await ensureSaveFolder(context)
+          : null;
+      if (PhoneDocumentSave.here && toFolder && folder == null) return false;
+      final savePath = folder != null
+          ? await PhoneDocumentSave.saveToFolder(
+              fileName: defaultName,
+              bytes: outBytes,
+              folder: folder,
+            ).then((saved) {
+              savedAt = saved.shown;
+              return saved.path;
+            })
+          : PhoneDocumentSave.here
           ? await PhoneDocumentSave.save(fileName: defaultName, bytes: outBytes)
           : destination ??
                 await FilePicker.saveFile(
@@ -5199,11 +5224,18 @@ class _EditorWidgetState extends State<EditorWidget>
         widget.onSaved?.call(savePath);
         showNotice(
           context,
-          PhoneDocumentSave.here
+          savedAt != null
+              ? 'Kaydedildi'
+              : PhoneDocumentSave.here
               ? 'Belge seçtiğiniz konuma kaydedildi.'
               : 'Başarıyla kaydedildi: ${p.basename(savePath)}',
-          detail: PhoneDocumentSave.here ? null : p.dirname(savePath),
+          detail:
+              savedAt ?? (PhoneDocumentSave.here ? null : p.dirname(savePath)),
           kind: NoticeKind.success,
+          actionLabel: savedAt != null ? 'Farklı kaydet' : null,
+          onAction: savedAt != null
+              ? () => unawaited(_saveAs(targetFormat))
+              : null,
         );
       }
       return targetFormat != EvrakFormat.pdf && !_hasChanges;
