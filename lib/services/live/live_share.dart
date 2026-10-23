@@ -187,6 +187,10 @@ class _Viewer {
   Future<void> queue = Future.value();
   bool ready = false;
 
+  /// Heard from at all: one that closed without a word turned the channel
+  /// away, it did not leave.
+  bool spoke = false;
+
   /// Bytes waiting to go: a viewer too far behind is given the whole
   /// again, once it has caught up, rather than every change.
   int waiting = 0;
@@ -772,11 +776,13 @@ class LiveShareHost {
   }
 
   /// [deviceId] shown the document: one of the person's own, or with
-  /// [office] a member of the office's (KVKK: only the one chosen).
+  /// [office] a member of the office's, or with [known] a device known by
+  /// a code alone (KVKK: only the one chosen).
   Future<bool> invite(
     String deviceId,
     String name, {
     bool office = false,
+    bool known = false,
     KnownDevice? guest,
   }) async {
     if (_closed || _viewers.containsKey(deviceId)) {
@@ -813,6 +819,7 @@ class LiveShareHost {
       liveKind,
       body: {'baslik': title, 'izin': rightOf(deviceId).name},
       office: office,
+      known: known,
       guest: guest != null,
     );
     // A guest may not yet have taken this Folio in when it is reached
@@ -848,6 +855,7 @@ class LiveShareHost {
     ch.messages.listen(
       (raw) {
         v.heard = DateTime.now();
+        v.spoke = true;
         try {
           final m = assembler.take(raw);
           switch (m?['tip']) {
@@ -900,7 +908,12 @@ class LiveShareHost {
     final v = _viewers[deviceId];
     if (v == null || !identical(v.channel, ch)) return;
     _viewers.remove(deviceId);
-    _set(deviceId, state);
+    _set(
+      deviceId,
+      state == LivePeerState.gone && !v.spoke
+          ? LivePeerState.unreachable
+          : state,
+    );
     _unask(deviceId);
     if (pen.value == deviceId) takeBack();
     await _shut(ch);
@@ -1572,8 +1585,14 @@ class LiveShare {
     network.streams[liveKind] =
         (ch, first, {required own, required member, required guest}) async {
           final from = ch.peer.deviceId;
+          // A device known by a code, neither the person's nor the
+          // office's: asked first, as the others are.
+          final known = !own && !member && !guest && network.isKnown(from);
           // A guest's host only when this Folio joined it, as a guest.
-          if (!own && !member && !(guest && network.joinedAsGuest(from))) {
+          if (!own &&
+              !member &&
+              !known &&
+              !(guest && network.joinedAsGuest(from))) {
             await ch.close();
             return;
           }
@@ -1588,6 +1607,13 @@ class LiveShare {
                 ].where((n) => n.trim().isNotEmpty).firstOrNull
               : member
               ? network.ledger.member(from)?.name
+              : known
+              ? [
+                  ...network.known
+                      .where((d) => d.deviceId == from)
+                      .expand((d) => [d.name, d.device]),
+                  network.peerNamed(from) ?? '',
+                ].where((n) => n.trim().isNotEmpty).firstOrNull
               : network.peerNamed(from);
           final session = LiveSession._(
             ch,
@@ -1599,10 +1625,10 @@ class LiveShare {
                     .where((r) => r.name == first['izin'])
                     .firstOrNull ??
                 LiveRight.view,
-            asGuest: guest && !own && !member,
+            asGuest: guest && !own && !member && !known,
           );
           incoming.value = [...incoming.value, session];
-          if (guest && !own && !member) {
+          if (guest && !own && !member && !known) {
             // Its host forgotten with it: nothing of the guest stays. Only
             // the grant it came under, not one a later joining made.
             final grant = network.guestGrant(from);

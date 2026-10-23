@@ -30,12 +30,16 @@ class _Target {
     this.device = '',
     this.platform,
     this.office = false,
+    this.known = false,
     this.guest,
   });
 
   final String id, name, device;
   final OfficePlatform? platform;
   final bool office;
+
+  /// Known by a code alone: neither the person's own nor the office's.
+  final bool known;
 
   /// A Folio nearby, invited as a guest.
   final OfficePeer? guest;
@@ -257,11 +261,15 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
       for (final m in ledger.members) {
         if (m.userId == me || !seen.add(m.deviceId)) continue;
         if (_net.isOnline(m.deviceId) || peers.containsKey(m.deviceId)) {
+          // The ledger may know a device by its person alone: its name and
+          // kind as it announces itself, that two of one person's tell apart.
+          final heard = _net.announced(m.deviceId);
           office.add(
             _Target(
               id: m.deviceId,
               name: m.name,
-              device: m.device,
+              device: m.device.isNotEmpty ? m.device : heard?.device ?? '',
+              platform: heard?.platform ?? m.platform,
               office: true,
             ),
           );
@@ -270,6 +278,27 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     }
 
     final nearby = <_Target>[];
+    // Paired by a code, neither one's own nor the office's.
+    for (final d in _net.known) {
+      if (d.userId == me || !_net.isOnline(d.deviceId)) continue;
+      if (!seen.add(d.deviceId)) continue;
+      final heard = _net.announced(d.deviceId);
+      final name = [
+        d.name,
+        heard?.name ?? '',
+        d.device,
+        heard?.device ?? '',
+      ].where((n) => n.trim().isNotEmpty).firstOrNull;
+      nearby.add(
+        _Target(
+          id: d.deviceId,
+          name: name ?? d.platform.label,
+          device: d.device.isNotEmpty ? d.device : heard?.device ?? '',
+          platform: heard?.platform ?? d.platform,
+          known: true,
+        ),
+      );
+    }
     for (final g in _net.invitableGuests) {
       if (!seen.add(g.deviceId)) continue;
       nearby.add(
@@ -305,13 +334,15 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
   };
 
   IconData _icon(_Target t) {
-    if (t.office) return Icons.person_outline_rounded;
     return switch (t.platform) {
       OfficePlatform.android || OfficePlatform.ios => Icons.smartphone_rounded,
       OfficePlatform.macos ||
       OfficePlatform.windows ||
       OfficePlatform.linux => Icons.laptop_rounded,
-      _ => t.guest != null ? Icons.person_outline_rounded : Icons.devices,
+      _ =>
+        t.guest != null || t.office
+            ? Icons.person_outline_rounded
+            : Icons.devices,
     };
   }
 
@@ -320,7 +351,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     if (guest != null) {
       await _host.inviteGuest(guest);
     } else {
-      await _host.invite(t.id, t.name, office: t.office);
+      await _host.invite(t.id, t.name, office: t.office, known: t.known);
     }
   }
 

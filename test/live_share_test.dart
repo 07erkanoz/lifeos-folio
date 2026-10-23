@@ -324,6 +324,21 @@ void main() {
     );
     expect(LiveShare.instance.incoming.value, isEmpty);
 
+    // Known by the code alone: asked, and shown it once he joins.
+    expect(
+      await host.invite(mert.self!.deviceId, 'Av. Mert Yıldız', known: true),
+      isTrue,
+    );
+    await until(() => LiveShare.instance.incoming.value.isNotEmpty);
+    final asked = LiveShare.instance.incoming.value.single;
+    expect(asked.asGuest, isFalse);
+    asked.accept();
+    await until(() => asked.ready);
+    expect(asked.document!.toPlainText(), 'Bilirkişi raporuna itirazlarımız\n');
+    await host.remove(mert.self!.deviceId);
+    await until(() => asked.ended);
+    await until(() => LiveShare.instance.incoming.value.isEmpty);
+
     expect(await deniz.foundOffice('Kaya Hukuk Bürosu'), isNull);
     expect(await deniz.admit(mert.self!.deviceId, OfficeRole.lawyer), isNull);
     await until(() => mert.ledger.members.length == 2);

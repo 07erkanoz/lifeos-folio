@@ -678,6 +678,7 @@ class OfficeNetwork extends ChangeNotifier {
     Map<String, Object?> body = const {},
     bool office = false,
     bool guest = false,
+    bool known = false,
   }) async {
     final identity = _identity, peer = _peers[deviceId];
     final host = peer?.host;
@@ -685,8 +686,11 @@ class OfficeNetwork extends ChangeNotifier {
       return null;
     }
     // A guest only as a guest: the channel it may have and no other.
+    // Known by a code alone: a live document, which it is asked about.
     final trusted = guest
         ? (isGuestOnly(deviceId) ? _guests[deviceId] : null)
+        : known
+        ? (kind == 'canli' ? _knownDevices[deviceId] : null)
         : office
         ? await _trusted(deviceId)
         : await _trustedFor(peer);
@@ -699,7 +703,7 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
-      if (!office && !guest && !ch.vouched) {
+      if (!office && !guest && !known && !ch.vouched) {
         await ch.close();
         return null;
       }
@@ -852,6 +856,9 @@ class OfficeNetwork extends ChangeNotifier {
   ];
 
   bool isOnline(String deviceId) => _peers[deviceId]?.online ?? false;
+
+  /// [deviceId] as it last announced itself on the network, if it did.
+  OfficePeer? announced(String deviceId) => _peers[deviceId];
 
   /// The person's own devices on the network now, as they say.
   List<OfficePeer> get ownOnline => [
@@ -1396,7 +1403,14 @@ class OfficeNetwork extends ChangeNotifier {
         final own = ch.vouched;
         final member = !viaGuest && ledger.member(id) != null;
         final guest = viaGuest;
-        if (handler == null || (!own && !member && !guest)) {
+        // A document shown live may come from a device known by a code too,
+        // neither the person's nor the office's: it is asked before it is
+        // shown (lib/services/live/live_share.dart). A phone paired so
+        // closed the channel at once, and the sharer read "ayrıldı" (23
+        // Ekim 2026).
+        final known =
+            !viaGuest && m['tur'] == 'canli' && _knownDevices.containsKey(id);
+        if (handler == null || (!own && !member && !guest && !known)) {
           await ch.close();
           return;
         }
