@@ -23,4 +23,9 @@ class DocumentLaunch {
     return DocumentLaunch(paths, edit: edit);
   }
   List<String> get arguments => [if (edit) '--edit', '--', ...paths];
+
+  /// What the open Folio is handed when this one is started again: nothing
+  /// when no document was named (its icon, the menu), that it shows its
+  /// home page; [arguments] always hold '--' and never said so.
+  List<String> get forwarded => paths.isEmpty ? const [] : arguments;
 }

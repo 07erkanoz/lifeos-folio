@@ -302,7 +302,9 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
         if (args.contains('--quick-search')) {
           _openQuick();
         } else {
-          companion!.showMain(paths: DocumentLaunch.parse(args).arguments);
+          // Started again with no document: the home page, not what was
+          // open when it went to the tray (23 Ekim 2026).
+          companion!.showMain(paths: DocumentLaunch.parse(args).forwarded);
         }
       });
       WidgetsBinding.instance.addPostFrameCallback((_) async {

@@ -57,6 +57,17 @@ void main() {
     expect(DocumentLaunch.parse(launch.arguments).edit, true);
     expect(DocumentLaunch.parse(['--preview', '--', 'a.pdf']).edit, false);
   });
+  test('Folio started again with no document hands the open one nothing, '
+      'that it shows its home page and not what was open in the tray', () {
+    // What a second Folio started from its icon sends: '--' alone.
+    final again = DocumentLaunch.parse(DocumentLaunch.parse([]).arguments);
+    expect(again.forwarded, isEmpty);
+    expect(DocumentLaunch.parse(['--edit']).forwarded, isEmpty);
+    expect(DocumentLaunch.parse(['--', 'a.udf']).forwarded, [
+      '--',
+      File('a.udf').absolute.path,
+    ]);
+  });
   testWidgets(
     'phone opens signed UDF, hides signing, shares and edits; signature notice is deferred to saving',
     (tester) async {
