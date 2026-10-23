@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../services/office/office_network.dart';
 import '../../services/editor/editor_settings.dart';
 import '../../services/editor/lawyer_profile.dart';
 import '../../services/editor/snippets.dart';
@@ -996,6 +997,22 @@ class _SettingsPageState extends State<SettingsPage> {
             title: 'Öğrenme',
             subtitle: 'Belgelerimden · arşivden · ifadeler',
             onTap: () => _push(const LearningPage()),
+          ),
+        ),
+        _Entry(
+          'canlı paylaşım davet misafir ağ yakındaki',
+          SettingsRow(
+            icon: Icons.cast_outlined,
+            title: 'Canlı paylaşıma davet edilebilirim',
+            subtitle:
+                'Aynı ağdaki başka bir büronun Folio’su sizi adınızla '
+                'görüp bir belgeyi izlemeye davet edebilir',
+            trailing: settingsSwitch(OfficeNetwork.instance.invitable, (
+              v,
+            ) async {
+              await OfficeNetwork.instance.setInvitable(v);
+              if (mounted) setState(() {});
+            }, key: const ValueKey('setting-live-invitable')),
           ),
         ),
       ], lead: 'Yazarken Folio’nun yardımı.'),

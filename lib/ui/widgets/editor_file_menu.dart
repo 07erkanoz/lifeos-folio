@@ -51,7 +51,6 @@ class EditorFileMenu extends StatelessWidget {
     this.onUyapOperations,
     this.onNewWindow,
     this.onLiveShare,
-    this.onLiveJoin,
     this.onShare,
     this.compact = false,
   });
@@ -78,9 +77,6 @@ class EditorFileMenu extends StatelessWidget {
 
   /// The document shown live on other devices; null where it cannot be.
   final VoidCallback? onLiveShare;
-
-  /// Another's document, shown live here as a guest, by a code.
-  final VoidCallback? onLiveJoin;
 
   /// The document's file sent on as it is, its signature kept: to a folder,
   /// an app, an e-mail.
@@ -199,12 +195,6 @@ class EditorFileMenu extends StatelessWidget {
         _item('Kaydet', Icons.save_outlined, save, keys: _key('S')),
         if (onLiveShare != null)
           _item('Canlı paylaş…', Icons.cast_outlined, onLiveShare),
-        if (onLiveJoin != null)
-          _item(
-            'Canlı belgeye katıl…',
-            Icons.cast_connected_outlined,
-            onLiveJoin,
-          ),
         _item('Farklı kaydet…', Icons.save_as_outlined, busy ? null : onSaveAs),
         if (onShare != null)
           _item('Paylaş…', Icons.ios_share_rounded, busy ? null : onShare),

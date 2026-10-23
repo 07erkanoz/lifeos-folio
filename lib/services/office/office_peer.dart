@@ -35,11 +35,21 @@ class OfficePeer {
     this.online = true,
     this.lastSeen,
     this.live = false,
+    this.invitable = false,
+    this.office = true,
   });
 
   /// Sharing a document live and taking guests now: a Folio that is no
   /// office's nor the person's may ask to be shown it.
   final bool live;
+
+  /// Lets a Folio that is no office's nor the person's invite it to a
+  /// document shared live (Ayarlar ▸ Editör): listed by its name there.
+  final bool invitable;
+
+  /// Open to the office (seen on its list by name), not named only to be
+  /// invited. A Folio of before saying neither is taken as open.
+  final bool office;
 
   /// The version of what Folios say to each other; the announcement's.
   static const protocol = 1;
@@ -67,6 +77,8 @@ class OfficePeer {
     'c': device,
     'p': platform.name,
     if (live) 'cl': '1',
+    if (invitable) 'md': '1',
+    if (invitable && !office) 'bo': '0',
   };
 
   /// Read back from an announcement; null when it is not a Folio's or is
@@ -92,6 +104,8 @@ class OfficePeer {
       version: version,
       lastSeen: now ?? DateTime.now(),
       live: txt['cl'] == '1',
+      invitable: txt['md'] == '1',
+      office: txt['bo'] != '0',
     );
   }
 
@@ -120,6 +134,8 @@ class OfficePeer {
           online: online,
           lastSeen: lastSeen,
           live: live,
+          invitable: invitable,
+          office: office,
         );
 
   static bool _v6(String host) => host.contains(':');
@@ -136,6 +152,8 @@ class OfficePeer {
     online: false,
     lastSeen: at,
     live: live,
+    invitable: invitable,
+    office: office,
   );
 }
 

@@ -47,7 +47,7 @@ void main() {
     );
     expect(
       Help.editor.parts.map((p) => p.heading),
-      containsAll(['Canlı paylaşım', 'Canlı belgeye katılmak']),
+      containsAll(['Canlı paylaşım', 'Canlı paylaşıma katılmak']),
     );
     expect(Help.tasks.parts.first.heading, 'Görev vermek');
     expect(Help.sync.parts.map((p) => p.heading), contains('Ne eşitlenir?'));

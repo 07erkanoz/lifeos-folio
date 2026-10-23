@@ -10,6 +10,8 @@ import '../editor/doc_model_json.dart';
 import '../office/office_channel.dart';
 import '../office/office_network.dart';
 import '../office/office_known.dart';
+import '../office/office_pairing.dart';
+import '../office/office_peer.dart';
 
 /// A document shared live (the editor's live sharing): the device it is
 /// open on streams it to the devices it chose, which see it change as it
@@ -40,7 +42,16 @@ const liveKind = 'canli';
 /// What a viewer may do: see it, or also write in it in turn.
 enum LiveRight { view, edit }
 
-enum LivePeerState { joining, watching, gone, unreachable }
+/// Where one shown it is: invited and not yet answered ([joining]),
+/// watching, gone; or not reached, said no, or said nothing in time.
+enum LivePeerState {
+  joining,
+  watching,
+  gone,
+  unreachable,
+  declined,
+  unanswered,
+}
 
 /// One the document is shared with, and how far it has come.
 class LivePeer {
@@ -49,18 +60,24 @@ class LivePeer {
     required this.name,
     this.right = LiveRight.view,
     this.state = LivePeerState.joining,
+    this.code,
   });
 
   final String deviceId, name;
   final LiveRight right;
   final LivePeerState state;
 
-  LivePeer copyWith({LivePeerState? state, LiveRight? right}) => LivePeer(
-    deviceId: deviceId,
-    name: name,
-    right: right ?? this.right,
-    state: state ?? this.state,
-  );
+  /// A guest's: the code its pairing shows on both screens.
+  final String? code;
+
+  LivePeer copyWith({LivePeerState? state, LiveRight? right, String? code}) =>
+      LivePeer(
+        deviceId: deviceId,
+        name: name,
+        right: right ?? this.right,
+        state: state ?? this.state,
+        code: code ?? this.code,
+      );
 }
 
 /// A word's bytes at most in one line: sealed, written in base64 twice and
@@ -611,17 +628,21 @@ class LiveShareHost {
   /// Whether [deviceId] is, or was, a guest shown it.
   bool isGuest(String deviceId) => _wereGuests.contains(deviceId);
 
-  /// Whether guests may ask to be shown it now (Misafir): only one
-  /// document takes them at a time, the last to be set to.
+  /// Whether guests it invited may join it now: only one document takes
+  /// them at a time, the last to invite one.
   bool get takingGuests => !_closed && identical(_net.guestOwner, this);
 
-  /// Guests taken (or no longer): one the lawyer accepts, its code seen
+  /// How long one invited has to answer.
+  static const answerWithin = Duration(minutes: 2);
+
+  /// Guests taken (or no longer): one invited that joins, its code seen
   /// on both screens, is shown the document at once.
   Future<void> takeGuests(bool take) async {
     if (take && !_closed) {
       await _net.openToGuests(
         this,
         title: title,
+        onPairing: _guestPairing,
         onGuest: (grant, name, office) {
           // One of the person's own devices, or the office's, that joined
           // by the code: shown it the way it is known, not as a guest. As a
@@ -655,6 +676,84 @@ class LiveShareHost {
     } else {
       await _net.closeToGuests(this);
     }
+  }
+
+  /// [guest], a Folio of no office's nor the person's, invited: its user
+  /// asked, and shown it once they join, both screens showing the same
+  /// code. False when it could not be told.
+  Future<bool> inviteGuest(OfficePeer guest) async {
+    if (_closed || _viewers.containsKey(guest.deviceId)) return false;
+    if (!takingGuests) await takeGuests(true);
+    final id = guest.deviceId;
+    final mine = (_invitations[id] ?? 0) + 1;
+    _invitations[id] = mine;
+    _wereGuests.add(id);
+    final name = guest.name.trim().isNotEmpty ? guest.name : guest.device;
+    peers.value = [
+      for (final p in peers.value)
+        if (p.deviceId != id) p,
+      LivePeer(
+        deviceId: id,
+        name: name.trim().isEmpty ? 'Misafir' : name,
+        right: rightOf(id),
+      ),
+    ];
+    final told = await _net.inviteGuest(this, guest);
+    if (_closed || _invitations[id] != mine) return false;
+    if (!told) {
+      _net.uninviteGuest(this, id);
+      _set(id, LivePeerState.unreachable);
+      return false;
+    }
+    // Not answered in time: invited no more.
+    Timer(answerWithin + const Duration(seconds: 30), () {
+      if (_closed || _invitations[id] != mine || _viewers.containsKey(id)) {
+        return;
+      }
+      if (peers.value.any(
+        (p) => p.deviceId == id && p.state == LivePeerState.joining,
+      )) {
+        _net.uninviteGuest(this, id);
+        _set(id, LivePeerState.unanswered);
+      }
+    });
+    return true;
+  }
+
+  /// An invited guest's pairing as it goes: its code shown on its row,
+  /// and its saying no, or nothing, there too.
+  void _guestPairing(String deviceId, OfficePairing pairing) {
+    final mine = _invitations[deviceId];
+    void step() {
+      if (_closed || _invitations[deviceId] != mine) {
+        pairing.removeListener(step);
+        return;
+      }
+      final code = pairing.code;
+      if (code != null) {
+        peers.value = [
+          for (final p in peers.value)
+            if (p.deviceId == deviceId && p.code != code)
+              p.copyWith(code: code)
+            else
+              p,
+        ];
+      }
+      if (!pairing.finished) return;
+      pairing.removeListener(step);
+      if (pairing.state == PairingState.done) return;
+      _set(
+        deviceId,
+        pairing.state == PairingState.rejected
+            ? LivePeerState.declined
+            : pairing.reason == 'Süre doldu.'
+            ? LivePeerState.unanswered
+            : LivePeerState.unreachable,
+      );
+    }
+
+    pairing.addListener(step);
+    step();
   }
 
   bool get sharing =>
@@ -695,10 +794,19 @@ class LiveShareHost {
       _guestIds[deviceId] = guest;
       _wereGuests.add(deviceId);
     }
+    final code = peers.value
+        .where((p) => p.deviceId == deviceId)
+        .firstOrNull
+        ?.code;
     peers.value = [
       for (final p in peers.value)
         if (p.deviceId != deviceId) p,
-      LivePeer(deviceId: deviceId, name: name, right: rightOf(deviceId)),
+      LivePeer(
+        deviceId: deviceId,
+        name: name,
+        right: rightOf(deviceId),
+        code: guest != null ? code : null,
+      ),
     ];
     var tried = await _net.openStream(
       deviceId,
@@ -751,6 +859,8 @@ class LiveShareHost {
               _sendWhole(v);
             case 'ayrildi':
               unawaited(_drop(deviceId, ch));
+            case 'reddetti':
+              unawaited(_drop(deviceId, ch, LivePeerState.declined));
             case 'kalemiste':
               if (rightOf(deviceId) == LiveRight.edit &&
                   apply != null &&
@@ -772,10 +882,10 @@ class LiveShareHost {
       onDone: () => _drop(deviceId, ch),
       onError: (Object _) => _drop(deviceId, ch),
     );
-    // Not ready in a while: not there.
-    Timer(const Duration(seconds: 20), () {
+    // Not joined in a while: asked on the other side, and not answered.
+    Timer(answerWithin, () {
       if (identical(_viewers[deviceId], v) && !v.ready) {
-        unawaited(_drop(deviceId, ch, LivePeerState.unreachable));
+        unawaited(_drop(deviceId, ch, LivePeerState.unanswered));
       }
     });
     return true;
@@ -998,9 +1108,10 @@ class LiveShareHost {
     await _net.forgetGuest(deviceId, grant);
   }
 
-  /// [deviceId] shown it no more.
+  /// [deviceId] shown it no more, or invited no more.
   Future<void> remove(String deviceId) async {
     _invitations[deviceId] = (_invitations[deviceId] ?? 0) + 1;
+    _net.uninviteGuest(this, deviceId);
     final v = _viewers.remove(deviceId);
     peers.value = [
       for (final p in peers.value)
@@ -1060,7 +1171,7 @@ class LiveSession extends ChangeNotifier {
     this.from,
     this.right, {
     this.asGuest = false,
-  });
+  }) : _answered = asGuest;
 
   final OfficeChannel _channel;
   final String title;
@@ -1068,9 +1179,39 @@ class LiveSession extends ChangeNotifier {
   /// The device it comes from.
   String get fromDevice => _channel.peer.deviceId;
 
-  /// Shown to this Folio as a guest, which asked for it by a code: opened
-  /// by the asking, not told of.
+  /// Shown to this Folio as a guest, which joined it from an invitation:
+  /// opened by the joining, not asked again.
   final bool asGuest;
+
+  /// Whether the user here joined it: until then the sharer is not told
+  /// this side is ready, and nothing of the document comes.
+  bool get answered => _answered;
+  bool _answered;
+
+  /// How long an invitation waits here for an answer.
+  static const answerWithin = Duration(minutes: 2);
+
+  /// Joined: the sharer told, the document shown whole.
+  void accept() {
+    if (_answered || ended) return;
+    _answered = true;
+    _begun = DateTime.now();
+    _say({'tip': 'hazir'});
+    notifyListeners();
+  }
+
+  /// Not joined: the sharer told so, nothing kept.
+  Future<void> decline() async {
+    if (ended) return;
+    if (!_channel.closed) {
+      try {
+        await _channel
+            .send({'tip': 'reddetti'})
+            .timeout(const Duration(seconds: 2), onTimeout: () {});
+      } catch (_) {}
+    }
+    _end();
+  }
 
   /// The device or person it comes from, as they are named here.
   final String from;
@@ -1165,11 +1306,21 @@ class LiveSession extends ChangeNotifier {
       onDone: _end,
       onError: (Object _) => _end(),
     );
-    _say({'tip': 'hazir'});
+    if (_answered) _say({'tip': 'hazir'});
     _pulse = Timer.periodic(heartbeat, (_) {
       final now = DateTime.now();
       final late = heartbeat * 6;
       final begun = _assembler.begun;
+      if (!_answered) {
+        // Asked, not yet answered: still there, until it is too late.
+        if (now.difference(_heard) > heartbeat * 3.5 ||
+            now.difference(_begun) > answerWithin) {
+          _end();
+        } else {
+          _say({'tip': 'nabiz'});
+        }
+        return;
+      }
       if (now.difference(_heard) > heartbeat * 3.5 ||
           // Never shown whole, a whole asked for and not come, a word
           // begun and not finished: not to be waited on for ever.
@@ -1442,7 +1593,7 @@ class LiveShare {
             ch,
             '${first['baslik'] ?? 'Belge'}',
             (name ?? '').isEmpty
-                ? (own ? 'Öbür cihazınız' : 'Bir meslektaşınız')
+                ? (own ? 'Diğer cihazınız' : 'Bir meslektaşınız')
                 : name!,
             LiveRight.values
                     .where((r) => r.name == first['izin'])

@@ -125,8 +125,6 @@ import '../../services/editor/petition_templates.dart';
 import 'desktop_frame.dart' show windowFullScreen;
 import '../../services/live/live_share.dart';
 import '../live/live_share_dialog.dart';
-import '../live/live_document_page.dart';
-import '../live/live_guest_dialogs.dart';
 import '../../services/portal/observed.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_hearing.dart';
@@ -388,14 +386,6 @@ class _EditorWidgetState extends State<EditorWidget>
     );
     if (mounted && message != null && message.isNotEmpty) {
       showNotice(context, message, kind: NoticeKind.success);
-    }
-  }
-
-  /// Another's document shown here live, joined as a guest.
-  Future<void> _joinLive() async {
-    final session = await LiveJoinDialog.show(context);
-    if (session != null && mounted) {
-      await LiveDocumentPage.open(context, session);
     }
   }
 
@@ -3936,6 +3926,20 @@ class _EditorWidgetState extends State<EditorWidget>
       (x) => x.signature(lawyer: _lawyerName ?? 'Av. [Ad Soyad]'),
     );
     final send = _desktop ? () => unawaited(_sendToUyap()) : null;
+    // Shown live on others' screens: where the document can be shared.
+    final live = PhoneDocumentSave.here || Platform.isIOS
+        ? null
+        : () => unawaited(_openLive());
+    final watching =
+        _live?.peers.value
+            .where((p) => p.state == LivePeerState.watching)
+            .length ??
+        0;
+    final liveLabel = watching > 0 ? 'Canlı ($watching)' : 'Canlı paylaş';
+    final liveTip = watching > 0
+        ? '$watching kişi izliyor · paylaşımı yönet'
+        : 'Belgeyi cihazlarınızda, büronuzda ya da yakındaki bir Folio’da '
+              'canlı gösterin';
     final canSign = _canSignNew && !_isSaving && !_signingNew;
     final sign = canSign ? () => unawaited(_signNew(mobile: false)) : null;
     final signMobile = canSign && mobileSigningAvailable
@@ -3991,6 +3995,16 @@ class _EditorWidgetState extends State<EditorWidget>
             'Süre',
             () => unawaited(_addDeadline()),
           ),
+          if (live != null)
+            ribbonButton(
+              context,
+              watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
+              liveLabel,
+              live,
+              selected: watching > 0,
+              tooltip: liveTip,
+              key: const ValueKey('legal-live'),
+            ),
           ribbonDivider(context),
           ribbonButton(
             context,
@@ -4197,6 +4211,20 @@ class _EditorWidgetState extends State<EditorWidget>
           ],
         ],
       ]),
+      if (live != null)
+        ribbonGroup(context, 'Paylaşım', [
+          [
+            ribbonBigButton(
+              context,
+              watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
+              watching > 0 ? 'Canlı\n$watching izliyor' : 'Canlı\npaylaş',
+              live,
+              primary: watching > 0,
+              tooltip: liveTip,
+              key: const ValueKey('legal-live'),
+            ),
+          ],
+        ]),
       ribbonGroup(context, 'Ajanda', last: true, [
         [
           ribbonButton(
@@ -5436,9 +5464,6 @@ class _EditorWidgetState extends State<EditorWidget>
                         onLiveShare: PhoneDocumentSave.here || Platform.isIOS
                             ? null
                             : () => unawaited(_openLive()),
-                        onLiveJoin: LiveShare.instance.listening
-                            ? () => unawaited(_joinLive())
-                            : null,
                         onShare: () => unawaited(_share()),
                         onPrint: () => unawaited(_print()),
                         onHistory: () => unawaited(_history()),

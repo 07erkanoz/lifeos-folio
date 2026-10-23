@@ -1,5 +1,6 @@
 // Pictures of live sharing written in turn (the share dialog with the pen
-// given, the viewer's page asking for it and holding it), from invented
+// given, the viewer's page asking for it and holding it) and of its
+// invitations (the one list, the windows asking on the other side), from invented
 // names over two Folios on this computer, for checking them by eye. Not
 // part of the test suite:
 //
@@ -21,6 +22,7 @@ import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:evrak_convert/ui/live/live_document_page.dart';
+import 'package:evrak_convert/ui/live/live_invite_dialogs.dart';
 import 'package:evrak_convert/ui/live/live_share_dialog.dart';
 import 'package:evrak_convert/ui/widgets/flowing_document_view.dart';
 import 'package:evrak_convert/ui/theme/app_theme.dart';
@@ -248,6 +250,7 @@ void main() {
     await tester.runAsync(() => host.invite(id, 'Tablet'));
     await wait(() => LiveShare.instance.incoming.value.isNotEmpty);
     final session = LiveShare.instance.incoming.value.single;
+    session.accept();
     await wait(() => session.ready);
 
     await tester.pumpWidget(_app(LiveDocumentPage(session: session)));
@@ -479,6 +482,209 @@ void main() {
 
     await tester.runAsync(host.close);
     await wait(() => session.ended);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(minutes: 4));
+  });
+
+  testWidgets('live sharing invitations', (tester) async {
+    tester.view.devicePixelRatio = pixelRatio;
+    await tester.binding.setSurfaceSize(const Size(1000, 680));
+    final dir = Directory.systemTemp.createTempSync('folio_live_invites_');
+    Future<OfficeNetwork> folio(String device, String name) async {
+      final net = OfficeNetwork(
+        settings: () async => File('${dir.path}/$device/buro.json'),
+        known: KnownDevices(
+          file: () async => File('${dir.path}/$device/k.json'),
+        ),
+        ledger: OfficeLedger(
+          file: () async => File('${dir.path}/$device/d.json'),
+        ),
+        tasks: OfficeTasks(
+          file: () async => File('${dir.path}/$device/g.json'),
+        ),
+        chats: OfficeChats(
+          file: () async => File('${dir.path}/$device/m.json'),
+        ),
+      );
+      final identity = await OfficeIdentity.load(store: _Store());
+      await net.listenForTesting(
+        identity,
+        OfficePeer(
+          deviceId: identity.deviceId,
+          userId: identity.userId,
+          name: name,
+          device: device,
+          platform: OfficePlatform.linux,
+        ),
+      );
+      return net;
+    }
+
+    Future<void> wait(bool Function() done) async {
+      for (var i = 0; i < 500 && !done(); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+    }
+
+    OfficePeer invitable(OfficePeer p) => OfficePeer(
+      deviceId: p.deviceId,
+      userId: p.userId,
+      name: p.name,
+      device: p.device,
+      platform: p.platform,
+      host: p.host,
+      port: p.port,
+      invitable: true,
+    );
+
+    final (pc, tablet, selin, mert) = (await tester.runAsync(() async {
+      final pc = await folio('masaustu', 'Av. Deniz Kaya');
+      final tablet = await folio('Tablet', 'Av. Deniz Kaya');
+      final selin = await folio('selin-dizustu', 'Av. Selin Arı');
+      final mert = await folio('mert-pc', 'Av. Mert Yıldız');
+      pc.seenForTesting(tablet.self!);
+      tablet.seenForTesting(pc.self!);
+      final asking = pc.pair(tablet.self!)!;
+      while (tablet.incoming.value?.code == null || asking.code == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      tablet.incoming.value!.confirm();
+      asking.confirm();
+      while (pc.self!.userId != tablet.self!.userId) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      pc.seenForTesting(tablet.self!);
+      tablet.seenForTesting(pc.self!);
+      pc.seenForTesting(invitable(selin.self!));
+      pc.seenForTesting(invitable(mert.self!));
+      selin.seenForTesting(pc.self!);
+      LiveShare.instance.listen(tablet);
+      LiveShare.instance.listen(selin);
+      return (pc, tablet, selin, mert);
+    }))!;
+    final host = LiveShareHost(
+      title: 'Kira sözleşmesi',
+      snapshot: () => (
+        delta: (Delta()..insert('KİRA SÖZLEŞMESİ\n')).toJson(),
+        blocks: <DocBlock>[],
+      ),
+      blockCount: () => 0,
+      network: pc,
+      apply: (change) => true,
+    );
+    // Each picture on its own: the windows of the one before taken away.
+    Future<void> fresh() => tester.pumpWidget(const SizedBox());
+    Widget dialog() => _app(
+      Scaffold(
+        backgroundColor: const Color(0xFFE9EBEF),
+        body: Center(
+          child: LiveShareDialog(host: host, network: pc),
+        ),
+      ),
+    );
+
+    // Nobody invited yet.
+    await tester.pumpWidget(dialog());
+    await _shot(tester, 'canli-liste-bos');
+
+    // The tablet asked, on its own screen.
+    await fresh();
+    await tester.runAsync(() => host.invite(tablet.self!.deviceId, 'Tablet'));
+    await wait(() => LiveShare.instance.incoming.value.isNotEmpty);
+    final mine = LiveShare.instance.incoming.value.single;
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) => Scaffold(
+            backgroundColor: const Color(0xFFE9EBEF),
+            body: Center(
+              child: TextButton(
+                onPressed: () => LiveInviteDialog.show(context, mine),
+                child: const Text('aç'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('aç'));
+    await _shot(tester, 'canli-davet-cihaz');
+    await tester.runAsync(
+      () => tester.tap(find.byKey(const ValueKey('live-invite-join'))),
+    );
+    await wait(() => mine.ready);
+
+    // Selin, of another office, invited from the list: her Folio pairs,
+    // the code on her row.
+    await fresh();
+    await tester.runAsync(() async {
+      await host.inviteGuest(invitable(selin.self!));
+      while (selin.liveInvite.value == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    final joining = (await tester.runAsync(
+      () async => selin.joinAsGuest(
+        selin.liveInvite.value!.from,
+        name: 'Av. Selin Arı',
+        office: 'Arı Hukuk',
+      )!,
+    ))!;
+    await wait(() => host.peers.value.any((p) => p.code != null));
+    await tester.pumpWidget(dialog());
+    await _shot(tester, 'canli-liste');
+
+    // On a phone.
+    await fresh();
+    tester.view.physicalSize = const Size(390, 780) * pixelRatio;
+    await tester.binding.setSurfaceSize(const Size(390, 780));
+    await tester.pumpWidget(dialog());
+    await _shot(tester, 'canli-liste-telefon');
+    tester.view.resetPhysicalSize();
+    await tester.binding.setSurfaceSize(const Size(1000, 680));
+    await tester.runAsync(() async => joining.reject());
+    selin.liveInvite.value = null;
+
+    // Mert's Folio, invited: the window asking him, the code on it.
+    await fresh();
+    await tester.runAsync(() async {
+      mert.seenForTesting(pc.self!);
+      await host.inviteGuest(invitable(mert.self!));
+      while (mert.liveInvite.value == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    final invite = mert.liveInvite.value!;
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) => Scaffold(
+            backgroundColor: const Color(0xFFE9EBEF),
+            body: Center(
+              child: TextButton(
+                onPressed: () =>
+                    LiveGuestInviteDialog.show(context, invite, network: mert),
+                child: const Text('aç'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.runAsync(() => tester.tap(find.text('aç')));
+    await wait(
+      () => host.peers.value.any(
+        (p) => p.deviceId == mert.self!.deviceId && p.code != null,
+      ),
+    );
+    await _shot(tester, 'canli-davet-misafir');
+    await fresh();
+
+    await tester.runAsync(host.close);
+    await wait(() => mine.ended);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(minutes: 4));
   });

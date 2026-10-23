@@ -27,28 +27,30 @@ class HelpPart {
 
 abstract final class Help {
   static const _liveShare = HelpPart('Canlı paylaşım', [
-    'Canlı paylaş, açık belgenizi başkalarının ekranında canlı gösterir. '
-        'Belge sizde kalır; paylaşım bitince karşı tarafta hiçbir şey '
-        'kalmaz.',
-    'Kiminle paylaşacağınızı seçin: Cihazlarım (kendi cihazlarınız), '
-        'büronuzdaki kişiler ya da Misafir (büronuzda olmayan, aynı '
-        'ağda Folio kullanan biri, örneğin karşı tarafın vekili).',
+    'Hukuk sekmesinde Canlı paylaş’a ya da Dosya › Canlı paylaş’a basın. '
+        'Açık belgeniz başkalarının ekranında canlı görünür; belge sizde '
+        'kalır, paylaşım bitince karşı tarafta hiçbir şey kalmaz.',
+    'Açılan listede aynı ağdaki cihazlar görünür: kendi cihazlarınız, '
+        'büronuzdaki kişiler ve yakındaki Folio’lar (büronuzda olmayan, '
+        'örneğin karşı tarafın vekili). Kişinin yanındaki Davet et’e '
+        'basın.',
     'Her kişi için seçin: Yalnız görebilir (okur, kopyalayamaz) ya da '
         'Sırayla düzenleyebilir.',
+    'Yakındaki bir Folio’yu davet edince satırında altı haneli bir kod '
+        'görünür; karşı tarafın davet penceresinde de aynı kod çıkar.',
     'Sırayla düzenleyebilen birine Kalemi ver dediğinizde onun '
         'yazdıkları sizin belgenize anında işlenir; o sırada siz yalnız '
         'okursunuz.',
     'Kalemi geri al ile istediğiniz an geri alırsınız. Kalem iki dakika '
         'kullanılmazsa kendiliğinden size döner.',
-    'Misafir için Misafirleri kabul et’i açın. Misafir kendi Folio’sunda '
-        'Dosya › Canlı belgeye katıl’ı seçer; iki ekranda çıkan kod '
-        'aynıysa onaylarsınız.',
-    'Bitirmek için Paylaşımı kapat’a basın.',
+    'Bitirmek için Paylaşımı bitir’e basın.',
   ]);
 
-  static const _liveJoin = HelpPart('Canlı belgeye katılmak', [
-    'Paylaşan size belgeyi açınca ekranınızda görünür. Misafirseniz '
-        'Dosya › Canlı belgeye katıl ile katılın.',
+  static const _liveJoin = HelpPart('Canlı paylaşıma katılmak', [
+    'Biri sizi davet edince Folio’da bir pencere açılır. Katıl’a basın; '
+        'belge kendiliğinden açılır. İstemiyorsanız Reddet’e basın.',
+    'Başka bir büronun sizi davet edebilmesi için Ayarlar › Editör’de '
+        'Canlı paylaşıma davet edilebilirim açık olmalı.',
     'Düzenleme izniniz varsa Düzenlemek iste’ye basın; paylaşan kalemi '
         'verince yazdıklarınız onun belgesine işlenir.',
     'İş bitince Kalemi bırak’a, ayrılmak için İzlemeyi bırak’a basın.',

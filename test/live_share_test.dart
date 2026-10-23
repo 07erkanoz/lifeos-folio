@@ -17,7 +17,7 @@ import 'package:flutter_quill/flutter_quill.dart'
     show Attribute, ChangeSource, Document, QuillController, QuillEditor;
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:evrak_convert/ui/live/live_document_page.dart';
-import 'package:evrak_convert/ui/live/live_guest_dialogs.dart';
+import 'package:evrak_convert/ui/live/live_invite_dialogs.dart';
 import 'package:evrak_convert/ui/live/live_share_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -106,6 +106,7 @@ void main() {
     expect(await host.invite(tablet.self!.deviceId, 'tablet'), isTrue);
     await until(() => LiveShare.instance.incoming.value.isNotEmpty);
     final session = LiveShare.instance.incoming.value.single;
+    session.accept();
     expect(session.title, 'Kira sözleşmesi');
     await until(() => session.ready);
     expect(host.peers.value.single.state, LivePeerState.watching);
@@ -205,6 +206,7 @@ void main() {
     expect(await joining, isTrue);
     await until(() => LiveShare.instance.incoming.value.isNotEmpty);
     final session = LiveShare.instance.incoming.value.single;
+    session.accept();
     await until(() => session.ready);
     for (var round = 0; round < 20; round++) {
       // A burst: the editor tells of them after all are made.
@@ -331,6 +333,7 @@ void main() {
     );
     await until(() => LiveShare.instance.incoming.value.isNotEmpty);
     final session = LiveShare.instance.incoming.value.single;
+    session.accept();
     expect(session.from, 'Av. Deniz Kaya');
     await until(() => session.ready);
     expect(
@@ -342,15 +345,25 @@ void main() {
     expect(session.document, isNull);
   });
 
-  test('a guest of no office and no pairing joins by a code both screens '
-      'show, is shown the document, may do nothing else, and both forget '
-      'each other when it ends', () async {
+  /// [p] as a Folio that may be invited announces itself.
+  OfficePeer invitable(OfficePeer p) => OfficePeer(
+    deviceId: p.deviceId,
+    userId: p.userId,
+    name: p.name,
+    device: p.device,
+    platform: p.platform,
+    host: p.host,
+    port: p.port,
+    invitable: true,
+  );
+
+  /// A sharer, and a Folio of another office's nearby that may be invited.
+  Future<(OfficeNetwork, OfficeNetwork, LiveShareHost)> guests() async {
     final deniz = await folio('deniz-pc', name: 'Av. Deniz Kaya');
     final selin = await folio('selin-pc', name: 'Av. Selin Arı');
-    // On the network, as the guest's quiet join would put them.
-    deniz.seenForTesting(selin.self!);
+    deniz.seenForTesting(invitable(selin.self!));
+    selin.seenForTesting(deniz.self!);
     LiveShare.instance.listen(selin);
-    LiveShare.instance.listen(deniz);
     final host = LiveShareHost(
       title: 'Kira sözleşmesi',
       snapshot: () => (
@@ -360,36 +373,56 @@ void main() {
       blockCount: () => 0,
       network: deniz,
     );
-    await host.takeGuests(true);
-    expect(deniz.guestsOpen, isTrue);
-    expect(deniz.self!.live, isTrue);
-    selin.seenForTesting(deniz.self!);
-    expect(selin.liveHosts.map((p) => p.deviceId), [deniz.self!.deviceId]);
+    return (deniz, selin, host);
+  }
 
+  /// [host] invites Selin; her Folio is told, pairs, and she joins: the
+  /// same code on her screen and on her row at the sharer's.
+  Future<OfficePairing> inviteAndJoin(
+    OfficeNetwork deniz,
+    OfficeNetwork selin,
+    LiveShareHost host,
+  ) async {
+    expect(await host.inviteGuest(invitable(selin.self!)), isTrue);
+    await until(() => selin.liveInvite.value != null);
+    final invite = selin.liveInvite.value!;
+    selin.liveInvite.value = null;
+    expect(invite.from.deviceId, deniz.self!.deviceId);
+    expect(invite.title, 'Kira sözleşmesi');
     final joining = selin.joinAsGuest(
-      deniz.self!,
+      invite.from,
       name: 'Av. Selin Arı',
       office: 'Arı Hukuk',
     )!;
-    await until(() => deniz.guestPairing.value?.code != null);
-    final asked = deniz.guestPairing.value!;
-    expect(asked.guestName, 'Av. Selin Arı');
-    expect(asked.guestOffice, 'Arı Hukuk');
-    await until(() => joining.code != null);
-    // The same six digits on both screens, not a device's pairing code.
-    expect(joining.code, asked.code);
-    expect(joining.mine, isFalse);
-    asked.confirm();
+    await until(
+      () => joining.code != null && host.peers.value.any((p) => p.code != null),
+    );
+    expect(host.peers.value.single.code, joining.code);
+    expect(host.peers.value.single.state, LivePeerState.joining);
     joining.confirm();
+    return joining;
+  }
+
+  test('a Folio of no office is invited from the list: told on its own '
+      'screen, joins with one tap after the code shows on both, is shown '
+      'the document, may do nothing else, and both forget each other when '
+      'it ends', () async {
+    final (deniz, selin, host) = await guests();
+    expect(deniz.invitableGuests.map((p) => p.deviceId), [
+      selin.self!.deviceId,
+    ]);
+    await inviteAndJoin(deniz, selin, host);
+    expect(deniz.guestsOpen, isTrue);
     await until(() => LiveShare.instance.incoming.value.isNotEmpty);
     final session = LiveShare.instance.incoming.value.single;
+    expect(session.asGuest, isTrue);
     await until(() => session.ready);
     expect(session.document!.toPlainText(), 'Kiraya veren ve kiracı\n');
+    await until(() => host.peers.value.single.state == LivePeerState.watching);
     expect(host.peers.value.single.name, 'Av. Selin Arı (Arı Hukuk)');
     // Not known as a device, not the person's, not the office's.
     expect(deniz.isKnown(selin.self!.deviceId), isFalse);
     expect(deniz.isGuestOnly(selin.self!.deviceId), isTrue);
-    expect(selin.self!.userId, isNot(deniz.self!.userId));
 
     // The guest offering a document of its own is not shown it.
     final back = await selin.openStream(
@@ -411,8 +444,44 @@ void main() {
     expect(deniz.guestsOpen, isFalse);
   });
 
-  test('one\'s own device joining by the code is shown the document the way '
-      'it is known, not turned away as no guest', () async {
+  test('a guest turning the invitation down is shown so on its row, and '
+      'one not invited is turned away though it asks', () async {
+    final (deniz, selin, host) = await guests();
+    expect(await host.inviteGuest(invitable(selin.self!)), isTrue);
+    await until(() => selin.liveInvite.value != null);
+    final joining = selin.joinAsGuest(
+      selin.liveInvite.value!.from,
+      name: 'Av. Selin Arı',
+    )!;
+    selin.liveInvite.value = null;
+    await until(() => joining.code != null);
+    joining.reject();
+    await until(() => host.peers.value.single.state == LivePeerState.declined);
+    expect(LiveShare.instance.incoming.value, isEmpty);
+
+    // Invited no more: asking to join is turned away.
+    final again = selin.joinAsGuest(deniz.self!, name: 'Av. Selin Arı')!;
+    await until(() => again.finished);
+    expect(again.state, isNot(PairingState.done));
+    expect(deniz.guestGrant(selin.self!.deviceId), isNull);
+    await host.close();
+  });
+
+  test('a Folio that may not be invited is not listed, and does not take '
+      'an invitation', () async {
+    final (deniz, selin, host) = await guests();
+    await selin.setInvitable(false);
+    expect(await host.inviteGuest(invitable(selin.self!)), isFalse);
+    expect(selin.liveInvite.value, isNull);
+    expect(host.peers.value.single.state, LivePeerState.unreachable);
+    // Announced as not to be invited: not on the list.
+    deniz.seenForTesting(selin.self!);
+    expect(deniz.invitableGuests, isEmpty);
+    await host.close();
+  });
+
+  test('one\'s own device asked to watch joins with Katıl, or says no and '
+      'the sharer sees it', () async {
     final (pc, tablet) = await pair();
     final host = LiveShareHost(
       title: 'Kira sözleşmesi',
@@ -423,54 +492,28 @@ void main() {
       blockCount: () => 0,
       network: pc,
     );
-    await host.takeGuests(true);
-    tablet.seenForTesting(pc.self!);
-    final joining = tablet.joinAsGuest(pc.self!, name: 'Tablet')!;
-    await until(() => pc.guestPairing.value?.code != null);
-    await until(() => joining.code != null);
-    expect(joining.code, pc.guestPairing.value!.code);
-    pc.guestPairing.value!.confirm();
-    joining.confirm();
-    // It came: before, the code matched and the sharer found it
-    // unreachable, its guest's door shut to a device it knows.
-    await until(
-      () => LiveShare.instance.incoming.value.any(
-        (s) => s.fromDevice == pc.self!.deviceId,
-      ),
-    );
-    final session = LiveShare.instance.incoming.value.singleWhere(
-      (s) => s.fromDevice == pc.self!.deviceId,
-    );
-    await until(() => session.ready);
-    expect(session.document!.toPlainText(), 'Kiraya veren ve kiracı\n');
-    expect(session.asGuest, isFalse);
-    await until(
-      () => host.peers.value.any((p) => p.state == LivePeerState.watching),
-    );
-    expect(pc.isGuestOnly(tablet.self!.deviceId), isFalse);
-    await host.close();
-    await until(() => session.ended);
-  });
+    final id = tablet.self!.deviceId;
+    expect(await host.invite(id, 'tablet'), isTrue);
+    await until(() => LiveShare.instance.incoming.value.isNotEmpty);
+    final first = LiveShare.instance.incoming.value.single;
+    // Asked, not yet answered: nothing of the document comes.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(first.ready, isFalse);
+    expect(host.peers.value.single.state, LivePeerState.joining);
+    await first.decline();
+    await until(() => host.peers.value.single.state == LivePeerState.declined);
+    expect(first.ended, isTrue);
 
-  /// A sharer taking guests and a guest seeing it on the network.
-  Future<(OfficeNetwork, OfficeNetwork, LiveShareHost)> guests() async {
-    final deniz = await folio('deniz-pc', name: 'Av. Deniz Kaya');
-    final selin = await folio('selin-pc', name: 'Av. Selin Arı');
-    deniz.seenForTesting(selin.self!);
-    LiveShare.instance.listen(selin);
-    final host = LiveShareHost(
-      title: 'Kira sözleşmesi',
-      snapshot: () => (
-        delta: (Delta()..insert('Kiraya veren ve kiracı\n')).toJson(),
-        blocks: <DocBlock>[],
-      ),
-      blockCount: () => 0,
-      network: deniz,
-    );
-    await host.takeGuests(true);
-    selin.seenForTesting(deniz.self!);
-    return (deniz, selin, host);
-  }
+    expect(await host.invite(id, 'tablet'), isTrue);
+    await until(() => LiveShare.instance.incoming.value.isNotEmpty);
+    final second = LiveShare.instance.incoming.value.single;
+    second.accept();
+    await until(() => second.ready);
+    await until(() => host.peers.value.single.state == LivePeerState.watching);
+    expect(second.document!.toPlainText(), 'Kiraya veren ve kiracı\n');
+    await host.close();
+    await until(() => second.ended);
+  });
 
   /// Waited for in a widget test: real time passing for the sockets, and
   /// the test's own zone let run between, where the dialogs' work is.
@@ -484,18 +527,88 @@ void main() {
     expect(done(), isTrue);
   }
 
-  testWidgets('the guest picks the sharer, gives a name, confirms the code '
-      'and is handed the document once the sharer accepts', (tester) async {
+  testWidgets('the sharer invites a Folio nearby from the one list; the '
+      'guest\'s Folio shows who shares what and the code, and one tap on '
+      'Katıl hands it the document', (tester) async {
     final (deniz, selin, host) = (await tester.runAsync(guests))!;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveShareDialog(host: host, network: deniz),
+        ),
+      ),
+    );
+    final id = selin.self!.deviceId;
+    expect(find.text('YAKINDAKİ FOLIO’LAR'), findsOneWidget);
+    expect(find.byKey(ValueKey('live-target-$id')), findsOneWidget);
+    await tester.runAsync(
+      () => tester.tap(find.byKey(ValueKey('live-invite-$id'))),
+    );
+    await settle(tester, () => selin.liveInvite.value != null);
+    expect(find.textContaining('yanıt bekleniyor'), findsOneWidget);
+
+    // On the guest's Folio.
     LiveSession? came;
+    final invite = selin.liveInvite.value!;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) => TextButton(
-            onPressed: () async => came = await showDialog<LiveSession>(
-              context: context,
-              builder: (_) => LiveJoinDialog(network: selin),
+            onPressed: () async => came = await LiveGuestInviteDialog.show(
+              context,
+              invite,
+              network: selin,
             ),
+            child: const Text('aç'),
+          ),
+        ),
+      ),
+    );
+    await tester.runAsync(() => tester.tap(find.text('aç')));
+    await settle(tester, () => host.peers.value.any((p) => p.code != null));
+    final code = host.peers.value.single.code!;
+    await settle(tester, () => find.text(code).evaluate().isNotEmpty);
+    expect(
+      find.textContaining('“Kira sözleşmesi” belgesini sizinle canlı'),
+      findsOneWidget,
+    );
+    await tester.runAsync(
+      () => tester.tap(find.byKey(const ValueKey('live-invite-join'))),
+    );
+    await settle(
+      tester,
+      () =>
+          came != null &&
+          host.peers.value.single.state == LivePeerState.watching,
+    );
+    expect(came!.asGuest, isTrue);
+    expect(came!.title, 'Kira sözleşmesi');
+    await tester.runAsync(host.close);
+    await settle(tester, () => came!.ended);
+    await tester.pump(OfficePairing.limit);
+  });
+
+  testWidgets('one\'s own device is asked in a window: Katıl opens it', (
+    tester,
+  ) async {
+    final (pc, tablet) = (await tester.runAsync(pair))!;
+    final host = LiveShareHost(
+      title: 'Dilekçe',
+      snapshot: () =>
+          (delta: (Delta()..insert('Dava dilekçesi\n')).toJson(), blocks: []),
+      blockCount: () => 0,
+      network: pc,
+    );
+    await tester.runAsync(() => host.invite(tablet.self!.deviceId, 'tablet'));
+    await settle(tester, () => LiveShare.instance.incoming.value.isNotEmpty);
+    final session = LiveShare.instance.incoming.value.single;
+    bool? joined;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async =>
+                joined = await LiveInviteDialog.show(context, session),
             child: const Text('aç'),
           ),
         ),
@@ -504,135 +617,23 @@ void main() {
     await tester.tap(find.text('aç'));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(ValueKey('live-host-${deniz.self!.deviceId}')),
+      find.textContaining('“Dilekçe” belgesini sizinle canlı paylaşıyor'),
       findsOneWidget,
     );
-    await tester.tap(find.byKey(ValueKey('live-host-${deniz.self!.deviceId}')));
-    await tester.enterText(
-      find.byKey(const ValueKey('live-join-name')),
-      'Av. Selin Arı',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('live-join-office')),
-      'Arı Hukuk',
-    );
-    await tester.pump();
-    // Tapped in real time: the pairing it starts talks over sockets.
     await tester.runAsync(
-      () => tester.tap(find.byKey(const ValueKey('live-join'))),
+      () => tester.tap(find.byKey(const ValueKey('live-invite-join'))),
     );
-    await settle(tester, () => deniz.guestPairing.value?.code != null);
-    await tester.pump();
-    final code = deniz.guestPairing.value!.code!;
-    expect(find.text(code), findsOneWidget);
-    deniz.guestPairing.value!.confirm();
-    await tester.runAsync(
-      () => tester.tap(find.byKey(const ValueKey('live-join-confirm'))),
-    );
-    await settle(
-      tester,
-      () =>
-          host.peers.value.isNotEmpty &&
-          host.peers.value.single.state == LivePeerState.watching,
-    );
-    await tester.pump();
-    expect(came, isNotNull);
-    expect(came!.asGuest, isTrue);
-    expect(came!.title, 'Kira sözleşmesi');
-    expect(host.peers.value.single.name, 'Av. Selin Arı (Arı Hukuk)');
+    await settle(tester, () => session.ready);
+    expect(joined, isTrue);
     await tester.runAsync(host.close);
-    await settle(tester, () => came!.ended);
-    // The pairing's own limit, run out in the test's time.
-    await tester.pump(OfficePairing.limit);
-  });
-
-  testWidgets('the sharer is shown who asks and the code, and the guest is '
-      'shown it only when accepted', (tester) async {
-    final (deniz, selin, host) = (await tester.runAsync(guests))!;
-    // Asked in real time: the pairing talks over sockets.
-    final joining = (await tester.runAsync(
-      () async => selin.joinAsGuest(
-        deniz.self!,
-        name: 'Av. Selin Arı',
-        office: 'Arı Hukuk',
-      )!,
-    ))!;
-    await settle(
-      tester,
-      () => deniz.guestPairing.value?.code != null && joining.code != null,
-    );
-    expect(deniz.guestPairingFor, 'Kira sözleşmesi');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => TextButton(
-            onPressed: () => LiveGuestAskDialog.show(
-              context,
-              deniz.guestPairing.value!,
-              title: deniz.guestPairingFor,
-            ),
-            child: const Text('aç'),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('aç'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(
-      find.textContaining(
-        'Av. Selin Arı (Arı Hukuk) “Kira sözleşmesi” belgesini canlı',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text(joining.code!), findsOneWidget);
-    await tester.runAsync(() async => joining.confirm());
-    await settle(tester, () => joining.state == PairingState.confirmed);
-    for (var i = 0; i < 20; i++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 10)),
-      );
-      await tester.pump();
-    }
-    expect(host.peers.value, isEmpty);
-    await tester.runAsync(
-      () => tester.tap(find.byKey(const ValueKey('live-guest-accept'))),
-    );
-    await settle(
-      tester,
-      () =>
-          host.peers.value.isNotEmpty &&
-          host.peers.value.single.state == LivePeerState.watching,
-    );
-    await tester.pump();
-    expect(find.textContaining('izlemeye başladı'), findsOneWidget);
-    // Gone by itself a moment later (its timer set where the pairing
-    // told it, in real time).
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 2300)),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(LiveGuestAskDialog), findsNothing);
-    await tester.runAsync(host.close);
-    await settle(tester, () => host.peers.value.isEmpty || host.closed);
-    await tester.pump(OfficePairing.limit);
+    await settle(tester, () => session.ended);
   });
 
   test('a guest saying on the network it is the sharer\'s own device is '
       'still a guest: not known, nothing but the live channel, and shut out '
       'once forgotten', () async {
     final (deniz, selin, host) = await guests();
-    final joining = selin.joinAsGuest(
-      deniz.self!,
-      name: 'Av. Selin Arı',
-      office: 'Arı Hukuk',
-    )!;
-    await until(
-      () => deniz.guestPairing.value?.code != null && joining.code != null,
-    );
-    deniz.guestPairing.value!.confirm();
-    joining.confirm();
+    await inviteAndJoin(deniz, selin, host);
     await until(
       () =>
           host.peers.value.isNotEmpty &&
@@ -696,6 +697,7 @@ void main() {
   test('one document takes guests at a time: the last to be set to, and the '
       'one before closing does not stop it', () async {
     final (deniz, _, a) = await guests();
+    await a.takeGuests(true);
     final b = LiveShareHost(
       title: 'Vekâletname',
       snapshot: () => (delta: (Delta()..insert('\n')).toJson(), blocks: []),
@@ -716,21 +718,20 @@ void main() {
   test('a grant let go is only that one: a later pairing\'s stays', () async {
     final (deniz, selin, host) = await guests();
     Future<KnownDevice> pairOnce() async {
-      final joining = selin.joinAsGuest(deniz.self!, name: 'Av. Selin Arı')!;
-      await until(
-        () => deniz.guestPairing.value?.code != null && joining.code != null,
-      );
-      deniz.guestPairing.value!.confirm();
-      joining.confirm();
+      final joining = await inviteAndJoin(deniz, selin, host);
       await until(() => joining.state == PairingState.done);
       await until(() => deniz.guestGrant(selin.self!.deviceId) != null);
       return deniz.guestGrant(selin.self!.deviceId)!;
     }
 
     final first = await pairOnce();
-    await until(() => host.peers.value.isNotEmpty);
+    await until(
+      () => host.peers.value.any((p) => p.state == LivePeerState.watching),
+    );
     await host.remove(selin.self!.deviceId);
     await until(() => deniz.guestGrant(selin.self!.deviceId) == null);
+    // Its invitation heard again only after a moment.
+    await Future<void>.delayed(const Duration(seconds: 5));
     final second = await pairOnce();
     expect(identical(first, second), isFalse);
     await deniz.forgetGuest(selin.self!.deviceId, first);
@@ -762,6 +763,7 @@ void main() {
     expect(await host.invite(id, 'tablet'), isTrue);
     await until(() => LiveShare.instance.incoming.value.isNotEmpty);
     final session = LiveShare.instance.incoming.value.single;
+    session.accept();
     await until(() => session.ready);
     bool alike() =>
         session.document != null &&
@@ -1043,6 +1045,7 @@ void main() {
     await tester.runAsync(() => host.invite(id, 'tablet'));
     await settle(tester, () => LiveShare.instance.incoming.value.isNotEmpty);
     final session = LiveShare.instance.incoming.value.single;
+    session.accept();
     await settle(tester, () => session.ready);
     await tester.pumpWidget(
       MaterialApp(home: LiveDocumentPage(session: session)),
