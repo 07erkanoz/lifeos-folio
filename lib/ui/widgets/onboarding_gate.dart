@@ -12,6 +12,7 @@ import '../../services/search/library_controller.dart';
 import 'folio_about_dialog.dart';
 import '../theme/theme_controller.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../mobile/phone_folder_picker.dart';
 import '../mobile/profile_from_uyap.dart';
 import '../agenda/mobile_connect.dart' show onPhone;
 import 'profile_from_card.dart';
@@ -318,7 +319,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final path =
           await (widget.pickFolder?.call() ??
               (DocumentIntents.picksFolders
-                  ? DocumentIntents.pickFolder()
+                  ? pickPhoneFolder(context)
                   : FilePicker.getDirectoryPath(
                       dialogTitle: 'İndekslenecek klasörü seçin',
                     )));

@@ -15,6 +15,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -38,6 +39,7 @@ class MainActivity : FlutterActivity() {
     private var folderInPlace = false
     private var pictureResult: MethodChannel.Result? = null
     private var microphoneResult: MethodChannel.Result? = null
+    private var downloadsResult: MethodChannel.Result? = null
     private val extensions = setOf("udf", "pdf", "docx", "xlsx", "txt", "odt", "rtf", "doc", "html", "htm", "md", "markdown", "csv", "tsv", "json", "xml", "log", "svg", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff")
     private val preferences by lazy { getSharedPreferences("indexed_trees", MODE_PRIVATE) }
 
@@ -90,6 +92,24 @@ class MainActivity : FlutterActivity() {
                         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
                         }, 4107)
+                    }
+                }
+                // The Download folder, read where it is. Android 11 and later
+                // keep it out of the folder picker; with all-files access it
+                // is read directly, so the lawyer is sent to the settings for
+                // that the first time. Null while it is not granted.
+                "downloadsFolder" -> {
+                    if (downloadsResult != null) { result.error("BUSY", "İzin isteği açık", null) }
+                    else if (hasAllFilesAccess()) { result.success(downloadsPath()) }
+                    else if (Build.VERSION.SDK_INT >= 30) {
+                        downloadsResult = result
+                        if (!openAllFilesSettings()) {
+                            downloadsResult = null
+                            result.success(null)
+                        }
+                    } else {
+                        downloadsResult = result
+                        requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 4111)
                     }
                 }
                 "syncFolders" -> background(result) {
@@ -169,6 +189,34 @@ class MainActivity : FlutterActivity() {
         return if (file.isDirectory && file.canRead()) file.absolutePath else null
     }
 
+    /// Every file on the phone's own storage readable by path: Android 11's
+    /// all-files access, or before it the storage permission.
+    private fun hasAllFilesAccess() =
+        if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager()
+        else checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+
+    /// Android's page for Folio's all-files access, or the list of every
+    /// app's where a phone has no page of Folio's own. False when neither opens.
+    private fun openAllFilesSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < 30) return false
+        val asked = listOf(
+            Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")),
+            Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
+        )
+        for (intent in asked) {
+            try {
+                startActivityForResult(intent, 4110)
+                return true
+            } catch (_: Exception) { /* The next one, if any. */ }
+        }
+        return false
+    }
+
+    private fun downloadsPath(): String? {
+        val directory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        return if (directory != null && directory.isDirectory && directory.canRead()) directory.absolutePath else null
+    }
+
     private fun mediaPermission() =
         if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES
         else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -191,6 +239,12 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 4111) {
+            val asked = downloadsResult ?: return
+            downloadsResult = null
+            asked.success(if (hasAllFilesAccess()) downloadsPath() else null)
+            return
+        }
         if (requestCode == 4109) {
             val asked = microphoneResult ?: return
             microphoneResult = null
@@ -279,6 +333,14 @@ class MainActivity : FlutterActivity() {
         if (saveFolder?.onActivityResult(requestCode, resultCode, data) == true) return
         if (defaultViewerSetup?.onActivityResult(requestCode, resultCode, data) == true) return
         super.onActivityResult(requestCode, resultCode, data)
+        // Back from the all-files settings, which say nothing of what was
+        // chosen there: the permission itself is asked.
+        if (requestCode == 4110) {
+            val asked = downloadsResult ?: return
+            downloadsResult = null
+            asked.success(if (hasAllFilesAccess()) downloadsPath() else null)
+            return
+        }
         if (requestCode != 4107) return
         val result = folderResult ?: return
         folderResult = null
@@ -289,10 +351,11 @@ class MainActivity : FlutterActivity() {
         background(result) {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             // A folder on the phone's own storage can be read directly once
-            // the media permission is held; there is nothing to copy.
-            if (inPlace) {
-                val direct = externalPath(uri)
-                if (direct != null && hasMediaPermission()) return@background direct
+            // the media permission (for pictures) or all-files access (for
+            // documents) is held; there is nothing to copy.
+            val direct = externalPath(uri)
+            if (direct != null && (hasAllFilesAccess() || inPlace && hasMediaPermission())) {
+                return@background direct
             }
             val rootId = DocumentsContract.getTreeDocumentId(uri)
             val document = DocumentsContract.buildDocumentUriUsingTree(uri, rootId)

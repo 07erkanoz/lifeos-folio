@@ -44,6 +44,13 @@ class DocumentIntents {
   static Future<String?> pickPictureFolder() =>
       channel.invokeMethod<String>('pickPictureFolder');
 
+  /// The phone's Download folder, read where it is (android MainActivity.kt).
+  /// Android 11 and later keep it out of the folder picker, so the first time
+  /// Android's settings open for all-files access; null while that is not
+  /// granted. Android only.
+  static Future<String?> downloadsFolder() =>
+      channel.invokeMethod<String>('downloadsFolder');
+
   /// The microphone allowed, asking the lawyer the first time; true on a
   /// computer, which does not ask.
   static Future<bool> microphone() async {

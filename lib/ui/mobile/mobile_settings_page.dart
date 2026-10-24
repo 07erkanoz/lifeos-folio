@@ -9,6 +9,7 @@ import '../../services/search/library_controller.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/learned_phrases_dialog.dart';
 import '../widgets/notice.dart';
+import 'phone_folder_picker.dart';
 import 'settings_parts.dart';
 import '../theme/folio_palette.dart';
 
@@ -29,7 +30,7 @@ class _ArchiveFoldersPageState extends State<ArchiveFoldersPage> {
     setState(() => _picking = true);
     try {
       final path = DocumentIntents.picksFolders
-          ? await DocumentIntents.pickFolder()
+          ? await pickPhoneFolder(context)
           : await FilePicker.getDirectoryPath(
               dialogTitle: 'İndekslenecek klasörü seçin',
             );
