@@ -80,7 +80,9 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
         _maximized = maximized;
         _fullScreen = fullscreen;
       });
-      windowFullScreen.value = fullscreen;
+      // A Mac's full screen (its green button) is the window filling
+      // the screen with all it shows: the caption and the ribbon stay.
+      windowFullScreen.value = fullscreen && !_mac;
     }
   }
 
@@ -220,7 +222,7 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
       child: CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.f11): _toggleFullScreen,
-          if (_fullScreen)
+          if (_fullScreen && !_mac)
             const SingleActivator(LogicalKeyboardKey.escape): () =>
                 _run(() => windowManager.setFullScreen(false)),
         },
@@ -232,8 +234,8 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
               Column(
                 children: [
                   // Full screen is the page alone; Esc or F11 brings the
-                  // bar back.
-                  if (!_fullScreen)
+                  // bar back. Not on a Mac; see [_sync].
+                  if (!_fullScreen || _mac)
                     RepaintBoundary(
                       child: Material(
                         key: const ValueKey('folio-titlebar'),
@@ -343,9 +345,8 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                                 widget.onAbout,
                               ),
                               _control(
-                                _fullScreen
-                                    ? 'Tam ekrandan çık (F11)'
-                                    : 'Tam ekran (F11)',
+                                '${_fullScreen ? 'Tam ekrandan çık' : 'Tam ekran'}'
+                                ' (${_mac ? '⌃⌘F' : 'F11'})',
                                 _fullScreen
                                     ? Icons.fullscreen_exit_rounded
                                     : Icons.fullscreen_rounded,
