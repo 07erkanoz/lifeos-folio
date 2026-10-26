@@ -77,6 +77,7 @@ class DesktopHome extends StatefulWidget {
     required this.onUets,
     this.onNewDocument,
     this.onOpenToEdit,
+    this.onJoinLive,
     this.onNotices,
     this.search,
     this.onFound,
@@ -111,6 +112,9 @@ class DesktopHome extends StatefulWidget {
   /// and one chosen on the computer, each in this window's editor, where
   /// live sharing, the UYAP panel and the network are.
   final VoidCallback? onNewDocument, onOpenToEdit;
+
+  /// A document shared live from another office joined by its code.
+  final VoidCallback? onJoinLive;
 
   /// UYAP Bildirimleri; null where it is not shown.
   final VoidCallback? onNotices;
@@ -617,6 +621,13 @@ class _DesktopHomeState extends State<DesktopHome> {
               'Bilgisayardan aç…',
               widget.onOpenToEdit,
             ),
+            if (widget.onJoinLive != null)
+              item(
+                const ValueKey('home-editor-join'),
+                Icons.cast_connected_outlined,
+                'Davet koduyla katıl…',
+                widget.onJoinLive,
+              ),
             if (editable.length > 1) ...[
               const Divider(height: 8),
               for (final f in editable.skip(1).take(5))

@@ -220,11 +220,13 @@ class UyapHelpPage extends StatelessWidget {
     (
       'Verileriniz nerede durur',
       'Dosyalarınız, evrakınız, müvekkil bilgileriniz ve oturumlarınız yalnız '
-          'sizin cihazlarınızda tutulur. Folio’nun bir sunucusu yoktur ve '
-          'hiçbir veriyi dışarıya göndermez; veriler KVKK’ya uygun olarak '
-          'yalnız sizin cihazınızda işlenir. Folio yapay zekâ hizmeti '
-          'kullanmaz. Büro ağında yalnız sizin paylaştığınız şeyler, büronuzun '
-          'kendi ağı üzerinden ve şifreli olarak gider.',
+          'sizin cihazlarınızda tutulur. Folio’nun verilerinizi tutan bir '
+          'sunucusu yoktur; veriler KVKK’ya uygun olarak yalnız sizin '
+          'cihazınızda işlenir. Folio yapay zekâ hizmeti kullanmaz. Büro '
+          'ağında yalnız sizin paylaştığınız şeyler, büronuzun kendi ağı '
+          'üzerinden ve şifreli olarak gider. Başka bir büroyla uzaktan canlı '
+          'paylaşımda belge şifreli olarak bir aktarma sunucusundan geçer; '
+          'sunucu içeriği göremez ve kaydetmez.',
     ),
     (
       'Bir hata görürseniz',

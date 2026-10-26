@@ -25,7 +25,7 @@ class OfficeChannel {
     this.vouched = false,
   });
 
-  final OfficeLink _link;
+  final OfficeWire _link;
 
   /// The known device on the other side.
   final KnownDevice peer;
@@ -190,6 +190,16 @@ class OfficeChannel {
       return null;
     }
   }
+
+  /// A talk over [wire] sealed with keys made elsewhere: a live document's
+  /// relay, where the invitation's code vouches for the other side rather
+  /// than a device key (see live_remote.dart).
+  static OfficeChannel sealed({
+    required OfficeWire wire,
+    required KnownDevice peer,
+    required SecretKey send,
+    required SecretKey receive,
+  }) => OfficeChannel._(wire, peer, send, receive).._start();
 
   static List<int>? _bytes(Object? v) {
     if (v is! String) return null;

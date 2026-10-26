@@ -10,6 +10,7 @@ import '../../models/document_model.dart';
 import '../../services/live/live_share.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/flowing_document_view.dart';
+import 'live_chat_panel.dart';
 
 /// A document another device shares live, shown as it is written there:
 /// read-only, the writer's selection marked.
@@ -47,11 +48,70 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
 
   LiveSession get _s => widget.session;
 
+  /// The talk beside it: open, and how many of the others' lines were
+  /// there when it was last looked at.
+  bool _chatOpen = false;
+  int _chatSeen = 0;
+  int get _heard => _s.chat.value.where((m) => !m.mine && !m.note).length;
+  int get _unseen => _chatOpen ? 0 : _heard - _chatSeen;
+
   @override
   void initState() {
     super.initState();
     _s.addListener(_changed);
+    _s.chat.addListener(_talked);
     _changed();
+  }
+
+  void _talked() {
+    if (mounted) setState(() {});
+  }
+
+  /// What is selected in the document, to quote in the talk.
+  String? _selected() {
+    final c = _controller;
+    final sel = c?.selection;
+    if (c == null || sel == null || !sel.isValid || sel.isCollapsed) {
+      return null;
+    }
+    return c.document.getPlainText(sel.start, sel.end - sel.start);
+  }
+
+  Widget _chatPanel(VoidCallback onClose) => LiveChatPanel(
+    chat: _s.chat,
+    onSay: _s.say,
+    quote: _selected,
+    onClose: onClose,
+  );
+
+  /// The talk: beside the page where there is room, in a sheet on a phone.
+  Future<void> _toggleChat() async {
+    if (MediaQuery.sizeOf(context).width >= 900) {
+      setState(() {
+        _chatOpen = !_chatOpen;
+        if (!_chatOpen) _chatSeen = _heard;
+      });
+      return;
+    }
+    setState(() => _chatOpen = true);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheet) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheet).bottom),
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheet).height * .7,
+          child: _chatPanel(() => Navigator.pop(sheet)),
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _chatOpen = false;
+        _chatSeen = _heard;
+      });
+    }
   }
 
   /// The page's own copy of the document, taken from the session's as it
@@ -151,6 +211,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
   @override
   void dispose() {
     _s.removeListener(_changed);
+    _s.chat.removeListener(_talked);
     _forget();
     super.dispose();
   }
@@ -224,6 +285,18 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
       appBar: AppBar(
         title: Text(_s.title, overflow: TextOverflow.ellipsis),
         actions: [
+          if (!_s.ended)
+            IconButton(
+              key: const ValueKey('live-doc-chat'),
+              tooltip: 'Yazışma',
+              isSelected: _chatOpen,
+              onPressed: () => unawaited(_toggleChat()),
+              icon: Badge(
+                isLabelVisible: _unseen > 0,
+                label: Text('$_unseen'),
+                child: const Icon(Icons.chat_outlined),
+              ),
+            ),
           const HelpButton(Help.live),
           TextButton(
             key: const ValueKey('live-leave'),
@@ -235,38 +308,59 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
           ),
         ],
       ),
-      body: Column(
+      body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _bar(),
-          Expanded(
-            child: _s.ended
-                ? const SizedBox()
-                : c == null
-                ? const Center(child: CircularProgressIndicator())
-                : LayoutBuilder(
-                    // The page at the top, as tall as the window: written
-                    // on from its first line, scrolled within.
-                    builder: (context, box) => Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: box.maxWidth > 820 ? 820 : box.maxWidth,
-                        height: box.maxHeight,
-                        child: FlowingDocumentView(
-                          key: ValueKey('live-$_whole'),
-                          model: DocModel(blocks: const []),
-                          scale: box.maxWidth > 700
-                              ? 1.15
-                              : FlowingDocumentView.zoom,
-                          live: (controller: c, blocks: () => _s.blocks),
-                          editable: _s.canWrite,
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
+          Expanded(child: _page(c)),
+          if (_chatOpen &&
+              !_s.ended &&
+              MediaQuery.sizeOf(context).width >= 900) ...[
+            const VerticalDivider(width: 1),
+            SizedBox(
+              width: 330,
+              child: _chatPanel(
+                () => setState(() {
+                  _chatOpen = false;
+                  _chatSeen = _heard;
+                }),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+
+  Widget _page(QuillController? c) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _bar(),
+      Expanded(
+        child: _s.ended
+            ? const SizedBox()
+            : c == null
+            ? const Center(child: CircularProgressIndicator())
+            : LayoutBuilder(
+                // The page at the top, as tall as the window: written
+                // on from its first line, scrolled within.
+                builder: (context, box) => Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: box.maxWidth > 820 ? 820 : box.maxWidth,
+                    height: box.maxHeight,
+                    child: FlowingDocumentView(
+                      key: ValueKey('live-$_whole'),
+                      model: DocModel(blocks: const []),
+                      scale: box.maxWidth > 700
+                          ? 1.15
+                          : FlowingDocumentView.zoom,
+                      live: (controller: c, blocks: () => _s.blocks),
+                      editable: _s.canWrite,
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    ],
+  );
 }

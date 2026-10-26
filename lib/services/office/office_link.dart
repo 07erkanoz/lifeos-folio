@@ -2,9 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+/// What a talk between two Folios goes over: JSON objects, in order.
+abstract interface class OfficeWire {
+  Stream<Map<String, Object?>> get messages;
+  bool get closed;
+  void send(Map<String, Object?> message);
+  Future<void> drain();
+  Future<void> close();
+}
+
 /// Two Folios talking over a socket: one JSON object a line. A line longer
 /// than [maxLine] ends the talk; nothing a peer says is trusted to be small.
-class OfficeLink {
+class OfficeLink implements OfficeWire {
   OfficeLink(this._socket) {
     // The bytes since the last line's end are counted as they come: a line
     // that never ends must not grow until the memory is gone.
@@ -48,8 +57,10 @@ class OfficeLink {
   bool _closed = false;
 
   /// What the other side says, in order; done when the talk ends.
+  @override
   Stream<Map<String, Object?>> get messages => _messages.stream;
 
+  @override
   bool get closed => _closed;
 
   static Future<OfficeLink> connect(
@@ -69,6 +80,7 @@ class OfficeLink {
     close();
   }
 
+  @override
   void send(Map<String, Object?> message) {
     if (_closed) return;
     try {
@@ -81,11 +93,13 @@ class OfficeLink {
   /// What was written has gone out: waited on between one word and the
   /// next by a sender that must not run ahead of a slow reader. Nothing
   /// may be written while it is waited on.
+  @override
   Future<void> drain() async {
     if (_closed) return;
     await _socket.flush();
   }
 
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;

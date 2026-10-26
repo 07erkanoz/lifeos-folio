@@ -12,6 +12,7 @@ import '../office/office_network.dart';
 import '../office/office_known.dart';
 import '../office/office_pairing.dart';
 import '../office/office_peer.dart';
+import 'live_remote.dart';
 
 /// A document shared live (the editor's live sharing): the device it is
 /// open on streams it to the devices it chose, which see it change as it
@@ -37,6 +38,10 @@ import '../office/office_peer.dart';
 /// is checked and put in there, then goes to the others as the sharer's
 /// own would. The sharer touching it takes the pen back.
 /// A word too long for one line goes in `parca`s, its bytes in base64.
+///
+/// Beside the document, a talk (`mesaj`: its words, and what of the
+/// document it quotes): a viewer's goes to the sharer, who passes it on to
+/// the others under its writer's name. Kept only while the sharing lasts.
 const liveKind = 'canli';
 
 /// What a viewer may do: see it, or also write in it in turn.
@@ -79,6 +84,44 @@ class LivePeer {
         code: code ?? this.code,
       );
 }
+
+/// One line of the talk beside a shared document, or a note of who came
+/// and went; held here only while the sharing lasts.
+class LiveMessage {
+  const LiveMessage({
+    required this.from,
+    required this.text,
+    required this.at,
+    this.quote,
+    this.mine = false,
+    this.note = false,
+  });
+
+  final String from, text;
+  final String? quote;
+  final DateTime at;
+
+  /// Written here; a note is said by no one.
+  final bool mine, note;
+}
+
+/// The most a line of the talk may be, and what it quotes; the most lines
+/// held.
+const _maxSaid = 2000, _maxQuote = 300, _keptSaid = 300;
+
+/// [v], said by another, as it may be shown: trimmed, cut to [max]; null
+/// when nothing is said.
+String? _said(Object? v, int max) {
+  if (v is! String) return null;
+  final s = v.replaceAll(RegExp(r'[\x00-\x08\x0b-\x1f\x7f]'), '').trim();
+  if (s.isEmpty) return null;
+  return s.length > max ? s.substring(0, max) : s;
+}
+
+List<LiveMessage> _then(List<LiveMessage> talk, LiveMessage m) => [
+  ...talk.length >= _keptSaid ? talk.skip(talk.length - _keptSaid + 1) : talk,
+  m,
+];
 
 /// A word's bytes at most in one line: sealed, written in base64 twice and
 /// wrapped, it stays well within the channel's megabyte a line.
@@ -609,6 +652,57 @@ class LiveShareHost {
 
   /// Who it is shared with, as they come and go.
   final peers = ValueNotifier<List<LivePeer>>(const []);
+
+  /// The talk beside it, the sharer's and the others'.
+  final chat = ValueNotifier<List<LiveMessage>>(const []);
+
+  /// The sharer's name, as the others see it in the talk.
+  String me = '';
+
+  /// [text] said to everyone watching, quoting [quote] of the document.
+  void say(String text, {String? quote}) {
+    final t = _said(text, _maxSaid);
+    if (t == null || _closed) return;
+    final q = _said(quote, _maxQuote);
+    chat.value = _then(
+      chat.value,
+      LiveMessage(
+        from: 'Siz',
+        text: t,
+        quote: q,
+        at: DateTime.now(),
+        mine: true,
+      ),
+    );
+    final word = {'tip': 'mesaj', 'kim': me, 'metin': t, 'alinti': ?q};
+    for (final v in _ready) {
+      _enqueue(v, word);
+    }
+  }
+
+  /// [deviceId]'s line, put in the talk and passed on to the others.
+  void _heard(String deviceId, Map<String, Object?> m) {
+    final t = _said(m['metin'], _maxSaid);
+    if (t == null) return;
+    final q = _said(m['alinti'], _maxQuote);
+    final name = _nameOf(deviceId);
+    chat.value = _then(
+      chat.value,
+      LiveMessage(from: name, text: t, quote: q, at: DateTime.now()),
+    );
+    final word = {'tip': 'mesaj', 'kim': name, 'metin': t, 'alinti': ?q};
+    for (final e in _viewers.entries) {
+      if (e.key != deviceId && e.value.ready) _enqueue(e.value, word);
+    }
+  }
+
+  void _note(String text) {
+    chat.value = _then(
+      chat.value,
+      LiveMessage(from: '', text: text, at: DateTime.now(), note: true),
+    );
+  }
+
   final _viewers = <String, _Viewer>{};
 
   /// Each device's invitation, counted: one withdrawn or made again while
@@ -769,6 +863,14 @@ class LiveShareHost {
       );
 
   void _set(String deviceId, LivePeerState state) {
+    final before = peers.value.where((p) => p.deviceId == deviceId).firstOrNull;
+    if (before != null && before.state != state) {
+      if (state == LivePeerState.watching) _note('${before.name} katıldı');
+      if (state == LivePeerState.gone &&
+          before.state == LivePeerState.watching) {
+        _note('${before.name} ayrıldı');
+      }
+    }
     peers.value = [
       for (final p in peers.value)
         if (p.deviceId == deviceId) p.copyWith(state: state) else p,
@@ -848,6 +950,13 @@ class LiveShareHost {
       if (guest != null) await _forgetGuest(deviceId, guest);
       return false;
     }
+    _watch(deviceId, ch, guest);
+    return true;
+  }
+
+  /// [ch], [deviceId]'s channel, listened to: it watches once it says it
+  /// is ready, and is dropped if it does not in time.
+  void _watch(String deviceId, OfficeChannel ch, [KnownDevice? guest]) {
     final v = _Viewer(ch, guest);
     _viewers[deviceId] = v;
     _pulse ??= Timer.periodic(heartbeat, (_) => _beat());
@@ -882,6 +991,8 @@ class LiveShareHost {
               if (identical(_viewers[deviceId], v)) _written(deviceId, v, m!);
             case 's':
               _theirSelection(deviceId, m!);
+            case 'mesaj':
+              if (v.ready) _heard(deviceId, m!);
           }
         } catch (_) {
           unawaited(_drop(deviceId, ch));
@@ -896,6 +1007,57 @@ class LiveShareHost {
         unawaited(_drop(deviceId, ch, LivePeerState.unanswered));
       }
     });
+  }
+
+  /// Those shown it from another office, over the relay (live_remote.dart).
+  final _remote = <String>{};
+
+  /// The invitation by a code waiting now, if one is: one at a time.
+  final remoteInvite = ValueNotifier<RemoteInvite?>(null);
+
+  /// A new invitation by a code, the one waiting before withdrawn.
+  RemoteInvite inviteRemote() {
+    final before = remoteInvite.value;
+    if (before != null && before.open) unawaited(before.decline());
+    return remoteInvite.value = RemoteInvite.make();
+  }
+
+  /// Whether [deviceId] came from another office, by an invitation's code.
+  bool isRemote(String deviceId) => _remote.contains(deviceId);
+
+  /// [name], who came from another office with an invitation's code and
+  /// was let in, shown it over [ch] with [right]; the sharer named [from]
+  /// to them. False when the sharing ended meanwhile.
+  Future<bool> showRemote(
+    String deviceId,
+    String name,
+    OfficeChannel ch,
+    LiveRight right, {
+    String from = '',
+  }) async {
+    if (_closed || _viewers.containsKey(deviceId)) {
+      unawaited(_shut(ch));
+      return false;
+    }
+    _remote.add(deviceId);
+    _rights[deviceId] = right;
+    peers.value = [
+      for (final p in peers.value)
+        if (p.deviceId != deviceId) p,
+      LivePeer(deviceId: deviceId, name: name, right: right),
+    ];
+    _watch(deviceId, ch);
+    try {
+      await ch.send({
+        'tip': 'davet',
+        'baslik': title,
+        'izin': right.name,
+        'ad': from,
+      });
+    } catch (_) {
+      unawaited(_drop(deviceId, ch));
+      return false;
+    }
     return true;
   }
 
@@ -1155,6 +1317,7 @@ class LiveShareHost {
     _closed = true;
     // No guest taken from here on, before anything is waited for.
     unawaited(_net.closeToGuests(this));
+    unawaited(remoteInvite.value?.decline());
     _selectionTimer?.cancel();
     _tableTimer?.cancel();
     _pulse?.cancel();
@@ -1167,6 +1330,8 @@ class LiveShareHost {
     final viewers = _viewers.values.toList();
     _viewers.clear();
     peers.value = const [];
+    // Nothing of the talk kept either.
+    chat.value = const [];
     await Future.wait([for (final v in viewers) _farewell(v.channel)]);
     for (final id in _guestIds.keys.toList()) {
       await _forgetGuest(id);
@@ -1282,6 +1447,27 @@ class LiveSession extends ChangeNotifier {
   ({int base, int extent})? selection;
 
   final _changes = StreamController<Delta>.broadcast();
+
+  /// The talk beside the document, as long as it is shown.
+  final chat = ValueNotifier<List<LiveMessage>>(const []);
+
+  /// [text] said to the sharer and those watching, quoting [quote].
+  void say(String text, {String? quote}) {
+    final t = _said(text, _maxSaid);
+    if (t == null || ended || !_answered) return;
+    final q = _said(quote, _maxQuote);
+    chat.value = _then(
+      chat.value,
+      LiveMessage(
+        from: 'Siz',
+        text: t,
+        quote: q,
+        at: DateTime.now(),
+        mine: true,
+      ),
+    );
+    _say({'tip': 'mesaj', 'metin': t, 'alinti': ?q});
+  }
 
   /// The body's changes as they are applied to [document], for a page
   /// showing a copy of it.
@@ -1441,6 +1627,19 @@ class LiveSession extends ChangeNotifier {
         _waitingWhole = true;
         _askedAt = DateTime.now();
         notifyListeners();
+      case 'mesaj':
+        final t = _said(m['metin'], _maxSaid);
+        if (t == null) return;
+        final who = _said(m['kim'], 80);
+        chat.value = _then(
+          chat.value,
+          LiveMessage(
+            from: who ?? from,
+            text: t,
+            quote: _said(m['alinti'], _maxQuote),
+            at: DateTime.now(),
+          ),
+        );
       case 'istekred':
         askedPen = false;
         refused = true;
@@ -1544,6 +1743,7 @@ class LiveSession extends ChangeNotifier {
     document = null;
     blocks = const [];
     selection = null;
+    chat.value = const [];
     _assembler.clear();
     unawaited(_changes.close());
     LiveShare.instance._gone(this);
@@ -1640,6 +1840,23 @@ class LiveShare {
           }
           session._start(heartbeat);
         };
+  }
+
+  /// A document shared from another office, joined by its code: [first]
+  /// is the sharer's word letting this side in (live_remote.dart).
+  LiveSession joinRemote(OfficeChannel ch, Map<String, Object?> first) {
+    final from = '${first['ad'] ?? ''}'.trim();
+    final session = LiveSession._(
+      ch,
+      '${first['baslik'] ?? 'Belge'}',
+      from.isEmpty ? 'Paylaşan' : from,
+      LiveRight.values.where((r) => r.name == first['izin']).firstOrNull ??
+          LiveRight.view,
+      asGuest: true,
+    );
+    incoming.value = [...incoming.value, session];
+    session._start(heartbeat);
+    return session;
   }
 
   void _gone(LiveSession s) {

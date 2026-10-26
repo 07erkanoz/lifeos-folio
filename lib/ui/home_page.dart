@@ -81,6 +81,7 @@ import '../services/platform/folder_zip.dart';
 import 'cash/cash_page.dart';
 import 'live/live_document_page.dart';
 import 'live/live_invite_dialogs.dart';
+import 'live/live_remote_dialogs.dart';
 import '../services/live/live_share.dart';
 import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
@@ -1263,6 +1264,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _liveTold.removeWhere((s) => s.ended);
   }
 
+  /// A document shared live from another office, joined by the code its
+  /// sharer sent (live_remote.dart).
+  Future<void> _joinRemote() async {
+    final session = await RemoteJoinDialog.show(context);
+    if (session != null && mounted && !session.ended) {
+      await LiveDocumentPage.open(context, session);
+    }
+  }
+
   /// A Folio of no office's inviting this one to its live document.
   void _guestInvited() {
     final invite = OfficeNetwork.instance.liveInvite.value;
@@ -2001,6 +2011,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onNotices: () => unawaited(_selectGroup('bildirim')),
     onNewDocument: () => unawaited(_newDocument()),
     onOpenToEdit: () => unawaited(_pickFiles(edit: true)),
+    onJoinLive: () => unawaited(_joinRemote()),
   );
 
   Widget _agendaPage() => AgendaPage(
@@ -3071,6 +3082,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       } else {
         unawaited(connectUets(context, api: sync.uets, secrets: sync.secrets));
       }
+    },
+    onJoinLive: () {
+      _closeDrawer();
+      unawaited(_joinRemote());
     },
     onSyncComputer: () {
       _closeDrawer();

@@ -38,6 +38,11 @@ abstract final class Help {
         'Sırayla düzenleyebilir.',
     'Yakındaki bir Folio’yu davet edince satırında altı haneli bir kod '
         'görünür; karşı tarafın davet penceresinde de aynı kod çıkar.',
+    'Başka bir büroyla, aynı ağda olmadan paylaşmak için Uzaktan’a basın. '
+        'Çıkan kodu WhatsApp ya da e-postayla gönderin. Kişi kodu yazınca '
+        'size sorulur; iki ekranda da aynı dört rakam görünür. Yalnız '
+        'görsün ya da Sırayla düzenlesin’e basın. Her kod bir kişi içindir '
+        've 15 dakika geçerlidir.',
     'Sırayla düzenleyebilen birine Kalemi ver dediğinizde onun '
         'yazdıkları sizin belgenize anında işlenir; o sırada siz yalnız '
         'okursunuz.',
@@ -51,6 +56,9 @@ abstract final class Help {
         'belge kendiliğinden açılır. İstemiyorsanız Reddet’e basın.',
     'Başka bir büronun sizi davet edebilmesi için Ayarlar › Editör’de '
         'Canlı paylaşıma davet edilebilirim açık olmalı.',
+    'Size bir davet kodu gönderildiyse bilgisayarda Editör ▾ › Davet '
+        'koduyla katıl’ı, telefonda menüden Canlı belgeye katıl’ı seçip kodu '
+        'yazın. Paylaşan onaylayınca belge açılır.',
     'Düzenleme izniniz varsa Düzenlemek iste’ye basın; paylaşan kalemi '
         'verince yazdıklarınız onun belgesine işlenir.',
     'İş bitince Kalemi bırak’a, ayrılmak için İzlemeyi bırak’a basın.',
@@ -63,8 +71,10 @@ abstract final class Help {
         'vekiliyle aynı anda düzenlersiniz. Belge sizde kalır; paylaşım '
         'bitince karşı tarafta hiçbir şey kalmaz.',
     [_liveShare, _liveJoin],
-    'Canlı paylaşım yalnız aynı ağdaki cihazlar arasında, şifreli çalışır. '
-        'Belge hiçbir sunucuya gitmez.',
+    'Aynı ağda belge cihazdan cihaza, şifreli gider; hiçbir sunucuya '
+        'uğramaz. Uzaktan paylaşımda belge şifreli olarak '
+        'canli.lifeos.com.tr üzerinden geçer; şifreyi yalnız iki Folio bilir, '
+        'sunucu içeriği göremez ve hiçbir şey saklamaz.',
   );
   static const home = HelpTopic(
     'Ana sayfa',
@@ -404,8 +414,10 @@ abstract final class Help {
       _liveShare,
       _liveJoin,
     ],
-    'Canlı paylaşım yalnız aynı ağdaki cihazlar arasında, şifreli çalışır. '
-        'Belge hiçbir sunucuya gitmez.',
+    'Aynı ağda belge cihazdan cihaza, şifreli gider; hiçbir sunucuya '
+        'uğramaz. Uzaktan paylaşımda belge şifreli olarak '
+        'canli.lifeos.com.tr üzerinden geçer; şifreyi yalnız iki Folio bilir, '
+        'sunucu içeriği göremez ve hiçbir şey saklamaz.',
   );
 
   static const library = HelpTopic(

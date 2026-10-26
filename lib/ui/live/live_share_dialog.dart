@@ -7,11 +7,13 @@ import '../../services/live/live_share.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_peer.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import 'live_remote_dialogs.dart';
 
 /// Who a document is shared with live, in one list: the person's own
 /// devices, the office's members, and Folios nearby that may be invited.
 /// Each is invited with a tap; their Folio asks them, and the document
-/// opens there once they join.
+/// opens there once they join. Uzaktan: another office, anywhere, by an
+/// invitation's code (live_remote.dart).
 class LiveShareDialog extends StatefulWidget {
   const LiveShareDialog({super.key, required this.host, this.network});
 
@@ -32,9 +34,13 @@ class _Target {
     this.office = false,
     this.known = false,
     this.guest,
+    this.remote = false,
   });
 
   final String id, name, device;
+
+  /// Came from another office by a code: not invited again from a row.
+  final bool remote;
   final OfficePlatform? platform;
   final bool office;
 
@@ -48,6 +54,12 @@ class _Target {
 class _LiveShareDialogState extends State<LiveShareDialog> {
   OfficeNetwork get _net => widget.network ?? OfficeNetwork.instance;
   LiveShareHost get _host => widget.host;
+
+  /// Showing the invitation by a code rather than the network's list:
+  /// where it was left, a code made before.
+  late bool _remote =
+      widget.host.remoteInvite.value != null ||
+      widget.host.peers.value.any((p) => widget.host.isRemote(p.deviceId));
 
   @override
   void initState() {
@@ -96,23 +108,55 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
           builder: (context, _) {
             final sections = _sections();
             final any = sections.any((s) => s.$2.isNotEmpty);
+            final remote = [
+              for (final p in _host.peers.value)
+                if (_host.isRemote(p.deviceId))
+                  _Target(id: p.deviceId, name: p.name, remote: true),
+            ];
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                SegmentedButton<bool>(
+                  key: const ValueKey('live-where'),
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      label: Text('Bu ağda'),
+                      icon: Icon(Icons.wifi_rounded, size: 18),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text('Uzaktan'),
+                      icon: Icon(Icons.public_rounded, size: 18),
+                    ),
+                  ],
+                  selected: {_remote},
+                  onSelectionChanged: (v) => setState(() => _remote = v.first),
+                ),
+                const SizedBox(height: 12),
                 Flexible(
                   child: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (!any) _empty(),
-                        for (final (name, rows) in sections)
-                          if (rows.isNotEmpty) ...[
-                            _heading(name),
-                            for (final t in rows) _row(t),
-                          ],
-                      ],
+                      children: _remote
+                          ? [
+                              RemoteInvitePane(host: _host),
+                              if (remote.isNotEmpty) ...[
+                                _heading('UZAKTAN KATILANLAR'),
+                                for (final t in remote) _row(t),
+                              ],
+                            ]
+                          : [
+                              if (!any) _empty(),
+                              for (final (name, rows) in sections)
+                                if (rows.isNotEmpty) ...[
+                                  _heading(name),
+                                  for (final t in rows) _row(t),
+                                ],
+                            ],
                     ),
                   ),
                 ),
@@ -138,10 +182,15 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'Davet ettiğiniz kişinin Folio’sunda bir pencere açılır; '
-                    'Katıl’a basınca belge onda açılır. Belge sizde kalır, '
-                    'paylaşım bitince onlarda kalmaz. "Sırayla düzenleyebilir" '
-                    'olanlara kalemi verince yazdıkları belgenize işlenir.',
+                    _remote
+                        ? 'Kodu alan kişi Folio’da Davet koduyla katıl’ı seçip '
+                              'kodu yazar; siz onaylayınca belge onda açılır. '
+                              'Belge sizde kalır, paylaşım bitince onda kalmaz.'
+                        : 'Davet ettiğiniz kişinin Folio’sunda bir pencere '
+                              'açılır; Katıl’a basınca belge onda açılır. Belge '
+                              'sizde kalır, paylaşım bitince onlarda kalmaz. '
+                              '"Sırayla düzenleyebilir" olanlara kalemi verince '
+                              'yazdıkları belgenize işlenir.',
                     style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
                 ),
@@ -227,7 +276,11 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
       return [
         (
           'DAVET EDİLENLER',
-          [for (final p in peers.values) _Target(id: p.deviceId, name: p.name)],
+          [
+            for (final p in peers.values)
+              if (!_host.isRemote(p.deviceId))
+                _Target(id: p.deviceId, name: p.name),
+          ],
         ),
       ];
     }
@@ -250,7 +303,11 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
       }
     }
     for (final p in peers.values) {
-      if (_host.isGuest(p.deviceId) || isMember(p.deviceId)) continue;
+      if (_host.isGuest(p.deviceId) ||
+          _host.isRemote(p.deviceId) ||
+          isMember(p.deviceId)) {
+        continue;
+      }
       if (seen.add(p.deviceId)) {
         own.add(_Target(id: p.deviceId, name: _ownName(p.deviceId, p)));
       }
@@ -364,13 +421,16 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     final holds = _host.pen.value == t.id;
     final scheme = Theme.of(context).colorScheme;
     // A guest no more nearby, invited before: not invited again from here.
-    final canInvite = t.guest != null || !_host.isGuest(t.id);
-    final action = on
+    final canInvite = !t.remote && (t.guest != null || !_host.isGuest(t.id));
+    final Widget action = on
         ? TextButton(
             key: ValueKey('live-remove-${t.id}'),
             onPressed: () => unawaited(_host.remove(t.id)),
             child: Text(state == LivePeerState.joining ? 'Geri al' : 'Çıkar'),
           )
+        // Gone from another office: asked again only by a new code.
+        : t.remote
+        ? const SizedBox()
         : FilledButton.tonal(
             key: ValueKey('live-invite-${t.id}'),
             onPressed: canInvite ? () => unawaited(_invite(t)) : null,
@@ -421,87 +481,93 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
       if (_state(peer).isNotEmpty) _state(peer),
     ].join(' · ');
     final code = peer?.code;
-    final wide = MediaQuery.sizeOf(context).width >= 560;
-    final head = Row(
-      children: [
-        CircleAvatar(
-          radius: 17,
-          backgroundColor: state == LivePeerState.watching
-              ? scheme.primary.withValues(alpha: .15)
-              : scheme.surfaceContainerHighest,
-          child: Icon(
-            _icon(t),
-            size: 18,
-            color: state == LivePeerState.watching
-                ? scheme.primary
-                : scheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                t.name,
-                key: ValueKey('live-target-${t.id}'),
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+    // On one line only where the row itself has room for the controls:
+    // the dialog is narrower than the screen it is on.
+    return LayoutBuilder(
+      builder: (context, box) {
+        final wide = box.maxWidth >= 640;
+        final head = Row(
+          children: [
+            CircleAvatar(
+              radius: 17,
+              backgroundColor: state == LivePeerState.watching
+                  ? scheme.primary.withValues(alpha: .15)
+                  : scheme.surfaceContainerHighest,
+              child: Icon(
+                _icon(t),
+                size: 18,
+                color: state == LivePeerState.watching
+                    ? scheme.primary
+                    : scheme.onSurfaceVariant,
               ),
-              if (sub.isNotEmpty || holds || code != null)
-                Wrap(
-                  spacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    t.name,
+                    key: ValueKey('live-target-${t.id}'),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  if (sub.isNotEmpty || holds || code != null)
+                    Wrap(
+                      spacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (sub.isNotEmpty)
+                          Text(
+                            sub,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  state == LivePeerState.declined ||
+                                      state == LivePeerState.unreachable
+                                  ? scheme.error
+                                  : AgendaColors.muted,
+                            ),
+                          ),
+                        if (code != null && state == LivePeerState.joining)
+                          _chip(
+                            'kod $code',
+                            Icons.verified_user_outlined,
+                            key: ValueKey('live-code-${t.id}'),
+                          ),
+                        if (holds)
+                          _chip(
+                            'kalem onda',
+                            Icons.edit_outlined,
+                            key: ValueKey('live-holds-${t.id}'),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            if (wide) ...controls,
+          ],
+        );
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: wide
+              ? head
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (sub.isNotEmpty)
-                      Text(
-                        sub,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color:
-                              state == LivePeerState.declined ||
-                                  state == LivePeerState.unreachable
-                              ? scheme.error
-                              : AgendaColors.muted,
-                        ),
+                    head,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 46),
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: controls,
                       ),
-                    if (code != null && state == LivePeerState.joining)
-                      _chip(
-                        'kod $code',
-                        Icons.verified_user_outlined,
-                        key: ValueKey('live-code-${t.id}'),
-                      ),
-                    if (holds)
-                      _chip(
-                        'kalem onda',
-                        Icons.edit_outlined,
-                        key: ValueKey('live-holds-${t.id}'),
-                      ),
+                    ),
                   ],
                 ),
-            ],
-          ),
-        ),
-        if (wide) ...controls,
-      ],
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: wide
-          ? head
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                head,
-                Padding(
-                  padding: const EdgeInsets.only(left: 46),
-                  child: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: controls,
-                  ),
-                ),
-              ],
-            ),
+        );
+      },
     );
   }
 

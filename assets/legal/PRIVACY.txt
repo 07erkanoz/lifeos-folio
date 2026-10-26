@@ -1,11 +1,11 @@
 LifeOS Folio Gizlilik Politikası ve KVKK Aydınlatma Metni
-Son güncelleme: 10 Ekim 2026
+Son güncelleme: 26 Ekim 2026
 
 1. Kapsam
 Bu metin, LifeOS tarafından avukatlar için geliştirilen LifeOS Folio uygulamasının kişisel verileri nasıl ele aldığını, 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) çerçevesinde açıklar.
 
 2. Verileriniz yalnız sizin cihazınızda kalır
-Folio yerel bir uygulamadır ve bir sunucusu yoktur. Belgeleriniz, dava dosyalarınız, tebligatlarınız, müvekkil bilgileriniz, ajandanız, kasa kayıtlarınız ve oturumlarınız yalnız sizin bilgisayarınızda ya da telefonunuzda tutulur. Bu veriler LifeOS'a gönderilmez; LifeOS bunları görmez, saklamaz ve işlemez. Bir veri cihazınızdan yalnız sizin başlattığınız bir işlemle ve yalnız o işin gerektirdiği kamu hizmetine gider; bunlar 4. ve 7. maddede anlatılır.
+Folio yerel bir uygulamadır; verilerinizi tutan bir sunucusu yoktur. Belgeleriniz, dava dosyalarınız, tebligatlarınız, müvekkil bilgileriniz, ajandanız, kasa kayıtlarınız ve oturumlarınız yalnız sizin bilgisayarınızda ya da telefonunuzda tutulur. Bu veriler LifeOS'a gönderilmez; LifeOS bunları görmez, saklamaz ve işlemez. Bir veri cihazınızdan yalnız sizin başlattığınız bir işlemle ve yalnız o işin gerektirdiği yere gider; bunlar 4., 5. ve 7. maddede anlatılır.
 
 3. Veri sorumlusu
 Folio'da tuttuğunuz müvekkil ve dosya bilgilerinin veri sorumlusu, mesleğini yürüten avukat olarak sizsiniz. Folio bu verileri yalnız sizin cihazınızda ve sizin denetiminizde işlemenize yarayan bir araçtır.
@@ -16,6 +16,8 @@ Folio, UYAP'a ve e-Tebligat'a sizin e-Devlet girişiniz, e-imzanız ya da mobil 
 5. Büro ağı ve Senkron
 Büro ağı ve Senkron, aynı yerel ağdaki kendi cihazlarınız ve büronuzdaki kişilerin cihazları arasında doğrudan ve şifreli çalışır; aktarım internetteki bir sunucudan geçmez. Büro ağında yalnız sizin paylaştığınız dosyalar, mesajlar ve görevler gider. Ücret ve avans gibi mali bilgiler yalnız bunları görme yetkisi olanlara gider.
 
+Başka bir büroyla aynı ağda olmadan bir belgeyi canlı paylaştığınızda (uzaktan canlı paylaşım) belge, LifeOS'un canli.lifeos.com.tr adresindeki aktarma sunucusundan geçer. Belge iki Folio arasında uçtan uca şifrelenir. Şifre, sizin karşı tarafa gönderdiğiniz davet kodundan iki cihazda üretilir; kod sunucuya gönderilmez. Sunucu belgenin içeriğini göremez, belgeyi ve yazışmaları kaydetmez, paylaşım bitince bağlantıyı kapatır. Sunucu bağlantı sürerken iki tarafın IP adresini ve aktarılan veri miktarını görür; bunlar kaydedilmez. Karşı taraf belgeyi siz onayladıktan sonra görür ve paylaşım bitince belge onun cihazında kalmaz.
+
 6. Yapay zekâ
 Folio hiçbir yapay zekâ hizmeti kullanmaz ve belgelerinizi hiçbir yapay zekâya okutmaz. Sesli okuma ve sesli yazma, bir kez indirilen modellerle internet bağlantısı olmadan sizin cihazınızda çalışır.
 
@@ -24,6 +26,7 @@ Kamu hizmetleri: yukarıda anlatıldığı gibi, yalnız sizin oturumunuzla.
 Mevzuat ve karar arama: aradığınız sözcükler ya da madde numarası resmî mevzuat ve karar bankalarına gönderilir; belgeniz gönderilmez.
 Güncelleme denetimi: bilgisayar ve Android sürümleri lifeos.com.tr adresinden yeni sürüm bilgisini okur; bu sırada kişisel veri gönderilmez. App Store ve Microsoft Store sürümlerini mağazanın kendisi günceller.
 Ses modelleri: sesli okuma ve sesli yazma ilk kullanıldığında modeller lifeos.com.tr adresinden indirilir.
+Uzaktan canlı paylaşım: yalnız siz bir belgeyi başka bir büroyla paylaştığınızda ya da size gönderilen bir davet koduyla katıldığınızda, 5. maddede anlatıldığı gibi.
 
 8. Haklarınız
 Folio'da tuttuğunuz verileri kendi cihazınızdan dilediğiniz zaman düzeltebilir ve silebilirsiniz; bunların LifeOS'ta bir kopyası yoktur. KVKK'nın 11. maddesindeki haklarınızla ilgili başvurularınızı info@avukatos.com.tr adresine ya da https://lifeos.com.tr/iletisim sayfasından iletebilirsiniz.

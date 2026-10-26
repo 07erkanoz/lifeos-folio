@@ -161,7 +161,8 @@ class FolioAboutDialog extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Verileriniz yalnız sizin cihazlarınızda tutulur. Folio’nun '
-                'bir sunucusu yoktur ve yapay zekâ hizmeti kullanmaz.',
+                'verilerinizi tutan bir sunucusu yoktur ve yapay zekâ hizmeti '
+                'kullanmaz.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, height: 1.55, color: muted),
               ),

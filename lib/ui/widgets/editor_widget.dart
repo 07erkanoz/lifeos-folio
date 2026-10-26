@@ -124,6 +124,7 @@ import 'editor_ribbon.dart';
 import '../../services/editor/petition_templates.dart';
 import 'desktop_frame.dart' show windowFullScreen;
 import '../../services/live/live_share.dart';
+import '../live/live_chat_panel.dart';
 import '../live/live_share_dialog.dart';
 import '../../services/portal/observed.dart';
 import '../../services/portal/portal_database.dart';
@@ -295,6 +296,7 @@ class _EditorWidgetState extends State<EditorWidget>
 
   void _unwatchLive() {
     _live?.peers.removeListener(_livePeersChanged);
+    _live?.chat.removeListener(_livePeersChanged);
     _live?.pen.removeListener(_livePenChanged);
     _live?.asking.removeListener(_livePenChanged);
   }
@@ -420,9 +422,11 @@ class _EditorWidgetState extends State<EditorWidget>
     if (!_liveWatched) {
       _liveWatched = true;
       _live!.peers.addListener(_livePeersChanged);
+      _live!.chat.addListener(_livePeersChanged);
       _live!.pen.addListener(_livePenChanged);
       _live!.asking.addListener(_livePenChanged);
     }
+    _live!.me = _lawyerName ?? '';
     await showDialog<void>(
       context: context,
       builder: (_) => LiveShareDialog(host: _live!),
@@ -1019,6 +1023,27 @@ class _EditorWidgetState extends State<EditorWidget>
   /// The UYAP case the document is written for, beside the page.
   bool _uyapOpen = false;
 
+  /// The talk beside a document shared live, right of the page; and how
+  /// many of the others' lines were there when it was last looked at.
+  bool _chatOpen = false;
+  double _chatWidth = 330;
+  int _chatSeen = 0;
+
+  /// The others' lines in the talk, and those not yet seen.
+  int get _chatHeard =>
+      _live?.chat.value.where((m) => !m.mine && !m.note).length ?? 0;
+  int get _chatUnseen => _chatOpen ? 0 : _chatHeard - _chatSeen;
+
+  /// What is selected in the document, to quote in the talk.
+  String? _selectedText() {
+    final sel = _quillController.selection;
+    if (!sel.isValid || sel.isCollapsed) return null;
+    return _quillController.document.getPlainText(
+      sel.start,
+      sel.end - sel.start,
+    );
+  }
+
   /// Opens [side]'s panel, or closes it if it is open. On a phone it is a
   /// sheet from below rather than a column beside a page there is no room
   /// beside.
@@ -1030,6 +1055,8 @@ class _EditorWidgetState extends State<EditorWidget>
     setState(() {
       if (side == _Side.uyap) {
         _uyapOpen = !_uyapOpen;
+      } else if (side == _Side.chat) {
+        _chatOpen = !_chatOpen;
       } else {
         _caseLawOpen = !_caseLawOpen;
       }
@@ -1039,6 +1066,7 @@ class _EditorWidgetState extends State<EditorWidget>
 
   Future<void> _sideSheet(_Side side) async {
     if (side == _Side.uyap) unawaited(_uyap.bind(_documentPath));
+    if (side == _Side.chat) _chatOpen = true;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1048,6 +1076,12 @@ class _EditorWidgetState extends State<EditorWidget>
         child: _sidePanel(sheet, side, onClose: () => Navigator.pop(sheet)),
       ),
     );
+    if (side == _Side.chat && mounted) {
+      setState(() {
+        _chatOpen = false;
+        _chatSeen = _chatHeard;
+      });
+    }
   }
 
   /// Ties the document to a case at once: the picker, then the case in
@@ -1074,6 +1108,16 @@ class _EditorWidgetState extends State<EditorWidget>
     _Side side, {
     required VoidCallback onClose,
   }) {
+    if (side == _Side.chat) {
+      final live = _live;
+      if (live == null) return const SizedBox();
+      return LiveChatPanel(
+        chat: live.chat,
+        onSay: live.say,
+        quote: _selectedText,
+        onClose: onClose,
+      );
+    }
     if (side == _Side.uyap) {
       return UyapCasePanel(
         key: const ValueKey('editor-uyap-panel'),
@@ -5639,7 +5683,7 @@ class _EditorWidgetState extends State<EditorWidget>
                         ),
                       // Shown only while the document is shared: the menu
                       // shares it, and the bar has no room to spare.
-                      if (_live?.sharing ?? false)
+                      if (_live?.sharing ?? false) ...[
                         IconButton(
                           key: const ValueKey('editor-live'),
                           tooltip: 'Canlı paylaşılıyor',
@@ -5650,6 +5694,18 @@ class _EditorWidgetState extends State<EditorWidget>
                             size: 19,
                           ),
                         ),
+                        IconButton(
+                          key: const ValueKey('editor-live-chat'),
+                          tooltip: 'Yazışma',
+                          onPressed: () => _toggleSide(_Side.chat),
+                          isSelected: _chatOpen,
+                          icon: Badge(
+                            isLabelVisible: _chatUnseen > 0,
+                            label: Text('$_chatUnseen'),
+                            child: const Icon(Icons.chat_outlined, size: 19),
+                          ),
+                        ),
+                      ],
                       IconButton(
                         tooltip: 'Kaydet · Ctrl+S',
                         onPressed: _isSaving ? null : _save,
@@ -5982,6 +6038,28 @@ class _EditorWidgetState extends State<EditorWidget>
                     ),
                     SizedBox(width: _evrakWidth, child: _evrakPane(context)),
                   ],
+                  // The talk beside a document shared live.
+                  if (_chatOpen &&
+                      (_live?.sharing ?? false) &&
+                      MediaQuery.sizeOf(context).width >= 760) ...[
+                    ResizeHandle(
+                      onDrag: (dx) => setState(
+                        () =>
+                            _chatWidth = (_chatWidth - dx).clamp(280.0, 520.0),
+                      ),
+                    ),
+                    SizedBox(
+                      width: _chatWidth,
+                      child: _sidePanel(
+                        context,
+                        _Side.chat,
+                        onClose: () => setState(() {
+                          _chatOpen = false;
+                          _chatSeen = _chatHeard;
+                        }),
+                      ),
+                    ),
+                  ],
                   // The case-law search on its own, right of the page.
                   if (_caseLawOpen &&
                       MediaQuery.sizeOf(context).width >= 760) ...[
@@ -6054,4 +6132,4 @@ class _DocumentController extends QuillController with EditorClipboard {
 }
 
 /// What the panel left of the page shows.
-enum _Side { uyap, caseLaw }
+enum _Side { uyap, caseLaw, chat }
