@@ -124,6 +124,7 @@ import 'editor_ribbon.dart';
 import '../../services/editor/petition_templates.dart';
 import 'desktop_frame.dart' show windowFullScreen;
 import '../../services/live/live_share.dart';
+import '../../services/live/live_remote.dart';
 import '../live/live_chat_panel.dart';
 import '../live/live_share_dialog.dart';
 import '../../services/portal/observed.dart';
@@ -185,6 +186,11 @@ class EditorWidget extends StatefulWidget {
   @visibleForTesting
   final CaseLaw? caseLaw;
 
+  /// Asked from the home page to share it live with another office, once
+  /// for each count (Canlı belge, approved mockup 26 Ekim 2026): the
+  /// sharing opens on its Uzaktan side with the code made.
+  final int liveAsk;
+
   const EditorWidget({
     super.key,
     this.initialFilePath,
@@ -200,6 +206,7 @@ class EditorWidget extends StatefulWidget {
     this.reveal,
     this.fileHost,
     this.caseLaw,
+    this.liveAsk = 0,
     this.hostTabs = true,
   });
 
@@ -297,6 +304,9 @@ class _EditorWidgetState extends State<EditorWidget>
   void _unwatchLive() {
     _live?.peers.removeListener(_livePeersChanged);
     _live?.chat.removeListener(_livePeersChanged);
+    _live?.remoteInvite.removeListener(_inviteChanged);
+    _invite?.removeListener(_inviteChanged);
+    _invite = null;
     _live?.pen.removeListener(_livePenChanged);
     _live?.asking.removeListener(_livePenChanged);
   }
@@ -391,7 +401,28 @@ class _EditorWidgetState extends State<EditorWidget>
     }
   }
 
-  Future<void> _openLive() async {
+  /// Whether the sharing's window is on screen: one who came with a code
+  /// opens it when it is not.
+  bool _liveShown = false;
+
+  /// The invitation by a code watched: one coming with it is asked about
+  /// at once, the sharing's window opened if it is not.
+  RemoteInvite? _invite;
+
+  void _inviteChanged() {
+    final next = _live?.remoteInvite.value;
+    if (!identical(next, _invite)) {
+      _invite?.removeListener(_inviteChanged);
+      _invite = next?..addListener(_inviteChanged);
+    }
+    if (_invite?.state == RemoteInviteState.arrived &&
+        !_liveShown &&
+        mounted) {
+      unawaited(_openLive(remote: true));
+    }
+  }
+
+  Future<void> _openLive({bool remote = false}) async {
     // A window of its own (LifeOS Editör) is not where the network is: it
     // joined it under this computer's very identity beside Folio's own
     // window, and a device reached either at random. The code matched on
@@ -425,12 +456,16 @@ class _EditorWidgetState extends State<EditorWidget>
       _live!.chat.addListener(_livePeersChanged);
       _live!.pen.addListener(_livePenChanged);
       _live!.asking.addListener(_livePenChanged);
+      _live!.remoteInvite.addListener(_inviteChanged);
     }
     _live!.me = _lawyerName ?? '';
-    await showDialog<void>(
-      context: context,
-      builder: (_) => LiveShareDialog(host: _live!),
-    );
+    if (_liveShown) return;
+    _liveShown = true;
+    try {
+      await LiveShareDialog.show(context, _live!, remote: remote);
+    } finally {
+      _liveShown = false;
+    }
     if (mounted) setState(() {});
   }
 
@@ -3971,9 +4006,7 @@ class _EditorWidgetState extends State<EditorWidget>
     );
     final send = _desktop ? () => unawaited(_sendToUyap()) : null;
     // Shown live on others' screens: where the document can be shared.
-    final live = PhoneDocumentSave.here || Platform.isIOS
-        ? null
-        : () => unawaited(_openLive());
+    void live() => unawaited(_openLive());
     final watching =
         _live?.peers.value
             .where((p) => p.state == LivePeerState.watching)
@@ -4039,10 +4072,9 @@ class _EditorWidgetState extends State<EditorWidget>
             'Süre',
             () => unawaited(_addDeadline()),
           ),
-          if (live != null)
-            ribbonButton(
-              context,
-              watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
+          ribbonButton(
+            context,
+            watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
               liveLabel,
               live,
               selected: watching > 0,
@@ -4255,8 +4287,7 @@ class _EditorWidgetState extends State<EditorWidget>
           ],
         ],
       ]),
-      if (live != null)
-        ribbonGroup(context, 'Paylaşım', [
+      ribbonGroup(context, 'Paylaşım', [
           [
             ribbonBigButton(
               context,
@@ -4873,6 +4904,24 @@ class _EditorWidgetState extends State<EditorWidget>
       );
     }
     if (!identical(widget.reveal, oldWidget.reveal)) _reveal();
+    if (widget.liveAsk != oldWidget.liveAsk ||
+        (widget.isActive && !oldWidget.isActive)) {
+      _liveAsked();
+    }
+  }
+
+  /// The home page's asking to share it live, answered once each, when
+  /// the document is open and on screen.
+  int _liveAnswered = 0;
+
+  void _liveAsked() {
+    if (widget.liveAsk == _liveAnswered || !widget.isActive || _isLoading) {
+      return;
+    }
+    _liveAnswered = widget.liveAsk;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_openLive(remote: true));
+    });
   }
 
   @override
@@ -5025,6 +5074,7 @@ class _EditorWidgetState extends State<EditorWidget>
         if (_desktop && _loadError == null) {
           unawaited(_uyap.bind(_documentPath));
         }
+        if (_loadError == null) _liveAsked();
         if (readByOcr && _loadError == null) {
           showNotice(
             context,
@@ -5505,9 +5555,7 @@ class _EditorWidgetState extends State<EditorWidget>
                         onSave: () => unawaited(_save()),
                         onSaveAs: () => unawaited(_saveAs(_ownFormat)),
                         onSaveIn: (format) => unawaited(_saveAs(format)),
-                        onLiveShare: PhoneDocumentSave.here || Platform.isIOS
-                            ? null
-                            : () => unawaited(_openLive()),
+                        onLiveShare: () => unawaited(_openLive()),
                         onShare: () => unawaited(_share()),
                         onPrint: () => unawaited(_print()),
                         onHistory: () => unawaited(_history()),

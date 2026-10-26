@@ -38,6 +38,7 @@ void main() {
                 onArchive: () {},
                 onGallery: () {},
                 onScan: () {},
+                onLive: () => opened.add('live'),
                 onRecovery: () {},
                 onRecent: (_) {},
                 onShare: (_) {},

@@ -107,6 +107,7 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
   var channel: FlutterMethodChannel?
   var ready = false
   var waiting: [String] = []
+  var waitingLinks: [String] = []
   var scanning: FlutterResult?
   var picking: FlutterResult?
 
@@ -184,6 +185,8 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
   }
 
   func receive(_ urls: [URL]) {
+    // A live document's invitation (lifeos-folio://katil/…), not a document.
+    waitingLinks.append(contentsOf: urls.filter { $0.scheme == "lifeos-folio" }.map { $0.absoluteString })
     let inbox = Self.folder("Gelen")
     for url in urls where url.isFileURL {
       let scoped = url.startAccessingSecurityScopedResource()
@@ -200,7 +203,12 @@ class FolioDocuments: NSObject, FlutterPlugin, FlutterSceneLifeCycleDelegate,
   }
 
   func flush() {
-    guard ready, !waiting.isEmpty else { return }
+    guard ready else { return }
+    for link in waitingLinks {
+      channel?.invokeMethod("liveLink", arguments: link)
+    }
+    waitingLinks = []
+    guard !waiting.isEmpty else { return }
     let paths = waiting
     waiting = []
     channel?.invokeMethod("openFiles", arguments: paths)

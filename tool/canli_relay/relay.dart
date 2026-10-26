@@ -89,6 +89,15 @@ class RelayServer {
         await _socket(request, parts[2]);
         return;
       }
+      if (path == '/.well-known/assetlinks.json') {
+        // Android opens this site's links in Folio itself, once it finds
+        // Folio's signing certificate named here.
+        request.response
+          ..headers.contentType = ContentType.json
+          ..write(assetLinks);
+        await request.response.close();
+        return;
+      }
       if (path == '/' || path == '/katil') {
         request.response
           ..headers.contentType = ContentType.html
@@ -272,6 +281,15 @@ class _Room {
   }
 }
 
+/// Folio's Android package and its signing certificate (release key,
+/// SHA-256), for App Links.
+const assetLinks =
+    '[{"relation":["delegate_permission/common.handle_all_urls"],'
+    '"target":{"namespace":"android_app",'
+    '"package_name":"com.erkanoz.evrak_convert",'
+    '"sha256_cert_fingerprints":["E0:2B:92:1B:90:66:1D:84:BB:E3:D9:5B:13:89:'
+    '37:1A:20:82:8E:5C:AC:BD:2A:76:F3:AA:86:44:73:9B:49:17"]}}]';
+
 /// What an invitation's link opens in a browser: the code, read from the
 /// link's fragment, which the browser never sends here, and where to type
 /// it. Nothing is loaded from elsewhere and nothing is kept.
@@ -293,6 +311,8 @@ const joinPage = r'''<!doctype html>
   .code { font:700 32px ui-monospace,Consolas,monospace; letter-spacing:4px; text-align:center; padding:18px; border:1.5px solid var(--primary); border-radius:14px; margin:18px 0; }
   ol { padding-left:20px; line-height:1.7; }
   a { color:var(--primary); }
+  .ac { display:inline-block; font-weight:600; padding:10px 16px; border-radius:10px; background:var(--primary); color:#fff; text-decoration:none; margin-right:6px; }
+  @media (prefers-color-scheme: dark) { .ac { color:#14181F; } }
   button { font:inherit; padding:10px 16px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer; }
 </style>
 </head>
@@ -301,11 +321,11 @@ const joinPage = r'''<!doctype html>
   <h1>Canlı belgeye davet edildiniz</h1>
   <p>Bir meslektaşınız sizinle LifeOS Folio’da bir belgeyi canlı paylaşıyor.</p>
   <div class="code" id="kod">—</div>
-  <p style="text-align:center"><button id="kopyala" type="button">Kodu kopyala</button></p>
+  <p style="text-align:center"><a id="ac" class="ac" href="#">Folio’da aç</a> <button id="kopyala" type="button">Kodu kopyala</button></p>
   <ol>
-    <li>Folio’yu açın.</li>
-    <li>Bilgisayarda <b>Editör ▾ › Davet koduyla katıl</b>, telefonda menüden <b>Canlı belgeye katıl</b>’ı seçin.</li>
-    <li>Bu kodu yazın. Paylaşan onaylayınca belge açılır.</li>
+    <li><b>Folio’da aç</b>’a basın; Folio açılır ve kod hazır gelir.</li>
+    <li>Olmazsa Folio’yu kendiniz açın; ana sayfada <b>Canlı belge</b>’ye basıp bu kodu yazın.</li>
+    <li>Paylaşan onaylayınca belge açılır.</li>
   </ol>
   <p>Folio yüklü değilse <a href="https://lifeos.com.tr/">lifeos.com.tr</a> adresinden ücretsiz indirebilirsiniz.</p>
   <p>Belge iki Folio arasında şifreli gider; bu sunucu içeriğini göremez ve hiçbir şey saklamaz. Kod 15 dakika geçerlidir.</p>
@@ -318,7 +338,11 @@ const joinPage = r'''<!doctype html>
   document.getElementById('kopyala').onclick = function () {
     if (ok && navigator.clipboard) navigator.clipboard.writeText(shown);
   };
-  if (!ok) document.getElementById('kopyala').style.display = 'none';
+  if (ok) document.getElementById('ac').href = 'lifeos-folio://katil/' + raw;
+  if (!ok) {
+    document.getElementById('kopyala').style.display = 'none';
+    document.getElementById('ac').style.display = 'none';
+  }
 </script>
 </body>
 </html>

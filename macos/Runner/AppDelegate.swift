@@ -37,6 +37,8 @@ class AppDelegate: FlutterAppDelegate {
   /// with "Birlikte Aç": handed to Folio once it listens (OpenedDocuments).
   override func application(_ application: NSApplication, open urls: [URL]) {
     OpenedDocuments.receive(urls.filter { $0.isFileURL }.map { $0.path })
+    // A live document's invitation (lifeos-folio://katil/…), from its page.
+    OpenedDocuments.links(urls.filter { $0.scheme == "lifeos-folio" }.map { $0.absoluteString })
   }
 }
 
@@ -47,6 +49,7 @@ enum OpenedDocuments {
   static var channel: FlutterMethodChannel?
   static var ready = false
   static var waiting: [String] = []
+  static var waitingLinks: [String] = []
 
   static func register(_ messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
@@ -68,8 +71,18 @@ enum OpenedDocuments {
     flush()
   }
 
+  static func links(_ links: [String]) {
+    waitingLinks.append(contentsOf: links)
+    flush()
+  }
+
   static func flush() {
-    guard ready, let channel, !waiting.isEmpty else { return }
+    guard ready, let channel else { return }
+    for link in waitingLinks {
+      channel.invokeMethod("liveLink", arguments: link)
+    }
+    waitingLinks = []
+    guard !waiting.isEmpty else { return }
     let paths = waiting
     waiting = []
     channel.invokeMethod("openFiles", arguments: paths)

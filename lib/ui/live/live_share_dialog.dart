@@ -15,10 +15,48 @@ import 'live_remote_dialogs.dart';
 /// opens there once they join. Uzaktan: another office, anywhere, by an
 /// invitation's code (live_remote.dart).
 class LiveShareDialog extends StatefulWidget {
-  const LiveShareDialog({super.key, required this.host, this.network});
+  const LiveShareDialog({
+    super.key,
+    required this.host,
+    this.network,
+    this.remote = false,
+    this.sheet = false,
+  });
 
   final LiveShareHost host;
   final OfficeNetwork? network;
+
+  /// Opened on its Uzaktan side, a code made (Canlı belge, 26 Ekim 2026).
+  final bool remote;
+
+  /// Laid out as a sheet from below, on a phone.
+  final bool sheet;
+
+  /// Shown for [host]: a sheet from below on a phone, a dialog elsewhere.
+  static Future<void> show(
+    BuildContext context,
+    LiveShareHost host, {
+    bool remote = false,
+  }) {
+    if (MediaQuery.sizeOf(context).width < 700) {
+      return showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheet) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheet).bottom,
+          ),
+          child: LiveShareDialog(host: host, remote: remote, sheet: true),
+        ),
+      );
+    }
+    return showDialog<void>(
+      context: context,
+      builder: (_) => LiveShareDialog(host: host, remote: remote),
+    );
+  }
 
   @override
   State<LiveShareDialog> createState() => _LiveShareDialogState();
@@ -58,162 +96,195 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
   /// Showing the invitation by a code rather than the network's list:
   /// where it was left, a code made before.
   late bool _remote =
+      widget.remote ||
       widget.host.remoteInvite.value != null ||
       widget.host.peers.value.any((p) => widget.host.isRemote(p.deviceId));
+
+  /// Whether the network is looked around for nearby Folios: while the
+  /// list is open on its Bu ağda side, not for another office's code.
+  bool _looking = false;
+
+  void _look(bool look) {
+    if (look == _looking) return;
+    _looking = look;
+    unawaited(_net.lookForLive(look));
+  }
 
   @override
   void initState() {
     super.initState();
-    // Looked around while the list is open, if not on the network already.
-    unawaited(_net.lookForLive(true));
+    if (!_remote) _look(true);
   }
 
   @override
   void dispose() {
-    unawaited(_net.lookForLive(false));
+    _look(false);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final title = Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Canlı paylaş'),
+              Text(
+                _host.title,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: AgendaColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const HelpButton(Help.live),
+      ],
+    );
+    final body = ListenableBuilder(
+      listenable: Listenable.merge([_net, _host.peers, _host.pen]),
+      builder: (context, _) {
+        final sections = _sections();
+        final any = sections.any((s) => s.$2.isNotEmpty);
+        final remote = [
+          for (final p in _host.peers.value)
+            if (_host.isRemote(p.deviceId))
+              _Target(id: p.deviceId, name: p.name, remote: true),
+        ];
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SegmentedButton<bool>(
+              key: const ValueKey('live-where'),
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  label: Text('Bu ağda'),
+                  icon: Icon(Icons.wifi_rounded, size: 18),
+                ),
+                ButtonSegment(
+                  value: true,
+                  label: Text('Uzaktan'),
+                  icon: Icon(Icons.public_rounded, size: 18),
+                ),
+              ],
+              selected: {_remote},
+              onSelectionChanged: (v) {
+                setState(() => _remote = v.first);
+                if (!_remote) _look(true);
+              },
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _remote
+                      ? [
+                          RemoteInvitePane(host: _host),
+                          if (remote.isNotEmpty) ...[
+                            _heading('UZAKTAN KATILANLAR'),
+                            for (final t in remote) _row(t),
+                          ],
+                        ]
+                      : [
+                          if (!any) _empty(),
+                          for (final (name, rows) in sections)
+                            if (rows.isNotEmpty) ...[
+                              _heading(name),
+                              for (final t in rows) _row(t),
+                            ],
+                        ],
+                ),
+              ),
+            ),
+            if (_host.pen.value != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('live-take-back'),
+                  onPressed: _host.takeBack,
+                  icon: const Icon(Icons.edit_off_outlined, size: 16),
+                  label: Text(
+                    'Kalemi geri al · ${_host.nameOf(_host.pen.value!)}',
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest.withValues(alpha: .5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _remote
+                    ? 'Kodu alan kişi bağlantıya dokunur ya da Folio’da '
+                          'Canlı belge’ye basıp kodu yazar; siz onaylayınca '
+                          'belge onda açılır. '
+                          'Belge sizde kalır, paylaşım bitince onda kalmaz.'
+                    : 'Davet ettiğiniz kişinin Folio’sunda bir pencere '
+                          'açılır; Katıl’a basınca belge onda açılır. Belge '
+                          'sizde kalır, paylaşım bitince onlarda kalmaz. '
+                          '"Sırayla düzenleyebilir" olanlara kalemi verince '
+                          'yazdıkları belgenize işlenir.',
+                style: TextStyle(fontSize: 12, color: AgendaColors.muted),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    final actions = <Widget>[
+      if (_host.sharing)
+        TextButton(
+          key: const ValueKey('live-stop'),
+          onPressed: () async {
+            await _host.close();
+            if (context.mounted) Navigator.pop(context);
+          },
+          child: const Text('Paylaşımı bitir'),
+        ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Tamam'),
+      ),
+    ];
+    if (widget.sheet) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DefaultTextStyle.merge(
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              child: title,
+            ),
+            const SizedBox(height: 10),
+            Flexible(child: body),
+            const SizedBox(height: 8),
+            Wrap(alignment: WrapAlignment.end, spacing: 8, children: actions),
+          ],
+        ),
+      );
+    }
     return AlertDialog(
       titlePadding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
-      title: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Canlı paylaş'),
-                Text(
-                  _host.title,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    color: AgendaColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const HelpButton(Help.live),
-        ],
-      ),
-      content: SizedBox(
-        width: 480,
-        child: ListenableBuilder(
-          listenable: Listenable.merge([_net, _host.peers, _host.pen]),
-          builder: (context, _) {
-            final sections = _sections();
-            final any = sections.any((s) => s.$2.isNotEmpty);
-            final remote = [
-              for (final p in _host.peers.value)
-                if (_host.isRemote(p.deviceId))
-                  _Target(id: p.deviceId, name: p.name, remote: true),
-            ];
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SegmentedButton<bool>(
-                  key: const ValueKey('live-where'),
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: false,
-                      label: Text('Bu ağda'),
-                      icon: Icon(Icons.wifi_rounded, size: 18),
-                    ),
-                    ButtonSegment(
-                      value: true,
-                      label: Text('Uzaktan'),
-                      icon: Icon(Icons.public_rounded, size: 18),
-                    ),
-                  ],
-                  selected: {_remote},
-                  onSelectionChanged: (v) => setState(() => _remote = v.first),
-                ),
-                const SizedBox(height: 12),
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: _remote
-                          ? [
-                              RemoteInvitePane(host: _host),
-                              if (remote.isNotEmpty) ...[
-                                _heading('UZAKTAN KATILANLAR'),
-                                for (final t in remote) _row(t),
-                              ],
-                            ]
-                          : [
-                              if (!any) _empty(),
-                              for (final (name, rows) in sections)
-                                if (rows.isNotEmpty) ...[
-                                  _heading(name),
-                                  for (final t in rows) _row(t),
-                                ],
-                            ],
-                    ),
-                  ),
-                ),
-                if (_host.pen.value != null) ...[
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('live-take-back'),
-                      onPressed: _host.takeBack,
-                      icon: const Icon(Icons.edit_off_outlined, size: 16),
-                      label: Text(
-                        'Kalemi geri al · ${_host.nameOf(_host.pen.value!)}',
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest.withValues(alpha: .5),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _remote
-                        ? 'Kodu alan kişi Folio’da Davet koduyla katıl’ı seçip '
-                              'kodu yazar; siz onaylayınca belge onda açılır. '
-                              'Belge sizde kalır, paylaşım bitince onda kalmaz.'
-                        : 'Davet ettiğiniz kişinin Folio’sunda bir pencere '
-                              'açılır; Katıl’a basınca belge onda açılır. Belge '
-                              'sizde kalır, paylaşım bitince onlarda kalmaz. '
-                              '"Sırayla düzenleyebilir" olanlara kalemi verince '
-                              'yazdıkları belgenize işlenir.',
-                    style: TextStyle(fontSize: 12, color: AgendaColors.muted),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-      actions: [
-        if (_host.sharing)
-          TextButton(
-            key: const ValueKey('live-stop'),
-            onPressed: () async {
-              await _host.close();
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Paylaşımı bitir'),
-          ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Tamam'),
-        ),
-      ],
+      title: title,
+      content: SizedBox(width: 480, child: body),
+      actions: actions,
     );
   }
 

@@ -218,6 +218,15 @@ class MainActivity : FlutterActivity() {
     }
     private fun accept(received: Intent?) {
         val intent = received ?: return
+        // A live document's invitation, not a document: its link to Dart.
+        val link = intent.data
+        if (intent.action == Intent.ACTION_VIEW && link != null &&
+            ((link.scheme == "https" && link.host == "canli.lifeos.com.tr") ||
+                link.scheme == "lifeos-folio")
+        ) {
+            emit("liveLink", link.toString())
+            return
+        }
         val uris: List<Uri> = when (intent.action) {
             Intent.ACTION_VIEW -> listOfNotNull(intent.data)
             Intent.ACTION_SEND -> listOfNotNull(intent.data ?: streamOf(intent))

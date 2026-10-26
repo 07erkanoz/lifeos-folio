@@ -1,7 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:evrak_convert/models/document_model.dart';
+import 'package:evrak_convert/models/evrak_file.dart';
+import 'package:evrak_convert/services/editor/document_history.dart';
+import 'package:evrak_convert/services/editor/document_lock.dart';
 import 'package:evrak_convert/services/live/live_remote.dart';
+import 'package:evrak_convert/services/udf/udf_writer.dart';
+import 'package:evrak_convert/ui/widgets/editor_widget.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart'
+    show FlutterQuillLocalizations;
 import 'package:evrak_convert/services/live/live_share.dart';
 import 'package:evrak_convert/services/office/office_chat.dart';
 import 'package:evrak_convert/services/office/office_known.dart';
@@ -357,6 +366,86 @@ void main() {
     await ready(() => joined!.ended);
     await tester.pumpWidget(const SizedBox());
     // Their timers (answers waited for, beats) run out.
+    await tester.pump(const Duration(minutes: 20));
+  });
+
+  testWidgets('asked from the home page, a phone\'s editor opens the sharing '
+      'from below on its Uzaktan side, WhatsApp first; closed, it opens '
+      'again when someone comes with the code', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    Future<void> ready(bool Function() done) async {
+      for (var i = 0; i < 300 && !done(); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(done(), isTrue);
+    }
+
+    DocumentHistory.instance = DocumentHistory(
+      directory: Directory('${dir.path}/history'),
+    );
+    final lockFolder = DocumentLock.folder;
+    DocumentLock.folder = () async => Directory('${dir.path}/acik');
+    addTearDown(() => DocumentLock.folder = lockFolder);
+    final file = File('${dir.path}/Kira sözleşmesi.udf');
+    await tester.runAsync(
+      () => file.writeAsBytes(
+        UdfWriter.writeBytes(
+          DocModel(blocks: [DocBlock(plainText: 'Kiraya veren')]),
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          FlutterQuillLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: EditorWidget(
+            initialFilePath: file.path,
+            initialFormat: EvrakFormat.udf,
+            liveAsk: 1,
+          ),
+        ),
+      ),
+    );
+    final code = find.byKey(const ValueKey('remote-code'));
+    await ready(() => code.evaluate().isNotEmpty);
+    await tester.pumpAndSettle();
+    expect(find.text('WhatsApp ile gönder'), findsOneWidget);
+    // From below, not a dialog in the middle.
+    expect(find.byType(BottomSheet), findsOneWidget);
+    final shown = (tester.widget(code) as SelectableText).data!;
+
+    // Put away; someone comes with the code: asked about at once.
+    await tester.tap(find.text('Tamam'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    final join = RemoteJoin.start(
+      RemoteCode.read(shown)!,
+      name: 'Av. Ayşe Demir',
+    );
+    await ready(
+      () => find.byKey(const ValueKey('remote-request')).evaluate().isNotEmpty,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('remote-let-view')));
+    await tester.tap(find.byKey(const ValueKey('remote-let-view')));
+    await ready(() => join.state == RemoteJoinState.joined);
+    await ready(() => join.session!.ready);
+    expect(join.session!.document!.toPlainText(), startsWith('Kiraya veren'));
+    expect(join.session!.right, LiveRight.view);
+
+    await tester.pumpWidget(const SizedBox());
+    await ready(() => join.session!.ended);
     await tester.pump(const Duration(minutes: 20));
   });
 }

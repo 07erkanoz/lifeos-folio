@@ -28,6 +28,9 @@ class MobileDocumentHome extends StatelessWidget {
 
   /// Camera to PDF; null where there is no scanner (off Android).
   final VoidCallback? onScan;
+
+  /// "Canlı belge": a live document joined by its code, or one shared.
+  final VoidCallback? onLive;
   final ValueChanged<EvrakFile> onRecent, onShare;
   final int recoveryCount;
 
@@ -54,6 +57,7 @@ class MobileDocumentHome extends StatelessWidget {
     required this.onArchive,
     required this.onGallery,
     this.onScan,
+    this.onLive,
     required this.onRecovery,
     required this.onRecent,
     required this.onShare,
@@ -234,6 +238,58 @@ class MobileDocumentHome extends StatelessWidget {
                 Icon(Icons.chevron_right, color: colors.onSurfaceVariant),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Canlı belge, across the row: to join by a code or share a document
+  /// (approved mockup, 26 Ekim 2026).
+  Widget _liveTile(BuildContext context, VoidCallback onTap) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.primary.withValues(alpha: .07),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: colors.primary, width: 1.2),
+      ),
+      child: InkWell(
+        key: const ValueKey('mobile-live'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.cast_connected_rounded,
+                size: 20,
+                color: colors.primary,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Canlı belge',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Kodla katılın ya da bir belgeyi paylaşın',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
+            ],
           ),
         ),
       ),
@@ -513,6 +569,11 @@ class MobileDocumentHome extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   for (final a in actions) SizedBox(width: width, child: a),
+                  if (onLive case final live?)
+                    SizedBox(
+                      width: box.maxWidth,
+                      child: _liveTile(context, live),
+                    ),
                 ],
               );
             },

@@ -8,6 +8,7 @@ import 'services/desktop/desktop_instance.dart';
 import 'services/desktop/mac_quit.dart';
 import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
+import 'services/live/live_links.dart';
 import 'services/platform/onboarding_store.dart';
 import 'services/security/app_lock.dart';
 import 'services/desktop/desktop_companion.dart';
@@ -106,6 +107,14 @@ void main(List<String> arguments) async {
     if (instance == null) exit(0);
   }
   final windowSession = await sessionFuture;
+  // An invitation's link Folio was started with: the home page asks to
+  // join once it is up; and this Folio named as what opens them.
+  if (DocumentLaunch.parse(arguments).link case final link?) {
+    LiveLinks.take(link);
+  }
+  if (Platform.isLinux || Platform.isWindows) {
+    unawaited(LiveLinkRegistration.ensure());
+  }
   bool desktopChrome = false;
   WindowOptions? pendingWindowOptions;
   if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
@@ -304,7 +313,11 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
         } else {
           // Started again with no document: the home page, not what was
           // open when it went to the tray (23 Ekim 2026).
-          companion!.showMain(paths: DocumentLaunch.parse(args).forwarded);
+          final launch = DocumentLaunch.parse(args);
+          companion!.showMain(
+            paths: launch.paths.isEmpty ? const [] : launch.forwarded,
+          );
+          if (launch.link case final link?) LiveLinks.take(link);
         }
       });
       WidgetsBinding.instance.addPostFrameCallback((_) async {

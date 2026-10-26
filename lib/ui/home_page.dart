@@ -82,7 +82,9 @@ import 'cash/cash_page.dart';
 import 'live/live_document_page.dart';
 import 'live/live_invite_dialogs.dart';
 import 'live/live_remote_dialogs.dart';
+import 'live/live_hub.dart';
 import '../services/live/live_share.dart';
+import '../services/live/live_links.dart';
 import 'clients/clients_page.dart';
 import 'office/tasks_page.dart';
 import 'widgets/share_as.dart';
@@ -293,6 +295,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _galleryFromHome = true;
     },
     onScan: DocumentScan.available ? () => unawaited(_scanToPdf()) : null,
+    onLive: () => unawaited(_liveHub()),
     onRecovery: _openRecovery,
     recoveryCount: _recoveryCount,
     onRecent: _openRecent,
@@ -1000,6 +1003,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       // Documents shared live with this device from the person's others.
       LiveShare.instance.listen(OfficeNetwork.instance);
       LiveShare.instance.incoming.addListener(_liveCame);
+      // An invitation's link that opened Folio, or comes while it runs.
+      LiveLinks.came.addListener(_linkCame);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _linkCame());
       OfficeNetwork.instance.liveInvite.addListener(_guestInvited);
       tellOffice(OfficeNetwork.instance);
       // The agenda's alarms: deadlines' last days, hearings (B23).
@@ -1265,12 +1271,65 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// A document shared live from another office, joined by the code its
-  /// sharer sent (live_remote.dart).
-  Future<void> _joinRemote() async {
-    final session = await RemoteJoinDialog.show(context);
+  /// sharer sent (live_remote.dart): at once when [start], the person
+  /// having said Katıl already; else [code] shown to join with.
+  Future<void> _joinRemote({String? code, bool start = false}) async {
+    final session = await RemoteJoinDialog.show(
+      context,
+      code: code,
+      start: start,
+    );
     if (session != null && mounted && !session.ended) {
       await LiveDocumentPage.open(context, session);
     }
+  }
+
+  /// The last invitation link taken (LiveLinks.came), not taken twice.
+  int _linkTaken = 0;
+
+  /// An invitation's link opened Folio: asked to join, its code in place.
+  void _linkCame() {
+    final came = LiveLinks.came.value;
+    if (came == null || came.n == _linkTaken || !mounted) return;
+    _linkTaken = came.n;
+    unawaited(_joinRemote(code: came.code));
+  }
+
+  /// Canlı belge (approved mockup, 26 Ekim 2026): a code to join with, or
+  /// a document to share, without going into the editor first.
+  Future<void> _liveHub({bool join = true}) => LiveHub.show(
+    context,
+    recent: _recentDocuments.files,
+    join: join,
+    onJoin: (code) => unawaited(_joinRemote(code: code, start: true)),
+    onShare: (file) => unawaited(_shareLive(file)),
+    onPick: () => unawaited(_pickToShareLive()),
+  );
+
+  /// How many times each document was asked to be shared live as it
+  /// opens: its editor shares it once for each (EditorWidget.liveAsk).
+  final _liveAsk = <String, int>{};
+
+  /// [file] opened in the editor here and shared live with another
+  /// office, its code made at once.
+  Future<void> _shareLive(EvrakFile file) async {
+    if (!LiveHub.shareable(file.format)) return;
+    setState(() => _liveAsk[file.path] = (_liveAsk[file.path] ?? 0) + 1);
+    await _openRecent(file, edit: true);
+  }
+
+  Future<void> _pickToShareLive() async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: 'Canlı paylaşılacak belge',
+      type: FileType.custom,
+      allowedExtensions: [
+        for (final f in EvrakFormat.values)
+          if (LiveHub.shareable(f)) f.defaultExtension,
+      ],
+    );
+    final path = result?.files.single.path;
+    if (!mounted || path == null) return;
+    await _shareLive(EvrakFile.fromPath(path));
   }
 
   /// A Folio of no office's inviting this one to its live document.
@@ -1335,6 +1394,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _keptSearch?.dispose();
     OfficeNetwork.instance.incoming.removeListener(_pairingAsked);
     LiveShare.instance.incoming.removeListener(_liveCame);
+    LiveLinks.came.removeListener(_linkCame);
     OfficeNetwork.instance.liveInvite.removeListener(_guestInvited);
     OfficeNetwork.instance.removeListener(_officeCounted);
     OfficeNetwork.instance.incomingOffer.removeListener(_offerCame);
@@ -2012,6 +2072,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     onNewDocument: () => unawaited(_newDocument()),
     onOpenToEdit: () => unawaited(_pickFiles(edit: true)),
     onJoinLive: () => unawaited(_joinRemote()),
+    onShareLive: () => unawaited(_liveHub(join: false)),
+    onShareLiveFile: (file) => unawaited(_shareLive(file)),
   );
 
   Widget _agendaPage() => AgendaPage(
@@ -3082,10 +3144,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       } else {
         unawaited(connectUets(context, api: sync.uets, secrets: sync.secrets));
       }
-    },
-    onJoinLive: () {
-      _closeDrawer();
-      unawaited(_joinRemote());
     },
     onSyncComputer: () {
       _closeDrawer();
@@ -4341,6 +4399,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   ? () => _loadViewerPdfText(opened.path)
                                   : null,
                               reveal: _revealAt[opened.path],
+                              liveAsk: _liveAsk[opened.path] ?? 0,
                               isActive:
                                   !_showLibrary &&
                                   !_isNewDocument &&

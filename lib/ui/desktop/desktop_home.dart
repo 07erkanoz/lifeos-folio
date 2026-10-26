@@ -25,6 +25,7 @@ import '../search/global_search.dart';
 import '../search/home_search_box.dart';
 import '../widgets/uyap_connect_view.dart';
 import '../theme/folio_palette.dart';
+import '../live/live_hub.dart';
 
 /// What the desktop's first page shows of the office, gathered by the home
 /// page from the portal database.
@@ -78,6 +79,8 @@ class DesktopHome extends StatefulWidget {
     this.onNewDocument,
     this.onOpenToEdit,
     this.onJoinLive,
+    this.onShareLive,
+    this.onShareLiveFile,
     this.onNotices,
     this.search,
     this.onFound,
@@ -113,8 +116,12 @@ class DesktopHome extends StatefulWidget {
   /// live sharing, the UYAP panel and the network are.
   final VoidCallback? onNewDocument, onOpenToEdit;
 
-  /// A document shared live from another office joined by its code.
-  final VoidCallback? onJoinLive;
+  /// A document shared live from another office joined by its code; one
+  /// chosen to share live (Canlı belge, approved mockup 26 Ekim 2026).
+  final VoidCallback? onJoinLive, onShareLive;
+
+  /// [EvrakFile] shared live: opened in the editor, its code made.
+  final ValueChanged<EvrakFile>? onShareLiveFile;
 
   /// UYAP Bildirimleri; null where it is not shown.
   final VoidCallback? onNotices;
@@ -528,6 +535,10 @@ class _DesktopHomeState extends State<DesktopHome> {
             ),
           ),
         ),
+        if (widget.onJoinLive != null || widget.onShareLive != null) ...[
+          const SizedBox(width: 10),
+          _liveButton(context),
+        ],
         if (widget.onNewDocument != null) ...[
           const SizedBox(width: 10),
           _editorButton(context),
@@ -535,6 +546,47 @@ class _DesktopHomeState extends State<DesktopHome> {
         const SizedBox(width: 4),
         const HelpButton(Help.home),
       ],
+    );
+  }
+
+  /// Canlı belge: a document shared live from another office joined by
+  /// its code, or one of these shared.
+  Widget _liveButton(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return MenuAnchor(
+      menuChildren: [
+        if (widget.onJoinLive case final join?)
+          MenuItemButton(
+            key: const ValueKey('home-live-join'),
+            leadingIcon: const Icon(Icons.login_rounded, size: 18),
+            onPressed: join,
+            child: const Text('Davet koduyla katıl…'),
+          ),
+        if (widget.onShareLive case final share?)
+          MenuItemButton(
+            key: const ValueKey('home-live-share'),
+            leadingIcon: const Icon(Icons.cast_rounded, size: 18),
+            onPressed: share,
+            child: const Text('Bir belgeyi paylaş…'),
+          ),
+      ],
+      builder: (context, controller, _) => OutlinedButton.icon(
+        key: const ValueKey('home-live'),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          side: BorderSide(color: scheme.primary, width: 1.3),
+        ),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        icon: const Icon(Icons.cast_connected_rounded, size: 18),
+        label: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Canlı belge'),
+            Icon(Icons.expand_more_rounded, size: 18),
+          ],
+        ),
+      ),
     );
   }
 
@@ -621,13 +673,7 @@ class _DesktopHomeState extends State<DesktopHome> {
               'Bilgisayardan aç…',
               widget.onOpenToEdit,
             ),
-            if (widget.onJoinLive != null)
-              item(
-                const ValueKey('home-editor-join'),
-                Icons.cast_connected_outlined,
-                'Davet koduyla katıl…',
-                widget.onJoinLive,
-              ),
+
             if (editable.length > 1) ...[
               const Divider(height: 8),
               for (final f in editable.skip(1).take(5))
@@ -1272,6 +1318,14 @@ class _DesktopHomeState extends State<DesktopHome> {
                             onPressed: () => widget.onSendUyap(file),
                             child: const Text('UYAP’a gönder'),
                           ),
+                        if (widget.onShareLiveFile case final share?
+                            when LiveHub.shareable(file.format))
+                          OutlinedButton.icon(
+                            key: const ValueKey('home-continue-live'),
+                            onPressed: () => share(file),
+                            icon: const Icon(Icons.cast_rounded, size: 16),
+                            label: const Text('Canlı paylaş'),
+                          ),
                       ],
                     ),
                   ],
@@ -1451,6 +1505,7 @@ class _DesktopHomeState extends State<DesktopHome> {
                 Expanded(flex: 2, child: Text('Dosya', style: heading)),
                 Expanded(flex: 2, child: Text('Klasör', style: heading)),
                 Expanded(flex: 2, child: Text('Değişiklik', style: heading)),
+                const SizedBox(width: 36),
               ],
             ),
           ),
@@ -1536,6 +1591,27 @@ class _DesktopHomeState extends State<DesktopHome> {
                                   m == null ? '' : _when(m),
                                   style: const TextStyle(fontSize: 13),
                                 ),
+                              ),
+                              SizedBox(
+                                width: 36,
+                                child:
+                                    widget.onShareLiveFile != null &&
+                                        LiveHub.shareable(f.format)
+                                    ? IconButton(
+                                        key: ValueKey('home-recent-live-$i'),
+                                        tooltip: 'Canlı paylaş',
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: () =>
+                                            widget.onShareLiveFile!(f),
+                                        icon: Icon(
+                                          Icons.cast_rounded,
+                                          size: 18,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                        ),
+                                      )
+                                    : null,
                               ),
                             ],
                           ),

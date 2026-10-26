@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import '../live/live_links.dart';
+
 /// Android's content URIs are copied byte-for-byte off the UI thread by the
 /// native bridge. Cold and warm launches share one ordered delivery queue.
 class DocumentIntents {
@@ -22,6 +24,9 @@ class DocumentIntents {
         _paths.add(List<String>.from(call.arguments as List));
       } else if (call.method == 'foldersChanged') {
         _changes.add(null);
+      } else if (call.method == 'liveLink') {
+        // An invitation's link the system handed to Folio (live_links.dart).
+        LiveLinks.take('${call.arguments}');
       } else if (call.method == 'openError') {
         _paths.addError(call.arguments.toString());
       }

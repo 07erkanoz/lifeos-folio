@@ -156,12 +156,13 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
               SizedBox(width: 10),
-              Text('Davet kodu hazırlanıyor…'),
+              Flexible(child: Text('Davet kodu hazırlanıyor…')),
             ],
           ),
         );
       case RemoteInviteState.waiting:
         final until = TimeOfDay.fromDateTime(invite.expires).format(context);
+        final phone = MediaQuery.sizeOf(context).width < 700;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -190,33 +191,83 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      FilledButton.icon(
-                        key: const ValueKey('remote-copy'),
-                        onPressed: () => unawaited(_copy(invite.code)),
-                        icon: const Icon(Icons.content_copy_rounded, size: 17),
-                        label: const Text('Daveti kopyala'),
+                  if (phone) ...[
+                    // On a phone the invitation goes by WhatsApp first.
+                    FilledButton.icon(
+                      key: const ValueKey('remote-whatsapp'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF25A244),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(46),
                       ),
-                      OutlinedButton.icon(
-                        key: const ValueKey('remote-whatsapp'),
-                        onPressed: () =>
-                            unawaited(_send(invite.code, mail: false)),
-                        icon: const Icon(Icons.chat_outlined, size: 17),
-                        label: const Text('WhatsApp'),
-                      ),
-                      OutlinedButton.icon(
-                        key: const ValueKey('remote-mail'),
-                        onPressed: () =>
-                            unawaited(_send(invite.code, mail: true)),
-                        icon: const Icon(Icons.mail_outline_rounded, size: 17),
-                        label: const Text('E-posta'),
-                      ),
-                    ],
-                  ),
+                      onPressed: () =>
+                          unawaited(_send(invite.code, mail: false)),
+                      icon: const Icon(Icons.chat_rounded, size: 18),
+                      label: const Text('WhatsApp ile gönder'),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('remote-copy'),
+                            onPressed: () => unawaited(_copy(invite.code)),
+                            icon: const Icon(
+                              Icons.content_copy_rounded,
+                              size: 17,
+                            ),
+                            label: const Text('Kopyala'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('remote-mail'),
+                            onPressed: () =>
+                                unawaited(_send(invite.code, mail: true)),
+                            icon: const Icon(
+                              Icons.mail_outline_rounded,
+                              size: 17,
+                            ),
+                            label: const Text('E-posta'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        FilledButton.icon(
+                          key: const ValueKey('remote-copy'),
+                          onPressed: () => unawaited(_copy(invite.code)),
+                          icon: const Icon(
+                            Icons.content_copy_rounded,
+                            size: 17,
+                          ),
+                          label: const Text('Daveti kopyala'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('remote-whatsapp'),
+                          onPressed: () =>
+                              unawaited(_send(invite.code, mail: false)),
+                          icon: const Icon(Icons.chat_outlined, size: 17),
+                          label: const Text('WhatsApp'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('remote-mail'),
+                          onPressed: () =>
+                              unawaited(_send(invite.code, mail: true)),
+                          icon: const Icon(
+                            Icons.mail_outline_rounded,
+                            size: 17,
+                          ),
+                          label: const Text('E-posta'),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 8),
                   Text(
                     '$until’e kadar geçerli, bir kişi içindir. Belge şifreli '
@@ -329,17 +380,27 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
 /// sharer sent (approved mockup, 26 Ekim 2026). The session, once the
 /// sharer lets this side in.
 class RemoteJoinDialog extends StatefulWidget {
-  const RemoteJoinDialog({super.key, this.code});
+  const RemoteJoinDialog({super.key, this.code, this.start = false});
 
-  /// A code already in hand, as a pasted link carries it.
+  /// A code already in hand, as a link or the home page's field gives it.
   final String? code;
 
-  static Future<LiveSession?> show(BuildContext context, {String? code}) =>
-      showDialog<LiveSession>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => RemoteJoinDialog(code: code),
-      );
+  /// Joined at once, the person having said so already (Canlı belge's
+  /// Katıl); else the code is shown to join with.
+  final bool start;
+
+  static Future<LiveSession?> show(
+    BuildContext context, {
+    String? code,
+    bool start = false,
+  }) => showDialog<LiveSession>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => RemoteJoinDialog(
+      code: code == null ? null : RemoteCode.shown(code),
+      start: start && code != null,
+    ),
+  );
 
   @override
   State<RemoteJoinDialog> createState() => _RemoteJoinDialogState();
@@ -362,6 +423,7 @@ class _RemoteJoinDialogState extends State<RemoteJoinDialog> {
         if (_name.text.isEmpty) _name.text = p.lawyer?.titled ?? '';
         _office = p.officeName.trim();
       } catch (_) {}
+      if (widget.start && mounted && _join == null) _start();
     }());
   }
 
@@ -477,7 +539,7 @@ class _RemoteJoinDialogState extends State<RemoteJoinDialog> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
               SizedBox(width: 10),
-              Text('Bağlanılıyor…'),
+              Flexible(child: Text('Bağlanılıyor…')),
             ],
           ),
         ),

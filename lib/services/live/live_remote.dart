@@ -79,6 +79,19 @@ abstract final class RemoteCode {
     return s;
   }
 
+  /// A code somewhere in [text] (an invitation's message, pasted or on the
+  /// clipboard): its link's, else one written in threes.
+  static String? find(String text) {
+    final linked = RegExp(r'canli\.lifeos\.com\.tr/?#([0-9A-Za-z]{9})')
+        .firstMatch(text);
+    if (linked != null) return read(linked.group(1)!);
+    final shown = RegExp(
+      r'(?<![0-9A-Za-z])([0-9A-Za-z]{3})[- ]([0-9A-Za-z]{3})[- ]([0-9A-Za-z]{3})(?![0-9A-Za-z])',
+    ).firstMatch(text);
+    if (shown == null) return null;
+    return read('${shown.group(1)}${shown.group(2)}${shown.group(3)}');
+  }
+
   /// K7Q-4MP-2XD.
   static String shown(String code) =>
       '${code.substring(0, 3)}-${code.substring(3, 6)}-${code.substring(6)}';
@@ -93,7 +106,8 @@ abstract final class RemoteCode {
   /// What goes to the other office: the link, and the code to type.
   static String message(String code, String title) =>
       'LifeOS Folio’da “$title” belgesini sizinle canlı paylaşıyorum. '
-      'Folio’da Davet koduyla katıl’ı seçip şu kodu yazın: ${shown(code)}\n'
+      'Katılmak için bağlantıya dokunun ya da Folio’nun ana sayfasında '
+      'Canlı belge’ye basıp şu kodu yazın: ${shown(code)}\n'
       '${link(code)}\n'
       'Kod 15 dakika geçerlidir.';
 }

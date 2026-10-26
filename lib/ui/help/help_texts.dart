@@ -38,7 +38,8 @@ abstract final class Help {
         'Sırayla düzenleyebilir.',
     'Yakındaki bir Folio’yu davet edince satırında altı haneli bir kod '
         'görünür; karşı tarafın davet penceresinde de aynı kod çıkar.',
-    'Başka bir büroyla, aynı ağda olmadan paylaşmak için Uzaktan’a basın. '
+    'Başka bir büroyla, aynı ağda olmadan paylaşmak için Uzaktan’a basın; '
+        'ya da ana sayfada Canlı belge’den bir belge seçin, kod hemen çıkar. '
         'Çıkan kodu WhatsApp ya da e-postayla gönderin. Kişi kodu yazınca '
         'size sorulur; iki ekranda da aynı dört rakam görünür. Yalnız '
         'görsün ya da Sırayla düzenlesin’e basın. Her kod bir kişi içindir '
@@ -56,9 +57,9 @@ abstract final class Help {
         'belge kendiliğinden açılır. İstemiyorsanız Reddet’e basın.',
     'Başka bir büronun sizi davet edebilmesi için Ayarlar › Editör’de '
         'Canlı paylaşıma davet edilebilirim açık olmalı.',
-    'Size bir davet kodu gönderildiyse bilgisayarda Editör ▾ › Davet '
-        'koduyla katıl’ı, telefonda menüden Canlı belgeye katıl’ı seçip kodu '
-        'yazın. Paylaşan onaylayınca belge açılır.',
+    'Size bir davet bağlantısı geldiyse ona dokunun; Folio açılır ve kod '
+        'hazır gelir. Ya da ana sayfada Canlı belge’ye basıp kodu yazın. '
+        'Paylaşan onaylayınca belge açılır.',
     'Düzenleme izniniz varsa Düzenlemek iste’ye basın; paylaşan kalemi '
         'verince yazdıklarınız onun belgesine işlenir.',
     'İş bitince Kalemi bırak’a, ayrılmak için İzlemeyi bırak’a basın.',

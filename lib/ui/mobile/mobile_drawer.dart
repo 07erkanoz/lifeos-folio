@@ -20,7 +20,6 @@ class MobileDrawer extends StatelessWidget {
     required this.onConnectWeb,
     required this.onConnectUets,
     required this.onSyncComputer,
-    this.onJoinLive,
     this.agendaToday = 0,
     this.uetsUnread = 0,
     this.uyapNotices = 0,
@@ -44,9 +43,6 @@ class MobileDrawer extends StatelessWidget {
   final ValueChanged<String> onGroup;
   final VoidCallback onConnectMobile, onConnectWeb, onConnectUets;
   final VoidCallback onSyncComputer;
-
-  /// A document shared live from another office joined by its code.
-  final VoidCallback? onJoinLive;
   final int agendaToday, uetsUnread, uyapCases, uyapNotices;
   final int messagesUnread, tasksOpen;
 
@@ -243,15 +239,6 @@ class MobileDrawer extends StatelessWidget {
                           selected: !home && group == 'buro',
                           onTap: () => onGroup('buro'),
                         ),
-                        if (onJoinLive case final join?)
-                          _item(
-                            context,
-                            key: const ValueKey('drawer-join-live'),
-                            icon: const Icon(Icons.cast_connected_outlined),
-                            label: 'Canlı belgeye katıl',
-                            selected: false,
-                            onTap: join,
-                          ),
                         _item(
                           context,
                           key: const ValueKey('drawer-sync'),
