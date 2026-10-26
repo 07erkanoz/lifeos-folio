@@ -19,10 +19,22 @@ work="${RUNNER_TEMP:-$(mktemp -d)}"
 install -m 600 /dev/null "$work/deploy_key"
 printf '%s\n' "$DEPLOY_KEY" > "$work/deploy_key"
 printf '%s\n' "$KNOWN_HOSTS" > "$work/known_hosts"
-ssh="ssh -i $work/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$work/known_hosts"
-rsync -rt -e "$ssh" "$folder/" folio-release@sbyazilim.info:
+ssh="ssh -i $work/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$work/known_hosts -o ConnectTimeout=20"
+
+# Tried again a few times: while bots knock on the server's SSH by the
+# dozen, sshd turns away new connections past MaxStartups, ours with them
+# (kex_exchange_identification: Connection reset, 26 Ekim 2026).
+send() {
+  for attempt in 1 2 3 4 5 6; do
+    rsync "$@" && return 0
+    echo "Sunucuya gönderilemedi ($attempt. deneme); biraz sonra yeniden."
+    sleep $((attempt * 20))
+  done
+  return 1
+}
+send -rt -e "$ssh" "$folder/" folio-release@sbyazilim.info:
 touch "$work/READY"
-rsync -t -e "$ssh" "$work/READY" folio-release@sbyazilim.info:READY
+send -t -e "$ssh" "$work/READY" folio-release@sbyazilim.info:READY
 rm -f "$work/deploy_key"
 
 for platform in "$@"; do
