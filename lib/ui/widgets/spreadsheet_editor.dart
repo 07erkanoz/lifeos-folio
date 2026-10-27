@@ -19,6 +19,7 @@ import 'document_versions_window.dart';
 import 'draft_prompts.dart';
 import 'notice.dart';
 import 'spreadsheet_viewer.dart';
+import '../../services/platform/save_name.dart';
 
 /// Numbers, dates and currency the way Turkish reads them.
 const _turkish = FormatLocale(
@@ -378,6 +379,9 @@ class _SpreadsheetEditorState extends State<SpreadsheetEditor>
                   fileName: _name,
                   type: FileType.custom,
                   allowedExtensions: ['xlsx'],
+                ).then(
+                  (chosen) =>
+                      chosen == null ? null : withExtension(chosen, 'xlsx'),
                 );
       if (path == null || !mounted) return false;
       if (!PhoneDocumentSave.here) {

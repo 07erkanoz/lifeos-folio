@@ -4776,6 +4776,56 @@ class _EditorWidgetState extends State<EditorWidget>
     );
   }
 
+  /// Which kind to save in (Farklı kaydet): UDF, Word, RTF or PDF, [current]
+  /// chosen at first. Null when given up.
+  Future<EvrakFormat?> _askSaveFormat(EvrakFormat current) {
+    var chosen = saveFormats.contains(current) ? current : EvrakFormat.udf;
+    return showDialog<EvrakFormat>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Hangi biçimde kaydedilsin?'),
+          content: SizedBox(
+            width: 380,
+            child: RadioGroup<EvrakFormat>(
+              groupValue: chosen,
+              onChanged: (f) => setState(() => chosen = f ?? chosen),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (format, title, detail) in [
+                    (EvrakFormat.udf, 'UDF', 'UYAP belgesi (.udf)'),
+                    (EvrakFormat.docx, 'Word', 'Word belgesi (.docx)'),
+                    (EvrakFormat.rtf, 'RTF', 'Zengin metin (.rtf)'),
+                    (EvrakFormat.pdf, 'PDF', 'Yazdırılmış hâli (.pdf)'),
+                  ])
+                    RadioListTile<EvrakFormat>(
+                      key: ValueKey('save-format-${format.defaultExtension}'),
+                      value: format,
+                      title: Text(title),
+                      subtitle: Text(detail),
+                      dense: true,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('save-format-go'),
+              onPressed: () => Navigator.pop(context, chosen),
+              child: const Text('Devam'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<_SignedSave?> _askSignedSave() => showDialog<_SignedSave>(
     context: context,
     builder: (context) => AlertDialog(
@@ -5219,8 +5269,17 @@ class _EditorWidgetState extends State<EditorWidget>
     String? destination,
     bool overwriteSigned = false,
     bool toFolder = false,
+    bool chooseFormat = false,
   }) async {
     if (_isSaving || _isLoading || _loadError != null) return false;
+    // Farklı kaydet: which kind, asked before the system's save screen,
+    // which does not tell what was chosen there. A new document's kind was
+    // chosen when it was made.
+    if (chooseFormat && destination == null && !PhoneDocumentSave.here) {
+      final chosen = await _askSaveFormat(targetFormat);
+      if (chosen == null || !mounted) return false;
+      targetFormat = chosen;
+    }
     setState(() => _isSaving = true);
     final model = _currentModel();
     final savedDelta = _deltaSnapshot();
@@ -5232,7 +5291,7 @@ class _EditorWidgetState extends State<EditorWidget>
     final savedTables = _tableRevision;
     final savedPage = _pageProperties;
     final savedProtected = List<DocBlock>.of(_korunanBloklar);
-    final ext = targetFormat.defaultExtension;
+    var ext = targetFormat.defaultExtension;
     final defaultName =
         '${_currentTitle ?? "yeni_evrak"}${model.metadata['hasSignature'] == true ? '_imzasiz' : ''}.$ext';
 
@@ -5244,21 +5303,21 @@ class _EditorWidgetState extends State<EditorWidget>
         return false;
       }
       if (!mounted) return false;
-      List<int> outBytes;
-      if (targetFormat == EvrakFormat.udf) {
-        outBytes = UdfWriter.writeBytes(model);
-      } else if (targetFormat == EvrakFormat.docx) {
-        outBytes = await DocxBridge.writeBytes(model);
-      } else if (targetFormat == EvrakFormat.rtf) {
-        outBytes = RtfWriter.writeBytes(model);
-      } else if (targetFormat == EvrakFormat.pdf) {
-        outBytes = await PdfService.modelToPdfBytes(
+      Future<List<int>> encode(EvrakFormat format) async => switch (format) {
+        EvrakFormat.udf => UdfWriter.writeBytes(model),
+        EvrakFormat.docx => await DocxBridge.writeBytes(model),
+        EvrakFormat.rtf => RtfWriter.writeBytes(model),
+        EvrakFormat.pdf => await PdfService.modelToPdfBytes(
           model,
           title: _currentTitle,
-        );
-      } else {
-        outBytes = utf8.encode(model.toPlainText());
-      }
+        ),
+        _ => utf8.encode(model.toPlainText()),
+      };
+      // A phone's save takes the bytes with the name; a computer's are
+      // made once the name is chosen, which may say another kind.
+      var outBytes = PhoneDocumentSave.here
+          ? await encode(targetFormat)
+          : const <int>[];
 
       // Where a phone's save went, as the lawyer would look for it: said
       // when it went into the save folder.
@@ -5268,7 +5327,7 @@ class _EditorWidgetState extends State<EditorWidget>
           ? await ensureSaveFolder(context)
           : null;
       if (PhoneDocumentSave.here && toFolder && folder == null) return false;
-      final savePath = folder != null
+      var savePath = folder != null
           ? await PhoneDocumentSave.saveToFolder(
               fileName: defaultName,
               bytes: outBytes,
@@ -5288,6 +5347,18 @@ class _EditorWidgetState extends State<EditorWidget>
                 );
 
       if (savePath == null || !mounted) return false;
+      if (!PhoneDocumentSave.here) {
+        if (destination == null) {
+          // The name as typed: without its extension it is given the one
+          // chosen; with another kind's, saved as that kind.
+          final named = savedNameAndFormat(savePath, targetFormat);
+          savePath = named.path;
+          targetFormat = named.format;
+          ext = targetFormat.defaultExtension;
+        }
+        outBytes = await encode(targetFormat);
+        if (!mounted) return false;
+      }
       // Another window's document is not written over from this one: its
       // own name too, when this window only reads it, held elsewhere.
       if (!PhoneDocumentSave.here &&
@@ -5574,7 +5645,8 @@ class _EditorWidgetState extends State<EditorWidget>
                             MediaQuery.sizeOf(context).width < 1000 ||
                             MediaQuery.sizeOf(context).height < 550,
                         onSave: () => unawaited(_save()),
-                        onSaveAs: () => unawaited(_saveAs(_ownFormat)),
+                        onSaveAs: () =>
+                            unawaited(_saveAs(_ownFormat, chooseFormat: true)),
                         onSaveIn: (format) => unawaited(_saveAs(format)),
                         // Ofis has no live sharing yet.
                         onLiveShare: AppEdition.isOfis
@@ -6205,3 +6277,27 @@ class _DocumentController extends QuillController with EditorClipboard {
 
 /// What the panel left of the page shows.
 enum _Side { uyap, caseLaw, chat }
+
+/// The kinds the editor saves in, as Farklı kaydet offers them.
+const saveFormats = [
+  EvrakFormat.udf,
+  EvrakFormat.docx,
+  EvrakFormat.rtf,
+  EvrakFormat.pdf,
+];
+
+/// [path] as typed in the system's save screen, and the kind it is saved
+/// in: without an extension (or with one that is no kind the editor
+/// writes) it is given [format]'s; with another kind's, it is saved as that
+/// kind. A name typed without its extension went to disk without one.
+({String path, EvrakFormat format}) savedNameAndFormat(
+  String path,
+  EvrakFormat format,
+) {
+  final typed = p.extension(path).replaceFirst('.', '').toLowerCase();
+  for (final kind in [...saveFormats, EvrakFormat.text]) {
+    if (kind.defaultExtension == typed) return (path: path, format: kind);
+  }
+  final base = path.endsWith('.') ? path.substring(0, path.length - 1) : path;
+  return (path: '$base.${format.defaultExtension}', format: format);
+}

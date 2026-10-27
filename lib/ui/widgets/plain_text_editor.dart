@@ -17,6 +17,7 @@ import 'package:path/path.dart' as p;
 
 import '../../services/search/text_extractor.dart';
 import '../../services/editor/editor_drafts.dart';
+import '../../services/platform/save_name.dart';
 
 /// Source text editor for Markdown, HTML and data files. No rich-text roundtrip
 /// that could damage markup, JSON syntax or delimiters. Always saves a copy.
@@ -258,7 +259,7 @@ class _PlainTextEditorState extends State<PlainTextEditor>
       final bytes = Uint8List.fromList(utf8.encode(savedText));
       final name =
           '${p.basenameWithoutExtension(widget.path)}_duzenlendi$extension';
-      final path = PhoneDocumentSave.here
+      final chosen = PhoneDocumentSave.here
           ? await PhoneDocumentSave.save(fileName: name, bytes: bytes)
           : await FilePicker.saveFile(
               dialogTitle: 'Düzenlenen metni kaydet',
@@ -266,6 +267,9 @@ class _PlainTextEditorState extends State<PlainTextEditor>
               type: FileType.custom,
               allowedExtensions: [extension.substring(1)],
             );
+      final path = chosen == null || PhoneDocumentSave.here
+          ? chosen
+          : withExtension(chosen, extension.replaceFirst('.', ''));
       if (path == null || !mounted) return false;
       if (!PhoneDocumentSave.here) {
         if (p.equals(p.absolute(path), p.absolute(widget.path)) ||

@@ -374,6 +374,13 @@ void main() {
     picker.target = '${dir.path}/yeni.udf';
     await click(tester, 'Dosya');
     await click(tester, 'Farklı kaydet…');
+    // Which kind, asked first: the document's own, UDF, chosen already.
+    await ready(
+      tester,
+      () => find.byKey(const ValueKey('save-format-go')).evaluate().isNotEmpty,
+    );
+    await tester.tap(find.byKey(const ValueKey('save-format-go')));
+    await tester.pump();
     await ready(
       tester,
       () => find
@@ -382,6 +389,33 @@ void main() {
           .isNotEmpty,
     );
     expect(title(), 'yeni.udf');
+
+    // Word chosen and the name typed without an extension: saved as Word,
+    // its extension given.
+    picker.target = '${dir.path}/ikinci';
+    await click(tester, 'Dosya');
+    await click(tester, 'Farklı kaydet…');
+    await ready(
+      tester,
+      () =>
+          find.byKey(const ValueKey('save-format-docx')).evaluate().isNotEmpty,
+    );
+    await tester.tap(find.byKey(const ValueKey('save-format-docx')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('save-format-go')));
+    await tester.pump();
+    await ready(
+      tester,
+      () => find.textContaining('ikinci.docx').evaluate().isNotEmpty,
+    );
+    expect(
+      await tester.runAsync(() => File('${dir.path}/ikinci.docx').exists()),
+      isTrue,
+    );
+    expect(
+      await tester.runAsync(() => File('${dir.path}/ikinci').exists()),
+      isFalse,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     await removeTemporaryDirectory(tester, dir);
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
