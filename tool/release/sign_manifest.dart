@@ -50,7 +50,7 @@ Future<void> main(List<String> args) async {
   final name = file.uri.pathSegments.last;
   final body = <String, dynamic>{
     'schema': UpdateManifest.schema,
-    'product': 'folio',
+    'product': UpdateManifest.productOf(platform),
     'channel': UpdateManifest.channel,
     'platform': platform,
     'version': version.group(1),
@@ -61,10 +61,7 @@ Future<void> main(List<String> args) async {
     'notes': {'tr': option('notes-tr'), 'en': option('notes-en')},
     'published': DateTime.now().toUtc().toIso8601String(),
   };
-  final signed = await UpdateManifest.sign(
-    body,
-    base64Decode(seedText.trim()),
-  );
+  final signed = await UpdateManifest.sign(body, base64Decode(seedText.trim()));
   final text = const JsonEncoder.withIndent('  ').convert(signed);
   // The same check every copy of Folio will make.
   await UpdateManifest.verify(text, platform: platform);

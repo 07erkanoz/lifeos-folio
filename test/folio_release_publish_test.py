@@ -1,6 +1,7 @@
-# The lifeos.com.tr side of a release (packaging/server): Windows, Linux and
-# Android come in one go, the Mac in a later one, and neither go may undo or
-# hold back the other. Signed with a key made here, put in place of Folio's.
+# The lifeos.com.tr side of a release (packaging/server): Windows, Linux,
+# Android and LifeOS Ofis for Linux come in one go, the Mac in a later one,
+# and neither go may undo or hold back the other. Signed with a key made
+# here, put in place of Folio's.
 #
 #   python3 test/folio_release_publish_test.py
 import base64
@@ -25,6 +26,7 @@ NAMES = {
     'linux-x64': 'LifeOS-Folio-{v}-Linux-x64.tar.gz',
     'android': 'LifeOS-Folio-{v}-Android.apk',
     'macos-universal': 'LifeOS-Folio-{v}-macOS.dmg',
+    'ofis-linux-x64': 'LifeOS-Ofis-{v}-Linux-x64.tar.gz',
 }
 
 
@@ -65,14 +67,15 @@ class PublishTest(unittest.TestCase):
         ).stdout
         return {**body, 'signature': 'ed25519:' + base64.b64encode(signature).decode()}
 
-    def send(self, version, build, platforms, package=True):
+    def send(self, version, build, platforms, package=True, product=None):
         for platform in platforms:
             name = NAMES[platform].format(v=version)
             data = f'{platform} {version}'.encode() * 100
             if package:
                 (self.incoming / name).write_bytes(data)
             manifest = self.sign({
-                'schema': 1, 'product': 'folio', 'channel': 'stable', 'platform': platform,
+                'schema': 1, 'channel': 'stable', 'platform': platform,
+                'product': product or ('ofis' if platform.startswith('ofis-') else 'folio'),
                 'version': version, 'build': build,
                 'url': f'https://lifeos.com.tr/downloads/{name}',
                 'sha256': hashlib.sha256(data).hexdigest(), 'size': len(data),
@@ -91,8 +94,23 @@ class PublishTest(unittest.TestCase):
         finally:
             server.empty(self.incoming)
 
+    def test_ofis_comes_with_folios_linux_package_and_is_its_own(self):
+        self.send('1.7.7', 20, ['windows-x64', 'linux-x64', 'android', 'ofis-linux-x64'])
+        _, files = self.publish()
+        self.assertIn('LifeOS-Ofis-1.7.7-Linux-x64.tar.gz', files)
+        self.assertEqual(self.published('ofis-linux-x64'), '1.7.7')
+        self.assertEqual(self.published('linux-x64'), '1.7.7')
+        # A Folio manifest is not taken for Ofis's, nor the other way round.
+        self.send('1.7.8', 21, ['ofis-linux-x64'], product='folio')
+        with self.assertRaises(ValueError):
+            self.publish()
+        self.send('1.7.8', 21, ['linux-x64'], product='ofis')
+        with self.assertRaises(ValueError):
+            self.publish()
+        self.assertEqual(self.published('ofis-linux-x64'), '1.7.7')
+
     def test_the_mac_follows_the_others_in_its_own_go(self):
-        self.send('1.7.1', 14, ['windows-x64', 'linux-x64', 'android'])
+        self.send('1.7.1', 14, ['windows-x64', 'linux-x64', 'android', 'ofis-linux-x64'])
         self.publish()
         self.assertIsNone(self.published('macos-universal'))
         self.send('1.7.1', 14, ['macos-universal'])

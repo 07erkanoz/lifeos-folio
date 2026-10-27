@@ -42,7 +42,15 @@ class UpdateManifest {
     'android',
     // One package for both kinds of Mac, Apple Silicon and Intel.
     'macos-universal',
+    // LifeOS Ofis, built with Folio from the same code and published
+    // beside it; LifeOS Arch installs and updates it from this.
+    'ofis-linux-x64',
   };
+
+  /// Whose package a platform's manifest names: LifeOS Ofis for the
+  /// `ofis-` ones, Folio for the rest.
+  static String productOf(String platform) =>
+      platform.startsWith('ofis-') ? 'ofis' : 'folio';
 
   /// Folio's update-signing public key. The private half is only in the
   /// release workflow's secrets and in the owner's backup.
@@ -115,7 +123,7 @@ class UpdateManifest {
     }
 
     if (field<int>('schema') != schema ||
-        field<String>('product') != 'folio' ||
+        field<String>('product') != productOf(platform) ||
         field<String>('channel') != channel ||
         field<String>('platform') != platform) {
       throw const FormatException('Sürüm bilgisi bu kurulum için değil.');

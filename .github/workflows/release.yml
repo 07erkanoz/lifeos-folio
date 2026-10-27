@@ -123,6 +123,10 @@ jobs:
       - run: flutter build linux --release
       - name: Linux paketini oluştur
         run: bash packaging/linux/make-release.sh
+      # LifeOS Ofis from the same bundle: no second build, a package of its
+      # own (LifeOS Arch installs it).
+      - name: LifeOS Ofis paketini oluştur
+        run: bash packaging/linux/make-release.sh ofis
       - name: Paketten kurulumu dene
         run: |
           work="$RUNNER_TEMP/kur"
@@ -132,10 +136,20 @@ jobs:
           test -x "$work/data/lifeos-folio/lifeos_folio"
           test -x "$work/data/lifeos-folio/tools/bin/tesseract"
           grep -q "lifeos-folio/lifeos_folio" "$work/data/applications/com.erkanoz.evrak_convert.desktop"
+          tar -C "$work" -xzf artifacts/LifeOS-Ofis-*-Linux-x64.tar.gz
+          XDG_DATA_HOME="$work/ofis" sh "$work/LifeOS-Ofis/kur.sh"
+          test -x "$work/ofis/lifeos-ofis/lifeos_ofis"
+          test ! -e "$work/ofis/lifeos-ofis/lifeos_folio"
+          test -x "$work/ofis/lifeos-ofis/tools/bin/tesseract"
+          grep -q "lifeos-ofis/lifeos_ofis" "$work/ofis/applications/com.erkanoz.lifeos_ofis.desktop"
       - name: Taslak sürüme yükle
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" "artifacts/LifeOS-Folio-${{ needs.version.outputs.version }}-Linux-x64.tar.gz" --clobber
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" --clobber \
+            "artifacts/LifeOS-Folio-$VERSION-Linux-x64.tar.gz" \
+            "artifacts/LifeOS-Ofis-$VERSION-Linux-x64.tar.gz"
 
   android:
     needs: version
@@ -235,7 +249,7 @@ jobs:
       - name: Paketleri taslaktan al
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "$GITHUB_REF_NAME" --pattern 'LifeOS-Folio-*' --dir packages
+        run: gh release download "$GITHUB_REF_NAME" --pattern 'LifeOS-Folio-*' --pattern 'LifeOS-Ofis-*' --dir packages
       - name: Ses kitaplığı
         # dart run builds every package's native code first, the recorder's
         # included, and that links against ALSA.
@@ -253,13 +267,19 @@ jobs:
           mkdir -p release
           sign() {
             dart run tool/release/sign_manifest.dart --platform "$1" --file "packages/$2" \
-              --notes-tr "$(jq -r .tr "$notes")" --notes-en "$(jq -r .en "$notes")" \
+              --notes-tr "$(jq -r "$3.tr" "$notes")" --notes-en "$(jq -r "$3.en" "$notes")" \
               > "release/$1.json"
           }
-          sign windows-x64 "LifeOS-Folio-$VERSION-Windows-x64-Setup.exe"
-          sign linux-x64 "LifeOS-Folio-$VERSION-Linux-x64.tar.gz"
-          sign android "LifeOS-Folio-$VERSION-Android.apk"
-          (cd packages && sha256sum LifeOS-Folio-* > ../release/SHA256SUMS.txt)
+          sign windows-x64 "LifeOS-Folio-$VERSION-Windows-x64-Setup.exe" ''
+          sign linux-x64 "LifeOS-Folio-$VERSION-Linux-x64.tar.gz" ''
+          sign android "LifeOS-Folio-$VERSION-Android.apk" ''
+          # Ofis's notes are the file's "ofis" ones, or a line of its own
+          # when there are none: Folio's are about lawyers' work.
+          jq -e .ofis "$notes" >/dev/null ||
+            jq '.ofis = {tr: "LifeOS Ofis \(env.VERSION): hata düzeltmeleri ve iyileştirmeler.", en: "LifeOS Ofis \(env.VERSION): fixes and improvements."}' \
+              "$notes" > "$RUNNER_TEMP/notes.json" && notes="$RUNNER_TEMP/notes.json"
+          sign ofis-linux-x64 "LifeOS-Ofis-$VERSION-Linux-x64.tar.gz" .ofis
+          (cd packages && sha256sum LifeOS-Folio-* LifeOS-Ofis-* > ../release/SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
       - name: İmzalı sürüm bilgilerini taslağa ekle
         env:
@@ -273,8 +293,8 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           mkdir -p outgoing
-          cp packages/LifeOS-Folio-* release/*.json outgoing/
-          bash tool/release/send_to_site.sh outgoing "$VERSION" windows-x64 linux-x64 android
+          cp packages/LifeOS-Folio-* packages/LifeOS-Ofis-* release/*.json outgoing/
+          bash tool/release/send_to_site.sh outgoing "$VERSION" windows-x64 linux-x64 android ofis-linux-x64
       - name: Sürümü yayımla
         env:
           GH_TOKEN: ${{ github.token }}

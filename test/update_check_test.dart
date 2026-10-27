@@ -119,6 +119,39 @@ void main() {
     }
   });
 
+  test('LifeOS Ofis has a manifest of its own, which a Folio one does not '
+      'pass for', () async {
+    final key = await publicKey();
+    const url =
+        'https://lifeos.com.tr/downloads/LifeOS-Ofis-1.2.0-Linux-x64.tar.gz';
+    final ofis = {
+      ...body(platform: 'ofis-linux-x64', url: url),
+      'product': 'ofis',
+    };
+    final m = await UpdateManifest.verify(
+      await signed(ofis),
+      platform: 'ofis-linux-x64',
+      key: key,
+    );
+    expect(m.url.toString(), url);
+    await expectLater(
+      UpdateManifest.verify(
+        await signed(body(platform: 'ofis-linux-x64', url: url)),
+        platform: 'ofis-linux-x64',
+        key: key,
+      ),
+      throwsFormatException,
+    );
+    await expectLater(
+      UpdateManifest.verify(
+        await signed(ofis),
+        platform: 'linux-x64',
+        key: key,
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('the Mac has its own manifest, one package for both kinds', () async {
     expect(UpdateManifest.platforms, contains('macos-universal'));
     final key = await publicKey();

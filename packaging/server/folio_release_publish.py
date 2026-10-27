@@ -32,7 +32,9 @@ import tempfile
 import time
 import urllib.parse
 
-PLATFORMS = ('windows-x64', 'linux-x64', 'android', 'macos-universal')
+PLATFORMS = ('windows-x64', 'linux-x64', 'android', 'macos-universal',
+             # LifeOS Ofis, from the same code, sent with Folio's Linux package.
+             'ofis-linux-x64')
 # Same key as UpdateManifest.publicKey in the app.
 PUBLIC_KEY = base64.b64decode('uo8uTbTSKeMNBtitM6hL25KFShLiMnlZKA6gbTPcxgY=')
 HOST = 'lifeos.com.tr'
@@ -69,11 +71,12 @@ def verify_signature(manifest):
 
 
 def check_manifest(manifest, platform):
-    """The package's file name, once the manifest is Folio's and for
-    [platform]."""
+    """The package's file name, once the manifest is Folio's (or, for an
+    ofis- platform, LifeOS Ofis's) and for [platform]."""
     verify_signature(manifest)
+    product = 'ofis' if platform.startswith('ofis-') else 'folio'
     if (manifest.get('schema'), manifest.get('product'), manifest.get('channel'), manifest.get('platform')) != (
-        1, 'folio', 'stable', platform
+        1, product, 'stable', platform
     ):
         raise ValueError(f'{platform}: sürüm bilgisi bu platform için değil')
     url = urllib.parse.urlsplit(manifest['url'])
@@ -154,7 +157,7 @@ def publish(incoming, site, owner):
     # manifest names any more go, a week on.
     current = {name for _, name, _, _ in ready}
     kept = current | published_names(site)
-    for old in downloads.glob('LifeOS-Folio-*'):
+    for old in [*downloads.glob('LifeOS-Folio-*'), *downloads.glob('LifeOS-Ofis-*')]:
         if old.name not in kept and time.time() - old.stat().st_mtime > KEEP_OLD:
             old.unlink()
     return ready[0][3], sorted(current)
