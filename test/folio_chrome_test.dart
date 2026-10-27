@@ -97,6 +97,7 @@ void main() {
       for (final key in [
         'about-terms',
         'about-privacy',
+        'about-license',
         'about-components',
         'about-download',
         'about-contact',
@@ -111,6 +112,7 @@ void main() {
       for (final (key, title, words) in [
         ('about-terms', 'Kullanım Koşulları', 'kişisel ve mesleki amaçla'),
         ('about-privacy', 'Gizlilik ve KVKK Aydınlatma Metni', '6698 sayılı'),
+        ('about-license', 'Lisans', 'açık kaynak değildir'),
       ]) {
         await tester.ensureVisible(find.byKey(ValueKey(key)));
         await tester.pump();

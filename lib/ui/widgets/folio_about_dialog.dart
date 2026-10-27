@@ -28,6 +28,9 @@ const folioPrivacy = (
   asset: 'assets/legal/PRIVACY.txt',
 );
 
+/// Whose Folio is, and that it is not open source.
+const folioLicense = (title: 'Lisans', asset: 'assets/legal/COPYRIGHT.txt');
+
 /// Opens one of Folio's legal texts on a page of its own.
 Future<void> openFolioLegal(
   BuildContext context,
@@ -162,7 +165,9 @@ class FolioAboutDialog extends StatelessWidget {
               Text(
                 'Verileriniz yalnız sizin cihazlarınızda tutulur. Folio’nun '
                 'verilerinizi tutan bir sunucusu yoktur ve yapay zekâ hizmeti '
-                'kullanmaz.',
+                'kullanmaz. Başka bir büroyla uzaktan canlı paylaşımda belge '
+                've yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu '
+                'içeriği göremez ve hiçbir şey saklamaz.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, height: 1.55, color: muted),
               ),
@@ -185,6 +190,16 @@ class FolioAboutDialog extends StatelessWidget {
                     subtitle: 'Kişisel verileriniz nasıl korunur',
                     onTap: () =>
                         unawaited(openFolioLegal(context, folioPrivacy)),
+                  ),
+                  SettingsRow(
+                    key: const ValueKey('about-license'),
+                    icon: Icons.copyright_rounded,
+                    fill: AgendaColors.line,
+                    tint: AgendaColors.muted,
+                    title: folioLicense.title,
+                    subtitle: 'Tescilli yazılım',
+                    onTap: () =>
+                        unawaited(openFolioLegal(context, folioLicense)),
                   ),
                   SettingsRow(
                     key: const ValueKey('about-components'),
@@ -229,7 +244,8 @@ class FolioAboutDialog extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               Text(
-                '© 2026 LifeOS. Tüm hakları saklıdır.',
+                '© 2026 LifeOS. Tüm hakları saklıdır. Folio tescilli bir '
+                'yazılımdır, açık kaynak değildir.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: muted),
               ),

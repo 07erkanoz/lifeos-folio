@@ -1,0 +1,8 @@
+LifeOS Folio Lisansı
+Copyright © 2026 LifeOS. Tüm hakları saklıdır.
+
+Folio tescilli bir yazılımdır, açık kaynak değildir. Kaynak kodu, görselleri, belgeleri ve "LifeOS Folio" adı LifeOS'a aittir ve 5846 sayılı Fikir ve Sanat Eserleri Kanunu ile korunur. Kodu görmüş ya da kopyalamış olmak kullanma hakkı vermez. LifeOS'un yazılı izni olmadan kod kopyalanamaz, değiştirilemez, başka bir yerde yayımlanamaz, dağıtılamaz, satılamaz ve başka bir adla sunulamaz.
+
+Folio uygulamasını kullanma izni yalnız Kullanım Koşulları'nda yazdığı kadardır ve kaynak kod üzerinde hak vermez. İçindeki açık kaynak bileşenler kendi lisanslarına tabidir; listeleri Hakkında penceresindeki Açık kaynak lisansları bölümündedir.
+
+İzin için: info@avukatos.com.tr
