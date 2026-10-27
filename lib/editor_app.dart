@@ -368,7 +368,7 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
               titleTrailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _EditedDot(_draft.edited),
+                  EditedDot(_draft.edited),
                   const SizedBox(width: 16),
                   const EditorRibbonTabs(height: 38),
                 ],
@@ -376,14 +376,14 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
               icon: 'assets/branding/lifeos_editor.png',
               iconTooltip: 'LifeOS Editör hakkında',
               leading: [
-                _FrameButton(
+                FrameButton(
                   key: const ValueKey('editor-new'),
                   icon: Icons.note_add_rounded,
                   label: 'Yeni',
                   tooltip: 'Yeni boş UDF · Ctrl+N',
                   onPressed: _new,
                 ),
-                _FrameButton(
+                FrameButton(
                   key: const ValueKey('editor-open'),
                   icon: Icons.folder_open_rounded,
                   label: 'Aç',
@@ -442,8 +442,8 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
 
 /// An icon in the title bar, beside the editor's own: tinted with the
 /// theme's colour, filled softly under the pointer, named by its tooltip.
-class _FrameButton extends StatelessWidget {
-  const _FrameButton({
+class FrameButton extends StatelessWidget {
+  const FrameButton({
     super.key,
     required this.icon,
     required this.label,
@@ -480,8 +480,8 @@ class _FrameButton extends StatelessWidget {
 }
 
 /// The dot after the document's name while it has unsaved edits.
-class _EditedDot extends StatelessWidget {
-  const _EditedDot(this.edited);
+class EditedDot extends StatelessWidget {
+  const EditedDot(this.edited, {super.key});
 
   final ValueListenable<bool> edited;
 

@@ -16,10 +16,15 @@
 
 void register_quick_search(FlView* view, GtkWindow* window);
 
-#ifdef FOLIO_EDITOR
+#if defined(FOLIO_EDITOR)
 // LifeOS Editor: the same app, asked for its editor alone.
 static constexpr const char* kTitle = "LifeOS Edit\xc3\xb6r";
 static constexpr const char* kIcon = "lifeos_editor.png";
+#elif defined(FOLIO_OFIS)
+// LifeOS Ofis: the same app, asked for the documents and the editor for
+// anyone (lib/ofis_app.dart).
+static constexpr const char* kTitle = "LifeOS Ofis";
+static constexpr const char* kIcon = "lifeos_ofis.png";
 #else
 static constexpr const char* kTitle = "LifeOS Folio";
 static constexpr const char* kIcon = "lifeos_folio.png";
@@ -128,11 +133,16 @@ static gboolean my_application_local_command_line(GApplication* application,
                                                   int* exit_status) {
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
-#ifdef FOLIO_EDITOR
-  // And put --editor first, which is all that makes this program the editor.
+#if defined(FOLIO_EDITOR) || defined(FOLIO_OFIS)
+  // And put --editor (or --ofis) first, which is all that makes this
+  // program the editor (or Ofis).
   {
     GStrvBuilder* builder = g_strv_builder_new();
+#ifdef FOLIO_OFIS
+    g_strv_builder_add(builder, "--ofis");
+#else
     g_strv_builder_add(builder, "--editor");
+#endif
     g_strv_builder_addv(builder, (const char**)(*arguments + 1));
     self->dart_entrypoint_arguments = g_strv_builder_end(builder);
     g_strv_builder_unref(builder);

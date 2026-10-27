@@ -105,3 +105,6 @@ jobs:
           # The e-Devlet window for logging into UYAP.
           test -x build/linux/x64/release/bundle/folio-edevlet
           test -f build/linux/x64/release/bundle/data/flutter_assets/assets/branding/lifeos_editor.png
+          # LifeOS Ofis, a third program from the same runner.
+          test -x build/linux/x64/release/bundle/lifeos_ofis
+          test -f build/linux/x64/release/bundle/data/flutter_assets/assets/branding/lifeos_ofis.png

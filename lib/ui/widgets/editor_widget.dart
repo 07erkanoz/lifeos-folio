@@ -125,6 +125,7 @@ import '../../services/editor/petition_templates.dart';
 import 'desktop_frame.dart' show windowFullScreen;
 import '../../services/live/live_share.dart';
 import '../../services/live/live_remote.dart';
+import '../../services/platform/app_edition.dart';
 import '../live/live_chat_panel.dart';
 import '../live/live_share_dialog.dart';
 import '../../services/portal/observed.dart';
@@ -415,9 +416,7 @@ class _EditorWidgetState extends State<EditorWidget>
       _invite?.removeListener(_inviteChanged);
       _invite = next?..addListener(_inviteChanged);
     }
-    if (_invite?.state == RemoteInviteState.arrived &&
-        !_liveShown &&
-        mounted) {
+    if (_invite?.state == RemoteInviteState.arrived && !_liveShown && mounted) {
       unawaited(_openLive(remote: true));
     }
   }
@@ -4031,15 +4030,25 @@ class _EditorWidgetState extends State<EditorWidget>
         : _signingNew || _isSaving
         ? 'İmzalanıyor…'
         : 'UDF olarak $way imzala';
+    // LifeOS Ofis: research, signing by card and the document's history;
+    // no petitions, UYAP, mobile signature, agenda or live sharing.
+    final ofis = AppEdition.isOfis;
 
     if (!expanded) {
       return ribbonStrip(
         [
           const SizedBox(width: 2),
-          ribbonMenu(context, Icons.auto_stories_outlined, 'Şablon', templates),
-          ribbonMenu(context, Icons.people_outline, 'Taraf', parties),
-          ribbonDivider(context),
-          if (_desktop)
+          if (!ofis) ...[
+            ribbonMenu(
+              context,
+              Icons.auto_stories_outlined,
+              'Şablon',
+              templates,
+            ),
+            ribbonMenu(context, Icons.people_outline, 'Taraf', parties),
+            ribbonDivider(context),
+          ],
+          if (_desktop && !ofis)
             ribbonMenu(context, Icons.gavel_rounded, 'UYAP', [
               MenuItemButton(
                 onPressed: _toggleUyap,
@@ -4060,27 +4069,30 @@ class _EditorWidgetState extends State<EditorWidget>
               leadingIcon: const Icon(Icons.usb_rounded, size: 18),
               child: const Text('E-imza kartıyla'),
             ),
-            MenuItemButton(
-              onPressed: signMobile,
-              leadingIcon: const Icon(Icons.phone_android_rounded, size: 18),
-              child: const Text('Mobil imzayla'),
-            ),
+            if (!ofis)
+              MenuItemButton(
+                onPressed: signMobile,
+                leadingIcon: const Icon(Icons.phone_android_rounded, size: 18),
+                child: const Text('Mobil imzayla'),
+              ),
           ]),
-          ribbonButton(
-            context,
-            Icons.event_available_outlined,
-            'Süre',
-            () => unawaited(_addDeadline()),
-          ),
-          ribbonButton(
-            context,
-            watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
+          if (!ofis) ...[
+            ribbonButton(
+              context,
+              Icons.event_available_outlined,
+              'Süre',
+              () => unawaited(_addDeadline()),
+            ),
+            ribbonButton(
+              context,
+              watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
               liveLabel,
               live,
               selected: watching > 0,
               tooltip: liveTip,
               key: const ValueKey('legal-live'),
             ),
+          ],
           ribbonDivider(context),
           ribbonButton(
             context,
@@ -4090,38 +4102,42 @@ class _EditorWidgetState extends State<EditorWidget>
             selected: _caseLawOpen,
           ),
         ],
-        more: ribbonMore('Diğer hukuk araçları', [
-          SubmenuButton(
-            menuChildren: styles,
-            leadingIcon: const Icon(Icons.format_paint_outlined, size: 18),
-            child: const Text('Dilekçe stili'),
-          ),
-          SubmenuButton(
-            menuChildren: sections,
-            leadingIcon: const Icon(Icons.segment, size: 18),
-            child: const Text('Bölüm başlığı'),
-          ),
+        more: ribbonMore(ofis ? 'Diğer araçlar' : 'Diğer hukuk araçları', [
+          if (!ofis) ...[
+            SubmenuButton(
+              menuChildren: styles,
+              leadingIcon: const Icon(Icons.format_paint_outlined, size: 18),
+              child: const Text('Dilekçe stili'),
+            ),
+            SubmenuButton(
+              menuChildren: sections,
+              leadingIcon: const Icon(Icons.segment, size: 18),
+              child: const Text('Bölüm başlığı'),
+            ),
+          ],
           MenuItemButton(
             onPressed: date,
             leadingIcon: const Icon(Icons.event_outlined, size: 18),
             child: const Text('Bugünün tarihi'),
           ),
-          MenuItemButton(
-            onPressed: signature,
-            leadingIcon: const Icon(Icons.edit_note_outlined, size: 18),
-            child: const Text('İmza bloğu'),
-          ),
-          MenuItemButton(
-            onPressed: _formatPetition,
-            leadingIcon: const Icon(Icons.auto_fix_high_rounded, size: 18),
-            child: const Text('Biçimlendir'),
-          ),
-          const Divider(height: 8),
-          MenuItemButton(
-            onPressed: needsCase(() => unawaited(_tieToHearing())),
-            leadingIcon: const Icon(Icons.calendar_month_outlined, size: 18),
-            child: const Text('Duruşmaya bağla'),
-          ),
+          if (!ofis) ...[
+            MenuItemButton(
+              onPressed: signature,
+              leadingIcon: const Icon(Icons.edit_note_outlined, size: 18),
+              child: const Text('İmza bloğu'),
+            ),
+            MenuItemButton(
+              onPressed: _formatPetition,
+              leadingIcon: const Icon(Icons.auto_fix_high_rounded, size: 18),
+              child: const Text('Biçimlendir'),
+            ),
+            const Divider(height: 8),
+            MenuItemButton(
+              onPressed: needsCase(() => unawaited(_tieToHearing())),
+              leadingIcon: const Icon(Icons.calendar_month_outlined, size: 18),
+              child: const Text('Duruşmaya bağla'),
+            ),
+          ],
           MenuItemButton(
             onPressed: () => unawaited(_snippets()),
             leadingIcon: const Icon(Icons.bolt_outlined, size: 18),
@@ -4136,50 +4152,51 @@ class _EditorWidgetState extends State<EditorWidget>
       );
     }
     return ribbonStrip([
-      ribbonGroup(context, 'Dilekçe', [
-        [
-          ribbonMenu(
-            context,
-            Icons.auto_stories_outlined,
-            'Şablon',
-            templates,
-            key: const ValueKey('legal-templates'),
-          ),
-          ribbonMenu(context, Icons.people_outline, 'Taraf satırı', parties),
-          ribbonButton(
-            context,
-            Icons.event_outlined,
-            'Tarih',
-            date,
-            tooltip: 'Bugünün tarihi, sağa yaslı',
-          ),
-        ],
-        [
-          ribbonMenu(
-            context,
-            Icons.format_paint_outlined,
-            'Dilekçe stili',
-            styles,
-          ),
-          ribbonMenu(context, Icons.segment, 'Bölüm başlığı', sections),
-          ribbonButton(
-            context,
-            Icons.edit_note_outlined,
-            'İmza bloğu',
-            signature,
-          ),
-          ribbonButton(
-            context,
-            Icons.auto_fix_high_rounded,
-            'Biçimlendir',
-            _formatPetition,
-            key: const ValueKey('legal-format'),
-            tooltip:
-                'Başlık, taraflar, gövde ve imza dilekçe kurallarıyla '
-                '· Ctrl+Shift+F',
-          ),
-        ],
-      ]),
+      if (!ofis)
+        ribbonGroup(context, 'Dilekçe', [
+          [
+            ribbonMenu(
+              context,
+              Icons.auto_stories_outlined,
+              'Şablon',
+              templates,
+              key: const ValueKey('legal-templates'),
+            ),
+            ribbonMenu(context, Icons.people_outline, 'Taraf satırı', parties),
+            ribbonButton(
+              context,
+              Icons.event_outlined,
+              'Tarih',
+              date,
+              tooltip: 'Bugünün tarihi, sağa yaslı',
+            ),
+          ],
+          [
+            ribbonMenu(
+              context,
+              Icons.format_paint_outlined,
+              'Dilekçe stili',
+              styles,
+            ),
+            ribbonMenu(context, Icons.segment, 'Bölüm başlığı', sections),
+            ribbonButton(
+              context,
+              Icons.edit_note_outlined,
+              'İmza bloğu',
+              signature,
+            ),
+            ribbonButton(
+              context,
+              Icons.auto_fix_high_rounded,
+              'Biçimlendir',
+              _formatPetition,
+              key: const ValueKey('legal-format'),
+              tooltip:
+                  'Başlık, taraflar, gövde ve imza dilekçe kurallarıyla '
+                  '· Ctrl+Shift+F',
+            ),
+          ],
+        ]),
       // Research second, not last: at the end the row ran past a laptop's
       // width, and "İçtihat ara" was there but out of sight.
       ribbonGroup(context, 'Araştırma', [
@@ -4215,7 +4232,7 @@ class _EditorWidgetState extends State<EditorWidget>
           ),
         ],
       ]),
-      if (_desktop)
+      if (_desktop && !ofis)
         ribbonGroup(context, 'Dosya', [
           [
             ribbonButton(
@@ -4255,7 +4272,7 @@ class _EditorWidgetState extends State<EditorWidget>
               ),
           ],
         ]),
-      ribbonGroup(context, 'İmzala ve gönder', [
+      ribbonGroup(context, ofis ? 'İmzala' : 'İmzala ve gönder', last: ofis, [
         [
           ribbonBigButton(
             context,
@@ -4265,16 +4282,18 @@ class _EditorWidgetState extends State<EditorWidget>
             tooltip: signTip('e-imza kartıyla', here: desktopSigningAvailable),
             key: const ValueKey('legal-sign-card'),
           ),
-          const SizedBox(width: 4),
-          ribbonBigButton(
-            context,
-            Icons.phone_android_rounded,
-            'Mobil\nimza',
-            signMobile,
-            tooltip: signTip('mobil imzayla', here: mobileSigningAvailable),
-            key: const ValueKey('legal-sign-mobile'),
-          ),
-          if (_desktop) ...[
+          if (!ofis) ...[
+            const SizedBox(width: 4),
+            ribbonBigButton(
+              context,
+              Icons.phone_android_rounded,
+              'Mobil\nimza',
+              signMobile,
+              tooltip: signTip('mobil imzayla', here: mobileSigningAvailable),
+              key: const ValueKey('legal-sign-mobile'),
+            ),
+          ],
+          if (_desktop && !ofis) ...[
             const SizedBox(width: 4),
             ribbonBigButton(
               context,
@@ -4287,7 +4306,8 @@ class _EditorWidgetState extends State<EditorWidget>
           ],
         ],
       ]),
-      ribbonGroup(context, 'Paylaşım', [
+      if (!ofis)
+        ribbonGroup(context, 'Paylaşım', [
           [
             ribbonBigButton(
               context,
@@ -4300,35 +4320,36 @@ class _EditorWidgetState extends State<EditorWidget>
             ),
           ],
         ]),
-      ribbonGroup(context, 'Ajanda', last: true, [
-        [
-          ribbonButton(
-            context,
-            Icons.event_available_outlined,
-            'Süre ekle',
-            () => unawaited(_addDeadline()),
-            key: const ValueKey('legal-deadline'),
-          ),
-          ribbonButton(
-            context,
-            Icons.calendar_month_outlined,
-            'Duruşmaya bağla',
-            needsCase(() => unawaited(_tieToHearing())),
-            tooltip: linked ? null : unlinked,
-          ),
-        ],
-        [
-          ribbonButton(
-            context,
-            Icons.mark_email_unread_outlined,
-            'Tebligattan süre',
-            needsCase(() => unawaited(_noticeDeadlines())),
-            tooltip: linked
-                ? 'Dosyanın UETS tebligatlarındaki süreler'
-                : unlinked,
-          ),
-        ],
-      ]),
+      if (!ofis)
+        ribbonGroup(context, 'Ajanda', last: true, [
+          [
+            ribbonButton(
+              context,
+              Icons.event_available_outlined,
+              'Süre ekle',
+              () => unawaited(_addDeadline()),
+              key: const ValueKey('legal-deadline'),
+            ),
+            ribbonButton(
+              context,
+              Icons.calendar_month_outlined,
+              'Duruşmaya bağla',
+              needsCase(() => unawaited(_tieToHearing())),
+              tooltip: linked ? null : unlinked,
+            ),
+          ],
+          [
+            ribbonButton(
+              context,
+              Icons.mark_email_unread_outlined,
+              'Tebligattan süre',
+              needsCase(() => unawaited(_noticeDeadlines())),
+              tooltip: linked
+                  ? 'Dosyanın UETS tebligatlarındaki süreler'
+                  : unlinked,
+            ),
+          ],
+        ]),
     ]);
   }
 
@@ -5555,7 +5576,10 @@ class _EditorWidgetState extends State<EditorWidget>
                         onSave: () => unawaited(_save()),
                         onSaveAs: () => unawaited(_saveAs(_ownFormat)),
                         onSaveIn: (format) => unawaited(_saveAs(format)),
-                        onLiveShare: () => unawaited(_openLive()),
+                        // Ofis has no live sharing yet.
+                        onLiveShare: AppEdition.isOfis
+                            ? null
+                            : () => unawaited(_openLive()),
                         onShare: () => unawaited(_share()),
                         onPrint: () => unawaited(_print()),
                         onHistory: () => unawaited(_history()),

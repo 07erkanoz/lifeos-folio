@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../mobile/settings_parts.dart';
 import 'notice.dart';
+import '../../services/platform/app_edition.dart';
 
 void showFolioAbout(BuildContext context) => showDialog<void>(
   context: context,
@@ -116,7 +117,7 @@ class FolioAboutDialog extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: Image.asset(
-                    'assets/branding/lifeos_folio.png',
+                    AppEdition.current.icon,
                     width: 72,
                     height: 72,
                     cacheWidth: (72 * MediaQuery.devicePixelRatioOf(context))
@@ -125,8 +126,8 @@ class FolioAboutDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
-                'LifeOS Folio',
+              Text(
+                AppEdition.current.title,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
@@ -147,23 +148,33 @@ class FolioAboutDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
-                'Avukatlar için dilekçe, dava ve büro uygulaması',
+              Text(
+                AppEdition.isOfis
+                    ? 'Belgeleri açan, düzenleyen ve imzalayan uygulama'
+                    : 'Avukatlar için dilekçe, dava ve büro uygulaması',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(
-                'Folio ile UDF dilekçenizi yazar, e-imza ya da mobil imzayla '
-                'imzalar ve dava dosyanıza gönderirsiniz. Müvekkillerinizi, '
-                'duruşma ve süre takviminizi, büronuzun kasasını ve ekibinizi '
-                'aynı uygulamadan yönetirsiniz.',
+                AppEdition.isOfis
+                    ? 'Ofis ile UDF, Word, ODT, RTF ve PDF belgelerinizi açar, '
+                          'düzenler, yazdırır ve e-imza kartınızla imzalarsınız. '
+                          'Kanun maddesi ve karar atıflarını denetler, yazım '
+                          'hatalarını bulur, metni sesli okur ve söylediklerinizi '
+                          'yazarsınız.'
+                    : 'Folio ile UDF dilekçenizi yazar, e-imza ya da mobil '
+                          'imzayla imzalar ve dava dosyanıza gönderirsiniz. '
+                          'Müvekkillerinizi, duruşma ve süre takviminizi, '
+                          'büronuzun kasasını ve ekibinizi aynı uygulamadan '
+                          'yönetirsiniz.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, height: 1.55, color: muted),
               ),
               const SizedBox(height: 8),
               Text(
-                'Verileriniz yalnız sizin cihazlarınızda tutulur. Folio’nun '
+                'Verileriniz yalnız sizin cihazlarınızda tutulur. '
+                '${AppEdition.isOfis ? 'Ofis’in' : 'Folio’nun'} '
                 'verilerinizi tutan bir sunucusu yoktur ve yapay zekâ hizmeti '
                 'kullanmaz. Başka bir büroyla uzaktan canlı paylaşımda belge '
                 've yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu '
@@ -215,15 +226,16 @@ class FolioAboutDialog extends StatelessWidget {
               const SettingsSection('DESTEK'),
               SettingsGroup(
                 children: [
-                  SettingsRow(
-                    key: const ValueKey('about-download'),
-                    icon: Icons.devices_outlined,
-                    fill: AgendaColors.taskFill,
-                    tint: AgendaColors.task,
-                    title: 'Diğer cihazlarınıza indirin',
-                    subtitle: _otherDevices,
-                    onTap: () => unawaited(_open(context, '/', 'indir')),
-                  ),
+                  if (!AppEdition.isOfis)
+                    SettingsRow(
+                      key: const ValueKey('about-download'),
+                      icon: Icons.devices_outlined,
+                      fill: AgendaColors.taskFill,
+                      tint: AgendaColors.task,
+                      title: 'Diğer cihazlarınıza indirin',
+                      subtitle: _otherDevices,
+                      onTap: () => unawaited(_open(context, '/', 'indir')),
+                    ),
                   SettingsRow(
                     key: const ValueKey('about-contact'),
                     icon: Icons.mail_outline_rounded,
@@ -244,7 +256,8 @@ class FolioAboutDialog extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               Text(
-                '© 2026 LifeOS. Tüm hakları saklıdır. Folio tescilli bir '
+                '© 2026 LifeOS. Tüm hakları saklıdır. '
+                '${AppEdition.isOfis ? 'Ofis' : 'Folio'} tescilli bir '
                 'yazılımdır, açık kaynak değildir.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: muted),

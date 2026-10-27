@@ -11,6 +11,10 @@ set(APPLICATION_ID "com.erkanoz.evrak_convert")
 # LifeOS Editör: the editor alone, built from the same runner.
 set(EDITOR_BINARY_NAME "lifeos_editor")
 set(EDITOR_APPLICATION_ID "com.erkanoz.lifeos_editor")
+# LifeOS Ofis: the documents and the editor for anyone, built from the same
+# runner (lib/ofis_app.dart).
+set(OFIS_BINARY_NAME "lifeos_ofis")
+set(OFIS_APPLICATION_ID "com.erkanoz.lifeos_ofis")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -73,12 +77,13 @@ add_subdirectory("runner")
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
 add_dependencies(${EDITOR_BINARY_NAME} flutter_assemble)
+add_dependencies(${OFIS_BINARY_NAME} flutter_assemble)
 
 # Only the install-generated bundle's copy of the executable will launch
 # correctly, since the resources must in the right relative locations. To avoid
 # people trying to run the unbundled copy, put it in a subdirectory instead of
 # the default top-level location.
-set_target_properties(${BINARY_NAME} ${EDITOR_BINARY_NAME} ${EDEVLET_BINARY_NAME}
+set_target_properties(${BINARY_NAME} ${EDITOR_BINARY_NAME} ${OFIS_BINARY_NAME} ${EDEVLET_BINARY_NAME}
   PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/intermediates_do_not_run"
 )
@@ -87,10 +92,11 @@ set_target_properties(${BINARY_NAME} ${EDITOR_BINARY_NAME} ${EDEVLET_BINARY_NAME
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
-# The generated file links the plugins to Folio alone; LifeOS Editör
-# registers the same plugins and needs them too.
+# The generated file links the plugins to Folio alone; LifeOS Editör and
+# LifeOS Ofis register the same plugins and need them too.
 foreach(plugin ${FLUTTER_PLUGIN_LIST})
   target_link_libraries(${EDITOR_BINARY_NAME} PRIVATE ${plugin}_plugin)
+  target_link_libraries(${OFIS_BINARY_NAME} PRIVATE ${plugin}_plugin)
 endforeach(plugin)
 
 
@@ -113,6 +119,8 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 install(TARGETS ${EDITOR_BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+install(TARGETS ${OFIS_BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 install(TARGETS ${EDEVLET_BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)

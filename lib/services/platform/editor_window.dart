@@ -1,11 +1,16 @@
 import 'dart:io';
 
+import 'app_edition.dart';
+
 /// Where the standalone editor starts: `--editor` on the command line, as
 /// the LifeOS Editör program passes it.
 const editorFlag = '--editor';
 
 /// Where a document is only shown, in a window of its own.
 const previewFlag = '--preview';
+
+/// Where LifeOS Ofis starts: its launcher passes it (lib/ofis_app.dart).
+const ofisFlag = '--ofis';
 
 /// A document in an editor window of its own: Folio started again as
 /// LifeOS Editör, which takes no single-instance lock, so each one is a
@@ -34,7 +39,8 @@ abstract final class EditorWindow {
   static Future<void> _open([String? path]) async {
     if (!available) return;
     await Process.start(Platform.resolvedExecutable, [
-      editorFlag,
+      // LifeOS Ofis's new window is Ofis's, not LifeOS Editör's.
+      if (AppEdition.isOfis) ...[ofisFlag, '--edit'] else editorFlag,
       ?path,
     ], mode: ProcessStartMode.detached);
   }

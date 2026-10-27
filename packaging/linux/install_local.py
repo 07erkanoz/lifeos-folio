@@ -45,6 +45,35 @@ def install_editor(executable, applications, icons):
     print(entry)
 
 
+OFIS_ID = 'com.erkanoz.lifeos_ofis'
+# What Ofis opens by default: documents. A text file or a workbook is only
+# offered to it ("Birlikte aç"); the desktop's own programs keep those.
+OFIS_DEFAULT_TYPES = [
+    'application/x-uyap-udf', 'application/udf', 'application/x-udf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword', 'application/vnd.oasis.opendocument.text',
+    'application/rtf', 'text/rtf', 'application/pdf',
+]
+
+
+def install_ofis(executable, applications, icons, default=False):
+    """LifeOS Ofis, from the same bundle, in the menu of its own; with
+    [default] the program its types open in (LifeOS Arch's Klasik Kurulum)."""
+    icon = executable.parent / 'data/flutter_assets/assets/branding/lifeos_ofis.png'
+    if not executable.is_file() or not os.access(executable, os.X_OK) or not icon.is_file():
+        return None
+    replace_if_changed(icons / f'{OFIS_ID}.png', icon.read_bytes())
+    template = (Path(__file__).parent / f'{OFIS_ID}.desktop').read_text()
+    desktop = template.replace('Exec=lifeos_ofis', f'Exec={quote_exec(str(executable))}')
+    entry = applications / f'{OFIS_ID}.desktop'
+    replace_if_changed(entry, desktop.encode('utf-8'))
+    if default and shutil.which('xdg-mime'):
+        for mime in OFIS_DEFAULT_TYPES:
+            subprocess.run(['xdg-mime', 'default', f'{OFIS_ID}.desktop', mime], capture_output=True, timeout=15)
+    print(entry)
+    return entry
+
+
 def install_mime(base):
     """UDF as a type of its own. Without it the desktop takes a .udf for the
     ZIP it is, and offers neither Folio nor UYAP to open it."""
@@ -85,8 +114,24 @@ def refresh_icon_cache(theme):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('executable', type=Path)
+    parser.add_argument('--ofis', action='store_true',
+                        help='Yalnız LifeOS Ofis: menüye ekler ve belge türlerinin varsayılanı yapar.')
     args = parser.parse_args()
     executable = args.executable.resolve(strict=True)
+    if args.ofis:
+        base = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share')))
+        applications = base / 'applications'
+        icons = base / 'icons/hicolor/256x256/apps'
+        applications.mkdir(parents=True, exist_ok=True)
+        icons.mkdir(parents=True, exist_ok=True)
+        install_mime(base)
+        ofis = executable if executable.name == 'lifeos_ofis' else executable.parent / 'lifeos_ofis'
+        if install_ofis(ofis, applications, icons, default=True) is None:
+            parser.error('LifeOS Ofis çalıştırıcısı ya da ikonu bulunamadı.')
+        if shutil.which('update-desktop-database'):
+            subprocess.run(['update-desktop-database', str(applications)], capture_output=True, timeout=15)
+        refresh_icon_cache(icons.parent.parent)
+        return
     icon = executable.parent / 'data/flutter_assets/assets/branding/lifeos_folio.png'
     if not executable.is_file() or not os.access(executable, os.X_OK) or not icon.is_file():
         parser.error('Geçerli Linux bundle çalıştırıcısı ve ikon bulunamadı.')
@@ -105,6 +150,7 @@ def main():
     # Both menus' entries first, then the index of what opens which type:
     # the Editör's types too.
     install_editor(executable.parent / 'lifeos_editor', applications, icons)
+    install_ofis(executable.parent / 'lifeos_ofis', applications, icons)
     if shutil.which('update-desktop-database'):
         result = subprocess.run(['update-desktop-database', str(applications)], capture_output=True, text=True, timeout=15)
         if result.returncode:

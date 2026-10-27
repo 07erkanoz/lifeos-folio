@@ -9,6 +9,7 @@ import '../../models/document_model.dart';
 import '../../services/editor/doc_delta_map.dart';
 import '../../services/editor/petition_templates.dart';
 import '../help/help_button.dart';
+import '../../services/platform/app_edition.dart';
 
 /// The editor's ribbon tabs (docs/design/editor-serit-taslak.png), after
 /// Banaozel's: Giriş holds the writing tools, Hukuk the petition, the case,
@@ -20,8 +21,12 @@ enum RibbonTab {
   insert('Ekle'),
   view('Görünüm');
 
-  const RibbonTab(this.label);
-  final String label;
+  const RibbonTab(this._label);
+  final String _label;
+
+  /// LifeOS Ofis keeps the legal tab's research, not its petitions or UYAP:
+  /// named for what is left.
+  String get label => this == legal && AppEdition.isOfis ? 'Araştırma' : _label;
 }
 
 /// The tab chosen, shared by the editor and the heading that shows the tabs,
