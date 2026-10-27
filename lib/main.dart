@@ -52,7 +52,6 @@ void main(List<String> arguments) async {
   await DataReset.finishPending();
   // LifeOS Editör: the editor alone, in a window of its own, without the
   // archive, the tray or the single-instance lock.
-  if (arguments.contains(previewFlag)) {
   // LifeOS Ofis: the documents and the editor for anyone (lib/ofis_app.dart).
   if (arguments.contains(ofisFlag)) {
     unawaited(SystemFontCatalog.load().then((_) {}, onError: (_) {}));
@@ -64,6 +63,7 @@ void main(List<String> arguments) async {
     ]);
     return;
   }
+  if (arguments.contains(previewFlag)) {
     await runPreviewApp([
       for (final argument in arguments)
         if (argument != previewFlag) argument,
