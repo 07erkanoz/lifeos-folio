@@ -1,53 +1,24 @@
-LifeOS Folio — Tescilli Yazılım Lisansı / Proprietary Software License
-
+LifeOS Folio
 Copyright © 2026 LifeOS. Tüm hakları saklıdır. All rights reserved.
 
-TÜRKÇE
+Bu yazılım açık kaynak değildir. Kaynak kodu, görselleri, belgeleri ve
+"LifeOS Folio" adı LifeOS'a aittir ve 5846 sayılı Fikir ve Sanat Eserleri
+Kanunu ile korunur. Kodu görmüş ya da kopyalamış olmak kullanma hakkı vermez.
+LifeOS'un yazılı izni olmadan kod kopyalanamaz, değiştirilemez, başka bir yerde
+yayımlanamaz, dağıtılamaz, satılamaz ve başka bir adla sunulamaz.
 
-Bu depodaki kaynak kod, derlenmiş paketler, belgeler, görseller, simgeler,
-ekran tasarımları ve "LifeOS Folio" adı (birlikte "Yazılım") LifeOS'a aittir
-ve 5846 sayılı Fikir ve Sanat Eserleri Kanunu ile ilgili uluslararası
-sözleşmelerle korunur.
+Folio uygulamasını kullanma izni yalnız Kullanım Koşulları'nda yazdığı
+kadardır ve kaynak kod üzerinde hak vermez. İçindeki açık kaynak bileşenler
+kendi lisanslarına tabidir.
 
-Yazılım açık kaynak değildir. Bu depoda hiçbir açık kaynak lisansı
-verilmemiştir. Kodun görülebilmiş olması, herhangi bir yerde barındırılması ya
-da kopyalanmış olması kimseye kullanma hakkı vermez.
+This software is not open source. Its source code, images, documents and the
+name "LifeOS Folio" belong to LifeOS and are protected by copyright. Having
+seen or copied the code gives no right to use it. Without written permission
+from LifeOS, the code may not be copied, modified, published elsewhere,
+distributed, sold or offered under another name.
 
-LifeOS'un önceden verilmiş yazılı izni olmadan Yazılımın tamamı ya da bir
-parçası çoğaltılamaz, değiştirilemez, uyarlanamaz, derlenemez, başka bir yazılıma
-katılamaz, dağıtılamaz, yayımlanamaz, kiralanamaz, satılamaz, yeniden
-markalanamaz, kaynak kodu başka bir yerde barındırılamaz ve Yazılımdan türetilmiş
-bir çalışma yapılamaz.
+Permission to use the Folio app is only what its Terms of Use say, and gives
+no right to the source code. The open source components inside it remain
+under their own licenses.
 
-Folio uygulamasını kendi cihazlarınızda kullanma izni yalnız Kullanım
-Koşulları'nda (https://lifeos.com.tr, uygulamada Hakkında › Kullanım Koşulları)
-yazdığı kadardır ve kaynak kod üzerinde hiçbir hak doğurmaz.
-
-Yazılımda kullanılan üçüncü taraf açık kaynak bileşenler kendi lisanslarına
-tabidir; bu lisans onları değiştirmez.
-
-İzin talepleri için: info@avukatos.com.tr
-
-ENGLISH
-
-The source code, compiled packages, documentation, images, icons, screen
-designs and the name "LifeOS Folio" in this repository (together, the
-"Software") belong to LifeOS and are protected by Turkish Law No. 5846 on
-Intellectual and Artistic Works and by international copyright treaties.
-
-The Software is not open source. No open source license has been granted for
-this repository. That the code could be viewed, is hosted anywhere, or has been
-copied gives no one any right to use it.
-
-Without the prior written permission of LifeOS, no one may copy, modify, adapt,
-compile, incorporate into other software, distribute, publish, rent, sell,
-rebrand or host the Software or any part of it, or make derivative works of it.
-
-The permission to use the Folio app on your own devices is only what its Terms
-of Use (https://lifeos.com.tr; in the app, About › Terms of Use) state, and it
-gives no right to the source code.
-
-Third-party open source components used in the Software remain under their own
-licenses; this license does not change them.
-
-Permission requests: info@avukatos.com.tr
+İzin için / For permission: info@avukatos.com.tr
