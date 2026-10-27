@@ -156,7 +156,8 @@ def main():
     # Both menus' entries first, then the index of what opens which type:
     # the Editör's types too.
     install_editor(executable.parent / 'lifeos_editor', applications, icons)
-    install_ofis(executable.parent / 'lifeos_ofis', applications, icons)
+    # LifeOS Ofis is not put in a Folio user's menu: it is installed on its
+    # own (--ofis), for those who use it instead of Folio.
     if shutil.which('update-desktop-database'):
         result = subprocess.run(['update-desktop-database', str(applications)], capture_output=True, text=True, timeout=15)
         if result.returncode:
