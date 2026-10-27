@@ -757,6 +757,7 @@ class _OfisHomeState extends State<OfisHome> {
   Widget _recentCard(EvrakFile f) {
     final scheme = Theme.of(context).colorScheme;
     final modified = _modified(f.path);
+    final imz = ImzFile.isImz(f.path);
     return Material(
       color: scheme.surface,
       shape: RoundedRectangleBorder(
@@ -780,7 +781,7 @@ class _OfisHomeState extends State<OfisHome> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  f.format.defaultExtension.toUpperCase(),
+                  imz ? 'İMZ' : f.format.defaultExtension.toUpperCase(),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -794,13 +795,16 @@ class _OfisHomeState extends State<OfisHome> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
+                      // An .imz by the document it holds: "sozlesme.pdf".
                       p.basenameWithoutExtension(f.path),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     Text(
-                      modified == null ? f.format.label : _when(modified),
+                      modified == null
+                          ? (imz ? 'E-imzalı belge' : f.format.label)
+                          : _when(modified),
                       style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                     ),
                   ],
