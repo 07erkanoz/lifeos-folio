@@ -52,7 +52,7 @@ OFIS_DEFAULT_TYPES = [
     'application/x-uyap-udf', 'application/udf', 'application/x-udf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/msword', 'application/vnd.oasis.opendocument.text',
-    'application/rtf', 'text/rtf', 'application/pdf',
+    'application/rtf', 'text/rtf', 'application/pdf', 'application/x-imz',
 ]
 
 
@@ -77,12 +77,18 @@ def install_ofis(executable, applications, icons, default=False):
 def install_mime(base):
     """UDF as a type of its own. Without it the desktop takes a .udf for the
     ZIP it is, and offers neither Folio nor UYAP to open it."""
-    source = Path(__file__).parent / 'lifeos-evrakci.xml'
-    if not source.is_file():
-        return
     packages = base / 'mime/packages'
-    packages.mkdir(parents=True, exist_ok=True)
-    changed = replace_if_changed(packages / 'lifeos-evrakci.xml', source.read_bytes())
+    changed = False
+    # UDF, and the e-signed .imz (a file of its own: the app rewrites
+    # lifeos-evrakci.xml at run time, and the two must stay the same).
+    for name in ('lifeos-evrakci.xml', 'lifeos-imz.xml'):
+        source = Path(__file__).parent / name
+        if not source.is_file():
+            continue
+        packages.mkdir(parents=True, exist_ok=True)
+        changed = replace_if_changed(packages / name, source.read_bytes()) or changed
+    if not packages.is_dir():
+        return
     tool = shutil.which('update-mime-database')
     if not tool:
         print('update-mime-database yok (shared-mime-info): UDF türü oturum yeniden açılınca tanınabilir.')

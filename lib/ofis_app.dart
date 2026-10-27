@@ -18,7 +18,9 @@ import 'services/editor/suggestions/phrase_memory.dart';
 import 'services/library/recent_documents.dart';
 import 'services/platform/app_edition.dart';
 import 'services/platform/document_launch.dart';
+import 'services/platform/platform_capabilities.dart';
 import 'services/preview/pdf_fonts.dart';
+import 'services/signing/imz_file.dart';
 import 'services/desktop/mac_quit.dart';
 import 'ui/agenda/agenda_page.dart' show AgendaColors;
 import 'ui/theme/app_theme.dart';
@@ -29,6 +31,8 @@ import 'ui/widgets/editor_file_menu.dart';
 import 'ui/widgets/editor_ribbon.dart';
 import 'ui/widgets/editor_widget.dart';
 import 'ui/widgets/file_preview.dart';
+import 'ui/widgets/imz_view.dart';
+import 'ui/widgets/signing_dialog.dart';
 import 'ui/widgets/folio_about_dialog.dart';
 import 'ui/widgets/notice.dart';
 
@@ -86,7 +90,8 @@ Future<void> runOfisApp(List<String> arguments) async {
 
 bool _previewable(String path) {
   final extension = p.extension(path).replaceFirst('.', '').toLowerCase();
-  return EvrakFormat.supportedExtensions.contains(extension);
+  return extension == ImzFile.extension ||
+      EvrakFormat.supportedExtensions.contains(extension);
 }
 
 bool _editable(String path) =>
@@ -228,7 +233,10 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     final picked = await FilePicker.pickFiles(
       dialogTitle: 'Belge aç',
       type: FileType.custom,
-      allowedExtensions: EvrakFormat.supportedExtensions,
+      allowedExtensions: [
+        ...EvrakFormat.supportedExtensions,
+        ImzFile.extension,
+      ],
     );
     final path = picked?.files.single.path;
     if (path != null) await _openPath(path);
@@ -256,6 +264,33 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
       return;
     }
     await _show(path);
+  }
+
+  /// Any file signed with the e-signature card into an `.imz` beside it,
+  /// then shown: its signature checked, its document read.
+  Future<void> _sign([String? path]) async {
+    final context = _context;
+    if (context == null) return;
+    final chosen =
+        path ??
+        (await FilePicker.pickFiles(dialogTitle: 'İmzalanacak dosya'))
+            ?.files
+            .single
+            .path;
+    if (chosen == null || !context.mounted) return;
+    final signed = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => SigningDialog(filePath: chosen, imz: true),
+    );
+    if (signed == null || !context.mounted) return;
+    showNotice(
+      context,
+      'Dosya e-imzalandı',
+      detail: signed,
+      kind: NoticeKind.success,
+    );
+    await _openPath(signed);
   }
 
   Future<void> _new([EvrakFormat format = EvrakFormat.udf]) async {
@@ -313,21 +348,44 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
         onOpen: () => unawaited(_open()),
         onNew: (format) => unawaited(_new(format)),
         onOpenFile: (path) => unawaited(_openPath(path)),
+        onSign: desktopSigningAvailable ? () => unawaited(_sign()) : null,
       );
     }
     final path = _path;
     if (!_editing && path != null) {
+      if (ImzFile.isImz(path)) {
+        return Scaffold(
+          key: ValueKey('ofis-imz-$_generation'),
+          body: ImzView(path: path),
+        );
+      }
       return Scaffold(
         key: ValueKey('ofis-preview-$_generation'),
         body: FilePreview(path: path),
-        floatingActionButton: _editable(path)
-            ? FloatingActionButton.extended(
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (desktopSigningAvailable)
+              FloatingActionButton.extended(
+                key: const ValueKey('ofis-sign'),
+                heroTag: 'ofis-sign',
+                onPressed: () => unawaited(_sign(path)),
+                icon: const Icon(Icons.draw_outlined),
+                label: const Text('E-imzala'),
+              ),
+            if (_editable(path)) ...[
+              const SizedBox(height: 10),
+              FloatingActionButton.extended(
                 key: const ValueKey('ofis-edit'),
+                heroTag: 'ofis-edit',
                 onPressed: () => unawaited(_edit()),
                 icon: const Icon(Icons.edit_note_rounded),
                 label: const Text('Düzenle'),
-              )
-            : null,
+              ),
+            ],
+          ],
+        ),
       );
     }
     return Scaffold(
@@ -452,10 +510,14 @@ class OfisHome extends StatefulWidget {
     required this.onOpen,
     required this.onNew,
     required this.onOpenFile,
+    this.onSign,
   });
 
   final List<EvrakFile> recent;
   final VoidCallback onOpen;
+
+  /// Dosya imzala: any file signed into an `.imz`.
+  final VoidCallback? onSign;
   final ValueChanged<EvrakFormat> onNew;
   final ValueChanged<String> onOpenFile;
 
@@ -596,7 +658,7 @@ class _OfisHomeState extends State<OfisHome> {
                   key: const ValueKey('ofis-home-open'),
                   icon: Icons.folder_open_rounded,
                   title: 'Belge aç',
-                  detail: 'UDF, Word, ODT, PDF, RTF, Excel',
+                  detail: 'UDF, Word, ODT, PDF, RTF, Excel, .imz',
                   onTap: widget.onOpen,
                   primary: true,
                 ),
@@ -614,6 +676,14 @@ class _OfisHomeState extends State<OfisHome> {
                   detail: 'DOCX olarak',
                   onTap: () => widget.onNew(EvrakFormat.docx),
                 ),
+                if (widget.onSign case final sign?)
+                  _action(
+                    key: const ValueKey('ofis-home-sign'),
+                    icon: Icons.draw_outlined,
+                    title: 'Dosya imzala',
+                    detail: 'E-imza kartıyla, .imz olarak',
+                    onTap: sign,
+                  ),
               ],
             ),
             const SizedBox(height: 14),

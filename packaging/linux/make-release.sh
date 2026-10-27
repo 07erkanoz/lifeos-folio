@@ -14,7 +14,8 @@ root="$stage/LifeOS-Folio"
 mkdir -p "$root/kurulum"
 cp -a "$bundle/." "$root/"
 cp packaging/linux/install_local.py packaging/linux/context_menu.py \
-  packaging/linux/*.desktop packaging/linux/lifeos-evrakci.xml "$root/kurulum/"
+  packaging/linux/*.desktop packaging/linux/lifeos-evrakci.xml \
+  packaging/linux/lifeos-imz.xml "$root/kurulum/"
 install -m 755 packaging/linux/kur.sh "$root/kur.sh"
 mkdir -p artifacts
 out="artifacts/LifeOS-Folio-$version-Linux-x64.tar.gz"

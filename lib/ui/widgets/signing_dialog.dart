@@ -15,6 +15,7 @@ import '../../services/signing/udf_signing_service.dart';
 import '../theme/app_theme.dart';
 import 'folio_dialog.dart';
 import 'folio_select.dart';
+import '../../services/signing/imz_file.dart';
 
 enum _Method { card, mobile }
 
@@ -28,12 +29,17 @@ class SigningDialog extends StatefulWidget {
   /// The way chosen before the dialog opened: true for the mobile
   /// signature, false for the card; null for the one used last time.
   final bool? mobile;
+
+  /// Any file signed into an `.imz` beside it (ImzFile), by card alone:
+  /// the mobile signature is UYAP's.
+  final bool imz;
   const SigningDialog({
     super.key,
     this.filePath,
     this.service,
     this.mobileClient,
     this.mobile,
+    this.imz = false,
   });
   @override
   State<SigningDialog> createState() => _SigningDialogState();
@@ -83,6 +89,7 @@ class _SigningDialogState extends State<SigningDialog> {
 
   /// Whether the mobile signature was asked for and can be used here.
   bool get _mobileAsked =>
+      !widget.imz &&
       widget.mobile == true &&
       mobileSigningAvailable &&
       widget.filePath != null;
@@ -102,7 +109,7 @@ class _SigningDialogState extends State<SigningDialog> {
       unawaited(_load());
     }
     final path = widget.filePath;
-    if (path != null) {
+    if (path != null && !widget.imz) {
       File(path).readAsBytes().then((bytes) {
         if (mounted) {
           setState(() => _signedAlready = UdfSigningService.isSigned(bytes));
@@ -147,6 +154,7 @@ class _SigningDialogState extends State<SigningDialog> {
           MobileOperator.byCode(operator is int ? operator : null) ?? _operator;
       // Only where there is a document: the settings dialog is the card's.
       if (data['method'] == 'mobile' &&
+          !widget.imz &&
           widget.filePath != null &&
           widget.mobile != false) {
         _method = _Method.mobile;
@@ -314,12 +322,20 @@ class _SigningDialogState extends State<SigningDialog> {
           if (_certificate == null) return;
         }
         setState(() => _status = 'Belge imzalanıyor…');
-        final path = await _service.sign(
-          widget.filePath!,
-          _card!,
-          _certificate!,
-          _pin.text,
-        );
+        final path = widget.imz
+            ? await ImzFile.sign(
+                widget.filePath!,
+                _service,
+                _card!,
+                _certificate!,
+                _pin.text,
+              )
+            : await _service.sign(
+                widget.filePath!,
+                _card!,
+                _certificate!,
+                _pin.text,
+              );
         if (!mounted) return;
         _pin.clear();
         unawaited(_keep({'method': 'card'}));
@@ -655,7 +671,11 @@ class _SigningDialogState extends State<SigningDialog> {
         width: 540,
         icon: file == null ? Icons.tune_rounded : Icons.draw_outlined,
         accent: AppColors.signature,
-        title: file == null ? 'E-imza ayarları' : 'UDF belgesini imzala',
+        title: file == null
+            ? 'E-imza ayarları'
+            : widget.imz
+            ? 'Dosyayı e-imzala'
+            : 'UDF belgesini imzala',
         subtitle: file == null
             ? 'Kart sürücüsü ve takılı kartlar'
             : p.basename(file),
@@ -689,7 +709,7 @@ class _SigningDialogState extends State<SigningDialog> {
             FilledButton.icon(
               onPressed: _canSign ? _sign : null,
               icon: const Icon(Icons.draw_outlined, size: 18),
-              label: const Text('İmzala ve kaydet'),
+              label: Text(widget.imz ? 'İmzala' : 'İmzala ve kaydet'),
             ),
           if (mobileSigningAvailable &&
               file != null &&
@@ -717,7 +737,12 @@ class _SigningDialogState extends State<SigningDialog> {
                 ),
               ),
             if (_desktop) ...[
-              if (file != null) ...[
+              if (file != null && widget.imz) ...[
+                ..._about(
+                  'İmzalı dosya, belgenin yanına aynı adla ve .imz uzantısıyla kaydedilir. Belgenin kendisi değişmez.',
+                ),
+                const SizedBox(height: 8),
+              ] else if (file != null) ...[
                 ..._about(
                   'İmza bu UDF dosyasına kaydedilir. İmza öncesi sürüm belge geçmişinde saklanır. Editördeki kaydedilmemiş değişiklikler imzalanmaz.',
                 ),
