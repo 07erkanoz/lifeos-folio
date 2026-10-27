@@ -1,16 +1,18 @@
 # LifeOS Folio
 
-Avukatlar için evrak ve dilekçe uygulaması: Windows, Linux ve Android; macOS için deneme paketi. UDF, Word, Excel ve PDF dosyalarını Microsoft Office olmadan açıp düzenler. Dilekçede geçen kanun maddelerini ve Yargıtay kararlarını belgenin yanında gösterir. Evrakı e-imza ya da mobil imzayla imzalayıp UYAP'a gönderir. Bir UYAP dosyasını dilekçeye bağladığınızda dosyanın taraflarını, duruşma günlerini ve evrakını editörün yanında açar; evrakı seçerek ya da toplu indirir ve arşive katar. Yazdığınız metni Türkçe bir sesle okur, söylediklerinizi yazar. Belgeleriniz bilgisayarınızda kalır; arama ve düzenleme yerel olarak yapılır.
+Avukatlar için evrak ve dilekçe uygulaması: Windows, macOS, Linux, Android, iPhone ve iPad. UDF, Word, Excel ve PDF dosyalarını Microsoft Office olmadan açıp düzenler. Dilekçede geçen kanun maddelerini ve Yargıtay kararlarını belgenin yanında gösterir. Evrakı e-imza ya da mobil imzayla imzalayıp UYAP'a gönderir. Bir UYAP dosyasını dilekçeye bağladığınızda dosyanın taraflarını, duruşma günlerini ve evrakını editörün yanında açar; evrakı seçerek ya da toplu indirir ve arşive katar. Yazdığınız metni Türkçe bir sesle okur, söylediklerinizi yazar. Belgeleriniz bilgisayarınızda kalır; arama ve düzenleme yerel olarak yapılır.
 
 ![Folio'da bir dilekçe ve üzerinde açılmış TMK m. 166](docs/screenshots/editor-madde.webp)
 
 Ekran görüntülerindeki kişi ve dosya bilgileri uydurmadır; görüntüler `tool/screenshots` ile kurmaca veriden üretilir.
 
+Folio tescilli bir yazılımdır, açık kaynak değildir. Bkz. [Lisans](#lisans).
+
 - [Sesli okuma ve sesli yazma](#sesli-okuma-ve-sesli-yazma)
 - [Birden fazla pencere ve yazdırma](#birden-fazla-pencere-ve-yazdırma)
 - [UYAP'a bağlanma](#uyapa-bağlanma) · [UYAP'a evrak gönderme](#uyapa-evrak-gönderme) · [UYAP Dosyalarım](#uyap-dosyalarım) · [UYAP dosyası editörün yanında](#uyap-dosyası-editörün-yanında)
 - [Elektronik imzalı UDF](#elektronik-imzalı-udf) · [Arama ve otomatik indeksleme](#arama-ve-otomatik-indeksleme) · [Kanun maddesi ve emsal karar önizlemesi](#kanun-maddesi-ve-emsal-karar-önizlemesi)
-- [Güncellemeler](#güncellemeler) · [macOS](#macos) · [Derleme](#derleme)
+- [Canlı paylaşım](#canlı-paylaşım) · [Güncellemeler](#güncellemeler) · [macOS](#macos) · [Derleme](#derleme) · [Lisans](#lisans)
 
 Dosyalar önce **önizlemeye** açılır. UDF/DOCX/XLSX/TXT/ODT için ayrı **Düzenle** düğmesi editörü açar; **Önizlemeye Dön** diskteki kaynak belgeyi gösterir. Masaüstünde UDF, DOCX, RTF, TXT ve ODT önizlemesinde sayfaya **çift tıklamak** da editörü açar: imleç çift tıklanan kelimeye gelir ve o satır görünümün ortasına kaydırılır. Satır, sayfanın kendi metin katmanından okunur ve komşu satırlarıyla birlikte aranır; böylece her paragrafın sonunda tekrarlanan bir cümlede de doğru yere gidilir. PDF'de çift tıklama editörü açmaz, çünkü PDF'yi düzenlemeye almak ayrıca onay istenen bir dönüşümdür. Sağa/sola 90° döndürme ve yakınlaştırma kaynak dosyayı değiştirmez. Fontlar yerel olarak paketlenir, UDF/PDF üretimi arka planda çalışır, son önizlemeler bellekte tutulur.
 
@@ -312,6 +314,12 @@ Komut satırında `lifeos_folio --preview -- dosya.udf` önizlemeyi, `lifeos_fol
 
 Platform kaynakları: [Android intent filtreleri](https://developer.android.com/training/basics/intents/filters), [Windows uygulama kaydı](https://learn.microsoft.com/en-us/windows/win32/shell/default-programs), [Linux MIME/desktop kaydı](https://specifications.freedesktop.org/desktop-entry/latest/mime-types.html).
 
+## Canlı paylaşım
+
+Editörde açık bir belge başka bir Folio'da canlı gösterilir; paylaşan izin verirse karşı taraf sırayla yazar, yazdığı paylaşanın belgesine işlenir. Belgenin yanında bir yazışma paneli vardır. Paylaşım bitince karşı tarafta belgeden ve yazışmadan hiçbir şey kalmaz.
+
+Aynı ağdaki cihazlar birbirini büro ağından bulur ve aralarında doğrudan, şifreli bağlanır. Başka bir büroyla paylaşmak için ana sayfadaki **Canlı belge** bir davet kodu üretir; kod WhatsApp ya da e-postayla gönderilir. Karşı taraf kodu yazınca paylaşana sorulur, iki ekranda aynı dört rakam görünür. Bu durumda belge `canli.lifeos.com.tr` üzerindeki aktarıcıdan geçer (`tool/canli_relay`). Anahtar iki cihazda davet kodundan üretilir ve kod aktarıcıya gönderilmez; aktarıcı içeriği okuyamaz ve hiçbir şey saklamaz. Protokol `lib/services/live/live_remote.dart` içinde anlatılır. Android'de davet bağlantısı doğrudan Folio'yu açar; bilgisayarda davet sayfasındaki **Folio'da aç** `lifeos-folio://` bağlantısını kullanır.
+
 ## Güncellemeler
 
 Folio yeni bir sürüm olduğunu kendisi bildirir. Sürüm bilgisi `lifeos.com.tr/surum/stable/<platform>.json` adresinden okunur ve uygulamaya gömülü Ed25519 anahtarıyla imzalanmış olmalıdır; imzası tutmayan ya da `lifeos.com.tr` dışındaki bir dosyayı gösteren bilgi yok sayılır. Paketler GitHub Actions'ta derlenir, imzalanır ve sunucuya gönderilir; sunucu imzayı yeniden denetledikten sonra yayınlar.
@@ -320,7 +328,7 @@ Mac paketi (`macos-universal`) aynı yoldan, Apple onayından sonra ayrı bir g�
 
 ## macOS
 
-macOS sürümü deneme aşamasındadır ve Apple tarafından imzalanmamıştır: paket ilk açılışta **Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç** ile bir kez onaylanmalıdır. Paket hem Apple Silicon hem Intel Mac'lerde çalışır ve GitHub'ın macOS makinesinde `.github/workflows/macos.yml` ile üretilir. OCR ve PDF küçültme araçları macOS için ayrıca derlenir (`packaging/native/build_tools.py macos`, `merge_macos.py`). Kartla e-imza, e-Devlet ile giriş ve UYAP gönderimi Mac'te henüz gerçek kullanıcıyla denenmedi; genel kısayol Mac'te yoktur.
+Mac paketi Apple'ın Developer ID imzasını taşır ve Apple tarafından onaylanmıştır (notarization); kurmak için ek bir ayar gerekmez. Paket hem Apple Silicon hem Intel Mac'lerde çalışır ve GitHub'ın macOS makinesinde `.github/workflows/macos.yml` ile üretilir. OCR ve PDF küçültme araçları macOS için ayrıca derlenir (`packaging/native/build_tools.py macos`, `merge_macos.py`). Kartla e-imza, e-Devlet ile giriş ve UYAP gönderimi Mac'te henüz gerçek kullanıcıyla denenmedi; genel kısayol Mac'te yoktur.
 
 ## Kullanılan bileşenler ve lisansları
 
@@ -399,9 +407,9 @@ Bunlar `native_tools/` altında kaynaktan derlenip ikili olarak sürümlenir; ku
 
 [Liberation](https://github.com/liberationfonts), [Inter](https://rsms.me/inter/) ve [Lora](https://github.com/cyrealtype/Lora-Cyrillic) — hepsi **SIL Open Font License 1.1**. Fontlar yerel olarak paketlenir; hiçbir font için ağ bağlantısı kurulmaz.
 
-### Lisans durumu
+### Bileşenlerin lisans durumu
 
-Listedeki bütün bileşenler açık kaynak lisanslıdır; ticari lisans gerektiren bir bileşen yoktur. PDF metni önceden `syncfusion_flutter_pdf` ile okunuyordu (Syncfusion Community License ya da ticari lisans gerektirir). 23 Eylül 2026'da PDFium'a geçildi ve paket bağımlılıklardan çıkarıldı.
+Listedeki bütün bileşenler açık kaynak lisanslıdır; ticari lisans gerektiren ve Folio'nun tescilli lisansıyla çelişen (GPL gibi) bir bileşen yoktur. PDF metni önceden `syncfusion_flutter_pdf` ile okunuyordu (Syncfusion Community License ya da ticari lisans gerektirir). 23 Eylül 2026'da PDFium'a geçildi ve paket bağımlılıklardan çıkarıldı.
 
 ## Teşekkür
 
@@ -409,7 +417,7 @@ Bu uygulamanın yaptığı işlerin neredeyse tamamı, başkalarının uzun yıl
 
 **Tesseract OCR** ve **Leptonica** geliştiricilerine: taranmış bir dilekçenin içindeki yazıyı bulunabilir kılan şey onların emeği. **qpdf**'ten Jay Berkenbilt'e, **LibTIFF**'ten Sam Leffler ve sürdürücülerine, **libjpeg-turbo**, **libpng** ve **zlib** ekiplerine — bu kütüphaneler otuz yıldır sessizce çalışıyor ve dosyalarımız onlar sayesinde bozulmadan duruyor.
 
-**PDFium** ve **pdfrx**'e, belgeyi ekranda gerçekten göründüğü gibi çizdikleri için. **flutter_quill** ve **SQLite**'a; FTS5 olmasa 2000 belgede içerik araması bu hızda olmazdı. **Flutter** ekibine, tek kod tabanından üç platform için.
+**PDFium** ve **pdfrx**'e, belgeyi ekranda gerçekten göründüğü gibi çizdikleri için. **flutter_quill** ve **SQLite**'a; FTS5 olmasa 2000 belgede içerik araması bu hızda olmazdı. **Flutter** ekibine, tek kod tabanından bütün platformlar için.
 
 **Liberation**, **Inter** ve **Lora** yazı tiplerini özgürce kullanıma açanlara — Türkçenin bütün harflerini doğru çizen bir font, sanıldığından daha değerli.
 
@@ -453,3 +461,13 @@ Bu komut kullanıcı menüsü ve ikon kaydını günceller; dosya türlerinin va
 ## Masaüstünde hızlı arama
 
 Ayarlar → **Masaüstünde hızlı arama**. Kapatınca tepside bekleme, seçilebilir global kısayol, sessiz indeksleme ve animasyonlu hızlı sonuçlar. Ana ekranla aynı sorgu, filtreler, geçmiş ve içerik araması kullanılır. [Kullanım ve platform ayrıntıları](docs/quick-search.md).
+
+## Lisans
+
+Copyright © 2026 LifeOS. Tüm hakları saklıdır.
+
+LifeOS Folio tescilli bir yazılımdır, açık kaynak değildir. Kaynak kodu, görselleri, belgeleri ve "LifeOS Folio" adı LifeOS'a aittir ve 5846 sayılı Fikir ve Sanat Eserleri Kanunu ile korunur. LifeOS'un yazılı izni olmadan kod kopyalanamaz, değiştirilemez, başka bir yerde yayımlanamaz, dağıtılamaz, satılamaz ve başka bir adla sunulamaz. Ayrıntısı [LICENSE](LICENSE) dosyasındadır.
+
+Uygulamayı kullanma izni [Kullanım Koşulları](assets/legal/LICENSE.txt)'nda yazdığı kadardır ve kaynak kod üzerinde hak vermez. Yukarıdaki açık kaynak bileşenler kendi lisanslarına tabidir.
+
+İzin için: info@avukatos.com.tr

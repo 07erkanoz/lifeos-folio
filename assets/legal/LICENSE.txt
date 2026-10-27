@@ -1,5 +1,5 @@
 LifeOS Folio Kullanım Koşulları
-Son güncelleme: 10 Ekim 2026
+Son güncelleme: 27 Ekim 2026
 
 1. Kapsam
 Bu koşullar, LifeOS tarafından geliştirilen LifeOS Folio uygulamasının (Folio) kullanımını düzenler. Folio'yu kurduğunuzda ya da kullandığınızda bu koşulları kabul etmiş olursunuz.
@@ -17,7 +17,7 @@ Folio, avukatın işini kolaylaştıran bir araçtır ve hukuki görüş vermez.
 Folio, UYAP ve e-Tebligat gibi kamu hizmetlerine yalnız sizin kendi girişinizle ve sizin yetkiniz ölçüsünde bağlanır. Bu hizmetler ilgili kurumlara aittir ve Folio'nun bu kurumlarla resmî bir bağı yoktur. LifeOS bu hizmetlerin kesintisiz çalışmasını sağlayamaz. Bu hizmetleri kullanırken onların kullanım koşullarına uymak size aittir.
 
 6. Verileriniz ve yedekleriniz
-Folio'nun bir sunucusu yoktur; belgeleriniz ve kayıtlarınız yalnız sizin cihazlarınızda tutulur. Bu nedenle verilerinizin yedeklenmesi ve korunması sizin sorumluluğunuzdadır. Kişisel verilerin nasıl işlendiği Gizlilik Politikası ve KVKK Aydınlatma Metni'nde anlatılır.
+Folio'nun verilerinizi tutan bir sunucusu yoktur; belgeleriniz ve kayıtlarınız yalnız sizin cihazlarınızda tutulur. Uzaktan canlı paylaşımda belge şifreli olarak aktarma sunucusundan geçer ve orada saklanmaz. Bu nedenle verilerinizin yedeklenmesi ve korunması sizin sorumluluğunuzdadır. Kişisel verilerin nasıl işlendiği Gizlilik Politikası ve KVKK Aydınlatma Metni'nde anlatılır.
 
 7. Garanti ve sorumluluk
 Folio olduğu gibi sunulur. LifeOS, uygulamanın her durumda kesintisiz ve hatasız çalışacağını garanti etmez. Yürürlükteki mevzuatın izin verdiği ölçüde LifeOS, uygulamanın kullanımından doğan dolaylı zararlardan sorumlu değildir. Kanunun vazgeçilemeyen hakları saklıdır.
