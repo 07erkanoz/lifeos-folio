@@ -165,10 +165,9 @@ jobs:
     needs: version
     permissions:
       contents: write
-    # Not ubuntu-latest: on 26.04 the runner was shut down twice midway
-    # through the APK build (28 Ekim 2026); 1.7.6 built on 24.04.
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    # Two cores on a private repository's runner: slower than 1.7.6's.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-java@v6.0.1
@@ -203,6 +202,22 @@ jobs:
             echo "keyAlias=$KEY_ALIAS"
             echo "keyPassword=$KEY_PASSWORD"
           } > android/key.properties
+      # A private repository's runner has 7 GB; android/gradle.properties
+      # asks Gradle for 8, and the runner was shut down mid-build three
+      # times (28 Ekim 2026). The user's Gradle settings override the
+      # project's; swap takes the peak.
+      - name: Gradle belleği
+        run: |
+          mkdir -p ~/.gradle
+          printf '%s\n' \
+            'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:ReservedCodeCacheSize=256m' \
+            'kotlin.daemon.jvmargs=-Xmx1g' \
+            'org.gradle.workers.max=2' > ~/.gradle/gradle.properties
+          sudo fallocate -l 6G /swap-gradle
+          sudo chmod 600 /swap-gradle
+          sudo mkswap /swap-gradle >/dev/null
+          sudo swapon /swap-gradle
+          free -h
       # One APK for every phone, so there is one file to offer and one
       # manifest to check against.
       - run: flutter build apk --release
