@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../services/editor/lawyer_profile.dart';
 import '../../services/platform/document_intents.dart';
+import '../../services/platform/lifeos_profile.dart';
 import '../../services/platform/onboarding_store.dart';
 import '../../services/search/library_controller.dart';
 import 'folio_about_dialog.dart';
@@ -89,6 +90,10 @@ class OnboardingScreen extends StatefulWidget {
   final Future<LawyerProfile> Function()? loadProfile;
   final Future<void> Function(LawyerProfile profile)? saveProfile;
 
+  /// What LifeOS asked at install, offered while the profile has no lawyer;
+  /// [LifeosProfile.read] when not given.
+  final Future<LawyerProfile?> Function()? lifeosProfile;
+
   /// A phone made one of the lawyer's devices with the computer's QR, and
   /// given what the computer has; true when it was. [pairWithDesktop] when
   /// not given.
@@ -104,6 +109,7 @@ class OnboardingScreen extends StatefulWidget {
     this.pickFolder,
     this.loadProfile,
     this.saveProfile,
+    this.lifeosProfile,
     this.pairDesktop,
   });
   @override
@@ -125,17 +131,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _fromUyap = false;
   bool _filling = false;
 
+  /// The form holds what was typed into LifeOS at install, to be checked.
+  bool _fromLifeos = false;
+
   @override
   void initState() {
     super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
     // A test reads no lawyer's real profile unless it gives one.
-    if (widget.loadProfile == null &&
-        Platform.environment.containsKey('FLUTTER_TEST')) {
+    final testing = Platform.environment.containsKey('FLUTTER_TEST');
+    if (widget.loadProfile == null && testing) return;
+    LawyerProfile p;
+    try {
+      p = await (widget.loadProfile ?? LawyerProfile.load)();
+    } catch (_) {
       return;
     }
-    (widget.loadProfile ?? LawyerProfile.load)().then((p) {
-      if (mounted) setState(() => _showProfile(p));
-    }, onError: (Object _) {});
+    // No lawyer kept yet: what LifeOS asked at install, if it did.
+    var fromLifeos = false;
+    if (p.lawyer == null && (widget.lifeosProfile != null || !testing)) {
+      final given = await (widget.lifeosProfile ?? LifeosProfile.read)()
+          .catchError((Object _) => null);
+      if (given != null) {
+        p = LifeosProfile.fill(p, given);
+        fromLifeos = true;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _showProfile(p);
+      _fromLifeos = fromLifeos;
+      _fromUyap = _fromUyap || fromLifeos;
+    });
   }
 
   @override
@@ -210,6 +240,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       setState(() {
         _showProfile(p);
         _fromUyap = true;
+        _fromLifeos = false;
         _paired = true;
       });
     } catch (e) {
@@ -252,6 +283,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       setState(() {
         _showProfile(filled);
         _fromUyap = true;
+        _fromLifeos = false;
       });
     } finally {
       if (mounted) setState(() => _filling = false);
@@ -855,6 +887,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
             ),
           ),
+          if (_fromLifeos)
+            Container(
+              key: const ValueKey('onboarding-lifeos-note'),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 20,
+                    color: colors.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'LifeOS kurulumunda yazdığınız bilgiler getirildi. '
+                      'Kontrol edin, gerekirse düzeltin ve “Devam et”e basın.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.45,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           field(_name, 'Ad soyad'),
           fieldPair(
             field(_bar, 'Baro'),

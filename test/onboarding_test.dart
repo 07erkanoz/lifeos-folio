@@ -217,6 +217,114 @@ void main() {
     library.dispose();
     await tester.runAsync(() => dir.delete(recursive: true));
   });
+  testWidgets('what LifeOS asked at install fills the profile step, to be '
+      'checked and kept; a kept profile is not touched', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final dir = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('folio-onboard-lifeos-'),
+    ))!;
+    final appearance = ThemeController(settingsPath: '${dir.path}/theme.json');
+    final library = _Library();
+    final saved = <LawyerProfile>[];
+    var kept = const LawyerProfile();
+    var asked = 0;
+    Widget screen() => MaterialApp(
+      home: OnboardingScreen(
+        library: library,
+        appearance: appearance,
+        store: _Store(),
+        status: const OnboardingStatus(licenseAccepted: true),
+        onDone: () {},
+        loadProfile: () async => kept,
+        saveProfile: (p) async => saved.add(p),
+        lifeosProfile: () async {
+          asked++;
+          return const LawyerProfile(
+            lawyers: [
+              Lawyer(
+                name: 'Deniz Yılmaz',
+                bar: 'Antalya',
+                barNumber: '1234',
+                tbbNumber: '56789',
+              ),
+            ],
+            phone: '0242 000 00 00',
+            email: 'deniz@example.com',
+            kep: 'deniz@hs01.kep.tr',
+            address: 'Muratpaşa/Antalya',
+            officeName: 'Yılmaz Hukuk Bürosu',
+          );
+        },
+      ),
+    );
+    String typed(String label) => tester
+        .widget<TextField>(find.widgetWithText(TextField, label))
+        .controller!
+        .text;
+    await tester.pumpWidget(screen());
+    await _io(tester);
+    expect(asked, 1);
+    expect(
+      find.byKey(const ValueKey('onboarding-lifeos-note')),
+      findsOneWidget,
+    );
+    expect(typed('Ad soyad'), 'Deniz Yılmaz');
+    expect(typed('Baro'), 'Antalya Barosu');
+    expect(typed('Baro sicil no'), '1234');
+    expect(typed('TBB sicil no'), '56789');
+    expect(typed('TC kimlik no'), '');
+    expect(typed('Telefon'), '0242 000 00 00');
+    expect(typed('E-posta'), 'deniz@example.com');
+    // Still the lawyer's to change before it is kept.
+    await tester.enterText(find.widgetWithText(TextField, 'Telefon'), '0532');
+    await tester.runAsync(
+      () => tester.tap(find.byKey(const ValueKey('onboarding-profile-next'))),
+    );
+    await _io(tester);
+    final one = saved.single;
+    expect(one.lawyer!.titled, 'Av. Deniz Yılmaz');
+    expect(one.phone, '0532');
+    expect(one.kep, 'deniz@hs01.kep.tr');
+    expect(one.address, 'Muratpaşa/Antalya');
+    expect(one.officeName, 'Yılmaz Hukuk Bürosu');
+
+    // Once Folio has its lawyer, the LifeOS file is not asked again.
+    kept = const LawyerProfile(lawyers: [Lawyer(name: 'Ece Kaya')]);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(screen());
+    await _io(tester);
+    expect(asked, 1);
+    expect(find.byKey(const ValueKey('onboarding-lifeos-note')), findsNothing);
+    expect(typed('Ad soyad'), 'Ece Kaya');
+
+    // No file, or a broken one: the step as it always was.
+    kept = const LawyerProfile();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OnboardingScreen(
+          library: library,
+          appearance: appearance,
+          store: _Store(),
+          status: const OnboardingStatus(licenseAccepted: true),
+          onDone: () {},
+          loadProfile: () async => kept,
+          saveProfile: (_) async {},
+          lifeosProfile: () async => null,
+        ),
+      ),
+    );
+    await _io(tester);
+    expect(find.byKey(const ValueKey('onboarding-lifeos-note')), findsNothing);
+    expect(typed('Ad soyad'), '');
+    await tester.pumpWidget(const SizedBox.shrink());
+    appearance.dispose();
+    library.dispose();
+    await tester.runAsync(() => dir.delete(recursive: true));
+  });
   testWidgets(
     'external preview can defer folders after accepting the license',
     (tester) async {

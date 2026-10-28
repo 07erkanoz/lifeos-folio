@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/editor/lawyer_profile.dart';
+import '../../services/platform/lifeos_profile.dart';
 import 'notice.dart';
 
 /// The office and its lawyers, typed once for every filing after.
@@ -11,7 +14,14 @@ class LawyerProfileDialog extends StatefulWidget {
   final LawyerProfile initial;
 
   static Future<void> show(BuildContext context) async {
-    final profile = await LawyerProfile.load();
+    var profile = await LawyerProfile.load();
+    // Skipped at the first start: what LifeOS asked at install, to keep or
+    // change here. A test reads no real file.
+    if (profile.lawyer == null &&
+        !Platform.environment.containsKey('FLUTTER_TEST')) {
+      final given = await LifeosProfile.read();
+      if (given != null) profile = LifeosProfile.fill(profile, given);
+    }
     if (!context.mounted) return;
     await showDialog<void>(
       context: context,
