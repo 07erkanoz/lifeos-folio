@@ -1,0 +1,8 @@
+{
+  "tr": "Farklı kaydet artık hangi biçimde kaydedeceğinizi sorar; dosya adındaki uzantıyı silseniz de belge uzantısız kaydolmaz. LifeOS'ta Mağaza'dan kurulan Folio, yeni sürümü indirme sayfasına yollamak yerine LifeOS Mağaza'dan kurmanızı söyler ve Mağaza'yı açar. Folio'nun Linux kurulumu uygulama menüsüne LifeOS Ofis eklemez. Lisans metni sadeleşti; Hakkında bölümünde lisans ve uzaktan paylaşımın şifreli aktarıcısı yazar.",
+  "en": "Save as now asks which format to save in, and a document is never saved without an extension even if you delete it from the name. On LifeOS, a Folio installed from the Store tells you to install the new version from LifeOS Mağaza and opens the Store, instead of sending you to the download page. Folio's Linux setup no longer adds LifeOS Ofis to the app menu. The licence text is simpler; About shows the licence and the encrypted relay used for remote sharing.",
+  "ofis": {
+    "tr": "LifeOS Ofis'in ilk sürümüdür. UDF, Word, ODT, RTF ve PDF belgelerini açar, düzenler ve yazdırır. E-imza kartınızla herhangi bir dosyayı imzalayıp .imz dosyası oluşturabilirsiniz. Size gelen bir .imz dosyasını açtığınızda imzanın geçerli olup olmadığını, kimin imzaladığını ve içindeki belgeyi görürsünüz. Farklı kaydet hangi biçimde kaydedeceğinizi sorar.",
+    "en": "The first release of LifeOS Ofis. It opens, edits and prints UDF, Word, ODT, RTF and PDF documents. Sign any file with your e-signature card to make an .imz file. Open an .imz you receive to see whether the signature holds, who signed it and the document inside. Save as asks which format to save in."
+  }
+}
