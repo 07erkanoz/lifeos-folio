@@ -205,7 +205,8 @@ jobs:
       # A private repository's runner has 7 GB; android/gradle.properties
       # asks Gradle for 8, and the runner was shut down mid-build three
       # times (28 Ekim 2026). The user's Gradle settings override the
-      # project's; swap takes the peak.
+      # project's; swap takes the peak. The swap file needs disk the runner
+      # does not have spare, so unused tools go first.
       - name: Gradle belleği
         run: |
           mkdir -p ~/.gradle
@@ -213,11 +214,15 @@ jobs:
             'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:ReservedCodeCacheSize=256m' \
             'kotlin.daemon.jvmargs=-Xmx1g' \
             'org.gradle.workers.max=2' > ~/.gradle/gradle.properties
-          sudo fallocate -l 6G /swap-gradle
+          # Room for the swap and the NDK: tools this job never uses.
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          sudo fallocate -l 4G /swap-gradle
           sudo chmod 600 /swap-gradle
           sudo mkswap /swap-gradle >/dev/null
           sudo swapon /swap-gradle
           free -h
+          df -h /
       # One APK for every phone, so there is one file to offer and one
       # manifest to check against.
       - run: flutter build apk --release
