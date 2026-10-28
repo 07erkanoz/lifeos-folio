@@ -165,7 +165,9 @@ jobs:
     needs: version
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: on 26.04 the runner was shut down twice midway
+    # through the APK build (28 Ekim 2026); 1.7.6 built on 24.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7.0.1
