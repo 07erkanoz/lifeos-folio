@@ -13,9 +13,13 @@ import '../../services/update/update_manifest.dart';
 /// download as it comes, the check against the signed manifest, and the
 /// system's own installer.
 class UpdateDialog extends StatefulWidget {
-  const UpdateDialog({super.key, required this.manifest});
+  const UpdateDialog({super.key, required this.manifest, this.packagedBy});
 
   final UpdateManifest manifest;
+
+  /// Who updates this Folio, in place of [UpdateInstaller.linuxUpdater].
+  @visibleForTesting
+  final LinuxUpdater? packagedBy;
 
   static Future<void> show(BuildContext context, UpdateManifest manifest) =>
       showDialog<void>(
@@ -38,6 +42,11 @@ class _UpdateDialogState extends State<UpdateDialog> {
 
   /// Asked once: on a Mac it tries writing beside the app.
   late final bool _inPlace = UpdateInstaller.replacesInPlace;
+
+  /// A Linux package's Folio: its update comes from LifeOS Mağaza or the
+  /// system, never from the site, which would install a second Folio.
+  late final LinuxUpdater? _packagedBy =
+      widget.packagedBy ?? UpdateInstaller.linuxUpdater;
 
   UpdateManifest get _m => widget.manifest;
 
@@ -145,10 +154,45 @@ class _UpdateDialogState extends State<UpdateDialog> {
                 ),
               ),
             const SizedBox(height: 12),
-            Text(
-              'Paket ${_size(_m.size)} · imzalı sürüm bilgisiyle denetlenir',
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-            ),
+            if (_packagedBy != null)
+              Container(
+                key: const ValueKey('update-packaged'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer.withValues(alpha: .5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.storefront_outlined,
+                      size: 18,
+                      color: scheme.onPrimaryContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _packagedBy == LinuxUpdater.lifeosStore
+                            ? 'Yeni sürüm LifeOS Mağaza’dan gelir. '
+                                  'Mağaza’nın Güncellemeler sayfasından '
+                                  'kurabilirsiniz.'
+                            : 'Yeni sürüm sistem güncellemesiyle gelir.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: scheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Text(
+                'Paket ${_size(_m.size)} · imzalı sürüm bilgisiyle denetlenir',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
             if (_step == _Step.downloading) ...[
               const SizedBox(height: 12),
               LinearProgressIndicator(
@@ -218,7 +262,25 @@ class _UpdateDialogState extends State<UpdateDialog> {
                 },
           child: const Text('Sonra'),
         ),
-        if (!UpdateInstaller.canInstall)
+        if (_packagedBy == LinuxUpdater.lifeosStore)
+          FilledButton.icon(
+            key: const ValueKey('update-store'),
+            onPressed: () {
+              unawaited(
+                UpdateInstaller.openStore().then<void>(
+                  (_) {},
+                  onError: (Object _) {},
+                ),
+              );
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.storefront_outlined, size: 18),
+            label: const Text('Mağaza’yı aç'),
+          )
+        // The system's package manager updates it: nothing to press.
+        else if (_packagedBy == LinuxUpdater.system)
+          ...const <Widget>[]
+        else if (!UpdateInstaller.canInstall)
           FilledButton.icon(
             onPressed: () {
               unawaited(

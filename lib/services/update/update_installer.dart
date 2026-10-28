@@ -12,6 +12,9 @@ import '../platform/file_actions.dart';
 import 'update_manifest.dart';
 import '../platform/store_package.dart';
 
+/// Who updates a Folio installed as a Linux package.
+enum LinuxUpdater { lifeosStore, system }
+
 /// A newer Folio fetched and installed from inside Folio: the package the
 /// signed manifest names, downloaded, held to the manifest's size and
 /// SHA-256 (the manifest's own Ed25519 signature having been checked by
@@ -27,6 +30,47 @@ abstract final class UpdateInstaller {
         p.join(Platform.environment['HOME'] ?? '', '.local', 'share'),
     'lifeos-folio',
   );
+
+  /// On Linux, who updates this Folio when it is not Folio's own kur.sh
+  /// install: LifeOS Mağaza, or the system's package manager. Null
+  /// elsewhere, and on Linux where Folio updates itself or runs from some
+  /// other folder (the download page is offered then).
+  static LinuxUpdater? get linuxUpdater => Platform.isLinux
+      ? linuxUpdaterOf(
+          Platform.resolvedExecutable,
+          path: Platform.environment['PATH'],
+        )
+      : null;
+
+  /// [linuxUpdater] for a Folio at [executable], with [path] the PATH it
+  /// was started with. A package puts Folio under /opt or /usr (LifeOS
+  /// Mağaza's under /opt/lifeos-folio); were its update downloaded from
+  /// the site, kur.sh would install a second Folio beside it.
+  @visibleForTesting
+  static LinuxUpdater? linuxUpdaterOf(
+    String executable, {
+    String? path,
+    bool Function(String file)? exists,
+  }) {
+    if (!p.posix.isWithin('/opt', executable) &&
+        !p.posix.isWithin('/usr', executable)) {
+      return null;
+    }
+    final found = exists ?? (file) => File(file).existsSync();
+    final store = (path ?? '')
+        .split(':')
+        .where((dir) => dir.isNotEmpty)
+        .any((dir) => found(p.posix.join(dir, _storeCommand)));
+    return store ? LinuxUpdater.lifeosStore : LinuxUpdater.system;
+  }
+
+  static const _storeCommand = 'lifeos-magaza';
+
+  /// Opens LifeOS Mağaza on its updates page.
+  static Future<void> openStore() => Process.start(_storeCommand, const [
+    '--sayfa',
+    'guncellemeler',
+  ], mode: ProcessStartMode.detached);
 
   /// Whether this Folio can install an update itself; elsewhere the
   /// download page is opened.

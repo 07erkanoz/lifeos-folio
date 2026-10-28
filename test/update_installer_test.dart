@@ -96,6 +96,50 @@ void main() {
 // the old one's place once Folio has quit. The system's commands are
 // played here by a fake that keeps what it was asked.
 void _mac() {
+  test('a Linux package\'s Folio is updated by LifeOS Mağaza where it is '
+      'there, by the system elsewhere; Folio\'s own install by Folio', () {
+    bool store(String file) => file == '/usr/bin/lifeos-magaza';
+    expect(
+      UpdateInstaller.linuxUpdaterOf(
+        '/opt/lifeos-folio/lifeos_folio',
+        path: '/usr/local/bin:/usr/bin',
+        exists: store,
+      ),
+      LinuxUpdater.lifeosStore,
+    );
+    expect(
+      UpdateInstaller.linuxUpdaterOf(
+        '/opt/lifeos-folio/lifeos_folio',
+        path: '/usr/local/bin:/bin',
+        exists: store,
+      ),
+      LinuxUpdater.system,
+    );
+    expect(
+      UpdateInstaller.linuxUpdaterOf(
+        '/usr/lib/lifeos-folio/lifeos_folio',
+        path: null,
+        exists: store,
+      ),
+      LinuxUpdater.system,
+    );
+    // kur.sh's Folio, and one run from wherever it was unpacked.
+    for (final elsewhere in [
+      '/home/ayse/.local/share/lifeos-folio/lifeos_folio',
+      '/home/ayse/İndirilenler/LifeOS-Folio/lifeos_folio',
+      '/optional/lifeos_folio',
+    ]) {
+      expect(
+        UpdateInstaller.linuxUpdaterOf(
+          elsewhere,
+          path: '/usr/bin',
+          exists: store,
+        ),
+        isNull,
+      );
+    }
+  });
+
   group('Mac', () {
     late Directory root;
     late String app;

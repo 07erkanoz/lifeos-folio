@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../services/update/update_installer.dart';
 import '../../services/update/update_manifest.dart';
 import 'update_dialog.dart';
 
@@ -75,7 +76,13 @@ class UpdateCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Yeni sürüm indirilmeye hazır; kurmak bir dakika sürer.',
+                        switch (UpdateInstaller.linuxUpdater) {
+                          LinuxUpdater.lifeosStore =>
+                            'Yeni sürüm LifeOS Mağaza’dan gelir.',
+                          LinuxUpdater.system =>
+                            'Yeni sürüm sistem güncellemesiyle gelir.',
+                          null => 'Yeni sürüm indirilmeye hazır; kurmak bir dakika sürer.',
+                        },
                         style: TextStyle(
                           fontSize: 12,
                           color: scheme.onSurfaceVariant,
