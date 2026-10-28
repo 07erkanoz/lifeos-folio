@@ -50,7 +50,10 @@ jobs:
           grep -n -i -B3 -A25 'hook\|native asset\|error' build-windows.log | tail -n 300
           exit 1
   test:
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: on 26.04 its newer appindicator marks the call
+    # tray_manager makes deprecated, and -Werror stops the Linux build. The
+    # release builds Linux on 24.04 too.
+    runs-on: ubuntu-24.04
     # The suite takes about a quarter of an hour; a slow package mirror on
     # top of it ran past thirty minutes twice on the day of a release.
     timeout-minutes: 50
