@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../editor/lawyer_profile.dart';
+import 'app_directories.dart';
 
 /// What LifeOS asked the lawyer while it was installed (or in its Karşılama),
 /// for Folio's first start not to ask again: `folio-profil.json` in LifeOS's
@@ -74,6 +75,49 @@ abstract final class LifeosProfile {
       return parse(await source.readAsString());
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Marks that LifeOS's details were offered once, whether kept or not; the
+  /// file is not offered again after (a lawyer who cleared them chose to).
+  static Future<File> _taken() async => File(
+    p.join((await folioSupportDirectory()).path, 'lifeos-profil-alindi'),
+  );
+
+  static Future<void> markTaken() async {
+    try {
+      final marker = await _taken();
+      await marker.parent.create(recursive: true);
+      await marker.writeAsString('', flush: true);
+    } catch (_) {}
+  }
+
+  /// At every start: a profile still with no lawyer gets LifeOS's details,
+  /// once. The first start's profile step offers them itself; this is for
+  /// a Folio that was started before it could read them (1.7.7 did not), or
+  /// whose step was skipped. True when the profile was filled and saved, to
+  /// be told once. The file is only read.
+  static Future<bool> fillAtStart({
+    Future<LawyerProfile> Function()? load,
+    Future<void> Function(LawyerProfile profile)? save,
+    Future<LawyerProfile?> Function()? lifeos,
+    Future<bool> Function()? taken,
+    Future<void> Function()? markTaken,
+  }) async {
+    try {
+      final kept = await (load ?? LawyerProfile.load)();
+      if (kept.lawyer != null) return false;
+      if (await (taken ?? () async => (await _taken()).exists())()) {
+        return false;
+      }
+      final given = await (lifeos ?? read)();
+      if (given == null || given.lawyer == null) return false;
+      final filled = fill(kept, given);
+      await (save ?? (p) => p.save())(filled);
+      await (markTaken ?? LifeosProfile.markTaken)();
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

@@ -30,6 +30,7 @@ import '../services/uyap/uyap_library.dart';
 import '../services/speech/speech_session.dart';
 import '../services/platform/document_intents.dart';
 import '../services/platform/agenda_launch.dart';
+import '../services/platform/lifeos_profile.dart';
 import '../services/platform/document_launch.dart';
 import '../services/platform/platform_capabilities.dart';
 import '../services/editor/document_lock.dart';
@@ -1000,7 +1001,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       unawaited(searchUyapFolder(_library).catchError((Object _) => false));
       unawaited(_countAgenda());
-      unawaited(_loadLawyerName());
+      unawaited(_fillFromLifeos());
       // The office's network, if this Folio had joined it.
       unawaited(OfficeNetwork.instance.resume());
       OfficeNetwork.instance.incoming.addListener(_pairingAsked);
@@ -1753,6 +1754,20 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Timer? _countSoon;
+
+  /// On Linux, a profile with no lawyer takes what LifeOS's installer
+  /// asked, once (LifeosProfile.fillAtStart), and says so; then the name.
+  Future<void> _fillFromLifeos() async {
+    if (Platform.isLinux && await LifeosProfile.fillAtStart() && mounted) {
+      showNotice(
+        context,
+        'LifeOS kurulumunda verdiğiniz bilgiler profilinize eklendi',
+        detail: 'Ayarlar › Profil’den değiştirebilirsiniz.',
+        kind: NoticeKind.success,
+      );
+    }
+    await _loadLawyerName();
+  }
 
   Future<void> _loadLawyerName() async {
     var name = '';

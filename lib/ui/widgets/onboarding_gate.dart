@@ -94,6 +94,11 @@ class OnboardingScreen extends StatefulWidget {
   /// [LifeosProfile.read] when not given.
   final Future<LawyerProfile?> Function()? lifeosProfile;
 
+  /// Told that LifeOS's details were shown and the step passed, kept or
+  /// changed: they are not offered again at a later start.
+  /// [LifeosProfile.markTaken] when not given.
+  final Future<void> Function()? lifeosTaken;
+
   /// A phone made one of the lawyer's devices with the computer's QR, and
   /// given what the computer has; true when it was. [pairWithDesktop] when
   /// not given.
@@ -110,6 +115,7 @@ class OnboardingScreen extends StatefulWidget {
     this.loadProfile,
     this.saveProfile,
     this.lifeosProfile,
+    this.lifeosTaken,
     this.pairDesktop,
   });
   @override
@@ -300,6 +306,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final profile = _typed;
       if (profile.lawyer != null) {
         await (widget.saveProfile ?? (p) => p.save())(profile);
+      }
+      // What the lawyer made of LifeOS's details is theirs, even emptied.
+      if (_fromLifeos) {
+        final taken =
+            widget.lifeosTaken ??
+            (Platform.environment.containsKey('FLUTTER_TEST')
+                ? null
+                : LifeosProfile.markTaken);
+        await taken?.call();
       }
       if (mounted) setState(() => _step = 3);
     } catch (e) {

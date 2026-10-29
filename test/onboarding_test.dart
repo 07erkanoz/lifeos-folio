@@ -231,6 +231,7 @@ void main() {
     final saved = <LawyerProfile>[];
     var kept = const LawyerProfile();
     var asked = 0;
+    var taken = 0;
     Widget screen() => MaterialApp(
       home: OnboardingScreen(
         library: library,
@@ -240,6 +241,7 @@ void main() {
         onDone: () {},
         loadProfile: () async => kept,
         saveProfile: (p) async => saved.add(p),
+        lifeosTaken: () async => taken++,
         lifeosProfile: () async {
           asked++;
           return const LawyerProfile(
@@ -285,6 +287,8 @@ void main() {
     );
     await _io(tester);
     final one = saved.single;
+    // Shown and passed: not offered again at a later start.
+    expect(taken, 1);
     expect(one.lawyer!.titled, 'Av. Deniz Yılmaz');
     expect(one.phone, '0532');
     expect(one.kep, 'deniz@hs01.kep.tr');

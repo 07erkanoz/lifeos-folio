@@ -89,4 +89,83 @@ void main() {
     expect(filled.phone, '0532 111 11 11');
     expect(filled.kep, 'deniz@hs01.kep.tr');
   });
+
+  group('at every start', () {
+    const lifeos = LawyerProfile(
+      lawyers: [Lawyer(name: 'Deniz Yılmaz', bar: 'Antalya')],
+      kep: 'deniz@hs01.kep.tr',
+    );
+    late LawyerProfile kept;
+    late List<LawyerProfile> saved;
+    late bool taken;
+    Future<bool> start({LawyerProfile? given, bool asGiven = true}) =>
+        LifeosProfile.fillAtStart(
+          load: () async => kept,
+          save: (p) async => saved.add(p),
+          lifeos: () async => asGiven ? given ?? lifeos : null,
+          taken: () async => taken,
+          markTaken: () async => taken = true,
+        );
+    setUp(() {
+      kept = const LawyerProfile(phone: '0532 111 11 11');
+      saved = [];
+      taken = false;
+    });
+
+    test('no lawyer and LifeOS\'s file: filled, kept, told once', () async {
+      expect(await start(), isTrue);
+      final one = saved.single;
+      expect(one.lawyer!.name, 'Deniz Yılmaz');
+      expect(one.kep, 'deniz@hs01.kep.tr');
+      expect(one.phone, '0532 111 11 11');
+      expect(taken, isTrue);
+      // The next start: offered already, nothing again.
+      kept = const LawyerProfile();
+      expect(await start(), isFalse);
+      expect(saved, hasLength(1));
+    });
+
+    test('a lawyer of Folio\'s own: nothing changes', () async {
+      kept = const LawyerProfile(lawyers: [Lawyer(name: 'Ece Kaya')]);
+      expect(await start(), isFalse);
+      expect(saved, isEmpty);
+      expect(taken, isFalse);
+    });
+
+    test('no file, or a broken one: as before, nothing kept', () async {
+      expect(await start(asGiven: false), isFalse);
+      expect(saved, isEmpty);
+      expect(taken, isFalse);
+      final dir = await Directory.systemTemp.createTemp('folio-lifeos-start-');
+      addTearDown(() => dir.delete(recursive: true));
+      final broken = File('${dir.path}/folio-profil.json');
+      await broken.writeAsString('{"ad": "Deniz');
+      expect(
+        await LifeosProfile.fillAtStart(
+          load: () async => kept,
+          save: (p) async => saved.add(p),
+          lifeos: () => LifeosProfile.read(broken),
+          taken: () async => false,
+          markTaken: () async => taken = true,
+        ),
+        isFalse,
+      );
+      expect(saved, isEmpty);
+    });
+
+    test('a file with no lawyer in it fills nothing', () async {
+      expect(
+        await start(given: const LawyerProfile(officeName: 'Kaya Hukuk')),
+        isFalse,
+      );
+      expect(saved, isEmpty);
+    });
+
+    test('the step at the first start was passed: not offered again', () async {
+      taken = true;
+      kept = const LawyerProfile();
+      expect(await start(), isFalse);
+      expect(saved, isEmpty);
+    });
+  });
 }
