@@ -1,0 +1,8 @@
+{
+  "tr": "LifeOS'ta kurulum sırasında verdiğiniz avukat bilgileri artık Folio'ya her durumda gelir. Folio daha önce boş profille açıldıysa, yeni sürümün ilk açılışında bilgiler profilinize eklenir ve bu bir kez söylenir; Ayarlar › Profil'den değiştirebilirsiniz. Profilinizde zaten bir avukat varsa hiçbir şey değişmez.",
+  "en": "On LifeOS, the lawyer's details you gave during installation now always reach Folio. If Folio was opened before with an empty profile, the new version adds them to your profile on its first start and tells you once; you can change them in Settings › Profile. If your profile already has a lawyer, nothing changes.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.7.8: Folio'yla aynı sürüm; Ofis'te değişiklik yok.",
+    "en": "LifeOS Ofis 1.7.8: the same release as Folio; nothing changed in Ofis."
+  }
+}
