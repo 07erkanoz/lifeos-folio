@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../platform/system_notices.dart';
+import 'lifeos_agenda.dart';
 import 'portal_database.dart';
 import 'uyap_notice_alerts.dart';
 
@@ -16,12 +17,16 @@ typedef AgendaReminder = ({
 
 /// The agenda's alarms (the audit's B23): a deadline followed is told 7, 3
 /// and 1 days before its last day, on it, and once the day after if not
-/// marked done; a hearing the day before and on its day. Each once, kept
+/// marked done; a hearing a day before and an hour before. Each once, kept
 /// in the database, so that the window and the phone's background check
-/// do not both tell it.
+/// do not both tell it. Clicked, each opens the agenda at its record as
+/// `--ajanda <uid>` does (payload `ajanda:<uid>`, LifeosAgenda.uidOf).
 abstract final class AgendaReminders {
   static const _sentKey = 'ajanda_hatirlatma';
   static const _deadlineStages = {7, 3, 1, 0, -1};
+
+  /// How long before a hearing it is told: a day, and an hour.
+  static const _day1 = Duration(days: 1), _hour1 = Duration(hours: 1);
 
   static Set<String> _sent(PortalDatabase db) {
     try {
@@ -67,33 +72,53 @@ abstract final class AgendaReminders {
             ? 'Bugün son gün'
             : '$left gün sonra son gün',
         body: '${d.record.title} · ${_day(day)}',
-        payload: 'ajanda:${d.record.id}',
+        payload:
+            'ajanda:${LifeosAgenda.uidOf('sure', 'folio-sure-${d.record.id}')}',
       ));
     }
-    for (final h in db.hearings(
-      from: today,
-      to: today.add(const Duration(days: 2)),
-    )) {
-      final left = DateTime(
-        h.at.year,
-        h.at.month,
-        h.at.day,
-      ).difference(today).inDays;
-      if (left > 1) continue;
-      final key = 'd|${h.key}|$left';
+    // A hearing begun is not told of any more; one within the day is told
+    // once, within the hour once more.
+    for (final h in db.hearings(from: now, to: now.add(_day1 * 2))) {
+      final left = h.at.difference(now);
+      if (left > _day1) continue;
+      final hour = left <= _hour1;
+      final key = 'd|${h.key}|${hour ? '1s' : '1g'}';
+      // An earlier Folio told the day before as `|1`.
+      if (!hour && sent.contains('d|${h.key}|1')) continue;
       if (!sent.add(key)) continue;
       final time =
           '${h.at.hour.toString().padLeft(2, '0')}:'
           '${h.at.minute.toString().padLeft(2, '0')}';
+      final minutes = left.inMinutes < 1 ? 1 : left.inMinutes;
+      final day = DateTime(h.at.year, h.at.month, h.at.day);
       out.add((
         key: key,
-        title: left == 0 ? 'Bugün duruşma $time' : 'Yarın duruşma $time',
+        title: hour
+            ? minutes >= 55
+                  ? '1 saat sonra duruşma $time'
+                  : '$minutes dakika sonra duruşma $time'
+            : day == today
+            ? 'Bugün duruşma $time'
+            : 'Yarın duruşma $time',
         body: '${h.number} · ${h.court}',
-        payload: 'ajanda:${h.key}',
+        payload:
+            'ajanda:${LifeosAgenda.uidOf('durusma', 'folio-durusma-${h.key}')}',
       ));
     }
     if (mark && out.isNotEmpty) _mark(db, [for (final r in out) r.key]);
     return out;
+  }
+
+  /// When after [now] a hearing is next due to be told: a day or an hour
+  /// before it, whichever comes first; null with none in the next day.
+  static DateTime? nextHearing(PortalDatabase db, DateTime now) {
+    DateTime? next;
+    for (final h in db.hearings(from: now, to: now.add(_day1 * 2))) {
+      for (final at in [h.at.subtract(_day1), h.at.subtract(_hour1)]) {
+        if (at.isAfter(now) && (next == null || at.isBefore(next))) next = at;
+      }
+    }
+    return next;
   }
 
   /// [keys] told, kept so; the newest hundreds: the old are past telling.
@@ -137,14 +162,25 @@ abstract final class AgendaReminders {
     return told.length;
   }
 
-  static Timer? _timer;
+  static Timer? _timer, _hearing;
 
-  /// Checks now and every half hour while Folio runs.
+  /// Checks now and every half hour while Folio runs, and at the minute a
+  /// hearing is next due to be told: an hour before is not half an hour
+  /// late.
   static void start({bool Function()? private}) {
     _timer?.cancel();
     Future<void> check() async {
       try {
-        await tell(await PortalDatabase.shared(), private: private, ask: true);
+        final db = await PortalDatabase.shared();
+        await tell(db, private: private, ask: true);
+        _hearing?.cancel();
+        final next = nextHearing(db, DateTime.now());
+        if (next != null) {
+          _hearing = Timer(
+            next.difference(DateTime.now()) + const Duration(seconds: 1),
+            () => unawaited(check()),
+          );
+        }
       } catch (_) {}
     }
 

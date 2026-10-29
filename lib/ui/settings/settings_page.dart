@@ -20,6 +20,7 @@ import '../../services/portal/background_notices.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_sync.dart';
 import '../../services/portal/uyap_notice.dart';
+import '../../services/portal/lifeos_agenda.dart';
 import '../../services/portal/uyap_notice_alerts.dart';
 import '../../services/search/library_controller.dart';
 import '../../services/uets/uets_api.dart';
@@ -125,6 +126,9 @@ class _SettingsPageState extends State<SettingsPage> {
   int? _snippets;
   PortalDatabase? _db;
   UyapNoticeAlerts _alerts = const UyapNoticeAlerts();
+
+  /// Whether LifeOS's agenda names the clients (LifeosAgenda): off.
+  bool _agendaNames = false;
   String _version = '';
   String? _update;
   UpdateManifest? _newer;
@@ -194,7 +198,10 @@ class _SettingsPageState extends State<SettingsPage> {
       _profile = profile;
       _snippets = snippets;
       _db = db;
-      if (db != null) _alerts = UyapNoticeAlerts.of(db);
+      if (db != null) {
+        _alerts = UyapNoticeAlerts.of(db);
+        _agendaNames = LifeosAgenda.showsNames(db);
+      }
       _version = version;
     });
   }
@@ -203,6 +210,14 @@ class _SettingsPageState extends State<SettingsPage> {
     await Navigator.of(context)
         .push(MaterialPageRoute<void>(builder: (_) => page));
     if (mounted) await _load();
+  }
+
+  void _setAgendaNames(bool on) {
+    setState(() => _agendaNames = on);
+    final db = _db;
+    if (db == null) return;
+    LifeosAgenda.setShowsNames(db, on);
+    unawaited(LifeosAgendaWriter.refresh());
   }
 
   void _setAlerts(UyapNoticeAlerts next) {
@@ -786,6 +801,21 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
+          if (Platform.isLinux)
+            _Entry(
+              'lifeos bildirim merkezi ajanda müvekkil adı kvkk masaüstü',
+              SettingsRow(
+                key: const ValueKey('settings-lifeos-agenda-names'),
+                icon: Icons.badge_outlined,
+                title: 'Müvekkil adını LifeOS ajandasında göster',
+                subtitle: _agendaNames
+                    ? 'Bildirim merkezindeki ajandada dosya numarasının '
+                          'yanında müvekkilin adı da yazar.'
+                    : 'Bildirim merkezindeki ajandada yalnızca dosya numarası '
+                          've mahkeme yazar; müvekkil adı masaüstüne verilmez.',
+                trailing: settingsSwitch(_agendaNames, _setAgendaNames),
+              ),
+            ),
           if (_phone)
             _Entry(
               'arka plan kapalıyken denetle pil',

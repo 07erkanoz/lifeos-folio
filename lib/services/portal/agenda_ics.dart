@@ -15,6 +15,12 @@ class CalendarEvent {
     this.minutes = 60,
     this.place = '',
     this.detail = '',
+    this.kind = '',
+    this.name = '',
+    this.court = '',
+    this.caseNumber = '',
+    this.clients = const [],
+    this.hearingKey,
   });
 
   /// The same for the same thing on every export: a calendar given the
@@ -24,6 +30,17 @@ class CalendarEvent {
   final DateTime start;
   final bool allDay;
   final int minutes;
+
+  /// What it is, as LifeOS's agenda names it: `durusma`, `sure` or `gorev`.
+  final String kind;
+
+  /// Its own title, without the case, the court and the clients [title]
+  /// is written with; and those apart, for a desktop that lays them out.
+  final String name, court, caseNumber;
+  final List<String> clients;
+
+  /// The hearing it is, or a task is about: the agenda opens on it.
+  final String? hearingKey;
 }
 
 /// What the agenda keeps between [from] and [to], for a calendar: the
@@ -82,6 +99,11 @@ List<CalendarEvent> agendaEvents(
           start: day,
           allDay: true,
           detail: d.record.law,
+          kind: 'sure',
+          name: d.user?.titleOverride ?? d.record.title,
+          court: kase?.court ?? '',
+          caseNumber: kase?.number ?? '',
+          clients: whose[key] ?? const [],
         ),
       );
     }
@@ -104,6 +126,12 @@ List<CalendarEvent> agendaEvents(
         allDay: i.allDay,
         minutes: 30,
         detail: SecretNotes.bodyHidden(i) ? '' : i.body,
+        kind: i.kind == 'deadline' ? 'sure' : 'gorev',
+        name: i.title,
+        court: kase?.court ?? '',
+        caseNumber: kase?.number ?? '',
+        clients: i.caseKey == null ? const [] : whose[i.caseKey!] ?? const [],
+        hearingKey: i.hearingKey,
       ),
     );
   }
@@ -124,6 +152,15 @@ CalendarEvent hearingEvent(PortalHearing h, {List<String> client = const []}) =>
       start: h.at,
       place: h.court,
       detail: h.kind?.value ?? '',
+      kind: 'durusma',
+      name: switch (h.kind?.value) {
+        final k? when k.trim().isNotEmpty => k.trim(),
+        _ => 'Duruşma',
+      },
+      court: h.court,
+      caseNumber: h.number,
+      clients: client,
+      hearingKey: h.key,
     );
 
 /// [events] as an iCalendar file (RFC 5545) that Google, Outlook and

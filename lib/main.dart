@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'services/desktop/desktop_instance.dart';
 import 'services/desktop/mac_quit.dart';
+import 'services/platform/agenda_launch.dart';
 import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
 import 'services/live/live_links.dart';
@@ -96,6 +97,10 @@ void main(List<String> arguments) async {
   unawaited(EditorSettings.instance.load());
 
   final startup = Stopwatch()..start();
+  // `--ajanda [uid]` (LifeOS's notification centre): the agenda, at that
+  // record; what is left of the arguments are documents, as ever.
+  final agenda = AgendaLaunch.parse(arguments);
+  final documents = DocumentLaunch.parse(AgendaLaunch.without(arguments));
   final sessionFuture =
       Platform.isLinux || Platform.isWindows || Platform.isMacOS
       ? WindowSession.load()
@@ -108,7 +113,9 @@ void main(List<String> arguments) async {
       instance = await DesktopInstance.acquire(
         arguments.contains('--quick-search')
             ? ['--quick-search']
-            : DocumentLaunch.parse(arguments).arguments,
+            : agenda != null
+            ? agenda.arguments
+            : documents.arguments,
       );
     } on StateError catch (e) {
       // The open Folio does not answer: said, and this one ends, not left
@@ -121,7 +128,7 @@ void main(List<String> arguments) async {
   final windowSession = await sessionFuture;
   // An invitation's link Folio was started with: the home page asks to
   // join once it is up; and this Folio named as what opens them.
-  if (DocumentLaunch.parse(arguments).link case final link?) {
+  if (documents.link case final link?) {
     LiveLinks.take(link);
   }
   if (Platform.isLinux || Platform.isWindows) {
@@ -161,8 +168,9 @@ void main(List<String> arguments) async {
       instance: instance,
       startQuick: arguments.contains('--quick-search'),
       onboarding: true,
-      initialPaths: DocumentLaunch.parse(arguments).paths,
-      initialEdit: DocumentLaunch.parse(arguments).edit,
+      initialPaths: documents.paths,
+      initialEdit: documents.edit,
+      initialAgenda: agenda,
     ),
   );
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -199,6 +207,9 @@ class EvrakConvertApp extends StatefulWidget {
   final bool desktopChrome;
   final List<String> initialPaths;
   final bool initialEdit;
+
+  /// Started with `--ajanda`: the agenda opens at its record.
+  final AgendaLaunch? initialAgenda;
   final LibraryController? library;
   final ThemeController? appearance;
   const EvrakConvertApp({
@@ -210,6 +221,7 @@ class EvrakConvertApp extends StatefulWidget {
     this.onboarding = false,
     this.initialPaths = const [],
     this.initialEdit = false,
+    this.initialAgenda,
     this.library,
     this.appearance,
   });
@@ -322,6 +334,13 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
       _launchRequests = widget.instance!.requests.listen((args) {
         if (args.contains('--quick-search')) {
           _openQuick();
+        } else if (AgendaLaunch.parse(args) case final agenda?) {
+          // LifeOS's agenda clicked: the window, at that record.
+          unawaited(
+            companion!
+                .showMain(showHome: false)
+                .then((_) => _homeKey.currentState?.openAgenda(agenda.uid)),
+          );
         } else {
           // Started again with no document: the home page, not what was
           // open when it went to the tray (23 Ekim 2026).
@@ -398,6 +417,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
       drafts: _drafts,
       initialPaths: widget.initialPaths,
       initialEdit: widget.initialEdit,
+      initialAgenda: widget.initialAgenda,
       desktopLaunches: companion?.launches.stream,
       library: library,
       appearance: appearance,

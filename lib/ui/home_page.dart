@@ -29,6 +29,7 @@ import '../services/uyap/uyap_case_store.dart';
 import '../services/uyap/uyap_library.dart';
 import '../services/speech/speech_session.dart';
 import '../services/platform/document_intents.dart';
+import '../services/platform/agenda_launch.dart';
 import '../services/platform/document_launch.dart';
 import '../services/platform/platform_capabilities.dart';
 import '../services/editor/document_lock.dart';
@@ -77,6 +78,7 @@ import 'office/office_pairing_dialog.dart';
 import 'office/messages_page.dart';
 import '../services/uyap/uyap_web_service.dart' show UyapWebService;
 import '../services/portal/agenda_reminders.dart';
+import '../services/portal/lifeos_agenda.dart';
 import '../services/platform/folder_zip.dart';
 import 'cash/cash_page.dart';
 import 'live/live_document_page.dart';
@@ -138,6 +140,9 @@ import 'theme/folio_palette.dart';
 class HomePage extends StatefulWidget {
   final List<String> initialPaths;
   final bool initialEdit;
+
+  /// Started with `--ajanda`: the agenda, at its record if it names one.
+  final AgendaLaunch? initialAgenda;
   final Stream<List<String>>? desktopLaunches;
   final LibraryController? library;
   final ThemeController appearance;
@@ -147,6 +152,7 @@ class HomePage extends StatefulWidget {
     super.key,
     this.initialPaths = const [],
     this.initialEdit = false,
+    this.initialAgenda,
     this.desktopLaunches,
     this.library,
     required this.appearance,
@@ -1010,6 +1016,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       tellOffice(OfficeNetwork.instance);
       // The agenda's alarms: deadlines' last days, hearings (B23).
       AgendaReminders.start(private: () => AppLock.instance.locked);
+      // LifeOS's notification centre shows the agenda from a file of its
+      // own (lifeOSArch docs/folio-ajanda.md), kept current here.
+      LifeosAgendaWriter.start(lawyer: () => _lawyerName);
       OfficeNetwork.instance.addListener(_officeCounted);
       // Each UYAP channel syncs when it connects, the agenda open or not.
       PortalSync.instance.addListener(_portalSynced);
@@ -1087,6 +1096,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const Duration(milliseconds: 750),
           () => _library.refresh(),
         );
+      });
+    }
+    if (widget.initialAgenda case final agenda?) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(openAgenda(agenda.uid));
       });
     }
     if (widget.initialPaths.isNotEmpty) {
@@ -2090,6 +2104,27 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     },
   );
 
+  /// The agenda at the record [uid] names (LifeosAgenda.uidOf): a hearing
+  /// chosen, a deadline's or a task's day; the agenda alone when [uid] is
+  /// null or names nothing kept. `--ajanda` and the agenda's notifications
+  /// both come here.
+  Future<void> openAgenda(String? uid) async {
+    ({DateTime day, String? hearing})? found;
+    if (uid != null) {
+      try {
+        found = LifeosAgenda.find(
+          await PortalDatabase.shared(),
+          uid,
+          DateTime.now(),
+        );
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    _agendaDay = found?.day;
+    _agendaHearing = found?.hearing;
+    await _selectGroup('agenda', asked: found != null);
+  }
+
   /// The notice the UETS page opens on, when a deadline led there.
   String? _uetsFocus;
 
@@ -2110,12 +2145,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await windowManager.focus();
       } catch (_) {}
     }
+    // The agenda's alarms: as `--ajanda <uid>` opens it.
+    if (payload.startsWith('ajanda:')) {
+      await openAgenda(payload.substring(7));
+      return;
+    }
     // The office's words: their pages.
     for (final (prefix, group) in const [
       ('mesaj:', 'mesajlar'),
       ('gorev:', 'gorevler'),
       ('muvekkil:', 'muvekkiller'),
-      ('ajanda:', 'agenda'),
       ('buro:', 'buro'),
     ]) {
       if (payload.startsWith(prefix)) {
