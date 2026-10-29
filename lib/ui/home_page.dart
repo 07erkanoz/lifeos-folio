@@ -2131,6 +2131,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           await PortalDatabase.shared(),
           uid,
           DateTime.now(),
+          // A hearing moved since LifeOS was given its uid.
+          ids: await LifeosAgendaIds.read(await LifeosAgendaIds.file()),
         );
       } catch (_) {}
     }

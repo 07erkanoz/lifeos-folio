@@ -123,23 +123,107 @@ void main() {
       );
     });
 
-    test('today and the next 14 days: not yesterday, not the 15th day', () {
+    test('30 days back and 120 ahead, and the file says so', () {
       final db = agenda(
         hearings: [
-          DateTime(2026, 10, 26, 10), // yesterday
-          DateTime(2026, 10, 27, 9), // today, already begun
-          DateTime(2026, 11, 10, 16), // the 14th day
-          DateTime(2026, 11, 11, 9), // the 15th
+          DateTime(2026, 9, 26, 10), // the 31st day back
+          DateTime(2026, 9, 27, 9), // the 30th
+          DateTime(2027, 2, 24, 16), // the 120th day ahead
+          DateTime(2027, 2, 25, 9), // the 121st
         ],
-        tasks: [DateTime(2026, 11, 10), DateTime(2026, 11, 11)],
+        tasks: [DateTime(2027, 2, 24), DateTime(2027, 2, 25)],
       );
-      final starts = [
-        for (final e in LifeosAgenda.events(db, now)) e['start'] as String,
-      ];
+      final events = LifeosAgenda.events(db, now);
+      final starts = [for (final e in events) e['start'] as String];
       expect(starts, hasLength(3));
-      expect(starts[0], startsWith('2026-10-27T09:00'));
-      expect(starts[1], '2026-11-10');
-      expect(starts[2], startsWith('2026-11-10T16:00'));
+      expect(starts[0], startsWith('2026-09-27T09:00'));
+      expect(starts[1], '2027-02-24');
+      expect(starts[2], startsWith('2027-02-24T16:00'));
+      final doc = jsonDecode(LifeosAgenda.encode(events, now)) as Map;
+      expect(doc['schema'], 1);
+      expect(doc['range'], {'from': '2026-09-27', 'to': '2027-02-24'});
+    });
+
+    test('a hearing keeps its uid moved to another hour (its portal id the '
+        'same) and when the two portals\' rows of it meet', () {
+      final db = agenda();
+      final ids = LifeosAgendaIds();
+      PortalHearing seen(DateTime at, PortalChannel channel, String id) =>
+          PortalHearing.create(
+            number: number,
+            court: court,
+            at: at,
+            channel: channel,
+            id: id,
+          );
+      db.mergeHearings(PortalChannel.uyapWeb, DateTime(2026), DateTime(2028), [
+        seen(DateTime(2026, 11, 4, 10), PortalChannel.uyapWeb, 'W1'),
+      ], complete: true);
+      final first = LifeosAgenda.events(db, now, ids: ids).single['uid'];
+      // The mobile API's row of the same hearing.
+      db.mergeHearings(
+        PortalChannel.uyapMobile,
+        DateTime(2026),
+        DateTime(2028),
+        [seen(DateTime(2026, 11, 4, 10), PortalChannel.uyapMobile, 'M1')],
+        complete: false,
+      );
+      expect(LifeosAgenda.events(db, now, ids: ids).single['uid'], first);
+      // Moved to another day and hour: another key, the same web record.
+      db.mergeHearings(PortalChannel.uyapWeb, DateTime(2026), DateTime(2028), [
+        seen(DateTime(2026, 12, 9, 14, 30), PortalChannel.uyapWeb, 'W1'),
+      ], complete: true);
+      final moved = LifeosAgenda.events(db, now, ids: ids).single;
+      expect(moved['start'], startsWith('2026-12-09T14:30'));
+      expect(moved['uid'], first);
+      // Kept across writes, and leads back to the hearing.
+      final again = LifeosAgendaIds.fromJson(
+        jsonDecode(jsonEncode(ids.toJson())),
+      );
+      expect(LifeosAgenda.events(db, now, ids: again).single['uid'], first);
+      final found = LifeosAgenda.find(db, first as String, now, ids: again)!;
+      expect(found.day, DateTime(2026, 12, 9));
+    });
+
+    test('updated: the same while a record stays, now when it changes; a '
+        'task done says so, a hearing called off too', () {
+      final db = agenda(hearings: [DateTime(2026, 11, 4, 10)]);
+      final ids = LifeosAgendaIds();
+      final t0 = LifeosAgenda.events(db, now, ids: ids).single['updated'];
+      final later = now.add(const Duration(hours: 2));
+      expect(LifeosAgenda.events(db, later, ids: ids).single['updated'], t0);
+      db.mergeHearings(PortalChannel.uyapWeb, DateTime(2026), DateTime(2028), [
+        PortalHearing.create(
+          number: number,
+          court: court,
+          at: DateTime(2026, 11, 4, 10),
+          channel: PortalChannel.uyapWeb,
+          id: 'W1',
+          result: Observed('Duruşma İptal Edildi', PortalChannel.uyapWeb, now),
+        ),
+      ], complete: true);
+      final off = LifeosAgenda.events(db, later, ids: ids).single;
+      expect(off['status'], 'iptal');
+      expect(off['updated'], isNot(t0));
+      expect(
+        DateTime.parse(off['updated'] as String).isAtSameMomentAs(later),
+        isTrue,
+      );
+
+      final tasks = agenda(tasks: [DateTime(2026, 10, 30)]);
+      final task = tasks.agenda().single;
+      expect(
+        LifeosAgenda.events(tasks, now).single.containsKey('done'),
+        isFalse,
+      );
+      final finished = now.add(const Duration(minutes: 5));
+      tasks.saveAgenda(task.copyWith(done: true, updated: finished));
+      final done = LifeosAgenda.events(tasks, later).single;
+      expect(done['done'], isTrue);
+      expect(
+        DateTime.parse(done['updated'] as String).isAtSameMomentAs(finished),
+        isTrue,
+      );
     });
 
     test('written whole: renamed over the old file, only its owner may read '
@@ -216,8 +300,8 @@ void main() {
       expect(await writer.check(), isTrue);
       expect(events().single['start'], startsWith('2026-11-02T09:00'));
 
-      // The day turns, the hearing's day passes: written without it.
-      clock = DateTime(2026, 11, 3, 0, 0, 20);
+      // The day turns, past the 30 days kept: written without it.
+      clock = DateTime(2026, 12, 3, 0, 0, 20);
       expect(await writer.check(), isTrue);
       expect(events(), isEmpty);
     });

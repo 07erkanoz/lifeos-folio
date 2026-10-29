@@ -1,3 +1,7 @@
+/// `--ajanda-yaz`: no window; LifeOS's agenda file written and its
+/// requests kept, then Folio ends (LifeosAgendaWriter.runOnce).
+const agendaWriteFlag = '--ajanda-yaz';
+
 /// `--ajanda [uid]`: Folio opened at its agenda, at the record LifeOS's
 /// notification centre or a hearing's notification named
 /// (LifeosAgenda.uidOf). Without a uid, the agenda alone.

@@ -7,6 +7,7 @@ import 'dart:async';
 import 'services/desktop/desktop_instance.dart';
 import 'services/desktop/mac_quit.dart';
 import 'services/platform/agenda_launch.dart';
+import 'services/portal/lifeos_agenda.dart';
 import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
 import 'services/live/live_links.dart';
@@ -48,6 +49,12 @@ import 'ui/theme/folio_palette.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // `--ajanda-yaz` (LifeOS's timer): the agenda file written and LifeOS's
+  // requests kept, with no window (none is shown before a first frame),
+  // beside an open Folio or without one; and nothing else of a start.
+  if (Platform.isLinux && arguments.contains(agendaWriteFlag)) {
+    exit(await LifeosAgendaWriter.runOnce());
+  }
   // Tüm verileri temizle left what was open then: cleared before anything
   // is read.
   await DataReset.finishPending();

@@ -21,6 +21,10 @@ class CalendarEvent {
     this.caseNumber = '',
     this.clients = const [],
     this.hearingKey,
+    this.done = false,
+    this.cancelled = false,
+    this.updated,
+    this.portalIds = const [],
   });
 
   /// The same for the same thing on every export: a calendar given the
@@ -41,6 +45,24 @@ class CalendarEvent {
 
   /// The hearing it is, or a task is about: the agenda opens on it.
   final String? hearingKey;
+
+  /// A task or deadline the lawyer marked done (written only when asked
+  /// for, [agendaEvents]' `done`); a hearing UYAP says is off.
+  final bool done, cancelled;
+
+  /// When the lawyer last changed it in Folio, where Folio keeps that (the
+  /// agenda's own rows).
+  final DateTime? updated;
+
+  /// A hearing's own ids at the portals (`uyapWeb:123`): the same hearing
+  /// moved to another hour keeps them.
+  final List<String> portalIds;
+}
+
+/// Whether UYAP's result for a hearing says it will not be held.
+bool hearingCancelled(String? result) {
+  final r = (result ?? '').toLowerCase();
+  return r.contains('iptal') || r.contains('düş');
 }
 
 /// What the agenda keeps between [from] and [to], for a calendar: the
@@ -57,6 +79,7 @@ List<CalendarEvent> agendaEvents(
   bool tasks = false,
   bool names = false,
   String? lawyer,
+  bool done = false,
 }) {
   final whose = <String, List<String>>{};
   if (names) {
@@ -84,7 +107,8 @@ List<CalendarEvent> agendaEvents(
   final told = <String>{};
   if (deadlines) {
     for (final d in db.deadlines(decidedOnly: true)) {
-      if (!d.onAgenda || (d.user?.done ?? false)) continue;
+      final finished = d.user?.done ?? false;
+      if (!d.onAgenda || (finished && !done)) continue;
       final day = DateTime.tryParse(d.day ?? '');
       if (day == null || day.isBefore(from) || day.isAfter(to)) continue;
       final key = d.record.caseKey ?? '';
@@ -104,13 +128,14 @@ List<CalendarEvent> agendaEvents(
           court: kase?.court ?? '',
           caseNumber: kase?.number ?? '',
           clients: whose[key] ?? const [],
+          done: finished,
         ),
       );
     }
   }
   for (final i in db.agenda(from: from, to: to)) {
     final at = i.at;
-    if (at == null || i.done || told.contains(i.id)) continue;
+    if (at == null || (i.done && !done) || told.contains(i.id)) continue;
     // A secret note is not written out of the lawyer's devices (R7).
     if (SecretNotes.rowHidden(db, i)) continue;
     if (i.kind == 'deadline' ? !deadlines : !tasks) continue;
@@ -132,6 +157,8 @@ List<CalendarEvent> agendaEvents(
         caseNumber: kase?.number ?? '',
         clients: i.caseKey == null ? const [] : whose[i.caseKey!] ?? const [],
         hearingKey: i.hearingKey,
+        done: i.done,
+        updated: i.updated,
       ),
     );
   }
@@ -161,6 +188,8 @@ CalendarEvent hearingEvent(PortalHearing h, {List<String> client = const []}) =>
       caseNumber: h.number,
       clients: client,
       hearingKey: h.key,
+      cancelled: hearingCancelled(h.result?.value),
+      portalIds: [for (final e in h.ids.entries) '${e.key.name}:${e.value}'],
     );
 
 /// [events] as an iCalendar file (RFC 5545) that Google, Outlook and
