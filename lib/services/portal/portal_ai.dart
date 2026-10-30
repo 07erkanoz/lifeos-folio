@@ -7,6 +7,10 @@ part of 'portal_database.dart';
 /// devices not to bring it back (Senkron's `yapay-zeka` part, between the
 /// lawyer's own devices alone).
 extension PortalAi on PortalDatabase {
+  /// Ticks when a record is kept, taken off or comes from an own device,
+  /// for what shows them.
+  static final changes = ValueNotifier<int>(0);
+
   static const _tables = '''
     CREATE TABLE IF NOT EXISTS ai_record (
       id TEXT PRIMARY KEY, tur TEXT NOT NULL, case_key TEXT NOT NULL,
@@ -72,6 +76,7 @@ extension PortalAi on PortalDatabase {
       'VALUES(?,?,?,?,?)',
       [id, kind, caseKey, jsonEncode(body), '${SyncClock.of(this).tick()}'],
     );
+    changes.value++;
     PortalDatabase.changed?.call();
   }
 
@@ -82,6 +87,7 @@ extension PortalAi on PortalDatabase {
       'UPDATE ai_record SET json=NULL, surum=? WHERE id=?',
       ['${SyncClock.of(this).tick()}', id],
     );
+    changes.value++;
     PortalDatabase.changed?.call();
   }
 
@@ -139,6 +145,7 @@ extension PortalAi on PortalDatabase {
       _db.execute('ROLLBACK');
       rethrow;
     }
+    if (changed) changes.value++;
     return changed;
   }
 }

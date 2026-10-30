@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/ai/ai_assistant.dart';
 import '../../services/ai/ai_memory.dart';
+import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import 'ai_panel.dart';
@@ -59,7 +60,20 @@ class _CaseAiTabState extends State<CaseAiTab> {
   @override
   void initState() {
     super.initState();
+    PortalAi.changes.addListener(_changed);
     unawaited(_first());
+  }
+
+  /// A record kept here or come from an own device: read again.
+  void _changed() {
+    if (mounted) unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    PortalAi.changes.removeListener(_changed);
+    _question.dispose();
+    super.dispose();
   }
 
   Future<void> _first() async {
@@ -394,15 +408,26 @@ class _CaseAiTabState extends State<CaseAiTab> {
             label: const Text('Yeni sohbet'),
           ),
         )
-      else if (!AiAssistant.available)
+      else if (_relays) ...[
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: FilledButton.icon(
+            key: const ValueKey('case-ai-new'),
+            onPressed: () => unawaited(_show(null)),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Yeni soru'),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
           child: Text(
-            'Bu cihazda yapay zekâya soru sorulmaz; bilgisayarınızda '
-            'yapılanlar burada okunur.',
+            'Sorularınızı bilgisayarınızdaki Folio, kendi yapay zekâ '
+            'programıyla cevaplar. Bilgisayar kapalıysa açıldığında '
+            'cevaplanır.',
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
           ),
         ),
+      ],
       if (_chats.isEmpty) _empty('Bu dosyada henüz sohbet yok.'),
       for (final c in _chats)
         Material(
@@ -467,13 +492,21 @@ class _CaseAiTabState extends State<CaseAiTab> {
           unawaited(_load());
         },
       );
-    } else if (open == null) {
+    } else if (open == null && !_relays) {
       body = Center(child: _empty('Okumak için soldan bir sohbet seçin.'));
     } else {
-      body = ListView(
+      final turns = open == null
+          ? const <Map<String, Object?>>[]
+          : AiMemory.turnsOf(open);
+      final list = ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          for (final t in AiMemory.turnsOf(open)) ...[
+          if (turns.isEmpty)
+            _empty(
+              'Sorunuzu aşağıya yazın. Bir dosyayla ilgiliyse dosyayı '
+              'numarasıyla, mahkemesiyle ya da bir tarafıyla anmanız yeter.',
+            ),
+          for (final (i, t) in turns.indexed) ...[
             Align(
               alignment: Alignment.centerRight,
               child: Container(
@@ -492,19 +525,97 @@ class _CaseAiTabState extends State<CaseAiTab> {
                 ),
               ),
             ),
-            Text(
-              '${t['yazan'] ?? ''}',
-              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 4),
-            SelectableText(
-              '${t['cevap'] ?? ''}',
-              style: const TextStyle(fontSize: 13.5, height: 1.5),
-            ),
+            if (t['bekliyor'] == true)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    if (t['alindi'] != null)
+                      const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 16,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        t['alindi'] != null
+                            ? '${t['cevaplayan'] ?? 'Bilgisayarınız'} '
+                                  'cevaplıyor…'
+                            : 'Bilgisayarınız açılınca ve bu cihazla '
+                                  'eşitlenince cevaplanacak.',
+                        key: const ValueKey('case-ai-waiting'),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (t['hata'] != null)
+              Text('${t['hata']}', style: TextStyle(color: scheme.error))
+            else ...[
+              Text(
+                '${t['yazan'] ?? ''}',
+                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                '${t['cevap'] ?? ''}',
+                style: const TextStyle(fontSize: 13.5, height: 1.5),
+              ),
+              for (final (j, o) in [
+                for (final o in t['teklifler'] as List? ?? const [])
+                  if (o is Map) o.cast<String, Object?>(),
+              ].indexed)
+                _relayOffer(open!, i, j, o, scheme),
+            ],
             const SizedBox(height: 16),
           ],
         ],
       );
+      body = !_relays
+          ? list
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: list),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 8, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          key: const ValueKey('case-ai-relay-question'),
+                          controller: _question,
+                          minLines: 1,
+                          maxLines: 4,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => unawaited(_relayAsk()),
+                          decoration: const InputDecoration(
+                            hintText: 'Sorun…',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        key: const ValueKey('case-ai-relay-send'),
+                        tooltip: 'Gönder',
+                        onPressed: () => unawaited(_relayAsk()),
+                        icon: const Icon(Icons.send_rounded, size: 20),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
     }
     if (!back) return body;
     return Column(
@@ -522,6 +633,185 @@ class _CaseAiTabState extends State<CaseAiTab> {
         Expanded(child: body),
       ],
     );
+  }
+
+  /// Asked here and answered by the lawyer's computer (AiRelay): a device
+  /// that runs no AI program, with the features on.
+  bool get _relays => !AiAssistant.available && AiSettings.on.value;
+
+  final _question = TextEditingController();
+
+  /// The question written into the conversation open, or a new one, as
+  /// waiting: the computer takes it when Senkron brings it.
+  Future<void> _relayAsk() async {
+    final text = _question.text.trim();
+    if (text.isEmpty) return;
+    final db = await widget.database();
+    final now = DateTime.now();
+    final turn = {
+      'soru': text,
+      'bekliyor': true,
+      'soran': 'telefon',
+      'zaman': now.toIso8601String(),
+    };
+    final open = _open;
+    if (open == null) {
+      final id = AiMemory.id();
+      final kase = widget.record ?? _openCase;
+      db.putAiRecord(
+        id,
+        AiMemory.chat,
+        widget.caseKey ??
+            (kase == null ? '' : caseKey(kase.number, kase.court)),
+        AiMemory.chatRecord(
+          title: text,
+          document: '',
+          started: now,
+          turns: [turn],
+          court: kase?.court,
+          number: kase?.number,
+        ),
+      );
+      _openId = id;
+    } else {
+      db.putAiRecord('${open['id']}', AiMemory.chat, '${open['dosya']}', {
+        ...open,
+        'turlar': [...AiMemory.turnsOf(open), turn],
+        'guncellendi': now.toIso8601String(),
+      });
+    }
+    _question.clear();
+    await _load();
+  }
+
+  /// What the computer's program offered with the [turn]th answer of
+  /// [chat]: kept here, on the lawyer's word, as the case's.
+  Widget _relayOffer(
+    Map<String, Object?> chat,
+    int turn,
+    int index,
+    Map<String, Object?> offer,
+    ColorScheme scheme,
+  ) {
+    final findings = offer['tur'] == AiMemory.finding;
+    final items = [
+      for (final f in offer['bulgular'] as List? ?? const [])
+        if (f is Map) f.cast<String, Object?>(),
+    ];
+    final decided = offer['karar'] as String?;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            findings
+                ? 'Dosyaya ${items.length} bulgu kaydedilsin mi?'
+                : 'Taslak: ${offer['baslik'] ?? ''}',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          if (findings)
+            for (final f in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${AiMemory.kinds[f['tur']] ?? f['tur']}: ${f['metin']}',
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              )
+          else
+            Text(
+              '${offer['metin'] ?? ''}',
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+            ),
+          if (decided != null)
+            Text(
+              decided,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurfaceVariant,
+              ),
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () =>
+                      unawaited(_decideRelayed(chat, turn, index, false)),
+                  child: const Text('Kaydetme'),
+                ),
+                FilledButton(
+                  key: ValueKey('case-ai-relay-keep-$turn-$index'),
+                  onPressed: () =>
+                      unawaited(_decideRelayed(chat, turn, index, true)),
+                  child: Text(findings ? 'Kaydet' : 'Taslağı kaydet'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _decideRelayed(
+    Map<String, Object?> chat,
+    int turn,
+    int index,
+    bool keep,
+  ) async {
+    final db = await widget.database();
+    final key = '${chat['dosya'] ?? ''}';
+    final turns = AiMemory.turnsOf(chat);
+    final offers = [
+      for (final o in turns[turn]['teklifler'] as List? ?? const [])
+        if (o is Map) o.cast<String, Object?>(),
+    ];
+    final offer = offers[index];
+    final now = DateTime.now().toIso8601String();
+    var said = 'Kaydedilmedi';
+    if (keep && key.isNotEmpty) {
+      if (offer['tur'] == AiMemory.finding) {
+        final items = offer['bulgular'] as List? ?? const [];
+        for (final f in items) {
+          if (f is! Map) continue;
+          db.putAiRecord(AiMemory.id(), AiMemory.finding, key, {
+            ...f.cast<String, Object?>(),
+            'sohbet': chat['id'],
+            'yazan': turns[turn]['yazan'],
+            'zaman': now,
+          });
+        }
+        said = '${items.length} bulgu dosyaya kaydedildi';
+      } else {
+        db.putAiRecord(AiMemory.id(), AiMemory.draft, key, {
+          'baslik': offer['baslik'],
+          'metin': offer['metin'],
+          'sohbet': chat['id'],
+          'yazan': turns[turn]['yazan'],
+          'zaman': now,
+        });
+        said = 'Taslak kaydedildi.';
+      }
+    } else if (keep) {
+      said = 'Sohbet bir dosyaya bağlı değil; kaydedilemedi.';
+    }
+    offers[index] = {...offer, 'karar': said};
+    turns[turn] = {...turns[turn], 'teklifler': offers};
+    db.putAiRecord('${chat['id']}', AiMemory.chat, key, {
+      ...chat,
+      'turlar': turns,
+    });
+    await _load();
   }
 
   Widget _findingsPart(ColorScheme scheme) {

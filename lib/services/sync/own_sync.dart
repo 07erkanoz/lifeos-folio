@@ -18,6 +18,7 @@ import '../office/task_package.dart';
 import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
+import '../ai/ai_relay.dart';
 import '../uets/notice_deadlines.dart';
 import '../uyap/uyap_case_store.dart';
 import '../portal/portal_channel.dart';
@@ -440,7 +441,11 @@ class OwnSync extends ChangeNotifier {
         export: () async => db.aiExport(),
         merge: (theirs) async {
           final changed = db.aiMerge(theirs);
-          if (changed) PortalSync.started?.notifyListeners();
+          if (changed) {
+            PortalSync.started?.notifyListeners();
+            // A question asked on the phone: answered here, if this asks.
+            unawaited(AiRelay.instance.poke());
+          }
           return changed;
         },
       );

@@ -1,3 +1,6 @@
+import '../../services/ai/ai_assistant.dart' show AiSettings;
+import '../../services/platform/app_edition.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../services/portal/portal_sync.dart';
@@ -271,6 +274,16 @@ class MobileDrawer extends StatelessWidget {
                           selected: !home && group == 'muvekkiller',
                           onTap: () => onGroup('muvekkiller'),
                         ),
+                        // Asked here, answered by the lawyer's computer.
+                        if (AiSettings.on.value && !AppEdition.isOfis)
+                          _item(
+                            context,
+                            key: const ValueKey('drawer-ai'),
+                            icon: const Icon(Icons.auto_awesome_outlined),
+                            label: 'Yapay zekâ',
+                            selected: !home && group == 'yapayzeka',
+                            onTap: () => onGroup('yapayzeka'),
+                          ),
                         if (cash)
                           _item(
                             context,

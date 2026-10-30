@@ -21,10 +21,13 @@ class AiPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
     return ColoredBox(
       color: dark ? scheme.surface : AgendaColors.page,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
+        padding: narrow
+            ? const EdgeInsets.fromLTRB(12, 12, 12, 12)
+            : const EdgeInsets.fromLTRB(28, 22, 28, 22),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

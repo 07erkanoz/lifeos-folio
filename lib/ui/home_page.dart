@@ -33,6 +33,7 @@ import '../services/platform/document_intents.dart';
 import '../services/ai/ai_assistant.dart';
 import 'ai/ai_panel.dart';
 import 'ai/ai_page.dart';
+import '../services/ai/ai_relay.dart';
 import '../services/platform/agenda_launch.dart';
 import '../services/platform/lifeos_profile.dart';
 import '../services/platform/document_launch.dart';
@@ -1763,6 +1764,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// The AI features turned on or off in the settings: off, their button
   /// and panel go.
   void _aiSwitched() {
+    // What the phone asks is answered here while the features are on.
+    if (AiAssistant.shown) {
+      AiRelay.instance.start();
+    } else {
+      AiRelay.instance.stop();
+    }
     if (!mounted) return;
     setState(() {
       if (!AiSettings.on.value) _aiOpen = false;
