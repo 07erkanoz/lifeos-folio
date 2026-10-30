@@ -131,6 +131,57 @@ class _CaseAiTabState extends State<CaseAiTab> {
     return '${two(t.day)}.${two(t.month)}.${t.year}';
   }
 
+  /// A conversation renamed or taken off.
+  Widget _chatMenu(Map<String, Object?> c) => PopupMenuButton<String>(
+    key: ValueKey('case-ai-chat-menu-${c['id']}'),
+    tooltip: 'Sohbet',
+    onSelected: (v) => unawaited(v == 'ad' ? _renameChat(c) : _removeChat(c)),
+    itemBuilder: (_) => const [
+      PopupMenuItem(value: 'ad', child: Text('Adını değiştir')),
+      PopupMenuItem(value: 'sil', child: Text('Sohbeti sil')),
+    ],
+  );
+
+  Future<void> _renameChat(Map<String, Object?> chat) async {
+    final name = TextEditingController(text: '${chat['baslik'] ?? ''}');
+    final given = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sohbetin adı'),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            key: const ValueKey('case-ai-chat-name'),
+            controller: name,
+            autofocus: true,
+            maxLength: 120,
+            onSubmitted: (v) => Navigator.pop(context, v.trim()),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            key: const ValueKey('case-ai-chat-name-save'),
+            onPressed: () => Navigator.pop(context, name.text.trim()),
+            child: const Text('Kaydet'),
+          ),
+        ],
+      ),
+    );
+    name.dispose();
+    if (given == null || given.isEmpty) return;
+    (await widget.database()).putAiRecord(
+      '${chat['id']}',
+      AiMemory.chat,
+      '${chat['dosya'] ?? ''}',
+      {...chat, 'baslik': given},
+    );
+    await _load();
+  }
+
   Future<void> _removeChat(Map<String, Object?> chat) async {
     final sure = await showDialog<bool>(
       context: context,
@@ -367,7 +418,7 @@ class _CaseAiTabState extends State<CaseAiTab> {
                 '${AiMemory.turnsOf(c).length} soru',
               ].join(' · '),
             ),
-            trailing: const Icon(Icons.chevron_right_rounded),
+            trailing: _chatMenu(c),
             onTap: () => widget.onChat!('${c['id']}'),
           ),
         ),
@@ -461,13 +512,7 @@ class _CaseAiTabState extends State<CaseAiTab> {
               style: const TextStyle(fontSize: 11.5),
             ),
             onTap: () => unawaited(_show('${c['id']}')),
-            trailing: PopupMenuButton<String>(
-              tooltip: 'Sohbet',
-              onSelected: (_) => _removeChat(c),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'sil', child: Text('Sohbeti sil')),
-              ],
-            ),
+            trailing: _chatMenu(c),
           ),
         ),
     ],

@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:file_picker/file_picker.dart';
+
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_attachment.dart';
 import '../../services/ai/ai_case.dart';
 import '../../services/ai/ai_draft.dart';
 import '../../services/ai/ai_memory.dart';
@@ -75,6 +78,9 @@ class _Turn {
 
   /// What the program put before the lawyer: findings to keep, drafts.
   final offers = <_Offer>[];
+
+  /// The documents the question went with, by name.
+  List<String> attached = const [];
 }
 
 /// Findings or a draft the program offered, waiting for the lawyer or
@@ -131,6 +137,46 @@ class _AiPanelState extends State<AiPanel> {
   DateTime _chatStarted = DateTime.now();
 
   bool get _busy => _cancel != null;
+
+  /// The documents the lawyer added to the conversation: sent with every
+  /// question until taken off. Each made ready once a program.
+  final _attached = <String>[];
+  final _prepared = <String, AiAttachment>{};
+
+  static const _attachable = [
+    'pdf', 'udf', 'docx', 'doc', 'odt', 'rtf', 'txt', 'md', //
+    'tif', 'tiff', 'png', 'jpg', 'jpeg', 'webp',
+  ];
+
+  Future<void> _attach() async {
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: 'Sohbete belge ekle',
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: _attachable,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      for (final f in picked.files) {
+        if (f.path case final path? when !_attached.contains(path)) {
+          _attached.add(path);
+        }
+      }
+    });
+  }
+
+  /// Whether a document added goes as pictures: what is in it, identity
+  /// numbers too, goes as it is.
+  bool get _sendsPictures => _attached.any(
+    (path) => const {
+      '.tif',
+      '.tiff',
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.webp',
+    }.contains(p.extension(path).toLowerCase()),
+  );
 
   @override
   void initState() {
@@ -245,6 +291,19 @@ class _AiPanelState extends State<AiPanel> {
           if (t != turn && t.answer != null)
             (question: t.question, answer: t.answer!),
       ];
+      // The documents added, made ready for this program.
+      final attachments = <AiAttachment>[];
+      for (final path in _attached) {
+        final key = '${provider.name}|$path';
+        attachments.add(
+          _prepared[key] ??= await AiAttachment.prepare(
+            path,
+            provider,
+            mask: settings.mask,
+          ),
+        );
+      }
+      turn.attached = [for (final a in attachments) a.name];
       // The case's tools only for a program given Folio's tools.
       final record = _case;
       final tools =
@@ -268,6 +327,7 @@ class _AiPanelState extends State<AiPanel> {
                   'bul; tek dosya açıkça uyuyorsa dosya_sec ile seç, birden '
                   'fazla uyuyorsa hangisi olduğunu avukata sor.'
             : null,
+        attached: AiAttachment.block(attachments),
         history: history,
       );
       if (cancel.isCompleted) return;
@@ -289,6 +349,7 @@ class _AiPanelState extends State<AiPanel> {
           prompt,
           model: model,
           caseSession: session,
+          attachments: attachments,
           cancel: cancel.future,
         );
         turn.answer = answer;
@@ -355,6 +416,7 @@ class _AiPanelState extends State<AiPanel> {
             'soru': t.question,
             'cevap': a,
             'yazan': t.by,
+            if (t.attached.isNotEmpty) 'ekler': t.attached,
             'zaman': DateTime.now().toIso8601String(),
           },
     ];
@@ -367,7 +429,8 @@ class _AiPanelState extends State<AiPanel> {
         AiMemory.chat,
         key,
         AiMemory.chatRecord(
-          title: _turns.first.question,
+          // A name the lawyer gave it stays.
+          title: '${db.aiRecord(id)?['baslik'] ?? _turns.first.question}',
           document: widget.path == null ? '' : p.basename(widget.path!),
           started: _chatStarted,
           turns: turns,
@@ -977,6 +1040,20 @@ class _AiPanelState extends State<AiPanel> {
                               ),
                             ),
                           ),
+                          if (t.attached.isNotEmpty)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Text(
+                                  'Ekler: ${t.attached.join(', ')}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ),
                           Padding(
                             padding: const EdgeInsets.only(top: 6, bottom: 2),
                             child: Text(
@@ -1031,10 +1108,58 @@ class _AiPanelState extends State<AiPanel> {
                   ),
                 ),
               ),
+            if (_attached.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final path in _attached)
+                          InputChip(
+                            key: ValueKey('ai-attached-$path'),
+                            avatar: const Icon(
+                              Icons.description_outlined,
+                              size: 16,
+                            ),
+                            label: Text(
+                              p.basename(path),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onDeleted: _busy
+                                ? null
+                                : () => setState(() => _attached.remove(path)),
+                          ),
+                      ],
+                    ),
+                    if (_sendsPictures)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Taranmış belge ve resimler görüntü olarak gider; '
+                          'içlerindeki kimlik numaraları gizlenemez.',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 8, 12),
+              padding: const EdgeInsets.fromLTRB(4, 0, 8, 12),
               child: Row(
                 children: [
+                  IconButton(
+                    key: const ValueKey('ai-attach'),
+                    tooltip: 'Belge ekle',
+                    onPressed: _busy ? null : () => unawaited(_attach()),
+                    icon: const Icon(Icons.attach_file_rounded, size: 20),
+                  ),
                   Expanded(
                     child: TextField(
                       key: const ValueKey('ai-question'),

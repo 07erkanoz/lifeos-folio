@@ -12,6 +12,7 @@ import '../platform/app_directories.dart';
 import '../platform/app_edition.dart';
 import '../platform/atomic_file.dart';
 import '../search/text_extractor.dart';
+import 'ai_attachment.dart';
 import 'ai_case.dart';
 import 'ai_prompts.dart';
 import 'folio_mcp.dart';
@@ -231,6 +232,8 @@ abstract final class AiAssistant {
     String? model,
     String? folio,
     String? caseFolder,
+    bool pictures = false,
+    List<String> images = const [],
   }) => switch (provider) {
     AiProvider.claude => [
       '-p',
@@ -255,8 +258,17 @@ abstract final class AiAssistant {
         '--allowedTools',
         [for (final n in FolioMcp.names) 'mcp__folio__$n'].join(','),
       ],
-      '--output-format',
-      'json',
+      // With pictures the question comes as an event, and the answer too.
+      if (pictures) ...[
+        '--input-format',
+        'stream-json',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+      ] else ...[
+        '--output-format',
+        'json',
+      ],
       '--tools',
       '',
       '--restricted',
@@ -313,6 +325,7 @@ abstract final class AiAssistant {
         'mcp_servers.folio.env={${[for (final key in mcpEnvironment)
           if (Platform.environment[key] case final v?) '$key=${jsonEncode(v)}', if (caseFolder != null) '${AiCaseSession.variable}=${jsonEncode(caseFolder)}'].join(',')}}',
       ],
+      for (final i in images) ...['-i', i],
       '-o',
       p.join(folder, '.yanit.txt'),
       '-',
@@ -450,7 +463,33 @@ abstract final class AiAssistant {
 
   /// [prompt] as [provider] reads it on its standard input.
   @visibleForTesting
-  static String input(AiProvider provider, String prompt) => switch (provider) {
+  static String input(
+    AiProvider provider,
+    String prompt, {
+    List<AiAttachment> attachments = const [],
+  }) => switch (provider) {
+    // Pages and pictures as they are, the question after them.
+    AiProvider.claude when attachments.any((a) => a.visual) =>
+      '${jsonEncode({
+        'type': 'user',
+        'message': {
+          'role': 'user',
+          'content': [
+            for (final a in attachments) ...[
+              if (a.pdf case final pdf?) {
+                  'type': 'document',
+                  'title': a.name,
+                  'source': {'type': 'base64', 'media_type': 'application/pdf', 'data': base64Encode(pdf)},
+                },
+              for (final i in a.images) {
+                  'type': 'image',
+                  'source': {'type': 'base64', 'media_type': i.mime, 'data': base64Encode(i.bytes)},
+                },
+            ],
+            {'type': 'text', 'text': prompt},
+          ],
+        },
+      })}\n',
     AiProvider.antigravity =>
       // It takes no instructions of its own: Folio's rules lead the message.
       '${jsonEncode({
@@ -469,11 +508,25 @@ abstract final class AiAssistant {
   ) {
     switch (provider) {
       case AiProvider.claude:
-        final Object? json;
+        Object? json;
         try {
           json = jsonDecode(stdout.trim());
         } on FormatException {
-          throw const AiFailure('Claude’ın yanıtı okunamadı.');
+          // With pictures it answers a line an event: the result is last.
+          for (final line in stdout.trim().split('\n').reversed) {
+            try {
+              final e = jsonDecode(line);
+              if (e is Map && e['type'] == 'result') {
+                json = e;
+                break;
+              }
+            } on FormatException {
+              continue;
+            }
+          }
+          if (json == null) {
+            throw const AiFailure('Claude’ın yanıtı okunamadı.');
+          }
         }
         if (json is! Map) throw const AiFailure('Claude’ın yanıtı okunamadı.');
         final result = '${json['result'] ?? ''}'.trim();
@@ -549,6 +602,7 @@ abstract final class AiAssistant {
     String? model,
     bool tools = true,
     AiCaseSession? caseSession,
+    List<AiAttachment> attachments = const [],
     Future<void>? cancel,
   }) async {
     final path = find(provider.command);
@@ -561,6 +615,22 @@ abstract final class AiAssistant {
       if (provider == AiProvider.codex) {
         await File(p.join(folder.path, 'talimat.md'))
             .writeAsString(AiPrompts.core);
+      }
+      // Codex is given pictures as files of its folder.
+      final images = <String>[];
+      if (provider == AiProvider.codex) {
+        for (final a in attachments) {
+          for (final i in a.images) {
+            final file = File(
+              p.join(
+                folder.path,
+                'ek-${images.length + 1}.${i.mime.split('/').last}',
+              ),
+            );
+            await file.writeAsBytes(i.bytes);
+            images.add(file.path);
+          }
+        }
       }
       final process = await Process.start(
         path,
@@ -577,6 +647,9 @@ abstract final class AiAssistant {
               ? folioProgram
               : null,
           caseFolder: caseSession?.folder.path,
+          pictures:
+              provider == AiProvider.claude && attachments.any((a) => a.visual),
+          images: images,
         ),
         workingDirectory: folder.path,
         // Antigravity's tools have its environment: the case is named there.
@@ -591,7 +664,7 @@ abstract final class AiAssistant {
         process.stdout.transform(utf8.decoder).forEach(out.write),
         process.stderr.transform(utf8.decoder).forEach(err.write),
       ]);
-      process.stdin.write(input(provider, prompt));
+      process.stdin.write(input(provider, prompt, attachments: attachments));
       await process.stdin.close();
       var stopped = false;
       unawaited(
@@ -648,6 +721,7 @@ abstract final class AiAssistant {
     String question = '',
     String? caseName,
     String? note,
+    String? attached,
     List<({String question, String answer})> history = const [],
   }) {
     final cut = text != null && text.length > maxCharacters;
@@ -673,6 +747,8 @@ abstract final class AiAssistant {
                   'evrakına Folio\'nun dosya araçlarıyla bakabilirsin.',
       ],
       if (note != null) ...['', note],
+      // The documents the lawyer added to the conversation.
+      if (attached != null && attached.isNotEmpty) ...['', attached],
       '',
       AiPrompts.task(task, question: question),
     ].join('\n');
@@ -717,17 +793,23 @@ abstract final class AiAssistant {
 
   /// The text of the document at [path], read away from the screen (a
   /// scan through OCR); empty when it has none.
-  static Future<String> documentText(String path) async {
+  static Future<String> documentText(String path, {bool ocr = true}) async {
     final got = await compute(_read, (
       path: path,
       pdfium: PdfPagesHost.start(),
+      ocr: ocr,
     ));
     return got;
   }
 
-  static Future<String> _read(({String path, SendPort pdfium}) request) async {
+  static Future<String> _read(
+    ({String path, SendPort pdfium, bool ocr}) request,
+  ) async {
     PdfPages.host = request.pdfium;
-    final got = await IndexTextExtractor.extract(request.path, ocr: true);
+    final got = await IndexTextExtractor.extract(
+      request.path,
+      ocr: request.ocr,
+    );
     return '${got['text'] ?? ''}';
   }
 

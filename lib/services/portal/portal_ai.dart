@@ -40,6 +40,19 @@ extension PortalAi on PortalDatabase {
     }
   }
 
+  /// The record [id], unless taken off or never kept.
+  Map<String, Object?>? aiRecord(String id) {
+    final rows = _db.select(
+      'SELECT case_key, json FROM ai_record WHERE id=? AND json IS NOT NULL',
+      [id],
+    );
+    if (rows.isEmpty) return null;
+    final json = _aiJson(rows.first['json']);
+    return json == null
+        ? null
+        : {...json, 'id': id, 'dosya': rows.first['case_key']};
+  }
+
   /// How many records of each kind [caseKey] has.
   Map<String, int> aiCounts(String caseKey) => {
     for (final r in _db.select(
@@ -83,10 +96,10 @@ extension PortalAi on PortalDatabase {
   /// The record [id] taken off, on every own device.
   void removeAiRecord(String id) {
     _aiObserve(id);
-    _db.execute(
-      'UPDATE ai_record SET json=NULL, surum=? WHERE id=?',
-      ['${SyncClock.of(this).tick()}', id],
-    );
+    _db.execute('UPDATE ai_record SET json=NULL, surum=? WHERE id=?', [
+      '${SyncClock.of(this).tick()}',
+      id,
+    ]);
     changes.value++;
     PortalDatabase.changed?.call();
   }
