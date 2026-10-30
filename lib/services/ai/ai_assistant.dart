@@ -225,14 +225,28 @@ abstract final class AiAssistant {
           'read-only',
           '-C',
           folder,
+          // Read-only stops writing, not reading: every tool goes, the
+          // shell's and the web's included (a document's words could
+          // otherwise send it somewhere).
           for (final feature in const [
             'shell_tool',
             'unified_exec',
             'browser_use',
+            'browser_use_external',
             'computer_use',
             'in_app_browser',
             'apps',
+            'multi_agent',
+            'plugins',
+            'image_generation',
+            'view_image',
           ]) ...['--disable', feature],
+          '-c',
+          'web_search="disabled"',
+          '-c',
+          'include_environment_context=false',
+          '-c',
+          'include_permissions_instructions=false',
           '-o',
           p.join(folder, '.yanit.txt'),
           '-',

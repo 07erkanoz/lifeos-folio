@@ -49,6 +49,10 @@ void main() {
           expect(args, containsAllInOrder(['--disable', f]));
         }
         expect(args, containsAll(['--ephemeral', '--ignore-user-config']));
+        expect(args, containsAllInOrder(['-c', 'web_search="disabled"']));
+        for (final f in ['multi_agent', 'plugins', 'view_image']) {
+          expect(args, containsAllInOrder(['--disable', f]));
+        }
         expect(args.last, '-');
       },
     );
