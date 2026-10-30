@@ -1,0 +1,8 @@
+{
+  "tr": "Linux'ta Adalet E-İmza ile UYAP Web'e bağlanırken, Adalet E-İmza menüden ayrıca açılmışsa ya da art arda birkaç kez bağlanmaya çalışıldıysa görülen \"Adalet E-İmza yeniden başladı ancak hazır olmadı\" hatası giderildi.",
+  "en": "On Linux, connecting to UYAP Web with Adalet E-İmza no longer fails with \"Adalet E-İmza restarted but was not ready\" when Adalet E-İmza was also opened from the menu or after several attempts in a row.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.8.2: Folio'yla aynı sürüm; Ofis'te değişiklik yok.",
+    "en": "LifeOS Ofis 1.8.2: the same release as Folio; nothing changed in Ofis."
+  }
+}
