@@ -24,6 +24,9 @@ class CaseAiTab extends StatefulWidget {
     required this.database,
     this.onOpenPath,
     this.onChanged,
+    this.onChat,
+    this.openChat,
+    this.startCase,
   });
 
   final String? caseKey;
@@ -33,6 +36,15 @@ class CaseAiTab extends StatefulWidget {
 
   /// Something kept or taken off: the tab's count read again.
   final VoidCallback? onChanged;
+
+  /// A case's tab: a conversation is had on the Yapay zekâ page, this
+  /// opening it there ([chatId] null for a new one of the case).
+  final void Function(String? chatId)? onChat;
+
+  /// The Yapay zekâ page's: the conversation to open, or a new one of
+  /// [startCase].
+  final String? openChat;
+  final UyapCaseRecord? startCase;
 
   @override
   State<CaseAiTab> createState() => _CaseAiTabState();
@@ -47,7 +59,22 @@ class _CaseAiTabState extends State<CaseAiTab> {
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    unawaited(_first());
+  }
+
+  Future<void> _first() async {
+    await _load();
+    if (!mounted) return;
+    if (widget.openChat case final id?) {
+      await _show(id);
+    } else if (widget.startCase case final kase?) {
+      setState(() {
+        _openId = null;
+        _openCase = kase;
+        _slot++;
+        _talking = true;
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -292,24 +319,67 @@ class _CaseAiTabState extends State<CaseAiTab> {
   bool get _asks =>
       AiAssistant.shown && (widget.caseKey == null || widget.record != null);
 
-  Widget _chatsPart(ColorScheme scheme) => LayoutBuilder(
-    builder: (context, box) {
-      final wide = box.maxWidth >= 720;
-      final list = _chatList(scheme);
-      final talk = _conversation(scheme, back: !wide);
-      if (wide) {
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(width: 280, child: list),
-            VerticalDivider(width: 1, color: scheme.outlineVariant),
-            Expanded(child: talk),
-          ],
-        );
-      }
-      return _talking ? talk : list;
-    },
+  /// A case's conversations, each opened on the Yapay zekâ page.
+  Widget _chatLinks(ColorScheme scheme) => ListView(
+    padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
+    children: [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.icon(
+          key: const ValueKey('case-ai-new'),
+          onPressed: () => widget.onChat!(null),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Bu dosyayla yeni sohbet'),
+        ),
+      ),
+      const SizedBox(height: 10),
+      if (_chats.isEmpty) _empty('Bu dosyada henüz sohbet yok.'),
+      for (final c in _chats)
+        Card(
+          margin: const EdgeInsets.only(bottom: 6),
+          child: ListTile(
+            key: ValueKey('case-ai-chat-${c['id']}'),
+            dense: true,
+            title: Text(
+              '${c['baslik'] ?? ''}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              [
+                _day(c['guncellendi']),
+                if (AiMemory.turnsOf(c).lastOrNull?['yazan'] case final by?)
+                  '$by',
+                '${AiMemory.turnsOf(c).length} soru',
+              ].join(' · '),
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => widget.onChat!('${c['id']}'),
+          ),
+        ),
+    ],
   );
+
+  Widget _chatsPart(ColorScheme scheme) => widget.onChat != null && _asks
+      ? _chatLinks(scheme)
+      : LayoutBuilder(
+          builder: (context, box) {
+            final wide = box.maxWidth >= 720;
+            final list = _chatList(scheme);
+            final talk = _conversation(scheme, back: !wide);
+            if (wide) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(width: 280, child: list),
+                  VerticalDivider(width: 1, color: scheme.outlineVariant),
+                  Expanded(child: talk),
+                ],
+              );
+            }
+            return _talking ? talk : list;
+          },
+        );
 
   Widget _chatList(ColorScheme scheme) => ListView(
     padding: const EdgeInsets.all(10),

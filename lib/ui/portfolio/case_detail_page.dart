@@ -53,6 +53,7 @@ class CaseDetailPage extends StatefulWidget {
     required this.onOpen,
     this.onNewPetition,
     this.onOpenPath,
+    this.onAiChat,
     this.onSaved,
     this.lawyer = '',
     this.database,
@@ -78,6 +79,10 @@ class CaseDetailPage extends StatefulWidget {
   final ValueChanged<File> onOpen;
   final ValueChanged<UyapCaseLink>? onNewPetition;
   final ValueChanged<String>? onOpenPath;
+
+  /// A conversation of the case had on the Yapay zekâ page: [chatId], or a
+  /// new one when null.
+  final void Function(String? chatId, UyapCaseRecord record)? onAiChat;
   final void Function(File file)? onSaved;
   final String lawyer;
   final PortalDatabase? database;
@@ -2672,6 +2677,17 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     record: _c.record,
     database: () => _db,
     onOpenPath: widget.onOpenPath,
+    onChat: widget.onAiChat == null
+        ? null
+        : (id) => widget.onAiChat!(
+            id,
+            _c.record ??
+                UyapCaseRecord(
+                  court: _kase?.court ?? '',
+                  number: _kase?.number ?? '',
+                  fetchedAt: DateTime.now(),
+                ),
+          ),
     onChanged: () async {
       final n = (await _db).aiCounts(widget.caseKey).values;
       final count = n.fold(0, (a, b) => a + b);

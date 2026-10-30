@@ -32,7 +32,7 @@ import '../services/speech/speech_session.dart';
 import '../services/platform/document_intents.dart';
 import '../services/ai/ai_assistant.dart';
 import 'ai/ai_panel.dart';
-import 'ai/case_ai_tab.dart';
+import 'ai/ai_page.dart';
 import '../services/platform/agenda_launch.dart';
 import '../services/platform/lifeos_profile.dart';
 import '../services/platform/document_launch.dart';
@@ -1661,6 +1661,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         value == 'gorevler' ||
         value == 'muvekkiller' ||
         value == 'kasa' ||
+        value == 'yapayzeka' ||
         value == 'mesajlar' ||
         value == 'ayarlar' ||
         _isUyapGroup(value)) {
@@ -1690,6 +1691,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'gorevler' ||
       group == 'muvekkiller' ||
       group == 'kasa' ||
+      group == 'yapayzeka' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
 
@@ -1705,6 +1707,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       group == 'gorevler' ||
       group == 'muvekkiller' ||
       group == 'kasa' ||
+      group == 'yapayzeka' ||
       group == 'mesajlar' ||
       group == 'ayarlar';
 
@@ -1751,6 +1754,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// The AI panel beside the preview (AiPanel).
   bool _aiOpen = false;
+
+  /// The Yapay zekâ page as last asked for from a case's page.
+  String? _aiChat;
+  UyapCaseRecord? _aiCase;
+  int _aiVersion = 0;
 
   /// The AI features turned on or off in the settings: off, their button
   /// and panel go.
@@ -2089,16 +2097,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// The desktop's first page (docs/design/masaustu-anasayfa-taslak.png).
   Widget _desktopHome() => DesktopHome(
     name: _lawyerName,
-    // Asked on the home page of no case: the program finds it.
-    aiChats: AiAssistant.shown
-        ? (context) => CaseAiTab(
-            caseKey: null,
-            record: null,
-            database: PortalDatabase.shared,
-            onOpenPath: (path) =>
-                unawaited(_openRecent(EvrakFile.fromPath(path), edit: true)),
-          )
-        : null,
     recent: _recentDocuments.files,
     office: _office,
     uyapFolder: UyapSettings.instance.folder,
@@ -2284,7 +2282,20 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       onSaved: (_) =>
           unawaited(searchUyapFolder(_library).catchError((Object _) => false)),
       onNewPetition: (link) => unawaited(_newDocument(forCase: link)),
+      onAiChat: AiAssistant.shown
+          ? (chatId, record) => _openAi(chat: chatId, kase: record)
+          : null,
     );
+  }
+
+  /// The Yapay zekâ page, at [chat], or at a new conversation of [kase].
+  void _openAi({String? chat, UyapCaseRecord? kase}) {
+    setState(() {
+      _aiChat = chat;
+      _aiCase = chat == null ? kase : null;
+      _aiVersion++;
+    });
+    unawaited(_selectGroup('yapayzeka'));
   }
 
   void _openConvertDialog({List<EvrakFile>? specificFiles}) {
@@ -2822,6 +2833,23 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                     )
                                                   : _group == 'gorevler'
                                                   ? const TasksPage()
+                                                  : _group == 'yapayzeka'
+                                                  ? AiPage(
+                                                      key: ValueKey(
+                                                        'ai-$_aiVersion',
+                                                      ),
+                                                      openChat: _aiChat,
+                                                      startCase: _aiCase,
+                                                      onOpenPath: (path) =>
+                                                          unawaited(
+                                                            _openRecent(
+                                                              EvrakFile.fromPath(
+                                                                path,
+                                                              ),
+                                                              edit: true,
+                                                            ),
+                                                          ),
+                                                    )
                                                   : _group == 'kasa' &&
                                                         !OfficeNetwork
                                                             .instance

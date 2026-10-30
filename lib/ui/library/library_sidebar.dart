@@ -1,3 +1,5 @@
+import '../../services/ai/ai_assistant.dart' show AiAssistant;
+
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
@@ -351,6 +353,16 @@ class LibrarySidebar extends StatelessWidget {
                     'kasa',
                     null,
                     key: const ValueKey('cash-nav'),
+                  ),
+                // Not there at all while the AI features are off.
+                if (AiAssistant.shown)
+                  _nav(
+                    context,
+                    Icons.auto_awesome_outlined,
+                    'Yapay zekâ',
+                    'yapayzeka',
+                    null,
+                    key: const ValueKey('ai-nav'),
                   ),
                 if (office) ...[
                   _nav(

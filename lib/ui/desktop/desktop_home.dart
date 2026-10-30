@@ -78,7 +78,6 @@ class DesktopHome extends StatefulWidget {
     required this.onUets,
     this.onNewDocument,
     this.onOpenToEdit,
-    this.aiChats,
     this.onJoinLive,
     this.onShareLive,
     this.onShareLiveFile,
@@ -117,11 +116,6 @@ class DesktopHome extends StatefulWidget {
   /// live sharing, the UYAP panel and the network are.
   final VoidCallback? onNewDocument, onOpenToEdit;
 
-  /// The lawyer's conversations with their AI program, the home page's
-  /// own: given while the AI features are on, shown in the board's place
-  /// when the lawyer turns to them.
-  final WidgetBuilder? aiChats;
-
   /// A document shared live from another office joined by its code; one
   /// chosen to share live (Canlı belge, approved mockup 26 Ekim 2026).
   final VoidCallback? onJoinLive, onShareLive;
@@ -147,9 +141,6 @@ class _DesktopHomeState extends State<DesktopHome> {
   /// The search field's, for Ctrl K.
   final _searchFocus = FocusNode();
   _Filter _filter = _Filter.all;
-
-  /// Whether the conversations are shown in the board's place.
-  bool _ai = false;
   Timer? _tick;
 
   /// The case each document is written for, as far as it is known.
@@ -440,31 +431,6 @@ class _DesktopHomeState extends State<DesktopHome> {
                 _uetsCard(context),
               ],
             );
-            // The conversations in the board's place.
-            if (_ai && widget.aiChats != null) {
-              final scheme = Theme.of(context).colorScheme;
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _head(context),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: Container(
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          color: scheme.surface,
-                          border: Border.all(color: scheme.outlineVariant),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: widget.aiChats!(context),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
             final top = [
               _head(context),
               const SizedBox(height: 16),
@@ -569,22 +535,6 @@ class _DesktopHomeState extends State<DesktopHome> {
             ),
           ),
         ),
-        if (widget.aiChats != null) ...[
-          const SizedBox(width: 10),
-          _ai
-              ? OutlinedButton.icon(
-                  key: const ValueKey('home-board'),
-                  onPressed: () => setState(() => _ai = false),
-                  icon: const Icon(Icons.dashboard_outlined, size: 18),
-                  label: const Text('Pano'),
-                )
-              : OutlinedButton.icon(
-                  key: const ValueKey('home-ai'),
-                  onPressed: () => setState(() => _ai = true),
-                  icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-                  label: const Text('Yapay zekâ'),
-                ),
-        ],
         if (widget.onJoinLive != null || widget.onShareLive != null) ...[
           const SizedBox(width: 10),
           _liveButton(context),
