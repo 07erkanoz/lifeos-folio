@@ -92,8 +92,8 @@ class _ConsentDialogState extends State<_ConsentDialog> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 title: const Text(
-                  'Okudum; yukarıdakileri ve Kullanım Koşulları’nın yapay '
-                  'zekâ maddesini kabul ediyorum.',
+                  'Okudum; yukarıdakileri ve Kullanım Koşulları’nın 5. '
+                  'maddesini (Yapay zekâ özellikleri) kabul ediyorum.',
                   style: TextStyle(fontSize: 13.5),
                 ),
               ),

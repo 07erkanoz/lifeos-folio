@@ -174,9 +174,8 @@ class FolioAboutDialog extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Verileriniz yalnız sizin cihazlarınızda tutulur. '
-                '${AppEdition.isOfis ? 'Ofis’in' : 'Folio’nun'} '
-                'verilerinizi tutan bir sunucusu yoktur ve yapay zekâ hizmeti '
-                'kullanmaz. Başka bir büroyla uzaktan canlı paylaşımda belge '
+                '${AppEdition.isOfis ? 'Ofis’in verilerinizi tutan bir sunucusu yoktur ve yapay zekâ hizmeti kullanmaz.' : 'Folio’nun verilerinizi tutan bir sunucusu yoktur. Yapay zekâ özellikleri isteğe bağlıdır ve siz açmadıkça kapalıdır.'} '
+                'Başka bir büroyla uzaktan canlı paylaşımda belge '
                 've yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu '
                 'içeriği göremez ve hiçbir şey saklamaz.',
                 textAlign: TextAlign.center,

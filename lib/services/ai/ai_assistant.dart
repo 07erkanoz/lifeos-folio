@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import '../pdf/pdf_pages.dart';
 import '../platform/app_directories.dart';
+import '../platform/app_edition.dart';
 import '../platform/atomic_file.dart';
 import '../search/text_extractor.dart';
 import 'ai_case.dart';
@@ -108,11 +109,13 @@ class AiFailure implements Exception {
 }
 
 abstract final class AiAssistant {
-  /// Linux only, for now; and not in a test, which runs no real program
-  /// unless it asks ([availableForTest]).
+  /// Folio's alone, not Ofis's; Linux only, for now; and not in a test,
+  /// which runs no real program unless it asks ([availableForTest]).
   static bool get available =>
       availableForTest ??
-      (Platform.isLinux && !Platform.environment.containsKey('FLUTTER_TEST'));
+      (!AppEdition.isOfis &&
+          Platform.isLinux &&
+          !Platform.environment.containsKey('FLUTTER_TEST'));
 
   @visibleForTesting
   static bool? availableForTest;

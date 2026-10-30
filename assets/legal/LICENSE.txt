@@ -1,5 +1,5 @@
 LifeOS Folio Kullanım Koşulları
-Son güncelleme: 27 Ekim 2026
+Son güncelleme: 30 Ekim 2026
 
 1. Kapsam
 Bu koşullar, LifeOS tarafından geliştirilen LifeOS Folio uygulamasının (Folio) kullanımını düzenler. Folio'yu kurduğunuzda ya da kullandığınızda bu koşulları kabul etmiş olursunuz.
@@ -13,22 +13,27 @@ Folio'nun yazılımı, adı, simgesi ve arayüzü üzerindeki bütün haklar Lif
 4. Mesleki sorumluluk
 Folio, avukatın işini kolaylaştıran bir araçtır ve hukuki görüş vermez. Uygulamanın hesapladığı süreler, gösterdiği kanun maddeleri ve kararlar ile kamu sistemlerinden alınan bilgiler yardımcı niteliktedir. Sürelerin, dilekçelerin ve gönderilen evrakın doğruluğunu denetlemek avukatın sorumluluğundadır.
 
-5. Kamu hizmetleri
+5. Yapay zekâ özellikleri
+Folio'nun yapay zekâ özellikleri isteğe bağlıdır ve varsayılan olarak kapalıdır. Bu özellikler, bilgisayarınızda kurulu ve sizin kendi hesabınızla oturum açtığınız üçüncü taraf programlarla (Claude, Codex, Antigravity) çalışır. Bu programlar ve arkalarındaki hizmetler LifeOS'a ait değildir; onların kullanım koşullarına uymak ve ücretleri size aittir.
+Bir belgeyi ya da dosya evrakını bu programlara göndermek sizin kararınızdır. Gönderimin KVKK'ya, avukatlık sırrına ve meslek kurallarına uygunluğundan siz sorumlusunuz.
+Yapay zekânın yanıtları yanlış ya da eksik olabilir. Folio, yanıttaki kanun maddesi ve karar atıflarını resmî kaynaklarda denetler; bu denetim her hatayı yakalamaz. Yanıtları denetlemek ve kullanmak avukatın sorumluluğundadır. Yürürlükteki mevzuatın izin verdiği ölçüde LifeOS, yapay zekâ yanıtlarından ve bu programlara gönderilen verilerden doğan zararlardan sorumlu değildir.
+
+6. Kamu hizmetleri
 Folio, UYAP ve e-Tebligat gibi kamu hizmetlerine yalnız sizin kendi girişinizle ve sizin yetkiniz ölçüsünde bağlanır. Bu hizmetler ilgili kurumlara aittir ve Folio'nun bu kurumlarla resmî bir bağı yoktur. LifeOS bu hizmetlerin kesintisiz çalışmasını sağlayamaz. Bu hizmetleri kullanırken onların kullanım koşullarına uymak size aittir.
 
-6. Verileriniz ve yedekleriniz
+7. Verileriniz ve yedekleriniz
 Folio'nun verilerinizi tutan bir sunucusu yoktur; belgeleriniz ve kayıtlarınız yalnız sizin cihazlarınızda tutulur. Bu nedenle verilerinizin yedeklenmesi ve korunması sizin sorumluluğunuzdadır. Uzaktan canlı paylaşımda belge şifreli olarak aktarma sunucusundan geçer ve orada saklanmaz. Kişisel verilerin nasıl işlendiği Gizlilik Politikası ve KVKK Aydınlatma Metni'nde anlatılır.
 
-7. Garanti ve sorumluluk
+8. Garanti ve sorumluluk
 Folio olduğu gibi sunulur. LifeOS, uygulamanın her durumda kesintisiz ve hatasız çalışacağını garanti etmez. Yürürlükteki mevzuatın izin verdiği ölçüde LifeOS, uygulamanın kullanımından doğan dolaylı zararlardan sorumlu değildir. Kanunun vazgeçilemeyen hakları saklıdır.
 
-8. Üçüncü taraf bileşenler
+9. Üçüncü taraf bileşenler
 Folio'da kullanılan açık kaynak bileşenler ve yazı tipleri kendi lisanslarına tabidir. Bu koşullar onların lisanslarını değiştirmez. Listeleri Hakkında penceresindeki Açık kaynak lisansları bölümündedir.
 
-9. Değişiklikler
+10. Değişiklikler
 LifeOS bu koşulları güncelleyebilir. Güncel hâli uygulamada ve lifeos.com.tr adresinde yayımlanır.
 
-10. Uygulanacak hukuk
+11. Uygulanacak hukuk
 Bu koşullara Türk hukuku uygulanır.
 
 İletişim: info@avukatos.com.tr · https://lifeos.com.tr/iletisim
