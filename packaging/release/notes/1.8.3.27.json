@@ -1,5 +1,5 @@
 {
-  "tr": "Linux'ta yapay zekâ sohbetinde Antigravity artık Gemini 4 Argon yerine daha az jeton harcayan Gemini 3.8 Flash kullanır. Eski Antigravity sürümlerinde sohbetin önceki kısmı her soruda yeniden gönderilir; böylece model konuşmayı hatırlar.",
-  "en": "In the AI chat on Linux, Antigravity now uses Gemini 3.8 Flash, which spends fewer tokens, instead of Gemini 4 Argon. With older Antigravity versions the earlier part of the conversation is sent again with each question, so the model remembers it.",
+  "tr": "Linux'ta yapay zekâ sohbetinde Antigravity artık Gemini 4 Argon yerine daha az jeton harcayan Gemini 3.8 Flash kullanır.",
+  "en": "In the AI chat on Linux, Antigravity now uses Gemini 3.8 Flash, which spends fewer tokens, instead of Gemini 4 Argon.",
   "ofis": {"tr": "LifeOS Ofis 1.8.3: Ofis'te değişiklik yok.", "en": "LifeOS Ofis 1.8.3: nothing changed in Ofis."}
 }
