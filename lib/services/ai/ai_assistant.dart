@@ -13,10 +13,12 @@ import '../platform/app_edition.dart';
 import '../platform/atomic_file.dart';
 import '../search/text_extractor.dart';
 import 'ai_attachment.dart';
+import 'ai_events.dart';
 import 'ai_case.dart';
 import 'ai_prompts.dart';
 import 'folio_mcp.dart';
 
+export 'ai_events.dart';
 export 'ai_prompts.dart';
 
 /// The AI programs a lawyer may have on this computer, each signed in with
@@ -258,17 +260,13 @@ abstract final class AiAssistant {
         '--allowedTools',
         [for (final n in FolioMcp.names) 'mcp__folio__$n'].join(','),
       ],
-      // With pictures the question comes as an event, and the answer too.
-      if (pictures) ...[
-        '--input-format',
-        'stream-json',
-        '--output-format',
-        'stream-json',
-        '--verbose',
-      ] else ...[
-        '--output-format',
-        'json',
-      ],
+      // The answer as events, for the lawyer to see it work; with pictures
+      // the question comes as an event too.
+      if (pictures) ...['--input-format', 'stream-json'],
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
       '--tools',
       '',
       '--restricted',
@@ -533,10 +531,10 @@ abstract final class AiAssistant {
         if (json['is_error'] == true) {
           throw AiFailure(_said(result, 'Claude'));
         }
-        return plain(result);
+        return result;
       case AiProvider.codex:
         final text = (lastMessage ?? '').trim();
-        if (text.isNotEmpty) return plain(text);
+        if (text.isNotEmpty) return text;
         for (final line in stdout.split('\n').reversed) {
           if (!line.startsWith('{')) continue;
           try {
@@ -562,7 +560,7 @@ abstract final class AiAssistant {
                   _said('${r['error'] ?? r['status']}', 'Antigravity'),
                 );
               }
-              return plain('${r['response'] ?? ''}');
+              return '${r['response'] ?? ''}'.trim();
             }
           } on FormatException {
             continue;
@@ -603,6 +601,7 @@ abstract final class AiAssistant {
     bool tools = true,
     AiCaseSession? caseSession,
     List<AiAttachment> attachments = const [],
+    void Function(AiEvent event)? onEvent,
     Future<void>? cancel,
   }) async {
     final path = find(provider.command);
@@ -660,8 +659,23 @@ abstract final class AiAssistant {
       );
       final out = StringBuffer();
       final err = StringBuffer();
+      final events = switch (provider) {
+        AiProvider.claude => AiEvents.claude,
+        AiProvider.codex => AiEvents.codex,
+        AiProvider.antigravity => AiEvents.antigravity,
+      };
       final reading = Future.wait([
-        process.stdout.transform(utf8.decoder).forEach(out.write),
+        process.stdout
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .forEach((line) {
+              out.writeln(line);
+              if (onEvent != null) {
+                for (final e in events(line)) {
+                  onEvent(e);
+                }
+              }
+            }),
         process.stderr.transform(utf8.decoder).forEach(err.write),
       ]);
       process.stdin.write(input(provider, prompt, attachments: attachments));

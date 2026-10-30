@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:file_picker/file_picker.dart';
@@ -11,6 +12,7 @@ import '../../services/ai/ai_case.dart';
 import '../../services/ai/ai_draft.dart';
 import '../../services/ai/ai_memory.dart';
 import '../../services/ai/ai_refresh.dart';
+import 'ai_markdown.dart';
 import '../../services/ai/folio_mcp.dart';
 import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_database.dart';
@@ -85,6 +87,19 @@ class _Turn {
 
   /// What Folio did for it on the way (UYAP asked for fresh).
   final notes = <String>[];
+
+  /// What the program did on the way: Folio's tools it called, by id;
+  /// what it thought or remarked; the answer as it is being written.
+  final steps = <String, AiStep>{};
+  final thought = StringBuffer();
+  final live = StringBuffer();
+  final started = DateTime.now();
+
+  /// The trace opened or folded by the lawyer; null to follow the work.
+  bool? traceOpen;
+
+  /// The steps of an answer kept, as they were told.
+  List<String> recorded = const [];
 }
 
 /// Findings or a draft the program offered, waiting for the lawyer or
@@ -192,7 +207,10 @@ class _AiPanelState extends State<AiPanel> {
       for (final t in AiMemory.turnsOf(chat)) {
         _turns.add(
           _Turn('${t['soru'] ?? ''}', '${t['yazan'] ?? ''}')
-            ..answer = '${t['cevap'] ?? ''}',
+            ..answer = '${t['cevap'] ?? ''}'
+            ..recorded = [
+              for (final a in t['adimlar'] as List? ?? const []) '$a',
+            ],
         );
       }
     }
@@ -275,6 +293,10 @@ class _AiPanelState extends State<AiPanel> {
     });
     _question.clear();
     _toEnd();
+    // The seconds counted while it works.
+    final tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
     try {
       final path = widget.path;
       String? text;
@@ -356,6 +378,7 @@ class _AiPanelState extends State<AiPanel> {
           model: model,
           caseSession: session,
           attachments: attachments,
+          onEvent: (e) => _heard(turn, e),
           cancel: cancel.future,
         );
         turn.answer = answer;
@@ -380,6 +403,7 @@ class _AiPanelState extends State<AiPanel> {
     } catch (e) {
       turn.error = 'Yanıt alınamadı: $e';
     } finally {
+      tick.cancel();
       if (mounted) {
         setState(() {
           if (identical(_cancel, cancel)) _cancel = null;
@@ -423,6 +447,11 @@ class _AiPanelState extends State<AiPanel> {
             'cevap': a,
             'yazan': t.by,
             if (t.attached.isNotEmpty) 'ekler': t.attached,
+            if (t.steps.isNotEmpty)
+              'adimlar': [
+                for (final s in t.steps.values)
+                  AiStep(s.id, s.tool, args: s.args, done: true).label,
+              ],
             'zaman': DateTime.now().toIso8601String(),
           },
     ];
@@ -778,6 +807,312 @@ class _AiPanelState extends State<AiPanel> {
     );
   }
 
+  /// What an empty conversation shows: what may be asked, and a few
+  /// questions to start with.
+  Widget _empty(ColorScheme scheme) {
+    final home = widget.path == null && _case == null;
+    final ideas = widget.path != null
+        ? const [
+            'Bu belgeyi özetle',
+            'Bu belgede süre doğuran bir şey var mı?',
+            'Bu belgeye karşı ne yapmalıyım?',
+          ]
+        : home
+        ? const [
+            'Bu hafta duruşmalarım neler?',
+            'Yeni tebligat var mı, süreleri ne?',
+            'Son günü yaklaşan süreler',
+            'UYAP’ta yeni bildirim var mı?',
+          ]
+        : const [
+            'Dosyanın durumu ne?',
+            'Son gelen evrakı özetle',
+            'Dosyada eksik ne var, ne yapmalıyım?',
+          ];
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          home
+              ? 'Sorunuzu aşağıya yazın. Bir dosyayla ilgiliyse dosyayı esas '
+                    'numarasıyla, mahkemesiyle ya da bir tarafın adıyla anmanız '
+                    'yeter; yapay zekâ dosyayı kendisi bulur. Ajandanızı, '
+                    'tebligatlarınızı ve dosyalarınızı da bilir.'
+              : widget.path == null
+              ? 'Dosyayla ilgili sorunuzu aşağıya yazın. Yapay zekâ dosyanın '
+                    'bilgilerine, evrakına ve hafızasına Folio’nun araçlarıyla '
+                    'bakar.'
+              : 'Belgeyi özetletebilir ya da aşağıya belgeyle ilgili bir soru '
+                    'yazabilirsiniz. Bir şey göndermeden önce size sorulur.',
+          style: TextStyle(color: scheme.onSurfaceVariant, height: 1.45),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final idea in ideas)
+              ActionChip(
+                key: ValueKey('ai-idea-$idea'),
+                label: Text(idea),
+                onPressed: _provider == null || _busy
+                    ? null
+                    : () => unawaited(_ask(AiTask.question, idea)),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// One question and its answer, with what the program did on the way.
+  List<Widget> _turnView(_Turn t, ColorScheme scheme) {
+    final muted = TextStyle(fontSize: 11, color: scheme.onSurfaceVariant);
+    final running = t.answer == null && t.error == null;
+    return [
+      Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          margin: const EdgeInsets.only(top: 10, left: 60),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: SelectableText(
+            t.question,
+            style: TextStyle(color: scheme.onPrimaryContainer),
+          ),
+        ),
+      ),
+      if (t.attached.isNotEmpty)
+        Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text('Ekler: ${t.attached.join(', ')}', style: muted),
+          ),
+        ),
+      Padding(
+        padding: const EdgeInsets.only(top: 6, bottom: 2),
+        child: Text(t.by, style: muted),
+      ),
+      for (final n in t.notes)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            children: [
+              Icon(Icons.sync_rounded, size: 14, color: scheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  n,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      if (t.steps.isNotEmpty || t.thought.isNotEmpty || t.recorded.isNotEmpty)
+        _trace(t, scheme),
+      for (final r in t.requests) _request(r, scheme),
+      if (t.answer case final a?) ...[
+        AiMarkdown(a),
+        Row(
+          children: [
+            TextButton.icon(
+              key: ValueKey('ai-copy-${identityHashCode(t)}'),
+              onPressed: () {
+                unawaited(Clipboard.setData(ClipboardData(text: a)));
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  const SnackBar(content: Text('Yanıt kopyalandı.')),
+                );
+              },
+              icon: const Icon(Icons.copy_rounded, size: 15),
+              label: const Text('Kopyala'),
+            ),
+          ],
+        ),
+        if (t.checks case final c?) _checks(c, scheme),
+      ] else if (t.error case final e?)
+        Text(
+          e,
+          key: const ValueKey('ai-error'),
+          style: TextStyle(color: scheme.error),
+        )
+      else if (running) ...[
+        _status(t, scheme),
+        if (t.live.isNotEmpty) AiMarkdown(t.live.toString()),
+      ],
+      for (final o in t.offers) _offer(t, o, scheme),
+    ];
+  }
+
+  /// While it works: what it is doing, and for how long.
+  Widget _status(_Turn t, ColorScheme scheme) {
+    final open = t.steps.values.where((s) => !s.done).lastOrNull;
+    final label = open != null
+        ? open.label
+        : t.live.isNotEmpty
+        ? 'Yazıyor'
+        : t.steps.isEmpty
+        ? 'Düşünüyor'
+        : 'Araştırıyor';
+    final seconds = DateTime.now().difference(t.started).inSeconds;
+    return Padding(
+      key: const ValueKey('ai-status'),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          const SizedBox.square(
+            dimension: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              seconds >= 3 ? '$label… · $seconds sn' : '$label…',
+              style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What the program did on the way, open while it works and folded when
+  /// the answer comes, unless the lawyer opened or folded it.
+  Widget _trace(_Turn t, ColorScheme scheme) {
+    final running = t.answer == null && t.error == null;
+    final open = t.traceOpen ?? running;
+    final steps = t.steps.isNotEmpty
+        ? t.steps.values.toList()
+        : [for (final (i, l) in t.recorded.indexed) _Told('$i', l)];
+    final small = TextStyle(fontSize: 12, color: scheme.onSurfaceVariant);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: ValueKey('ai-trace-${identityHashCode(t)}'),
+            onTap: () => setState(() => t.traceOpen = !open),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+              child: Row(
+                children: [
+                  Icon(
+                    open
+                        ? Icons.expand_more_rounded
+                        : Icons.chevron_right_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      steps.isEmpty
+                          ? 'Düşünme'
+                          : 'Yapılan incelemeler (${steps.length})',
+                      style: small.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final s in steps)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(
+                        children: [
+                          s.done
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  size: 14,
+                                  color: scheme.primary,
+                                )
+                              : const SizedBox.square(
+                                  dimension: 12,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.6,
+                                  ),
+                                ),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(s.label, style: small)),
+                        ],
+                      ),
+                    ),
+                  if (t.thought.isNotEmpty) ...[
+                    if (steps.isNotEmpty) const SizedBox(height: 6),
+                    Text(
+                      'Düşünme',
+                      style: small.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    AiMarkdown(t.thought.toString().trim(), size: 12),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// A program's event, put in its turn: drawn a few times a second at
+  /// most, an answer coming a letter at a time.
+  void _heard(_Turn turn, AiEvent e) {
+    switch (e) {
+      case AiStep(:final id, done: true):
+        final known = turn.steps[id];
+        if (known != null) {
+          turn.steps[id] = AiStep(id, known.tool, args: known.args, done: true);
+        }
+      case AiStep(:final id, :final tool, :final args):
+        final known = turn.steps[id];
+        turn.steps[id] = AiStep(
+          id,
+          tool.isEmpty ? (known?.tool ?? '') : tool,
+          args: args.isEmpty ? (known?.args ?? const {}) : args,
+          done: known?.done ?? false,
+        );
+      case AiThought(:final text):
+        turn.thought.write(text);
+      case AiWriting(:final text, :final restart):
+        if (restart) {
+          // What it said before calling a tool was a remark on the way.
+          if (turn.live.isNotEmpty) {
+            turn.thought.write('${turn.live}\n\n');
+          }
+          turn.live.clear();
+        }
+        turn.live.write(text);
+    }
+    if (_drawing) return;
+    _drawing = true;
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      _drawing = false;
+      if (mounted) setState(() {});
+      _toEnd();
+    });
+  }
+
+  bool _drawing = false;
+
   /// Folio's own look at the answer's citations, shown under it: none is
   /// changed, each found, missing or repealed is said so.
   Future<void> _check(_Turn turn, String answer) async {
@@ -1013,122 +1348,12 @@ class _AiPanelState extends State<AiPanel> {
             ),
             Expanded(
               child: _turns.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        widget.path == null && _case == null
-                            ? 'Sorunuzu aşağıya yazın. Bir dosyayla ilgiliyse '
-                                  'dosyayı esas numarasıyla, mahkemesiyle ya da '
-                                  'bir tarafın adıyla anmanız yeter; yapay zekâ '
-                                  'dosyayı kendisi bulur.'
-                            : widget.path == null
-                            ? 'Dosyayla ilgili sorunuzu aşağıya yazın. Yapay '
-                                  'zekâ dosyanın bilgilerine, evrakına ve '
-                                  'hafızasına Folio’nun araçlarıyla bakar.'
-                            : 'Belgeyi özetletebilir ya da aşağıya belgeyle '
-                                  'ilgili bir soru yazabilirsiniz. Bir şey '
-                                  'göndermeden önce size sorulur.',
-                        style: TextStyle(
-                          color: scheme.onSurfaceVariant,
-                          height: 1.45,
-                        ),
-                      ),
-                    )
+                  ? _empty(scheme)
                   : ListView(
                       controller: _scroll,
                       padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
                       children: [
-                        for (final t in _turns) ...[
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Container(
-                              margin: const EdgeInsets.only(top: 8, left: 40),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: scheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                t.question,
-                                style: TextStyle(
-                                  color: scheme.onPrimaryContainer,
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (t.attached.isNotEmpty)
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 3),
-                                child: Text(
-                                  'Ekler: ${t.attached.join(', ')}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6, bottom: 2),
-                            child: Text(
-                              t.by,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          for (final n in t.notes)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.sync_rounded,
-                                    size: 14,
-                                    color: scheme.primary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      n,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          for (final r in t.requests) _request(r, scheme),
-                          if (t.answer case final a?) ...[
-                            SelectableText(
-                              a,
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                height: 1.5,
-                              ),
-                            ),
-                            if (t.checks case final c?) _checks(c, scheme),
-                          ] else if (t.error case final e?)
-                            Text(
-                              e,
-                              key: const ValueKey('ai-error'),
-                              style: TextStyle(color: scheme.error),
-                            )
-                          else
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 6),
-                              child: LinearProgressIndicator(),
-                            ),
-                          for (final o in t.offers) _offer(t, o, scheme),
-                        ],
+                        for (final t in _turns) ..._turnView(t, scheme),
                       ],
                     ),
             ),
@@ -1203,21 +1428,35 @@ class _AiPanelState extends State<AiPanel> {
                     icon: const Icon(Icons.attach_file_rounded, size: 20),
                   ),
                   Expanded(
-                    child: TextField(
-                      key: const ValueKey('ai-question'),
-                      controller: _question,
-                      enabled: !_busy,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: InputDecoration(
-                        hintText: widget.path != null
-                            ? 'Belgeye sorun…'
-                            : _case != null
-                            ? 'Dosyaya sorun…'
-                            : 'Sorun…',
-                        isDense: true,
+                    // Enter sends, Shift+Enter starts a new line.
+                    child: Focus(
+                      onKeyEvent: (_, event) {
+                        if (event is KeyDownEvent &&
+                            (event.logicalKey == LogicalKeyboardKey.enter ||
+                                event.logicalKey ==
+                                    LogicalKeyboardKey.numpadEnter) &&
+                            !HardwareKeyboard.instance.isShiftPressed) {
+                          _send();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: TextField(
+                        key: const ValueKey('ai-question'),
+                        controller: _question,
+                        enabled: !_busy,
+                        minLines: 1,
+                        maxLines: 6,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        decoration: InputDecoration(
+                          hintText: widget.path != null
+                              ? 'Belgeye sorun…'
+                              : _case != null
+                              ? 'Dosyaya sorun…'
+                              : 'Sorun…',
+                          isDense: true,
+                        ),
                       ),
                     ),
                   ),
@@ -1235,4 +1474,12 @@ class _AiPanelState extends State<AiPanel> {
       ),
     );
   }
+}
+
+/// A step of an answer kept: its words as they were told.
+class _Told extends AiStep {
+  const _Told(String id, this.said) : super(id, '', done: true);
+  final String said;
+  @override
+  String get label => said;
 }

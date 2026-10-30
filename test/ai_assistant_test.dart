@@ -39,7 +39,10 @@ void main() {
   group('the programs, run safe', () {
     test('Claude: print mode, no tools, no settings, nothing kept', () {
       final args = AiAssistant.arguments(AiProvider.claude, '/tmp/x');
-      expect(args, containsAllInOrder(['-p', '--output-format', 'json']));
+      expect(
+        args,
+        containsAllInOrder(['-p', '--output-format', 'stream-json']),
+      );
       final tools = args.indexOf('--tools');
       expect(args[tools + 1], '');
       expect(

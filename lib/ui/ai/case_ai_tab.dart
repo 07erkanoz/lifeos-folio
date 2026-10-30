@@ -8,6 +8,7 @@ import '../../services/ai/ai_memory.dart';
 import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_case_store.dart';
+import 'ai_markdown.dart';
 import 'ai_panel.dart';
 
 /// A case's "Yapay zekâ" tab: what the lawyer's AI program left of it
@@ -644,10 +645,7 @@ class _CaseAiTabState extends State<CaseAiTab> {
                 style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 4),
-              SelectableText(
-                '${t['cevap'] ?? ''}',
-                style: const TextStyle(fontSize: 13.5, height: 1.5),
-              ),
+              AiMarkdown('${t['cevap'] ?? ''}'),
               for (final (j, o) in [
                 for (final o in t['teklifler'] as List? ?? const [])
                   if (o is Map) o.cast<String, Object?>(),
