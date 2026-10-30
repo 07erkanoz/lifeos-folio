@@ -1,0 +1,8 @@
+{
+  "tr": "Linux'ta Adalet E-İmza ile UYAP Web girişinde, açık olan Adalet E-İmza artık her seferinde kapatılıp açılmaz; önce ondan sertifika istenir. Program yalnız cevap vermezse ya da kartı okumazsa yeniden başlatılır. Giriş çoğu zaman beklemeden başlar.",
+  "en": "On Linux, the UYAP Web login with Adalet E-İmza no longer closes and reopens a running Adalet E-İmza every time; the certificate is asked of it first. It is restarted only when it does not answer or does not read the card. The login usually starts without waiting.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.8.3: Ofis'te değişiklik yok.",
+    "en": "LifeOS Ofis 1.8.3: nothing changed in Ofis."
+  }
+}

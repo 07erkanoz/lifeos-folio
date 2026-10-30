@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Packs the built Linux bundle as artifacts/LifeOS-Folio-<version>-Linux-x64.tar.gz:
+# Packs the built Linux bundle as artifacts/LifeOS-Folio-<version>.<build>-Linux-x64.tar.gz
+# (a new build of one version is a file of its own):
 # one LifeOS-Folio folder holding the bundle, kur.sh, and the scripts kur.sh
 # uses to add Folio to the app menu. With `ofis`, LifeOS Ofis from the same
-# bundle instead, as artifacts/LifeOS-Ofis-<version>-Linux-x64.tar.gz: its
+# bundle instead, as artifacts/LifeOS-Ofis-<version>.<build>-Linux-x64.tar.gz: its
 # own program only, without Folio's, the Editör's and the e-Devlet window's,
 # and the kur.sh that installs it as the documents' default.
 set -euo pipefail
@@ -10,6 +11,7 @@ cd "$(dirname "$0")/../.."
 product="${1:-folio}"
 version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+[[:space:]]*$/\1/p' pubspec.yaml)"
 test -n "$version" || { echo "pubspec.yaml sürümü okunamadı." >&2; exit 1; }
+build="$(sed -nE 's/^version:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+\+([0-9]+)[[:space:]]*$/\1/p' pubspec.yaml)"
 bundle=build/linux/x64/release/bundle
 case "$product" in
   folio) name=LifeOS-Folio program=lifeos_folio installer=kur.sh ;;
@@ -30,6 +32,6 @@ cp packaging/linux/install_local.py packaging/linux/context_menu.py \
   packaging/linux/lifeos-imz.xml "$root/kurulum/"
 install -m 755 "packaging/linux/$installer" "$root/kur.sh"
 mkdir -p artifacts
-out="artifacts/$name-$version-Linux-x64.tar.gz"
+out="artifacts/$name-$version.$build-Linux-x64.tar.gz"
 tar -C "$stage" --owner=0 --group=0 --numeric-owner -czf "$out" "$name"
 echo "$out"

@@ -158,8 +158,8 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           gh release upload "$GITHUB_REF_NAME" --clobber \
-            "artifacts/LifeOS-Folio-$VERSION-Linux-x64.tar.gz" \
-            "artifacts/LifeOS-Ofis-$VERSION-Linux-x64.tar.gz"
+            artifacts/LifeOS-Folio-$VERSION.*-Linux-x64.tar.gz \
+            artifacts/LifeOS-Ofis-$VERSION.*-Linux-x64.tar.gz
 
   android:
     needs: version
@@ -303,14 +303,14 @@ jobs:
               > "release/$1.json"
           }
           sign windows-x64 "LifeOS-Folio-$VERSION-Windows-x64-Setup.exe" ''
-          sign linux-x64 "LifeOS-Folio-$VERSION-Linux-x64.tar.gz" ''
+          sign linux-x64 "$(cd packages && ls LifeOS-Folio-"$VERSION".*-Linux-x64.tar.gz)" ''
           sign android "LifeOS-Folio-$VERSION-Android.apk" ''
           # Ofis's notes are the file's "ofis" ones, or a line of its own
           # when there are none: Folio's are about lawyers' work.
           jq -e .ofis "$notes" >/dev/null ||
             jq '.ofis = {tr: "LifeOS Ofis \(env.VERSION): hata düzeltmeleri ve iyileştirmeler.", en: "LifeOS Ofis \(env.VERSION): fixes and improvements."}' \
               "$notes" > "$RUNNER_TEMP/notes.json" && notes="$RUNNER_TEMP/notes.json"
-          sign ofis-linux-x64 "LifeOS-Ofis-$VERSION-Linux-x64.tar.gz" .ofis
+          sign ofis-linux-x64 "$(cd packages && ls LifeOS-Ofis-"$VERSION".*-Linux-x64.tar.gz)" .ofis
           (cd packages && sha256sum LifeOS-Folio-* LifeOS-Ofis-* > ../release/SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
       - name: İmzalı sürüm bilgilerini taslağa ekle
