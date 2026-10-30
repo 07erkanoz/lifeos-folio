@@ -268,4 +268,83 @@ void main() {
       expect(again, endsWith('Rapora itiraz (2).udf'));
     });
   });
+
+  test('a case found by its number, court or a party; the conversation '
+      'bound to one only the search gave', () async {
+    const cases = [
+      AiCaseEntry(
+        key: '2026/470|manavgat 3 is mahkemesi',
+        number: '2026/470',
+        court: 'Manavgat 3. İş Mahkemesi',
+        parties: ['Ayşe Kara (Davacı)', 'Örnek Turizm A.Ş. (Davalı)'],
+      ),
+      AiCaseEntry(
+        key: '2026/470|antalya 2 asliye ticaret mahkemesi',
+        number: '2026/470',
+        court: 'Antalya 2. Asliye Ticaret Mahkemesi',
+        parties: ['Mehmet Demir (Davacı)'],
+      ),
+      AiCaseEntry(
+        key: '2025/12|manavgat icra dairesi',
+        number: '2025/12',
+        court: 'Manavgat İcra Dairesi',
+        parties: ['AYŞE KARA (Alacaklı)'],
+      ),
+    ];
+    List<String> keys(String words) => [
+      for (final c in AiCaseEntry.match(words, cases)) c.number,
+    ];
+    expect(keys('2026/470'), ['2026/470', '2026/470']);
+    expect(
+      AiCaseEntry.match('2026 / 470 manavgat', cases).first.court,
+      'Manavgat 3. İş Mahkemesi',
+    );
+    expect(keys('ayse kara'), ['2026/470', '2025/12']);
+    expect(keys('Ayşe Kara icra'), ['2025/12']);
+    expect(keys('olmayan kişi'), isEmpty);
+
+    final root = await Directory.systemTemp.createTemp('folio-yz-sec-');
+    addTearDown(() => root.delete(recursive: true));
+    final session = await AiCaseSession.open(null, chat: 'c1');
+    addTearDown(session.close);
+    final tools = FolioCaseTools(
+      session.folder,
+      store: UyapCaseStore(directory: Directory('${root.path}/d')),
+      portfolio: () async => cases,
+      records: (kind, key) async =>
+          kind == AiMemory.finding && key == '2025/12|manavgat icra dairesi'
+          ? [
+              {'metin': 'x'},
+            ]
+          : const [],
+    );
+    expect((await tools.call('dosya_bilgisi', {}))['durum'], 'dosya_secilmedi');
+    expect(await session.bound(), isNull);
+    // Only a key the search gave.
+    expect(
+      (await tools.call('dosya_sec', {
+        'anahtar': '2025/12|manavgat icra dairesi',
+      }))['durum'],
+      'yok',
+    );
+    final found = await tools.call('dosya_ara', {'ifade': 'Ayşe Kara'});
+    expect((found['dosyalar'] as List).length, 2);
+    expect(found['not'], contains('avukata sor'));
+    final chosen = await tools.call('dosya_sec', {
+      'anahtar': '2025/12|manavgat icra dairesi',
+    });
+    expect(chosen['durum'], 'secildi');
+    expect(chosen['aciklama'], contains('dosya_hafizasi'));
+    final bound = await session.bound();
+    expect(bound?.number, '2025/12');
+    expect(bound?.court, 'Manavgat İcra Dairesi');
+    // The conversation kept its id: the memory leaves it out.
+    expect(
+      jsonDecode(
+        File('${session.folder.path}/dosya.json').readAsStringSync(),
+      )['sohbet'],
+      'c1',
+    );
+    expect((await tools.call('dosya_bilgisi', {}))['esas'], '2025/12');
+  });
 }

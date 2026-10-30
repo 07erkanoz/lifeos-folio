@@ -72,7 +72,10 @@ class FolioMcp {
       'dönerse bunu söyle; madde ya da karar uydurma, numara tahmin etme. '
       'Madde numarasından emin değilsen önce mevzuat_icindekiler, karardan '
       'emin değilsen önce karar_ara çağır. Taslak yazdıysan bitirmeden '
-      'atif_dogrula ile denetle. Soru bir dosyaya bağlıysa dosya_bilgisi ve '
+      'atif_dogrula ile denetle. Konuşma bir dosyaya bağlı değilse ve soru '
+      'avukatın bir dosyasıyla ilgiliyse dosya_ara ile bul, tek dosya açıkça '
+      'uyuyorsa dosya_sec ile seç, birden fazlası uyuyorsa avukata sor. '
+      'Soru bir dosyaya bağlıysa dosya_bilgisi ve '
       'dosya_evraklari ile dosyayı tanı; evrakı evrak_oku ile oku, inmemiş '
       'olanı yalnız gerekiyorsa evrak_indir ile avukattan iste.';
 

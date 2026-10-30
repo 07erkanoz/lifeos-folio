@@ -13,7 +13,9 @@ import 'ai_panel.dart';
 /// (AiMemory) — its conversations, to read or go on with; the findings the
 /// lawyer kept, those found wrong struck through with why; the drafts it
 /// wrote. Shown only while the AI features are on. On a device that runs
-/// no AI program (a phone) it is read, not asked.
+/// no AI program (a phone) it is read, not asked. With no [caseKey], the
+/// home page's: every conversation, each with the case it came to be of,
+/// and a new one of no case, whose case the program finds.
 class CaseAiTab extends StatefulWidget {
   const CaseAiTab({
     super.key,
@@ -24,7 +26,7 @@ class CaseAiTab extends StatefulWidget {
     this.onChanged,
   });
 
-  final String caseKey;
+  final String? caseKey;
   final UyapCaseRecord? record;
   final Future<PortalDatabase> Function() database;
   final ValueChanged<String>? onOpenPath;
@@ -56,8 +58,10 @@ class _CaseAiTabState extends State<CaseAiTab> {
     if (!mounted) return;
     setState(() {
       _chats = newest(AiMemory.chat, 'guncellendi');
-      _findings = newest(AiMemory.finding, 'zaman');
-      _drafts = newest(AiMemory.draft, 'zaman');
+      if (key != null) {
+        _findings = newest(AiMemory.finding, 'zaman');
+        _drafts = newest(AiMemory.draft, 'zaman');
+      }
       _loaded = true;
     });
     widget.onChanged?.call();
@@ -69,72 +73,6 @@ class _CaseAiTabState extends State<CaseAiTab> {
     String two(int v) => v.toString().padLeft(2, '0');
     return '${two(t.day)}.${two(t.month)}.${t.year}';
   }
-
-  /// [chat] gone on with, or a new one when null: beside the case, as on a
-  /// document.
-  Future<void> _ask([Map<String, Object?>? chat]) async {
-    final record = widget.record;
-    if (record == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          height: 640,
-          child: AiPanel(
-            caseRecord: record,
-            chat: chat,
-            onClose: () => Navigator.pop(context),
-            onOpen: (path) {
-              Navigator.pop(context);
-              widget.onOpenPath?.call(path);
-            },
-          ),
-        ),
-      ),
-    );
-    await _load();
-  }
-
-  /// [chat] read, on a device that asks nothing.
-  Future<void> _read(Map<String, Object?> chat) => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('${chat['baslik'] ?? 'Sohbet'}'),
-      scrollable: true,
-      content: SizedBox(
-        width: 520,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final t in AiMemory.turnsOf(chat)) ...[
-              Text(
-                '${t['soru'] ?? ''}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${t['yazan'] ?? ''}',
-                style: const TextStyle(fontSize: 11.5, color: Colors.grey),
-              ),
-              const SizedBox(height: 4),
-              SelectableText(
-                '${t['cevap'] ?? ''}',
-                style: const TextStyle(height: 1.5),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Kapat'),
-        ),
-      ],
-    ),
-  );
 
   Future<void> _removeChat(Map<String, Object?> chat) async {
     final sure = await showDialog<bool>(
@@ -203,10 +141,15 @@ class _CaseAiTabState extends State<CaseAiTab> {
     why.dispose();
     if (reason == null) return;
     final db = await widget.database();
-    db.putAiRecord('${finding['id']}', AiMemory.finding, widget.caseKey, {
-      ...finding,
-      'yanlis': {'neden': reason, 'zaman': DateTime.now().toIso8601String()},
-    });
+    db.putAiRecord(
+      '${finding['id']}',
+      AiMemory.finding,
+      '${finding['dosya']}',
+      {
+        ...finding,
+        'yanlis': {'neden': reason, 'zaman': DateTime.now().toIso8601String()},
+      },
+    );
     await _load();
   }
 
@@ -236,151 +179,317 @@ class _CaseAiTabState extends State<CaseAiTab> {
     );
   }
 
-  Widget _heading(String text, {Widget? trailing}) => Padding(
-    padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        ?trailing,
-      ],
-    ),
-  );
+  /// What the tab shows: the conversations, the findings or the drafts.
+  _Part _part = _Part.chats;
+
+  /// The conversation open: null for a new one. [_slot] names the panel
+  /// shown, a new one each time another is opened, never as an answer is
+  /// kept (the panel keeps what it put before the lawyer).
+  String? _openId;
+  int _slot = 0;
+
+  /// On a narrow screen the list and the conversation take the room by
+  /// turns: whether the conversation has it.
+  bool _talking = false;
+
+  Map<String, Object?>? get _open =>
+      _chats.where((c) => c['id'] == _openId).firstOrNull;
+
+  /// The case of the conversation open on the home page, read for it.
+  UyapCaseRecord? _openCase;
+
+  Future<void> _show(String? id) async {
+    UyapCaseRecord? kase;
+    final chat = _chats.where((c) => c['id'] == id).firstOrNull;
+    final court = chat?['mahkeme'];
+    if (widget.caseKey == null && court is String) {
+      final number = '${chat!['esas'] ?? ''}';
+      kase =
+          await UyapCaseStore.instance.load(court, number) ??
+          UyapCaseRecord(
+            court: court,
+            number: number,
+            fetchedAt: DateTime.now(),
+          );
+    }
+    if (!mounted) return;
+    setState(() {
+      _openId = id;
+      _openCase = kase;
+      _slot++;
+      _talking = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
-        child: Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
     final scheme = Theme.of(context).colorScheme;
-    final asks = AiAssistant.shown && widget.record != null;
+    final standing = _findings.where((f) => f['yanlis'] == null).length;
+    Widget chip(_Part part, String label) => Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        key: ValueKey('case-ai-part-${part.name}'),
+        label: Text(label),
+        selected: _part == part,
+        onSelected: (_) => setState(() => _part = part),
+      ),
+    );
+    // The home page's: the conversations alone.
+    if (widget.caseKey == null) {
+      return KeyedSubtree(
+        key: const ValueKey('home-ai'),
+        child: _chatsPart(scheme),
+      );
+    }
+    return Column(
+      key: const ValueKey('case-ai-tab'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                chip(_Part.chats, 'Sohbetler · ${_chats.length}'),
+                chip(_Part.findings, 'Bulgular · $standing'),
+                chip(_Part.drafts, 'Taslaklar · ${_drafts.length}'),
+              ],
+            ),
+          ),
+        ),
+        Divider(height: 1, color: scheme.outlineVariant),
+        Expanded(
+          child: switch (_part) {
+            _Part.chats => _chatsPart(scheme),
+            _Part.findings => _findingsPart(scheme),
+            _Part.drafts => _draftsPart(),
+          },
+        ),
+      ],
+    );
+  }
+
+  bool get _asks =>
+      AiAssistant.shown && (widget.caseKey == null || widget.record != null);
+
+  Widget _chatsPart(ColorScheme scheme) => LayoutBuilder(
+    builder: (context, box) {
+      final wide = box.maxWidth >= 720;
+      final list = _chatList(scheme);
+      final talk = _conversation(scheme, back: !wide);
+      if (wide) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: 280, child: list),
+            VerticalDivider(width: 1, color: scheme.outlineVariant),
+            Expanded(child: talk),
+          ],
+        );
+      }
+      return _talking ? talk : list;
+    },
+  );
+
+  Widget _chatList(ColorScheme scheme) => ListView(
+    padding: const EdgeInsets.all(10),
+    children: [
+      if (_asks)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: FilledButton.icon(
+            key: const ValueKey('case-ai-new'),
+            onPressed: () => unawaited(_show(null)),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Yeni sohbet'),
+          ),
+        )
+      else if (!AiAssistant.available)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+          child: Text(
+            'Bu cihazda yapay zekâya soru sorulmaz; bilgisayarınızda '
+            'yapılanlar burada okunur.',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          ),
+        ),
+      if (_chats.isEmpty) _empty('Bu dosyada henüz sohbet yok.'),
+      for (final c in _chats)
+        Material(
+          color: c['id'] == _openId
+              ? scheme.primary.withValues(alpha: .08)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          child: ListTile(
+            key: ValueKey('case-ai-chat-${c['id']}'),
+            dense: true,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            title: Text(
+              '${c['baslik'] ?? ''}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              [
+                if (widget.caseKey == null)
+                  c['mahkeme'] == null
+                      ? 'Dosyasız'
+                      : '${c['esas']} · ${c['mahkeme']}',
+                _day(c['guncellendi']),
+                if (AiMemory.turnsOf(c).lastOrNull?['yazan'] case final by?)
+                  '$by',
+                '${AiMemory.turnsOf(c).length} soru',
+              ].join(' · '),
+              style: const TextStyle(fontSize: 11.5),
+            ),
+            onTap: () => unawaited(_show('${c['id']}')),
+            trailing: PopupMenuButton<String>(
+              tooltip: 'Sohbet',
+              onSelected: (_) => _removeChat(c),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'sil', child: Text('Sohbeti sil')),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
+
+  /// The conversation open, asked on where this device asks; read where
+  /// it does not.
+  Widget _conversation(ColorScheme scheme, {required bool back}) {
+    final open = _open;
+    final record = widget.record;
+    final Widget body;
+    if (_asks) {
+      body = AiPanel(
+        key: ValueKey('case-ai-panel-$_slot'),
+        caseRecord: record ?? _openCase,
+        chat: open,
+        embedded: true,
+        onOpen: widget.onOpenPath,
+        onKept: (id) {
+          _openId = id;
+          unawaited(_load());
+        },
+      );
+    } else if (open == null) {
+      body = Center(child: _empty('Okumak için soldan bir sohbet seçin.'));
+    } else {
+      body = ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          for (final t in AiMemory.turnsOf(open)) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                margin: const EdgeInsets.only(left: 40, bottom: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${t['soru'] ?? ''}',
+                  style: TextStyle(color: scheme.onPrimaryContainer),
+                ),
+              ),
+            ),
+            Text(
+              '${t['yazan'] ?? ''}',
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              '${t['cevap'] ?? ''}',
+              style: const TextStyle(fontSize: 13.5, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ],
+      );
+    }
+    if (!back) return body;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const ValueKey('case-ai-back'),
+            onPressed: () => setState(() => _talking = false),
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: const Text('Sohbetler'),
+          ),
+        ),
+        Expanded(child: body),
+      ],
+    );
+  }
+
+  Widget _findingsPart(ColorScheme scheme) {
     final byKind = <String, List<Map<String, Object?>>>{};
     for (final f in _findings) {
       byKind.putIfAbsent('${f['tur']}', () => []).add(f);
     }
-    final standing = _findings.where((f) => f['yanlis'] == null).length;
-    // In the case page's own scroll, as its other tabs.
-    return Padding(
-      key: const ValueKey('case-ai-tab'),
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (asks)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.icon(
-                  key: const ValueKey('case-ai-ask'),
-                  onPressed: () => _ask(),
-                  icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-                  label: const Text('Dosyaya sor'),
-                ),
-              ),
-            )
-          else if (!AiAssistant.available)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                'Bu cihazda yapay zekâya soru sorulmaz; bilgisayarınızda '
-                'yapılanlar burada okunur.',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: scheme.onSurfaceVariant,
-                ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 20),
+      children: [
+        if (_findings.isEmpty)
+          _empty(
+            'Kaydedilmiş bulgu yok. Yapay zekâ bulgu önerdiğinde sohbette '
+            'onayınıza sunulur.',
+          ),
+        for (final kind in [
+          ...AiMemory.kinds.keys.where(byKind.containsKey),
+          ...byKind.keys.where((k) => !AiMemory.kinds.containsKey(k)),
+        ]) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
+            child: Text(
+              AiMemory.kinds[kind] ?? kind,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurfaceVariant,
               ),
             ),
-          _heading('Sohbetler'),
-          if (_chats.isEmpty)
-            _empty('Bu dosyada henüz yapay zekâ sohbeti yok.')
-          else
-            for (final c in _chats)
-              Card(
-                margin: const EdgeInsets.only(bottom: 6),
-                child: ListTile(
-                  key: ValueKey('case-ai-chat-${c['id']}'),
-                  dense: true,
-                  title: Text(
-                    '${c['baslik'] ?? ''}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    [
-                      _day(c['guncellendi']),
-                      if (AiMemory.turnsOf(c).lastOrNull?['yazan']
-                          case final by?)
-                        '$by',
-                      '${AiMemory.turnsOf(c).length} soru',
-                    ].join(' · '),
-                  ),
-                  onTap: () => asks ? _ask(c) : _read(c),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (v) => v == 'oku' ? _read(c) : _removeChat(c),
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'oku', child: Text('Oku')),
-                      PopupMenuItem(value: 'sil', child: Text('Sohbeti sil')),
-                    ],
-                  ),
-                ),
-              ),
-          _heading('Bulgular · $standing geçerli'),
-          if (_findings.isEmpty)
-            _empty(
-              'Kaydedilmiş bulgu yok. Yapay zekâ bulgu önerdiğinde panelde '
-              'onayınıza sunulur.',
-            )
-          else
-            for (final kind in [
-              ...AiMemory.kinds.keys.where(byKind.containsKey),
-              ...byKind.keys.where((k) => !AiMemory.kinds.containsKey(k)),
-            ]) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
-                child: Text(
-                  AiMemory.kinds[kind] ?? kind,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              for (final f in byKind[kind]!) _finding(f, scheme),
-            ],
-          _heading('Taslaklar'),
-          if (_drafts.isEmpty)
-            _empty('Yapay zekânın yazıp kaydettiğiniz taslak yok.')
-          else
-            for (final d in _drafts)
-              Card(
-                margin: const EdgeInsets.only(bottom: 6),
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.description_outlined),
-                  title: Text('${d['baslik'] ?? ''}'),
-                  subtitle: Text(
-                    '${_day(d['zaman'])} · Yapay zekâ taslağı · '
-                    '${d['yazan'] ?? ''}',
-                  ),
-                  onTap: () => _openDraft(d),
-                ),
-              ),
+          ),
+          for (final f in byKind[kind]!) _finding(f, scheme),
         ],
-      ),
+      ],
     );
   }
+
+  Widget _draftsPart() => ListView(
+    padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
+    children: [
+      if (_drafts.isEmpty)
+        _empty('Yapay zekânın yazıp kaydettiğiniz taslak yok.'),
+      for (final d in _drafts)
+        Card(
+          margin: const EdgeInsets.only(bottom: 6),
+          child: ListTile(
+            dense: true,
+            leading: const Icon(Icons.description_outlined),
+            title: Text('${d['baslik'] ?? ''}'),
+            subtitle: Text(
+              '${_day(d['zaman'])} · Yapay zekâ taslağı · ${d['yazan'] ?? ''}',
+            ),
+            onTap: () => _openDraft(d),
+          ),
+        ),
+    ],
+  );
 
   Widget _empty(String text) => Padding(
     padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
@@ -455,3 +564,5 @@ class _CaseAiTabState extends State<CaseAiTab> {
     );
   }
 }
+
+enum _Part { chats, findings, drafts }

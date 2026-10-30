@@ -9,6 +9,7 @@ import '../portal/observed.dart';
 import '../portal/portal_database.dart';
 import '../uyap/uyap_case_data.dart';
 import '../uyap/uyap_case_store.dart';
+import '../uyap/uyap_web_service.dart' show UyapParty, UyapWebService;
 import 'ai_assistant.dart';
 import 'ai_memory.dart';
 
@@ -20,22 +21,44 @@ import 'ai_memory.dart';
 class AiCaseSession {
   AiCaseSession._(this.folder, this.record);
 
+  /// The case [folder] is bound to, as the program chose it (dosya_sec)
+  /// or Folio gave it; null while it is of none.
+  static Future<({String court, String number})?> boundIn(
+    Directory folder,
+  ) async {
+    try {
+      final json = jsonDecode(
+        await File(p.join(folder.path, 'dosya.json')).readAsString(),
+      );
+      if (json is! Map || json['mahkeme'] is! String) return null;
+      return (court: json['mahkeme'] as String, number: '${json['esas']}');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<({String court, String number})?> bound() => boundIn(folder);
+
   /// The environment variable the folder is named in.
   static const variable = 'FOLIO_YZ_DOSYA';
 
   final Directory folder;
-  final UyapCaseRecord record;
+
+  /// The case, once known: given, or chosen by the program.
+  UyapCaseRecord? record;
 
   /// [chat] is the conversation going on, left out of the case's memory.
+  /// With no [record] the program finds the case itself (dosya_ara,
+  /// dosya_sec).
   static Future<AiCaseSession> open(
-    UyapCaseRecord record, {
+    UyapCaseRecord? record, {
     String? chat,
   }) async {
     final folder = await Directory.systemTemp.createTemp('folio-yz-dosya-');
     await File(p.join(folder.path, 'dosya.json')).writeAsString(
       jsonEncode({
-        'mahkeme': record.court,
-        'esas': record.number,
+        'mahkeme': ?record?.court,
+        'esas': ?record?.number,
         'sohbet': ?chat,
       }),
     );
@@ -163,11 +186,13 @@ class FolioCaseTools {
     Future<String> Function(String path)? read,
     Future<List<Map<String, Object?>>> Function(String kind, String caseKey)?
     records,
+    Future<List<AiCaseEntry>> Function()? portfolio,
     this.patience = const Duration(minutes: 2),
     this.every = const Duration(milliseconds: 500),
   }) : _hearings = hearings ?? _portalHearings,
        _read = read ?? AiAssistant.documentText,
-       _records = records ?? _portalRecords;
+       _records = records ?? _portalRecords,
+       _portfolio = portfolio ?? _portalCases;
 
   /// The tools of the case named in the environment, when Folio named one.
   static FolioCaseTools? fromEnvironment([Map<String, String>? environment]) {
@@ -186,6 +211,11 @@ class FolioCaseTools {
   final Future<String> Function(String path) _read;
   final Future<List<Map<String, Object?>>> Function(String kind, String caseKey)
   _records;
+  final Future<List<AiCaseEntry>> Function() _portfolio;
+
+  /// The cases dosya_ara gave in this session, by key: dosya_sec takes no
+  /// other.
+  final _found = <String, AiCaseEntry>{};
 
   /// Folio's check of the law and decision citations in a text
   /// (FolioMcp's atif_dogrula), given by the server the tools run in.
@@ -207,6 +237,51 @@ class FolioCaseTools {
   };
 
   static const tools = <Map<String, Object?>>[
+    {
+      'name': 'dosya_ara',
+      'title': 'Avukatın dosyalarında ara',
+      'description':
+          'Avukatın Folio\'daki dava ve icra dosyalarında esas numarası, '
+          'mahkeme ya da taraf adıyla arar: "2026/470", "Manavgat iş", '
+          '"Ayşe Kara". Soru bir dosyayla ilgiliyse ve konuşma henüz bir '
+          'dosyaya bağlı değilse önce bunu çağır.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'ifade': {
+            'type': 'string',
+            'description': 'Esas no, mahkeme ya da taraf adından sözcükler',
+          },
+        },
+        'required': ['ifade'],
+      },
+      'annotations': _reads,
+    },
+    {
+      'name': 'dosya_sec',
+      'title': 'Konuşmayı dosyaya bağla',
+      'description':
+          'Konuşmayı dosya_ara\'nın bulduğu bir dosyaya bağlar; sonra dosya '
+          'araçları o dosya için çalışır ve konuşma dosyanın kaydına girer. '
+          'Yalnız avukatın sözüyle tek bir dosya açıkça uyuyorsa seç; birden '
+          'fazla dosya uyuyorsa hangisi olduğunu avukata sor, tahmin etme.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'anahtar': {
+            'type': 'string',
+            'description': 'dosya_ara\'nın verdiği anahtar',
+          },
+        },
+        'required': ['anahtar'],
+      },
+      'annotations': {
+        'readOnlyHint': false,
+        'destructiveHint': false,
+        'idempotentHint': true,
+        'openWorldHint': false,
+      },
+    },
     {
       'name': 'dosya_bilgisi',
       'title': 'Dosyanın bilgileri',
@@ -377,20 +452,35 @@ class FolioCaseTools {
 
   Future<UyapCaseRecord?> _record() async {
     final json = await _session();
-    return store.load('${json['mahkeme']}', '${json['esas']}');
+    if (json['mahkeme'] is! String) return null;
+    return await store.load('${json['mahkeme']}', '${json['esas']}') ??
+        // A case of the portfolio whose documents were never fetched.
+        UyapCaseRecord(
+          court: '${json['mahkeme']}',
+          number: '${json['esas']}',
+          fetchedAt: DateTime.now(),
+        );
   }
 
-  static const _noCase = {
-    'durum': 'yok',
-    'aciklama': 'Dosya Folio\'da kayıtlı değil.',
+  static const _unbound = {
+    'durum': 'dosya_secilmedi',
+    'aciklama':
+        'Konuşma bir dosyaya bağlı değil: önce dosya_ara ile dosyayı bul, '
+        'dosya_sec ile seç.',
   };
 
   Future<Map<String, Object?>> call(
     String name,
     Map<String, Object?> args,
   ) async {
+    switch (name) {
+      case 'dosya_ara':
+        return _search('${args['ifade'] ?? ''}'.trim());
+      case 'dosya_sec':
+        return _choose('${args['anahtar'] ?? ''}'.trim());
+    }
     final record = await _record();
-    if (record == null) return _noCase;
+    if (record == null) return _unbound;
     final key = '${args['anahtar'] ?? ''}'.trim();
     switch (name) {
       case 'dosya_bilgisi':
@@ -510,6 +600,59 @@ class FolioCaseTools {
         (part - 1) * partSize,
         min(text.length, part * partSize),
       ),
+    };
+  }
+
+  Future<Map<String, Object?>> _search(String words) async {
+    if (words.isEmpty) return {'durum': 'yok', 'aciklama': 'İfade boş.'};
+    final found = AiCaseEntry.match(words, await _portfolio());
+    for (final e in found) {
+      _found[e.key] = e;
+    }
+    if (found.isEmpty) {
+      return {
+        'durum': 'yok',
+        'aciklama': 'Avukatın dosyalarında buna uyan dosya yok.',
+      };
+    }
+    return {
+      'durum': 'bulundu',
+      'dosyalar': [for (final e in found) e.toJson()],
+      if (found.length > 1)
+        'not':
+            'Birden fazla dosya uyuyor: hangisi olduğunu avukata sor, '
+            'tahmin etme.',
+    };
+  }
+
+  Future<Map<String, Object?>> _choose(String key) async {
+    final entry = _found[key];
+    if (entry == null) {
+      return {
+        'durum': 'yok',
+        'aciklama': 'Bu anahtar bu konuşmadaki dosya_ara sonuçlarında yok.',
+      };
+    }
+    final session = await _session();
+    await _writeWhole(
+      File(p.join(folder.path, 'dosya.json')),
+      utf8.encode(
+        jsonEncode({
+          ...session.map((k, v) => MapEntry('$k', v)),
+          'mahkeme': entry.court,
+          'esas': entry.number,
+        }),
+      ),
+    );
+    final hint = AiMemory.hint({
+      AiMemory.chat: (await _records(AiMemory.chat, entry.key)).length,
+      AiMemory.finding: (await _records(AiMemory.finding, entry.key)).length,
+      AiMemory.draft: (await _records(AiMemory.draft, entry.key)).length,
+    });
+    return {
+      'durum': 'secildi',
+      'dosya': entry.toJson(),
+      'aciklama': 'Konuşma bu dosyaya bağlandı.${hint == null ? '' : ' $hint'}',
     };
   }
 
@@ -711,6 +854,26 @@ class FolioCaseTools {
     };
   }
 
+  static Future<List<AiCaseEntry>> _portalCases() async {
+    final db = await PortalDatabase.shared().timeout(
+      const Duration(seconds: 20),
+    );
+    final parties = db.caseParties();
+    return [
+      for (final c in db.cases().values)
+        AiCaseEntry(
+          key: c.key,
+          number: c.number,
+          court: c.court,
+          parties: [
+            for (final t in parties[c.key] ?? const <UyapParty>[])
+              t.role.isEmpty ? t.name : '${t.name} (${t.role})',
+          ],
+          status: c.status?.value ?? '',
+        ),
+    ];
+  }
+
   static Future<List<Map<String, Object?>>> _portalRecords(
     String kind,
     String caseKey,
@@ -735,5 +898,59 @@ class FolioCaseTools {
           'sonuc': ?h.result?.value,
         },
     ];
+  }
+}
+
+/// A case of the lawyer's portfolio, as dosya_ara finds and tells it.
+class AiCaseEntry {
+  const AiCaseEntry({
+    required this.key,
+    required this.number,
+    required this.court,
+    this.parties = const [],
+    this.status = '',
+  });
+
+  final String key, number, court, status;
+  final List<String> parties;
+
+  Map<String, Object?> toJson() => {
+    'anahtar': key,
+    'esas': number,
+    'mahkeme': court,
+    if (parties.isNotEmpty) 'taraflar': parties,
+    if (status.isNotEmpty) 'durum': status,
+  };
+
+  /// The cases [words] name, the best first, ten at most: a number
+  /// (`2026/470`) only those of that number; otherwise those holding every
+  /// word of three letters or more, in their court, number or parties.
+  static List<AiCaseEntry> match(String words, List<AiCaseEntry> cases) {
+    final fold = UyapWebService.fold;
+    final number = RegExp(r'\d{4}\s*/\s*\d+').firstMatch(words)?[0];
+    final rest = fold(number == null ? words : words.replaceFirst(number, ' '))
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((w) => w.length >= 3)
+        .toList();
+    final out = <(int, AiCaseEntry)>[];
+    for (final c in cases) {
+      final hay = fold('${c.court} ${c.number} ${c.parties.join(' ')}');
+      if (number != null &&
+          fold(c.number).replaceAll(' ', '') !=
+              fold(number).replaceAll(' ', '')) {
+        continue;
+      }
+      final hits = rest.where(hay.contains).length;
+      if (number == null && (rest.isEmpty || hits < rest.length)) continue;
+      // With a number, the court's words choose among cases of it.
+      if (number != null && rest.isNotEmpty && hits == 0) {
+        if (cases.where((o) => fold(o.number) == fold(c.number)).length > 1) {
+          continue;
+        }
+      }
+      out.add((hits, c));
+    }
+    out.sort((a, b) => b.$1.compareTo(a.$1));
+    return [for (final (_, c) in out.take(10)) c];
   }
 }

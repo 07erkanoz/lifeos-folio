@@ -760,6 +760,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                     Expanded(
                       child: _tab == _Tab.documents && _c.record != null
                           ? _documentsSplit(context)
+                          // A conversation fills the room it has.
+                          : _tab == _Tab.ai
+                          ? _aiTab()
                           : SingleChildScrollView(
                               child: _tabBody(context, true),
                             ),
@@ -2656,19 +2659,25 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     _Tab.facts => _factsTab(context),
     _Tab.petitions => _petitionsTab(context),
     _Tab.tasks => _tasksTab(context),
-    _Tab.ai => CaseAiTab(
-      key: ValueKey('ai-${widget.caseKey}'),
-      caseKey: widget.caseKey,
-      record: _c.record,
-      database: () => _db,
-      onOpenPath: widget.onOpenPath,
-      onChanged: () async {
-        final n = (await _db).aiCounts(widget.caseKey).values;
-        final count = n.fold(0, (a, b) => a + b);
-        if (mounted && count != _aiCount) setState(() => _aiCount = count);
-      },
+    // In the page's own scroll: given a window's room of its own.
+    _Tab.ai => SizedBox(
+      height: (MediaQuery.sizeOf(context).height * .8).clamp(420.0, 900.0),
+      child: _aiTab(),
     ),
   };
+
+  Widget _aiTab() => CaseAiTab(
+    key: ValueKey('ai-${widget.caseKey}'),
+    caseKey: widget.caseKey,
+    record: _c.record,
+    database: () => _db,
+    onOpenPath: widget.onOpenPath,
+    onChanged: () async {
+      final n = (await _db).aiCounts(widget.caseKey).values;
+      final count = n.fold(0, (a, b) => a + b);
+      if (mounted && count != _aiCount) setState(() => _aiCount = count);
+    },
+  );
 
   /// The office's tasks over this case: given here, followed here.
   Widget _tasksTab(BuildContext context) => ListenableBuilder(

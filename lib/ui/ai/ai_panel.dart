@@ -11,6 +11,7 @@ import '../../services/ai/folio_mcp.dart';
 import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
+import '../../services/uyap/uyap_case_data.dart' show UyapCaseDocument;
 import '../../services/uyap/uyap_case_store.dart';
 import 'ai_dialogs.dart';
 
@@ -28,7 +29,9 @@ class AiPanel extends StatefulWidget {
     this.chat,
     this.onClose,
     this.onOpen,
-  }) : assert(path != null || caseRecord != null);
+    this.onKept,
+    this.embedded = false,
+  });
 
   final String? path;
   final UyapCaseRecord? caseRecord;
@@ -37,6 +40,13 @@ class AiPanel extends StatefulWidget {
 
   /// Opens a draft saved in the case's folder, in the editor.
   final void Function(String path)? onOpen;
+
+  /// The conversation kept with the case, by its id: after each answer.
+  final void Function(String chatId)? onKept;
+
+  /// In a case's page, filling the room it is given: no edge of its own,
+  /// no closing, the case not named again.
+  final bool embedded;
 
   @override
   State<AiPanel> createState() => _AiPanelState();
@@ -232,27 +242,33 @@ class _AiPanelState extends State<AiPanel> {
       ];
       // The case's tools only for a program given Folio's tools.
       final record = _case;
-      final withCase =
-          record != null &&
-          (AiAssistant.takesTools(provider) ||
-              await AiAssistant.antigravityFolio() != null);
-      if (record == null && path == null) return;
-      final db = withCase ? await PortalDatabase.shared() : null;
-      final key = record == null ? null : caseKey(record.number, record.court);
+      final tools =
+          AiAssistant.takesTools(provider) ||
+          await AiAssistant.antigravityFolio() != null;
+      final withCase = record != null && tools;
+      // Asked of no document and no case: the program finds the case.
+      final open = path == null && record == null && tools;
+      final db = withCase || open ? await PortalDatabase.shared() : null;
       final prompt = AiAssistant.prompt(
         task: task,
         name: path == null ? null : p.basename(path),
         text: text,
         question: question,
         caseName: withCase ? '${record.court} ${record.number}' : null,
-        // The case's memory, for the program to read first.
-        note: db == null ? null : AiMemory.hint(db.aiCounts(key!)),
+        note: withCase
+            // The case's memory, for the program to read first.
+            ? AiMemory.hint(db!.aiCounts(caseKey(record.number, record.court)))
+            : open
+            ? 'Soru avukatın bir dosyasıyla ilgiliyse dosya_ara ile dosyayı '
+                  'bul; tek dosya açıkça uyuyorsa dosya_sec ile seç, birden '
+                  'fazla uyuyorsa hangisi olduğunu avukata sor.'
+            : null,
         history: history,
       );
       if (cancel.isCompleted) return;
       setState(() => _sentTo = provider);
-      if (withCase) _chatId ??= AiMemory.id();
-      final session = withCase
+      if (db != null) _chatId ??= AiMemory.id();
+      final session = db != null
           ? await AiCaseSession.open(record, chat: _chatId)
           : null;
       _session = session;
@@ -272,7 +288,11 @@ class _AiPanelState extends State<AiPanel> {
         );
         turn.answer = answer;
         unawaited(_check(turn, answer));
-        if (db != null) _keep(db, key!);
+        if (db != null) {
+          // The case it chose at the very end.
+          if (session != null) await _bind(session);
+          _keep(db);
+        }
       } finally {
         watch?.cancel();
         // What it put before the lawyer at the very end.
@@ -297,10 +317,32 @@ class _AiPanelState extends State<AiPanel> {
     }
   }
 
-  /// The conversation kept with the case [key], as it is now.
-  void _keep(PortalDatabase db, String key) {
+  /// The case the program chose in [session] (dosya_sec), taken as the
+  /// conversation's: its documents' requests and its record are of it.
+  Future<void> _bind(AiCaseSession session) async {
+    final bound = await session.bound();
+    if (bound == null) return;
+    final now = _case;
+    if (now != null && now.court == bound.court && now.number == bound.number) {
+      return;
+    }
+    final record =
+        await UyapCaseStore.instance.load(bound.court, bound.number) ??
+        UyapCaseRecord(
+          court: bound.court,
+          number: bound.number,
+          fetchedAt: DateTime.now(),
+        );
+    session.record = record;
+    if (mounted) setState(() => _case = record);
+  }
+
+  /// The conversation kept, with its case or with none, as it is now.
+  void _keep(PortalDatabase db) {
     final id = _chatId;
     if (id == null) return;
+    final kase = _case;
+    final key = kase == null ? '' : caseKey(kase.number, kase.court);
     final turns = [
       for (final t in _turns)
         if (t.answer case final a?)
@@ -313,6 +355,8 @@ class _AiPanelState extends State<AiPanel> {
     ];
     if (turns.isEmpty) return;
     try {
+      // Said after it is kept.
+      scheduleMicrotask(() => widget.onKept?.call(id));
       db.putAiRecord(
         id,
         AiMemory.chat,
@@ -322,6 +366,8 @@ class _AiPanelState extends State<AiPanel> {
           document: widget.path == null ? '' : p.basename(widget.path!),
           started: _chatStarted,
           turns: turns,
+          court: kase?.court,
+          number: kase?.number,
         ),
       );
     } catch (_) {}
@@ -330,6 +376,7 @@ class _AiPanelState extends State<AiPanel> {
   /// Downloads the program asked for in [session], and the findings and
   /// drafts it offered, put before the lawyer.
   Future<void> _look(AiCaseSession session, _Turn turn) async {
+    await _bind(session);
     final offered = await session.proposals();
     if (offered.isNotEmpty && mounted) {
       setState(() {
@@ -348,10 +395,9 @@ class _AiPanelState extends State<AiPanel> {
           _Request(
             a,
             [
-                  for (final d in session.record.documents) ...[
-                    d,
-                    ...d.attachments,
-                  ],
+                  for (final d
+                      in session.record?.documents ??
+                          const <UyapCaseDocument>[]) ...[d, ...d.attachments],
                 ].where((d) => d.key == a.key).firstOrNull?.title ??
                 'Evrak',
           ),
@@ -374,6 +420,8 @@ class _AiPanelState extends State<AiPanel> {
       setState(() => request.outcome = 'İndirilmedi');
       return;
     }
+    final record = session.record;
+    if (record == null) return;
     setState(() => request.working = true);
     final store = UyapCaseStore.instance;
     final panel = UyapCasePanelController(store: store);
@@ -389,9 +437,9 @@ class _AiPanelState extends State<AiPanel> {
         }
         return;
       }
-      await panel.show(session.record);
+      await panel.show(record);
       await panel.download([request.asked.key]);
-      final now = await store.load(session.record.court, session.record.number);
+      final now = await store.load(record.court, record.number);
       final done = now != null && store.fileOf(now, request.asked.key) != null;
       await session.answer(
         request.asked,
@@ -748,10 +796,12 @@ class _AiPanelState extends State<AiPanel> {
     ];
     return Container(
       key: const ValueKey('ai-panel'),
-      width: 380,
+      width: widget.embedded ? null : 380,
       decoration: BoxDecoration(
         color: scheme.surface,
-        border: Border(left: BorderSide(color: scheme.outlineVariant)),
+        border: widget.embedded
+            ? null
+            : Border(left: BorderSide(color: scheme.outlineVariant)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -786,15 +836,16 @@ class _AiPanelState extends State<AiPanel> {
                         ? null
                         : (v) => setState(() => _provider = v),
                   ),
-                IconButton(
-                  tooltip: 'Kapat',
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  onPressed: widget.onClose,
-                ),
+                if (widget.onClose != null)
+                  IconButton(
+                    tooltip: 'Kapat',
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: widget.onClose,
+                  ),
               ],
             ),
           ),
-          if (_case case final c?)
+          if (_case case final c? when !widget.embedded)
             Padding(
               key: const ValueKey('ai-case'),
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),

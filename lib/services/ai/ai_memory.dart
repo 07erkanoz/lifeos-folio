@@ -45,6 +45,8 @@ abstract final class AiMemory {
     required String document,
     required DateTime started,
     required List<Map<String, Object?>> turns,
+    String? court,
+    String? number,
   }) {
     final kept = turns.length > keptTurns
         ? turns.sublist(turns.length - keptTurns)
@@ -52,6 +54,8 @@ abstract final class AiMemory {
     return {
       'baslik': _cut(title, 120),
       'belge': document,
+      'mahkeme': ?court,
+      'esas': ?number,
       'basladi': started.toIso8601String(),
       'guncellendi': DateTime.now().toIso8601String(),
       'turlar': [

@@ -32,6 +32,7 @@ import '../services/speech/speech_session.dart';
 import '../services/platform/document_intents.dart';
 import '../services/ai/ai_assistant.dart';
 import 'ai/ai_panel.dart';
+import 'ai/case_ai_tab.dart';
 import '../services/platform/agenda_launch.dart';
 import '../services/platform/lifeos_profile.dart';
 import '../services/platform/document_launch.dart';
@@ -2088,6 +2089,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// The desktop's first page (docs/design/masaustu-anasayfa-taslak.png).
   Widget _desktopHome() => DesktopHome(
     name: _lawyerName,
+    // Asked on the home page of no case: the program finds it.
+    aiChats: AiAssistant.shown
+        ? (context) => CaseAiTab(
+            caseKey: null,
+            record: null,
+            database: PortalDatabase.shared,
+            onOpenPath: (path) =>
+                unawaited(_openRecent(EvrakFile.fromPath(path), edit: true)),
+          )
+        : null,
     recent: _recentDocuments.files,
     office: _office,
     uyapFolder: UyapSettings.instance.folder,
