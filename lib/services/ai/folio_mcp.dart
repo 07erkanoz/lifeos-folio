@@ -8,6 +8,7 @@ import '../legal/case_law_search.dart';
 import '../legal/citation.dart';
 import '../legal/decision.dart';
 import '../legal/legislation.dart';
+import 'ai_assistant.dart';
 import 'ai_case.dart';
 
 /// `lifeos_folio --mcp`: Folio's own tools for the lawyer's AI program, over
@@ -683,6 +684,11 @@ class FolioMcp {
   /// Serves the protocol on standard input and output until input ends;
   /// one JSON message a line, as the stdio transport has it.
   static Future<int> serve() async {
+    // AI turned off in Folio: no program is answered.
+    if (!(await AiSettings.load()).enabled) {
+      stderr.writeln('Folio’da yapay zekâ özellikleri kapalı.');
+      return 1;
+    }
     final server = FolioMcp(caseTools: FolioCaseTools.fromEnvironment());
     final pending = <Future<void>>[];
     await for (final line

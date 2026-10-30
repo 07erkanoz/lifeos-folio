@@ -149,6 +149,27 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     ),
   );
 
+  /// The switch for every AI feature. Turned off, nothing of them is shown
+  /// and Folio comes off Antigravity's list of tools.
+  Widget _main() => SettingsRow(
+    key: const ValueKey('ai-enabled'),
+    icon: Icons.auto_awesome_outlined,
+    title: 'Yapay zekâ özelliklerini kullan',
+    subtitle: _settings.enabled
+        ? 'Açık. Belge önizlemesinde yapay zekâ düğmesi görünür.'
+        : 'Kapalı. Folio’da yapay zekâyla ilgili hiçbir düğme ya da '
+              'pencere görünmez.',
+    trailing: settingsSwitch(_settings.enabled, (v) async {
+      await _save(_settings.copyWith(enabled: v));
+      if (!v && _agyTools) {
+        try {
+          await AiAssistant.removeFromAntigravity();
+        } catch (_) {}
+        await _load();
+      }
+    }),
+  );
+
   /// The model [provider] runs for [tier], to choose from what it offers.
   Widget _model(AiProvider provider, AiTier tier) {
     final current = _settings.modelFor(provider, tier);
@@ -194,76 +215,78 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     final found = _found;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-          child: Text(
-            'Belgeleri kendi yapay zekâ aboneliğinizle özetletip '
-            'sorabilirsiniz. İstekler bilgisayarınızdaki programdan doğrudan '
-            'gider; Folio araya sunucu koymaz.',
-            style: TextStyle(
-              fontSize: 13,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        if (found == null)
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else
-          for (final s in found) ...[
-            _program(s),
-            if (s.provider == AiProvider.antigravity && s.installed)
-              _antigravityTools(),
-          ],
-        if (found != null)
-          for (final s in found)
-            if (s.installed)
-              for (final tier in AiTier.values) _model(s.provider, tier),
-        SettingsRow(
-          key: const ValueKey('ai-mask'),
-          icon: Icons.shield_outlined,
-          title: 'Göndermeden önce TC kimlik numaralarını gizle',
-          subtitle: _settings.mask
-              ? 'Belgedeki geçerli TC kimlik numaraları yıldızla gönderilir.'
-              : 'Belge olduğu gibi gönderilir.',
-          trailing: settingsSwitch(
-            _settings.mask,
-            (v) => _save(_settings.copyWith(mask: v)),
-          ),
-        ),
-        SettingsRow(
-          key: const ValueKey('ai-consent-row'),
-          icon: Icons.verified_user_outlined,
-          title: _settings.consented
-              ? 'Kullanım onayı verildi'
-              : 'Kullanım onayı verilmedi',
-          subtitle: _settings.consented
-              ? [
-                  if (_settings.consentAt case final at?) _when(at),
-                  ?_settings.consentBy,
-                  'onay metni sürüm ${_settings.consentVersion}',
-                ].join(' · ')
-              : 'İlk belgeyi gönderirken bir kez sorulur.',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextButton(
-                onPressed: () => showAiConsentText(context),
-                child: const Text('Metni göster'),
-              ),
-              if (_settings.consented)
-                TextButton(
-                  key: const ValueKey('ai-consent-revoke'),
-                  onPressed: () => _save(_settings.copyWith(revoke: true)),
-                  child: const Text('Onayı geri al'),
-                ),
-            ],
-          ),
-        ),
-      ],
+      children: [_main(), if (_settings.enabled) ..._features(found)],
     );
   }
+
+  List<Widget> _features(List<AiStatus>? found) => [
+    Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+      child: Text(
+        'Belgeleri kendi yapay zekâ aboneliğinizle özetletip '
+        'sorabilirsiniz. İstekler bilgisayarınızdaki programdan doğrudan '
+        'gider; Folio araya sunucu koymaz.',
+        style: TextStyle(
+          fontSize: 13,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ),
+    if (found == null)
+      const Padding(
+        padding: EdgeInsets.all(12),
+        child: Center(child: CircularProgressIndicator()),
+      )
+    else
+      for (final s in found) ...[
+        _program(s),
+        if (s.provider == AiProvider.antigravity && s.installed)
+          _antigravityTools(),
+      ],
+    if (found != null)
+      for (final s in found)
+        if (s.installed)
+          for (final tier in AiTier.values) _model(s.provider, tier),
+    SettingsRow(
+      key: const ValueKey('ai-mask'),
+      icon: Icons.shield_outlined,
+      title: 'Göndermeden önce TC kimlik numaralarını gizle',
+      subtitle: _settings.mask
+          ? 'Belgedeki geçerli TC kimlik numaraları yıldızla gönderilir.'
+          : 'Belge olduğu gibi gönderilir.',
+      trailing: settingsSwitch(
+        _settings.mask,
+        (v) => _save(_settings.copyWith(mask: v)),
+      ),
+    ),
+    SettingsRow(
+      key: const ValueKey('ai-consent-row'),
+      icon: Icons.verified_user_outlined,
+      title: _settings.consented
+          ? 'Kullanım onayı verildi'
+          : 'Kullanım onayı verilmedi',
+      subtitle: _settings.consented
+          ? [
+              if (_settings.consentAt case final at?) _when(at),
+              ?_settings.consentBy,
+              'onay metni sürüm ${_settings.consentVersion}',
+            ].join(' · ')
+          : 'İlk belgeyi gönderirken bir kez sorulur.',
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextButton(
+            onPressed: () => showAiConsentText(context),
+            child: const Text('Metni göster'),
+          ),
+          if (_settings.consented)
+            TextButton(
+              key: const ValueKey('ai-consent-revoke'),
+              onPressed: () => _save(_settings.copyWith(revoke: true)),
+              child: const Text('Onayı geri al'),
+            ),
+        ],
+      ),
+    ),
+  ];
 }

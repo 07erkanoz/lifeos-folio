@@ -14,6 +14,28 @@ import 'support/fake_path_provider.dart';
 // every tool off, given only the text of the document chosen; the consent
 // asked once and kept.
 void main() {
+  test('off until the lawyer turns it on; off, nothing of it is shown', () {
+    addTearDown(() {
+      AiAssistant.availableForTest = null;
+      AiSettings.on.value = false;
+    });
+    expect(const AiSettings().enabled, isFalse);
+    expect(AiSettings.fromJson(const {}).enabled, isFalse);
+    expect(AiSettings.fromJson({'acik': true}).enabled, isTrue);
+    expect(
+      AiSettings.fromJson(const AiSettings().copyWith(enabled: true).toJson())
+          .enabled,
+      isTrue,
+    );
+    AiAssistant.availableForTest = true;
+    AiSettings.on.value = false;
+    expect(AiAssistant.shown, isFalse);
+    AiSettings.on.value = true;
+    expect(AiAssistant.shown, isTrue);
+    AiAssistant.availableForTest = false;
+    expect(AiAssistant.shown, isFalse);
+  });
+
   group('the programs, run safe', () {
     test('Claude: print mode, no tools, no settings, nothing kept', () {
       final args = AiAssistant.arguments(AiProvider.claude, '/tmp/x');

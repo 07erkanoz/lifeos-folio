@@ -980,6 +980,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    AiSettings.on.addListener(_aiSwitched);
+    if (AiAssistant.available) unawaited(AiSettings.load());
     UpdateCheck.instance.available.addListener(_updateAvailable);
     UpdateCheck.instance.start();
     _recentDocuments.load().then((_) {
@@ -1406,6 +1408,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    AiSettings.on.removeListener(_aiSwitched);
     PortalSync.newCaseNotice.removeListener(_newCaseTold);
     PortalSync.setupOffer.removeListener(_offerSetup);
     _keptSearch?.dispose();
@@ -1745,6 +1748,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// The AI panel beside the preview (AiPanel).
   bool _aiOpen = false;
+
+  /// The AI features turned on or off in the settings: off, their button
+  /// and panel go.
+  void _aiSwitched() {
+    if (!mounted) return;
+    setState(() {
+      if (!AiSettings.on.value) _aiOpen = false;
+    });
+  }
 
   /// Told by the portals' syncs, often while one runs: counted again once
   /// they have been quiet a moment, not each time, which froze the window.
@@ -4300,7 +4312,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           },
                         ),
                       // The lawyer's own AI program, beside the document.
-                      if (!phone && !_isEditorMode && AiAssistant.available)
+                      if (!phone && !_isEditorMode && AiAssistant.shown)
                         IconButton(
                           key: const ValueKey('preview-ai'),
                           tooltip: 'Yapay zekâ',
@@ -4398,7 +4410,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(child: _documentArea(file, phone)),
-              if (_aiOpen && !_isEditorMode && !phone && AiAssistant.available)
+              if (_aiOpen && !_isEditorMode && !phone && AiAssistant.shown)
                 AiPanel(
                   path: file.path,
                   onClose: () => setState(() => _aiOpen = false),

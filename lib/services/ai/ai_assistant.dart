@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:flutter/foundation.dart' show compute, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show ValueNotifier, compute, visibleForTesting;
 import 'package:path/path.dart' as p;
 
 import '../pdf/pdf_pages.dart';
@@ -115,6 +116,10 @@ abstract final class AiAssistant {
 
   @visibleForTesting
   static bool? availableForTest;
+
+  /// Whether the AI features are shown: [available], and turned on by the
+  /// lawyer ([AiSettings.enabled]).
+  static bool get shown => available && AiSettings.on.value;
 
   /// The most of a document's text sent: the rest is left out, and said so.
   static const maxCharacters = 200000;
@@ -735,6 +740,7 @@ abstract final class AiAssistant {
 /// Folio's own folder.
 class AiSettings {
   const AiSettings({
+    this.enabled = false,
     this.consentVersion,
     this.consentAt,
     this.consentBy,
@@ -746,6 +752,13 @@ class AiSettings {
   /// The consent text's version; one given to an older text no longer
   /// counts.
   static const currentConsent = 1;
+
+  /// Whether the lawyer turned the AI features on. Off, Folio shows none of
+  /// them and its tools answer no AI program.
+  final bool enabled;
+
+  /// [enabled] as last loaded or saved, for what shows the features.
+  static final on = ValueNotifier<bool>(false);
 
   final int? consentVersion;
   final DateTime? consentAt;
@@ -767,6 +780,7 @@ class AiSettings {
   bool get consented => consentVersion == currentConsent;
 
   AiSettings copyWith({
+    bool? enabled,
     int? consentVersion,
     DateTime? consentAt,
     String? consentBy,
@@ -775,6 +789,7 @@ class AiSettings {
     Map<String, String>? models,
     bool revoke = false,
   }) => AiSettings(
+    enabled: enabled ?? this.enabled,
     consentVersion: revoke ? null : consentVersion ?? this.consentVersion,
     consentAt: revoke ? null : consentAt ?? this.consentAt,
     consentBy: revoke ? null : consentBy ?? this.consentBy,
@@ -784,6 +799,7 @@ class AiSettings {
   );
 
   Map<String, Object?> toJson() => {
+    'acik': enabled,
     if (consentVersion != null) 'onaySurumu': consentVersion,
     if (consentAt != null) 'onayZamani': consentAt!.toIso8601String(),
     if (consentBy != null) 'onaylayan': consentBy,
@@ -796,6 +812,7 @@ class AiSettings {
     if (json is! Map) return const AiSettings();
     final version = json['onaySurumu'];
     return AiSettings(
+      enabled: json['acik'] == true,
       consentVersion: version is int ? version : null,
       consentAt: DateTime.tryParse('${json['onayZamani'] ?? ''}'),
       consentBy: json['onaylayan'] as String?,
@@ -820,10 +837,15 @@ class AiSettings {
     try {
       final file = await _file();
       if (await file.exists()) {
-        return _held = fromJson(jsonDecode(await file.readAsString()));
+        return _hold(fromJson(jsonDecode(await file.readAsString())));
       }
     } catch (_) {}
-    return _held = const AiSettings();
+    return _hold(const AiSettings());
+  }
+
+  static AiSettings _hold(AiSettings settings) {
+    on.value = settings.enabled;
+    return _held = settings;
   }
 
   Future<void> save() async {
@@ -831,7 +853,7 @@ class AiSettings {
       await _file(),
       utf8.encode(const JsonEncoder.withIndent('  ').convert(toJson())),
     );
-    _held = this;
+    _hold(this);
   }
 }
 
