@@ -840,6 +840,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (pinned != null) return !pinned;
         return _foldsPanel ||
             (_group == 'kasa' && width < 1400) ||
+            // A conversation wants the room: the menu folds to its icons.
+            _group == 'yapayzeka' ||
             width < 1200;
     }
   }
