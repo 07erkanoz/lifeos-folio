@@ -433,7 +433,7 @@ class _AiPanelState extends State<AiPanel> {
           thread: thread,
         );
         String answer;
-        if (thread.ids.containsKey(provider)) {
+        if (await AiAssistant.goesOn(provider, thread)) {
           try {
             answer = await asking(full: false);
           } on AiFailure catch (e) {

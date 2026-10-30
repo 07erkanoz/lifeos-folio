@@ -661,7 +661,11 @@ abstract final class AiAssistant {
         : await Directory(
             p.join(Directory.systemTemp.path, 'folio-yz-${thread.place}'),
           ).create(recursive: true);
-    final resume = thread?.ids[provider];
+    // An Antigravity that does not go on with a conversation is not asked
+    // to: its id is not kept, and each question carries what was said.
+    final keeps =
+        provider != AiProvider.antigravity || await antigravityResumes();
+    final resume = keeps ? thread?.ids[provider] : null;
     try {
       if (provider == AiProvider.codex) {
         await File(p.join(folder.path, 'talimat.md'))
@@ -728,7 +732,7 @@ abstract final class AiAssistant {
             .forEach((line) {
               heard = DateTime.now();
               out.writeln(line);
-              if (thread != null) {
+              if (thread != null && keeps) {
                 if (threadIn(provider, line) case final id?) {
                   thread.ids[provider] = id;
                 }
@@ -816,6 +820,38 @@ abstract final class AiAssistant {
         if (f is File) await f.delete();
       }
     } catch (_) {}
+  }
+
+  /// Whether this computer's Antigravity goes on with a conversation it is
+  /// given (`--conversation`): seen to from 1.4.12; an older one is sent
+  /// what was said instead.
+  static Future<bool> antigravityResumes() async =>
+      _agyResumes ??= () async {
+        final path = find(AiProvider.antigravity.command);
+        if (path == null) return false;
+        try {
+          final r = await Process.run(path, [
+            '--version',
+          ], environment: environment()).timeout(const Duration(seconds: 15));
+          final m = RegExp(r'(\d+)\.(\d+)\.(\d+)').firstMatch('${r.stdout}');
+          if (m == null) return false;
+          final v = [for (var i = 1; i <= 3; i++) int.parse(m.group(i)!)];
+          return v[0] > 1 ||
+              (v[0] == 1 && (v[1] > 4 || (v[1] == 4 && v[2] >= 12)));
+        } catch (_) {
+          return false;
+        }
+      }();
+
+  static Future<bool>? _agyResumes;
+
+  /// Whether [provider] goes on with [thread] here: if not, its id is
+  /// dropped, so that the question carries what was said.
+  static Future<bool> goesOn(AiProvider provider, AiThread thread) async {
+    if (provider == AiProvider.antigravity && !await antigravityResumes()) {
+      thread.ids.remove(provider);
+    }
+    return thread.ids.containsKey(provider);
   }
 
   /// The id of the conversation [provider] says it keeps, in a line it

@@ -224,7 +224,7 @@ class AiRelay {
     try {
       final model = settings.modelFor(provider, AiTask.question.tier);
       String answer;
-      if (thread.ids.containsKey(provider)) {
+      if (await AiAssistant.goesOn(provider, thread)) {
         try {
           answer = await _ask(
             provider,
