@@ -151,6 +151,23 @@ class _AiPanelState extends State<AiPanel> {
   final _turns = <_Turn>[];
   final _question = TextEditingController();
   final _scroll = ScrollController();
+
+  /// Whether the conversation follows what is written at its end: so
+  /// while the lawyer is at the end; not once they scroll up to read.
+  bool _follow = true;
+
+  bool _onScroll(ScrollNotification n) {
+    if (n is UserScrollNotification || n is ScrollUpdateNotification) {
+      if (n is ScrollUpdateNotification && n.dragDetails == null) {
+        return false;
+      }
+      _follow = n.metrics.maxScrollExtent - n.metrics.pixels < 160;
+    } else if (n is ScrollEndNotification) {
+      _follow = n.metrics.maxScrollExtent - n.metrics.pixels < 160;
+    }
+    return false;
+  }
+
   Completer<void>? _cancel;
   String? _text;
   AiProvider? _sentTo;
@@ -312,7 +329,7 @@ class _AiPanelState extends State<AiPanel> {
       _cancel = cancel;
     });
     _question.clear();
-    _toEnd();
+    _toEnd(now: true);
     // The seconds counted while it works.
     final tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
@@ -550,7 +567,10 @@ class _AiPanelState extends State<AiPanel> {
           if (o.kind == AiMemory.draft) {
             _wrote(turn, o.body);
           } else {
-            turn.offers.add(_Offer(o.kind, o.body));
+            // Checked by Folio already: kept at once, as the case's.
+            final offer = _Offer(o.kind, o.body);
+            turn.offers.add(offer);
+            unawaited(_decide(turn, offer, true));
           }
         }
       });
@@ -621,7 +641,13 @@ class _AiPanelState extends State<AiPanel> {
   /// or the draft saved in its folder and opened.
   Future<void> _decide(_Turn turn, _Offer offer, bool keep) async {
     final record = _case;
-    if (offer.outcome != null || record == null) return;
+    if (offer.outcome != null) return;
+    if (record == null) {
+      setState(
+        () => offer.outcome = 'Sohbet bir dosyaya bağlı değil; kaydedilmedi',
+      );
+      return;
+    }
     if (!keep) {
       setState(
         () => offer.outcome = offer.kind == AiMemory.finding
@@ -650,7 +676,7 @@ class _AiPanelState extends State<AiPanel> {
         setState(
           () => offer.outcome = chosen.isEmpty
               ? 'Kaydedilmedi'
-              : '${chosen.length} bulgu dosyaya kaydedildi',
+              : '${chosen.length} bulgu dosyanın hafızasına kaydedildi',
         );
       } else {
         final title = '${offer.body['baslik'] ?? 'Taslak'}';
@@ -680,6 +706,33 @@ class _AiPanelState extends State<AiPanel> {
   Widget _offer(_Turn turn, _Offer o, ColorScheme scheme) {
     final findings = o.kind == AiMemory.finding;
     final items = o.findings;
+    // Findings are kept as they come: one line says so.
+    if (findings) {
+      final repealed = items.where((f) => f['mulga'] is List).length;
+      return Padding(
+        key: ValueKey('ai-offer-${o.kind}-${identityHashCode(o)}'),
+        padding: const EdgeInsets.only(top: 6, bottom: 2),
+        child: Row(
+          children: [
+            Icon(
+              Icons.bookmark_added_outlined,
+              size: 15,
+              color: scheme.primary,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                [
+                  o.outcome ?? 'Bulgular kaydediliyor',
+                  if (repealed > 0) '$repealed tanesi mülga maddeye dayanıyor',
+                ].join(' · '),
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       key: ValueKey('ai-offer-${o.kind}-${identityHashCode(o)}'),
       margin: const EdgeInsets.only(top: 8, bottom: 4),
@@ -734,6 +787,8 @@ class _AiPanelState extends State<AiPanel> {
                   [
                     ...?(f['kaynaklar'] as List?)?.map((k) => '$k'),
                     if (f['denetim'] == 'dogrulandi') 'kaynağında denetlendi',
+                    if (f['mulga'] case final List m when m.isNotEmpty)
+                      'mülga: ${m.join(', ')}',
                   ].join(' · '),
                   style: TextStyle(
                     fontSize: 11,
@@ -1537,15 +1592,17 @@ class _AiPanelState extends State<AiPanel> {
     }
   }
 
-  void _toEnd() => WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (_scroll.hasClients) {
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-    }
-  });
+  /// To the end of the conversation, if the lawyer is following it;
+  /// [now] for a question just asked, which they always follow.
+  void _toEnd({bool now = false}) {
+    if (now) _follow = true;
+    if (!_follow) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_follow && _scroll.hasClients) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
+    });
+  }
 
   void _send() {
     final q = _question.text.trim();
@@ -1708,12 +1765,15 @@ class _AiPanelState extends State<AiPanel> {
                   Expanded(
                     child: _turns.isEmpty
                         ? _empty(scheme)
-                        : ListView(
-                            controller: _scroll,
-                            padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-                            children: [
-                              for (final t in _turns) ..._turnView(t, scheme),
-                            ],
+                        : NotificationListener<ScrollNotification>(
+                            onNotification: _onScroll,
+                            child: ListView(
+                              controller: _scroll,
+                              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+                              children: [
+                                for (final t in _turns) ..._turnView(t, scheme),
+                              ],
+                            ),
                           ),
                   ),
                   if (widget.embedded &&

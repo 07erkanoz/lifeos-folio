@@ -806,7 +806,21 @@ class CaseLaw {
   /// test hands in behave alike.
   static bool _isRefusal(String body) => body.trimLeft().startsWith('<');
 
+  /// A connection the line cut (some home lines drop one now and then,
+  /// mid-handshake) is tried again a few times before the bank is called
+  /// unreachable: a decision that is there is not reported missing.
   static Future<String> _http(String path, String? body) async {
+    for (var attempt = 1; ; attempt++) {
+      try {
+        return await _httpOnce(path, body);
+      } on IOException {
+        if (attempt >= 3) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 600 * attempt));
+      }
+    }
+  }
+
+  static Future<String> _httpOnce(String path, String? body) async {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15);
     try {

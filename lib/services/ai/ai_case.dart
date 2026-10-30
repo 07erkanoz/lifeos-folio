@@ -455,10 +455,12 @@ class FolioCaseTools {
     },
     {
       'name': 'bulgu_oner',
-      'title': 'Bulguları avukata öner',
+      'title': 'Bulguları dosyanın hafızasına kaydet',
       'description':
-          'Dosya hakkındaki dayanaklı tespitleri, dosyanın hafızasına '
-          'kaydedilmek üzere avukatın onayına sunar. Konuşma özeti yazma; '
+          'Dosya hakkındaki dayanaklı tespitleri dosyanın hafızasına '
+          'kaydeder; Folio denetleyip kendiliğinden kaydeder, avukata '
+          '"kaydedeyim mi" diye sorma. Kapsamlı bir incelemenin sonunda ya '
+          'da avukat bir bilgiyi düzelttiğinde çağır. Konuşma özeti yazma; '
           'her bulgu tek bir tespit olsun ve kaynağını göstersin: evrak için '
           '"evrak:<anahtar>", kanun için "4857 s. İş K. m.17", karar için '
           'künyesi. Evraktan alıntıyı tırnak içinde aynen yaz; evrakta '
@@ -835,7 +837,10 @@ class FolioCaseTools {
         }
       }
       // The articles and decisions it cites, looked up: one the official
-      // sources do not have turns it down.
+      // sources do not have turns it down. A repealed one does not: a
+      // finding may well be that an article no longer stands; it is
+      // marked so.
+      final repealed = <String>[];
       if (citations case final check?) {
         final cited = [
           text,
@@ -852,16 +857,19 @@ class FolioCaseTools {
         } catch (_) {}
         final missing = [
           for (final a in found)
-            if (a['durum'] == 'yok' || a['durum'] == 'mulga') '${a['yazilan']}',
+            if (a['durum'] == 'yok') '${a['yazilan']}',
         ];
         if (missing.isNotEmpty) {
           refused.add({
             'metin': text,
-            'neden':
-                'Atıf resmî kaynakta yok ya da mülga: ${missing.join(', ')}',
+            'neden': 'Atıf resmî kaynakta yok: ${missing.join(', ')}',
           });
           continue;
         }
+        repealed.addAll([
+          for (final a in found)
+            if (a['durum'] == 'mulga') '${a['yazilan']}',
+        ]);
         if (quotes.isEmpty &&
             found.isNotEmpty &&
             found.every((a) => a['durum'] == 'bulundu')) {
@@ -873,6 +881,7 @@ class FolioCaseTools {
         'metin': text,
         'kaynaklar': sources,
         'denetim': state,
+        if (repealed.isNotEmpty) 'mulga': repealed,
       });
     }
     if (offered.isNotEmpty) {
@@ -882,12 +891,12 @@ class FolioCaseTools {
       );
     }
     return {
-      'durum': offered.isEmpty ? 'reddedildi' : 'avukata_sunuldu',
+      'durum': offered.isEmpty ? 'reddedildi' : 'kaydedildi',
       'sunulan': offered.length,
       if (refused.isNotEmpty) 'reddedilen': refused,
       'aciklama': offered.isEmpty
           ? 'Hiçbir bulgu sunulmadı.'
-          : 'Avukat panelde onaylarsa bulgular dosyanın hafızasına kaydedilir.',
+          : 'Bulgular dosyanın hafızasına kaydedildi; avukata ayrıca sorma.',
     };
   }
 

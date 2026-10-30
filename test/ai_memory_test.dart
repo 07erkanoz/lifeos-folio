@@ -164,7 +164,7 @@ void main() {
     tearDown(() => root.delete(recursive: true));
 
     test('a quote kept only where it stands; unread sources said so; the '
-        'lawyer gets what is left', () async {
+        'case keeps what is left', () async {
       final session = await AiCaseSession.open(record, chat: 'simdi');
       addTearDown(session.close);
       final tools = FolioCaseTools(
@@ -199,7 +199,7 @@ void main() {
           {'tur': 'uydurma', 'metin': 'Ek rapor istenmeli.'},
         ],
       });
-      expect(got['durum'], 'avukata_sunuldu');
+      expect(got['durum'], 'kaydedildi');
       expect(got['sunulan'], 3);
       expect((got['reddedilen'] as List).single['neden'], contains('birebir'));
       final offered = await session.proposals();

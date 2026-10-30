@@ -353,6 +353,18 @@ class BedestenLegislation {
   }
 
   static Future<String> _http(String path, String body) async {
+    // A connection the line cut is tried again before giving up.
+    for (var attempt = 1; ; attempt++) {
+      try {
+        return await _httpOnce(path, body);
+      } on IOException {
+        if (attempt >= 3) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 600 * attempt));
+      }
+    }
+  }
+
+  static Future<String> _httpOnce(String path, String body) async {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15);
     try {

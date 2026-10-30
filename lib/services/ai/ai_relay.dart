@@ -274,7 +274,16 @@ class AiRelay {
           'zaman': DateTime.now().toIso8601String(),
           if (offers.isNotEmpty)
             'teklifler': [
-              for (final o in offers) {'tur': o.kind, ...o.body},
+              for (final o in offers)
+                // Findings are kept at once, as on the computer.
+                if (o.kind == AiMemory.finding && key.isNotEmpty)
+                  {
+                    'tur': o.kind,
+                    ...o.body,
+                    'karar': _keepFindings(db, key, id, o.body, provider),
+                  }
+                else
+                  {'tur': o.kind, ...o.body},
             ],
         },
         court: court,
@@ -289,6 +298,30 @@ class AiRelay {
       serving?.cancel();
       unawaited(session?.close());
     }
+  }
+
+  /// [body]'s findings kept as [key]'s; what is said of it.
+  static String _keepFindings(
+    PortalDatabase db,
+    String key,
+    String chat,
+    Map<String, Object?> body,
+    AiProvider provider,
+  ) {
+    final items = body['bulgular'] as List? ?? const [];
+    final now = DateTime.now().toIso8601String();
+    var kept = 0;
+    for (final f in items) {
+      if (f is! Map) continue;
+      db.putAiRecord(AiMemory.id(), AiMemory.finding, key, {
+        ...f.cast<String, Object?>(),
+        'sohbet': chat,
+        'yazan': '${provider.label} · ${AiTask.question.tier.label}',
+        'zaman': now,
+      });
+      kept++;
+    }
+    return '$kept bulgu dosyanın hafızasına kaydedildi';
   }
 
   static String _thisComputer() {

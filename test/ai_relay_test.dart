@@ -89,6 +89,12 @@ void main() {
     final offer = (last['teklifler'] as List).single as Map;
     expect(offer['tur'], AiMemory.finding);
     expect((offer['bulgular'] as List).single['tur'], 'yapilacak');
+    // Kept at once, as the case's, as on the computer.
+    expect(offer['karar'], '1 bulgu dosyanın hafızasına kaydedildi');
+    expect(
+      phone.aiRecords(AiMemory.finding).single['metin'],
+      'Tebliğ tarihi teyit edilmeli.',
+    );
   });
 
   test('a computer with no program signed in says so in the question\'s '

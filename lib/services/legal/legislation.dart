@@ -452,6 +452,18 @@ class Legislation {
   }
 
   static Future<String> _fetch(Law law) async {
+    // A connection the line cut is tried again before giving up.
+    for (var attempt = 1; ; attempt++) {
+      try {
+        return await _fetchOnce(law);
+      } on IOException {
+        if (attempt >= 3) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 600 * attempt));
+      }
+    }
+  }
+
+  static Future<String> _fetchOnce(Law law) async {
     final client = HttpClient(context: await _context())
       ..connectionTimeout = const Duration(seconds: 20);
     try {
