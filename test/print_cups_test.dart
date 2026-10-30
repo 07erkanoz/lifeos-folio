@@ -8,9 +8,11 @@ import 'package:printing/printing.dart';
 // On Linux a PDF goes to CUPS as it is, the printer's queue named: the
 // plugin's own drawing of it printed blank pages.
 void main() {
+  setUp(() => PrintJob.flattenForTesting = (pdf) async => pdf);
   tearDown(() {
     PrintJob.runForTesting = null;
     PrintJob.linuxForTesting = null;
+    PrintJob.flattenForTesting = null;
   });
 
   test(
