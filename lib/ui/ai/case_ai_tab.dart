@@ -42,6 +42,7 @@ class _CaseAiTabState extends State<CaseAiTab> {
   List<Map<String, Object?>> _chats = const [], _findings = const [];
   List<Map<String, Object?>> _drafts = const [];
   bool _loaded = false;
+  Map<String, ({String court, String number})> _names = const {};
 
   @override
   void initState() {
@@ -55,8 +56,23 @@ class _CaseAiTabState extends State<CaseAiTab> {
     List<Map<String, Object?>> newest(String kind, String at) =>
         db.aiRecords(kind, caseKey: key)
           ..sort((a, b) => '${b[at]}'.compareTo('${a[at]}'));
+    // The cases of the home page's conversations, by key, for what they
+    // are called.
+    final names = <String, ({String court, String number})>{};
+    if (key == null) {
+      for (final c in db.aiRecords(AiMemory.chat)) {
+        final k = '${c['dosya'] ?? ''}';
+        if (k.isEmpty || names.containsKey(k)) continue;
+        if (db.caseOf(k) case final kase?) {
+          names[k] = (court: kase.court, number: kase.number);
+        } else if (c['mahkeme'] is String) {
+          names[k] = (court: '${c['mahkeme']}', number: '${c['esas']}');
+        }
+      }
+    }
     if (!mounted) return;
     setState(() {
+      _names = names;
       _chats = newest(AiMemory.chat, 'guncellendi');
       if (key != null) {
         _findings = newest(AiMemory.finding, 'zaman');
@@ -201,9 +217,9 @@ class _CaseAiTabState extends State<CaseAiTab> {
   Future<void> _show(String? id) async {
     UyapCaseRecord? kase;
     final chat = _chats.where((c) => c['id'] == id).firstOrNull;
-    final court = chat?['mahkeme'];
-    if (widget.caseKey == null && court is String) {
-      final number = '${chat!['esas'] ?? ''}';
+    final named = _names['${chat?['dosya'] ?? ''}'];
+    if (widget.caseKey == null && named != null) {
+      final (:court, :number) = named;
       kase =
           await UyapCaseStore.instance.load(court, number) ??
           UyapCaseRecord(
@@ -338,9 +354,10 @@ class _CaseAiTabState extends State<CaseAiTab> {
             subtitle: Text(
               [
                 if (widget.caseKey == null)
-                  c['mahkeme'] == null
-                      ? 'Dosyasız'
-                      : '${c['esas']} · ${c['mahkeme']}',
+                  switch (_names['${c['dosya'] ?? ''}']) {
+                    final n? => '${n.number} · ${n.court}',
+                    null => 'Dosyasız',
+                  },
                 _day(c['guncellendi']),
                 if (AiMemory.turnsOf(c).lastOrNull?['yazan'] case final by?)
                   '$by',
@@ -373,6 +390,7 @@ class _CaseAiTabState extends State<CaseAiTab> {
         caseRecord: record ?? _openCase,
         chat: open,
         embedded: true,
+        showCase: widget.caseKey == null,
         onOpen: widget.onOpenPath,
         onKept: (id) {
           _openId = id;

@@ -854,23 +854,42 @@ class FolioCaseTools {
     };
   }
 
+  /// The portfolio's cases, with their parties as the portals and the
+  /// cases' own records (what UYAP gave when they were opened) have them;
+  /// a case kept with no place in the portfolio as well.
   static Future<List<AiCaseEntry>> _portalCases() async {
     final db = await PortalDatabase.shared().timeout(
       const Duration(seconds: 20),
     );
     final parties = db.caseParties();
+    final records = {
+      for (final (r, _) in await UyapCaseStore.instance.cases(counted: false))
+        caseKey(r.number, r.court): r,
+    };
+    String said(UyapParty t) =>
+        t.role.isEmpty ? t.name : '${t.name} (${t.role})';
+    List<String> partiesOf(String key) => {
+      for (final t in parties[key] ?? const <UyapParty>[]) said(t),
+      for (final t in records[key]?.parties ?? const <UyapParty>[]) said(t),
+    }.toList();
+    final cases = db.cases();
     return [
-      for (final c in db.cases().values)
+      for (final c in cases.values)
         AiCaseEntry(
           key: c.key,
           number: c.number,
           court: c.court,
-          parties: [
-            for (final t in parties[c.key] ?? const <UyapParty>[])
-              t.role.isEmpty ? t.name : '${t.name} (${t.role})',
-          ],
+          parties: partiesOf(c.key),
           status: c.status?.value ?? '',
         ),
+      for (final MapEntry(:key, value: r) in records.entries)
+        if (!cases.containsKey(key))
+          AiCaseEntry(
+            key: key,
+            number: r.number,
+            court: r.court,
+            parties: partiesOf(key),
+          ),
     ];
   }
 

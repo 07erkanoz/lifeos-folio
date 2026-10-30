@@ -31,6 +31,7 @@ class AiPanel extends StatefulWidget {
     this.onOpen,
     this.onKept,
     this.embedded = false,
+    this.showCase = false,
   });
 
   final String? path;
@@ -47,6 +48,10 @@ class AiPanel extends StatefulWidget {
   /// In a case's page, filling the room it is given: no edge of its own,
   /// no closing, the case not named again.
   final bool embedded;
+
+  /// Embedded on the home page: the case the conversation is of named all
+  /// the same, with a way to take it off when the program chose wrong.
+  final bool showCase;
 
   @override
   State<AiPanel> createState() => _AiPanelState();
@@ -845,7 +850,7 @@ class _AiPanelState extends State<AiPanel> {
               ],
             ),
           ),
-          if (_case case final c? when !widget.embedded)
+          if (_case case final c? when !widget.embedded || widget.showCase)
             Padding(
               key: const ValueKey('ai-case'),
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
@@ -868,6 +873,16 @@ class _AiPanelState extends State<AiPanel> {
                       ),
                     ),
                   ),
+                  // Of no document: the case was chosen, and may be
+                  // taken off; the conversation goes on of none.
+                  if (widget.path == null && widget.showCase)
+                    TextButton(
+                      key: const ValueKey('ai-case-off'),
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _case = null),
+                      child: const Text('Kaldır'),
+                    ),
                 ],
               ),
             ),
@@ -919,7 +934,12 @@ class _AiPanelState extends State<AiPanel> {
                   ? Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        widget.path == null
+                        widget.path == null && _case == null
+                            ? 'Sorunuzu aşağıya yazın. Bir dosyayla ilgiliyse '
+                                  'dosyayı esas numarasıyla, mahkemesiyle ya da '
+                                  'bir tarafın adıyla anmanız yeter; yapay zekâ '
+                                  'dosyayı kendisi bulur.'
+                            : widget.path == null
                             ? 'Dosyayla ilgili sorunuzu aşağıya yazın. Yapay '
                                   'zekâ dosyanın bilgilerine, evrakına ve '
                                   'hafızasına Folio’nun araçlarıyla bakar.'
@@ -1025,9 +1045,11 @@ class _AiPanelState extends State<AiPanel> {
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
                       decoration: InputDecoration(
-                        hintText: widget.path == null
+                        hintText: widget.path != null
+                            ? 'Belgeye sorun…'
+                            : _case != null
                             ? 'Dosyaya sorun…'
-                            : 'Belgeye sorun…',
+                            : 'Sorun…',
                         isDense: true,
                       ),
                     ),
