@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:path/path.dart' as p;
 import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:printing/printing.dart';
@@ -33,6 +37,15 @@ abstract final class PrintJob {
     required String name,
     Printer? printer,
   }) async {
+    // On Linux the PDF goes to CUPS as it is, as other programs send it:
+    // the plugin draws each page with a PDFium of its own and closes it
+    // when done, under the one Folio's preview has open, and the pages
+    // came out blank.
+    if ((linuxForTesting ?? Platform.isLinux) &&
+        printer != null &&
+        _lp() != null) {
+      return _toCups(pdf, name: name, queue: printer.url);
+    }
     final info = await Printing.info();
     if (printer != null && info.directPrint) {
       return await Printing.directPrintPdf(
@@ -50,6 +63,53 @@ abstract final class PrintJob {
       dynamicLayout: false,
       onLayout: (_) async => pdf,
     );
+  }
+
+  @visibleForTesting
+  static Future<ProcessResult> Function(String program, List<String> args)?
+  runForTesting;
+
+  @visibleForTesting
+  static bool? linuxForTesting;
+
+  static String? _lp() {
+    if (runForTesting != null) return 'lp';
+    for (final dir in ['/usr/bin', '/usr/local/bin', '/bin']) {
+      if (File(p.join(dir, 'lp')).existsSync()) return p.join(dir, 'lp');
+    }
+    return null;
+  }
+
+  static Future<bool> _toCups(
+    Uint8List pdf, {
+    required String name,
+    required String queue,
+  }) async {
+    final folder = await Directory.systemTemp.createTemp('folio-yazdir-');
+    try {
+      final file = File(p.join(folder.path, 'belge.pdf'));
+      await file.writeAsBytes(pdf, flush: true);
+      final run = runForTesting ?? Process.run;
+      final r = await run(_lp()!, [
+        '-d',
+        queue,
+        '-t',
+        name,
+        '-o',
+        'fit-to-page',
+        file.path,
+      ]);
+      if (r.exitCode != 0) {
+        final said = '${r.stderr}'.trim();
+        throw StateError(said.isEmpty ? 'Yazıcı işi kabul etmedi.' : said);
+      }
+      return true;
+    } finally {
+      // CUPS has copied the file by the time lp returns.
+      unawaited(
+        folder.delete(recursive: true).catchError((Object _) => folder),
+      );
+    }
   }
 
   /// The printers there are, the default first; none where the system cannot
