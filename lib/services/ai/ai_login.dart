@@ -3,13 +3,17 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import 'ai_assistant.dart';
 
 /// A sign-in to an [AiProvider] run by Folio, with no terminal: the program
 /// is started as its own sign-in asks, and what it says (the address to
-/// open, a code to type there) is shown in Folio's window. A code the
-/// browser gives back is handed to it with [answer].
+/// open, a code to type there) is shown in Folio's window. The sign-in is
+/// the program's and its maker's alone: Folio opens the address and waits,
+/// and never takes a code, a password or a token in between (Anthropic
+/// allows no app to). Claude's browser sign-in comes back to Claude Code
+/// itself, on this computer.
 class AiLogin extends ChangeNotifier {
   AiLogin(this.provider);
 
@@ -20,9 +24,6 @@ class AiLogin extends ChangeNotifier {
 
   /// The code to type at [address], when the program gives one.
   String? code;
-
-  /// Whether the program asks for a code from the browser back.
-  bool wantsCode = false;
 
   /// Null while it runs; then whether the lawyer is signed in.
   bool? done;
@@ -55,8 +56,6 @@ class AiLogin extends ChangeNotifier {
     if (code == null) {
       if (_code.firstMatch(clean) case final m?) code = m[0];
     }
-    final lower = clean.toLowerCase();
-    if (lower.contains('paste') && lower.contains('code')) wantsCode = true;
     notifyListeners();
   }
 
@@ -69,19 +68,51 @@ class AiLogin extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    // Claude Code opens its sign-in in a browser, which comes back to it
+    // on this computer; the address it prints instead is the one whose code
+    // is pasted, which Folio does not take. Its browser is Folio here: a
+    // script that only hands the address over.
+    final folder = await Directory.systemTemp.createTemp('folio-giris-');
+    final given = File(p.join(folder.path, 'adres'));
+    final browser = File(p.join(folder.path, 'tarayici'));
+    await browser.writeAsString(
+      '#!/bin/sh\nprintf \'%s\' "\$1" > "${given.path}.part" && '
+      'mv "${given.path}.part" "${given.path}"\n',
+    );
+    await Process.run('chmod', ['700', browser.path]);
+    final viaBrowser = provider == AiProvider.claude;
     final process = _process = await Process.start(
       path,
       arguments(provider),
-      environment: {...AiAssistant.environment(), 'BROWSER': 'true'},
+      environment: {
+        ...AiAssistant.environment(),
+        'BROWSER': viaBrowser ? browser.path : 'true',
+      },
     );
+    // Nothing is ever typed to it.
+    unawaited(process.stdin.close().catchError((Object _) {}));
     var opened = false;
-    void each(String line) {
-      read(line);
-      if (!opened && address != null) {
-        opened = true;
-        unawaited(open(Uri.parse(address!)).catchError((Object _) {}));
-      }
+    void show(String at) {
+      if (opened) return;
+      opened = true;
+      address = at;
+      notifyListeners();
+      unawaited(open(Uri.parse(at)).catchError((Object _) {}));
     }
+
+    void each(String line) {
+      if (viaBrowser) return;
+      read(line);
+      if (address case final at?) show(at);
+    }
+
+    final watch = !viaBrowser
+        ? null
+        : Timer.periodic(const Duration(milliseconds: 300), (_) {
+            if (!opened && given.existsSync()) {
+              show(given.readAsStringSync().trim());
+            }
+          });
 
     final reading = Future.wait([
       process.stdout
@@ -95,21 +126,14 @@ class AiLogin extends ChangeNotifier {
     ]);
     final exit = await process.exitCode;
     await reading;
+    watch?.cancel();
+    unawaited(folder.delete(recursive: true).catchError((Object _) => folder));
     _process = null;
     final status = await AiAssistant.status(provider);
     done = exit == 0 && status.signedIn != false;
     if (done != true) {
       error ??= '${provider.label} oturumu açılamadı.';
     }
-    notifyListeners();
-  }
-
-  /// The code the browser showed, handed to the program.
-  void answer(String text) {
-    final process = _process;
-    if (process == null) return;
-    process.stdin.writeln(text.trim());
-    wantsCode = false;
     notifyListeners();
   }
 

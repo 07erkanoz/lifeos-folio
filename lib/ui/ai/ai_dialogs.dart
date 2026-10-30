@@ -150,8 +150,6 @@ class _LoginDialog extends StatefulWidget {
 }
 
 class _LoginDialogState extends State<_LoginDialog> {
-  final _code = TextEditingController();
-
   @override
   void initState() {
     super.initState();
@@ -170,7 +168,6 @@ class _LoginDialogState extends State<_LoginDialog> {
   @override
   void dispose() {
     widget.login.removeListener(_changed);
-    _code.dispose();
     super.dispose();
   }
 
@@ -228,27 +225,6 @@ class _LoginDialogState extends State<_LoginDialog> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
-              if (login.wantsCode) ...[
-                const SizedBox(height: 12),
-                const Text('Tarayıcının gösterdiği kodu buraya yapıştırın:'),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _code,
-                        decoration: const InputDecoration(isDense: true),
-                        onSubmitted: login.answer,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: () => login.answer(_code.text),
-                      child: const Text('Gönder'),
-                    ),
-                  ],
                 ),
               ],
               const SizedBox(height: 14),

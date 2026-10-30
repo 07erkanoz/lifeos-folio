@@ -282,8 +282,6 @@ void main() {
     login.read('Enter this one-time code: KXQ4-7TPM');
     expect(login.address, 'https://auth.openai.com/codex/device');
     expect(login.code, 'KXQ4-7TPM');
-    login.read('Paste code here if prompted >');
-    expect(login.wantsCode, isTrue);
     expect(AiLogin.arguments(AiProvider.codex), ['login', '--device-auth']);
     expect(AiLogin.arguments(AiProvider.claude), [
       'auth',
