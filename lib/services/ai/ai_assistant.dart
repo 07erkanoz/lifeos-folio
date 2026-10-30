@@ -11,6 +11,7 @@ import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
 import '../search/text_extractor.dart';
 import 'ai_prompts.dart';
+import 'folio_mcp.dart';
 
 export 'ai_prompts.dart';
 
@@ -219,6 +220,7 @@ abstract final class AiAssistant {
     AiProvider provider,
     String folder, {
     String? model,
+    String? folio,
   }) => switch (provider) {
     AiProvider.claude => [
       '-p',
@@ -226,6 +228,21 @@ abstract final class AiAssistant {
       '--system-prompt',
       AiPrompts.core,
       if (model != null && model.isNotEmpty) ...['--model', model],
+      // Folio's own tools, and no others.
+      if (folio != null) ...[
+        '--mcp-config',
+        jsonEncode({
+          'mcpServers': {
+            'folio': {
+              'type': 'stdio',
+              'command': folio,
+              'args': [FolioMcp.flag],
+            },
+          },
+        }),
+        '--allowedTools',
+        [for (final t in FolioMcp.tools) 'mcp__folio__${t['name']}'].join(','),
+      ],
       '--output-format',
       'json',
       '--tools',
@@ -271,6 +288,19 @@ abstract final class AiAssistant {
       '-c',
       'model_instructions_file="${p.join(folder, 'talimat.md')}"',
       if (model != null && model.isNotEmpty) ...['-m', model],
+      // Folio's own tools. Codex gives a tool's program none of its own
+      // surroundings: the display and Folio's folders are passed on.
+      if (folio != null) ...[
+        '-c',
+        'mcp_servers.folio.command=${jsonEncode(folio)}',
+        '-c',
+        'mcp_servers.folio.args=${jsonEncode([FolioMcp.flag])}',
+        '-c',
+        'mcp_servers.folio.startup_timeout_sec=30',
+        '-c',
+        'mcp_servers.folio.env={${[for (final key in mcpEnvironment)
+          if (Platform.environment[key] case final v?) '$key=${jsonEncode(v)}'].join(',')}}',
+      ],
       '-o',
       p.join(folder, '.yanit.txt'),
       '-',
@@ -290,6 +320,32 @@ abstract final class AiAssistant {
       '--print=',
     ],
   };
+
+  /// What Folio's MCP server needs of its surroundings: a display for the
+  /// engine, the folders Folio keeps its caches in.
+  static const mcpEnvironment = [
+    'DISPLAY',
+    'WAYLAND_DISPLAY',
+    'XAUTHORITY',
+    'XDG_RUNTIME_DIR',
+    'HOME',
+    'XDG_DATA_HOME',
+    'XDG_CONFIG_HOME',
+    'XDG_CACHE_HOME',
+  ];
+
+  /// Whether [provider] can be given Folio's tools for one question:
+  /// Antigravity keeps its MCP servers in a settings file of its own, for
+  /// every session, which Folio does not change.
+  static bool takesTools(AiProvider provider) =>
+      provider != AiProvider.antigravity;
+
+  /// The program Folio's tools run as: this Folio, given [FolioMcp.flag].
+  /// Null in a test, whose program is not Folio.
+  static String? get folioProgram =>
+      Platform.environment.containsKey('FLUTTER_TEST')
+      ? null
+      : Platform.resolvedExecutable;
 
   /// [prompt] as [provider] reads it on its standard input.
   @visibleForTesting
@@ -390,6 +446,7 @@ abstract final class AiAssistant {
     AiProvider provider,
     String prompt, {
     String? model,
+    bool tools = true,
     Future<void>? cancel,
   }) async {
     final path = find(provider.command);
@@ -405,7 +462,12 @@ abstract final class AiAssistant {
       }
       final process = await Process.start(
         path,
-        arguments(provider, folder.path, model: model),
+        arguments(
+          provider,
+          folder.path,
+          model: model,
+          folio: tools && takesTools(provider) ? folioProgram : null,
+        ),
         workingDirectory: folder.path,
         environment: environment(),
       );

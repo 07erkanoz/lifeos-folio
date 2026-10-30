@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../legal/bedesten_legislation.dart';
 import '../legal/case_law.dart';
@@ -284,8 +283,8 @@ class FolioMcp {
     }
   }
 
-  /// The tool [name] run with [args].
-  @visibleForTesting
+  /// The tool [name] run with [args]; Folio uses it itself too, to check
+  /// an answer's citations.
   Future<Map<String, Object?>> call(
     String name,
     Map<String, Object?> args,
@@ -413,7 +412,7 @@ class FolioMcp {
       if (article.headings.isNotEmpty) 'basliklar': article.headings,
       'metin': article.text,
       if (article.repealed) 'mulga': true,
-      if (article.repealNotice case final note?) 'mulga_notu': note,
+      'mulga_notu': ?article.repealNotice,
       'kaynak': article.source.label,
       if (article.url.isNotEmpty) 'kaynak_adres': article.url,
     };
@@ -506,14 +505,27 @@ class FolioMcp {
             'esas': hit.esas,
             'karar': hit.karar,
             'tarih': hit.date,
-            'atif': hit.reference.isNotEmpty
-                ? hit.reference
-                : '${hit.court} E.${hit.esas} K.${hit.karar} ${hit.date}',
+            'atif': _referenceOf(hit),
             if (hit.snippet.isNotEmpty) 'ozet_cumle': hit.snippet,
             if (hit.alike > 0) 'benzer_sayisi': hit.alike,
           },
       ],
     };
+  }
+
+  /// The hit's citation with its court named whole: the bank gives the
+  /// chamber alone ("9. Hukuk Dairesi") for Yargıtay and Danıştay.
+  static String _referenceOf(CaseLawHit hit) {
+    if (hit.reference.isNotEmpty) return hit.reference;
+    final bench = switch (hit.kind) {
+      'YARGITAYKARARI' => 'Yargıtay',
+      'DANISTAYKARAR' => 'Danıştay',
+      _ => '',
+    };
+    final court = bench.isEmpty || hit.court.startsWith(bench)
+        ? hit.court
+        : '$bench ${hit.court}';
+    return '$court E.${hit.esas} K.${hit.karar} ${hit.date}'.trim();
   }
 
   String _keep(CaseLawHit hit) {
@@ -616,7 +628,7 @@ class FolioMcp {
             ArticleOutcome.unreachable => 'ulasilamadi',
           },
           if (a != null) 'dogru_atif': a.title,
-          if (a?.repealNotice case final note?) 'mulga_notu': note,
+          'mulga_notu': ?a?.repealNotice,
         });
       } catch (_) {
         out.add({'tur': 'madde', 'yazilan': written, 'durum': 'ulasilamadi'});

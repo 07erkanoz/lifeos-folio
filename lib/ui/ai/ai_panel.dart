@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/folio_mcp.dart';
 import 'ai_dialogs.dart';
 
 /// Beside a document's preview: the document summarised or asked about by
@@ -27,6 +28,10 @@ class _Turn {
   final String by;
   String? answer;
   String? error;
+
+  /// The answer's citations as Folio found them (FolioMcp.atif_dogrula);
+  /// null while they are being checked.
+  List<Map<String, Object?>>? checks;
 }
 
 class _AiPanelState extends State<AiPanel> {
@@ -136,6 +141,7 @@ class _AiPanelState extends State<AiPanel> {
         cancel: cancel.future,
       );
       turn.answer = answer;
+      unawaited(_check(turn, answer));
     } on AiFailure catch (e) {
       turn.error = e.message;
     } catch (e) {
@@ -148,6 +154,79 @@ class _AiPanelState extends State<AiPanel> {
         _toEnd();
       }
     }
+  }
+
+  /// Folio's own look at the answer's citations, shown under it: none is
+  /// changed, each found, missing or repealed is said so.
+  Future<void> _check(_Turn turn, String answer) async {
+    try {
+      final got = await _mcp.call('atif_dogrula', {'metin': answer});
+      final list = [
+        for (final one in got['atiflar'] as List? ?? const [])
+          if (one is Map) one.cast<String, Object?>(),
+      ];
+      if (mounted) setState(() => turn.checks = list);
+    } catch (_) {
+      if (mounted) setState(() => turn.checks = const []);
+    }
+  }
+
+  final _mcp = FolioMcp();
+
+  Widget _checks(List<Map<String, Object?>> checks, ColorScheme scheme) {
+    if (checks.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Folio’nun denetimi',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          for (final c in checks)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    switch (c['durum']) {
+                      'bulundu' => Icons.check_circle_outline,
+                      'mulga' => Icons.history_toggle_off,
+                      'ulasilamadi' => Icons.cloud_off_outlined,
+                      _ => Icons.error_outline,
+                    },
+                    size: 15,
+                    color: switch (c['durum']) {
+                      'bulundu' => const Color(0xFF157A52),
+                      'ulasilamadi' => scheme.onSurfaceVariant,
+                      _ => scheme.error,
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${c['yazilan']}: ${switch (c['durum']) {
+                        'bulundu' => 'resmî kaynakta var',
+                        'mulga' => 'mülga',
+                        'yayimlanmamis' => 'yayımlanmamış',
+                        'ulasilamadi' => 'denetlenemedi',
+                        _ => 'resmî kaynakta bulunamadı',
+                      }}${c['daire_farkli'] == true ? ' (dairesi farklı)' : ''}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   void _toEnd() => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -313,15 +392,16 @@ class _AiPanelState extends State<AiPanel> {
                               ),
                             ),
                           ),
-                          if (t.answer case final a?)
+                          if (t.answer case final a?) ...[
                             SelectableText(
                               a,
                               style: const TextStyle(
                                 fontSize: 13.5,
                                 height: 1.5,
                               ),
-                            )
-                          else if (t.error case final e?)
+                            ),
+                            if (t.checks case final c?) _checks(c, scheme),
+                          ] else if (t.error case final e?)
                             Text(
                               e,
                               key: const ValueKey('ai-error'),
