@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:evrak_convert/services/ai/ai_case.dart';
 import 'package:evrak_convert/services/ai/ai_draft.dart';
+import 'package:evrak_convert/models/evrak_file.dart';
 import 'package:evrak_convert/services/ai/ai_memory.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:evrak_convert/services/udf/udf_reader.dart';
@@ -346,5 +347,23 @@ void main() {
       'c1',
     );
     expect((await tools.call('dosya_bilgisi', {}))['esas'], '2025/12');
+  });
+
+  test('a document written as UDF, Word and PDF; a heading bold, its marks '
+      'gone', () async {
+    const text = '# İTİRAZ DİLEKÇESİ\n\nRapora **itiraz** ederiz.';
+    final model = aiDraftModel(text);
+    expect(model.toPlainText(), contains('İTİRAZ DİLEKÇESİ'));
+    expect(model.toPlainText(), isNot(contains('#')));
+    final udf = await aiDraftBytes('İtiraz', text, EvrakFormat.udf);
+    expect(UdfReader.readBytes(udf)!.toPlainText(), contains('itiraz ederiz'));
+    final docx = await aiDraftBytes('İtiraz', text, EvrakFormat.docx);
+    expect(String.fromCharCodes(docx.take(2)), 'PK');
+    final pdf = await aiDraftBytes('İtiraz', text, EvrakFormat.pdf);
+    expect(String.fromCharCodes(pdf.take(4)), '%PDF');
+    expect(
+      aiDraftName('Rapora itiraz - 2026/470 E.'),
+      'Rapora itiraz - 2026-470 E',
+    );
   });
 }

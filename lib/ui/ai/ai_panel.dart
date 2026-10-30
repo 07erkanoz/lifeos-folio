@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:file_picker/file_picker.dart';
 
+import '../../models/evrak_file.dart';
 import '../../services/ai/ai_assistant.dart';
 import '../../services/ai/ai_attachment.dart';
 import '../../services/ai/ai_case.dart';
@@ -100,6 +102,9 @@ class _Turn {
 
   /// The steps of an answer kept, as they were told.
   List<String> recorded = const [];
+
+  /// The documents it wrote.
+  final documents = <_Doc>[];
 }
 
 /// Findings or a draft the program offered, waiting for the lawyer or
@@ -256,6 +261,7 @@ class _AiPanelState extends State<AiPanel> {
 
   Future<void> _load() async {
     unawaited(_findCase());
+    unawaited(_loadDocuments());
     final settings = await AiSettings.load();
     final found = await AiAssistant.statuses();
     if (!mounted) return;
@@ -491,7 +497,12 @@ class _AiPanelState extends State<AiPanel> {
     if (offered.isNotEmpty && mounted) {
       setState(() {
         for (final o in offered) {
-          turn.offers.add(_Offer(o.kind, o.body));
+          // A document goes to the documents; findings wait for a word.
+          if (o.kind == AiMemory.draft) {
+            _wrote(turn, o.body);
+          } else {
+            turn.offers.add(_Offer(o.kind, o.body));
+          }
         }
       });
       _toEnd();
@@ -948,6 +959,23 @@ class _AiPanelState extends State<AiPanel> {
         if (t.live.isNotEmpty) AiMarkdown(t.live.toString()),
       ],
       for (final o in t.offers) _offer(t, o, scheme),
+      // In the narrow panel beside a document, with the answer; on the
+      // page, beside the conversation.
+      if (!widget.embedded)
+        for (final d in t.documents) _docCard(d, scheme)
+      else if (t.documents.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: TextButton.icon(
+            onPressed: () => setState(() => _documentsOpen = true),
+            icon: const Icon(Icons.description_outlined, size: 16),
+            label: Text(
+              t.documents.length == 1
+                  ? 'Belge hazırlandı: ${t.documents.single.title}'
+                  : '${t.documents.length} belge hazırlandı',
+            ),
+          ),
+        ),
     ];
   }
 
@@ -1113,6 +1141,245 @@ class _AiPanelState extends State<AiPanel> {
 
   bool _drawing = false;
 
+  /// The documents the program wrote in this conversation, the newest
+  /// first; kept with the case's drafts when it is of one.
+  final _documents = <_Doc>[];
+
+  /// Whether the documents are beside the conversation (on the page).
+  bool _documentsOpen = true;
+
+  void _wrote(_Turn turn, Map<String, Object?> body) {
+    final doc = _Doc(
+      AiMemory.id(),
+      '${body['baslik'] ?? 'Belge'}',
+      '${body['metin'] ?? ''}',
+    );
+    turn.documents.add(doc);
+    _documents.insert(0, doc);
+    _documentsOpen = true;
+    final kase = _case;
+    if (kase == null) return;
+    unawaited(() async {
+      try {
+        (await PortalDatabase.shared()).putAiRecord(
+          doc.id,
+          AiMemory.draft,
+          caseKey(kase.number, kase.court),
+          {
+            'baslik': doc.title,
+            'metin': doc.text,
+            'sohbet': ?_chatId,
+            'yazan': turn.by,
+            'zaman': DateTime.now().toIso8601String(),
+          },
+        );
+      } catch (_) {}
+    }());
+  }
+
+  /// The documents written in the conversation gone on with.
+  Future<void> _loadDocuments() async {
+    final chat = widget.chat?['id'];
+    if (chat == null) return;
+    try {
+      final db = await PortalDatabase.shared();
+      final kept = [
+        for (final d in db.aiRecords(AiMemory.draft))
+          if (d['sohbet'] == chat) d,
+      ]..sort((a, b) => '${b['zaman']}'.compareTo('${a['zaman']}'));
+      if (!mounted || kept.isEmpty) return;
+      setState(() {
+        for (final d in kept) {
+          _documents.add(
+            _Doc('${d['id']}', '${d['baslik'] ?? ''}', '${d['metin'] ?? ''}')
+              ..path = d['yol'] as String?,
+          );
+        }
+      });
+    } catch (_) {}
+  }
+
+  /// [doc] opened in Folio's editor: written as a UDF in the case's folder
+  /// (or Folio's "Yapay zekâ" folder) once.
+  Future<void> _openDoc(_Doc doc) async {
+    try {
+      doc.path ??= await writeAiDraft(
+        UyapCaseStore.instance,
+        _case,
+        doc.title,
+        doc.text,
+      );
+      final kase = _case;
+      if (kase != null) {
+        (await PortalDatabase.shared()).putAiRecord(
+          doc.id,
+          AiMemory.draft,
+          caseKey(kase.number, kase.court),
+          {
+            'baslik': doc.title,
+            'metin': doc.text,
+            'yol': doc.path,
+            'sohbet': ?_chatId,
+            'zaman': DateTime.now().toIso8601String(),
+          },
+        );
+      }
+      if (mounted) setState(() {});
+      widget.onOpen?.call(doc.path!);
+    } catch (e) {
+      _say('Belge açılamadı: $e');
+    }
+  }
+
+  /// [doc] saved where the lawyer chooses, as [format].
+  Future<void> _exportDoc(_Doc doc, EvrakFormat format) async {
+    final ext = switch (format) {
+      EvrakFormat.docx => 'docx',
+      EvrakFormat.pdf => 'pdf',
+      _ => 'udf',
+    };
+    final where = await FilePicker.saveFile(
+      dialogTitle: 'Belgeyi kaydet',
+      fileName: '${aiDraftName(doc.title)}.$ext',
+      type: FileType.custom,
+      allowedExtensions: [ext],
+    );
+    if (where == null) return;
+    try {
+      final path = where.toLowerCase().endsWith('.$ext')
+          ? where
+          : '$where.$ext';
+      await File(path).writeAsBytes(
+        await aiDraftBytes(doc.title, doc.text, format),
+        flush: true,
+      );
+      _say('Kaydedildi: ${p.basename(path)}');
+    } catch (e) {
+      _say('Kaydedilemedi: $e');
+    }
+  }
+
+  void _say(String text) =>
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(text)));
+
+  Widget _docCard(_Doc doc, ColorScheme scheme) => Container(
+    key: ValueKey('ai-doc-${doc.id}'),
+    margin: const EdgeInsets.only(top: 6, bottom: 6),
+    padding: const EdgeInsets.fromLTRB(10, 8, 6, 4),
+    decoration: BoxDecoration(
+      border: Border.all(color: scheme.outlineVariant),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.description_outlined, size: 16, color: scheme.primary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                doc.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          doc.text.replaceAll(RegExp(r'\s+'), ' ').trim(),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+        ),
+        Wrap(
+          spacing: 2,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TextButton.icon(
+              key: ValueKey('ai-doc-open-${doc.id}'),
+              onPressed: () => unawaited(_openDoc(doc)),
+              icon: const Icon(Icons.edit_note_rounded, size: 16),
+              label: const Text('Aç'),
+            ),
+            for (final (format, label) in const [
+              (EvrakFormat.udf, 'UDF'),
+              (EvrakFormat.docx, 'DOCX'),
+              (EvrakFormat.pdf, 'PDF'),
+            ])
+              TextButton(
+                key: ValueKey('ai-doc-$label-${doc.id}'),
+                onPressed: () => unawaited(_exportDoc(doc, format)),
+                child: Text(label),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  /// Beside the conversation on the page: what it wrote and what was
+  /// added to it.
+  Widget _documentsPanel(ColorScheme scheme) => Container(
+    key: const ValueKey('ai-documents'),
+    width: 300,
+    decoration: BoxDecoration(
+      border: Border(left: BorderSide(color: scheme.outlineVariant)),
+    ),
+    child: ListView(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Belgeler',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Gizle',
+              onPressed: () => setState(() => _documentsOpen = false),
+              icon: const Icon(Icons.close_rounded, size: 18),
+            ),
+          ],
+        ),
+        if (_documents.isNotEmpty) ...[
+          Text(
+            'Yapay zekânın yazdıkları',
+            style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+          ),
+          for (final d in _documents) _docCard(d, scheme),
+        ],
+        if (_attached.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Sohbete eklenenler',
+            style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+          ),
+          for (final path in _attached)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.attach_file_rounded, size: 18),
+              title: Text(
+                p.basename(path),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: widget.onOpen == null ? null : () => widget.onOpen!(path),
+            ),
+        ],
+      ],
+    ),
+  );
+
   /// Folio's own look at the answer's citations, shown under it: none is
   /// changed, each found, missing or repealed is said so.
   Future<void> _check(_Turn turn, String answer) async {
@@ -1222,7 +1489,10 @@ class _AiPanelState extends State<AiPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!widget.embedded || usable.length > 1)
+          if (!widget.embedded ||
+              usable.length > 1 ||
+              (!_documentsOpen &&
+                  (_documents.isNotEmpty || _attached.isNotEmpty)))
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
               child: Row(
@@ -1257,6 +1527,17 @@ class _AiPanelState extends State<AiPanel> {
                       onChanged: _busy
                           ? null
                           : (v) => setState(() => _provider = v),
+                    ),
+                  if (widget.embedded &&
+                      !_documentsOpen &&
+                      (_documents.isNotEmpty || _attached.isNotEmpty))
+                    TextButton.icon(
+                      key: const ValueKey('ai-documents-open'),
+                      onPressed: () => setState(() => _documentsOpen = true),
+                      icon: const Icon(Icons.description_outlined, size: 16),
+                      label: Text(
+                        'Belgeler (${_documents.length + _attached.length})',
+                      ),
                     ),
                   if (widget.onClose != null)
                     IconButton(
@@ -1347,15 +1628,26 @@ class _AiPanelState extends State<AiPanel> {
               ),
             ),
             Expanded(
-              child: _turns.isEmpty
-                  ? _empty(scheme)
-                  : ListView(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-                      children: [
-                        for (final t in _turns) ..._turnView(t, scheme),
-                      ],
-                    ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _turns.isEmpty
+                        ? _empty(scheme)
+                        : ListView(
+                            controller: _scroll,
+                            padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+                            children: [
+                              for (final t in _turns) ..._turnView(t, scheme),
+                            ],
+                          ),
+                  ),
+                  if (widget.embedded &&
+                      _documentsOpen &&
+                      (_documents.isNotEmpty || _attached.isNotEmpty))
+                    _documentsPanel(scheme),
+                ],
+              ),
             ),
             if (_sentTo case final to?)
               Padding(
@@ -1482,4 +1774,12 @@ class _Told extends AiStep {
   final String said;
   @override
   String get label => said;
+}
+
+/// A document the program wrote in the conversation: its title and text,
+/// and where it was written as a UDF once opened.
+class _Doc {
+  _Doc(this.id, this.title, this.text);
+  final String id, title, text;
+  String? path;
 }
