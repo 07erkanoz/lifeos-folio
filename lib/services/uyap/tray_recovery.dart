@@ -10,15 +10,22 @@ class TrayRecovery {
     if (!Platform.isLinux) return;
     final installed = await _systemctl(['cat', _unit], seconds: 5);
     if (installed?.exitCode != 0) return;
-    final restarted = await _systemctl(['restart', _unit], seconds: 30);
-    if (restarted?.exitCode != 0) {
-      throw StateError('Adalet E-İmza yeniden başlatılamadı.');
-    }
+    // A few logins in a row would otherwise reach the service's start limit
+    // (LifeOS allows four in five minutes), and systemd would refuse it.
+    await _systemctl(['reset-failed', _unit], seconds: 5);
+    // A copy opened from the menu holds port 5975 outside the service, and
+    // the service then does not start at all (LifeOS skips it while the
+    // port is taken): that copy goes, so that a fresh one reads the card.
+    await _systemctl(['stop', _unit], seconds: 30);
+    await _killPortHolders();
+    await _systemctl(['start', _unit], seconds: 30);
     if (await _ready()) return;
 
     // A stuck Java sign request can ignore SIGTERM while holding port 5975.
     // Kill only the named user service, then let systemd start a fresh copy.
     await _systemctl(['kill', '--signal=SIGKILL', _unit], seconds: 10);
+    await _killPortHolders();
+    await _systemctl(['reset-failed', _unit], seconds: 5);
     await _systemctl(['start', _unit], seconds: 15);
     if (!await _ready()) {
       throw StateError('Adalet E-İmza yeniden başladı ancak hazır olmadı.');
@@ -81,11 +88,44 @@ class TrayRecovery {
     return false;
   }
 
+  /// The user's own processes listening on port 5975: Adalet E-İmza's,
+  /// whether the service's or one opened from the menu.
+  static Future<void> _killPortHolders() async {
+    for (final signal in ['-TERM', '-KILL']) {
+      final pids = await _portHolders();
+      if (pids.isEmpty) return;
+      try {
+        await Process.run('kill', [
+          signal,
+          ...pids,
+        ]).timeout(const Duration(seconds: 5));
+      } catch (_) {}
+      for (var i = 0; i < 10 && (await _portHolders()).isNotEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+    }
+  }
+
+  static Future<List<String>> _portHolders() async {
+    try {
+      final r = await Process.run('ss', [
+        '-Hltnp',
+        'sport = :5975',
+      ]).timeout(const Duration(seconds: 5));
+      return {
+        for (final m in RegExp(r'pid=(\d+)').allMatches('${r.stdout}'))
+          m.group(1)!,
+      }.toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Its port answering: the service is up. Java starts slowly at the low
+  /// priority LifeOS gives the service, so it is given half a minute.
   static Future<bool> _ready() async {
-    for (var i = 0; i < 12; i++) {
+    for (var i = 0; i < 30; i++) {
       await Future<void>.delayed(const Duration(seconds: 1));
-      final state = await _systemctl(['is-active', _unit], seconds: 5);
-      if (state?.stdout.toString().trim() != 'active') continue;
       try {
         final socket = await Socket.connect(
           '127.0.0.1',
