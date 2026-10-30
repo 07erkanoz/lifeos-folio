@@ -77,7 +77,7 @@ enum AiProvider {
     (AiProvider.codex, AiTier.normal) => 'gpt-6-luna',
     (AiProvider.codex, AiTier.strong) => 'gpt-6.1-sol',
     (AiProvider.antigravity, AiTier.normal) => 'gemini-3.8-flash-medium',
-    (AiProvider.antigravity, AiTier.strong) => 'gemini-4-argon-high',
+    (AiProvider.antigravity, AiTier.strong) => 'gemini-3.8-flash-high',
   };
 }
 
