@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:evrak_convert/services/ai/ai_assistant.dart';
@@ -158,10 +159,76 @@ void main() {
     expect(codex, contains('mcp_servers.folio.args=["--mcp"]'));
     expect(codex.any((a) => a.startsWith('mcp_servers.folio.env={')), isTrue);
     expect(AiAssistant.takesTools(AiProvider.antigravity), isFalse);
+    // Antigravity's own list holds them; for the question Folio's are let
+    // through, and no command or file written.
+    final agy = AiAssistant.arguments(
+      AiProvider.antigravity,
+      '/tmp/x',
+      folio: '/opt/folio/lifeos_folio',
+    );
+    final settings =
+        jsonDecode(agy[agy.indexOf('--settings') + 1]) as Map<String, dynamic>;
+    expect(settings['permissions']['allow'], ['mcp(folio/*)']);
+    expect(
+      settings['permissions']['deny'],
+      containsAll(['command(*)', 'write_file(*)']),
+    );
+    final bare = AiAssistant.arguments(AiProvider.antigravity, '/tmp/x');
+    expect(
+      (jsonDecode(bare[bare.indexOf('--settings') + 1]) as Map)['permissions']
+          ['allow'],
+      isEmpty,
+    );
     // Without Folio's program (a test), none.
     expect(
       AiAssistant.arguments(AiProvider.claude, '/tmp/x'),
       isNot(contains('--mcp-config')),
+    );
+  });
+
+  test('Folio on Antigravity\'s list: only when there, turned on and given '
+      'its flag', () async {
+    final dir = await Directory.systemTemp.createTemp('agy-');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/mcp_config.json');
+    Future<String?> listed(Object? json) async {
+      await file.writeAsString(json is String ? json : jsonEncode(json));
+      return AiAssistant.antigravityFolio(file);
+    }
+
+    expect(await AiAssistant.antigravityFolio(file), isNull);
+    expect(await listed(''), isNull);
+    expect(
+      await listed({
+        'mcpServers': {
+          'folio': {
+            'command': '/opt/folio/lifeos_folio',
+            'args': ['--mcp'],
+            'disabled': false,
+          },
+        },
+      }),
+      '/opt/folio/lifeos_folio',
+    );
+    expect(
+      await listed({
+        'mcpServers': {
+          'folio': {
+            'command': '/opt/folio/lifeos_folio',
+            'args': ['--mcp'],
+            'disabled': true,
+          },
+        },
+      }),
+      isNull,
+    );
+    expect(
+      await listed({
+        'mcpServers': {
+          'folio': {'command': '/usr/bin/npx', 'args': []},
+        },
+      }),
+      isNull,
     );
   });
 }

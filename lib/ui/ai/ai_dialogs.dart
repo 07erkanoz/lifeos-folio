@@ -55,6 +55,8 @@ class _ConsentDialogState extends State<_ConsentDialog> {
     final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
       key: const ValueKey('ai-consent'),
+      // A short window still shows the buttons.
+      scrollable: true,
       title: const Text('Yapay zekâ kullanım onayı'),
       content: SizedBox(
         width: 480,
@@ -294,4 +296,45 @@ class _LoginDialogState extends State<_LoginDialog> {
       ],
     );
   }
+}
+
+/// Asks before Folio puts its tools on Antigravity's own list, which holds
+/// for all of Antigravity's sessions and not only Folio's questions. True
+/// when the lawyer agrees.
+Future<bool> askAntigravityTools(BuildContext context) async {
+  final given = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      key: const ValueKey('ai-agy-tools'),
+      scrollable: true,
+      title: const Text('Folio’nun araçları Antigravity’ye eklensin mi?'),
+      content: const SizedBox(
+        width: 480,
+        child: Text(
+          'Antigravity araçlarını kendi ayar dosyasında tutar ve her soruda '
+          'ayrıca araç almaz. Bu yüzden Folio, kanun maddesi ve karar okuma '
+          'araçlarını Antigravity’nin ayarlarına ekler. Eklenmezse '
+          'Antigravity madde ve karar metnini Folio’dan okuyamaz.\n\n'
+          'Bu kayıt Antigravity’nin bütün oturumlarında görünür. Kanun ve '
+          'karar araçları yalnız okur. Dosya ve evrak araçları yalnız '
+          'Folio’dan sorduğunuz sorularda ve o soruya bağlı dosya için '
+          'açılır.\n\n'
+          'Kaydı istediğiniz zaman Ayarlar’dan kaldırabilirsiniz.',
+          style: TextStyle(fontSize: 13.5, height: 1.45),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          key: const ValueKey('ai-agy-tools-accept'),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Ekle'),
+        ),
+      ],
+    ),
+  );
+  return given == true;
 }

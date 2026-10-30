@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_case.dart';
 import '../../services/ai/folio_mcp.dart';
+import '../../services/uyap/uyap_case_panel_controller.dart';
+import '../../services/uyap/uyap_case_store.dart';
 import 'ai_dialogs.dart';
 
 /// Beside a document's preview: the document summarised or asked about by
@@ -32,6 +35,21 @@ class _Turn {
   /// The answer's citations as Folio found them (FolioMcp.atif_dogrula);
   /// null while they are being checked.
   List<Map<String, Object?>>? checks;
+
+  /// The documents the program asked to download, as the lawyer answered.
+  final requests = <_Request>[];
+}
+
+/// A download the AI program asked for, waiting for the lawyer or
+/// answered.
+class _Request {
+  _Request(this.asked, this.title);
+  final AiDownloadRequest asked;
+  final String title;
+
+  /// What came of it, said to the lawyer; null while it waits.
+  String? outcome;
+  bool working = false;
 }
 
 class _AiPanelState extends State<AiPanel> {
@@ -43,6 +61,11 @@ class _AiPanelState extends State<AiPanel> {
   Completer<void>? _cancel;
   String? _text;
   AiProvider? _sentTo;
+
+  /// The case the document belongs to, whose other documents the program
+  /// may read with Folio's tools; null for a document of no case.
+  UyapCaseRecord? _case;
+  AiCaseSession? _session;
 
   bool get _busy => _cancel != null;
 
@@ -61,7 +84,18 @@ class _AiPanelState extends State<AiPanel> {
       _turns.clear();
       _text = null;
       _sentTo = null;
+      _case = null;
+      unawaited(_findCase());
     }
+  }
+
+  Future<void> _findCase() async {
+    final path = widget.path;
+    UyapCaseRecord? record;
+    try {
+      record = await AiCaseSession.ofDocument(path, UyapCaseStore.instance);
+    } catch (_) {}
+    if (mounted && widget.path == path) setState(() => _case = record);
   }
 
   @override
@@ -73,6 +107,7 @@ class _AiPanelState extends State<AiPanel> {
   }
 
   Future<void> _load() async {
+    unawaited(_findCase());
     final settings = await AiSettings.load();
     final found = await AiAssistant.statuses();
     if (!mounted) return;
@@ -125,23 +160,48 @@ class _AiPanelState extends State<AiPanel> {
           if (t != turn && t.answer != null)
             (question: t.question, answer: t.answer!),
       ];
+      // The case's tools only for a program given Folio's tools.
+      final record = _case;
+      final withCase =
+          record != null &&
+          (AiAssistant.takesTools(provider) ||
+              await AiAssistant.antigravityFolio() != null);
       final prompt = AiAssistant.prompt(
         task: task,
         name: p.basename(widget.path),
         text: text,
         question: question,
+        caseName: withCase ? '${record.court} ${record.number}' : null,
         history: history,
       );
       if (cancel.isCompleted) return;
       setState(() => _sentTo = provider);
-      final answer = await AiAssistant.ask(
-        provider,
-        prompt,
-        model: model,
-        cancel: cancel.future,
-      );
-      turn.answer = answer;
-      unawaited(_check(turn, answer));
+      final session = withCase ? await AiCaseSession.open(record) : null;
+      _session = session;
+      final watch = session == null
+          ? null
+          : Timer.periodic(
+              const Duration(milliseconds: 700),
+              (_) => unawaited(_look(session, turn)),
+            );
+      try {
+        final answer = await AiAssistant.ask(
+          provider,
+          prompt,
+          model: model,
+          caseSession: session,
+          cancel: cancel.future,
+        );
+        turn.answer = answer;
+        unawaited(_check(turn, answer));
+      } finally {
+        watch?.cancel();
+        _session = null;
+        unawaited(session?.close());
+        for (final r in turn.requests) {
+          r.outcome ??= 'Yanıtlanmadı';
+        }
+      }
     } on AiFailure catch (e) {
       turn.error = e.message;
     } catch (e) {
@@ -155,6 +215,151 @@ class _AiPanelState extends State<AiPanel> {
       }
     }
   }
+
+  /// Downloads the program asked for in [session], put before the lawyer.
+  Future<void> _look(AiCaseSession session, _Turn turn) async {
+    final asked = await session.pending();
+    if (!mounted || !identical(_session, session)) return;
+    final known = {for (final r in turn.requests) r.asked.id};
+    final fresh = [
+      for (final a in asked)
+        if (!known.contains(a.id))
+          _Request(
+            a,
+            [
+                  for (final d in session.record.documents) ...[
+                    d,
+                    ...d.attachments,
+                  ],
+                ].where((d) => d.key == a.key).firstOrNull?.title ??
+                'Evrak',
+          ),
+    ];
+    if (fresh.isEmpty) return;
+    setState(() => turn.requests.addAll(fresh));
+    _toEnd();
+  }
+
+  /// The lawyer's answer to [request]: downloaded from UYAP when agreed.
+  Future<void> _answer(_Request request, bool agreed) async {
+    final session = _session;
+    if (session == null || request.outcome != null || request.working) return;
+    if (!agreed) {
+      await session.answer(
+        request.asked,
+        'reddedildi',
+        'Avukat bu evrakın indirilmesini istemedi.',
+      );
+      setState(() => request.outcome = 'İndirilmedi');
+      return;
+    }
+    setState(() => request.working = true);
+    final store = UyapCaseStore.instance;
+    final panel = UyapCasePanelController(store: store);
+    try {
+      if (!panel.connected) {
+        await session.answer(
+          request.asked,
+          'uyap_bagli_degil',
+          'Folio UYAP\'a bağlı değil; evrak indirilemedi.',
+        );
+        if (mounted) {
+          setState(() => request.outcome = 'UYAP’a bağlı değil; indirilemedi');
+        }
+        return;
+      }
+      await panel.show(session.record);
+      await panel.download([request.asked.key]);
+      final now = await store.load(session.record.court, session.record.number);
+      final done = now != null && store.fileOf(now, request.asked.key) != null;
+      await session.answer(
+        request.asked,
+        done ? 'indirildi' : 'indirilemedi',
+        done ? null : 'UYAP evrakı vermedi.',
+      );
+      if (mounted) {
+        setState(() => request.outcome = done ? 'İndirildi' : 'İndirilemedi');
+      }
+    } catch (e) {
+      await session.answer(request.asked, 'indirilemedi', '$e');
+      if (mounted) setState(() => request.outcome = 'İndirilemedi');
+    } finally {
+      panel.dispose();
+      if (mounted) setState(() => request.working = false);
+    }
+  }
+
+  Widget _request(_Request r, ColorScheme scheme) => Container(
+    key: ValueKey('ai-request-${r.asked.id}'),
+    margin: const EdgeInsets.only(top: 6, bottom: 4),
+    padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+    decoration: BoxDecoration(
+      border: Border.all(color: scheme.outlineVariant),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.download_outlined, size: 16, color: scheme.primary),
+            const SizedBox(width: 6),
+            const Expanded(
+              child: Text(
+                'Evrak indirme isteği',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(r.title, style: const TextStyle(fontSize: 13)),
+        if (r.asked.reason.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              'Neden: ${r.asked.reason}',
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+            ),
+          ),
+        if (r.outcome case final o?)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 2),
+            child: Text(
+              o,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: o == 'İndirildi'
+                    ? const Color(0xFF157A52)
+                    : scheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else if (r.working)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: LinearProgressIndicator(),
+          )
+        else
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                key: ValueKey('ai-request-no-${r.asked.id}'),
+                onPressed: () => _answer(r, false),
+                child: const Text('İndirme'),
+              ),
+              FilledButton(
+                key: ValueKey('ai-request-yes-${r.asked.id}'),
+                onPressed: () => _answer(r, true),
+                child: const Text('İndir'),
+              ),
+            ],
+          ),
+      ],
+    ),
+  );
 
   /// Folio's own look at the answer's citations, shown under it: none is
   /// changed, each found, missing or repealed is said so.
@@ -301,6 +506,32 @@ class _AiPanelState extends State<AiPanel> {
               ],
             ),
           ),
+          if (_case case final c?)
+            Padding(
+              key: const ValueKey('ai-case'),
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.folder_outlined,
+                    size: 15,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${c.court} · ${c.number}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 1),
           if (found == null)
             const Expanded(child: Center(child: CircularProgressIndicator()))
@@ -392,6 +623,7 @@ class _AiPanelState extends State<AiPanel> {
                               ),
                             ),
                           ),
+                          for (final r in t.requests) _request(r, scheme),
                           if (t.answer case final a?) ...[
                             SelectableText(
                               a,
@@ -420,8 +652,9 @@ class _AiPanelState extends State<AiPanel> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
                 child: Text(
-                  'Bu belgenin metni ${_to(to)} gönderildi. Yanıtlar yanlış '
-                  'olabilir; karar sizindir.',
+                  '${_case == null ? 'Bu belgenin metni' : 'Bu belgenin ve yapay zekânın okuduğu dosya evrakının metni'} '
+                  '${_to(to)} gönderildi. Yanıtlar yanlış olabilir; karar '
+                  'sizindir.',
                   key: const ValueKey('ai-sent-note'),
                   style: TextStyle(
                     fontSize: 11.5,

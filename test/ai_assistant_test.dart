@@ -307,6 +307,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('ai-consent-accept')));
     await tester.pump();
     expect(find.byKey(const ValueKey('ai-consent')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('ai-consent-read')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('ai-consent-read')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('ai-consent-accept')));

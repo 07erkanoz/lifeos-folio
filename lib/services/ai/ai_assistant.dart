@@ -10,6 +10,7 @@ import '../pdf/pdf_pages.dart';
 import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
 import '../search/text_extractor.dart';
+import 'ai_case.dart';
 import 'ai_prompts.dart';
 import 'folio_mcp.dart';
 
@@ -221,6 +222,7 @@ abstract final class AiAssistant {
     String folder, {
     String? model,
     String? folio,
+    String? caseFolder,
   }) => switch (provider) {
     AiProvider.claude => [
       '-p',
@@ -237,11 +239,13 @@ abstract final class AiAssistant {
               'type': 'stdio',
               'command': folio,
               'args': [FolioMcp.flag],
+              if (caseFolder != null)
+                'env': {AiCaseSession.variable: caseFolder},
             },
           },
         }),
         '--allowedTools',
-        [for (final t in FolioMcp.tools) 'mcp__folio__${t['name']}'].join(','),
+        [for (final n in FolioMcp.names) 'mcp__folio__$n'].join(','),
       ],
       '--output-format',
       'json',
@@ -299,7 +303,7 @@ abstract final class AiAssistant {
         'mcp_servers.folio.startup_timeout_sec=30',
         '-c',
         'mcp_servers.folio.env={${[for (final key in mcpEnvironment)
-          if (Platform.environment[key] case final v?) '$key=${jsonEncode(v)}'].join(',')}}',
+          if (Platform.environment[key] case final v?) '$key=${jsonEncode(v)}', if (caseFolder != null) '${AiCaseSession.variable}=${jsonEncode(caseFolder)}'].join(',')}}',
       ],
       '-o',
       p.join(folder, '.yanit.txt'),
@@ -312,6 +316,16 @@ abstract final class AiAssistant {
       'stream-json',
       '--sandbox',
       '--disable-slash-commands',
+      // Its tools come from its own settings (see [addToAntigravity]); for
+      // this question Folio's may be called without asking, and it may
+      // neither run a command nor write a file.
+      '--settings',
+      jsonEncode({
+        'permissions': {
+          'allow': [if (folio != null) 'mcp(${FolioMcp.name}/*)'],
+          'deny': ['command(*)', 'write_file(*)'],
+        },
+      }),
       '--print-timeout',
       '${timeout.inSeconds}s',
       if (model != null && model.isNotEmpty) ...['--model', model],
@@ -334,11 +348,90 @@ abstract final class AiAssistant {
     'XDG_CACHE_HOME',
   ];
 
-  /// Whether [provider] can be given Folio's tools for one question:
-  /// Antigravity keeps its MCP servers in a settings file of its own, for
-  /// every session, which Folio does not change.
+  /// Whether [provider] is given Folio's tools with each question. Antigravity
+  /// is not: it keeps its MCP servers in a settings file of its own, for all
+  /// its sessions, which Folio adds itself to only when the lawyer says so
+  /// ([addToAntigravity]).
   static bool takesTools(AiProvider provider) =>
       provider != AiProvider.antigravity;
+
+  /// Antigravity's own list of MCP servers.
+  @visibleForTesting
+  static File antigravityServers([Map<String, String>? environment]) => File(
+    p.join(
+      (environment ?? Platform.environment)['HOME'] ?? '',
+      '.gemini',
+      'config',
+      'mcp_config.json',
+    ),
+  );
+
+  /// The program Antigravity runs as Folio's tools, when Folio is on its
+  /// list and turned on there.
+  static Future<String?> antigravityFolio([File? servers]) async {
+    try {
+      final json = jsonDecode(
+        await (servers ?? antigravityServers()).readAsString(),
+      );
+      final folio = (json as Map)['mcpServers']?[FolioMcp.name];
+      if (folio is! Map || folio['disabled'] == true) return null;
+      final args = folio['args'];
+      if (args is! List || !args.contains(FolioMcp.flag)) return null;
+      return folio['command'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Puts Folio's tools on Antigravity's list, through its own command, for
+  /// all its sessions. Asked of the lawyer first.
+  static Future<void> addToAntigravity() async {
+    final agy = find(AiProvider.antigravity.command);
+    final folio = folioProgram;
+    if (agy == null || folio == null) {
+      throw const AiFailure('Antigravity bu bilgisayarda kurulu değil.');
+    }
+    final r = await Process.run(agy, [
+      'mcp',
+      'add',
+      FolioMcp.name,
+      folio,
+      '--',
+      FolioMcp.flag,
+    ], environment: environment()).timeout(const Duration(seconds: 20));
+    if (r.exitCode != 0) {
+      throw AiFailure(
+        _said(_lastLine('${r.stderr}\n${r.stdout}'), 'Antigravity'),
+      );
+    }
+  }
+
+  /// Takes Folio's tools off Antigravity's list.
+  static Future<void> removeFromAntigravity() async {
+    final agy = find(AiProvider.antigravity.command);
+    if (agy == null) return;
+    await Process.run(agy, [
+      'mcp',
+      'remove',
+      FolioMcp.name,
+    ], environment: environment()).timeout(const Duration(seconds: 20));
+  }
+
+  /// Whether Antigravity can be given Folio's tools with this question: on
+  /// its list, as this Folio. A Folio moved since (an update to another
+  /// folder) is put back on it, the lawyer having agreed once.
+  static Future<bool> antigravityHasTools() async {
+    final listed = await antigravityFolio();
+    final folio = folioProgram;
+    if (listed == null || folio == null) return false;
+    if (listed == folio) return true;
+    try {
+      await addToAntigravity();
+      return await antigravityFolio() == folio;
+    } on Object {
+      return false;
+    }
+  }
 
   /// The program Folio's tools run as: this Folio, given [FolioMcp.flag].
   /// Null in a test, whose program is not Folio.
@@ -447,6 +540,7 @@ abstract final class AiAssistant {
     String prompt, {
     String? model,
     bool tools = true,
+    AiCaseSession? caseSession,
     Future<void>? cancel,
   }) async {
     final path = find(provider.command);
@@ -466,10 +560,22 @@ abstract final class AiAssistant {
           provider,
           folder.path,
           model: model,
-          folio: tools && takesTools(provider) ? folioProgram : null,
+          folio: !tools
+              ? null
+              : takesTools(provider)
+              ? folioProgram
+              : provider == AiProvider.antigravity &&
+                    await antigravityHasTools()
+              ? folioProgram
+              : null,
+          caseFolder: caseSession?.folder.path,
         ),
         workingDirectory: folder.path,
-        environment: environment(),
+        // Antigravity's tools have its environment: the case is named there.
+        environment: {
+          ...environment(),
+          AiCaseSession.variable: ?caseSession?.folder.path,
+        },
       );
       final out = StringBuffer();
       final err = StringBuffer();
@@ -532,6 +638,7 @@ abstract final class AiAssistant {
     required String name,
     required String text,
     String question = '',
+    String? caseName,
     List<({String question, String answer})> history = const [],
   }) {
     final cut = text.length > maxCharacters;
@@ -545,6 +652,11 @@ abstract final class AiAssistant {
         '',
         'Önceki soru: ${h.question}',
         'Önceki yanıt: ${h.answer}',
+      ],
+      if (caseName != null) ...[
+        '',
+        'Bu belge $caseName dosyasına ait. Dosyanın bilgilerine ve diğer '
+            'evrakına Folio\'nun dosya araçlarıyla bakabilirsin.',
       ],
       '',
       AiPrompts.task(task, question: question),
@@ -729,7 +841,9 @@ class AiSettings {
 const aiConsentPoints = [
   'Yapay zekâ özelliklerinde, seçtiğiniz belgenin metni sizin '
       'bilgisayarınızdan, sizin hesabınızla kullandığınız sağlayıcıya '
-      '(Anthropic, OpenAI ya da Google) doğrudan gönderilir.',
+      '(Anthropic, OpenAI ya da Google) doğrudan gönderilir. Belge bir '
+      'dosyaya aitse yapay zekânın okuduğu dosya bilgileri ve evrak da '
+      'gönderilir.',
   'LifeOS bu metni görmez, saklamaz ve kimseye aktarmaz. Sağlayıcıyla ilişki '
       'sizinle o şirket arasındadır.',
   'Belgelerdeki kişisel verilerin veri sorumlusu sizsiniz. Gönderimin '

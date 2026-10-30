@@ -21,6 +21,9 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
   List<AiStatus>? _found;
   bool _store = false;
 
+  /// Whether Folio is on Antigravity's own list of tools.
+  bool _agyTools = false;
+
   /// The models each installed program offers.
   final _offered = <AiProvider, List<String>>{};
 
@@ -34,6 +37,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     final settings = await AiSettings.load();
     final found = await AiAssistant.statuses();
     final store = AiAssistant.hasStore;
+    final agyTools = await AiAssistant.antigravityFolio() != null;
     final offered = {
       for (final s in found)
         if (s.installed) s.provider: await AiAssistant.models(s.provider),
@@ -43,6 +47,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
       _settings = settings;
       _found = found;
       _store = store;
+      _agyTools = agyTools;
       _offered
         ..clear()
         ..addAll(offered);
@@ -113,6 +118,37 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     );
   }
 
+  /// Folio's tools on Antigravity's own list, put there or taken off at the
+  /// lawyer's word.
+  Widget _antigravityTools() => SettingsRow(
+    key: const ValueKey('ai-agy-tools-row'),
+    icon: Icons.menu_book_outlined,
+    title: 'Antigravity’de Folio’nun araçları',
+    subtitle: _agyTools
+        ? 'Eklendi. Antigravity kanun maddesini ve kararı Folio’dan okur.'
+        : 'Eklenmedi. Antigravity kanun maddesini ve kararı Folio’dan '
+              'okuyamaz.',
+    status: _agyTools ? const Color(0xFF157A52) : Colors.grey,
+    trailing: TextButton(
+      key: const ValueKey('ai-agy-tools-toggle'),
+      onPressed: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        try {
+          if (_agyTools) {
+            await AiAssistant.removeFromAntigravity();
+          } else {
+            if (!await askAntigravityTools(context)) return;
+            await AiAssistant.addToAntigravity();
+          }
+        } on AiFailure catch (e) {
+          messenger.showSnackBar(SnackBar(content: Text(e.message)));
+        }
+        await _load();
+      },
+      child: Text(_agyTools ? 'Kaldır' : 'Ekle'),
+    ),
+  );
+
   /// The model [provider] runs for [tier], to choose from what it offers.
   Widget _model(AiProvider provider, AiTier tier) {
     final current = _settings.modelFor(provider, tier);
@@ -177,7 +213,11 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
             child: Center(child: CircularProgressIndicator()),
           )
         else
-          for (final s in found) _program(s),
+          for (final s in found) ...[
+            _program(s),
+            if (s.provider == AiProvider.antigravity && s.installed)
+              _antigravityTools(),
+          ],
         if (found != null)
           for (final s in found)
             if (s.installed)

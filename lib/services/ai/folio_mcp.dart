@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-
 import '../legal/bedesten_legislation.dart';
 import '../legal/case_law.dart';
 import '../legal/case_law_search.dart';
 import '../legal/citation.dart';
 import '../legal/decision.dart';
 import '../legal/legislation.dart';
+import 'ai_case.dart';
 
 /// `lifeos_folio --mcp`: Folio's own tools for the lawyer's AI program, over
 /// the Model Context Protocol on standard input and output. They only read:
@@ -17,6 +17,8 @@ import '../legal/legislation.dart';
 /// from the official banks, and a check of the citations a draft makes. The
 /// program is told to cite only what these return, so an article or a
 /// decision it would otherwise make up is either found or said not to be.
+/// Run for a question asked of a case, it also has that case's tools
+/// ([FolioCaseTools]).
 class FolioMcp {
   FolioMcp({
     Legislation? legislation,
@@ -24,6 +26,7 @@ class FolioMcp {
     BedestenLegislation? bank,
     Future<CitationScanner> Function()? laws,
     Future<DecisionScanner> Function()? courts,
+    this.caseTools,
   }) : _legislation = legislation ?? Legislation(),
        _caseLaw = caseLaw ?? CaseLaw(),
        _bank = bank ?? BedestenLegislation(),
@@ -35,6 +38,10 @@ class FolioMcp {
   final BedestenLegislation _bank;
   final Future<CitationScanner> Function() _laws;
   final Future<DecisionScanner> Function() _courts;
+
+  /// The tools of the case the question is asked of; null when it is of
+  /// none, or the program was not run by Folio for a question.
+  final FolioCaseTools? caseTools;
   CitationScanner? _scanner;
   DecisionScanner? _decisions;
 
@@ -50,6 +57,9 @@ class FolioMcp {
   /// The command line flag.
   static const flag = '--mcp';
 
+  /// The name its tools go by in the AI program: `mcp__folio__…`.
+  static const name = 'folio';
+
   /// What the program reads before it uses the tools.
   static const instructions =
       'Folio\'nun hukuk araçları. Kanun maddesi, karar künyesi ya da karar '
@@ -58,7 +68,14 @@ class FolioMcp {
       'dönerse bunu söyle; madde ya da karar uydurma, numara tahmin etme. '
       'Madde numarasından emin değilsen önce mevzuat_icindekiler, karardan '
       'emin değilsen önce karar_ara çağır. Taslak yazdıysan bitirmeden '
-      'atif_dogrula ile denetle.';
+      'atif_dogrula ile denetle. Soru bir dosyaya bağlıysa dosya_bilgisi ve '
+      'dosya_evraklari ile dosyayı tanı; evrakı evrak_oku ile oku, inmemiş '
+      'olanı yalnız gerekiyorsa evrak_indir ile avukattan iste.';
+
+  /// Every tool's name: the case's too, for the program to be let use them.
+  static List<String> get names => [
+    for (final t in [...tools, ...FolioCaseTools.tools]) '${t['name']}',
+  ];
 
   static const _readOnly = {
     'readOnlyHint': true,
@@ -238,17 +255,15 @@ class FolioMcp {
           'capabilities': {
             'tools': {'listChanged': false},
           },
-          'serverInfo': {
-            'name': 'folio',
-            'title': 'LifeOS Folio',
-            'version': '1',
-          },
+          'serverInfo': {'name': name, 'title': 'LifeOS Folio', 'version': '1'},
           'instructions': instructions,
         });
       case 'ping':
         return result(const <String, Object?>{});
       case 'tools/list':
-        return result({'tools': tools});
+        return result({
+          'tools': [...tools, if (caseTools != null) ...FolioCaseTools.tools],
+        });
       case 'tools/call':
         final params = message['params'];
         if (params is! Map) return error(-32602, 'params yok');
@@ -257,7 +272,8 @@ class FolioMcp {
         final arguments = args is Map
             ? args.cast<String, Object?>()
             : const <String, Object?>{};
-        if (!tools.any((t) => t['name'] == name)) {
+        if (!tools.any((t) => t['name'] == name) &&
+            !(caseTools != null && FolioCaseTools.owns(name))) {
           return error(-32602, 'Bilinmeyen araç: $name');
         }
         Map<String, Object?> answer;
@@ -290,6 +306,9 @@ class FolioMcp {
     Map<String, Object?> args,
   ) async {
     String text(String key) => '${args[key] ?? ''}'.trim();
+    if (caseTools case final c? when FolioCaseTools.owns(name)) {
+      return c.call(name, args);
+    }
     switch (name) {
       case 'mevzuat_madde':
         return _article(text('kanun'), text('madde'));
@@ -664,7 +683,7 @@ class FolioMcp {
   /// Serves the protocol on standard input and output until input ends;
   /// one JSON message a line, as the stdio transport has it.
   static Future<int> serve() async {
-    final server = FolioMcp();
+    final server = FolioMcp(caseTools: FolioCaseTools.fromEnvironment());
     final pending = <Future<void>>[];
     await for (final line
         in stdin.transform(utf8.decoder).transform(const LineSplitter())) {
