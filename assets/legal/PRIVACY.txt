@@ -16,12 +16,16 @@ Folio, UYAP'a ve e-Tebligat'a sizin e-Devlet girişiniz, e-imzanız ya da mobil 
 5. Büro ağı ve Senkron
 Büro ağı ve Senkron, aynı yerel ağdaki kendi cihazlarınız ve büronuzdaki kişilerin cihazları arasında doğrudan ve şifreli çalışır; aktarım internetteki bir sunucudan geçmez. Büro ağında yalnız sizin paylaştığınız dosyalar, mesajlar ve görevler gider. Ücret ve avans gibi mali bilgiler yalnız bunları görme yetkisi olanlara gider.
 
+Yapay zekâ özelliklerini açtıysanız, sohbetleriniz, kaydettiğiniz bulgular ve taslaklar da Senkron ile yalnız kendi cihazlarınız arasında eşitlenir; büroya gitmez.
+
 Başka bir büroyla aynı ağda olmadan bir belgeyi canlı paylaştığınızda (uzaktan canlı paylaşım) belge, LifeOS'un canli.lifeos.com.tr adresindeki aktarma sunucusundan geçer. Belge iki Folio arasında uçtan uca şifrelenir. Şifre, sizin karşı tarafa gönderdiğiniz davet kodundan iki cihazda üretilir; kod sunucuya gönderilmez. Sunucu belgenin içeriğini göremez, belgeyi ve yazışmaları kaydetmez, paylaşım bitince bağlantıyı kapatır. Sunucu bağlantı sürerken iki tarafın IP adresini ve aktarılan veri miktarını görür; bunlar kaydedilmez. Karşı taraf belgeyi siz onayladıktan sonra görür ve paylaşım bitince belge onun cihazında kalmaz.
 
 6. Yapay zekâ
 Folio'nun kendisi bir yapay zekâ hizmeti kullanmaz ve belgelerinizi kendiliğinden hiçbir yapay zekâya okutmaz. Yapay zekâ özellikleri isteğe bağlıdır, varsayılan olarak kapalıdır ve şimdilik yalnız Linux'ta bulunur.
 
 Bu özellikleri Ayarlar'dan açar ve bir belge için özet ya da soru isterseniz, o belgenin metni bilgisayarınızda kurulu ve sizin hesabınızla oturum açılmış programla (Claude, Codex ya da Antigravity) doğrudan o programın sağlayıcısına (Anthropic, OpenAI ya da Google) gönderilir. Belge bir dava dosyasına aitse yapay zekânın o dosyadan okuduğu bilgiler ve evrak da gönderilir. Bir evrak UYAP'tan yalnız sizin onayınızla indirilir. Gönderim LifeOS'un sunucusundan geçmez; LifeOS bu içeriği görmez ve saklamaz.
+
+Telefonunuzdan sorduğunuz soru Senkron ile bilgisayarınıza gider ve bilgisayarınızdaki programla gönderilir; cevap aynı yoldan telefonunuza döner. Sohbetler, kaydettiğiniz bulgular ve taslaklar ilgili dosyanın kaydında, yalnız sizin cihazlarınızda tutulur ve istediğiniz zaman silinebilir.
 
 Bu verilerin sağlayıcıya aktarılmasında veri sorumlusu sizsiniz. Sağlayıcının veriyi nasıl işlediği, sizinle o şirket arasındaki sözleşmeye tabidir. İlk gönderimden önce onayınız bir kez alınır; onayı ve özellikleri Ayarlar'dan istediğiniz zaman kapatabilirsiniz. Göndermeden önce geçerli TC kimlik numaraları varsayılan olarak gizlenir.
 

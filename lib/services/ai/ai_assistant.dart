@@ -884,6 +884,10 @@ const aiConsentPoints = [
       'gönderilir.',
   'LifeOS bu metni görmez, saklamaz ve kimseye aktarmaz. Sağlayıcıyla ilişki '
       'sizinle o şirket arasındadır.',
+  'Yapay zekâyla yaptığınız sohbetler, kaydettiğiniz bulgular ve taslaklar '
+      'ilgili dosyanın kaydında tutulur: bu bilgisayarda ve Senkron açıksa '
+      'yalnız kendi cihazlarınızda. Telefonunuzdan sorduğunuz soru da '
+      'bilgisayarınızdaki programla gönderilir.',
   'Belgelerdeki kişisel verilerin veri sorumlusu sizsiniz. Gönderimin '
       'KVKK’ya, avukatlık sırrına ve meslek kurallarına uygunluğundan siz '
       'sorumlusunuz.',

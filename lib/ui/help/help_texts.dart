@@ -154,7 +154,59 @@ abstract final class Help {
         'Evrakı seçip Paylaş ile büronuzdaki birine gönderebilir, Görevler '
             'sekmesinden bu dosya için görev verebilirsiniz.',
       ]),
+      HelpPart('Yapay zekâ sekmesi', [
+        'Yapay zekâ özellikleri açıksa görünür. Sohbetler’de bu dosyayla '
+            'yapılan bütün sohbetler listelenir; birine dokununca Yapay '
+            'zekâ sayfasında açılır.',
+        'Bu dosyayla yeni sohbet, Yapay zekâ sayfasını bu dosyaya bağlı '
+            'olarak açar.',
+        'Bulgular’da yapay zekânın önerip sizin kaydettiğiniz tespitler '
+            'türlerine göre durur. Yanlış olanı Yanlış işaretle ile '
+            'gerekçesini yazarak işaretlersiniz; silinmez, üstü çizili kalır.',
+        'Taslaklar’da yapay zekânın yazıp kaydettiğiniz dilekçe ve raporlar '
+            'durur; dokununca editörde açılır.',
+      ], numbered: false),
     ],
+  );
+
+  static const ai = HelpTopic(
+    'Yapay zekâ',
+    'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile, kendi '
+        'aboneliğinizle soru sorarsınız. Folio araya sunucu koymaz; kanun '
+        'maddesini ve kararı resmî kaynaklardan okutur, yanıttaki atıfları '
+        'denetler.',
+    [
+      HelpPart('Soru sormak', [
+        'Yeni sohbet’e basın ve sorunuzu yazın.',
+        'Soru bir dosyayla ilgiliyse dosyayı esas numarasıyla, mahkemesiyle '
+            'ya da bir tarafın adıyla anın. Yapay zekâ dosyayı bulur ve '
+            'sohbetin üstünde dosyanın adı görünür. Yanlış dosyayı seçtiyse '
+            'Kaldır’a basın.',
+        'Birden fazla dosya uyuyorsa yapay zekâ hangisi olduğunu size sorar.',
+        'Sohbet seçilen dosyaya kaydedilir ve dosyanın Yapay zekâ '
+            'sekmesinde de görünür. Bir dahaki sohbette yapay zekâ dosyada '
+            'daha önce yapılanları hatırlar.',
+      ]),
+      HelpPart('Bulgular, taslaklar ve evrak', [
+        'Yapay zekâ bir tespiti dosyaya kaydetmeyi önerirse yanıtın altında '
+            'bir kart çıkar. Kaydet’e basarsanız dosyanın bulgularına girer.',
+        'Bir taslak yazarsa Dosyaya kaydet ve aç ile dosyanın klasörüne '
+            'UDF olarak kaydedilir ve editörde açılır.',
+        'İnmemiş bir evrakı okuması gerekirse sizden ister; İndir’e '
+            'basarsanız Folio UYAP’tan indirir.',
+      ]),
+      HelpPart('Telefondan sormak', [
+        'Telefonda Yapay zekâ sayfasında ya da bir dosyanın Yapay zekâ '
+            'sekmesinde sorunuzu yazın.',
+        'Soru Senkron ile bilgisayarınıza gider; bilgisayarınızdaki Folio '
+            'kendi yapay zekâ programıyla cevaplar. Bilgisayar kapalıysa '
+            'açılınca cevaplanır.',
+        'Telefondan sorulan soruda evrak indirilmez.',
+      ]),
+    ],
+    'Yanıtlar yanlış ya da eksik olabilir. Altındaki Folio’nun denetimi '
+        'listesi, yanıttaki atıfların resmî kaynakta olup olmadığını '
+        'gösterir; kararı siz verirsiniz.',
   );
 
   static const uyapNotices = HelpTopic(
@@ -446,6 +498,8 @@ abstract final class Help {
         'Profil: adınız, baronuz ve sicil numaranız dilekçelere hazır gelir.',
         'Bağlantılar: UYAP, UETS ve UYAP’ın kendiliğinden okunması.',
         'Arşiv klasörleri: Folio’nun arayacağı klasörler.',
+        'Yapay zekâ: özellikleri açıp kapatırsınız, programı ve modelleri '
+            'seçersiniz; kullanım onayınız burada görünür.',
         'Tüm verileri temizle: Folio’yu ilk kurulduğu hâline döndürür. '
             'Kendi klasörlerinizdeki belgeler silinmez.',
       ], numbered: false),

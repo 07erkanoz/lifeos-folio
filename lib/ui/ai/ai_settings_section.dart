@@ -223,9 +223,12 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
       child: Text(
-        'Belgeleri kendi yapay zekâ aboneliğinizle özetletip '
-        'sorabilirsiniz. İstekler bilgisayarınızdaki programdan doğrudan '
-        'gider; Folio araya sunucu koymaz.',
+        'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile, kendi '
+        'aboneliğinizle soru sorarsınız: kenar çubuğundaki Yapay zekâ '
+        'sayfasından, belge önizlemesinden ve dosyaların Yapay zekâ '
+        'sekmesinden. İstekler bu bilgisayardaki programdan doğrudan gider; '
+        'Folio araya sunucu koymaz. Telefonunuzdan sorduğunuz soruları da bu '
+        'bilgisayar cevaplar.',
         style: TextStyle(
           fontSize: 13,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
