@@ -92,8 +92,14 @@ class AiFailure implements Exception {
 }
 
 abstract final class AiAssistant {
-  /// Linux only, for now.
-  static bool get available => Platform.isLinux;
+  /// Linux only, for now; and not in a test, which runs no real program
+  /// unless it asks ([availableForTest]).
+  static bool get available =>
+      availableForTest ??
+      (Platform.isLinux && !Platform.environment.containsKey('FLUTTER_TEST'));
+
+  @visibleForTesting
+  static bool? availableForTest;
 
   /// The most of a document's text sent: the rest is left out, and said so.
   static const maxCharacters = 200000;
