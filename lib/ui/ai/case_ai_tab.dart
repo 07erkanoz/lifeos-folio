@@ -450,7 +450,7 @@ class _CaseAiTabState extends State<CaseAiTab> {
                         // The list put away for the conversation's room.
                         Positioned(
                           left: 4,
-                          bottom: 8,
+                          top: 4,
                           child: IconButton(
                             key: const ValueKey('case-ai-list-toggle'),
                             tooltip: _listShown
