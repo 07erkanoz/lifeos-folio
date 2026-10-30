@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-/// Linux Adalet E-İmza tray preparation used before a new login, matching the
-/// working web login flow: obtain the certificate only after a fresh tray.
+/// Linux Adalet E-İmza tray restarted for a login when the running one does
+/// not answer or reads no card: the certificate is then read from a fresh
+/// one.
 class TrayRecovery {
   static const _unit = 'adalet-eimza-tray';
 

@@ -311,15 +311,32 @@ class UyapWebService {
     final cancel = Completer<void>();
     _loginCancel = cancel;
     try {
-      onProgress?.call('Adalet E-İmza güvenli oturumu hazırlanıyor');
-      await _loginWait(
-        TrayRecovery.prepare(),
-        cancel,
-        const Duration(seconds: 90),
-        'Adalet E-İmza hazırlığı',
-      );
-      onProgress?.call('Kart ve sertifika okunuyor');
-      var certificate = await _trayCertificate(cancel);
+      // The Adalet E-İmza already running is asked first; it is restarted
+      // only when it does not answer in time or reads no card, as on
+      // Windows: a login need not wait for a fresh one.
+      Map? certificate;
+      if (Platform.isLinux) {
+        onProgress?.call('Kart ve sertifika okunuyor');
+        try {
+          certificate = await _trayCertificate(
+            cancel,
+          ).timeout(const Duration(seconds: 12));
+        } on Object {
+          if (cancel.isCompleted) rethrow;
+          certificate = null;
+        }
+      }
+      if (certificate?['certificateId']?.toString().isNotEmpty != true) {
+        onProgress?.call('Adalet E-İmza güvenli oturumu hazırlanıyor');
+        await _loginWait(
+          TrayRecovery.prepare(),
+          cancel,
+          const Duration(seconds: 90),
+          'Adalet E-İmza hazırlığı',
+        );
+        onProgress?.call('Kart ve sertifika okunuyor');
+        certificate = await _trayCertificate(cancel);
+      }
       if (certificate == null && await TrayRecovery.restartOnWindows()) {
         onProgress?.call('Adalet E-İmza kart okuyucuları yeniden tarıyor');
         certificate = await _trayCertificate(cancel);
