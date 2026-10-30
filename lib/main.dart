@@ -8,6 +8,7 @@ import 'services/desktop/desktop_instance.dart';
 import 'services/desktop/mac_quit.dart';
 import 'services/platform/agenda_launch.dart';
 import 'services/portal/lifeos_agenda.dart';
+import 'services/ai/folio_mcp.dart';
 import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
 import 'services/live/live_links.dart';
@@ -54,6 +55,11 @@ void main(List<String> arguments) async {
   // beside an open Folio or without one; and nothing else of a start.
   if (Platform.isLinux && arguments.contains(agendaWriteFlag)) {
     exit(await LifeosAgendaWriter.runOnce());
+  }
+  // `--mcp` (the lawyer's AI program, started by Folio): Folio's legal
+  // tools on standard input and output, with no window, until it closes.
+  if (Platform.isLinux && arguments.contains(FolioMcp.flag)) {
+    exit(await FolioMcp.serve());
   }
   // Tüm verileri temizle left what was open then: cleared before anything
   // is read.
