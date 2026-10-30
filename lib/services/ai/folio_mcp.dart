@@ -255,6 +255,16 @@ class FolioMcp {
   Future<DecisionScanner> get _courtTable async =>
       _decisions ??= await _courts();
 
+  /// The article and decision citations in [text], as Folio reads them:
+  /// what an answer rests on, shown under it.
+  Future<(List<Citation>, List<DecisionCitation>)> citationsIn(
+    String text,
+  ) async => ((await _lawTable).scan(text), (await _courtTable).scan(text));
+
+  /// The text of what a citation names, from the official source.
+  Future<ArticleLookup> article(Citation c) => _legislation.lookup(c);
+  Future<DecisionLookup> decision(DecisionCitation c) => _caseLaw.lookup(c);
+
   /// One JSON-RPC message; the answer, or null for a notification.
   Future<Map<String, Object?>?> handle(Map<String, Object?> message) async {
     final id = message['id'];

@@ -18,7 +18,14 @@ import 'ai_refresh.dart';
 class AiRelay {
   AiRelay({
     Future<PortalDatabase> Function()? database,
-    Future<String> Function(AiProvider, String, AiCaseSession?, String?)? ask,
+    Future<String> Function(
+      AiProvider,
+      String,
+      AiCaseSession?,
+      String?,
+      AiThread?,
+    )?
+    ask,
     Future<AiProvider?> Function(AiSettings settings)? provider,
   }) : _database = database ?? PortalDatabase.shared,
        _ask = ask ?? _askProgram,
@@ -32,6 +39,7 @@ class AiRelay {
     String prompt,
     AiCaseSession? session,
     String? model,
+    AiThread? thread,
   )
   _ask;
   final Future<AiProvider?> Function(AiSettings settings) _provider;
@@ -71,7 +79,15 @@ class AiRelay {
     String prompt,
     AiCaseSession? session,
     String? model,
-  ) => AiAssistant.ask(provider, prompt, model: model, caseSession: session);
+    AiThread? thread,
+  ) => AiAssistant.ask(
+    provider,
+    prompt,
+    model: model,
+    tier: AiTier.strong,
+    caseSession: session,
+    thread: thread,
+  );
 
   /// The question waiting, if any, asked and answered. True when one was.
   Future<bool> poke() async {
@@ -112,9 +128,16 @@ class AiRelay {
     final turns = AiMemory.turnsOf(chat);
     final question = turns.last;
     // Taken by this computer: the others leave it.
-    void write(Map<String, Object?> last, {String? court, String? number}) {
+    void write(
+      Map<String, Object?> last, {
+      String? court,
+      String? number,
+      AiThread? thread,
+    }) {
       db.putAiRecord(id, AiMemory.chat, key, {
         ...chat,
+        if (thread != null && thread.ids.isNotEmpty)
+          'oturumlar': thread.toJson(),
         'turlar': [...turns.take(turns.length - 1), last],
         'guncellendi': DateTime.now().toIso8601String(),
         'mahkeme': ?court ?? chat['mahkeme'],
@@ -155,7 +178,11 @@ class AiRelay {
     final tools =
         AiAssistant.takesTools(provider) ||
         await AiAssistant.antigravityFolio() != null;
-    final prompt = AiAssistant.prompt(
+    // The program goes on with the conversation it had: the earlier
+    // answers are then not sent again.
+    final thread = AiThread.of(id, chat['oturumlar']);
+    final who = await AiAssistant.who();
+    String prompt({required bool full}) => AiAssistant.prompt(
       task: AiTask.question,
       question: '${question['soru'] ?? ''}',
       caseName: record != null && tools
@@ -170,36 +197,63 @@ class AiRelay {
                 'süre, tebligat ve bildirim soruları için Folio\'nun '
                 'ajanda, tebligatlar ve uyap_bildirimleri araçları var.'
           : null,
+      who: who,
       history: [
-        for (final t in turns.take(turns.length - 1))
-          if (t['cevap'] case final String a)
-            (question: '${t['soru'] ?? ''}', answer: a),
+        if (full)
+          for (final t in turns.take(turns.length - 1))
+            if (t['cevap'] case final String a)
+              (question: '${t['soru'] ?? ''}', answer: a),
       ],
     );
     final session = tools ? await AiCaseSession.open(record, chat: id) : null;
-    // Asked from the phone: no document is downloaded without the lawyer
-    // at the computer, so a download asked for is said no to at once.
-    final refuse = session == null
+    var busy = false;
+    final serving = session == null
         ? null
         : Timer.periodic(const Duration(seconds: 1), (_) async {
-            // UYAP asked for fresh: done here as on the lawyer's word.
-            await AiRefresh.serve(session);
-            for (final r in await session.pending()) {
-              await session.answer(
-                r,
-                'reddedildi',
-                'Soru telefondan soruldu; evrak indirilemez. Avukat evrakı '
-                    'bilgisayardan indirebilir.',
-              );
+            if (busy) return;
+            busy = true;
+            try {
+              // UYAP asked for fresh, and documents to download: done here,
+              // this computer holding the session.
+              await AiRefresh.serve(session);
+              await AiRefresh.serveDownloads(session);
+            } finally {
+              busy = false;
             }
           });
     try {
-      final answer = await _ask(
-        provider,
-        prompt,
-        session,
-        settings.modelFor(provider, AiTask.question.tier),
-      );
+      final model = settings.modelFor(provider, AiTask.question.tier);
+      String answer;
+      if (thread.ids.containsKey(provider)) {
+        try {
+          answer = await _ask(
+            provider,
+            prompt(full: false),
+            session,
+            model,
+            thread,
+          );
+        } on AiFailure catch (e) {
+          if (e.timedOut) rethrow;
+          // Its record gone (another computer, or cleared): from the start.
+          thread.ids.remove(provider);
+          answer = await _ask(
+            provider,
+            prompt(full: true),
+            session,
+            model,
+            thread,
+          );
+        }
+      } else {
+        answer = await _ask(
+          provider,
+          prompt(full: true),
+          session,
+          model,
+          thread,
+        );
+      }
       String? court, number;
       if (session != null) {
         if (await session.bound() case final b?) {
@@ -225,13 +279,14 @@ class AiRelay {
         },
         court: court,
         number: number,
+        thread: thread,
       );
     } on AiFailure catch (e) {
       write({...claimed, 'bekliyor': false, 'hata': e.message});
     } catch (e) {
       write({...claimed, 'bekliyor': false, 'hata': 'Yanıt alınamadı: $e'});
     } finally {
-      refuse?.cancel();
+      serving?.cancel();
       unawaited(session?.close());
     }
   }

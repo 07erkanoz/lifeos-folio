@@ -47,6 +47,7 @@ abstract final class AiMemory {
     required List<Map<String, Object?>> turns,
     String? court,
     String? number,
+    Map<String, String>? threads,
   }) {
     final kept = turns.length > keptTurns
         ? turns.sublist(turns.length - keptTurns)
@@ -58,6 +59,8 @@ abstract final class AiMemory {
       'esas': ?number,
       'basladi': started.toIso8601String(),
       'guncellendi': DateTime.now().toIso8601String(),
+      // Each program's own id of the conversation it goes on with.
+      if (threads != null && threads.isNotEmpty) 'oturumlar': threads,
       'turlar': [
         for (final t in kept)
           {...t, 'cevap': _cut('${t['cevap'] ?? ''}', keptAnswer)},

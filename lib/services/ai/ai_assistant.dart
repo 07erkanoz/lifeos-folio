@@ -12,6 +12,7 @@ import '../platform/app_directories.dart';
 import '../platform/app_edition.dart';
 import '../platform/atomic_file.dart';
 import '../search/text_extractor.dart';
+import '../editor/lawyer_profile.dart';
 import 'ai_attachment.dart';
 import 'ai_events.dart';
 import 'ai_case.dart';
@@ -105,8 +106,12 @@ class AiStatus {
 
 /// A question Folio could not get answered, said in Turkish.
 class AiFailure implements Exception {
-  const AiFailure(this.message);
+  const AiFailure(this.message, {this.timedOut = false});
   final String message;
+
+  /// The program did not answer in time: asking it again from the start
+  /// would only wait as long once more.
+  final bool timedOut;
   @override
   String toString() => message;
 }
@@ -235,7 +240,10 @@ abstract final class AiAssistant {
     String? folio,
     String? caseFolder,
     bool pictures = false,
+    AiTier? tier,
     List<String> images = const [],
+    String? resume,
+    bool keep = false,
   }) => switch (provider) {
     AiProvider.claude => [
       '-p',
@@ -243,6 +251,11 @@ abstract final class AiAssistant {
       '--system-prompt',
       AiPrompts.core,
       if (model != null && model.isNotEmpty) ...['--model', model],
+      // The strong tier thinks harder.
+      if (tier != null) ...[
+        '--effort',
+        tier == AiTier.strong ? 'high' : 'medium',
+      ],
       // Folio's own tools, and no others.
       if (folio != null) ...[
         '--mcp-config',
@@ -271,19 +284,30 @@ abstract final class AiAssistant {
       '',
       '--restricted',
       '--strict-mcp-config',
-      '--no-session-persistence',
+      // A conversation the program goes on with keeps its own record, so
+      // that the next question is not read from the start.
+      if (resume != null) ...['--resume', resume],
+      if (!keep && resume == null) '--no-session-persistence',
       '--disable-slash-commands',
     ],
     AiProvider.codex => [
       'exec',
+      if (resume != null) 'resume',
       '--json',
-      '--ephemeral',
+      if (!keep && resume == null) '--ephemeral',
       '--ignore-user-config',
       '--skip-git-repo-check',
-      '-s',
-      'read-only',
-      '-C',
-      folder,
+      // Going on, it takes neither: read-only said as a setting, the folder
+      // it runs in its own.
+      if (resume == null) ...[
+        '-s',
+        'read-only',
+        '-C',
+        folder,
+      ] else ...[
+        '-c',
+        'sandbox_mode="read-only"',
+      ],
       // Read-only stops writing, not reading: every tool goes, the
       // shell's and the web's included (a document's words could
       // otherwise send it somewhere).
@@ -310,6 +334,10 @@ abstract final class AiAssistant {
       '-c',
       'model_instructions_file="${p.join(folder, 'talimat.md')}"',
       if (model != null && model.isNotEmpty) ...['-m', model],
+      if (tier != null) ...[
+        '-c',
+        'model_reasoning_effort="${tier == AiTier.strong ? 'high' : 'medium'}"',
+      ],
       // Folio's own tools. Codex gives a tool's program none of its own
       // surroundings: the display and Folio's folders are passed on.
       if (folio != null) ...[
@@ -319,6 +347,10 @@ abstract final class AiAssistant {
         'mcp_servers.folio.args=${jsonEncode([FolioMcp.flag])}',
         '-c',
         'mcp_servers.folio.startup_timeout_sec=30',
+        // Folio's tools run without Codex asking first: it would ask no one
+        // here and say no. What needs the lawyer, Folio asks itself.
+        '-c',
+        'mcp_servers.folio.default_tools_approval_mode="approve"',
         '-c',
         'mcp_servers.folio.env={${[for (final key in mcpEnvironment)
           if (Platform.environment[key] case final v?) '$key=${jsonEncode(v)}', if (caseFolder != null) '${AiCaseSession.variable}=${jsonEncode(caseFolder)}'].join(',')}}',
@@ -326,6 +358,7 @@ abstract final class AiAssistant {
       for (final i in images) ...['-i', i],
       '-o',
       p.join(folder, '.yanit.txt'),
+      ?resume,
       '-',
     ],
     AiProvider.antigravity => [
@@ -348,6 +381,7 @@ abstract final class AiAssistant {
       '--print-timeout',
       '${timeout.inSeconds}s',
       if (model != null && model.isNotEmpty) ...['--model', model],
+      if (resume != null) ...['--conversation', resume],
       // Written with its (empty) value: apart, agy takes the next flag
       // for the prompt.
       '--print=',
@@ -598,18 +632,27 @@ abstract final class AiAssistant {
     AiProvider provider,
     String prompt, {
     String? model,
+    AiTier? tier,
     bool tools = true,
     AiCaseSession? caseSession,
     List<AiAttachment> attachments = const [],
     void Function(AiEvent event)? onEvent,
     Future<void>? cancel,
+    AiThread? thread,
   }) async {
     final path = find(provider.command);
     if (path == null) {
       throw AiFailure('${provider.label} bu bilgisayarda kurulu değil.');
     }
     // An empty folder of its own: nothing of the lawyer's for it to see.
-    final folder = await Directory.systemTemp.createTemp('folio-yz-');
+    // A conversation it goes on with has the same one each time: Claude
+    // keeps its record by the folder it ran in.
+    final folder = thread == null
+        ? await Directory.systemTemp.createTemp('folio-yz-')
+        : await Directory(
+            p.join(Directory.systemTemp.path, 'folio-yz-${thread.place}'),
+          ).create(recursive: true);
+    final resume = thread?.ids[provider];
     try {
       if (provider == AiProvider.codex) {
         await File(p.join(folder.path, 'talimat.md'))
@@ -637,6 +680,7 @@ abstract final class AiAssistant {
           provider,
           folder.path,
           model: model,
+          tier: tier,
           folio: !tools
               ? null
               : takesTools(provider)
@@ -649,6 +693,8 @@ abstract final class AiAssistant {
           pictures:
               provider == AiProvider.claude && attachments.any((a) => a.visual),
           images: images,
+          resume: resume,
+          keep: thread != null,
         ),
         workingDirectory: folder.path,
         // Antigravity's tools have its environment: the case is named there.
@@ -670,6 +716,11 @@ abstract final class AiAssistant {
             .transform(const LineSplitter())
             .forEach((line) {
               out.writeln(line);
+              if (thread != null) {
+                if (threadIn(provider, line) case final id?) {
+                  thread.ids[provider] = id;
+                }
+              }
               if (onEvent != null) {
                 for (final e in events(line)) {
                   onEvent(e);
@@ -693,6 +744,7 @@ abstract final class AiAssistant {
           process.kill();
           throw AiFailure(
             '${provider.label} ${timeout.inMinutes} dakikada yanıt vermedi.',
+            timedOut: true,
           );
         },
       );
@@ -711,9 +763,46 @@ abstract final class AiAssistant {
         rethrow;
       }
     } finally {
-      unawaited(
-        folder.delete(recursive: true).catchError((Object _) => folder),
-      );
+      // The kept folder is cleared before the next question writes in it.
+      if (thread != null) {
+        await _clear(folder, whole: false);
+      } else {
+        unawaited(_clear(folder, whole: true));
+      }
+    }
+  }
+
+  static Future<void> _clear(Directory folder, {required bool whole}) async {
+    try {
+      if (whole) {
+        await folder.delete(recursive: true);
+        return;
+      }
+      // The folder stays for the conversation; what was put in it goes.
+      await for (final f in folder.list()) {
+        if (f is File) await f.delete();
+      }
+    } catch (_) {}
+  }
+
+  /// The id of the conversation [provider] says it keeps, in a line it
+  /// writes: Claude's session, Codex's thread, Antigravity's conversation.
+  static String? threadIn(AiProvider provider, String line) {
+    if (!line.startsWith('{')) return null;
+    try {
+      final e = jsonDecode(line);
+      if (e is! Map) return null;
+      final id = switch (provider) {
+        AiProvider.claude when e['type'] == 'system' => e['session_id'],
+        AiProvider.codex when e['type'] == 'thread.started' => e['thread_id'],
+        AiProvider.antigravity when e['event'] == 'init' =>
+          e['conversation_id'] ??
+              (e['init'] is Map ? (e['init'] as Map)['conversation_id'] : null),
+        _ => null,
+      };
+      return id is String && id.isNotEmpty ? id : null;
+    } on FormatException {
+      return null;
     }
   }
 
@@ -736,6 +825,7 @@ abstract final class AiAssistant {
     String? caseName,
     String? note,
     String? attached,
+    String? who,
     List<({String question, String answer})> history = const [],
   }) {
     final cut = text != null && text.length > maxCharacters;
@@ -760,12 +850,32 @@ abstract final class AiAssistant {
             : 'Soru $caseName dosyası hakkında. Dosyanın bilgilerine ve '
                   'evrakına Folio\'nun dosya araçlarıyla bakabilirsin.',
       ],
+      if (who != null && who.isNotEmpty) ...['', who],
       if (note != null) ...['', note],
       // The documents the lawyer added to the conversation.
       if (attached != null && attached.isNotEmpty) ...['', attached],
       '',
       AiPrompts.task(task, question: question),
     ].join('\n');
+  }
+
+  /// Who asks, for the program to answer them as the lawyer they are:
+  /// "Kullanıcı: Av. Deniz Yılmaz, Antalya Barosu (sicil 1234), Yılmaz
+  /// Hukuk Bürosu." Empty when the profile names no one.
+  static Future<String> who() async {
+    try {
+      final profile = await LawyerProfile.load();
+      final lawyer = profile.lawyer;
+      if (lawyer == null) return '';
+      final bar = [
+        if (lawyer.barName.isNotEmpty) lawyer.barName,
+        if (lawyer.barNumber.trim().isNotEmpty)
+          '(sicil ${lawyer.barNumber.trim()})',
+      ].join(' ');
+      return 'Kullanıcı: ${[lawyer.titled, if (bar.isNotEmpty) bar, if (profile.officeName.trim().isNotEmpty) profile.officeName.trim()].join(', ')}.';
+    } catch (_) {
+      return '';
+    }
   }
 
   /// The models [provider] offers, for the lawyer to choose from: Claude's
@@ -990,3 +1100,25 @@ const aiConsentPoints = [
   'Yapay zekânın yanıtları yanlış ya da eksik olabilir; denetlemek ve '
       'kullanmak sizin kararınızdır.',
 ];
+
+/// A conversation each program goes on with from one question to the
+/// next, so that it does not read the case and the earlier answers again:
+/// [place] names it (the chat's id), [ids] holds each program's own id of
+/// it once it has said one.
+class AiThread {
+  AiThread(this.place, [Map<AiProvider, String>? ids]) : ids = ids ?? {};
+
+  final String place;
+  final Map<AiProvider, String> ids;
+
+  /// As kept with the chat: {"claude": "…", "codex": "…"}.
+  Map<String, String> toJson() => {
+    for (final e in ids.entries) e.key.name: e.value,
+  };
+
+  static AiThread of(String place, Object? kept) => AiThread(place, {
+    if (kept is Map)
+      for (final p in AiProvider.values)
+        if (kept[p.name] case final String id when id.isNotEmpty) p: id,
+  });
+}

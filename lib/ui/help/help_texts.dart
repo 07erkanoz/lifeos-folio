@@ -192,8 +192,9 @@ abstract final class Help {
             'bir kart çıkar. Kaydet’e basarsanız dosyanın bulgularına girer.',
         'Bir taslak yazarsa Dosyaya kaydet ve aç ile dosyanın klasörüne '
             'UDF olarak kaydedilir ve editörde açılır.',
-        'İnmemiş bir evrakı okuması gerekirse sizden ister; İndir’e '
-            'basarsanız Folio UYAP’tan indirir.',
+        'İnmemiş bir evrakı okuması gerekirse Folio UYAP’a bağlıysa '
+            'evrakı kendiliğinden indirir; bir soruda en çok 10 evrak '
+            'indirilir.',
       ]),
       HelpPart('Telefondan sormak', [
         'Telefonda Yapay zekâ sayfasında ya da bir dosyanın Yapay zekâ '
@@ -201,12 +202,15 @@ abstract final class Help {
         'Soru Senkron ile bilgisayarınıza gider; bilgisayarınızdaki Folio '
             'kendi yapay zekâ programıyla cevaplar. Bilgisayar kapalıysa '
             'açılınca cevaplanır.',
-        'Telefondan sorulan soruda evrak indirilmez.',
+        'Telefondan sorulan soruda da gereken evrak bilgisayarınızdaki '
+            'UYAP bağlantısıyla indirilir.',
       ]),
     ],
-    'Yanıtlar yanlış ya da eksik olabilir. Altındaki Folio’nun denetimi '
-        'listesi, yanıttaki atıfların resmî kaynakta olup olmadığını '
-        'gösterir; kararı siz verirsiniz.',
+    'Yanıtlar yanlış ya da eksik olabilir. Yanıtın altındaki Dayanakları '
+        'bölümünde yanıtın dayandığı kanun maddeleri ve kararlar görünür; '
+        'birine tıklarsanız tam metni resmî kaynaktan açılır. Folio her '
+        'birinin resmî kaynakta olup olmadığını işaretler; kararı siz '
+        'verirsiniz.',
   );
 
   static const uyapNotices = HelpTopic(

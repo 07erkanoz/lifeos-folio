@@ -93,8 +93,13 @@ abstract final class AiCaseLawSearch {
     }
     // Quick work: the lighter tier, and no tools.
     final model = settings.modelFor(provider, AiTier.normal);
-    return (prompt) =>
-        AiAssistant.ask(provider, prompt, model: model, tools: false);
+    return (prompt) => AiAssistant.ask(
+      provider,
+      prompt,
+      model: model,
+      tier: AiTier.normal,
+      tools: false,
+    );
   }
 
   static String _queriesPrompt(

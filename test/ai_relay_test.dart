@@ -55,7 +55,7 @@ void main() {
     final relay = AiRelay(
       database: () async => computer,
       provider: (_) async => AiProvider.claude,
-      ask: (provider, prompt, session, model) async {
+      ask: (provider, prompt, session, model, _) async {
         asked.add(prompt);
         // The program offers a finding as it works.
         await File('${session!.folder.path}/bulgu-1.json').writeAsString(
@@ -109,7 +109,7 @@ void main() {
     final relay = AiRelay(
       database: () async => db,
       provider: (_) async => null,
-      ask: (_, _, _, _) async => fail('not asked'),
+      ask: (_, _, _, _, _) async => fail('not asked'),
     );
     expect(await relay.poke(), isTrue);
     final last = AiMemory.turnsOf(db.aiRecords(AiMemory.chat).single).last;

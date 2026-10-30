@@ -348,4 +348,62 @@ void main() {
     expect(again, isTrue);
     expect(find.byKey(const ValueKey('ai-consent')), findsNothing);
   });
+
+  test('a conversation gone on with: each program told its own id; the id '
+      'read from what it writes', () {
+    final claude = AiAssistant.arguments(
+      AiProvider.claude,
+      '/tmp/x',
+      resume: 'oturum-1',
+      keep: true,
+    );
+    expect(claude, containsAllInOrder(['--resume', 'oturum-1']));
+    expect(claude, isNot(contains('--no-session-persistence')));
+    expect(
+      AiAssistant.arguments(AiProvider.claude, '/tmp/x'),
+      contains('--no-session-persistence'),
+    );
+    final codex = AiAssistant.arguments(
+      AiProvider.codex,
+      '/tmp/x',
+      resume: 'konu-1',
+      keep: true,
+    );
+    expect(codex.take(2), ['exec', 'resume']);
+    expect(codex, isNot(contains('--ephemeral')));
+    expect(codex, isNot(contains('-C')));
+    expect(codex, contains('sandbox_mode="read-only"'));
+    expect(codex.sublist(codex.length - 2), ['konu-1', '-']);
+    expect(
+      AiAssistant.arguments(
+        AiProvider.antigravity,
+        '/tmp/x',
+        resume: 'sohbet-1',
+      ),
+      containsAllInOrder(['--conversation', 'sohbet-1']),
+    );
+    expect(
+      AiAssistant.threadIn(
+        AiProvider.claude,
+        '{"type":"system","subtype":"init","session_id":"a1"}',
+      ),
+      'a1',
+    );
+    expect(
+      AiAssistant.threadIn(
+        AiProvider.codex,
+        '{"type":"thread.started","thread_id":"t1"}',
+      ),
+      't1',
+    );
+    expect(
+      AiAssistant.threadIn(
+        AiProvider.antigravity,
+        '{"event":"init","conversation_id":"c1"}',
+      ),
+      'c1',
+    );
+    final kept = AiThread('s', {AiProvider.codex: 't1'}).toJson();
+    expect(AiThread.of('s', kept).ids, {AiProvider.codex: 't1'});
+  });
 }

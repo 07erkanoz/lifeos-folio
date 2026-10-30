@@ -4,6 +4,8 @@ import '../portal/portal_sync.dart';
 import '../uets/uets_api.dart';
 import '../uyap/uyap_mobile_api.dart';
 import '../uyap/uyap_web_service.dart';
+import '../uyap/uyap_case_panel_controller.dart';
+import '../uyap/uyap_case_store.dart';
 import 'ai_case.dart';
 
 /// The running Folio doing what the AI program asked of UYAP and UETS
@@ -96,6 +98,77 @@ abstract final class AiRefresh {
     for (final r in await session.refreshes()) {
       told?.call(_said(r.scope));
       await session.answerRefresh(r.id, await run(r.scope, r.key));
+    }
+  }
+
+  /// The most documents downloaded for one question.
+  static const downloadsPerQuestion = 10;
+
+  /// The documents the program asked for in [session], downloaded from
+  /// UYAP one after another while Folio is connected: [told] hears each
+  /// (its title, and then what came of it).
+  static Future<void> serveDownloads(
+    AiCaseSession session, {
+    void Function(String id, String title, String? outcome)? told,
+  }) async {
+    for (final r in await session.pending()) {
+      if (!session.handled.add(r.id)) continue;
+      final record = session.record;
+      final title =
+          [
+            for (final d
+                in record?.documents ?? const <UyapCaseDocument>[]) ...[
+              d,
+              ...d.attachments,
+            ],
+          ].where((d) => d.key == r.key).firstOrNull?.title ??
+          'Evrak';
+      told?.call(r.id, title, null);
+      final String state, note;
+      if (record == null) {
+        (state, note) = ('yapilamadi', 'Konuşma bir dosyaya bağlı değil.');
+      } else if (session.handled.length > downloadsPerQuestion) {
+        (state, note) = (
+          'sinir',
+          'Bir soruda en çok $downloadsPerQuestion evrak indirilir; elindekiyle '
+              'sürdür.',
+        );
+      } else {
+        (state, note) = await _download(record, r.key);
+      }
+      await session.answer(r, state, note);
+      told?.call(r.id, title, switch (state) {
+        'indirildi' => 'İndirildi',
+        'uyap_bagli_degil' => 'UYAP’a bağlı değil; indirilemedi',
+        'sinir' => 'Sınır doldu; indirilmedi',
+        _ => 'İndirilemedi',
+      });
+    }
+  }
+
+  static Future<(String, String)> _download(
+    UyapCaseRecord record,
+    String key,
+  ) async {
+    final store = UyapCaseStore.instance;
+    final panel = UyapCasePanelController(store: store);
+    try {
+      if (!panel.connected) {
+        return (
+          'uyap_bagli_degil',
+          'Folio UYAP\'a bağlı değil; avukat bağlanınca indirilebilir.',
+        );
+      }
+      await panel.show(record);
+      await panel.download([key]);
+      final now = await store.load(record.court, record.number);
+      return now != null && store.fileOf(now, key) != null
+          ? ('indirildi', 'İndirildi; evrak_oku ile oku.')
+          : ('indirilemedi', 'UYAP evrakı vermedi.');
+    } catch (e) {
+      return ('indirilemedi', '$e');
+    } finally {
+      panel.dispose();
     }
   }
 

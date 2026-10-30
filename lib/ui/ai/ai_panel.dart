@@ -16,10 +16,11 @@ import '../../services/ai/ai_memory.dart';
 import '../../services/ai/ai_refresh.dart';
 import 'ai_markdown.dart';
 import '../../services/ai/folio_mcp.dart';
+import '../../services/legal/citation.dart';
+import '../../services/legal/decision.dart';
+import '../widgets/article_panel.dart';
 import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_database.dart';
-import '../../services/uyap/uyap_case_panel_controller.dart';
-import '../../services/uyap/uyap_case_data.dart' show UyapCaseDocument;
 import '../../services/uyap/uyap_case_store.dart';
 import 'ai_dialogs.dart';
 
@@ -78,6 +79,10 @@ class _Turn {
   /// null while they are being checked.
   List<Map<String, Object?>>? checks;
 
+  /// What the answer rests on as Folio read it in its text: articles
+  /// ([Citation]) and decisions ([DecisionCitation]), each once.
+  List<Object> sources = const [];
+
   /// The documents the program asked to download, as the lawyer answered.
   final requests = <_Request>[];
 
@@ -131,8 +136,8 @@ class _Offer {
 /// A download the AI program asked for, waiting for the lawyer or
 /// answered.
 class _Request {
-  _Request(this.asked, this.title);
-  final AiDownloadRequest asked;
+  _Request(this.id, this.title);
+  final String id;
   final String title;
 
   /// What came of it, said to the lawyer; null while it waits.
@@ -158,6 +163,11 @@ class _AiPanelState extends State<AiPanel> {
   /// The conversation as kept with the case: its id once the first answer
   /// came, and when it began.
   String? _chatId;
+
+  /// The conversation each program goes on with, and the documents added
+  /// it was already given (by program and name).
+  AiThread? _thread;
+  final _given = <String>{};
   DateTime _chatStarted = DateTime.now();
 
   bool get _busy => _cancel != null;
@@ -207,6 +217,7 @@ class _AiPanelState extends State<AiPanel> {
     super.initState();
     if (widget.chat case final chat?) {
       _chatId = chat['id'] as String?;
+      if (_chatId case final id?) _thread = AiThread.of(id, chat['oturumlar']);
       _chatStarted =
           DateTime.tryParse('${chat['basladi'] ?? ''}') ?? DateTime.now();
       for (final t in AiMemory.turnsOf(chat)) {
@@ -217,6 +228,7 @@ class _AiPanelState extends State<AiPanel> {
               for (final a in t['adimlar'] as List? ?? const []) '$a',
             ],
         );
+        unawaited(_read(_turns.last));
       }
     }
     unawaited(_load());
@@ -233,6 +245,8 @@ class _AiPanelState extends State<AiPanel> {
       _sentTo = null;
       _case = null;
       _chatId = null;
+      _thread = null;
+      _given.clear();
       _chatStarted = DateTime.now();
       unawaited(_findCase());
     }
@@ -345,10 +359,16 @@ class _AiPanelState extends State<AiPanel> {
       // Asked of no document and no case: the program finds the case.
       final open = path == null && record == null && tools;
       final db = withCase || open ? await PortalDatabase.shared() : null;
-      final prompt = AiAssistant.prompt(
+      if (db != null) _chatId ??= AiMemory.id();
+      // The program goes on with the conversation it had: the document,
+      // the earlier answers and the documents it was given are not sent
+      // again.
+      final thread = _thread ??= AiThread(_chatId ?? AiMemory.id());
+      final who = await AiAssistant.who();
+      String prompt({required bool full}) => AiAssistant.prompt(
         task: task,
         name: path == null ? null : p.basename(path),
-        text: text,
+        text: full ? text : null,
         question: question,
         caseName: withCase ? '${record.court} ${record.number}' : null,
         note: withCase
@@ -361,12 +381,15 @@ class _AiPanelState extends State<AiPanel> {
                   'süre, tebligat ve bildirim soruları için Folio\'nun '
                   'ajanda, tebligatlar ve uyap_bildirimleri araçları var.'
             : null,
-        attached: AiAttachment.block(attachments),
-        history: history,
+        attached: AiAttachment.block([
+          for (final a in attachments)
+            if (full || !_given.contains('${provider.name}|${a.name}')) a,
+        ]),
+        who: who,
+        history: full ? history : const [],
       );
       if (cancel.isCompleted) return;
       setState(() => _sentTo = provider);
-      if (db != null) _chatId ??= AiMemory.id();
       final session = db != null
           ? await AiCaseSession.open(record, chat: _chatId)
           : null;
@@ -378,16 +401,41 @@ class _AiPanelState extends State<AiPanel> {
               (_) => unawaited(_look(session, turn)),
             );
       try {
-        final answer = await AiAssistant.ask(
+        Future<String> asking({required bool full}) => AiAssistant.ask(
           provider,
-          prompt,
+          prompt(full: full),
           model: model,
+          tier: task.tier,
           caseSession: session,
-          attachments: attachments,
+          attachments: [
+            for (final a in attachments)
+              if (full || !_given.contains('${provider.name}|${a.name}')) a,
+          ],
           onEvent: (e) => _heard(turn, e),
           cancel: cancel.future,
+          thread: thread,
         );
+        String answer;
+        if (thread.ids.containsKey(provider)) {
+          try {
+            answer = await asking(full: false);
+          } on AiFailure catch (e) {
+            if (e.timedOut || cancel.isCompleted) rethrow;
+            // Its record gone (another computer, or cleared): from the
+            // start, with all that was said.
+            thread.ids.remove(provider);
+            turn.steps.clear();
+            turn.live.clear();
+            answer = await asking(full: true);
+          }
+        } else {
+          answer = await asking(full: true);
+        }
+        for (final a in attachments) {
+          _given.add('${provider.name}|${a.name}');
+        }
         turn.answer = answer;
+        unawaited(_read(turn));
         unawaited(_check(turn, answer));
         if (db != null) {
           // The case it chose at the very end.
@@ -477,6 +525,7 @@ class _AiPanelState extends State<AiPanel> {
           turns: turns,
           court: kase?.court,
           number: kase?.number,
+          threads: _thread?.toJson(),
         ),
       );
     } catch (_) {}
@@ -507,146 +556,63 @@ class _AiPanelState extends State<AiPanel> {
       });
       _toEnd();
     }
-    final asked = await session.pending();
     if (!mounted || !identical(_session, session)) return;
-    final known = {for (final r in turn.requests) r.asked.id};
-    final fresh = [
-      for (final a in asked)
-        if (!known.contains(a.id))
-          _Request(
-            a,
-            [
-                  for (final d
-                      in session.record?.documents ??
-                          const <UyapCaseDocument>[]) ...[d, ...d.attachments],
-                ].where((d) => d.key == a.key).firstOrNull?.title ??
-                'Evrak',
-          ),
-    ];
-    if (fresh.isEmpty) return;
-    setState(() => turn.requests.addAll(fresh));
-    _toEnd();
+    // What it asked to download, fetched from UYAP as it asks, one after
+    // another; shown as it goes.
+    _downloads = _downloads.then(
+      (_) => AiRefresh.serveDownloads(
+        session,
+        told: (id, title, outcome) {
+          if (!mounted) return;
+          setState(() {
+            final known = turn.requests.where((r) => r.id == id).firstOrNull;
+            if (known == null) {
+              turn.requests.add(_Request(id, title)..working = true);
+            } else {
+              known
+                ..outcome = outcome
+                ..working = outcome == null;
+            }
+          });
+          _toEnd();
+        },
+      ),
+    );
+    await _downloads;
   }
 
-  /// The lawyer's answer to [request]: downloaded from UYAP when agreed.
-  Future<void> _answer(_Request request, bool agreed) async {
-    final session = _session;
-    if (session == null || request.outcome != null || request.working) return;
-    if (!agreed) {
-      await session.answer(
-        request.asked,
-        'reddedildi',
-        'Avukat bu evrakın indirilmesini istemedi.',
-      );
-      setState(() => request.outcome = 'İndirilmedi');
-      return;
-    }
-    final record = session.record;
-    if (record == null) return;
-    setState(() => request.working = true);
-    final store = UyapCaseStore.instance;
-    final panel = UyapCasePanelController(store: store);
-    try {
-      if (!panel.connected) {
-        await session.answer(
-          request.asked,
-          'uyap_bagli_degil',
-          'Folio UYAP\'a bağlı değil; evrak indirilemedi.',
-        );
-        if (mounted) {
-          setState(() => request.outcome = 'UYAP’a bağlı değil; indirilemedi');
-        }
-        return;
-      }
-      await panel.show(record);
-      await panel.download([request.asked.key]);
-      final now = await store.load(record.court, record.number);
-      final done = now != null && store.fileOf(now, request.asked.key) != null;
-      await session.answer(
-        request.asked,
-        done ? 'indirildi' : 'indirilemedi',
-        done ? null : 'UYAP evrakı vermedi.',
-      );
-      if (mounted) {
-        setState(() => request.outcome = done ? 'İndirildi' : 'İndirilemedi');
-      }
-    } catch (e) {
-      await session.answer(request.asked, 'indirilemedi', '$e');
-      if (mounted) setState(() => request.outcome = 'İndirilemedi');
-    } finally {
-      panel.dispose();
-      if (mounted) setState(() => request.working = false);
-    }
-  }
+  Future<void> _downloads = Future.value();
 
-  Widget _request(_Request r, ColorScheme scheme) => Container(
-    key: ValueKey('ai-request-${r.asked.id}'),
-    margin: const EdgeInsets.only(top: 6, bottom: 4),
-    padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-    decoration: BoxDecoration(
-      border: Border.all(color: scheme.outlineVariant),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  /// A document it had downloaded: as it goes, and what came of it.
+  Widget _request(_Request r, ColorScheme scheme) => Padding(
+    key: ValueKey('ai-request-${r.id}'),
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
       children: [
-        Row(
-          children: [
-            Icon(Icons.download_outlined, size: 16, color: scheme.primary),
-            const SizedBox(width: 6),
-            const Expanded(
-              child: Text(
-                'Evrak indirme isteği',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(r.title, style: const TextStyle(fontSize: 13)),
-        if (r.asked.reason.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              'Neden: ${r.asked.reason}',
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-            ),
-          ),
-        if (r.outcome case final o?)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 2),
-            child: Text(
-              o,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: o == 'İndirildi'
-                    ? const Color(0xFF157A52)
-                    : scheme.onSurfaceVariant,
-              ),
-            ),
-          )
-        else if (r.working)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 6),
-            child: LinearProgressIndicator(),
+        if (r.working)
+          const SizedBox.square(
+            dimension: 13,
+            child: CircularProgressIndicator(strokeWidth: 1.8),
           )
         else
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                key: ValueKey('ai-request-no-${r.asked.id}'),
-                onPressed: () => _answer(r, false),
-                child: const Text('İndirme'),
-              ),
-              FilledButton(
-                key: ValueKey('ai-request-yes-${r.asked.id}'),
-                onPressed: () => _answer(r, true),
-                child: const Text('İndir'),
-              ),
-            ],
+          Icon(
+            r.outcome == 'İndirildi'
+                ? Icons.download_done_rounded
+                : Icons.file_download_off_outlined,
+            size: 15,
+            color: r.outcome == 'İndirildi'
+                ? const Color(0xFF157A52)
+                : scheme.onSurfaceVariant,
           ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            r.working
+                ? 'Evrak UYAP’tan indiriliyor · ${r.title}'
+                : '${r.outcome ?? ''} · ${r.title}',
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          ),
+        ),
       ],
     ),
   );
@@ -947,7 +913,7 @@ class _AiPanelState extends State<AiPanel> {
             ),
           ],
         ),
-        if (t.checks case final c?) _checks(c, scheme),
+        _sourcesOf(t, scheme),
       ] else if (t.error case final e?)
         Text(
           e,
@@ -1397,60 +1363,167 @@ class _AiPanelState extends State<AiPanel> {
 
   final _mcp = FolioMcp();
 
-  Widget _checks(List<Map<String, Object?>> checks, ColorScheme scheme) {
-    if (checks.isEmpty) return const SizedBox.shrink();
+  /// The citations in [turn]'s answer, read by Folio itself.
+  Future<void> _read(_Turn turn) async {
+    final answer = turn.answer;
+    if (answer == null || answer.isEmpty) return;
+    try {
+      final (articles, decisions) = await _mcp.citationsIn(answer);
+      final seen = <String>{};
+      String said(String w) =>
+          w.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+      final list = <Object>[
+        for (final c in articles)
+          if (seen.add(said(_written(answer, c.start, c.length)))) c,
+        for (final c in decisions)
+          if (seen.add(said(_written(answer, c.start, c.length)))) c,
+      ];
+      if (mounted && list.isNotEmpty) setState(() => turn.sources = list);
+    } catch (_) {}
+  }
+
+  static String _written(String text, int start, int length) =>
+      start >= 0 && start + length <= text.length
+      ? text.substring(start, start + length)
+      : '';
+
+  /// What the answer rests on, under it: each article and decision it
+  /// cites, opened in full from the official source as in the editor;
+  /// marked as Folio found it there once it has looked.
+  Widget _sourcesOf(_Turn t, ColorScheme scheme) {
+    final answer = t.answer ?? '';
+    if (t.sources.isEmpty) return const SizedBox.shrink();
+    final checked = {
+      for (final c in t.checks ?? const <Map<String, Object?>>[])
+        '${c['yazilan']}': c,
+    };
     return Padding(
+      key: ValueKey('ai-sources-${identityHashCode(t)}'),
       padding: const EdgeInsets.only(top: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Folio’nun denetimi',
+            'Dayanakları',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: scheme.onSurfaceVariant,
             ),
           ),
-          for (final c in checks)
-            Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    switch (c['durum']) {
-                      'bulundu' => Icons.check_circle_outline,
-                      'mulga' => Icons.history_toggle_off,
-                      'ulasilamadi' => Icons.cloud_off_outlined,
-                      _ => Icons.error_outline,
-                    },
-                    size: 15,
-                    color: switch (c['durum']) {
-                      'bulundu' => const Color(0xFF157A52),
-                      'ulasilamadi' => scheme.onSurfaceVariant,
-                      _ => scheme.error,
-                    },
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '${c['yazilan']}: ${switch (c['durum']) {
-                        'bulundu' => 'resmî kaynakta var',
-                        'mulga' => 'mülga',
-                        'yayimlanmamis' => 'yayımlanmamış',
-                        'ulasilamadi' => 'denetlenemedi',
-                        _ => 'resmî kaynakta bulunamadı',
-                      }}${c['daire_farkli'] == true ? ' (dairesi farklı)' : ''}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final s in t.sources) _source(s, answer, checked, scheme),
+            ],
+          ),
         ],
       ),
     );
+  }
+
+  Widget _source(
+    Object source,
+    String answer,
+    Map<String, Map<String, Object?>> checked,
+    ColorScheme scheme,
+  ) {
+    final (start, length, decision) = switch (source) {
+      final Citation c => (c.start, c.length, false),
+      final DecisionCitation c => (c.start, c.length, true),
+      _ => (0, 0, false),
+    };
+    final written = _written(answer, start, length);
+    final check = checked[written];
+    final state = check?['durum'];
+    final wrong = state != null && state != 'bulundu' && state != 'ulasilamadi';
+    final color = wrong ? scheme.error : scheme.primary;
+    final note = switch (state) {
+      'bulundu' => 'Resmî kaynakta var',
+      'mulga' => 'Mülga',
+      'yayimlanmamis' => 'Yayımlanmamış',
+      'ulasilamadi' => 'Denetlenemedi',
+      null => null,
+      _ => 'Resmî kaynakta bulunamadı',
+    };
+    return Tooltip(
+      message: [
+        note ?? 'Tam metni aç',
+        if (check?['daire_farkli'] == true) 'dairesi farklı',
+      ].join(' · '),
+      child: Material(
+        color: color.withValues(alpha: 0.07),
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: color.withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: InkWell(
+          key: ValueKey('ai-source-$written'),
+          borderRadius: BorderRadius.circular(8),
+          onTapUp: (d) => _openSource(source, d.globalPosition),
+          onTap: () {},
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  decision ? Icons.balance_outlined : Icons.gavel_outlined,
+                  size: 14,
+                  color: color,
+                ),
+                const SizedBox(width: 5),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  child: Text(
+                    written.replaceAll(RegExp(r'\s+'), ' '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: color),
+                  ),
+                ),
+                if (state == 'bulundu') ...[
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.check_circle_outline,
+                    size: 13,
+                    color: Color(0xFF157A52),
+                  ),
+                ] else if (wrong) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    note!.toLowerCase(),
+                    style: TextStyle(fontSize: 11, color: scheme.error),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// [source]'s full text, over the page as the editor shows it.
+  void _openSource(Object source, Offset at) {
+    switch (source) {
+      case final Citation c:
+        ArticlePanel.show(
+          context,
+          citation: c,
+          lookup: () => _mcp.article(c),
+          at: at,
+        );
+      case final DecisionCitation c:
+        DecisionPanel.show(
+          context,
+          citation: c,
+          lookup: () => _mcp.decision(c),
+          at: at,
+        );
+    }
   }
 
   void _toEnd() => WidgetsBinding.instance.addPostFrameCallback((_) {

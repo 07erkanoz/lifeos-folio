@@ -163,7 +163,25 @@ void main(List<String> arguments) async {
         center: true,
         title: 'LifeOS Folio',
       );
-      pendingWindowOptions = windowOptions;
+      if (Platform.isLinux) {
+        // GTK shows the window on Flutter's first frame. Put as it was left
+        // before that, while it is not yet on screen: it appears at its
+        // size or maximized at once, not at GTK's size first, then the
+        // saved one, then maximized.
+        await windowManager.setTitleBarStyle(
+          TitleBarStyle.hidden,
+          windowButtonVisibility: false,
+        );
+        await windowManager.setTitle(windowOptions.title!);
+        await windowManager.setMinimumSize(windowOptions.minimumSize!);
+        if (windowSession != null) {
+          await windowSession.restore();
+        } else {
+          await windowManager.setSize(windowOptions.size!);
+        }
+      } else {
+        pendingWindowOptions = windowOptions;
+      }
     } catch (_) {
       desktopChrome = false;
       try {

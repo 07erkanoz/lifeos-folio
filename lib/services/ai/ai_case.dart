@@ -10,6 +10,7 @@ import '../portal/portal_database.dart';
 import '../uyap/uyap_case_data.dart';
 import '../uyap/uyap_case_store.dart';
 import '../uyap/uyap_web_service.dart' show UyapParty, UyapWebService;
+import '../editor/lawyer_profile.dart';
 import 'ai_assistant.dart';
 import 'ai_memory.dart';
 
@@ -110,6 +111,9 @@ class AiCaseSession {
     }
     return null;
   }
+
+  /// The downloads taken in hand (AiRefresh.serveDownloads), each once.
+  final handled = <String>{};
 
   /// The downloads asked for and not yet answered, the oldest first.
   Future<List<AiDownloadRequest>> pending() async {
@@ -225,12 +229,17 @@ class FolioCaseTools {
     Future<List<Map<String, Object?>>> Function(String kind, String caseKey)?
     records,
     Future<List<AiCaseEntry>> Function()? portfolio,
+    Future<List<({String ad, String rol})>> Function(String caseKey)?
+    represented,
+    Future<String> Function()? lawyerName,
     this.patience = const Duration(minutes: 2),
     this.every = const Duration(milliseconds: 500),
   }) : _hearings = hearings ?? _portalHearings,
        _read = read ?? AiAssistant.documentText,
        _records = records ?? _portalRecords,
-       _portfolio = portfolio ?? _portalCases;
+       _portfolio = portfolio ?? _portalCases,
+       _represented = represented ?? _portalRepresented,
+       _lawyerName = lawyerName ?? _profileName;
 
   /// The tools of the case named in the environment, when Folio named one.
   static FolioCaseTools? fromEnvironment([Map<String, String>? environment]) {
@@ -250,6 +259,46 @@ class FolioCaseTools {
   final Future<List<Map<String, Object?>>> Function(String kind, String caseKey)
   _records;
   final Future<List<AiCaseEntry>> Function() _portfolio;
+  final Future<List<({String ad, String rol})>> Function(String caseKey)
+  _represented;
+  final Future<String> Function() _lawyerName;
+
+  static Future<List<({String ad, String rol})>> _portalRepresented(
+    String caseKey,
+  ) async {
+    final db = await PortalDatabase.shared().timeout(
+      const Duration(seconds: 20),
+    );
+    return db.representation(caseKey);
+  }
+
+  static Future<String> _profileName() async {
+    try {
+      return (await LawyerProfile.load()).lawyer?.name.trim() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Whom the lawyer acts for in [record]: as the lawyer said in Folio, or
+  /// the parties whose attorney is named as the lawyer is.
+  Future<List<Map<String, Object?>>> _clients(UyapCaseRecord record) async {
+    try {
+      final said = await _represented(caseKey(record.number, record.court));
+      if (said.isNotEmpty) {
+        return [
+          for (final t in said) {'ad': t.ad, 'rol': t.rol},
+        ];
+      }
+    } catch (_) {}
+    final name = UyapWebService.fold(await _lawyerName());
+    if (name.isEmpty) return const [];
+    return [
+      for (final t in record.parties)
+        if (UyapWebService.fold(t.lawyer).contains(name))
+          {'ad': t.name, 'rol': t.role},
+    ];
+  }
 
   /// The cases dosya_ara gave in this session, by key: dosya_sec takes no
   /// other.
@@ -367,11 +416,10 @@ class FolioCaseTools {
       'name': 'evrak_indir',
       'title': 'Evrakı indirmeyi iste',
       'description':
-          'İnmemiş bir evrakın UYAP\'tan indirilmesini avukattan ister. '
-          'Avukat onaylarsa Folio indirir; sonra evrak_oku ile oku. Avukat '
-          'reddederse ya da UYAP bağlı değilse durum bunu söyler; ısrar '
-          'etme. Yalnız soruyu yanıtlamak için gerçekten gereken evrakı '
-          'iste ve nedenini kısaca yaz.',
+          'İnmemiş bir evrakı Folio\'ya UYAP\'tan indirtir; Folio UYAP\'a '
+          'bağlıysa indirir, sonra evrak_oku ile oku. UYAP bağlı değilse '
+          'durum bunu söyler; ısrar etme. Soruyu yanıtlamak için gereken '
+          'evrakı indir; bir soruda en çok 10 evrak, nedenini kısaca yaz.',
       'inputSchema': {
         'type': 'object',
         'properties': {
@@ -552,6 +600,7 @@ class FolioCaseTools {
     }
     String? text(String v) => v.trim().isEmpty ? null : v.trim();
     final d = record.details;
+    final clients = await _clients(record);
     return {
       'durum': 'bulundu',
       'mahkeme': record.court,
@@ -568,6 +617,11 @@ class FolioCaseTools {
         for (final t in record.parties)
           {'ad': t.name, 'rol': t.role, 'vekil': ?text(t.lawyer)},
       ],
+      // The side the lawyer is on: the answer is theirs.
+      'avukatin_muvekkili': switch (clients) {
+        [] => 'Bilinmiyor; avukata sor.',
+        final c => c,
+      },
       'durusmalar': hearings,
       'icra': ?record.enforcement?.toJson(),
       'tahsilat_harc': ?record.money?.toJson(),
