@@ -27,8 +27,8 @@ class AiPage extends StatelessWidget {
       color: dark ? scheme.surface : AgendaColors.page,
       child: Padding(
         padding: narrow
-            ? const EdgeInsets.fromLTRB(12, 12, 12, 12)
-            : const EdgeInsets.fromLTRB(28, 22, 28, 22),
+            ? const EdgeInsets.fromLTRB(8, 8, 8, 8)
+            : const EdgeInsets.fromLTRB(16, 12, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -38,7 +38,7 @@ class AiPage extends StatelessWidget {
                   child: Text(
                     'Yapay zekâ',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -.5,
                     ),
@@ -47,14 +47,7 @@ class AiPage extends StatelessWidget {
                 HelpButton(Help.ai),
               ],
             ),
-            const SizedBox(height: 3),
-            Text(
-              'Sorularınızı kendi yapay zekâ aboneliğinizle sorarsınız. Bir '
-              'dosyayı adıyla, numarasıyla ya da bir tarafıyla anınca '
-              'yapay zekâ dosyayı bulur; sohbet o dosyaya kaydedilir.',
-              style: TextStyle(fontSize: 13, color: AgendaColors.muted),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             Expanded(
               child: Container(
                 clipBehavior: Clip.antiAlias,

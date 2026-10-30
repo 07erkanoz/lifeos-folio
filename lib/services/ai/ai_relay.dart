@@ -7,6 +7,7 @@ import '../uyap/uyap_case_store.dart';
 import 'ai_assistant.dart';
 import 'ai_case.dart';
 import 'ai_memory.dart';
+import 'ai_refresh.dart';
 
 /// The lawyer's computer answering what they asked on their phone: a
 /// question the phone wrote in a conversation as waiting (Senkron brings
@@ -165,7 +166,9 @@ class AiRelay {
           : tools
           ? 'Soru avukatın bir dosyasıyla ilgiliyse dosya_ara ile dosyayı '
                 'bul; tek dosya açıkça uyuyorsa dosya_sec ile seç, birden '
-                'fazla uyuyorsa hangisi olduğunu avukata sor.'
+                'fazla uyuyorsa hangisi olduğunu avukata sor. Ajanda, '
+                'süre, tebligat ve bildirim soruları için Folio\'nun '
+                'ajanda, tebligatlar ve uyap_bildirimleri araçları var.'
           : null,
       history: [
         for (final t in turns.take(turns.length - 1))
@@ -179,6 +182,8 @@ class AiRelay {
     final refuse = session == null
         ? null
         : Timer.periodic(const Duration(seconds: 1), (_) async {
+            // UYAP asked for fresh: done here as on the lawyer's word.
+            await AiRefresh.serve(session);
             for (final r in await session.pending()) {
               await session.answer(
                 r,

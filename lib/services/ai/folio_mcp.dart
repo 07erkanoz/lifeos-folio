@@ -10,6 +10,7 @@ import '../legal/decision.dart';
 import '../legal/legislation.dart';
 import 'ai_assistant.dart';
 import 'ai_case.dart';
+import 'ai_office.dart';
 
 /// `lifeos_folio --mcp`: Folio's own tools for the lawyer's AI program, over
 /// the Model Context Protocol on standard input and output. They only read:
@@ -28,6 +29,7 @@ class FolioMcp {
     Future<CitationScanner> Function()? laws,
     Future<DecisionScanner> Function()? courts,
     this.caseTools,
+    this.officeTools,
   }) : _legislation = legislation ?? Legislation(),
        _caseLaw = caseLaw ?? CaseLaw(),
        _bank = bank ?? BedestenLegislation(),
@@ -46,6 +48,9 @@ class FolioMcp {
   /// The tools of the case the question is asked of; null when it is of
   /// none, or the program was not run by Folio for a question.
   final FolioCaseTools? caseTools;
+
+  /// The tools of the lawyer's whole practice, with the case's.
+  final FolioOfficeTools? officeTools;
   CitationScanner? _scanner;
   DecisionScanner? _decisions;
 
@@ -72,7 +77,12 @@ class FolioMcp {
       'dönerse bunu söyle; madde ya da karar uydurma, numara tahmin etme. '
       'Madde numarasından emin değilsen önce mevzuat_icindekiler, karardan '
       'emin değilsen önce karar_ara çağır. Taslak yazdıysan bitirmeden '
-      'atif_dogrula ile denetle. Konuşma bir dosyaya bağlı değilse ve soru '
+      'atif_dogrula ile denetle. Duruşma, süre, görev, tebligat, UYAP '
+      'bildirimi ve dosya listesi gibi büronun bütünüyle ilgili sorularda '
+      'ajanda, tebligatlar, uyap_bildirimleri ve dosyalar araçlarını kullan; '
+      'bilgi eski görünüyorsa ya da avukat güncelini isterse önce '
+      'uyap_baglantilari, sonra uyap_guncelle. Konuşma bir dosyaya bağlı '
+      'değilse ve soru '
       'avukatın bir dosyasıyla ilgiliyse dosya_ara ile bul, tek dosya açıkça '
       'uyuyorsa dosya_sec ile seç, birden fazlası uyuyorsa avukata sor. '
       'Soru bir dosyaya bağlıysa dosya_bilgisi ve '
@@ -81,7 +91,12 @@ class FolioMcp {
 
   /// Every tool's name: the case's too, for the program to be let use them.
   static List<String> get names => [
-    for (final t in [...tools, ...FolioCaseTools.tools]) '${t['name']}',
+    for (final t in [
+      ...tools,
+      ...FolioCaseTools.tools,
+      ...FolioOfficeTools.tools,
+    ])
+      '${t['name']}',
   ];
 
   static const _readOnly = {
@@ -269,7 +284,11 @@ class FolioMcp {
         return result(const <String, Object?>{});
       case 'tools/list':
         return result({
-          'tools': [...tools, if (caseTools != null) ...FolioCaseTools.tools],
+          'tools': [
+            ...tools,
+            if (caseTools != null) ...FolioCaseTools.tools,
+            if (officeTools != null) ...FolioOfficeTools.tools,
+          ],
         });
       case 'tools/call':
         final params = message['params'];
@@ -280,7 +299,8 @@ class FolioMcp {
             ? args.cast<String, Object?>()
             : const <String, Object?>{};
         if (!tools.any((t) => t['name'] == name) &&
-            !(caseTools != null && FolioCaseTools.owns(name))) {
+            !(caseTools != null && FolioCaseTools.owns(name)) &&
+            !(officeTools != null && FolioOfficeTools.owns(name))) {
           return error(-32602, 'Bilinmeyen araç: $name');
         }
         Map<String, Object?> answer;
@@ -315,6 +335,9 @@ class FolioMcp {
     String text(String key) => '${args[key] ?? ''}'.trim();
     if (caseTools case final c? when FolioCaseTools.owns(name)) {
       return c.call(name, args);
+    }
+    if (officeTools case final o? when FolioOfficeTools.owns(name)) {
+      return o.call(name, args);
     }
     switch (name) {
       case 'mevzuat_madde':
@@ -695,7 +718,10 @@ class FolioMcp {
       stderr.writeln('Folio’da yapay zekâ özellikleri kapalı.');
       return 1;
     }
-    final server = FolioMcp(caseTools: FolioCaseTools.fromEnvironment());
+    final server = FolioMcp(
+      caseTools: FolioCaseTools.fromEnvironment(),
+      officeTools: FolioOfficeTools.fromEnvironment(),
+    );
     final pending = <Future<void>>[];
     await for (final line
         in stdin.transform(utf8.decoder).transform(const LineSplitter())) {

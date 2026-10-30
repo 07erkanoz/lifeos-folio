@@ -10,6 +10,7 @@ import '../../services/ai/ai_attachment.dart';
 import '../../services/ai/ai_case.dart';
 import '../../services/ai/ai_draft.dart';
 import '../../services/ai/ai_memory.dart';
+import '../../services/ai/ai_refresh.dart';
 import '../../services/ai/folio_mcp.dart';
 import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_database.dart';
@@ -81,6 +82,9 @@ class _Turn {
 
   /// The documents the question went with, by name.
   List<String> attached = const [];
+
+  /// What Folio did for it on the way (UYAP asked for fresh).
+  final notes = <String>[];
 }
 
 /// Findings or a draft the program offered, waiting for the lawyer or
@@ -325,7 +329,9 @@ class _AiPanelState extends State<AiPanel> {
             : open
             ? 'Soru avukatın bir dosyasıyla ilgiliyse dosya_ara ile dosyayı '
                   'bul; tek dosya açıkça uyuyorsa dosya_sec ile seç, birden '
-                  'fazla uyuyorsa hangisi olduğunu avukata sor.'
+                  'fazla uyuyorsa hangisi olduğunu avukata sor. Ajanda, '
+                  'süre, tebligat ve bildirim soruları için Folio\'nun '
+                  'ajanda, tebligatlar ve uyap_bildirimleri araçları var.'
             : null,
         attached: AiAttachment.block(attachments),
         history: history,
@@ -445,6 +451,13 @@ class _AiPanelState extends State<AiPanel> {
   /// drafts it offered, put before the lawyer.
   Future<void> _look(AiCaseSession session, _Turn turn) async {
     await _bind(session);
+    // UYAP asked for fresh, shown as it is done.
+    await AiRefresh.serve(
+      session,
+      told: (said) {
+        if (mounted) setState(() => turn.notes.add(said));
+      },
+    );
     final offered = await session.proposals();
     if (offered.isNotEmpty && mounted) {
       setState(() {
@@ -874,45 +887,51 @@ class _AiPanelState extends State<AiPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.auto_awesome_outlined,
-                  size: 18,
-                  color: scheme.primary,
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Yapay zekâ',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                if (usable.length > 1)
-                  DropdownButton<AiProvider>(
-                    key: const ValueKey('ai-provider'),
-                    value: _provider,
-                    isDense: true,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      for (final u in usable)
-                        DropdownMenuItem(value: u, child: Text(u.label)),
-                    ],
-                    onChanged: _busy
-                        ? null
-                        : (v) => setState(() => _provider = v),
-                  ),
-                if (widget.onClose != null)
-                  IconButton(
-                    tooltip: 'Kapat',
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    onPressed: widget.onClose,
-                  ),
-              ],
+          if (!widget.embedded || usable.length > 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
+              child: Row(
+                children: [
+                  // On the Yapay zekâ page the page says it already.
+                  if (widget.embedded)
+                    const Spacer()
+                  else ...[
+                    Icon(
+                      Icons.auto_awesome_outlined,
+                      size: 18,
+                      color: scheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Yapay zekâ',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                  if (usable.length > 1)
+                    DropdownButton<AiProvider>(
+                      key: const ValueKey('ai-provider'),
+                      value: _provider,
+                      isDense: true,
+                      underline: const SizedBox.shrink(),
+                      items: [
+                        for (final u in usable)
+                          DropdownMenuItem(value: u, child: Text(u.label)),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(() => _provider = v),
+                    ),
+                  if (widget.onClose != null)
+                    IconButton(
+                      tooltip: 'Kapat',
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: widget.onClose,
+                    ),
+                ],
+              ),
             ),
-          ),
           if (_case case final c? when !widget.embedded || widget.showCase)
             Padding(
               key: const ValueKey('ai-case'),
@@ -1064,6 +1083,29 @@ class _AiPanelState extends State<AiPanel> {
                               ),
                             ),
                           ),
+                          for (final n in t.notes)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.sync_rounded,
+                                    size: 14,
+                                    color: scheme.primary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      n,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           for (final r in t.requests) _request(r, scheme),
                           if (t.answer case final a?) ...[
                             SelectableText(

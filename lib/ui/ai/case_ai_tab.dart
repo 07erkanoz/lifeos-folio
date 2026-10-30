@@ -300,6 +300,9 @@ class _CaseAiTabState extends State<CaseAiTab> {
   /// turns: whether the conversation has it.
   bool _talking = false;
 
+  /// On a wide one, whether the list is beside the conversation.
+  bool _listShown = true;
+
   Map<String, Object?>? get _open =>
       _chats.where((c) => c['id'] == _openId).firstOrNull;
 
@@ -436,9 +439,36 @@ class _CaseAiTabState extends State<CaseAiTab> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(width: 280, child: list),
-                  VerticalDivider(width: 1, color: scheme.outlineVariant),
-                  Expanded(child: talk),
+                  if (_listShown) ...[
+                    SizedBox(width: 320, child: list),
+                    VerticalDivider(width: 1, color: scheme.outlineVariant),
+                  ],
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        Positioned.fill(child: talk),
+                        // The list put away for the conversation's room.
+                        Positioned(
+                          left: 4,
+                          bottom: 8,
+                          child: IconButton(
+                            key: const ValueKey('case-ai-list-toggle'),
+                            tooltip: _listShown
+                                ? 'Sohbet listesini gizle'
+                                : 'Sohbet listesini göster',
+                            onPressed: () =>
+                                setState(() => _listShown = !_listShown),
+                            icon: Icon(
+                              _listShown
+                                  ? Icons.keyboard_double_arrow_left_rounded
+                                  : Icons.keyboard_double_arrow_right_rounded,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               );
             }
@@ -494,10 +524,12 @@ class _CaseAiTabState extends State<CaseAiTab> {
             ),
             title: Text(
               '${c['baslik'] ?? ''}',
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               [
                 if (widget.caseKey == null)
                   switch (_names['${c['dosya'] ?? ''}']) {

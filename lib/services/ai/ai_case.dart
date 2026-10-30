@@ -145,6 +145,44 @@ class AiCaseSession {
 
   String _answerPath(String id) => p.join(folder.path, 'indir-$id.sonuc.json');
 
+  /// The refreshes the program asked of UYAP (uyap_guncelle) and not yet
+  /// answered; each given once.
+  Future<List<({String id, String scope, String key})>> refreshes() async {
+    final out = <({String id, String scope, String key})>[];
+    if (!await folder.exists()) return out;
+    await for (final entry in folder.list()) {
+      final name = p.basename(entry.path);
+      if (entry is! File ||
+          !name.startsWith('guncelle-') ||
+          !name.endsWith('.json') ||
+          name.endsWith('.sonuc.json')) {
+        continue;
+      }
+      final id = name.substring(9, name.length - 5);
+      if (_taken.contains(id)) continue;
+      try {
+        final json = jsonDecode(await entry.readAsString()) as Map;
+        _taken.add(id);
+        out.add((
+          id: id,
+          scope: '${json['kapsam'] ?? ''}',
+          key: '${json['anahtar'] ?? ''}',
+        ));
+      } catch (_) {
+        // Written in part: taken on the next look.
+      }
+    }
+    return out;
+  }
+
+  final _taken = <String>{};
+
+  Future<void> answerRefresh(String id, Map<String, Object?> answer) =>
+      _writeWhole(
+        File(p.join(folder.path, 'guncelle-$id.sonuc.json')),
+        utf8.encode(jsonEncode(answer)),
+      );
+
   /// [request] answered: [state] is what the tool tells the program.
   Future<void> answer(
     AiDownloadRequest request,
