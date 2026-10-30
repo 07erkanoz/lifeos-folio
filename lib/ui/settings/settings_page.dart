@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../services/ai/ai_assistant.dart';
+import '../ai/ai_settings_section.dart';
 import '../../services/office/office_network.dart';
 import '../../services/editor/editor_settings.dart';
 import '../../services/editor/lawyer_profile.dart';
@@ -1273,6 +1275,14 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+      // The lawyer's own AI programs, Linux only for now.
+      if (AiAssistant.available)
+        const _Section('ai', 'Yapay zekâ', Icons.auto_awesome_outlined, [
+          _Entry(
+            'yapay zeka claude codex chatgpt antigravity gemini özet kvkk onay',
+            AiSettingsSection(),
+          ),
+        ]),
       _Section('about', 'Hakkında', Icons.info_outline_rounded, [
         _Entry(
           'hakkında lisans sürüm',

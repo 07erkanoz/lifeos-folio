@@ -29,6 +29,8 @@ import '../services/uyap/uyap_case_store.dart';
 import '../services/uyap/uyap_library.dart';
 import '../services/speech/speech_session.dart';
 import '../services/platform/document_intents.dart';
+import '../services/ai/ai_assistant.dart';
+import 'ai/ai_panel.dart';
 import '../services/platform/agenda_launch.dart';
 import '../services/platform/lifeos_profile.dart';
 import '../services/platform/document_launch.dart';
@@ -1740,6 +1742,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// "Av. Deniz Yılmaz": the profile's lawyer, else the UYAP Mobil user.
   String _lawyerName = '';
+
+  /// The AI panel beside the preview (AiPanel).
+  bool _aiOpen = false;
 
   /// Told by the portals' syncs, often while one runs: counted again once
   /// they have been quiet a moment, not each time, which froze the window.
@@ -4294,6 +4299,18 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             );
                           },
                         ),
+                      // The lawyer's own AI program, beside the document.
+                      if (!phone && !_isEditorMode && AiAssistant.available)
+                        IconButton(
+                          key: const ValueKey('preview-ai'),
+                          tooltip: 'Yapay zekâ',
+                          isSelected: _aiOpen,
+                          icon: const Icon(
+                            Icons.auto_awesome_outlined,
+                            size: 20,
+                          ),
+                          onPressed: () => setState(() => _aiOpen = !_aiOpen),
+                        ),
                       if (!phone && !_isEditorMode && canPrint(file))
                         IconButton(
                           key: const ValueKey('preview-print'),
@@ -4377,100 +4394,110 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
         Expanded(
-          child: ChromeScrollWatcher(
-            enabled: phone,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                TransitionPane(
-                  visible: !_isEditorMode,
-                  child: _previewBody(file),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _documentArea(file, phone)),
+              if (_aiOpen && !_isEditorMode && !phone && AiAssistant.available)
+                AiPanel(
+                  path: file.path,
+                  onClose: () => setState(() => _aiOpen = false),
                 ),
-                if (speechAvailable && !_isEditorMode)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 18,
-                    child: Center(child: SpeechBar(owner: previewSpeech)),
-                  ),
-                // The way back out, floating over the document rather than
-                // taking a strip of it. A tap on the page itself belongs to the
-                // document — that is how text is selected and highlighted.
-                if (_fullScreen)
-                  Positioned(
-                    top: MediaQuery.paddingOf(context).top + 6,
-                    right: 8,
-                    child: Material(
-                      color: Colors.black.withValues(alpha: .55),
-                      shape: const CircleBorder(),
-                      child: IconButton(
-                        key: const ValueKey('preview-exit-fullscreen'),
-                        tooltip: 'Tam ekrandan çık',
-                        icon: const Icon(
-                          Icons.fullscreen_exit_rounded,
-                          size: 22,
-                          color: Colors.white,
-                        ),
-                        onPressed: () => _setFullScreen(false),
-                      ),
-                    ),
-                  ),
-                for (final opened in _files.where(
-                  (f) => _openedEditors.contains(f.path),
-                ))
-                  TransitionPane(
-                    key: ValueKey(
-                      'draft_${opened.path}_${_editorGenerations[opened.path] ?? 0}',
-                    ),
-                    visible: _isEditorMode && opened.path == file.path,
-                    child: TickerMode(
-                      enabled:
-                          !_showLibrary &&
-                          !_isNewDocument &&
-                          _isEditorMode &&
-                          opened.path == file.path,
-                      child: opened.format == EvrakFormat.spreadsheet
-                          ? SpreadsheetEditor(
-                              path: opened.path,
-                              draft: _fileDraft(opened),
-                              onSaved: _saved,
-                            )
-                          : opened.format.usesPlainTextEditor
-                          ? PlainTextEditor(
-                              path: opened.path,
-                              draft: _fileDraft(opened),
-                              onSaved: _saved,
-                            )
-                          : EditorWidget(
-                              hostTabs: MediaQuery.sizeOf(context).width >= 700,
-                              fileHost: _editorFileHost,
-                              draft: _fileDraft(opened),
-                              library: _library,
-                              onSaved: _saved,
-                              onSigned: _signed,
-                              initialFilePath: opened.path,
-                              initialFormat: opened.format,
-                              initialPdfTextLoader:
-                                  opened.format == EvrakFormat.pdf
-                                  ? () => _loadViewerPdfText(opened.path)
-                                  : null,
-                              reveal: _revealAt[opened.path],
-                              liveAsk: _liveAsk[opened.path] ?? 0,
-                              isActive:
-                                  !_showLibrary &&
-                                  !_isNewDocument &&
-                                  _isEditorMode &&
-                                  opened.path == file.path,
-                            ),
-                    ),
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
       ],
     );
   }
+
+  /// The document itself: the preview, its open editors and what floats
+  /// over them.
+  Widget _documentArea(EvrakFile file, bool phone) => ChromeScrollWatcher(
+    enabled: phone,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        TransitionPane(visible: !_isEditorMode, child: _previewBody(file)),
+        if (speechAvailable && !_isEditorMode)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 18,
+            child: Center(child: SpeechBar(owner: previewSpeech)),
+          ),
+        // The way back out, floating over the document rather than
+        // taking a strip of it. A tap on the page itself belongs to the
+        // document — that is how text is selected and highlighted.
+        if (_fullScreen)
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 6,
+            right: 8,
+            child: Material(
+              color: Colors.black.withValues(alpha: .55),
+              shape: const CircleBorder(),
+              child: IconButton(
+                key: const ValueKey('preview-exit-fullscreen'),
+                tooltip: 'Tam ekrandan çık',
+                icon: const Icon(
+                  Icons.fullscreen_exit_rounded,
+                  size: 22,
+                  color: Colors.white,
+                ),
+                onPressed: () => _setFullScreen(false),
+              ),
+            ),
+          ),
+        for (final opened in _files.where(
+          (f) => _openedEditors.contains(f.path),
+        ))
+          TransitionPane(
+            key: ValueKey(
+              'draft_${opened.path}_${_editorGenerations[opened.path] ?? 0}',
+            ),
+            visible: _isEditorMode && opened.path == file.path,
+            child: TickerMode(
+              enabled:
+                  !_showLibrary &&
+                  !_isNewDocument &&
+                  _isEditorMode &&
+                  opened.path == file.path,
+              child: opened.format == EvrakFormat.spreadsheet
+                  ? SpreadsheetEditor(
+                      path: opened.path,
+                      draft: _fileDraft(opened),
+                      onSaved: _saved,
+                    )
+                  : opened.format.usesPlainTextEditor
+                  ? PlainTextEditor(
+                      path: opened.path,
+                      draft: _fileDraft(opened),
+                      onSaved: _saved,
+                    )
+                  : EditorWidget(
+                      hostTabs: MediaQuery.sizeOf(context).width >= 700,
+                      fileHost: _editorFileHost,
+                      draft: _fileDraft(opened),
+                      library: _library,
+                      onSaved: _saved,
+                      onSigned: _signed,
+                      initialFilePath: opened.path,
+                      initialFormat: opened.format,
+                      initialPdfTextLoader: opened.format == EvrakFormat.pdf
+                          ? () => _loadViewerPdfText(opened.path)
+                          : null,
+                      reveal: _revealAt[opened.path],
+                      liveAsk: _liveAsk[opened.path] ?? 0,
+                      isActive:
+                          !_showLibrary &&
+                          !_isNewDocument &&
+                          _isEditorMode &&
+                          opened.path == file.path,
+                    ),
+            ),
+          ),
+      ],
+    ),
+  );
 
   static const _readableFormats = {
     EvrakFormat.pdf,
