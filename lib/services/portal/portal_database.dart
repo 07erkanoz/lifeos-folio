@@ -30,6 +30,7 @@ import '../sync/sync_generation.dart';
 import '../sync/sync_migration.dart';
 import '../../models/json_shape.dart';
 
+part 'portal_ai.dart';
 part 'portal_agenda_versions.dart';
 part 'portal_clients.dart';
 part 'portal_notes.dart';
@@ -277,6 +278,7 @@ class PortalDatabase {
     _db.execute(PortalNotes._tables);
     _db.execute(PortalProposals._tables);
     _db.execute(PortalSharedLedger._tables);
+    _db.execute(PortalAi._tables);
     // When the lawyer last decided on a deadline: for the newer to win
     // between their own devices.
     final columns = {

@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../../preview_app.dart' show openPreviewWindow;
+import '../../services/ai/ai_assistant.dart' show AiSettings;
 import '../../services/editor/petition_templates.dart' show trUpper;
+import '../../services/platform/app_edition.dart';
 import '../../services/platform/editor_window.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/shared_cases.dart';
@@ -34,6 +36,7 @@ import '../office/tasks_page.dart' show TaskDetail, dueOf;
 import '../widgets/file_preview.dart';
 import '../widgets/share_as.dart';
 import '../../services/enforcement/enforcement_ledger.dart';
+import '../ai/case_ai_tab.dart';
 import 'enforcement_view.dart';
 import 'portfolio_rows.dart';
 import '../theme/folio_palette.dart';
@@ -105,6 +108,7 @@ enum _Tab {
   facts,
   petitions,
   tasks,
+  ai,
 }
 
 enum _DocFilter { all, fresh, decisions, petitions, notDownloaded }
@@ -122,6 +126,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
   List<UyapNotice> _uyapNotices = const [];
   List<String> _petitions = const [];
   bool _loaded = false;
+
+  /// How many records the AI program left of the case (AiMemory).
+  int _aiCount = 0;
 
   /// The documents new when the page opened, kept marked while it is open
   /// though they are no longer new once seen.
@@ -246,6 +253,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
 
   Future<void> _load() async {
     final db = await _db;
+    try {
+      _aiCount = db.aiCounts(widget.caseKey).values.fold(0, (a, b) => a + b);
+    } catch (_) {}
     // This case alone: the whole portfolio and every notice are not read
     // to open one case's page.
     final kase = db.caseOf(widget.caseKey);
@@ -2646,6 +2656,13 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
     _Tab.facts => _factsTab(context),
     _Tab.petitions => _petitionsTab(context),
     _Tab.tasks => _tasksTab(context),
+    _Tab.ai => CaseAiTab(
+      key: ValueKey('ai-${widget.caseKey}'),
+      caseKey: widget.caseKey,
+      record: _c.record,
+      database: () => _db,
+      onOpenPath: widget.onOpenPath,
+    ),
   };
 
   /// The office's tasks over this case: given here, followed here.
@@ -2816,6 +2833,9 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
                   .where((t) => t.cases.any((c) => c.caseKey == widget.caseKey))
                   .length,
             ),
+            // Not there at all while the AI features are off.
+            if (AiSettings.on.value && !AppEdition.isOfis)
+              tab(_Tab.ai, 'Yapay zekâ', _aiCount),
           ],
         ),
       ),

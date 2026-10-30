@@ -5,19 +5,38 @@ import 'package:path/path.dart' as p;
 
 import '../../services/ai/ai_assistant.dart';
 import '../../services/ai/ai_case.dart';
+import '../../services/ai/ai_draft.dart';
+import '../../services/ai/ai_memory.dart';
 import '../../services/ai/folio_mcp.dart';
+import '../../services/portal/observed.dart' show caseKey;
+import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_case_panel_controller.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import 'ai_dialogs.dart';
 
 /// Beside a document's preview: the document summarised or asked about by
 /// the lawyer's own AI program ([AiAssistant]). Nothing is sent before the
-/// lawyer presses a button, nor before the consent asked once.
+/// lawyer presses a button, nor before the consent asked once. A document
+/// of a case keeps the conversation with the case (AiMemory), and the
+/// findings and drafts the lawyer agrees to; with no document, the
+/// questions are of [caseRecord] itself, [chat] one gone on with.
 class AiPanel extends StatefulWidget {
-  const AiPanel({super.key, required this.path, this.onClose});
+  const AiPanel({
+    super.key,
+    this.path,
+    this.caseRecord,
+    this.chat,
+    this.onClose,
+    this.onOpen,
+  }) : assert(path != null || caseRecord != null);
 
-  final String path;
+  final String? path;
+  final UyapCaseRecord? caseRecord;
+  final Map<String, Object?>? chat;
   final VoidCallback? onClose;
+
+  /// Opens a draft saved in the case's folder, in the editor.
+  final void Function(String path)? onOpen;
 
   @override
   State<AiPanel> createState() => _AiPanelState();
@@ -38,6 +57,30 @@ class _Turn {
 
   /// The documents the program asked to download, as the lawyer answered.
   final requests = <_Request>[];
+
+  /// What the program put before the lawyer: findings to keep, drafts.
+  final offers = <_Offer>[];
+}
+
+/// Findings or a draft the program offered, waiting for the lawyer or
+/// decided.
+class _Offer {
+  _Offer(this.kind, this.body)
+    : chosen = {
+        for (var i = 0; i < (body['bulgular'] as List? ?? const []).length; i++)
+          i,
+      };
+  final String kind;
+  final Map<String, Object?> body;
+
+  /// The findings ticked to keep.
+  final Set<int> chosen;
+  String? outcome;
+
+  List<Map<String, Object?>> get findings => [
+    for (final f in body['bulgular'] as List? ?? const [])
+      if (f is Map) f.cast<String, Object?>(),
+  ];
 }
 
 /// A download the AI program asked for, waiting for the lawyer or
@@ -67,11 +110,27 @@ class _AiPanelState extends State<AiPanel> {
   UyapCaseRecord? _case;
   AiCaseSession? _session;
 
+  /// The conversation as kept with the case: its id once the first answer
+  /// came, and when it began.
+  String? _chatId;
+  DateTime _chatStarted = DateTime.now();
+
   bool get _busy => _cancel != null;
 
   @override
   void initState() {
     super.initState();
+    if (widget.chat case final chat?) {
+      _chatId = chat['id'] as String?;
+      _chatStarted =
+          DateTime.tryParse('${chat['basladi'] ?? ''}') ?? DateTime.now();
+      for (final t in AiMemory.turnsOf(chat)) {
+        _turns.add(
+          _Turn('${t['soru'] ?? ''}', '${t['yazan'] ?? ''}')
+            ..answer = '${t['cevap'] ?? ''}',
+        );
+      }
+    }
     unawaited(_load());
   }
 
@@ -85,12 +144,18 @@ class _AiPanelState extends State<AiPanel> {
       _text = null;
       _sentTo = null;
       _case = null;
+      _chatId = null;
+      _chatStarted = DateTime.now();
       unawaited(_findCase());
     }
   }
 
   Future<void> _findCase() async {
     final path = widget.path;
+    if (path == null) {
+      setState(() => _case = widget.caseRecord);
+      return;
+    }
     UyapCaseRecord? record;
     try {
       record = await AiCaseSession.ofDocument(path, UyapCaseStore.instance);
@@ -146,14 +211,19 @@ class _AiPanelState extends State<AiPanel> {
     _question.clear();
     _toEnd();
     try {
-      var text = _text ??= await AiAssistant.documentText(widget.path);
-      if (text.trim().isEmpty) {
-        throw const AiFailure(
-          'Bu belgede okunabilir metin bulunamadı; gönderilecek bir şey yok.',
-        );
-      }
-      if (settings.mask) {
-        text = AiAssistant.maskIdentityNumbers(text);
+      final path = widget.path;
+      String? text;
+      if (path != null) {
+        text = _text ??= await AiAssistant.documentText(path);
+        if (text.trim().isEmpty) {
+          throw const AiFailure(
+            'Bu belgede okunabilir metin bulunamadı; gönderilecek bir şey '
+            'yok.',
+          );
+        }
+        if (settings.mask) {
+          text = AiAssistant.maskIdentityNumbers(text);
+        }
       }
       final history = [
         for (final t in _turns)
@@ -166,17 +236,25 @@ class _AiPanelState extends State<AiPanel> {
           record != null &&
           (AiAssistant.takesTools(provider) ||
               await AiAssistant.antigravityFolio() != null);
+      if (record == null && path == null) return;
+      final db = withCase ? await PortalDatabase.shared() : null;
+      final key = record == null ? null : caseKey(record.number, record.court);
       final prompt = AiAssistant.prompt(
         task: task,
-        name: p.basename(widget.path),
+        name: path == null ? null : p.basename(path),
         text: text,
         question: question,
         caseName: withCase ? '${record.court} ${record.number}' : null,
+        // The case's memory, for the program to read first.
+        note: db == null ? null : AiMemory.hint(db.aiCounts(key!)),
         history: history,
       );
       if (cancel.isCompleted) return;
       setState(() => _sentTo = provider);
-      final session = withCase ? await AiCaseSession.open(record) : null;
+      if (withCase) _chatId ??= AiMemory.id();
+      final session = withCase
+          ? await AiCaseSession.open(record, chat: _chatId)
+          : null;
       _session = session;
       final watch = session == null
           ? null
@@ -194,8 +272,11 @@ class _AiPanelState extends State<AiPanel> {
         );
         turn.answer = answer;
         unawaited(_check(turn, answer));
+        if (db != null) _keep(db, key!);
       } finally {
         watch?.cancel();
+        // What it put before the lawyer at the very end.
+        if (session != null) await _look(session, turn);
         _session = null;
         unawaited(session?.close());
         for (final r in turn.requests) {
@@ -216,8 +297,48 @@ class _AiPanelState extends State<AiPanel> {
     }
   }
 
-  /// Downloads the program asked for in [session], put before the lawyer.
+  /// The conversation kept with the case [key], as it is now.
+  void _keep(PortalDatabase db, String key) {
+    final id = _chatId;
+    if (id == null) return;
+    final turns = [
+      for (final t in _turns)
+        if (t.answer case final a?)
+          {
+            'soru': t.question,
+            'cevap': a,
+            'yazan': t.by,
+            'zaman': DateTime.now().toIso8601String(),
+          },
+    ];
+    if (turns.isEmpty) return;
+    try {
+      db.putAiRecord(
+        id,
+        AiMemory.chat,
+        key,
+        AiMemory.chatRecord(
+          title: _turns.first.question,
+          document: widget.path == null ? '' : p.basename(widget.path!),
+          started: _chatStarted,
+          turns: turns,
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// Downloads the program asked for in [session], and the findings and
+  /// drafts it offered, put before the lawyer.
   Future<void> _look(AiCaseSession session, _Turn turn) async {
+    final offered = await session.proposals();
+    if (offered.isNotEmpty && mounted) {
+      setState(() {
+        for (final o in offered) {
+          turn.offers.add(_Offer(o.kind, o.body));
+        }
+      });
+      _toEnd();
+    }
     final asked = await session.pending();
     if (!mounted || !identical(_session, session)) return;
     final known = {for (final r in turn.requests) r.asked.id};
@@ -360,6 +481,173 @@ class _AiPanelState extends State<AiPanel> {
       ],
     ),
   );
+
+  /// [offer] kept as the lawyer chose: the findings ticked as the case's,
+  /// or the draft saved in its folder and opened.
+  Future<void> _decide(_Turn turn, _Offer offer, bool keep) async {
+    final record = _case;
+    if (offer.outcome != null || record == null) return;
+    if (!keep) {
+      setState(
+        () => offer.outcome = offer.kind == AiMemory.finding
+            ? 'Kaydedilmedi'
+            : 'Taslak kaydedilmedi',
+      );
+      return;
+    }
+    final key = caseKey(record.number, record.court);
+    try {
+      final db = await PortalDatabase.shared();
+      final now = DateTime.now().toIso8601String();
+      if (offer.kind == AiMemory.finding) {
+        final chosen = [
+          for (final (i, f) in offer.findings.indexed)
+            if (offer.chosen.contains(i)) f,
+        ];
+        for (final f in chosen) {
+          db.putAiRecord(AiMemory.id(), AiMemory.finding, key, {
+            ...f,
+            'sohbet': ?_chatId,
+            'yazan': turn.by,
+            'zaman': now,
+          });
+        }
+        setState(
+          () => offer.outcome = chosen.isEmpty
+              ? 'Kaydedilmedi'
+              : '${chosen.length} bulgu dosyaya kaydedildi',
+        );
+      } else {
+        final title = '${offer.body['baslik'] ?? 'Taslak'}';
+        final text = '${offer.body['metin'] ?? ''}';
+        final path = await writeAiDraft(
+          UyapCaseStore.instance,
+          record,
+          title,
+          text,
+        );
+        db.putAiRecord(AiMemory.id(), AiMemory.draft, key, {
+          'baslik': title,
+          'metin': text,
+          'yol': path,
+          'sohbet': ?_chatId,
+          'yazan': turn.by,
+          'zaman': now,
+        });
+        setState(() => offer.outcome = 'Kaydedildi: ${p.basename(path)}');
+        widget.onOpen?.call(path);
+      }
+    } catch (e) {
+      if (mounted) setState(() => offer.outcome = 'Kaydedilemedi: $e');
+    }
+  }
+
+  Widget _offer(_Turn turn, _Offer o, ColorScheme scheme) {
+    final findings = o.kind == AiMemory.finding;
+    final items = o.findings;
+    return Container(
+      key: ValueKey('ai-offer-${o.kind}-${identityHashCode(o)}'),
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                findings
+                    ? Icons.bookmark_border_rounded
+                    : Icons.description_outlined,
+                size: 16,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  findings
+                      ? 'Dosyaya ${items.length} bulgu kaydedilsin mi?'
+                      : 'Taslak: ${o.body['baslik'] ?? ''}',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (findings)
+            for (final (i, f) in items.indexed)
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: o.chosen.contains(i),
+                onChanged: o.outcome != null
+                    ? null
+                    : (v) => setState(
+                        () => v == true ? o.chosen.add(i) : o.chosen.remove(i),
+                      ),
+                title: Text(
+                  '${AiMemory.kinds[f['tur']] ?? f['tur']}: ${f['metin']}',
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+                subtitle: Text(
+                  [
+                    ...?(f['kaynaklar'] as List?)?.map((k) => '$k'),
+                    if (f['denetim'] == 'dogrulandi') 'alıntı evrakta var',
+                  ].join(' · '),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '${o.body['metin'] ?? ''}',
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
+            ),
+          if (o.outcome case final done?)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 2),
+              child: Text(
+                done,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  key: const ValueKey('ai-offer-no'),
+                  onPressed: () => _decide(turn, o, false),
+                  child: const Text('Kaydetme'),
+                ),
+                FilledButton(
+                  key: const ValueKey('ai-offer-yes'),
+                  onPressed: () => _decide(turn, o, true),
+                  child: Text(findings ? 'Kaydet' : 'Dosyaya kaydet ve aç'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
 
   /// Folio's own look at the answer's citations, shown under it: none is
   /// changed, each found, missing or repealed is said so.
@@ -558,12 +846,13 @@ class _AiPanelState extends State<AiPanel> {
                 spacing: 8,
                 runSpacing: 6,
                 children: [
-                  FilledButton.icon(
-                    key: const ValueKey('ai-summary'),
-                    onPressed: _busy ? null : () => _ask(AiTask.summary),
-                    icon: const Icon(Icons.subject_rounded, size: 18),
-                    label: const Text('Özetle'),
-                  ),
+                  if (widget.path != null)
+                    FilledButton.icon(
+                      key: const ValueKey('ai-summary'),
+                      onPressed: _busy ? null : () => _ask(AiTask.summary),
+                      icon: const Icon(Icons.subject_rounded, size: 18),
+                      label: const Text('Özetle'),
+                    ),
                   if (_busy)
                     OutlinedButton.icon(
                       key: const ValueKey('ai-stop'),
@@ -579,9 +868,13 @@ class _AiPanelState extends State<AiPanel> {
                   ? Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        'Belgeyi özetletebilir ya da aşağıya belgeyle ilgili '
-                        'bir soru yazabilirsiniz. Bir şey göndermeden önce '
-                        'size sorulur.',
+                        widget.path == null
+                            ? 'Dosyayla ilgili sorunuzu aşağıya yazın. Yapay '
+                                  'zekâ dosyanın bilgilerine, evrakına ve '
+                                  'hafızasına Folio’nun araçlarıyla bakar.'
+                            : 'Belgeyi özetletebilir ya da aşağıya belgeyle '
+                                  'ilgili bir soru yazabilirsiniz. Bir şey '
+                                  'göndermeden önce size sorulur.',
                         style: TextStyle(
                           color: scheme.onSurfaceVariant,
                           height: 1.45,
@@ -644,6 +937,7 @@ class _AiPanelState extends State<AiPanel> {
                               padding: EdgeInsets.symmetric(vertical: 6),
                               child: LinearProgressIndicator(),
                             ),
+                          for (final o in t.offers) _offer(t, o, scheme),
                         ],
                       ],
                     ),
@@ -652,7 +946,11 @@ class _AiPanelState extends State<AiPanel> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
                 child: Text(
-                  '${_case == null ? 'Bu belgenin metni' : 'Bu belgenin ve yapay zekânın okuduğu dosya evrakının metni'} '
+                  '${widget.path == null
+                      ? 'Sorunuz ve yapay zekânın okuduğu dosya bilgileri'
+                      : _case == null
+                      ? 'Bu belgenin metni'
+                      : 'Bu belgenin ve yapay zekânın okuduğu dosya evrakının metni'} '
                   '${_to(to)} gönderildi. Yanıtlar yanlış olabilir; karar '
                   'sizindir.',
                   key: const ValueKey('ai-sent-note'),
@@ -675,8 +973,10 @@ class _AiPanelState extends State<AiPanel> {
                       maxLines: 4,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(
-                        hintText: 'Belgeye sorun…',
+                      decoration: InputDecoration(
+                        hintText: widget.path == null
+                            ? 'Dosyaya sorun…'
+                            : 'Belgeye sorun…',
                         isDense: true,
                       ),
                     ),

@@ -7,6 +7,7 @@ import '../editor/editor_settings.dart';
 import '../editor/lawyer_profile.dart';
 import '../editor/letterheads.dart';
 import '../editor/snippets.dart';
+import '../ai/ai_assistant.dart';
 import '../legal/legal_settings.dart';
 import '../platform/app_directories.dart';
 
@@ -35,6 +36,8 @@ class SettingsSync {
     'antetler.json',
     'editor.json',
     'hukuk.json',
+    // Whether the AI features are on, and the consent given once.
+    'yapay-zeka.json',
   ];
 
   /// A device being set up takes what its own other device has, whatever
@@ -108,6 +111,7 @@ class SettingsSync {
       if (names.contains(profile)) await LawyerProfile.reload();
       if (names.contains('editor.json')) await EditorSettings.instance.load();
       if (names.contains('hukuk.json')) await LegalSettings.instance.load();
+      if (names.contains('yapay-zeka.json')) await AiSettings.reload();
       if (names.contains('kaliplar.json')) await SnippetStore.reloadShared();
       if (names.contains('antetler.json')) {
         await LetterheadStore.reloadShared();

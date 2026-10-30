@@ -97,6 +97,8 @@ abstract final class SyncCaps {
     // The long UYAP job and the device running it: an older Folio would
     // run it too, not knowing whose it is (docs/uyap-is-sahipligi.md).
     'uyap-is': {jobOwner, hlc},
+    // The AI program's records of a case, each with its version.
+    'yapay-zeka': {hlc},
   };
 
   /// The capabilities [part] needs now: its row's that are in use here.

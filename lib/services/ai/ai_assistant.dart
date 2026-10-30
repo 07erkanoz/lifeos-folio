@@ -643,19 +643,22 @@ abstract final class AiAssistant {
   /// rules ([AiPrompts.core]) go apart, as the program's instructions.
   static String prompt({
     required AiTask task,
-    required String name,
-    required String text,
+    String? name,
+    String? text,
     String question = '',
     String? caseName,
+    String? note,
     List<({String question, String answer})> history = const [],
   }) {
-    final cut = text.length > maxCharacters;
+    final cut = text != null && text.length > maxCharacters;
     final body = cut ? text.substring(0, maxCharacters) : text;
     return [
-      '<belge ad="${name.replaceAll('"', "'")}">',
-      body,
-      if (cut) '[Belgenin geri kalanı uzunluğu yüzünden gönderilmedi.]',
-      '</belge>',
+      if (body != null) ...[
+        '<belge ad="${(name ?? 'belge').replaceAll('"', "'")}">',
+        body,
+        if (cut) '[Belgenin geri kalanı uzunluğu yüzünden gönderilmedi.]',
+        '</belge>',
+      ],
       for (final h in history) ...[
         '',
         'Önceki soru: ${h.question}',
@@ -663,9 +666,13 @@ abstract final class AiAssistant {
       ],
       if (caseName != null) ...[
         '',
-        'Bu belge $caseName dosyasına ait. Dosyanın bilgilerine ve diğer '
-            'evrakına Folio\'nun dosya araçlarıyla bakabilirsin.',
+        body != null
+            ? 'Bu belge $caseName dosyasına ait. Dosyanın bilgilerine ve diğer '
+                  'evrakına Folio\'nun dosya araçlarıyla bakabilirsin.'
+            : 'Soru $caseName dosyası hakkında. Dosyanın bilgilerine ve '
+                  'evrakına Folio\'nun dosya araçlarıyla bakabilirsin.',
       ],
+      if (note != null) ...['', note],
       '',
       AiPrompts.task(task, question: question),
     ].join('\n');
@@ -844,6 +851,12 @@ class AiSettings {
       }
     } catch (_) {}
     return _hold(const AiSettings());
+  }
+
+  /// Read again from its file: another own device's came (Senkron).
+  static Future<AiSettings> reload() {
+    _held = null;
+    return load();
   }
 
   static AiSettings _hold(AiSettings settings) {

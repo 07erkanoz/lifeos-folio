@@ -90,6 +90,11 @@ class OwnSync extends ChangeNotifier {
   /// whatever else is, for two own devices never to run it at once
   /// (docs/uyap-is-sahipligi.md).
   static const uyapJob = 'uyap-is';
+
+  /// What the lawyer's AI program left of their cases: conversations, the
+  /// findings kept and the drafts; between their own devices alone, never
+  /// to the office.
+  static const aiPart = 'yapay-zeka';
   static const _optIn = {officeClients};
   final _on = <String>{};
 
@@ -428,6 +433,19 @@ class OwnSync extends ChangeNotifier {
       _net.ownAnswers.remove(UyapOwnSync.kind);
       _net.ownAnswers.remove(UyapDocumentsSync.kind);
       _net.ownFiles.remove(UyapDocumentsSync.kind);
+    }
+    if (isOn(aiPart)) {
+      final db = await _database();
+      _net.ownParts[aiPart] = OwnPart(
+        export: () async => db.aiExport(),
+        merge: (theirs) async {
+          final changed = db.aiMerge(theirs);
+          if (changed) PortalSync.started?.notifyListeners();
+          return changed;
+        },
+      );
+    } else {
+      _net.ownParts.remove(aiPart);
     }
     if (isOn(agenda)) {
       final db = await _database();

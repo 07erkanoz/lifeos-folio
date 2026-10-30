@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../services/ai/ai_assistant.dart';
 import '../../services/office/office_known.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_peer.dart';
@@ -359,6 +360,7 @@ class _SyncPageState extends State<SyncPage> {
       OwnSync.noteTracking: 'Gizli notlar',
       OwnSync.ownProposals: 'Öneriler',
       OwnSync.ownShares: 'Dosya paylaşımları',
+      OwnSync.aiPart: 'Yapay zekâ kayıtları',
     };
     final what = [for (final p in parts.keys) names[p] ?? p];
     return '${what.join(', ')} bu cihazla eşitlenmiyor. Bu cihazdaki Folio '
@@ -469,6 +471,23 @@ class _SyncPageState extends State<SyncPage> {
           value: _sync.isOn(OwnSync.agenda),
           onChanged: (on) => unawaited(_sync.turn(OwnSync.agenda, on)),
         ),
+        // Not there at all while the AI features are off.
+        if (AiSettings.on.value)
+          SwitchListTile(
+            key: const ValueKey('sync-ai'),
+            secondary: const Icon(Icons.auto_awesome_outlined),
+            title: const Text(
+              'Yapay zekâ kayıtları',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: const Text(
+              'Dosyalarınızdaki yapay zekâ sohbetleri, kaydettiğiniz bulgular '
+              've taslaklar. Yalnız kendi cihazlarınıza gider, büroya gitmez.',
+              style: TextStyle(fontSize: 12),
+            ),
+            value: _sync.isOn(OwnSync.aiPart),
+            onChanged: (on) => unawaited(_sync.turn(OwnSync.aiPart, on)),
+          ),
         SwitchListTile(
           key: const ValueKey('sync-uyap'),
           secondary: const Icon(Icons.gavel_rounded),

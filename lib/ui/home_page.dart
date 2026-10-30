@@ -11,6 +11,7 @@ import '../services/sync/folder_sync.dart';
 import '../services/sync/own_sync.dart';
 import '../services/office/office_network.dart';
 import '../services/office/office_notices.dart';
+import '../services/platform/app_edition.dart';
 import '../services/platform/system_notices.dart';
 import '../services/portal/background_notices.dart';
 import '../services/portal/uyap_notice_alerts.dart';
@@ -981,7 +982,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     AiSettings.on.addListener(_aiSwitched);
-    if (AiAssistant.available) unawaited(AiSettings.load());
+    // A phone reads the switch too: the cases' AI tab follows it.
+    if (!AppEdition.isOfis) unawaited(AiSettings.load());
     UpdateCheck.instance.available.addListener(_updateAvailable);
     UpdateCheck.instance.start();
     _recentDocuments.load().then((_) {
@@ -4414,6 +4416,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 AiPanel(
                   path: file.path,
                   onClose: () => setState(() => _aiOpen = false),
+                  onOpen: (path) => unawaited(_addFiles([path], edit: true)),
                 ),
             ],
           ),
