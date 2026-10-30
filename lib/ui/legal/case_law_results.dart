@@ -22,7 +22,15 @@ class CaseLawResultList extends StatelessWidget {
     this.asked = false,
     this.compact = false,
     this.onPage,
+    this.reasons = const {},
+    this.stage,
   });
+
+  /// Why the AI program chose each decision, by its id.
+  final Map<String, String> reasons;
+
+  /// What the AI search is doing while [busy].
+  final String? stage;
 
   final CaseLawResults results;
   final bool busy;
@@ -44,9 +52,23 @@ class CaseLawResultList extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (busy) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 28),
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        child: Column(
+          children: [
+            const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            if (stage case final s?) ...[
+              const SizedBox(height: 10),
+              Text(
+                '$s…',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
       );
     }
     if (results.isEmpty) {
@@ -110,6 +132,7 @@ class CaseLawResultList extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 6),
               itemBuilder: (context, i) => _Row(
                 hit: results.hits[i],
+                reason: reasons[results.hits[i].documentId],
                 compact: compact,
                 onOpen: () => onOpen(results.hits[i]),
               ),
@@ -137,9 +160,17 @@ class CaseLawResultList extends StatelessWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.hit, required this.compact, required this.onOpen});
+  const _Row({
+    required this.hit,
+    required this.compact,
+    required this.onOpen,
+    this.reason,
+  });
 
   final CaseLawHit hit;
+
+  /// Why the AI program chose it, when it did.
+  final String? reason;
   final bool compact;
   final VoidCallback onOpen;
 
@@ -226,6 +257,30 @@ class _Row extends StatelessWidget {
                   ],
                 ],
               ),
+              if (reason case final r? when r.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_outlined,
+                      size: 14,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        r,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 1.4,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (hit.snippet.isNotEmpty) ...[
                 const SizedBox(height: 5),
                 Text(

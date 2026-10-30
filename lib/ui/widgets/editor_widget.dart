@@ -1192,7 +1192,15 @@ class _EditorWidgetState extends State<EditorWidget>
             ),
           ),
           Divider(height: 1, color: scheme.outlineVariant),
-          Expanded(child: CaseLawSearchScreen(bank: _caseLaw, compact: true)),
+          Expanded(
+            child: CaseLawSearchScreen(
+              bank: _caseLaw,
+              compact: true,
+              // The petition being written: what the AI search reads the
+              // question in.
+              document: () => _quillController.document.toPlainText(),
+            ),
+          ),
         ],
       ),
     );

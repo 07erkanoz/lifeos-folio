@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_case_law.dart';
 import '../../services/legal/case_law.dart';
+import '../ai/ai_dialogs.dart';
 import '../../services/legal/case_law_search.dart';
 import '../widgets/article_panel.dart';
 import '../widgets/notice.dart';
@@ -24,9 +27,14 @@ class CaseLawSearchScreen extends StatefulWidget {
     super.key,
     required this.bank,
     this.compact = false,
+    this.document,
   });
 
   final CaseLaw bank;
+
+  /// The document being written beside it, for the AI program to read the
+  /// question in (the editor's).
+  final String Function()? document;
 
   /// The narrow arrangement, for a phone or a side panel.
   final bool compact;
@@ -50,6 +58,14 @@ class _CaseLawSearchScreenState extends State<CaseLawSearchScreen> {
   var _settling = false;
   var _filtersOpen = false;
   int _run = 0;
+
+  /// Searched with the lawyer's AI program (AiCaseLawSearch): while the AI
+  /// features are on, unless the lawyer turns it off.
+  var _byAi = AiAssistant.shown;
+
+  /// Why the program chose each decision, by its id; what it is doing.
+  var _reasons = const <String, String>{};
+  String? _stage;
 
   @override
   void dispose() {
@@ -87,6 +103,10 @@ class _CaseLawSearchScreenState extends State<CaseLawSearchScreen> {
   Future<void> _search({int page = 1}) async {
     final query = _asSetUp.copyWith(page: page);
     if (query.isEmpty || query.kinds.isEmpty) return;
+    if (_byAi && AiAssistant.shown && query.hasWords && page == 1) {
+      return _searchByAi(query);
+    }
+    _reasons = const {};
     final run = ++_run;
     setState(() {
       _query = query;
@@ -117,6 +137,55 @@ class _CaseLawSearchScreenState extends State<CaseLawSearchScreen> {
     }, wanted: () => mounted && run == _run);
     if (!mounted || run != _run) return;
     setState(() => _settling = false);
+  }
+
+  /// The question as the lawyer wrote it, searched with their AI program.
+  Future<void> _searchByAi(CaseLawQuery query) async {
+    if (!await askAiConsent(context)) return;
+    final run = ++_run;
+    setState(() {
+      _query = query;
+      _busy = true;
+      _asked = true;
+      _reasons = const {};
+      _stage = 'Yapay zekâ hazırlanıyor';
+    });
+    var picks = const <AiCaseLawPick>[];
+    String? failed;
+    try {
+      picks = await AiCaseLawSearch.run(
+        bank: widget.bank,
+        question: query.words,
+        document: widget.document?.call() ?? '',
+        kinds: query.kinds,
+        onStage: (stage) {
+          if (mounted && run == _run) setState(() => _stage = stage);
+        },
+      );
+    } on AiFailure catch (e) {
+      failed = e.message;
+    } catch (e) {
+      failed = 'Arama yapılamadı: $e';
+    }
+    if (!mounted || run != _run) return;
+    setState(() {
+      _busy = false;
+      _stage = null;
+      _results = CaseLawResults(
+        hits: [for (final p in picks) p.hit],
+        total: picks.length,
+        page: 1,
+      );
+      _reasons = {
+        for (final p in picks)
+          if (p.reason.isNotEmpty) p.hit.documentId: p.reason,
+      };
+    });
+    if (failed != null) {
+      ScaffoldMessenger.maybeOf(context)
+        ?..clearSnackBars()
+        ..showSnackBar(noticeBar(failed, kind: NoticeKind.error));
+    }
   }
 
   Future<void> _open(CaseLawHit hit) async {
@@ -174,11 +243,16 @@ class _CaseLawSearchScreenState extends State<CaseLawSearchScreen> {
                   decoration: InputDecoration(
                     isDense: true,
                     prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                    hintText:
-                        'Kavram arayın — kıdem tazminatı giydirilmiş ücret',
-                    helperText:
-                        'Kelimelerin hepsi aranır. Tam ifade için "tırnak", '
-                        'hariç tutmak için -kelime yazabilirsiniz.',
+                    hintText: _byAi && AiAssistant.shown
+                        ? 'Meseleyi yazın — işçi izinlerini kullanmadan '
+                              'ayrıldı, izin ücreti istiyor'
+                        : 'Kavram arayın — kıdem tazminatı giydirilmiş ücret',
+                    helperText: _byAi && AiAssistant.shown
+                        ? 'Yapay zekâ arama ifadelerini kurar, Folio resmî '
+                              'bankada arar, yapay zekâ en ilgilileri seçer.'
+                        : 'Kelimelerin hepsi aranır. Tam ifade için '
+                              '"tırnak", hariç tutmak için -kelime '
+                              'yazabilirsiniz.',
                     helperMaxLines: 2,
                     border: const OutlineInputBorder(),
                   ),
@@ -200,6 +274,14 @@ class _CaseLawSearchScreenState extends State<CaseLawSearchScreen> {
             runSpacing: 6,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              if (AiAssistant.shown)
+                FilterChip(
+                  key: const ValueKey('case-law-ai'),
+                  avatar: const Icon(Icons.auto_awesome_outlined, size: 16),
+                  label: const Text('Yapay zekâyla'),
+                  selected: _byAi,
+                  onSelected: (on) => setState(() => _byAi = on),
+                ),
               for (final kind in CourtKind.values)
                 FilterChip(
                   label: Text(kind.label),
@@ -248,7 +330,10 @@ class _CaseLawSearchScreenState extends State<CaseLawSearchScreen> {
             asked: _asked,
             compact: widget.compact,
             onOpen: _open,
-            onPage: (page) => _search(page: page),
+            reasons: _reasons,
+            stage: _stage,
+            // The program's choice is one page.
+            onPage: _reasons.isNotEmpty ? null : (page) => _search(page: page),
           ),
         ),
       ],
