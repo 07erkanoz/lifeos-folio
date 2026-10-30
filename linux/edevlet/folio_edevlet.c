@@ -26,7 +26,17 @@ typedef struct {
   const gchar *redirect;
   gboolean got;
   GtkWidget *window;
+  // A page that failed to load, tried again in a moment: some lines cut a
+  // connection to e-Devlet now and then mid-handshake, and a browser that
+  // tries once shows the lawyer an error a second try would not have.
+  WebKitWebView *view;
+  gchar *again;
+  guint tries;
+  gboolean failed;
 } State;
+
+// How many times a page is tried again before its error is shown.
+#define TRIES 4
 
 // gtk_main_quit() doğrudan çağrılmaz: yönlendirme gtk_main() başlamadan
 // gelebilir; boşta kuyruğa alınca döngü başladığında güvenle kapanır.
@@ -96,6 +106,51 @@ static void uri_changed(WebKitWebView *view, GParamSpec *spec, gpointer data) {
   }
 }
 
+static gboolean load_again(gpointer data) {
+  State *s = data;
+  if (s->again && !s->got) webkit_web_view_load_uri(s->view, s->again);
+  return G_SOURCE_REMOVE;
+}
+
+// A page whose connection was cut is loaded again, a little later each
+// time; its error is shown only when it keeps failing. Stopped loads (the
+// return address held back above, a navigation replaced) are not errors.
+static gboolean load_failed(WebKitWebView *view, WebKitLoadEvent event,
+                            gchar *uri, GError *error, gpointer data) {
+  (void)view;
+  (void)event;
+  State *s = data;
+  s->failed = TRUE;
+  if (s->got || !uri || g_str_has_prefix(uri, s->redirect) ||
+      g_error_matches(error, WEBKIT_NETWORK_ERROR,
+                      WEBKIT_NETWORK_ERROR_CANCELLED) ||
+      error->domain == WEBKIT_POLICY_ERROR) {
+    return FALSE;
+  }
+  if (g_strcmp0(s->again, uri) != 0) {
+    g_free(s->again);
+    s->again = g_strdup(uri);
+    s->tries = 0;
+  }
+  if (s->tries >= TRIES) return FALSE;
+  s->tries++;
+  g_timeout_add(400 * s->tries, load_again, s);
+  return TRUE;
+}
+
+// A page that loaded clears the count: the next one has its own tries.
+static void load_changed(WebKitWebView *view, WebKitLoadEvent event,
+                         gpointer data) {
+  (void)view;
+  State *s = data;
+  if (event == WEBKIT_LOAD_STARTED) {
+    s->failed = FALSE;
+  } else if (event == WEBKIT_LOAD_FINISHED && !s->failed) {
+    g_clear_pointer(&s->again, g_free);
+    s->tries = 0;
+  }
+}
+
 // e-Devlet's e-imza page opens its help in a new window; it goes to the
 // system's browser rather than nowhere.
 static GtkWidget *new_window(WebKitWebView *view,
@@ -135,13 +190,20 @@ int main(int argc, char **argv) {
   }
   g_option_context_free(context);
 
-  State state = {.redirect = redirect, .got = FALSE, .window = NULL};
+  State state = {.redirect = redirect,
+                 .got = FALSE,
+                 .window = NULL,
+                 .view = NULL,
+                 .again = NULL,
+                 .tries = 0,
+                 .failed = FALSE};
 
   // Geçici bağlam: ortak bir bilgisayarda bir önceki kişinin e-Devlet
   // oturumu kalmaz; çerez ve önbellek diske hiç yazılmaz.
   WebKitWebContext *web = webkit_web_context_new_ephemeral();
   WebKitWebView *view = WEBKIT_WEB_VIEW(
       g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", web, NULL));
+  state.view = view;
 
   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   state.window = window;
@@ -167,6 +229,8 @@ int main(int argc, char **argv) {
   g_signal_connect(view, "decide-policy", G_CALLBACK(decide), &state);
   g_signal_connect(view, "notify::uri", G_CALLBACK(uri_changed), &state);
   g_signal_connect(view, "create", G_CALLBACK(new_window), &state);
+  g_signal_connect(view, "load-failed", G_CALLBACK(load_failed), &state);
+  g_signal_connect(view, "load-changed", G_CALLBACK(load_changed), &state);
   g_signal_connect(window, "destroy", G_CALLBACK(closed), NULL);
 
   gtk_widget_show_all(window);

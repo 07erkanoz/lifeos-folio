@@ -1,0 +1,8 @@
+{
+  "tr": "Linux'ta e-Devlet ile UYAP girişi, bağlantı ara sıra kesilen internet hatlarında artık hata sayfasında kalmaz. Kesilen bağlantı birkaç kez kendiliğinden yeniden denenir ve giriş sayfası açılır.",
+  "en": "On Linux, the e-Devlet login for UYAP no longer stops at an error page on internet lines that drop a connection now and then. A dropped connection is retried a few times by itself and the login page opens.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.8.1: Folio'yla aynı sürüm; Ofis'te değişiklik yok.",
+    "en": "LifeOS Ofis 1.8.1: the same release as Folio; nothing changed in Ofis."
+  }
+}
