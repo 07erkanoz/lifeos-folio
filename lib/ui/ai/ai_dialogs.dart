@@ -319,7 +319,8 @@ Future<bool> askAntigravityTools(BuildContext context) async {
           'karar araçları yalnız okur. Dosya ve evrak araçları yalnız '
           'Folio’dan sorduğunuz sorularda ve o soruya bağlı dosya için '
           'açılır.\n\n'
-          'Kaydı istediğiniz zaman Ayarlar’dan kaldırabilirsiniz.',
+          'Kaydı istediğiniz zaman Ayarlar’dan kaldırabilirsiniz. Folio’da '
+          'yapay zekâ özelliklerini kapattığınızda kayıt da kaldırılır.',
           style: TextStyle(fontSize: 13.5, height: 1.45),
         ),
       ),
