@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
-import '../help/help_button.dart';
 import 'case_ai_tab.dart';
 
 /// Yapay zekâ: the lawyer's conversations with their own AI program, a page
@@ -32,22 +31,6 @@ class AiPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Yapay zekâ',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -.5,
-                    ),
-                  ),
-                ),
-                HelpButton(Help.ai),
-              ],
-            ),
-            const SizedBox(height: 10),
             Expanded(
               child: Container(
                 clipBehavior: Clip.antiAlias,

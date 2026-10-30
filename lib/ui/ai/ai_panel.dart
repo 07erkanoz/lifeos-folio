@@ -893,9 +893,11 @@ class _AiPanelState extends State<AiPanel> {
             ],
           ),
         ),
-      if (t.steps.isNotEmpty || t.thought.isNotEmpty || t.recorded.isNotEmpty)
+      if (t.steps.isNotEmpty ||
+          t.thought.isNotEmpty ||
+          t.recorded.isNotEmpty ||
+          t.requests.isNotEmpty)
         _trace(t, scheme),
-      for (final r in t.requests) _request(r, scheme),
       if (t.answer case final a?) ...[
         AiMarkdown(a),
         Row(
@@ -948,7 +950,10 @@ class _AiPanelState extends State<AiPanel> {
   /// While it works: what it is doing, and for how long.
   Widget _status(_Turn t, ColorScheme scheme) {
     final open = t.steps.values.where((s) => !s.done).lastOrNull;
-    final label = open != null
+    final fetching = t.requests.where((r) => r.working).lastOrNull;
+    final label = fetching != null
+        ? 'Evrak UYAP’tan indiriliyor · ${fetching.title}'
+        : open != null
         ? open.label
         : t.live.isNotEmpty
         ? 'Yazıyor'
@@ -977,11 +982,12 @@ class _AiPanelState extends State<AiPanel> {
     );
   }
 
-  /// What the program did on the way, open while it works and folded when
-  /// the answer comes, unless the lawyer opened or folded it.
+  /// What the program did on the way, the documents it had downloaded
+  /// among it: folded, one line, unless the lawyer opens it; the line
+  /// under it says what it is doing now.
   Widget _trace(_Turn t, ColorScheme scheme) {
-    final running = t.answer == null && t.error == null;
-    final open = t.traceOpen ?? running;
+    final open = t.traceOpen ?? false;
+    final downloaded = t.requests.where((r) => r.outcome == 'İndirildi').length;
     final steps = t.steps.isNotEmpty
         ? t.steps.values.toList()
         : [for (final (i, l) in t.recorded.indexed) _Told('$i', l)];
@@ -1012,9 +1018,13 @@ class _AiPanelState extends State<AiPanel> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      steps.isEmpty
-                          ? 'Düşünme'
-                          : 'Yapılan incelemeler (${steps.length})',
+                      [
+                        steps.isEmpty
+                            ? 'Düşünme'
+                            : 'Yapılan incelemeler (${steps.length})',
+                        if (downloaded > 0)
+                          '$downloaded evrak UYAP’tan indirildi',
+                      ].join(' · '),
                       style: small.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -1028,6 +1038,7 @@ class _AiPanelState extends State<AiPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  for (final r in t.requests) _request(r, scheme),
                   for (final s in steps)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 3),
@@ -1677,29 +1688,19 @@ class _AiPanelState extends State<AiPanel> {
               ),
             )
           else ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  if (widget.path != null)
-                    FilledButton.icon(
-                      key: const ValueKey('ai-summary'),
-                      onPressed: _busy ? null : () => _ask(AiTask.summary),
-                      icon: const Icon(Icons.subject_rounded, size: 18),
-                      label: const Text('Özetle'),
-                    ),
-                  if (_busy)
-                    OutlinedButton.icon(
-                      key: const ValueKey('ai-stop'),
-                      onPressed: () => _cancel?.complete(),
-                      icon: const Icon(Icons.stop_rounded, size: 18),
-                      label: const Text('Durdur'),
-                    ),
-                ],
+            if (widget.path != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.icon(
+                    key: const ValueKey('ai-summary'),
+                    onPressed: _busy ? null : () => _ask(AiTask.summary),
+                    icon: const Icon(Icons.subject_rounded, size: 18),
+                    label: const Text('Özetle'),
+                  ),
+                ),
               ),
-            ),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1825,12 +1826,24 @@ class _AiPanelState extends State<AiPanel> {
                       ),
                     ),
                   ),
-                  IconButton(
-                    key: const ValueKey('ai-send'),
-                    tooltip: 'Sor',
-                    onPressed: _busy ? null : _send,
-                    icon: const Icon(Icons.send_rounded, size: 20),
-                  ),
+                  if (_busy)
+                    IconButton(
+                      key: const ValueKey('ai-stop'),
+                      tooltip: 'Durdur',
+                      onPressed: () => _cancel?.complete(),
+                      icon: Icon(
+                        Icons.stop_circle_rounded,
+                        size: 24,
+                        color: scheme.primary,
+                      ),
+                    )
+                  else
+                    IconButton(
+                      key: const ValueKey('ai-send'),
+                      tooltip: 'Sor',
+                      onPressed: _send,
+                      icon: const Icon(Icons.send_rounded, size: 20),
+                    ),
                 ],
               ),
             ),

@@ -135,8 +135,13 @@ abstract final class AiAssistant {
   /// The most of a document's text sent: the rest is left out, and said so.
   static const maxCharacters = 200000;
 
-  /// How long one answer may take.
-  static const timeout = Duration(minutes: 4);
+  /// How long a program may go quiet: no word of its work, no tool's
+  /// answer (a tool waits at most three minutes for Folio). A program
+  /// still working is not stopped, however long the case takes it.
+  static const timeout = Duration(minutes: 6);
+
+  /// The longest one answer may take all told.
+  static const longest = Duration(minutes: 30);
 
   /// Where the programs are looked for: the PATH Folio was started with
   /// (a desktop's is often short) and where their installers put them.
@@ -379,7 +384,11 @@ abstract final class AiAssistant {
         },
       }),
       '--print-timeout',
-      '${timeout.inSeconds}s',
+      '${longest.inSeconds}s',
+      if (tier != null) ...[
+        '--effort',
+        tier == AiTier.strong ? 'high' : 'medium',
+      ],
       if (model != null && model.isNotEmpty) ...['--model', model],
       if (resume != null) ...['--conversation', resume],
       // Written with its (empty) value: apart, agy takes the next flag
@@ -710,11 +719,14 @@ abstract final class AiAssistant {
         AiProvider.codex => AiEvents.codex,
         AiProvider.antigravity => AiEvents.antigravity,
       };
+      var heard = DateTime.now();
+      final began = heard;
       final reading = Future.wait([
         process.stdout
             .transform(utf8.decoder)
             .transform(const LineSplitter())
             .forEach((line) {
+              heard = DateTime.now();
               out.writeln(line);
               if (thread != null) {
                 if (threadIn(provider, line) case final id?) {
@@ -738,16 +750,37 @@ abstract final class AiAssistant {
           process.kill();
         }),
       );
-      final code = await process.exitCode.timeout(
-        timeout,
-        onTimeout: () {
-          process.kill();
-          throw AiFailure(
-            '${provider.label} ${timeout.inMinutes} dakikada yanıt vermedi.',
-            timedOut: true,
+      // Stopped only when it has gone quiet, or taken far too long.
+      final quiet = Completer<String>();
+      final watch = Timer.periodic(const Duration(seconds: 5), (_) {
+        final now = DateTime.now();
+        if (quiet.isCompleted) return;
+        if (now.difference(heard) > timeout) {
+          quiet.complete(
+            '${provider.label} ${timeout.inMinutes} dakikadır hiçbir şey '
+            'yapmadı; durduruldu.',
           );
-        },
-      );
+        } else if (now.difference(began) > longest) {
+          quiet.complete(
+            '${provider.label} ${longest.inMinutes} dakikada bitiremedi; '
+            'durduruldu.',
+          );
+        }
+      });
+      final int code;
+      try {
+        final ended = await Future.any<Object>([
+          process.exitCode,
+          quiet.future,
+        ]);
+        if (ended is String) {
+          process.kill();
+          throw AiFailure(ended, timedOut: true);
+        }
+        code = ended as int;
+      } finally {
+        watch.cancel();
+      }
       await reading;
       if (stopped) throw const AiFailure('Durduruldu.');
       final last = File(p.join(folder.path, '.yanit.txt'));

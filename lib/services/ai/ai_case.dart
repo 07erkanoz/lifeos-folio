@@ -419,7 +419,7 @@ class FolioCaseTools {
           'İnmemiş bir evrakı Folio\'ya UYAP\'tan indirtir; Folio UYAP\'a '
           'bağlıysa indirir, sonra evrak_oku ile oku. UYAP bağlı değilse '
           'durum bunu söyler; ısrar etme. Soruyu yanıtlamak için gereken '
-          'evrakı indir; bir soruda en çok 10 evrak, nedenini kısaca yaz.',
+          'evrakı indir, nedenini kısaca yaz; inmiş evrakı yeniden isteme.',
       'inputSchema': {
         'type': 'object',
         'properties': {

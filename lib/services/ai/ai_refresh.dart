@@ -101,9 +101,6 @@ abstract final class AiRefresh {
     }
   }
 
-  /// The most documents downloaded for one question.
-  static const downloadsPerQuestion = 10;
-
   /// The documents the program asked for in [session], downloaded from
   /// UYAP one after another while Folio is connected: [told] hears each
   /// (its title, and then what came of it).
@@ -127,12 +124,6 @@ abstract final class AiRefresh {
       final String state, note;
       if (record == null) {
         (state, note) = ('yapilamadi', 'Konuşma bir dosyaya bağlı değil.');
-      } else if (session.handled.length > downloadsPerQuestion) {
-        (state, note) = (
-          'sinir',
-          'Bir soruda en çok $downloadsPerQuestion evrak indirilir; elindekiyle '
-              'sürdür.',
-        );
       } else {
         (state, note) = await _download(record, r.key);
       }
@@ -140,7 +131,6 @@ abstract final class AiRefresh {
       told?.call(r.id, title, switch (state) {
         'indirildi' => 'İndirildi',
         'uyap_bagli_degil' => 'UYAP’a bağlı değil; indirilemedi',
-        'sinir' => 'Sınır doldu; indirilmedi',
         _ => 'İndirilemedi',
       });
     }
@@ -153,6 +143,11 @@ abstract final class AiRefresh {
     final store = UyapCaseStore.instance;
     final panel = UyapCasePanelController(store: store);
     try {
+      // Already here: read, not asked of UYAP again.
+      if (await store.load(record.court, record.number) case final now?
+          when store.fileOf(now, key) != null) {
+        return ('indirildi', 'Zaten inmiş; evrak_oku ile oku.');
+      }
       if (!panel.connected) {
         return (
           'uyap_bagli_degil',

@@ -193,8 +193,8 @@ abstract final class Help {
         'Bir taslak yazarsa Dosyaya kaydet ve aç ile dosyanın klasörüne '
             'UDF olarak kaydedilir ve editörde açılır.',
         'İnmemiş bir evrakı okuması gerekirse Folio UYAP’a bağlıysa '
-            'evrakı kendiliğinden indirir; bir soruda en çok 10 evrak '
-            'indirilir.',
+            'evrakı kendiliğinden indirir. İnmiş evrak yeniden '
+            'indirilmez.',
       ]),
       HelpPart('Telefondan sormak', [
         'Telefonda Yapay zekâ sayfasında ya da bir dosyanın Yapay zekâ '
