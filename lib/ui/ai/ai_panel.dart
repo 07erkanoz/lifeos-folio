@@ -20,8 +20,11 @@ class AiPanel extends StatefulWidget {
 }
 
 class _Turn {
-  _Turn(this.question);
+  _Turn(this.question, this.by);
   final String question;
+
+  /// Who answers: the program and the tier, as the lawyer sees them.
+  final String by;
   String? answer;
   String? error;
 }
@@ -89,8 +92,11 @@ class _AiPanelState extends State<AiPanel> {
     final provider = _provider;
     if (provider == null || _busy) return;
     if (!await askAiConsent(context)) return;
+    final settings = await AiSettings.load();
+    final model = settings.modelFor(provider, task.tier);
     final turn = _Turn(
       task == AiTask.summary ? 'Belgeyi özetle' : question.trim(),
+      '${provider.label} · ${task.tier.label}',
     );
     final cancel = Completer<void>();
     setState(() {
@@ -106,7 +112,7 @@ class _AiPanelState extends State<AiPanel> {
           'Bu belgede okunabilir metin bulunamadı; gönderilecek bir şey yok.',
         );
       }
-      if ((await AiSettings.load()).mask) {
+      if (settings.mask) {
         text = AiAssistant.maskIdentityNumbers(text);
       }
       final history = [
@@ -126,6 +132,7 @@ class _AiPanelState extends State<AiPanel> {
       final answer = await AiAssistant.ask(
         provider,
         prompt,
+        model: model,
         cancel: cancel.future,
       );
       turn.answer = answer;
@@ -181,7 +188,11 @@ class _AiPanelState extends State<AiPanel> {
             padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
             child: Row(
               children: [
-                Icon(Icons.auto_awesome_outlined, size: 18, color: scheme.primary),
+                Icon(
+                  Icons.auto_awesome_outlined,
+                  size: 18,
+                  color: scheme.primary,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -223,7 +234,10 @@ class _AiPanelState extends State<AiPanel> {
                   'bulunamadı. Ayarlar › Yapay zekâ’dan Claude, Codex ya da '
                   'Antigravity’yi kurabilir ve oturum açabilirsiniz.',
                   key: const ValueKey('ai-none'),
-                  style: TextStyle(color: scheme.onSurfaceVariant, height: 1.45),
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
                 ),
               ),
             )
@@ -289,11 +303,23 @@ class _AiPanelState extends State<AiPanel> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6, bottom: 2),
+                            child: Text(
+                              t.by,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
                           if (t.answer case final a?)
                             SelectableText(
                               a,
-                              style: const TextStyle(fontSize: 13.5, height: 1.5),
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                height: 1.5,
+                              ),
                             )
                           else if (t.error case final e?)
                             Text(

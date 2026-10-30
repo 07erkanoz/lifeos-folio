@@ -21,6 +21,9 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
   List<AiStatus>? _found;
   bool _store = false;
 
+  /// The models each installed program offers.
+  final _offered = <AiProvider, List<String>>{};
+
   @override
   void initState() {
     super.initState();
@@ -31,11 +34,18 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     final settings = await AiSettings.load();
     final found = await AiAssistant.statuses();
     final store = AiAssistant.hasStore;
+    final offered = {
+      for (final s in found)
+        if (s.installed) s.provider: await AiAssistant.models(s.provider),
+    };
     if (!mounted) return;
     setState(() {
       _settings = settings;
       _found = found;
       _store = store;
+      _offered
+        ..clear()
+        ..addAll(offered);
     });
   }
 
@@ -103,6 +113,39 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     );
   }
 
+  /// The model [provider] runs for [tier], to choose from what it offers.
+  Widget _model(AiProvider provider, AiTier tier) {
+    final current = _settings.modelFor(provider, tier);
+    final choices = {current, ...?_offered[provider]}.toList();
+    return SettingsRow(
+      key: ValueKey('ai-model-${provider.name}-${tier.name}'),
+      icon: tier == AiTier.strong
+          ? Icons.workspace_premium_outlined
+          : Icons.bolt_outlined,
+      title: '${provider.label} · ${tier.label}',
+      subtitle: tier.detail,
+      trailing: DropdownButton<String>(
+        value: current,
+        isDense: true,
+        underline: const SizedBox.shrink(),
+        items: [
+          for (final m in choices) DropdownMenuItem(value: m, child: Text(m)),
+        ],
+        onChanged: (m) {
+          if (m == null) return;
+          final models = Map<String, String>.of(_settings.models);
+          final key = '${provider.name}.${tier.name}';
+          if (m == provider.defaultModel(tier)) {
+            models.remove(key);
+          } else {
+            models[key] = m;
+          }
+          unawaited(_save(_settings.copyWith(models: models)));
+        },
+      ),
+    );
+  }
+
   AiProvider? get _firstUsable {
     for (final s in _found ?? const <AiStatus>[]) {
       if (s.usable) return s.provider;
@@ -135,6 +178,10 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
           )
         else
           for (final s in found) _program(s),
+        if (found != null)
+          for (final s in found)
+            if (s.installed)
+              for (final tier in AiTier.values) _model(s.provider, tier),
         SettingsRow(
           key: const ValueKey('ai-mask'),
           icon: Icons.shield_outlined,

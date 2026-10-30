@@ -31,6 +31,13 @@ void main() {
       );
       // --bare would not read the subscription's sign-in.
       expect(args, isNot(contains('--bare')));
+      // Folio's rules in place of its coding persona; the tier's model.
+      expect(args, containsAllInOrder(['--system-prompt', AiPrompts.core]));
+      expect(
+        AiAssistant.arguments(AiProvider.claude, '/tmp/x', model: 'opus'),
+        containsAllInOrder(['--model', 'opus']),
+      );
+      expect(args, isNot(contains('--model')));
     });
 
     test(
@@ -54,6 +61,21 @@ void main() {
           expect(args, containsAllInOrder(['--disable', f]));
         }
         expect(args.last, '-');
+        expect(
+          args,
+          containsAllInOrder([
+            '-c',
+            'model_instructions_file="/tmp/x/talimat.md"',
+          ]),
+        );
+        expect(
+          AiAssistant.arguments(
+            AiProvider.codex,
+            '/tmp/x',
+            model: 'gpt-6-luna',
+          ),
+          containsAllInOrder(['-m', 'gpt-6-luna']),
+        );
       },
     );
 
@@ -64,7 +86,11 @@ void main() {
       final line = AiAssistant.input(AiProvider.antigravity, 'Özetle');
       final json = jsonDecode(line.trim()) as Map;
       expect(json['event'], 'user');
-      expect((json['message'] as Map)['content'], 'Özetle');
+      // It takes no instructions apart: Folio's rules lead the message.
+      expect(
+        (json['message'] as Map)['content'],
+        '${AiPrompts.core}\n\nÖzetle',
+      );
       expect(AiAssistant.input(AiProvider.claude, 'Özetle'), 'Özetle');
     });
 
@@ -153,7 +179,9 @@ void main() {
     );
     expect(short, contains('<belge ad="rapor.pdf">'));
     expect(short, contains('Bilirkişi raporu metni'));
-    expect(short, contains('Hiçbir araç'));
+    // Folio's rules go apart, as the program's instructions.
+    expect(short, isNot(contains(AiPrompts.core)));
+    expect(short, contains('Evrak türü'));
     expect(short, isNot(contains('gönderilmedi')));
     final long = AiAssistant.prompt(
       task: AiTask.question,
@@ -166,8 +194,8 @@ void main() {
       long,
       contains('[Belgenin geri kalanı uzunluğu yüzünden gönderilmedi.]'),
     );
-    expect(long, contains('Soru: Kim?'));
-    expect(long.trim().endsWith('Süre ne?'), isTrue);
+    expect(long, contains('Önceki soru: Kim?'));
+    expect(long.trim().endsWith('Soru: Süre ne?'), isTrue);
   });
 
   test('only identity numbers that check out are hidden', () {
@@ -203,6 +231,25 @@ void main() {
     expect(revoked.consented, isFalse);
     expect(revoked.consentAt, isNull);
     expect(revoked.provider, AiProvider.codex);
+  });
+
+  test('two tiers: each task its own, each program a model for each, the '
+      'lawyer\'s choice kept', () {
+    expect(AiTask.summary.tier, AiTier.normal);
+    expect(AiTask.question.tier, AiTier.strong);
+    expect(AiProvider.claude.defaultModel(AiTier.normal), 'sonnet');
+    expect(AiProvider.claude.defaultModel(AiTier.strong), 'opus');
+    expect(AiProvider.codex.defaultModel(AiTier.normal), 'gpt-6-luna');
+    expect(AiProvider.codex.defaultModel(AiTier.strong), 'gpt-6.1-sol');
+    expect(
+      AiProvider.antigravity.defaultModel(AiTier.normal),
+      startsWith('gemini-3.8-flash'),
+    );
+    const chosen = AiSettings(models: {'codex.strong': 'gpt-6.1-terra'});
+    expect(chosen.modelFor(AiProvider.codex, AiTier.strong), 'gpt-6.1-terra');
+    expect(chosen.modelFor(AiProvider.codex, AiTier.normal), 'gpt-6-luna');
+    final read = AiSettings.fromJson(jsonDecode(jsonEncode(chosen.toJson())));
+    expect(read.models, {'codex.strong': 'gpt-6.1-terra'});
   });
 
   test('a sign-in\'s address and code read from what the program says', () {

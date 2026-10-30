@@ -10,6 +10,9 @@ import '../pdf/pdf_pages.dart';
 import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
 import '../search/text_extractor.dart';
+import 'ai_prompts.dart';
+
+export 'ai_prompts.dart';
 
 /// The AI programs a lawyer may have on this computer, each signed in with
 /// the lawyer's own subscription. Folio runs them itself, with no terminal:
@@ -57,6 +60,16 @@ enum AiProvider {
     AiProvider.claude => 'lifeos:claude-code',
     AiProvider.codex => 'lifeos:codex-cli',
     AiProvider.antigravity => 'lifeos:antigravity-cli',
+  };
+
+  /// The model each tier runs, unless the lawyer chose another.
+  String defaultModel(AiTier tier) => switch ((this, tier)) {
+    (AiProvider.claude, AiTier.normal) => 'sonnet',
+    (AiProvider.claude, AiTier.strong) => 'opus',
+    (AiProvider.codex, AiTier.normal) => 'gpt-6-luna',
+    (AiProvider.codex, AiTier.strong) => 'gpt-6.1-sol',
+    (AiProvider.antigravity, AiTier.normal) => 'gemini-3.8-flash-medium',
+    (AiProvider.antigravity, AiTier.strong) => 'gemini-4-argon-high',
   };
 }
 
@@ -202,77 +215,90 @@ abstract final class AiAssistant {
   /// The arguments that run [provider] once, read-only and with every tool
   /// it has turned off; the question comes on its standard input.
   @visibleForTesting
-  static List<String> arguments(AiProvider provider, String folder) =>
-      switch (provider) {
-        AiProvider.claude => [
-          '-p',
-          '--output-format',
-          'json',
-          '--tools',
-          '',
-          '--restricted',
-          '--strict-mcp-config',
-          '--no-session-persistence',
-          '--disable-slash-commands',
-        ],
-        AiProvider.codex => [
-          'exec',
-          '--json',
-          '--ephemeral',
-          '--ignore-user-config',
-          '--skip-git-repo-check',
-          '-s',
-          'read-only',
-          '-C',
-          folder,
-          // Read-only stops writing, not reading: every tool goes, the
-          // shell's and the web's included (a document's words could
-          // otherwise send it somewhere).
-          for (final feature in const [
-            'shell_tool',
-            'unified_exec',
-            'browser_use',
-            'browser_use_external',
-            'computer_use',
-            'in_app_browser',
-            'apps',
-            'multi_agent',
-            'plugins',
-            'image_generation',
-            'view_image',
-          ]) ...['--disable', feature],
-          '-c',
-          'web_search="disabled"',
-          '-c',
-          'include_environment_context=false',
-          '-c',
-          'include_permissions_instructions=false',
-          '-o',
-          p.join(folder, '.yanit.txt'),
-          '-',
-        ],
-        AiProvider.antigravity => [
-          '--input-format',
-          'stream-json',
-          '--output-format',
-          'stream-json',
-          '--sandbox',
-          '--disable-slash-commands',
-          '--print-timeout',
-          '${timeout.inSeconds}s',
-          // Written with its (empty) value: apart, agy takes the next flag
-          // for the prompt.
-          '--print=',
-        ],
-      };
+  static List<String> arguments(
+    AiProvider provider,
+    String folder, {
+    String? model,
+  }) => switch (provider) {
+    AiProvider.claude => [
+      '-p',
+      // Folio's rules in place of the program's own coding persona.
+      '--system-prompt',
+      AiPrompts.core,
+      if (model != null && model.isNotEmpty) ...['--model', model],
+      '--output-format',
+      'json',
+      '--tools',
+      '',
+      '--restricted',
+      '--strict-mcp-config',
+      '--no-session-persistence',
+      '--disable-slash-commands',
+    ],
+    AiProvider.codex => [
+      'exec',
+      '--json',
+      '--ephemeral',
+      '--ignore-user-config',
+      '--skip-git-repo-check',
+      '-s',
+      'read-only',
+      '-C',
+      folder,
+      // Read-only stops writing, not reading: every tool goes, the
+      // shell's and the web's included (a document's words could
+      // otherwise send it somewhere).
+      for (final feature in const [
+        'shell_tool',
+        'unified_exec',
+        'browser_use',
+        'browser_use_external',
+        'computer_use',
+        'in_app_browser',
+        'apps',
+        'multi_agent',
+        'plugins',
+        'image_generation',
+        'view_image',
+      ]) ...['--disable', feature],
+      '-c',
+      'web_search="disabled"',
+      '-c',
+      'include_environment_context=false',
+      '-c',
+      'include_permissions_instructions=false',
+      // Folio's rules in place of the coding agent's instructions.
+      '-c',
+      'model_instructions_file="${p.join(folder, 'talimat.md')}"',
+      if (model != null && model.isNotEmpty) ...['-m', model],
+      '-o',
+      p.join(folder, '.yanit.txt'),
+      '-',
+    ],
+    AiProvider.antigravity => [
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--sandbox',
+      '--disable-slash-commands',
+      '--print-timeout',
+      '${timeout.inSeconds}s',
+      if (model != null && model.isNotEmpty) ...['--model', model],
+      // Written with its (empty) value: apart, agy takes the next flag
+      // for the prompt.
+      '--print=',
+    ],
+  };
 
   /// [prompt] as [provider] reads it on its standard input.
   @visibleForTesting
   static String input(AiProvider provider, String prompt) => switch (provider) {
     AiProvider.antigravity =>
+      // It takes no instructions of its own: Folio's rules lead the message.
       '${jsonEncode({
         'event': 'user',
-        'message': {'role': 'user', 'content': prompt},
+        'message': {'role': 'user', 'content': '${AiPrompts.core}\n\n$prompt'},
       })}\n',
     _ => prompt,
   };
@@ -363,6 +389,7 @@ abstract final class AiAssistant {
   static Future<String> ask(
     AiProvider provider,
     String prompt, {
+    String? model,
     Future<void>? cancel,
   }) async {
     final path = find(provider.command);
@@ -372,9 +399,13 @@ abstract final class AiAssistant {
     // An empty folder of its own: nothing of the lawyer's for it to see.
     final folder = await Directory.systemTemp.createTemp('folio-yz-');
     try {
+      if (provider == AiProvider.codex) {
+        await File(p.join(folder.path, 'talimat.md'))
+            .writeAsString(AiPrompts.core);
+      }
       final process = await Process.start(
         path,
-        arguments(provider, folder.path),
+        arguments(provider, folder.path, model: model),
         workingDirectory: folder.path,
         environment: environment(),
       );
@@ -431,8 +462,9 @@ abstract final class AiAssistant {
         orElse: () => '',
       );
 
-  /// The question Folio asks for [task] about the document [name] whose
-  /// [text] it took out; [history] the questions and answers before it.
+  /// The message for [task] about the document [name] whose [text] Folio
+  /// took out; [history] the questions and answers before it. Folio's
+  /// rules ([AiPrompts.core]) go apart, as the program's instructions.
   static String prompt({
     required AiTask task,
     required String name,
@@ -442,31 +474,56 @@ abstract final class AiAssistant {
   }) {
     final cut = text.length > maxCharacters;
     final body = cut ? text.substring(0, maxCharacters) : text;
-    final ask = switch (task) {
-      AiTask.summary =>
-        'Bu belgeyi bir avukat için Türkçe özetle: belgenin ne olduğu, '
-            'önemli olgular, tarihler, tutarlar ve sonuç. Kısa maddeler '
-            'halinde yaz.',
-      AiTask.question => question.trim(),
-    };
     return [
-      'Sen bir Türk avukatın belge okuma yardımcısısın. Yalnız aşağıdaki '
-          'belgeye dayan; belgede olmayan bir şeyi bilmediğini söyle. Hiçbir '
-          'araç, komut ya da dosya kullanma. Yanıtı düz metin olarak, Türkçe '
-          'ver.',
-      '',
       '<belge ad="${name.replaceAll('"', "'")}">',
       body,
       if (cut) '[Belgenin geri kalanı uzunluğu yüzünden gönderilmedi.]',
       '</belge>',
       for (final h in history) ...[
         '',
-        'Soru: ${h.question}',
-        'Yanıt: ${h.answer}',
+        'Önceki soru: ${h.question}',
+        'Önceki yanıt: ${h.answer}',
       ],
       '',
-      ask,
+      AiPrompts.task(task, question: question),
     ].join('\n');
+  }
+
+  /// The models [provider] offers, for the lawyer to choose from: Claude's
+  /// names that always lead to its newest, the others' own lists.
+  static Future<List<String>> models(AiProvider provider) async {
+    try {
+      switch (provider) {
+        case AiProvider.claude:
+          return const ['fable', 'opus', 'sonnet', 'haiku'];
+        case AiProvider.codex:
+          final home =
+              Platform.environment['CODEX_HOME'] ??
+              p.join(Platform.environment['HOME'] ?? '', '.codex');
+          final cache = File(p.join(home, 'models_cache.json'));
+          if (!await cache.exists()) return const [];
+          final json = jsonDecode(await cache.readAsString());
+          final list = json is Map ? json['models'] : json;
+          return [
+            if (list is List)
+              for (final m in list)
+                if (m is Map && (m['slug'] ?? m['id']) is String)
+                  (m['slug'] ?? m['id']) as String,
+          ];
+        case AiProvider.antigravity:
+          final path = find(provider.command);
+          if (path == null) return const [];
+          final r = await Process.run(path, [
+            'models',
+          ], environment: environment()).timeout(const Duration(seconds: 30));
+          return [
+            for (final line in '${r.stdout}'.split('\n'))
+              if (line.contains('\t')) line.split('\t').first.trim(),
+          ];
+      }
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// The text of the document at [path], read away from the screen (a
@@ -500,9 +557,6 @@ abstract final class AiAssistant {
   }
 }
 
-/// What the lawyer asked of a document.
-enum AiTask { summary, question }
-
 /// What the lawyer agreed to once, and how Folio uses the AI programs; in
 /// Folio's own folder.
 class AiSettings {
@@ -512,6 +566,7 @@ class AiSettings {
     this.consentBy,
     this.mask = true,
     this.provider,
+    this.models = const {},
   });
 
   /// The consent text's version; one given to an older text no longer
@@ -528,6 +583,13 @@ class AiSettings {
   /// The program the lawyer chose; the first usable one when null.
   final AiProvider? provider;
 
+  /// Models the lawyer chose, by `<program>.<tier>` (`codex.strong`).
+  final Map<String, String> models;
+
+  /// The model [provider] runs for [tier].
+  String modelFor(AiProvider provider, AiTier tier) =>
+      models['${provider.name}.${tier.name}'] ?? provider.defaultModel(tier);
+
   bool get consented => consentVersion == currentConsent;
 
   AiSettings copyWith({
@@ -536,6 +598,7 @@ class AiSettings {
     String? consentBy,
     bool? mask,
     AiProvider? provider,
+    Map<String, String>? models,
     bool revoke = false,
   }) => AiSettings(
     consentVersion: revoke ? null : consentVersion ?? this.consentVersion,
@@ -543,6 +606,7 @@ class AiSettings {
     consentBy: revoke ? null : consentBy ?? this.consentBy,
     mask: mask ?? this.mask,
     provider: provider ?? this.provider,
+    models: models ?? this.models,
   );
 
   Map<String, Object?> toJson() => {
@@ -551,6 +615,7 @@ class AiSettings {
     if (consentBy != null) 'onaylayan': consentBy,
     'tcGizle': mask,
     if (provider != null) 'saglayici': provider!.name,
+    if (models.isNotEmpty) 'modeller': models,
   };
 
   static AiSettings fromJson(Object? json) {
@@ -562,6 +627,12 @@ class AiSettings {
       consentBy: json['onaylayan'] as String?,
       mask: json['tcGizle'] != false,
       provider: AiProvider.values.asNameMap()['${json['saglayici']}'],
+      models: {
+        if (json['modeller'] case final Map m)
+          for (final e in m.entries)
+            if (e.key is String && e.value is String)
+              e.key as String: e.value as String,
+      },
     );
   }
 
