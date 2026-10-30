@@ -21,12 +21,16 @@ class CaseAiTab extends StatefulWidget {
     required this.record,
     required this.database,
     this.onOpenPath,
+    this.onChanged,
   });
 
   final String caseKey;
   final UyapCaseRecord? record;
   final Future<PortalDatabase> Function() database;
   final ValueChanged<String>? onOpenPath;
+
+  /// Something kept or taken off: the tab's count read again.
+  final VoidCallback? onChanged;
 
   @override
   State<CaseAiTab> createState() => _CaseAiTabState();
@@ -56,6 +60,7 @@ class _CaseAiTabState extends State<CaseAiTab> {
       _drafts = newest(AiMemory.draft, 'zaman');
       _loaded = true;
     });
+    widget.onChanged?.call();
   }
 
   static String _day(Object? at) {
@@ -346,7 +351,10 @@ class _CaseAiTabState extends State<CaseAiTab> {
                 padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
                 child: Text(
                   AiMemory.kinds[kind] ?? kind,
-                  style: TextStyle(fontSize: 11.5, color: scheme.outline),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               for (final f in byKind[kind]!) _finding(f, scheme),
@@ -427,7 +435,9 @@ class _CaseAiTabState extends State<CaseAiTab> {
                           ].join(' · '),
                     style: TextStyle(
                       fontSize: 11,
-                      color: wrong != null ? scheme.error : scheme.outline,
+                      color: wrong != null
+                          ? scheme.error
+                          : scheme.onSurfaceVariant,
                     ),
                   ),
                 ),

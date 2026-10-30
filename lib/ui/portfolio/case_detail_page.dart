@@ -2662,6 +2662,11 @@ class _CaseDetailPageState extends State<CaseDetailPage> {
       record: _c.record,
       database: () => _db,
       onOpenPath: widget.onOpenPath,
+      onChanged: () async {
+        final n = (await _db).aiCounts(widget.caseKey).values;
+        final count = n.fold(0, (a, b) => a + b);
+        if (mounted && count != _aiCount) setState(() => _aiCount = count);
+      },
     ),
   };
 
