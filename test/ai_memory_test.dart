@@ -211,6 +211,36 @@ void main() {
       expect(findings.last['tur'], 'cikarim');
       // Taken once.
       expect(await session.proposals(), isEmpty);
+      // A citation the official sources do not have turns it down.
+      tools.citations = (text) async => {
+        'atiflar': [
+          if (text.contains('2099'))
+            {'yazilan': 'Yargıtay 9. HD, 2099/1 E.', 'durum': 'yok'}
+          else if (text.contains('m.17'))
+            {'yazilan': '4857 m.17', 'durum': 'bulundu'},
+        ],
+      };
+      final cited = await tools.call('bulgu_oner', {
+        'bulgular': [
+          {
+            'tur': 'strateji',
+            'metin':
+                'Yargıtay 9. HD, 2099/1 E. kararına göre ek rapor istenir.',
+          },
+          {
+            'tur': 'strateji',
+            'metin': 'İhbar süresi eksik hesaplanmış.',
+            'kaynaklar': ['4857 s. İş K. m.17'],
+          },
+        ],
+      });
+      expect(cited['sunulan'], 1);
+      expect((cited['reddedilen'] as List).single['neden'], contains('2099'));
+      expect(
+        ((await session.proposals()).single.body['bulgular'] as List)
+            .single['denetim'],
+        'dogrulandi',
+      );
       final drafted = await tools.call('taslak_oner', {
         'baslik': 'Rapora itiraz',
         'metin': 'SAYIN MAHKEMEYE\n\nRapora itiraz ederiz.',

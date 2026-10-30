@@ -265,104 +265,112 @@ class _CaseAiTabState extends State<CaseAiTab> {
       byKind.putIfAbsent('${f['tur']}', () => []).add(f);
     }
     final standing = _findings.where((f) => f['yanlis'] == null).length;
-    return ListView(
+    // In the case page's own scroll, as its other tabs.
+    return Padding(
       key: const ValueKey('case-ai-tab'),
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
-      children: [
-        if (asks)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.icon(
-                key: const ValueKey('case-ai-ask'),
-                onPressed: () => _ask(),
-                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-                label: const Text('Dosyaya sor'),
-              ),
-            ),
-          )
-        else if (!AiAssistant.available)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(
-              'Bu cihazda yapay zekâya soru sorulmaz; bilgisayarınızda '
-              'yapılanlar burada okunur.',
-              style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
-            ),
-          ),
-        _heading('Sohbetler'),
-        if (_chats.isEmpty)
-          _empty('Bu dosyada henüz yapay zekâ sohbeti yok.')
-        else
-          for (final c in _chats)
-            Card(
-              margin: const EdgeInsets.only(bottom: 6),
-              child: ListTile(
-                key: ValueKey('case-ai-chat-${c['id']}'),
-                dense: true,
-                title: Text(
-                  '${c['baslik'] ?? ''}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  [
-                    _day(c['guncellendi']),
-                    if (AiMemory.turnsOf(c).lastOrNull?['yazan'] case final by?)
-                      '$by',
-                    '${AiMemory.turnsOf(c).length} soru',
-                  ].join(' · '),
-                ),
-                onTap: () => asks ? _ask(c) : _read(c),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (v) => v == 'oku' ? _read(c) : _removeChat(c),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'oku', child: Text('Oku')),
-                    PopupMenuItem(value: 'sil', child: Text('Sohbeti sil')),
-                  ],
-                ),
-              ),
-            ),
-        _heading('Bulgular · $standing geçerli'),
-        if (_findings.isEmpty)
-          _empty(
-            'Kaydedilmiş bulgu yok. Yapay zekâ bulgu önerdiğinde panelde '
-            'onayınıza sunulur.',
-          )
-        else
-          for (final kind in [
-            ...AiMemory.kinds.keys.where(byKind.containsKey),
-            ...byKind.keys.where((k) => !AiMemory.kinds.containsKey(k)),
-          ]) ...[
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (asks)
             Padding(
-              padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
-              child: Text(
-                AiMemory.kinds[kind] ?? kind,
-                style: TextStyle(fontSize: 11.5, color: scheme.outline),
-              ),
-            ),
-            for (final f in byKind[kind]!) _finding(f, scheme),
-          ],
-        _heading('Taslaklar'),
-        if (_drafts.isEmpty)
-          _empty('Yapay zekânın yazıp kaydettiğiniz taslak yok.')
-        else
-          for (final d in _drafts)
-            Card(
-              margin: const EdgeInsets.only(bottom: 6),
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.description_outlined),
-                title: Text('${d['baslik'] ?? ''}'),
-                subtitle: Text(
-                  '${_day(d['zaman'])} · Yapay zekâ taslağı · '
-                  '${d['yazan'] ?? ''}',
+              padding: const EdgeInsets.only(top: 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  key: const ValueKey('case-ai-ask'),
+                  onPressed: () => _ask(),
+                  icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                  label: const Text('Dosyaya sor'),
                 ),
-                onTap: () => _openDraft(d),
+              ),
+            )
+          else if (!AiAssistant.available)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                'Bu cihazda yapay zekâya soru sorulmaz; bilgisayarınızda '
+                'yapılanlar burada okunur.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
-      ],
+          _heading('Sohbetler'),
+          if (_chats.isEmpty)
+            _empty('Bu dosyada henüz yapay zekâ sohbeti yok.')
+          else
+            for (final c in _chats)
+              Card(
+                margin: const EdgeInsets.only(bottom: 6),
+                child: ListTile(
+                  key: ValueKey('case-ai-chat-${c['id']}'),
+                  dense: true,
+                  title: Text(
+                    '${c['baslik'] ?? ''}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    [
+                      _day(c['guncellendi']),
+                      if (AiMemory.turnsOf(c).lastOrNull?['yazan']
+                          case final by?)
+                        '$by',
+                      '${AiMemory.turnsOf(c).length} soru',
+                    ].join(' · '),
+                  ),
+                  onTap: () => asks ? _ask(c) : _read(c),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (v) => v == 'oku' ? _read(c) : _removeChat(c),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'oku', child: Text('Oku')),
+                      PopupMenuItem(value: 'sil', child: Text('Sohbeti sil')),
+                    ],
+                  ),
+                ),
+              ),
+          _heading('Bulgular · $standing geçerli'),
+          if (_findings.isEmpty)
+            _empty(
+              'Kaydedilmiş bulgu yok. Yapay zekâ bulgu önerdiğinde panelde '
+              'onayınıza sunulur.',
+            )
+          else
+            for (final kind in [
+              ...AiMemory.kinds.keys.where(byKind.containsKey),
+              ...byKind.keys.where((k) => !AiMemory.kinds.containsKey(k)),
+            ]) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
+                child: Text(
+                  AiMemory.kinds[kind] ?? kind,
+                  style: TextStyle(fontSize: 11.5, color: scheme.outline),
+                ),
+              ),
+              for (final f in byKind[kind]!) _finding(f, scheme),
+            ],
+          _heading('Taslaklar'),
+          if (_drafts.isEmpty)
+            _empty('Yapay zekânın yazıp kaydettiğiniz taslak yok.')
+          else
+            for (final d in _drafts)
+              Card(
+                margin: const EdgeInsets.only(bottom: 6),
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.description_outlined),
+                  title: Text('${d['baslik'] ?? ''}'),
+                  subtitle: Text(
+                    '${_day(d['zaman'])} · Yapay zekâ taslağı · '
+                    '${d['yazan'] ?? ''}',
+                  ),
+                  onTap: () => _openDraft(d),
+                ),
+              ),
+        ],
+      ),
     );
   }
 
@@ -415,7 +423,7 @@ class _CaseAiTabState extends State<CaseAiTab> {
                             _day(f['zaman']),
                             if (f['yazan'] case final by?) '$by',
                             if (f['denetim'] == 'dogrulandi')
-                              'alıntı evrakta var',
+                              'kaynağında denetlendi',
                           ].join(' · '),
                     style: TextStyle(
                       fontSize: 11,

@@ -32,7 +32,10 @@ class FolioMcp {
        _caseLaw = caseLaw ?? CaseLaw(),
        _bank = bank ?? BedestenLegislation(),
        _laws = laws ?? CitationScanner.load,
-       _courts = courts ?? DecisionScanner.load;
+       _courts = courts ?? DecisionScanner.load {
+    // A finding's citations are looked up as an answer's are.
+    caseTools?.citations = _check;
+  }
 
   final Legislation _legislation;
   final CaseLaw _caseLaw;

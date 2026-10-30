@@ -22,10 +22,16 @@ Future<String> writeAiDraft(
   await folder.create(recursive: true);
   final safe = title.trim().isEmpty
       ? 'Yapay zekâ taslağı'
-      : title.trim().replaceAll(RegExp(r'[\\/:*?"<>|\n\r\t]'), '-');
-  var file = File(p.join(folder.path, '$safe.udf'));
+      : title
+            .trim()
+            .replaceAll(RegExp(r'[\\/:*?"<>|\n\r\t]'), '-')
+            // A name ending in a dot or a space is not one every system
+            // keeps: "… E." would be "… E..udf".
+            .replaceAll(RegExp(r'[. ]+$'), '');
+  final name = safe.isEmpty ? 'Yapay zekâ taslağı' : safe;
+  var file = File(p.join(folder.path, '$name.udf'));
   for (var i = 2; await file.exists(); i++) {
-    file = File(p.join(folder.path, '$safe ($i).udf'));
+    file = File(p.join(folder.path, '$name ($i).udf'));
   }
   final blocks = <DocBlock>[];
   var gap = false;

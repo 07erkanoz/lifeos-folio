@@ -187,6 +187,10 @@ class FolioCaseTools {
   final Future<List<Map<String, Object?>>> Function(String kind, String caseKey)
   _records;
 
+  /// Folio's check of the law and decision citations in a text
+  /// (FolioMcp's atif_dogrula), given by the server the tools run in.
+  Future<Map<String, Object?>> Function(String text)? citations;
+
   /// How long a download waits for the lawyer and UYAP.
   final Duration patience;
   final Duration every;
@@ -593,6 +597,40 @@ class FolioCaseTools {
             'neden': 'Alıntı gösterilen evrakta birebir geçmiyor.',
           });
           continue;
+        }
+      }
+      // The articles and decisions it cites, looked up: one the official
+      // sources do not have turns it down.
+      if (citations case final check?) {
+        final cited = [
+          text,
+          for (final s in sources)
+            if (!s.startsWith('evrak:')) s,
+        ].join('\n');
+        List<Map> found = const [];
+        try {
+          found = [
+            for (final a
+                in (await check(cited))['atiflar'] as List? ?? const [])
+              if (a is Map) a,
+          ];
+        } catch (_) {}
+        final missing = [
+          for (final a in found)
+            if (a['durum'] == 'yok' || a['durum'] == 'mulga') '${a['yazilan']}',
+        ];
+        if (missing.isNotEmpty) {
+          refused.add({
+            'metin': text,
+            'neden':
+                'Atıf resmî kaynakta yok ya da mülga: ${missing.join(', ')}',
+          });
+          continue;
+        }
+        if (quotes.isEmpty &&
+            found.isNotEmpty &&
+            found.every((a) => a['durum'] == 'bulundu')) {
+          state = 'dogrulandi';
         }
       }
       offered.add({

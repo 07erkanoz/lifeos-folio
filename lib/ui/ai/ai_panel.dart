@@ -598,7 +598,7 @@ class _AiPanelState extends State<AiPanel> {
                 subtitle: Text(
                   [
                     ...?(f['kaynaklar'] as List?)?.map((k) => '$k'),
-                    if (f['denetim'] == 'dogrulandi') 'alıntı evrakta var',
+                    if (f['denetim'] == 'dogrulandi') 'kaynağında denetlendi',
                   ].join(' · '),
                   style: TextStyle(
                     fontSize: 11,
