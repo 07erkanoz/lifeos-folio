@@ -1,0 +1,8 @@
+{
+  "tr": "Linux'ta yapay zekâ sohbetinde düzeltmeler: dosyayı uzun inceleyen model artık 4 dakikada kesilmez; yalnız uzun süre hiçbir şey yapmazsa durdurulur. Evrak indirmede soru başına sınır kalktı ve inmiş evrak yeniden indirilmez. Bulgular sorulmadan dosyanın hafızasına kaydedilir. Yapılan incelemeler kapalı durur, Durdur düğmesi gönder düğmesinin yerindedir ve cevap yazılırken yukarı kaydırılabilir. Bağlantı kesildiğinde karar ve mevzuat denetimi yeniden denenir.",
+  "en": "Fixes to the AI chat on Linux: a model reviewing a case at length is no longer stopped after 4 minutes, only when it does nothing for a long time. There is no longer a per-question limit on downloads, and documents already downloaded are not downloaded again. Findings are kept in the case's memory without asking. The steps taken stay folded, the Stop button takes the Send button's place, and the conversation can be scrolled up while an answer is written. Decision and legislation checks are retried when a connection drops.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.8.3: Folio'yla aynı sürüm; Ofis'te değişiklik yok.",
+    "en": "LifeOS Ofis 1.8.3: the same release as Folio; nothing changed in Ofis."
+  }
+}
