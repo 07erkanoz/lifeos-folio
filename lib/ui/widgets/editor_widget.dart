@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import '../../services/speech/speech_models.dart';
 import '../../services/speech/speech_session.dart';
+import '../../services/platform/document_write.dart';
 import '../../services/platform/phone_document_save.dart';
 
 import 'dart:async';
@@ -907,6 +908,10 @@ class _EditorWidgetState extends State<EditorWidget>
   /// is saved somewhere else — the original on disk must stay protected either
   /// way.
   bool _sourceSigned = false;
+
+  /// The document on disk as last read or written here; a save over it
+  /// asks first when another program changed it since.
+  DiskStamp? _diskStamp;
   bool _isSaving = false;
   bool _isPrinting = false;
   final _editorFocus = FocusNode(debugLabel: 'document-editor');
@@ -4719,8 +4724,10 @@ class _EditorWidgetState extends State<EditorWidget>
   /// signature only when it opened the file, so without this the banner
   /// stayed away until the document was opened again.
   Future<void> _takeSignature(String path) async {
+    final stamp = await DiskStamp.of(path);
     final signed = UdfReader.readBytes(await File(path).readAsBytes());
     if (!mounted) return;
+    _diskStamp = stamp;
     setState(() {
       _savedPath = path;
       _savedFormat = EvrakFormat.udf;
@@ -4874,6 +4881,31 @@ class _EditorWidgetState extends State<EditorWidget>
   );
 
   /// The same question, for a signed file picked in the save dialog.
+  Future<bool> _confirmExternalOverwrite() async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Belge başka bir yerde değiştirildi'),
+          content: const Text(
+            'Bu dosya, siz burada açtıktan sonra başka bir programda '
+            'değiştirilmiş. Kaydederseniz sizin hâliniz geçerli olur; '
+            'öbür hâli belge geçmişinde saklanır.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('external-overwrite'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Benim hâlimi kaydet'),
+            ),
+          ],
+        ),
+      ) ==
+      true;
+
   Future<bool> _confirmSignedOverwrite() async =>
       await showDialog<bool>(
         context: context,
@@ -5087,9 +5119,14 @@ class _EditorWidgetState extends State<EditorWidget>
       _signatureNoticeShown = false;
       _savedPath = null;
       _savedFormat = null;
+      _diskStamp = null;
     });
     unawaited(_holdDocument(carry: false));
     try {
+      // Before reading: a change made while it is read is a change too.
+      final stamp = await DiskStamp.of(path);
+      if (!mounted || generation != _loadGeneration) return;
+      _diskStamp = stamp;
       final pdfText = format == EvrakFormat.pdf
           ? await widget.initialPdfTextLoader?.call()
           : null;
@@ -5385,6 +5422,13 @@ class _EditorWidgetState extends State<EditorWidget>
         }
         return false;
       }
+      // Changed by another program since it was opened or saved here: its
+      // version goes to the history, but only when the lawyer says so.
+      final overExternal =
+          !PhoneDocumentSave.here &&
+          await (_diskStamp?.changedAt(savePath)) == true;
+      if (overExternal && !await _confirmExternalOverwrite()) return false;
+      if (!mounted) return false;
       final source = widget.initialFilePath;
       final overSource =
           !PhoneDocumentSave.here &&
@@ -5434,9 +5478,26 @@ class _EditorWidgetState extends State<EditorWidget>
             }
             return false;
           }
+          // The same promise for the other program's version.
+          if (!kept && overExternal) {
+            if (mounted) {
+              showNotice(
+                context,
+                'Belgenin üzerine yazılmadı',
+                detail:
+                    'Başka programdaki hâli belge geçmişine saklanamadı. '
+                    'Değişikliklerinizi başka bir adla kaydedebilirsiniz.',
+                kind: NoticeKind.error,
+              );
+            }
+            return false;
+          }
         }
-        // Keep the destination semantics (including existing symlinks).
-        await file.writeAsBytes(outBytes, flush: true);
+        // Whole or not at all; through a link, the file it points at.
+        await writeDocument(savePath, outBytes);
+        if (targetFormat != EvrakFormat.pdf) {
+          _diskStamp = await DiskStamp.of(savePath);
+        }
         // The file on disk carries no signature any more.
         if (overSource) _sourceSigned = false;
       }
