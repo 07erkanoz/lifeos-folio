@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter_quill/flutter_quill.dart';
-import 'package:pdf/pdf.dart';
 
 import '../../models/document_model.dart';
 import 'editor_sheets.dart';
@@ -31,11 +30,10 @@ abstract final class EditorPages {
         : math.max(page.marginBottom, page.footerOffset + footer),
   );
 
-  /// The sheet, in points: A4, turned for a landscape page.
+  /// The sheet, in points: the document's (A4 unless it says otherwise),
+  /// turned for a landscape page.
   static ({double width, double height}) sheet(DocPageProperties page) =>
-      page.landscape
-      ? (width: PdfPageFormat.a4.height, height: PdfPageFormat.a4.width)
-      : (width: PdfPageFormat.a4.width, height: PdfPageFormat.a4.height);
+      page.sheet;
 
   /// The pages the editor lays its lines out on, in pixels.
   static QuillPageGeometry geometry(

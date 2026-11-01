@@ -143,9 +143,8 @@ class PdfService {
     final baseFamily = baseStyle?.family ?? 'Times New Roman';
     final baseSize = baseStyle?.size ?? 12.0;
     final p = model.pageProperties;
-    final pageFormat = p.landscape
-        ? PdfPageFormat.a4.landscape
-        : PdfPageFormat.a4;
+    final sheet = p.sheet;
+    final pageFormat = PdfPageFormat(sheet.width, sheet.height);
     final width = pageFormat.width - p.marginLeft - p.marginRight;
     final height = pageFormat.height - p.marginTop - p.marginBottom;
     if (width <= 0 || height <= 0) {

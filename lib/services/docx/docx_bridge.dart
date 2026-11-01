@@ -13,6 +13,7 @@ import 'package:xml/xml.dart' show XmlBuilder;
 import '../../models/document_model.dart';
 import '../editor/tab_stops.dart';
 import '../layout/page_numbers.dart';
+import 'docx_regions.dart';
 
 class DocxBridge {
   static Future<DocModel?> readFile(String filePath) async {
@@ -27,16 +28,24 @@ class DocxBridge {
 
   static Future<DocModel?> readBytes(Uint8List bytes) async {
     try {
-      final patched = _preprocessDocxForReading(bytes);
+      final regions = DocxPageRegions.read(bytes);
+      final patched = _preprocessDocxForReading(bytes, regions);
       final doc = await DocxReader.loadFromBytes(patched);
-      return _docxToModel(doc, defaultTabStop: _defaultTabStop(bytes));
+      return _docxToModel(
+        doc,
+        defaultTabStop: _defaultTabStop(bytes),
+        regions: regions,
+      );
     } catch (e) {
       debugPrint('DocxBridge.readBytes hatası: $e');
       return null;
     }
   }
 
-  static Uint8List _preprocessDocxForReading(Uint8List rawBytes) {
+  static Uint8List _preprocessDocxForReading(
+    Uint8List rawBytes, [
+    DocxPageRegions? regions,
+  ]) {
     try {
       final input = ZipDecoder().decodeBytes(rawBytes);
       final output = Archive();
@@ -56,6 +65,11 @@ class DocxBridge {
 
         if (isPatchableXml) {
           content = _stripFalseToggleElements(content);
+        }
+        // Only the header and footer Folio keeps, for the reader to take
+        // those rather than the first and the last it meets.
+        if (file.name == 'word/document.xml' && regions != null) {
+          content = regions.keepChosen(String.fromCharCodes(content)).codeUnits;
         }
 
         output.addFile(ArchiveFile(file.name, content.length, content));
@@ -497,10 +511,74 @@ class DocxBridge {
   static DocModel _docxToModel(
     DocxBuiltDocument doc, {
     double? defaultTabStop,
+    DocxPageRegions? regions,
   }) {
+    final blocks = _blocksOf(doc.elements);
+
+    if (blocks.isEmpty) {
+      blocks.add(DocBlock(plainText: ''));
+    }
+
+    final section = doc.section;
+    // The header and footer, their page number taken apart from their text
+    // as UYAP keeps it, and the pages they show on.
+    final pageRegions = <String, List<DocBlock>>{};
+    final regionAttrs = <String, Map<String, String>>{};
+    for (final kind in const ['header', 'footer']) {
+      final region = regions?.regions[kind];
+      final children = kind == 'header'
+          ? section?.header?.children
+          : section?.footer?.children;
+      if (region == null || children == null || region.unplaced) continue;
+      var kept = children;
+      final at = region.numberAt;
+      if (at != null) {
+        // Taken apart only when the parts match what was read, one to one.
+        if (children.length != region.blocks) continue;
+        kept = [...children]..removeAt(at);
+      }
+      final content = _blocksOf(kept);
+      pageRegions[kind] = content.isEmpty ? [DocBlock(plainText: '')] : content;
+      regionAttrs[kind] = {
+        ...region.placement,
+        ...?region.numbering?.toAttributes(),
+      };
+    }
+    // The sheet upright, whichever way the file gives it.
+    final width = section?.effectiveWidth.toDouble();
+    final height = section?.effectiveHeight.toDouble();
+    return DocModel(
+      blocks: blocks,
+      // Word's tab rules, not UYAP's: see TabRules.
+      metadata: {
+        'tabRules': 'word',
+        'defaultTabStop': defaultTabStop ?? 36.0,
+        if (regionAttrs.isNotEmpty) 'pageRegionAttrs': regionAttrs,
+      },
+      pageRegions: pageRegions,
+      pageProperties: section == null || width == null || height == null
+          ? const DocPageProperties()
+          : DocPageProperties(
+              marginLeft: section.marginLeft / 20,
+              marginRight: section.marginRight / 20,
+              marginTop: section.marginTop / 20,
+              marginBottom: section.marginBottom / 20,
+              landscape:
+                  section.orientation == DocxPageOrientation.landscape ||
+                  width > height,
+              headerOffset: regions?.headerOffset ?? 20.0,
+              footerOffset: regions?.footerOffset ?? 20.0,
+              paperWidth: math.min(width, height) / 20,
+              paperHeight: math.max(width, height) / 20,
+            ),
+    );
+  }
+
+  /// Word's blocks as Folio's: the body's, a header's or a footer's.
+  static List<DocBlock> _blocksOf(Iterable<DocxNode> elements) {
     final blocks = <DocBlock>[];
 
-    for (final element in doc.elements) {
+    for (final element in elements) {
       if (element is DocxParagraph) {
         final images = element.children.whereType<DocxInlineImage>();
         final paragraph = _paragraphToBlock(element);
@@ -561,25 +639,7 @@ class DocxBridge {
       }
     }
 
-    if (blocks.isEmpty) {
-      blocks.add(DocBlock(plainText: ''));
-    }
-
-    final section = doc.section;
-    return DocModel(
-      blocks: blocks,
-      // Word's tab rules, not UYAP's: see TabRules.
-      metadata: {'tabRules': 'word', 'defaultTabStop': defaultTabStop ?? 36.0},
-      pageProperties: section == null
-          ? const DocPageProperties()
-          : DocPageProperties(
-              marginLeft: section.marginLeft / 20,
-              marginRight: section.marginRight / 20,
-              marginTop: section.marginTop / 20,
-              marginBottom: section.marginBottom / 20,
-              landscape: section.orientation == DocxPageOrientation.landscape,
-            ),
-    );
+    return blocks;
   }
 
   static DocBlock _imageToBlock(DocxInlineImage image) => DocBlock(
@@ -862,7 +922,10 @@ class DocxBridge {
     return DocxBuiltDocument(
       elements: built.elements,
       section: DocxSectionDef(
-        pageSize: DocxPageSize.a4,
+        // A4 by name; any other sheet (Letter, Legal…) by its size.
+        pageSize: p.isA4 ? DocxPageSize.a4 : DocxPageSize.custom,
+        customWidth: p.isA4 ? null : (p.paperWidth * 20).round(),
+        customHeight: p.isA4 ? null : (p.paperHeight * 20).round(),
         orientation: p.landscape
             ? DocxPageOrientation.landscape
             : DocxPageOrientation.portrait,

@@ -328,8 +328,8 @@ class RtfWriter {
       head.write('}\n');
     }
     head
-      ..write('\\paperw${((page.landscape ? 841.89 : 595.28) * _twip).round()}')
-      ..write('\\paperh${((page.landscape ? 595.28 : 841.89) * _twip).round()}')
+      ..write('\\paperw${(page.sheet.width * _twip).round()}')
+      ..write('\\paperh${(page.sheet.height * _twip).round()}')
       ..write('\\margl${(page.marginLeft * _twip).round()}')
       ..write('\\margr${(page.marginRight * _twip).round()}')
       ..write('\\margt${(page.marginTop * _twip).round()}')

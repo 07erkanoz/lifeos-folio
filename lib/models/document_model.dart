@@ -57,6 +57,15 @@ class DocPageProperties {
   final double headerOffset;
   final double footerOffset;
 
+  /// The sheet standing upright, in points: A4 unless the document says
+  /// otherwise (a Word file may be Letter, Legal or any size); [landscape]
+  /// turns it. UDF knows A4 only.
+  final double paperWidth;
+  final double paperHeight;
+
+  /// A4, 210 × 297 mm, in points.
+  static const a4Width = 595.2755905511812, a4Height = 841.8897637795277;
+
   const DocPageProperties({
     this.marginTop = 42.525,
     this.marginBottom = 42.525,
@@ -65,7 +74,41 @@ class DocPageProperties {
     this.landscape = false,
     this.headerOffset = 20.0,
     this.footerOffset = 20.0,
+    this.paperWidth = a4Width,
+    this.paperHeight = a4Height,
   });
+
+  /// Whether the sheet is A4, to the hundredth of a millimetre.
+  bool get isA4 =>
+      (paperWidth - a4Width).abs() < .03 &&
+      (paperHeight - a4Height).abs() < .03;
+
+  /// The sheet as it lies on the page: turned for [landscape].
+  ({double width, double height}) get sheet => landscape
+      ? (width: paperHeight, height: paperWidth)
+      : (width: paperWidth, height: paperHeight);
+
+  DocPageProperties copyWith({
+    double? marginTop,
+    double? marginBottom,
+    double? marginLeft,
+    double? marginRight,
+    bool? landscape,
+    double? headerOffset,
+    double? footerOffset,
+    double? paperWidth,
+    double? paperHeight,
+  }) => DocPageProperties(
+    marginTop: marginTop ?? this.marginTop,
+    marginBottom: marginBottom ?? this.marginBottom,
+    marginLeft: marginLeft ?? this.marginLeft,
+    marginRight: marginRight ?? this.marginRight,
+    landscape: landscape ?? this.landscape,
+    headerOffset: headerOffset ?? this.headerOffset,
+    footerOffset: footerOffset ?? this.footerOffset,
+    paperWidth: paperWidth ?? this.paperWidth,
+    paperHeight: paperHeight ?? this.paperHeight,
+  );
 }
 
 class DocStyleDef {

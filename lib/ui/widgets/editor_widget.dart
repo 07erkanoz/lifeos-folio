@@ -82,7 +82,6 @@ import 'suggestion_list.dart';
 import 'document_ruler.dart';
 import 'editor_page_viewport.dart';
 
-import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 
@@ -527,6 +526,12 @@ class _EditorWidgetState extends State<EditorWidget>
       "udf": base64Encode(UdfWriter.writeBytes(value.$1)),
       "delta": value.$2,
       "saveFormat": value.$4,
+      // UDF knows A4 only: another sheet (a Word file's) is kept beside it.
+      if (!value.$1.pageProperties.isA4)
+        "paper": [
+          value.$1.pageProperties.paperWidth,
+          value.$1.pageProperties.paperHeight,
+        ],
       "protected": base64Encode(
         UdfWriter.writeBytes(DocModel(blocks: value.$3)),
       ),
@@ -616,11 +621,15 @@ class _EditorWidgetState extends State<EditorWidget>
       final bytes = await DocumentHistory.instance.read(entry);
       String? delta;
       List<DocBlock>? protected;
+      List<num>? paper;
       List<int> content = bytes;
       var format = EvrakFormat.fromExtension(entry.format);
       if (entry.format == "rich-draft") {
         final snapshot = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
         delta = snapshot["delta"] as String;
+        if (snapshot["paper"] case [final num width, final num height]) {
+          paper = [width, height];
+        }
         final preferred = EvrakFormat.fromExtension(
           snapshot["saveFormat"] as String? ?? 'udf',
         );
@@ -650,15 +659,21 @@ class _EditorWidgetState extends State<EditorWidget>
       if (!mounted) return false;
       final mapped = DocDeltaMap.modeldenDelta(model);
       final metadata = _sourceModel?.metadata ?? const <String, dynamic>{};
+      final page = paper == null
+          ? model.pageProperties
+          : model.pageProperties.copyWith(
+              paperWidth: paper[0].toDouble(),
+              paperHeight: paper[1].toDouble(),
+            );
       _sourceModel = DocModel(
         blocks: model.blocks,
         styles: model.styles,
-        pageProperties: model.pageProperties,
+        pageProperties: page,
         pageRegions: model.pageRegions,
         metadata: metadata,
       );
       _korunanBloklar = protected ?? mapped.korunanlar;
-      _pageProperties = model.pageProperties;
+      _pageProperties = page;
       _quillController.document = delta == null
           ? Document.fromDelta(mapped.delta)
           : Document.fromJson(jsonDecode(delta) as List);
@@ -1631,6 +1646,8 @@ class _EditorWidgetState extends State<EditorWidget>
     page.landscape,
     page.headerOffset,
     page.footerOffset,
+    page.paperWidth,
+    page.paperHeight,
   ];
 
   /// The saved text, decoded once for each time it is saved, and its length.
@@ -5993,18 +6010,17 @@ class _EditorWidgetState extends State<EditorWidget>
                                       )) {
                                         return _flowing(context, constraints);
                                       }
-                                      // A4 exactly, as the preview lays it out: the
-                                      // 595.28 this used to round to made the page a
-                                      // hair wider, enough for a word the preview
-                                      // put on the next row to stay on this one.
-                                      final widthPoints =
-                                          _pageProperties.landscape
-                                          ? PdfPageFormat.a4.height
-                                          : PdfPageFormat.a4.width;
-                                      final heightPoints =
-                                          _pageProperties.landscape
-                                          ? PdfPageFormat.a4.width
-                                          : PdfPageFormat.a4.height;
+                                      // The sheet exactly, as the preview lays it
+                                      // out: the 595.28 A4 used to round to made
+                                      // the page a hair wider, enough for a word
+                                      // the preview put on the next row to stay
+                                      // on this one.
+                                      final (
+                                        width: widthPoints,
+                                        height: heightPoints,
+                                      ) = EditorPages.sheet(
+                                        _pageProperties,
+                                      );
                                       // The page is laid out in points and drawn
                                       // larger (see EditorUnits).
                                       const scale = EditorUnits.pixelsPerPoint;
@@ -6030,25 +6046,15 @@ class _EditorWidgetState extends State<EditorWidget>
                                       ) => setState(() {
                                         _recovery.changed();
                                         _checkEditedSoon();
-                                        _pageProperties = DocPageProperties(
-                                          marginLeft: horizontal
-                                              ? start
-                                              : _pageProperties.marginLeft,
-                                          marginRight: horizontal
-                                              ? end
-                                              : _pageProperties.marginRight,
-                                          marginTop: horizontal
-                                              ? _pageProperties.marginTop
-                                              : start,
-                                          marginBottom: horizontal
-                                              ? _pageProperties.marginBottom
-                                              : end,
-                                          landscape: _pageProperties.landscape,
-                                          headerOffset:
-                                              _pageProperties.headerOffset,
-                                          footerOffset:
-                                              _pageProperties.footerOffset,
-                                        );
+                                        _pageProperties = horizontal
+                                            ? _pageProperties.copyWith(
+                                                marginLeft: start,
+                                                marginRight: end,
+                                              )
+                                            : _pageProperties.copyWith(
+                                                marginTop: start,
+                                                marginBottom: end,
+                                              );
                                         // A header breaks its lines at the page's
                                         // width.
                                         _measureRegionsSoon();
