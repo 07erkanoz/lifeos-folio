@@ -14,7 +14,7 @@ import 'app_directories.dart';
 class ViewerRegistration {
   static const linuxApplicationId = 'com.erkanoz.evrak_convert';
   static const mimeTypes =
-      'application/pdf;application/x-uyap-udf;application/udf;application/x-udf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.text;text/plain;text/html;text/markdown;text/csv;text/tab-separated-values;application/json;application/xml;text/xml;image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;image/svg+xml;';
+      'application/pdf;application/rtf;text/rtf;application/msword;application/x-uyap-udf;application/udf;application/x-udf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.text;text/plain;text/html;text/markdown;text/csv;text/tab-separated-values;application/json;application/xml;text/xml;image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;image/svg+xml;';
   // UYAP's Linux package registers application/udf. A competing higher-weight
   // glob hides UYAP from GNOME's Open With list even though it remains installed.
   static const udfMime = '''<?xml version="1.0" encoding="UTF-8"?>
@@ -30,7 +30,7 @@ class ViewerRegistration {
       '''[Desktop Entry]
 Type=Application
 Name=LifeOS Folio
-Comment=Evrak arama, önizleme ve dönüştürme
+Comment=$_comment
 Exec=${quoteExec(executable)} %F
 Icon=$icon
 Terminal=false
@@ -39,6 +39,17 @@ StartupNotify=true
 StartupWMClass=$linuxApplicationId
 MimeType=$mimeTypes
 ''';
+
+  static const _comment = 'Evrak arama, önizleme ve dönüştürme';
+
+  /// Where the system keeps programs' entries (XDG_DATA_DIRS).
+  static List<String> _systemDataDirs() {
+    final dirs = Platform.environment['XDG_DATA_DIRS'];
+    return (dirs == null || dirs.isEmpty ? '/usr/local/share:/usr/share' : dirs)
+        .split(':')
+        .where((d) => d.isNotEmpty)
+        .toList();
+  }
 
   /// UDF's other names, which `udfMime` makes aliases of application/udf.
   static const udfAliases = {'application/x-uyap-udf', 'application/x-udf'};
@@ -167,8 +178,17 @@ MimeType=$mimeTypes
     required List<int> icon,
     required List<ViewerFileType> types,
     Future<ProcessResult> Function(String, List<String>) run = runCommand,
+    List<String>? systemDirs,
   }) async {
     final applications = p.join(base, 'applications');
+    // Installed as a package (LifeOS's /usr/share): its own entry names the
+    // program and every type it reads; one written here would stand over
+    // it with Folio's bare path, so the package's is the one made default.
+    final packaged = (systemDirs ?? _systemDataDirs()).any(
+      (d) =>
+          File(p.join(d, 'applications', '$linuxApplicationId.desktop'))
+              .existsSync(),
+    );
     // Publish dependencies first; publish the complete desktop entry last.
     await replaceFileIfChanged(
       File(
@@ -205,10 +225,21 @@ MimeType=$mimeTypes
         throw StateError('UDF dosya türü kaydedilemedi: ${result.stderr}');
       }
     }
-    final entryChanged = await replaceFileIfChanged(
-      File(p.join(applications, '$linuxApplicationId.desktop')),
-      utf8.encode(desktopEntry(executable, linuxApplicationId)),
-    );
+    final own = File(p.join(applications, '$linuxApplicationId.desktop'));
+    var entryChanged = false;
+    if (packaged) {
+      // One written here by an earlier Folio goes: the package's shows.
+      if (own.existsSync() &&
+          own.readAsStringSync().contains('Comment=$_comment')) {
+        own.deleteSync();
+        entryChanged = true;
+      }
+    } else {
+      entryChanged = await replaceFileIfChanged(
+        own,
+        utf8.encode(desktopEntry(executable, linuxApplicationId)),
+      );
+    }
     if (entryChanged) {
       final result = await tool('update-desktop-database', [applications]);
       if (result != null && result.exitCode != 0) {

@@ -23,6 +23,8 @@ class ViewerFileType {
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       ],
     ),
+    ViewerFileType('RTF', ['rtf'], ['application/rtf', 'text/rtf']),
+    ViewerFileType('Word 97-2003', ['doc'], ['application/msword']),
     ViewerFileType(
       'OpenDocument',
       ['odt'],

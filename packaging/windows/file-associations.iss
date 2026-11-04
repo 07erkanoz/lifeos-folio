@@ -32,6 +32,28 @@ Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.docx\shell\LifeOSF
 Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.docx\shell\LifeOSFolio.Edit"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\lifeos_folio.exe"",0"; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.docx\shell\LifeOSFolio.Edit"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Document"; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.docx\shell\LifeOSFolio.Edit\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --edit -- ""%1"""; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\.rtf\OpenWithProgids"; ValueType: string; ValueName: "LifeOSEvrak.Document"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\Applications\lifeos_folio.exe\SupportedTypes"; ValueType: string; ValueName: ".rtf"; ValueData: ""; Tasks: associations
+Root: HKCU; Subkey: "Software\LifeOSEvrak\Capabilities\FileAssociations"; ValueType: string; ValueName: ".rtf"; ValueData: "LifeOSEvrak.Document"; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.rtf\shell\LifeOSFolio.Preview"; ValueType: string; ValueData: "Folio ile önizle"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.rtf\shell\LifeOSFolio.Preview"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\lifeos_folio.exe"",0"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.rtf\shell\LifeOSFolio.Preview"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Document"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.rtf\shell\LifeOSFolio.Preview\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --preview -- ""%1"""; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.rtf\shell\LifeOSFolio.Edit"; ValueType: string; ValueData: "Folio ile düzenle"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.rtf\shell\LifeOSFolio.Edit"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\lifeos_folio.exe"",0"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.rtf\shell\LifeOSFolio.Edit"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Document"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.rtf\shell\LifeOSFolio.Edit\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --edit -- ""%1"""; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\.doc\OpenWithProgids"; ValueType: string; ValueName: "LifeOSEvrak.Document"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\Applications\lifeos_folio.exe\SupportedTypes"; ValueType: string; ValueName: ".doc"; ValueData: ""; Tasks: associations
+Root: HKCU; Subkey: "Software\LifeOSEvrak\Capabilities\FileAssociations"; ValueType: string; ValueName: ".doc"; ValueData: "LifeOSEvrak.Document"; Tasks: associations
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.doc\shell\LifeOSFolio.Preview"; ValueType: string; ValueData: "Folio ile önizle"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.doc\shell\LifeOSFolio.Preview"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\lifeos_folio.exe"",0"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.doc\shell\LifeOSFolio.Preview"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Document"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.doc\shell\LifeOSFolio.Preview\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --preview -- ""%1"""; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.doc\shell\LifeOSFolio.Edit"; ValueType: string; ValueData: "Folio ile düzenle"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.doc\shell\LifeOSFolio.Edit"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\lifeos_folio.exe"",0"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.doc\shell\LifeOSFolio.Edit"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Document"; Tasks: contextmenu
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.doc\shell\LifeOSFolio.Edit\command"; ValueType: string; ValueData: """{app}\lifeos_folio.exe"" --edit -- ""%1"""; Tasks: contextmenu
 Root: HKCU; Subkey: "Software\Classes\.xlsx\OpenWithProgids"; ValueType: string; ValueName: "LifeOSEvrak.Document"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associations
 Root: HKCU; Subkey: "Software\Classes\Applications\lifeos_folio.exe\SupportedTypes"; ValueType: string; ValueName: ".xlsx"; ValueData: ""; Tasks: associations
 Root: HKCU; Subkey: "Software\LifeOSEvrak\Capabilities\FileAssociations"; ValueType: string; ValueName: ".xlsx"; ValueData: "LifeOSEvrak.Document"; Tasks: associations

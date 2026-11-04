@@ -7,4 +7,4 @@ Icon=com.erkanoz.evrak_convert
 StartupWMClass=com.erkanoz.evrak_convert
 Terminal=false
 Categories=Office;Viewer;
-MimeType=application/pdf;application/x-uyap-udf;application/udf;application/x-udf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.text;text/plain;text/html;text/markdown;text/csv;text/tab-separated-values;application/json;application/xml;text/xml;image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;image/svg+xml;
+MimeType=application/pdf;application/rtf;text/rtf;application/msword;application/x-uyap-udf;application/udf;application/x-udf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.text;text/plain;text/html;text/markdown;text/csv;text/tab-separated-values;application/json;application/xml;text/xml;image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;image/svg+xml;

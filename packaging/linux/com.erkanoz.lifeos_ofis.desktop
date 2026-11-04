@@ -9,7 +9,7 @@ StartupWMClass=com.erkanoz.lifeos_ofis
 Terminal=false
 Categories=Office;WordProcessor;Viewer;
 Keywords=UDF;UYAP;Word;DOCX;ODT;RTF;PDF;belge;e-imza;
-MimeType=application/x-uyap-udf;application/udf;application/x-udf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;application/rtf;text/rtf;application/pdf;application/x-imz;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;text/plain;
+MimeType=application/x-uyap-udf;application/udf;application/x-udf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;application/rtf;text/rtf;application/pdf;application/x-imz;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;text/plain;text/markdown;text/csv;text/tab-separated-values;text/html;application/json;application/xml;text/xml;image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;image/svg+xml;
 Actions=Yeni;
 
 [Desktop Action Yeni]

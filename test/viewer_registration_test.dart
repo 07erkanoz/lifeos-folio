@@ -130,6 +130,7 @@ void main() {
       icon: [1],
       types: [ViewerFileType.supported.first],
       run: run,
+      systemDirs: const [],
     );
     expect(message, contains('update-mime-database'));
     expect(message, contains('update-desktop-database'));
@@ -194,6 +195,7 @@ void main() {
       icon: [1, 2, 3],
       types: [ViewerFileType.supported.first],
       run: run,
+      systemDirs: const [],
     );
     await register();
     final desktop = File(
@@ -289,4 +291,52 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('İşlem tamamlandı'), findsOneWidget);
   }, variant: TargetPlatformVariant({TargetPlatform.linux}));
+
+  test('Folio installed as a package is made default by its own entry, '
+      'none written over it', () async {
+    final root = await Directory.systemTemp.createTemp('folio-paket-');
+    addTearDown(() => root.delete(recursive: true));
+    final system = Directory('${root.path}/usr/share/applications')
+      ..createSync(recursive: true);
+    File('${system.path}/${ViewerRegistration.linuxApplicationId}.desktop')
+        .writeAsStringSync('[Desktop Entry]\nName=LifeOS Folio\n');
+    final base = '${root.path}/home/.local/share';
+    // One an earlier Folio wrote, standing over the package's.
+    File('$base/applications/${ViewerRegistration.linuxApplicationId}.desktop')
+      ..createSync(recursive: true)
+      ..writeAsStringSync(ViewerRegistration.desktopEntry('/opt/x', 'x'));
+    final defaults = <String, String>{};
+    Future<ProcessResult> run(String command, List<String> args) async {
+      if (command == 'xdg-mime' && args.first == 'default') {
+        defaults[args.last] = args[1];
+      }
+      return ProcessResult(
+        1,
+        0,
+        command == 'xdg-mime' && args.first == 'query'
+            ? defaults[args.last] ?? ''
+            : '',
+        '',
+      );
+    }
+
+    await ViewerRegistration.registerLinux(
+      base: base,
+      executable: '/opt/lifeos-folio/lifeos_folio',
+      icon: [1],
+      types: [ViewerFileType.supported.firstWhere((t) => t.label == 'RTF')],
+      run: run,
+      systemDirs: ['${root.path}/usr/share'],
+    );
+    expect(
+      File(
+        '$base/applications/${ViewerRegistration.linuxApplicationId}.desktop',
+      ).existsSync(),
+      isFalse,
+    );
+    expect(
+      defaults['application/rtf'],
+      '${ViewerRegistration.linuxApplicationId}.desktop',
+    );
+  });
 }

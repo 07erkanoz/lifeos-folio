@@ -34,8 +34,8 @@ $editCommand = '"' + $exe + '" --edit -- "%1"'
 
 # Explorer verbs apply even when another viewer is the default. Only supported
 # extensions receive verbs; no global * shell entries or UserChoice changes.
-$previewExtensions = 'pdf','udf','docx','xlsx','odt','txt','md','markdown','html','htm','csv','tsv','json','xml','log','png','jpg','jpeg','gif','webp','bmp','tif','tiff','svg'
-$editExtensions = 'pdf','udf','docx','xlsx','odt','txt','md','markdown','html','htm','csv','tsv','json','xml','log'
+$previewExtensions = 'pdf','udf','docx','rtf','doc','xlsx','odt','txt','md','markdown','html','htm','csv','tsv','json','xml','log','png','jpg','jpeg','gif','webp','bmp','tif','tiff','svg'
+$editExtensions = 'pdf','udf','docx','rtf','doc','xlsx','odt','txt','md','markdown','html','htm','csv','tsv','json','xml','log'
 foreach ($extension in $previewExtensions) {
     $verbs = @(@{Id='Preview'; Label='Folio ile önizle'; Command=$previewCommand})
     if ($extension -in $editExtensions) { $verbs += @{Id='Edit'; Label='Folio ile düzenle'; Command=$editCommand} }
