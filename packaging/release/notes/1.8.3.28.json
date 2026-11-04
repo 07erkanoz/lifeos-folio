@@ -1,0 +1,8 @@
+{
+  "tr": "Folio artık RTF ve eski Word (.doc) belgeleri için de varsayılan uygulama yapılabilir; LifeOS'ta paketle kurulu Folio'nun kaydı korunur. LifeOS Ofis bilgisayarın dilini izler ya da dil menüsünden seçilen dille açılır (şimdilik Türkçe ve İngilizce); yeni belge Word olarak açılır.",
+  "en": "Folio can now be made the default app for RTF and old Word (.doc) documents too; on LifeOS, the packaged Folio's entry is kept. LifeOS Ofis follows the computer's language or the one chosen in its language menu (Turkish and English for now); a new document opens as Word.",
+  "ofis": {
+    "tr": "LifeOS Ofis artık bilgisayarın dilini izler ya da dil menüsünden seçilen dille açılır (şimdilik Türkçe ve İngilizce). Yeni belge Word olarak açılır; Ofis, Markdown, CSV, HTML ve resimler için de varsayılan uygulama yapılabilir.",
+    "en": "LifeOS Ofis now follows the computer's language or the one chosen in its language menu (Turkish and English for now). A new document opens as Word, and Ofis can also be the default app for Markdown, CSV, HTML and pictures."
+  }
+}
