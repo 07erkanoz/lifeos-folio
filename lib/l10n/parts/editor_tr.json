@@ -1,0 +1,375 @@
+{
+  "editorFindReplacedCount": "{count} eşleşme değiştirildi.",
+  "@editorFindReplacedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorFindTitle": "Bul ve değiştir",
+  "editorFindQuery": "Aranan metin",
+  "editorFindMatchCase": "Büyük/küçük harf",
+  "editorFindWholeWord": "Tam sözcük",
+  "editorFindPrompt": "Belge içinde arayın",
+  "editorFindNoMatch": "Eşleşme bulunamadı",
+  "editorFindPosition": "{current} / {total} eşleşme",
+  "@editorFindPosition": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "editorFindPrevious": "Önceki eşleşme",
+  "editorFindNext": "Sonraki eşleşme",
+  "editorFindReplace": "Değiştir",
+  "editorFindReplacement": "Yeni metin",
+  "editorFindReplaceAll": "Tümünü değiştir",
+  "editorClose": "Kapat",
+  "editorPageJump": "Sayfaya git",
+  "editorPageSemantics": "Sayfa {current} / {count}",
+  "@editorPageSemantics": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorPageNumberField": "Sayfa numarası",
+  "editorCancel": "Vazgeç",
+  "editorPageJumpGo": "Git",
+  "editorZoomOut": "Uzaklaştır",
+  "editorZoomTooltip": "Yakınlaştırma · Ctrl + fare tekerleği",
+  "editorZoomPercent": "%{percent}",
+  "@editorZoomPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "editorZoomIn": "Yakınlaştır",
+  "editorZoomReset": "Sıfırla",
+  "editorRulerMarginLeft": "Sol kenar boşluğu",
+  "editorRulerMarginRight": "Sağ kenar boşluğu",
+  "editorRulerMarginTop": "Üst kenar boşluğu",
+  "editorRulerMarginBottom": "Alt kenar boşluğu",
+  "editorRulerMarginTip": "{label}: {cm} cm · Sürükleyin",
+  "@editorRulerMarginTip": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "cm": {
+        "type": "String"
+      }
+    }
+  },
+  "editorRulerTabKindTip": "Sekme türü: {kind} · Değiştirmek için tıklayın",
+  "@editorRulerTabKindTip": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "editorRulerTabStopTip": "{kind} sekme · {cm} cm · Silmek için aşağı sürükleyin ya da çift tıklayın",
+  "@editorRulerTabStopTip": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "cm": {
+        "type": "String"
+      }
+    }
+  },
+  "editorRulerFirstLineIndent": "İlk satır girintisi",
+  "editorRulerLeftIndent": "Sol ve asılı girinti",
+  "editorRulerRightIndent": "Sağ girinti",
+  "editorTabLeft": "Sol",
+  "editorTabCentre": "Orta",
+  "editorTabRight": "Sağ",
+  "editorTabDecimal": "Ondalık",
+  "editorTabBar": "Çubuk",
+  "editorHeaderPlaceholder": "Üst bilgi — her sayfanın başında yazılır",
+  "editorFooterPlaceholder": "Alt bilgi — her sayfanın sonunda yazılır",
+  "editorRegionRemove": "KALDIR",
+  "editorHeaderLabel": "ÜST BİLGİ",
+  "editorFooterLabel": "ALT BİLGİ",
+  "editorRegionPrintsFromPage": "{page}. sayfadan itibaren basılır",
+  "@editorRegionPrintsFromPage": {
+    "placeholders": {
+      "page": {
+        "type": "String"
+      }
+    }
+  },
+  "editorHistoryWriteFailed": "Belge geçmişine yazılamadı",
+  "editorHistoryWriteFailedDetail": "Belgeniz yine de kaydedilebilir; yalnız bu sürüm saklanmadı.",
+  "editorUnsavedChangesTitle": "Kaydedilmemiş değişiklikler var",
+  "editorShareSavedOnly": "Paylaşılan, belgenin kaydedilmiş hâlidir.",
+  "editorShareSavedVersion": "Kaydedilmiş hâlini paylaş",
+  "editorSaveAndShare": "Kaydet ve paylaş",
+  "editorReplaceWhatDraft": "Taslak",
+  "editorReplaceWhatVersion": "Seçilen sürüm",
+  "editorVersionUnreadable": "Sürüm okunamadı.",
+  "editorVersionOpenFailed": "Sürüm açılamadı",
+  "editorNotSavedYet": "Bu belge henüz kaydedilmedi",
+  "editorHistoryFromFirstSave": "Geçmiş, ilk kayıttan itibaren tutulur.",
+  "editorRestoreLabel": "Editöre yükle",
+  "editorRestoreHint": "Seçilen sürüm editöre kaydedilmemiş değişiklik olarak gelir; siz kaydedene kadar dosya değişmez.",
+  "editorVersionLoaded": "{date} sürümü editöre yüklendi",
+  "@editorVersionLoaded": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "editorSaveToKeep": "Dosyada kalıcı olması için kaydedin.",
+  "editorCitationLaws": "{count} kanun maddesi",
+  "@editorCitationLaws": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorCitationDecisions": "{count} karar",
+  "@editorCitationDecisions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorCitationShowTip": "{detail} · dayanakları göster",
+  "@editorCitationShowTip": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "editorCitationTotal": "{count} dayanak",
+  "@editorCitationTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorCitationTitle": "Bu belgenin dayanakları",
+  "editorCaseLawPanelTitle": "Emsal karar ara",
+  "editorClosePanel": "Paneli kapat",
+  "editorOpenInWindow": "Ayrı pencerede aç",
+  "editorReadAloud": "Sesli oku",
+  "editorTermMeaning": "“{term}” ne demek?",
+  "@editorTermMeaning": {
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "editorAddToDictionary": "Sözlüğe ekle",
+  "editorSnippetHotkeyUnassigned": "Alt+F{key} bir kalıba atanmamış.",
+  "@editorSnippetHotkeyUnassigned": {
+    "placeholders": {
+      "key": {
+        "type": "int"
+      }
+    }
+  },
+  "editorSnippetHotkeyHint": "Ctrl+Space → Kalıplarımı yönet ile atayabilirsiniz.",
+  "editorSnippetEmbedsSkipped": "Seçimdeki tablo ve görseller kalıba alınmadı.",
+  "editorSnippetTextOnly": "Kalıp yalnız metni ve biçimini tutar.",
+  "editorSnippetsAdded": "{count} kalıp eklendi.",
+  "@editorSnippetsAdded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorOpenElsewhere": "Bu belge başka bir pencerede açık",
+  "editorOpenElsewhereDetail": "Aynı belge iki pencerede düzenlenirse biri ötekinin kaydını ezer. Belgeyi açık olduğu pencerede düzenleyin.",
+  "editorHeldElsewhereBanner": "Bu belge başka bir Folio penceresinde düzenleniyor. Burada yalnız okunabilir; değişiklikleri o pencerede yapın.",
+  "editorRetry": "Yeniden dene",
+  "editorDictationFailed": "Sesli yazma başlamadı",
+  "editorFormatNothing": "Biçimlendirilecek bir şey bulunamadı",
+  "editorFormatted": "Biçimlendirildi",
+  "editorUndoHint": "Ctrl+Z ile geri alabilirsiniz.",
+  "editorPrintName": "Belge",
+  "editorPrintFailed": "Yazdırılamadı",
+  "editorInsertImageTitle": "Görsel ekle",
+  "editorImageTooLarge": "Görsel çok büyük — en çok 12 MB eklenebilir.",
+  "editorImageUnreadable": "Görsel okunamadı: {name}",
+  "@editorImageUnreadable": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editorImageInsertFailed": "Görsel eklenemedi: {error}",
+  "@editorImageInsertFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "editorDeleteHeaderTitle": "Üst bilgi silinsin mi?",
+  "editorDeleteFooterTitle": "Alt bilgi silinsin mi?",
+  "editorDeleteRegionBody": "Yazdıklarınız belgeden kaldırılacak. Kaydetmeden çıkarsanız değişiklik uygulanmaz.",
+  "editorDelete": "Sil",
+  "editorPageView": "Sayfa görünümü",
+  "editorMobileView": "Mobil görünüm",
+  "editorSign": "İmzala",
+  "editorSignWithCard": "E-imza kartıyla",
+  "editorCaseLaw": "İçtihat",
+  "editorMoreTools": "Diğer araçlar",
+  "editorTodaysDate": "Bugünün tarihi",
+  "editorSnippets": "Kalıp metin",
+  "editorDocumentHistory": "Belge geçmişi",
+  "editorResearch": "Araştırma",
+  "editorSearchCaseLaw": "İçtihat ara",
+  "editorCompare": "Karşılaştır",
+  "editorCompareTip": "Kaydedilmiş sürümlerle karşılaştır",
+  "editorSignCardButton": "E-imza\nkartı",
+  "editorSignWayCard": "e-imza kartıyla",
+  "editorSignOnlyUdf": "Yalnız UDF belgeler imzalanır: önce UDF olarak kaydedin",
+  "editorSignUnavailable": "{way} bu cihazda kullanılamıyor",
+  "@editorSignUnavailable": {
+    "placeholders": {
+      "way": {
+        "type": "String"
+      }
+    }
+  },
+  "editorSigning": "İmzalanıyor…",
+  "editorSignAsUdf": "UDF olarak {way} imzala",
+  "@editorSignAsUdf": {
+    "placeholders": {
+      "way": {
+        "type": "String"
+      }
+    }
+  },
+  "editorTableSize": "{rows} × {columns} tablo",
+  "@editorTableSize": {
+    "placeholders": {
+      "rows": {
+        "type": "int"
+      },
+      "columns": {
+        "type": "int"
+      }
+    }
+  },
+  "editorTable": "Tablo",
+  "editorImage": "Görsel",
+  "editorHeader": "Üst bilgi",
+  "editorFooter": "Alt bilgi",
+  "editorPageNumbers": "Sayfa numarası",
+  "editorLetterhead": "Antet",
+  "editorDate": "Tarih",
+  "editorTableAndImage": "Tablo ve görsel",
+  "editorHeaderAndFooter": "Üst ve alt bilgi",
+  "editorText": "Metin",
+  "editorSignatureBlock": "İmza bloğu",
+  "editorHorizontalRuler": "Yatay cetvel",
+  "editorVerticalRuler": "Dikey cetvel",
+  "editorShortcuts": "Kısayollar",
+  "editorView": "Görünüm",
+  "editorRulers": "Cetveller",
+  "editorOther": "Diğer",
+  "editorShortcutsTitle": "Editör kısayolları",
+  "editorShortcutsList": "Ctrl+S  Kaydet\nCtrl+Shift+S  Farklı kaydet\nCtrl+Z  Geri al\nCtrl+Y / Ctrl+Shift+Z  Yinele\nCtrl+B / I / U  Kalın / İtalik / Altı çizili\nCtrl+A / C / X / V  Seç / Kopyala / Kes / Yapıştır\nCtrl+F  Belgede bul\nCtrl+H  Bul ve değiştir\nCtrl+P  Yazdır\nCtrl+L / E / R / J  Sola / Ortaya / Sağa / İki yana\nCtrl+Shift+L / 8  Madde işaretleri\nCtrl+Shift+7  Numaralı liste\nCtrl+M / Ctrl+Shift+M  Girintiyi artır / azalt\n\nmacOS’ta Ctrl yerine ⌘ kullanılır.",
+  "editorOk": "Tamam",
+  "editorSaveFormatTitle": "Hangi biçimde kaydedilsin?",
+  "editorFormatUdf": "UYAP belgesi (.udf)",
+  "editorFormatDocx": "Word belgesi (.docx)",
+  "editorFormatRtf": "Zengin metin (.rtf)",
+  "editorFormatPdf": "Yazdırılmış hâli (.pdf)",
+  "editorContinue": "Devam",
+  "editorSignedTitle": "Bu belge e-imzalı",
+  "editorSignedBody": "İmza, belgenin imzalandığı andaki içeriğini kapsar; değiştirilmiş belgeye taşınamaz.\n\n• Üzerine kaydet: dosya değişikliklerinizle, imzasız olarak güncellenir. İmzalı hali belge geçmişinde saklanır; istediğinizde ona dönebilir ya da kopyasını alabilirsiniz.\n\n• İmzasız kopya: imzalı dosya olduğu gibi kalır, değişiklikler yeni bir dosyaya yazılır.",
+  "editorSaveUnsignedCopy": "İmzasız kopya kaydet…",
+  "editorOverwriteSave": "Üzerine kaydet",
+  "editorChangedElsewhereTitle": "Belge başka bir yerde değiştirildi",
+  "editorChangedElsewhereBody": "Bu dosya, siz burada açtıktan sonra başka bir programda değiştirilmiş. Kaydederseniz sizin hâliniz geçerli olur; öbür hâli belge geçmişinde saklanır.",
+  "editorSaveMine": "Benim hâlimi kaydet",
+  "editorOverwriteSignedTitle": "İmzalı dosyanın üzerine yazılsın mı?",
+  "editorOverwriteSignedBody": "Dosya değişikliklerinizle, imzasız olarak güncellenir. İmzalı hali belge geçmişinde saklanır.",
+  "editorOverwrite": "Üzerine yaz",
+  "editorPdfNoTextNoOcr": "Bu PDF’te metin katmanı yok: yazıları taranmış ya da yazdırılırken şekle dönüştürülmüş. Okumak için gereken OCR aracı bu kurulumda bulunamadı.",
+  "editorPdfNoTextUnreadable": "Bu PDF’te metin katmanı yok ve sayfalarında okunabilir yazı bulunamadı.",
+  "editorUnreadable": "Belge okunamadı veya bozuk.",
+  "editorOcrRead": "Bu PDF’te metin katmanı yoktu; metin sayfalardan okundu (OCR).",
+  "editorOcrCheck": "Kaydetmeden önce özellikle rakamları ve adları kontrol edin.",
+  "editorBlanksTitle": "Doldurulmamış yer var",
+  "editorBlanksBody": "Belgede kalıptan gelen {count} yer hâlâ boş: {names}.\n\nYine de kaydedilsin mi?",
+  "@editorBlanksBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "editorGoBack": "Geri dön",
+  "editorSaveAnyway": "Yine de kaydet",
+  "editorUnsignedCopyTitle": "İmzasız kopya kaydedilecek",
+  "editorUnderstoodSave": "Anladım, kaydet",
+  "editorSaveDialogTitle": "Evrakı Kaydet ({ext})",
+  "@editorSaveDialogTitle": {
+    "placeholders": {
+      "ext": {
+        "type": "String"
+      }
+    }
+  },
+  "editorOverwriteHeldDetail": "Üzerine yazmak, o penceredeki çalışmayı kaybettirebilir. Başka bir adla kaydedin ya da önce o pencereyi kapatın.",
+  "editorSignedNotOverwritten": "İmzalı dosyanın üzerine yazılmadı",
+  "editorSignedNotOverwrittenDetail": "İmzalı hali belge geçmişine saklanamadı. Değişiklikleri imzasız kopya olarak kaydedebilirsiniz.",
+  "editorNotOverwritten": "Belgenin üzerine yazılmadı",
+  "editorNotOverwrittenDetail": "Başka programdaki hâli belge geçmişine saklanamadı. Değişikliklerinizi başka bir adla kaydedebilirsiniz.",
+  "editorSaved": "Kaydedildi",
+  "editorSavedToLocation": "Belge seçtiğiniz konuma kaydedildi.",
+  "editorSavedAs": "Başarıyla kaydedildi: {name}",
+  "@editorSavedAs": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editorSaveAs": "Farklı kaydet",
+  "editorSaveFailed": "Kaydetme hatası: belge kaydedilemedi",
+  "editorOcrReading": "Bu PDF’te metin katmanı yok; sayfalar okunuyor (OCR)…",
+  "editorOcrPerPage": "Sayfa başına birkaç saniye sürebilir.",
+  "editorOpenFailed": "Belge açılamadı: {error}",
+  "@editorOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "editorRecoverFromHistory": "Belge geçmişinden kurtar",
+  "editorFontLoadFailed": "Yazı tipi yüklenemedi",
+  "editorSignUdf": "UDF e-imzala",
+  "editorSaveTooltip": "Kaydet · Ctrl+S"
+}

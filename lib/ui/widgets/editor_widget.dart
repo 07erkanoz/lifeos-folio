@@ -62,6 +62,9 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../../services/platform/app_language.dart';
+
 import 'package:flutter/services.dart';
 
 import 'editor_toolbar.dart';
@@ -252,8 +255,8 @@ class _EditorWidgetState extends State<EditorWidget>
     _historyErrorShown = true;
     showNotice(
       context,
-      'Belge geçmişine yazılamadı',
-      detail: 'Belgeniz yine de kaydedilebilir; yalnız bu sürüm saklanmadı.',
+      context.l.editorHistoryWriteFailed,
+      detail: context.l.editorHistoryWriteFailedDetail,
       kind: NoticeKind.error,
     );
   }
@@ -363,8 +366,8 @@ class _EditorWidgetState extends State<EditorWidget>
       final choice = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Kaydedilmemiş değişiklikler var'),
-          content: const Text('Paylaşılan, belgenin kaydedilmiş hâlidir.'),
+          title: Text(context.l.editorUnsavedChangesTitle),
+          content: Text(context.l.editorShareSavedOnly),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -373,12 +376,12 @@ class _EditorWidgetState extends State<EditorWidget>
             OutlinedButton(
               key: const ValueKey('share-saved'),
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Kaydedilmiş hâlini paylaş'),
+              child: Text(context.l.editorShareSavedVersion),
             ),
             FilledButton(
               key: const ValueKey('share-save-first'),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Kaydet ve paylaş'),
+              child: Text(context.l.editorSaveAndShare),
             ),
           ],
         ),
@@ -605,7 +608,10 @@ class _EditorWidgetState extends State<EditorWidget>
       }
     } else {
       if (_hasChanges) {
-        final choice = await confirmReplaceEdits(context, 'Taslak');
+        final choice = await confirmReplaceEdits(
+          context,
+          context.l.editorReplaceWhatDraft,
+        );
         if (choice == null || !mounted) return;
         if (choice == ReplaceChoice.saveFirst && !await _save()) return;
       }
@@ -652,7 +658,9 @@ class _EditorWidgetState extends State<EditorWidget>
         Uint8List.fromList(content),
         format,
       );
-      if (model == null) throw const FormatException("Sürüm okunamadı.");
+      if (model == null) {
+        throw FormatException(AppLanguage.t.editorVersionUnreadable);
+      }
       await DocumentFonts.loadEditorFamilies(
         DocumentFonts.modelFamilies(model),
       );
@@ -693,7 +701,7 @@ class _EditorWidgetState extends State<EditorWidget>
       if (mounted) {
         showNotice(
           context,
-          'Sürüm açılamadı',
+          context.l.editorVersionOpenFailed,
           detail: '$e',
           kind: NoticeKind.error,
         );
@@ -709,8 +717,8 @@ class _EditorWidgetState extends State<EditorWidget>
     if (path == null) {
       showNotice(
         context,
-        'Bu belge henüz kaydedilmedi',
-        detail: 'Geçmiş, ilk kayıttan itibaren tutulur.',
+        context.l.editorNotSavedYet,
+        detail: context.l.editorHistoryFromFirstSave,
       );
       return;
     }
@@ -723,14 +731,15 @@ class _EditorWidgetState extends State<EditorWidget>
       currentText: _loadError == null
           ? () async => _currentModel().toPlainText()
           : null,
-      restoreLabel: 'Editöre yükle',
-      restoreHint:
-          'Seçilen sürüm editöre kaydedilmemiş değişiklik olarak gelir; siz '
-          'kaydedene kadar dosya değişmez.',
+      restoreLabel: context.l.editorRestoreLabel,
+      restoreHint: context.l.editorRestoreHint,
     );
     if (entry == null || !mounted) return;
     if (_hasChanges) {
-      final choice = await confirmReplaceEdits(context, 'Seçilen sürüm');
+      final choice = await confirmReplaceEdits(
+        context,
+        context.l.editorReplaceWhatVersion,
+      );
       if (choice == null || !mounted) return;
       if (choice == ReplaceChoice.saveFirst && !await _save()) return;
       if (!mounted) return;
@@ -738,8 +747,8 @@ class _EditorWidgetState extends State<EditorWidget>
     if (await _restoreRevision(entry) && mounted) {
       showNotice(
         context,
-        '${draftDate(entry.created)} sürümü editöre yüklendi',
-        detail: 'Dosyada kalıcı olması için kaydedin.',
+        context.l.editorVersionLoaded(draftDate(entry.created)),
+        detail: context.l.editorSaveToKeep,
         kind: NoticeKind.success,
       );
     }
@@ -1019,16 +1028,17 @@ class _EditorWidgetState extends State<EditorWidget>
     if (total == 0) return null;
     final scheme = Theme.of(context).colorScheme;
     final detail = [
-      if (count.laws > 0) '${count.laws} kanun maddesi',
-      if (count.decisions > 0) '${count.decisions} karar',
+      if (count.laws > 0) context.l.editorCitationLaws(count.laws),
+      if (count.decisions > 0)
+        context.l.editorCitationDecisions(count.decisions),
     ].join(', ');
     return Tooltip(
-      message: '$detail · dayanakları göster',
+      message: context.l.editorCitationShowTip(detail),
       child: TextButton.icon(
         key: const ValueKey('citation-status'),
         onPressed: () => unawaited(_showCitations(detail)),
         icon: const Icon(Icons.balance_outlined, size: 15),
-        label: Text('$total dayanak'),
+        label: Text(context.l.editorCitationTotal(total)),
         style: TextButton.styleFrom(
           foregroundColor: scheme.primary,
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1047,7 +1057,7 @@ class _EditorWidgetState extends State<EditorWidget>
     context: context,
     builder: (dialog) => FolioDialog(
       icon: Icons.balance_outlined,
-      title: 'Bu belgenin dayanakları',
+      title: context.l.editorCitationTitle,
       subtitle: detail,
       width: 560,
       onClose: () => Navigator.pop(dialog),
@@ -1197,14 +1207,17 @@ class _EditorWidgetState extends State<EditorWidget>
               children: [
                 Icon(Icons.balance_outlined, size: 18, color: scheme.primary),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Emsal karar ara',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    context.l.editorCaseLawPanelTitle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Paneli kapat',
+                  tooltip: context.l.editorClosePanel,
                   onPressed: onClose,
                   icon: const Icon(Icons.close_rounded, size: 19),
                 ),
@@ -1275,7 +1288,7 @@ class _EditorWidgetState extends State<EditorWidget>
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Ayrı pencerede aç',
+                  tooltip: context.l.editorOpenInWindow,
                   onPressed: () {
                     unawaited(openPreviewWindow(path));
                     setState(() => _evrakPath = null);
@@ -1283,7 +1296,7 @@ class _EditorWidgetState extends State<EditorWidget>
                   icon: const Icon(Icons.open_in_new_rounded, size: 19),
                 ),
                 IconButton(
-                  tooltip: 'Kapat',
+                  tooltip: context.l.editorClose,
                   onPressed: () => setState(() => _evrakPath = null),
                   icon: const Icon(Icons.close_rounded, size: 19),
                 ),
@@ -1409,7 +1422,7 @@ class _EditorWidgetState extends State<EditorWidget>
           !selection.isCollapsed &&
           identical(state.controller, _quillController))
         ContextMenuButtonItem(
-          label: 'Sesli oku',
+          label: context.l.editorReadAloud,
           onPressed: () {
             ContextMenuController.removeAny();
             unawaited(_readAloud(restart: true));
@@ -1417,7 +1430,7 @@ class _EditorWidgetState extends State<EditorWidget>
         ),
       if (term != null)
         ContextMenuButtonItem(
-          label: '“${term.term}” ne demek?',
+          label: context.l.editorTermMeaning(term.term),
           onPressed: () {
             final at = state.contextMenuAnchors.primaryAnchor;
             ContextMenuController.removeAny();
@@ -1459,7 +1472,7 @@ class _EditorWidgetState extends State<EditorWidget>
               },
             ),
           ContextMenuButtonItem(
-            label: 'Sözlüğe ekle',
+            label: context.l.editorAddToDictionary,
             onPressed: () {
               ContextMenuController.removeAny();
               unawaited(
@@ -2165,8 +2178,8 @@ class _EditorWidgetState extends State<EditorWidget>
     if (snippet == null) {
       showNotice(
         context,
-        'Alt+F$key bir kalıba atanmamış.',
-        detail: 'Ctrl+Space → Kalıplarımı yönet ile atayabilirsiniz.',
+        context.l.editorSnippetHotkeyUnassigned(key),
+        detail: context.l.editorSnippetHotkeyHint,
       );
       return;
     }
@@ -2237,8 +2250,8 @@ class _EditorWidgetState extends State<EditorWidget>
         if (mounted && SnippetStore.holdsEmbeds(passage)) {
           showNotice(
             context,
-            'Seçimdeki tablo ve görseller kalıba alınmadı.',
-            detail: 'Kalıp yalnız metni ve biçimini tutar.',
+            context.l.editorSnippetEmbedsSkipped,
+            detail: context.l.editorSnippetTextOnly,
           );
         }
       case HarvestArchive():
@@ -2268,7 +2281,10 @@ class _EditorWidgetState extends State<EditorWidget>
       messenger
         ?..clearSnackBars()
         ..showSnackBar(
-          noticeBar('$kept kalıp eklendi.', kind: NoticeKind.success),
+          noticeBar(
+            AppLanguage.t.editorSnippetsAdded(kept),
+            kind: NoticeKind.success,
+          ),
         );
     }
   }
@@ -2476,10 +2492,8 @@ class _EditorWidgetState extends State<EditorWidget>
 
   void _showHeldElsewhere() => showNotice(
     context,
-    'Bu belge başka bir pencerede açık',
-    detail:
-        'Aynı belge iki pencerede düzenlenirse biri ötekinin kaydını ezer. '
-        'Belgeyi açık olduğu pencerede düzenleyin.',
+    context.l.editorOpenElsewhere,
+    detail: context.l.editorOpenElsewhereDetail,
     kind: NoticeKind.error,
   );
 
@@ -2573,8 +2587,7 @@ class _EditorWidgetState extends State<EditorWidget>
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Bu belge başka bir Folio penceresinde düzenleniyor. Burada '
-                'yalnız okunabilir; değişiklikleri o pencerede yapın.',
+                context.l.editorHeldElsewhereBanner,
                 style: TextStyle(color: scheme.onTertiaryContainer),
               ),
             ),
@@ -2583,7 +2596,7 @@ class _EditorWidgetState extends State<EditorWidget>
                 _lockedPath = null;
                 unawaited(_holdDocument());
               },
-              child: const Text('Yeniden dene'),
+              child: Text(context.l.editorRetry),
             ),
           ],
         ),
@@ -2648,7 +2661,7 @@ class _EditorWidgetState extends State<EditorWidget>
     if (dictation.error != null && mounted) {
       showNotice(
         context,
-        'Sesli yazma başlamadı',
+        context.l.editorDictationFailed,
         detail: dictation.error,
         kind: NoticeKind.error,
       );
@@ -2798,8 +2811,8 @@ class _EditorWidgetState extends State<EditorWidget>
     setState(() {});
     showNotice(
       context,
-      changed == 0 ? 'Biçimlendirilecek bir şey bulunamadı' : 'Biçimlendirildi',
-      detail: changed == 0 ? null : 'Ctrl+Z ile geri alabilirsiniz.',
+      changed == 0 ? context.l.editorFormatNothing : context.l.editorFormatted,
+      detail: changed == 0 ? null : context.l.editorUndoHint,
     );
   }
 
@@ -2963,13 +2976,13 @@ class _EditorWidgetState extends State<EditorWidget>
       await PrintScreen.show(
         context,
         pdf: bytes,
-        name: _currentTitle ?? 'Belge',
+        name: _currentTitle ?? context.l.editorPrintName,
       );
     } catch (e) {
       if (mounted) {
         showNotice(
           context,
-          'Yazdırılamadı',
+          context.l.editorPrintFailed,
           detail: '$e',
           kind: NoticeKind.error,
         );
@@ -2984,7 +2997,7 @@ class _EditorWidgetState extends State<EditorWidget>
   /// with it.
   Future<void> _insertImage() async {
     final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Görsel ekle',
+      dialogTitle: context.l.editorInsertImageTitle,
       type: FileType.custom,
       allowedExtensions: EditorImages.extensions,
     );
@@ -2998,13 +3011,13 @@ class _EditorWidgetState extends State<EditorWidget>
     try {
       final file = File(path);
       if (await file.length() > EditorImages.maxBytes) {
-        uyar('Görsel çok büyük — en çok 12 MB eklenebilir.');
+        uyar(AppLanguage.t.editorImageTooLarge);
         return;
       }
       final bytes = await file.readAsBytes();
       final size = EditorImages.measure(bytes);
       if (size == null) {
-        uyar('Görsel okunamadı: ${p.basename(path)}');
+        uyar(AppLanguage.t.editorImageUnreadable(p.basename(path)));
         return;
       }
       if (!mounted) return;
@@ -3015,7 +3028,7 @@ class _EditorWidgetState extends State<EditorWidget>
         size: size,
       );
     } catch (e) {
-      uyar('Görsel eklenemedi: $e');
+      uyar(AppLanguage.t.editorImageInsertFailed('$e'));
     }
   }
 
@@ -3147,13 +3160,10 @@ class _EditorWidgetState extends State<EditorWidget>
           builder: (context) => AlertDialog(
             title: Text(
               key == 'header'
-                  ? 'Üst bilgi silinsin mi?'
-                  : 'Alt bilgi silinsin mi?',
+                  ? context.l.editorDeleteHeaderTitle
+                  : context.l.editorDeleteFooterTitle,
             ),
-            content: const Text(
-              'Yazdıklarınız belgeden kaldırılacak. Kaydetmeden çıkarsanız '
-              'değişiklik uygulanmaz.',
-            ),
+            content: Text(context.l.editorDeleteRegionBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -3161,7 +3171,7 @@ class _EditorWidgetState extends State<EditorWidget>
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Sil'),
+                child: Text(context.l.editorDelete),
               ),
             ],
           ),
@@ -3328,7 +3338,7 @@ class _EditorWidgetState extends State<EditorWidget>
               ),
               const SizedBox(width: 6),
               Text(
-                flows ? 'Sayfa görünümü' : 'Mobil görünüm',
+                flows ? context.l.editorPageView : context.l.editorMobileView,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -3569,7 +3579,9 @@ class _EditorWidgetState extends State<EditorWidget>
     // there faded, so that it can still be written in.
     final printed = PageNumbering.regionShows(_regionAttrs[key], page + 1);
     final start = _regionAttrs[key]?['startPage'];
-    final note = printed ? null : '$start. sayfadan itibaren basılır';
+    final note = printed
+        ? null
+        : AppLanguage.t.editorRegionPrintsFromPage('$start');
     // The page's own number, drawn over the band as UYAP draws it.
     final numbering = PageNumbering.parse(_regionAttrs[key]);
     final label =
@@ -4054,12 +4066,12 @@ class _EditorWidgetState extends State<EditorWidget>
     // Why a signing button is off, said on it.
     final udf = (_savedFormat ?? widget.initialFormat) == EvrakFormat.udf;
     String signTip(String way, {bool here = true}) => !udf
-        ? 'Yalnız UDF belgeler imzalanır: önce UDF olarak kaydedin'
+        ? context.l.editorSignOnlyUdf
         : !here
-        ? '$way bu cihazda kullanılamıyor'
+        ? context.l.editorSignUnavailable(way)
         : _signingNew || _isSaving
-        ? 'İmzalanıyor…'
-        : 'UDF olarak $way imzala';
+        ? context.l.editorSigning
+        : context.l.editorSignAsUdf(way);
     // LifeOS Ofis: research, signing by card and the document's history;
     // no petitions, UYAP, mobile signature, agenda or live sharing.
     final ofis = AppEdition.isOfis;
@@ -4093,11 +4105,11 @@ class _EditorWidgetState extends State<EditorWidget>
                 child: const Text('İşlemlerim'),
               ),
             ]),
-          ribbonMenu(context, Icons.draw_outlined, 'İmzala', [
+          ribbonMenu(context, Icons.draw_outlined, context.l.editorSign, [
             MenuItemButton(
               onPressed: desktopSigningAvailable ? sign : null,
               leadingIcon: const Icon(Icons.usb_rounded, size: 18),
-              child: const Text('E-imza kartıyla'),
+              child: Text(context.l.editorSignWithCard),
             ),
             if (!ofis)
               MenuItemButton(
@@ -4127,58 +4139,65 @@ class _EditorWidgetState extends State<EditorWidget>
           ribbonButton(
             context,
             Icons.balance_outlined,
-            'İçtihat',
+            context.l.editorCaseLaw,
             () => _toggleSide(_Side.caseLaw),
             selected: _caseLawOpen,
           ),
         ],
-        more: ribbonMore(ofis ? 'Diğer araçlar' : 'Diğer hukuk araçları', [
-          if (!ofis) ...[
-            SubmenuButton(
-              menuChildren: styles,
-              leadingIcon: const Icon(Icons.format_paint_outlined, size: 18),
-              child: const Text('Dilekçe stili'),
+        more: ribbonMore(
+          ofis ? context.l.editorMoreTools : 'Diğer hukuk araçları',
+          [
+            if (!ofis) ...[
+              SubmenuButton(
+                menuChildren: styles,
+                leadingIcon: const Icon(Icons.format_paint_outlined, size: 18),
+                child: const Text('Dilekçe stili'),
+              ),
+              SubmenuButton(
+                menuChildren: sections,
+                leadingIcon: const Icon(Icons.segment, size: 18),
+                child: const Text('Bölüm başlığı'),
+              ),
+            ],
+            MenuItemButton(
+              onPressed: date,
+              leadingIcon: const Icon(Icons.event_outlined, size: 18),
+              child: Text(context.l.editorTodaysDate),
             ),
-            SubmenuButton(
-              menuChildren: sections,
-              leadingIcon: const Icon(Icons.segment, size: 18),
-              child: const Text('Bölüm başlığı'),
+            if (!ofis) ...[
+              MenuItemButton(
+                onPressed: signature,
+                leadingIcon: const Icon(Icons.edit_note_outlined, size: 18),
+                child: const Text('İmza bloğu'),
+              ),
+              MenuItemButton(
+                onPressed: _formatPetition,
+                leadingIcon: const Icon(Icons.auto_fix_high_rounded, size: 18),
+                child: const Text('Biçimlendir'),
+              ),
+              const Divider(height: 8),
+              MenuItemButton(
+                onPressed: needsCase(() => unawaited(_tieToHearing())),
+                leadingIcon: const Icon(
+                  Icons.calendar_month_outlined,
+                  size: 18,
+                ),
+                child: const Text('Duruşmaya bağla'),
+              ),
+            ],
+            MenuItemButton(
+              onPressed: () => unawaited(_snippets()),
+              leadingIcon: const Icon(Icons.bolt_outlined, size: 18),
+              child: Text(context.l.editorSnippets),
+            ),
+            MenuItemButton(
+              onPressed: () => unawaited(_history()),
+              leadingIcon: const Icon(Icons.history_rounded, size: 18),
+              child: Text(context.l.editorDocumentHistory),
             ),
           ],
-          MenuItemButton(
-            onPressed: date,
-            leadingIcon: const Icon(Icons.event_outlined, size: 18),
-            child: const Text('Bugünün tarihi'),
-          ),
-          if (!ofis) ...[
-            MenuItemButton(
-              onPressed: signature,
-              leadingIcon: const Icon(Icons.edit_note_outlined, size: 18),
-              child: const Text('İmza bloğu'),
-            ),
-            MenuItemButton(
-              onPressed: _formatPetition,
-              leadingIcon: const Icon(Icons.auto_fix_high_rounded, size: 18),
-              child: const Text('Biçimlendir'),
-            ),
-            const Divider(height: 8),
-            MenuItemButton(
-              onPressed: needsCase(() => unawaited(_tieToHearing())),
-              leadingIcon: const Icon(Icons.calendar_month_outlined, size: 18),
-              child: const Text('Duruşmaya bağla'),
-            ),
-          ],
-          MenuItemButton(
-            onPressed: () => unawaited(_snippets()),
-            leadingIcon: const Icon(Icons.bolt_outlined, size: 18),
-            child: const Text('Kalıp metin'),
-          ),
-          MenuItemButton(
-            onPressed: () => unawaited(_history()),
-            leadingIcon: const Icon(Icons.history_rounded, size: 18),
-            child: const Text('Belge geçmişi'),
-          ),
-        ], key: const ValueKey('legal-more')),
+          key: const ValueKey('legal-more'),
+        ),
       );
     }
     return ribbonStrip([
@@ -4229,12 +4248,12 @@ class _EditorWidgetState extends State<EditorWidget>
         ]),
       // Research second, not last: at the end the row ran past a laptop's
       // width, and "İçtihat ara" was there but out of sight.
-      ribbonGroup(context, 'Araştırma', [
+      ribbonGroup(context, context.l.editorResearch, [
         [
           ribbonButton(
             context,
             Icons.balance_outlined,
-            'İçtihat ara',
+            context.l.editorSearchCaseLaw,
             () => _toggleSide(_Side.caseLaw),
             selected: _caseLawOpen,
             key: const ValueKey('legal-case-law'),
@@ -4242,7 +4261,7 @@ class _EditorWidgetState extends State<EditorWidget>
           ribbonButton(
             context,
             Icons.bolt_outlined,
-            'Kalıp metin',
+            context.l.editorSnippets,
             () => unawaited(_snippets()),
           ),
         ],
@@ -4250,15 +4269,15 @@ class _EditorWidgetState extends State<EditorWidget>
           ribbonButton(
             context,
             Icons.history_rounded,
-            'Belge geçmişi',
+            context.l.editorDocumentHistory,
             () => unawaited(_history()),
           ),
           ribbonButton(
             context,
             Icons.compare_outlined,
-            'Karşılaştır',
+            context.l.editorCompare,
             () => unawaited(_history()),
-            tooltip: 'Kaydedilmiş sürümlerle karşılaştır',
+            tooltip: context.l.editorCompareTip,
           ),
         ],
       ]),
@@ -4302,40 +4321,48 @@ class _EditorWidgetState extends State<EditorWidget>
               ),
           ],
         ]),
-      ribbonGroup(context, ofis ? 'İmzala' : 'İmzala ve gönder', last: ofis, [
+      ribbonGroup(
+        context,
+        ofis ? context.l.editorSign : 'İmzala ve gönder',
+        last: ofis,
         [
-          ribbonBigButton(
-            context,
-            Icons.usb_rounded,
-            'E-imza\nkartı',
-            desktopSigningAvailable ? sign : null,
-            tooltip: signTip('e-imza kartıyla', here: desktopSigningAvailable),
-            key: const ValueKey('legal-sign-card'),
-          ),
-          if (!ofis) ...[
-            const SizedBox(width: 4),
+          [
             ribbonBigButton(
               context,
-              Icons.phone_android_rounded,
-              'Mobil\nimza',
-              signMobile,
-              tooltip: signTip('mobil imzayla', here: mobileSigningAvailable),
-              key: const ValueKey('legal-sign-mobile'),
+              Icons.usb_rounded,
+              context.l.editorSignCardButton,
+              desktopSigningAvailable ? sign : null,
+              tooltip: signTip(
+                context.l.editorSignWayCard,
+                here: desktopSigningAvailable,
+              ),
+              key: const ValueKey('legal-sign-card'),
             ),
-          ],
-          if (_desktop && !ofis) ...[
-            const SizedBox(width: 4),
-            ribbonBigButton(
-              context,
-              Icons.send_rounded,
-              'UYAP’a\ngönder',
-              send,
-              primary: true,
-              key: const ValueKey('legal-send'),
-            ),
+            if (!ofis) ...[
+              const SizedBox(width: 4),
+              ribbonBigButton(
+                context,
+                Icons.phone_android_rounded,
+                'Mobil\nimza',
+                signMobile,
+                tooltip: signTip('mobil imzayla', here: mobileSigningAvailable),
+                key: const ValueKey('legal-sign-mobile'),
+              ),
+            ],
+            if (_desktop && !ofis) ...[
+              const SizedBox(width: 4),
+              ribbonBigButton(
+                context,
+                Icons.send_rounded,
+                'UYAP’a\ngönder',
+                send,
+                primary: true,
+                key: const ValueKey('legal-send'),
+              ),
+            ],
           ],
         ],
-      ]),
+      ),
       if (!ofis)
         ribbonGroup(context, 'Paylaşım', [
           [
@@ -4392,20 +4419,20 @@ class _EditorWidgetState extends State<EditorWidget>
         for (final (rows, columns) in const [(2, 2), (3, 3), (4, 3), (5, 4)])
           MenuItemButton(
             onPressed: () => _insertTable(rows, columns),
-            child: Text('$rows × $columns tablo'),
+            child: Text(context.l.editorTableSize(rows, columns)),
           ),
       ],
       builder: (context, menu, _) => expanded
           ? ribbonBigButton(
               context,
               Icons.table_chart_outlined,
-              'Tablo',
+              context.l.editorTable,
               () => menu.isOpen ? menu.close() : menu.open(),
             )
           : ribbonButton(
               context,
               Icons.table_chart_outlined,
-              'Tablo',
+              context.l.editorTable,
               () => menu.isOpen ? menu.close() : menu.open(),
             ),
     );
@@ -4413,27 +4440,27 @@ class _EditorWidgetState extends State<EditorWidget>
         ? ribbonBigButton(
             context,
             Icons.image_outlined,
-            'Görsel',
+            context.l.editorImage,
             () => unawaited(_insertImage()),
           )
         : ribbonButton(
             context,
             Icons.image_outlined,
-            'Görsel',
+            context.l.editorImage,
             () => unawaited(_insertImage()),
           );
     final bands = [
       ribbonButton(
         context,
         Icons.vertical_align_top_rounded,
-        'Üst bilgi',
+        context.l.editorHeader,
         () => unawaited(_toggleRegion('header')),
         selected: header,
       ),
       ribbonButton(
         context,
         Icons.vertical_align_bottom_rounded,
-        'Alt bilgi',
+        context.l.editorFooter,
         () => unawaited(_toggleRegion('footer')),
         selected: footer,
       ),
@@ -4442,13 +4469,13 @@ class _EditorWidgetState extends State<EditorWidget>
       ribbonButton(
         context,
         Icons.tag_rounded,
-        'Sayfa numarası',
+        context.l.editorPageNumbers,
         () => unawaited(_pageNumbers()),
       ),
       ribbonButton(
         context,
         Icons.branding_watermark_outlined,
-        'Antet',
+        context.l.editorLetterhead,
         () => unawaited(_letterheads()),
       ),
     ];
@@ -4456,13 +4483,13 @@ class _EditorWidgetState extends State<EditorWidget>
       ribbonButton(
         context,
         Icons.bolt_outlined,
-        'Kalıp metin',
+        context.l.editorSnippets,
         () => unawaited(_snippets()),
       ),
       ribbonButton(
         context,
         Icons.event_outlined,
-        'Tarih',
+        context.l.editorDate,
         () => _petitionEdit((x) => x.date()),
       ),
     ];
@@ -4478,17 +4505,17 @@ class _EditorWidgetState extends State<EditorWidget>
       ]);
     }
     return ribbonStrip([
-      ribbonGroup(context, 'Tablo ve görsel', [
+      ribbonGroup(context, context.l.editorTableAndImage, [
         [table, const SizedBox(width: 4), image],
       ]),
-      ribbonGroup(context, 'Üst ve alt bilgi', [bands, page]),
-      ribbonGroup(context, 'Metin', last: true, [
+      ribbonGroup(context, context.l.editorHeaderAndFooter, [bands, page]),
+      ribbonGroup(context, context.l.editorText, last: true, [
         text,
         [
           ribbonButton(
             context,
             Icons.edit_note_outlined,
-            'İmza bloğu',
+            context.l.editorSignatureBlock,
             () => _petitionEdit(
               (x) => x.signature(lawyer: _lawyerName ?? 'Av. [Ad Soyad]'),
             ),
@@ -4505,14 +4532,14 @@ class _EditorWidgetState extends State<EditorWidget>
       ribbonButton(
         context,
         Icons.description_outlined,
-        'Sayfa görünümü',
+        context.l.editorPageView,
         () => _flowChoice.value = false,
         selected: !flows,
       ),
       ribbonButton(
         context,
         Icons.smartphone_rounded,
-        'Mobil görünüm',
+        context.l.editorMobileView,
         () => _flowChoice.value = true,
         selected: flows,
       ),
@@ -4521,14 +4548,14 @@ class _EditorWidgetState extends State<EditorWidget>
       ribbonButton(
         context,
         Icons.straighten_rounded,
-        'Yatay cetvel',
+        context.l.editorHorizontalRuler,
         () => setState(() => _showHorizontalRuler = !_showHorizontalRuler),
         selected: _showHorizontalRuler,
       ),
       ribbonButton(
         context,
         Icons.height_rounded,
-        'Dikey cetvel',
+        context.l.editorVerticalRuler,
         () => setState(() => _showVerticalRuler = !_showVerticalRuler),
         selected: _showVerticalRuler,
       ),
@@ -4538,13 +4565,13 @@ class _EditorWidgetState extends State<EditorWidget>
         ribbonButton(
           context,
           Icons.record_voice_over_outlined,
-          'Sesli oku',
+          context.l.editorReadAloud,
           () => unawaited(_readAloud()),
         ),
       ribbonButton(
         context,
         Icons.keyboard_outlined,
-        'Kısayollar',
+        context.l.editorShortcuts,
         _showShortcuts,
       ),
     ];
@@ -4558,15 +4585,15 @@ class _EditorWidgetState extends State<EditorWidget>
       ]);
     }
     return ribbonStrip([
-      ribbonGroup(context, 'Görünüm', [
+      ribbonGroup(context, context.l.editorView, [
         [views.first],
         [views.last],
       ]),
-      ribbonGroup(context, 'Cetveller', [
+      ribbonGroup(context, context.l.editorRulers, [
         [rulers.first],
         [rulers.last],
       ]),
-      ribbonGroup(context, 'Diğer', last: true, [
+      ribbonGroup(context, context.l.editorOther, last: true, [
         [other.first],
         if (other.length > 1) [other.last],
       ]),
@@ -4576,16 +4603,14 @@ class _EditorWidgetState extends State<EditorWidget>
   void _showShortcuts() => showDialog<void>(
     context: context,
     builder: (_) => AlertDialog(
-      title: const Text('Editör kısayolları'),
-      content: const SingleChildScrollView(
-        child: Text(
-          'Ctrl+S  Kaydet\nCtrl+Shift+S  Farklı kaydet\nCtrl+Z  Geri al\nCtrl+Y / Ctrl+Shift+Z  Yinele\nCtrl+B / I / U  Kalın / İtalik / Altı çizili\nCtrl+A / C / X / V  Seç / Kopyala / Kes / Yapıştır\nCtrl+F  Belgede bul\nCtrl+H  Bul ve değiştir\nCtrl+P  Yazdır\nCtrl+L / E / R / J  Sola / Ortaya / Sağa / İki yana\nCtrl+Shift+L / 8  Madde işaretleri\nCtrl+Shift+7  Numaralı liste\nCtrl+M / Ctrl+Shift+M  Girintiyi artır / azalt\n\nmacOS’ta Ctrl yerine ⌘ kullanılır.',
-        ),
+      title: Text(context.l.editorShortcutsTitle),
+      content: SingleChildScrollView(
+        child: Text(context.l.editorShortcutsList),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Tamam'),
+          child: Text(context.l.editorOk),
         ),
       ],
     ),
@@ -4816,7 +4841,7 @@ class _EditorWidgetState extends State<EditorWidget>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('Hangi biçimde kaydedilsin?'),
+          title: Text(context.l.editorSaveFormatTitle),
           content: SizedBox(
             width: 380,
             child: RadioGroup<EvrakFormat>(
@@ -4826,10 +4851,10 @@ class _EditorWidgetState extends State<EditorWidget>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (final (format, title, detail) in [
-                    (EvrakFormat.udf, 'UDF', 'UYAP belgesi (.udf)'),
-                    (EvrakFormat.docx, 'Word', 'Word belgesi (.docx)'),
-                    (EvrakFormat.rtf, 'RTF', 'Zengin metin (.rtf)'),
-                    (EvrakFormat.pdf, 'PDF', 'Yazdırılmış hâli (.pdf)'),
+                    (EvrakFormat.udf, 'UDF', context.l.editorFormatUdf),
+                    (EvrakFormat.docx, 'Word', context.l.editorFormatDocx),
+                    (EvrakFormat.rtf, 'RTF', context.l.editorFormatRtf),
+                    (EvrakFormat.pdf, 'PDF', context.l.editorFormatPdf),
                   ])
                     RadioListTile<EvrakFormat>(
                       key: ValueKey('save-format-${format.defaultExtension}'),
@@ -4850,7 +4875,7 @@ class _EditorWidgetState extends State<EditorWidget>
             FilledButton(
               key: const ValueKey('save-format-go'),
               onPressed: () => Navigator.pop(context, chosen),
-              child: const Text('Devam'),
+              child: Text(context.l.editorContinue),
             ),
           ],
         ),
@@ -4865,19 +4890,8 @@ class _EditorWidgetState extends State<EditorWidget>
         Icons.draw_outlined,
         color: Theme.of(context).colorScheme.primary,
       ),
-      title: const Text('Bu belge e-imzalı'),
-      content: const SizedBox(
-        width: 460,
-        child: Text(
-          'İmza, belgenin imzalandığı andaki içeriğini kapsar; değiştirilmiş '
-          'belgeye taşınamaz.\n\n'
-          '• Üzerine kaydet: dosya değişikliklerinizle, imzasız olarak '
-          'güncellenir. İmzalı hali belge geçmişinde saklanır; istediğinizde '
-          'ona dönebilir ya da kopyasını alabilirsiniz.\n\n'
-          '• İmzasız kopya: imzalı dosya olduğu gibi kalır, değişiklikler '
-          'yeni bir dosyaya yazılır.',
-        ),
-      ),
+      title: Text(context.l.editorSignedTitle),
+      content: SizedBox(width: 460, child: Text(context.l.editorSignedBody)),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
@@ -4886,12 +4900,12 @@ class _EditorWidgetState extends State<EditorWidget>
         TextButton(
           key: const ValueKey('save-unsigned-copy'),
           onPressed: () => Navigator.pop(context, _SignedSave.copy),
-          child: const Text('İmzasız kopya kaydet…'),
+          child: Text(context.l.editorSaveUnsignedCopy),
         ),
         FilledButton(
           key: const ValueKey('overwrite-signed'),
           onPressed: () => Navigator.pop(context, _SignedSave.overwrite),
-          child: const Text('Üzerine kaydet'),
+          child: Text(context.l.editorOverwriteSave),
         ),
       ],
     ),
@@ -4902,12 +4916,8 @@ class _EditorWidgetState extends State<EditorWidget>
       await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Belge başka bir yerde değiştirildi'),
-          content: const Text(
-            'Bu dosya, siz burada açtıktan sonra başka bir programda '
-            'değiştirilmiş. Kaydederseniz sizin hâliniz geçerli olur; '
-            'öbür hâli belge geçmişinde saklanır.',
-          ),
+          title: Text(context.l.editorChangedElsewhereTitle),
+          content: Text(context.l.editorChangedElsewhereBody),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -4916,7 +4926,7 @@ class _EditorWidgetState extends State<EditorWidget>
             FilledButton(
               key: const ValueKey('external-overwrite'),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Benim hâlimi kaydet'),
+              child: Text(context.l.editorSaveMine),
             ),
           ],
         ),
@@ -4927,11 +4937,8 @@ class _EditorWidgetState extends State<EditorWidget>
       await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('İmzalı dosyanın üzerine yazılsın mı?'),
-          content: const Text(
-            'Dosya değişikliklerinizle, imzasız olarak güncellenir. İmzalı '
-            'hali belge geçmişinde saklanır.',
-          ),
+          title: Text(context.l.editorOverwriteSignedTitle),
+          content: Text(context.l.editorOverwriteSignedBody),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -4939,7 +4946,7 @@ class _EditorWidgetState extends State<EditorWidget>
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Üzerine yaz'),
+              child: Text(context.l.editorOverwrite),
             ),
           ],
         ),
@@ -5101,11 +5108,7 @@ class _EditorWidgetState extends State<EditorWidget>
   /// almost without fault; either way this is the only text there is.
   Future<DocModel> _readPages(String path) async {
     if (!await OcrService.available) {
-      throw const FormatException(
-        'Bu PDF’te metin katmanı yok: yazıları taranmış ya da yazdırılırken '
-        'şekle dönüştürülmüş. Okumak için gereken OCR aracı bu kurulumda '
-        'bulunamadı.',
-      );
+      throw FormatException(AppLanguage.t.editorPdfNoTextNoOcr);
     }
     if (mounted) setState(() => _readingPages = true);
     try {
@@ -5115,10 +5118,7 @@ class _EditorWidgetState extends State<EditorWidget>
         pdfPages: _pagesToRead,
       );
       if (text == null || text.trim().isEmpty) {
-        throw const FormatException(
-          'Bu PDF’te metin katmanı yok ve sayfalarında okunabilir yazı '
-          'bulunamadı.',
-        );
+        throw FormatException(AppLanguage.t.editorPdfNoTextUnreadable);
       }
       return ocrDocModel(text);
     } finally {
@@ -5162,7 +5162,7 @@ class _EditorWidgetState extends State<EditorWidget>
       }
       if (!mounted || generation != _loadGeneration) return;
       if (model == null) {
-        throw const FormatException('Belge okunamadı veya bozuk.');
+        throw FormatException(AppLanguage.t.editorUnreadable);
       }
       await DocumentFonts.loadEditorFamilies(
         DocumentFonts.modelFamilies(model),
@@ -5211,10 +5211,8 @@ class _EditorWidgetState extends State<EditorWidget>
         if (readByOcr && _loadError == null) {
           showNotice(
             context,
-            'Bu PDF’te metin katmanı yoktu; metin sayfalardan okundu (OCR).',
-            detail:
-                'Kaydetmeden önce özellikle rakamları ve adları kontrol '
-                'edin.',
+            context.l.editorOcrRead,
+            detail: context.l.editorOcrCheck,
             duration: const Duration(seconds: 8),
           );
         }
@@ -5247,21 +5245,22 @@ class _EditorWidgetState extends State<EditorWidget>
     final go = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Doldurulmamış yer var'),
+        title: Text(context.l.editorBlanksTitle),
         content: Text(
-          'Belgede kalıptan gelen ${left.length} yer hâlâ boş: '
-          '${left.map((one) => '[$one]').join(', ')}.\n\n'
-          'Yine de kaydedilsin mi?',
+          context.l.editorBlanksBody(
+            left.length,
+            left.map((one) => '[$one]').join(', '),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Geri dön'),
+            child: Text(context.l.editorGoBack),
           ),
           FilledButton(
             key: const ValueKey('save-with-blanks'),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Yine de kaydet'),
+            child: Text(context.l.editorSaveAnyway),
           ),
         ],
       ),
@@ -5274,7 +5273,7 @@ class _EditorWidgetState extends State<EditorWidget>
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('İmzasız kopya kaydedilecek'),
+        title: Text(context.l.editorUnsignedCopyTitle),
         content: const Text(SignatureBanner.saveNotice),
         actions: [
           TextButton(
@@ -5283,7 +5282,7 @@ class _EditorWidgetState extends State<EditorWidget>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Anladım, kaydet'),
+            child: Text(context.l.editorUnderstoodSave),
           ),
         ],
       ),
@@ -5402,7 +5401,7 @@ class _EditorWidgetState extends State<EditorWidget>
           ? await PhoneDocumentSave.save(fileName: defaultName, bytes: outBytes)
           : destination ??
                 await FilePicker.saveFile(
-                  dialogTitle: 'Evrakı Kaydet ($ext)',
+                  dialogTitle: AppLanguage.t.editorSaveDialogTitle(ext),
                   fileName: defaultName,
                   type: FileType.custom,
                   allowedExtensions: [ext],
@@ -5430,10 +5429,8 @@ class _EditorWidgetState extends State<EditorWidget>
         if (mounted) {
           showNotice(
             context,
-            'Bu belge başka bir pencerede açık',
-            detail:
-                'Üzerine yazmak, o penceredeki çalışmayı kaybettirebilir. '
-                'Başka bir adla kaydedin ya da önce o pencereyi kapatın.',
+            context.l.editorOpenElsewhere,
+            detail: context.l.editorOverwriteHeldDetail,
             kind: NoticeKind.error,
           );
         }
@@ -5486,10 +5483,8 @@ class _EditorWidgetState extends State<EditorWidget>
             if (mounted) {
               showNotice(
                 context,
-                'İmzalı dosyanın üzerine yazılmadı',
-                detail:
-                    'İmzalı hali belge geçmişine saklanamadı. Değişiklikleri '
-                    'imzasız kopya olarak kaydedebilirsiniz.',
+                context.l.editorSignedNotOverwritten,
+                detail: context.l.editorSignedNotOverwrittenDetail,
                 kind: NoticeKind.error,
               );
             }
@@ -5500,10 +5495,8 @@ class _EditorWidgetState extends State<EditorWidget>
             if (mounted) {
               showNotice(
                 context,
-                'Belgenin üzerine yazılmadı',
-                detail:
-                    'Başka programdaki hâli belge geçmişine saklanamadı. '
-                    'Değişikliklerinizi başka bir adla kaydedebilirsiniz.',
+                context.l.editorNotOverwritten,
+                detail: context.l.editorNotOverwrittenDetail,
                 kind: NoticeKind.error,
               );
             }
@@ -5576,14 +5569,14 @@ class _EditorWidgetState extends State<EditorWidget>
         showNotice(
           context,
           savedAt != null
-              ? 'Kaydedildi'
+              ? context.l.editorSaved
               : PhoneDocumentSave.here
-              ? 'Belge seçtiğiniz konuma kaydedildi.'
-              : 'Başarıyla kaydedildi: ${p.basename(savePath)}',
+              ? context.l.editorSavedToLocation
+              : context.l.editorSavedAs(p.basename(savePath)),
           detail:
               savedAt ?? (PhoneDocumentSave.here ? null : p.dirname(savePath)),
           kind: NoticeKind.success,
-          actionLabel: savedAt != null ? 'Farklı kaydet' : null,
+          actionLabel: savedAt != null ? context.l.editorSaveAs : null,
           onAction: savedAt != null
               ? () => unawaited(_saveAs(targetFormat))
               : null,
@@ -5594,7 +5587,7 @@ class _EditorWidgetState extends State<EditorWidget>
       if (mounted) {
         showNotice(
           context,
-          'Kaydetme hatası: belge kaydedilemedi',
+          context.l.editorSaveFailed,
           detail: '$e',
           kind: NoticeKind.error,
         );
@@ -5617,14 +5610,14 @@ class _EditorWidgetState extends State<EditorWidget>
             const CircularProgressIndicator(),
             if (_readingPages) ...[
               const SizedBox(height: 16),
-              const Text(
-                'Bu PDF’te metin katmanı yok; sayfalar okunuyor (OCR)…',
-                key: ValueKey('reading-pages'),
+              Text(
+                context.l.editorOcrReading,
+                key: const ValueKey('reading-pages'),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),
               Text(
-                'Sayfa başına birkaç saniye sürebilir.',
+                context.l.editorOcrPerPage,
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -5643,12 +5636,12 @@ class _EditorWidgetState extends State<EditorWidget>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SelectableText('Belge açılamadı: $_loadError'),
+              SelectableText(context.l.editorOpenFailed('$_loadError')),
               const SizedBox(height: 16),
               OutlinedButton.icon(
                 onPressed: _history,
                 icon: const Icon(Icons.history_rounded),
-                label: const Text('Belge geçmişinden kurtar'),
+                label: Text(context.l.editorRecoverFromHistory),
               ),
             ],
           ),
@@ -5836,7 +5829,7 @@ class _EditorWidgetState extends State<EditorWidget>
                                     if (context.mounted) {
                                       showNotice(
                                         context,
-                                        'Yazı tipi yüklenemedi',
+                                        context.l.editorFontLoadFailed,
                                         detail: '$e',
                                         kind: NoticeKind.error,
                                       );
@@ -5897,7 +5890,7 @@ class _EditorWidgetState extends State<EditorWidget>
                         ),
                       if (_canSignNew)
                         IconButton(
-                          tooltip: 'UDF e-imzala',
+                          tooltip: context.l.editorSignUdf,
                           onPressed: _isSaving || _signingNew ? null : _signNew,
                           icon: const Icon(Icons.draw_outlined, size: 20),
                         ),
@@ -5937,7 +5930,7 @@ class _EditorWidgetState extends State<EditorWidget>
                         ),
                       ],
                       IconButton(
-                        tooltip: 'Kaydet · Ctrl+S',
+                        tooltip: context.l.editorSaveTooltip,
                         onPressed: _isSaving ? null : _save,
                         icon: _isSaving
                             ? const SizedBox(

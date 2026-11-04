@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../services/platform/app_language.dart';
+
 import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/editor/document_search.dart';
@@ -75,7 +78,7 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
       _current = next < 0 ? 0 : next;
       _select();
     }
-    _message = '$count eşleşme değiştirildi.';
+    _message = context.l.editorFindReplacedCount(count);
   });
   @override
   void dispose() {
@@ -86,7 +89,7 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Bul ve değiştir'),
+    title: Text(context.l.editorFindTitle),
     content: SizedBox(
       width: 460,
       child: SingleChildScrollView(
@@ -96,9 +99,9 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
             TextField(
               controller: _query,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Aranan metin',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                labelText: context.l.editorFindQuery,
+                prefixIcon: const Icon(Icons.search),
               ),
               onChanged: (_) => setState(_search),
               onSubmitted: (_) => _next(1),
@@ -109,7 +112,7 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
               runSpacing: 8,
               children: [
                 FilterChip(
-                  label: const Text('Büyük/küçük harf'),
+                  label: Text(context.l.editorFindMatchCase),
                   selected: _matchCase,
                   onSelected: (value) => setState(() {
                     _matchCase = value;
@@ -117,7 +120,7 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
                   }),
                 ),
                 FilterChip(
-                  label: const Text('Tam sözcük'),
+                  label: Text(context.l.editorFindWholeWord),
                   selected: _wholeWord,
                   onSelected: (value) => setState(() {
                     _wholeWord = value;
@@ -131,19 +134,22 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
                 Expanded(
                   child: Text(
                     _query.text.isEmpty
-                        ? 'Belge içinde arayın'
+                        ? context.l.editorFindPrompt
                         : _matches.isEmpty
-                        ? 'Eşleşme bulunamadı'
-                        : '${_current + 1} / ${_matches.length} eşleşme',
+                        ? context.l.editorFindNoMatch
+                        : context.l.editorFindPosition(
+                            _current + 1,
+                            _matches.length,
+                          ),
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Önceki eşleşme',
+                  tooltip: context.l.editorFindPrevious,
                   onPressed: _matches.isEmpty ? null : () => _next(-1),
                   icon: const Icon(Icons.keyboard_arrow_up),
                 ),
                 IconButton(
-                  tooltip: 'Sonraki eşleşme',
+                  tooltip: context.l.editorFindNext,
                   onPressed: _matches.isEmpty ? null : () => _next(1),
                   icon: const Icon(Icons.keyboard_arrow_down),
                 ),
@@ -151,14 +157,16 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Değiştir'),
+              title: Text(context.l.editorFindReplace),
               value: _replace,
               onChanged: (value) => setState(() => _replace = value),
             ),
             if (_replace) ...[
               TextField(
                 controller: _replacement,
-                decoration: const InputDecoration(labelText: 'Yeni metin'),
+                decoration: InputDecoration(
+                  labelText: context.l.editorFindReplacement,
+                ),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -167,11 +175,11 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
                 children: [
                   OutlinedButton(
                     onPressed: _matches.isEmpty ? null : () => _apply(false),
-                    child: const Text('Değiştir'),
+                    child: Text(context.l.editorFindReplace),
                   ),
                   FilledButton(
                     onPressed: _matches.isEmpty ? null : () => _apply(true),
-                    child: const Text('Tümünü değiştir'),
+                    child: Text(context.l.editorFindReplaceAll),
                   ),
                 ],
               ),
@@ -188,7 +196,7 @@ class _EditorFindReplaceState extends State<EditorFindReplace> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Kapat'),
+        child: Text(context.l.editorClose),
       ),
     ],
   );

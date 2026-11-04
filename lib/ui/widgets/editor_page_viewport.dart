@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import '../../services/platform/app_language.dart';
+
 import 'package:flutter/services.dart';
 
 import 'page_zoom.dart';
@@ -169,27 +172,29 @@ class _EditorPageViewportState extends State<EditorPageViewport> {
             ?widget.status,
             const Spacer(),
             IconButton(
-              tooltip: 'Uzaklaştır',
+              tooltip: context.l.editorZoomOut,
               onPressed: () => _setZoom(_zoom - .1),
               icon: const Icon(Icons.remove, size: 16),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 28, height: 28),
             ),
             PopupMenuButton<double>(
-              tooltip: 'Yakınlaştırma · Ctrl + fare tekerleği',
+              tooltip: context.l.editorZoomTooltip,
               onSelected: _setZoom,
               itemBuilder: (_) => [
                 for (final zoom in [.5, .75, 1.0, 1.2, 1.5, 2.0, 3.0])
                   PopupMenuItem(
                     value: zoom,
-                    child: Text('%${(zoom * 100).round()}'),
+                    child: Text(
+                      context.l.editorZoomPercent((zoom * 100).round()),
+                    ),
                   ),
               ],
               child: SizedBox(
                 width: 55,
                 child: Center(
                   child: Text(
-                    '%${(_zoom * 100).round()}',
+                    context.l.editorZoomPercent((_zoom * 100).round()),
                     key: const ValueKey('editor-zoom-label'),
                     style: const TextStyle(fontSize: 11),
                   ),
@@ -197,7 +202,7 @@ class _EditorPageViewportState extends State<EditorPageViewport> {
               ),
             ),
             IconButton(
-              tooltip: 'Yakınlaştır',
+              tooltip: context.l.editorZoomIn,
               onPressed: () => _setZoom(_zoom + .1),
               icon: const Icon(Icons.add, size: 16),
               padding: EdgeInsets.zero,
@@ -205,7 +210,10 @@ class _EditorPageViewportState extends State<EditorPageViewport> {
             ),
             TextButton(
               onPressed: () => _setZoom(PageZoom.initial),
-              child: const Text('Sıfırla', style: TextStyle(fontSize: 11)),
+              child: Text(
+                context.l.editorZoomReset,
+                style: const TextStyle(fontSize: 11),
+              ),
             ),
           ],
         ),

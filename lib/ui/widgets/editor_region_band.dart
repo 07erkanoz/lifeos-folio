@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../services/platform/app_language.dart';
+
 import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/fonts/document_fonts.dart';
@@ -159,8 +162,8 @@ class _EditorRegionBandState extends State<EditorRegionBand> {
         placeholder: widget.numberLabel != null
             ? null
             : header
-            ? 'Üst bilgi — her sayfanın başında yazılır'
-            : 'Alt bilgi — her sayfanın sonunda yazılır',
+            ? context.l.editorHeaderPlaceholder
+            : context.l.editorFooterPlaceholder,
         scrollable: false,
         expands: false,
         padding: EdgeInsets.zero,
@@ -194,10 +197,13 @@ class _EditorRegionBandState extends State<EditorRegionBand> {
                   child: InkWell(
                     onTap: widget.onRemove,
                     borderRadius: BorderRadius.circular(3),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
                       child: Text(
-                        'KALDIR',
+                        context.l.editorRegionRemove,
                         style: EditorRegionBand._labelStyle,
                       ),
                     ),
@@ -240,7 +246,9 @@ class _EditorRegionBandState extends State<EditorRegionBand> {
                 child: IgnorePointer(
                   child: Text(
                     [
-                      header ? 'ÜST BİLGİ' : 'ALT BİLGİ',
+                      header
+                          ? context.l.editorHeaderLabel
+                          : context.l.editorFooterLabel,
                       ?widget.note,
                     ].join(' · '),
                     style: EditorRegionBand._labelStyle,

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../services/platform/app_language.dart';
+
 import 'package:flutter/services.dart';
 
 /// The page counter, which is also the way to a page by its number.
@@ -41,7 +44,7 @@ class PageJump extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-    message: count < 2 ? label : 'Sayfaya git',
+    message: count < 2 ? label : context.l.editorPageJump,
     child: InkWell(
       onTap: count < 2 ? null : () => _ask(context),
       borderRadius: BorderRadius.circular(6),
@@ -52,7 +55,7 @@ class PageJump extends StatelessWidget {
           child: Text(
             label,
             textAlign: TextAlign.center,
-            semanticsLabel: 'Sayfa $current / $count',
+            semanticsLabel: context.l.editorPageSemantics(current, count),
             style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600),
           ),
         ),
@@ -86,7 +89,7 @@ class _PageJumpDialogState extends State<_PageJumpDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Sayfaya git'),
+    title: Text(context.l.editorPageJump),
     content: TextField(
       controller: _field,
       autofocus: true,
@@ -94,16 +97,16 @@ class _PageJumpDialogState extends State<_PageJumpDialog> {
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       onSubmitted: (_) => _go(),
       decoration: InputDecoration(
-        labelText: 'Sayfa numarası',
+        labelText: context.l.editorPageNumberField,
         helperText: '1 – ${widget.count}',
       ),
     ),
     actions: [
       TextButton(
         onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Vazgeç'),
+        child: Text(context.l.editorCancel),
       ),
-      FilledButton(onPressed: _go, child: const Text('Git')),
+      FilledButton(onPressed: _go, child: Text(context.l.editorPageJumpGo)),
     ],
   );
 }

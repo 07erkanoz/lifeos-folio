@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
+
+import '../../services/platform/app_language.dart';
+
 import 'package:flutter/services.dart';
 
 import '../../services/editor/tab_stops.dart';
@@ -150,8 +153,12 @@ class _DocumentRulerState extends State<DocumentRuler> {
       final margin = start ? leading : trailing;
       final position = (start ? leading : widget.pagePoints - trailing) * scale;
       final label = horizontal
-          ? (start ? 'Sol kenar boşluğu' : 'Sağ kenar boşluğu')
-          : (start ? 'Üst kenar boşluğu' : 'Alt kenar boşluğu');
+          ? (start
+                ? context.l.editorRulerMarginLeft
+                : context.l.editorRulerMarginRight)
+          : (start
+                ? context.l.editorRulerMarginTop
+                : context.l.editorRulerMarginBottom);
       void change(double delta) {
         final next = (margin + delta)
             .clamp(
@@ -178,8 +185,10 @@ class _DocumentRulerState extends State<DocumentRuler> {
         onIncrease: () => change(2.8346),
         onDecrease: () => change(-2.8346),
         child: Tooltip(
-          message:
-              '$label: ${(margin / DocumentRuler.pointsPerCm).toStringAsFixed(2)} cm · Sürükleyin',
+          message: context.l.editorRulerMarginTip(
+            label,
+            (margin / DocumentRuler.pointsPerCm).toStringAsFixed(2),
+          ),
           child: MouseRegion(
             cursor: horizontal
                 ? SystemMouseCursors.resizeLeftRight
@@ -341,8 +350,7 @@ class _DocumentRulerState extends State<DocumentRuler> {
         left: 1,
         top: 3,
         child: Tooltip(
-          message:
-              'Sekme türü: ${_kindName(_kind)} · Değiştirmek için tıklayın',
+          message: context.l.editorRulerTabKindTip(_kindName(_kind)),
           child: InkWell(
             key: const ValueKey('ruler-tab-kind'),
             onTap: () => setState(
@@ -371,10 +379,11 @@ class _DocumentRulerState extends State<DocumentRuler> {
           left: (left + p.origin + stop.position) * scale - 6,
           top: 11,
           child: Tooltip(
-            message:
-                '${_kindName(stop.align)} sekme · '
-                '${((p.origin + stop.position) / DocumentRuler.pointsPerCm).toStringAsFixed(2)} cm · '
-                'Silmek için aşağı sürükleyin ya da çift tıklayın',
+            message: context.l.editorRulerTabStopTip(
+              _kindName(stop.align),
+              ((p.origin + stop.position) / DocumentRuler.pointsPerCm)
+                  .toStringAsFixed(2),
+            ),
             child: GestureDetector(
               key: ValueKey('ruler-tab-$i'),
               behavior: HitTestBehavior.opaque,
@@ -421,7 +430,7 @@ class _DocumentRulerState extends State<DocumentRuler> {
         ),
       mark(
         key: const ValueKey('ruler-first'),
-        tip: 'İlk satır girintisi',
+        tip: context.l.editorRulerFirstLineIndent,
         at: left + p.firstRow,
         down: true,
         moved: (points) =>
@@ -429,7 +438,7 @@ class _DocumentRulerState extends State<DocumentRuler> {
       ),
       mark(
         key: const ValueKey('ruler-left'),
-        tip: 'Sol ve asılı girinti',
+        tip: context.l.editorRulerLeftIndent,
         at: left + p.otherRows,
         down: false,
         moved: (points) =>
@@ -437,7 +446,7 @@ class _DocumentRulerState extends State<DocumentRuler> {
       ),
       mark(
         key: const ValueKey('ruler-right'),
-        tip: 'Sağ girinti',
+        tip: context.l.editorRulerRightIndent,
         at: textEnd - p.right,
         down: false,
         moved: (points) => p.copyWith(
@@ -449,12 +458,12 @@ class _DocumentRulerState extends State<DocumentRuler> {
 
   bool _offRuler = false;
 
-  static String _kindName(TabAlign a) => switch (a) {
-    TabAlign.left => 'Sol',
-    TabAlign.centre => 'Orta',
-    TabAlign.right => 'Sağ',
-    TabAlign.decimal => 'Ondalık',
-    TabAlign.bar => 'Çubuk',
+  String _kindName(TabAlign a) => switch (a) {
+    TabAlign.left => context.l.editorTabLeft,
+    TabAlign.centre => context.l.editorTabCentre,
+    TabAlign.right => context.l.editorTabRight,
+    TabAlign.decimal => context.l.editorTabDecimal,
+    TabAlign.bar => context.l.editorTabBar,
   };
 }
 
