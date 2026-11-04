@@ -1,0 +1,8 @@
+{
+  "tr": "Folio küçük ekranlara sığar: 1280×800 ve 1366×768 dizüstülerde pencere dock'un arkasına taşmaz. Yapay zekâ sayfasında sohbet listesi açılıp kapanabilir; dar ekranda belgeler paneli yer kaplamaz. Sohbete eklenen PDF'lerdeki ekran görüntüleri ve gömülü taramalar modele görsel olarak gider; uzun taramalar yarım kalmadan tam OCR metniyle gider.",
+  "en": "Folio fits small screens: on 1280×800 and 1366×768 laptops the window no longer runs behind the dock. On the AI page the chat list can be hidden and shown; on a narrow screen the documents panel takes no room. Screenshots and embedded scans in PDFs added to a chat go to the model as pictures; long scans go whole as their OCR text.",
+  "ofis": {
+    "tr": "LifeOS Ofis'te UDF artık öne çıkmaz: açılış ekranında yeni belge Word olarak açılır, UDF olarak kaydetme dosya menüsünün sonundadır; UDF dosyaları yine açılır ve kaydedilir. Pencere küçük ekranlara sığar.",
+    "en": "UDF no longer comes first in LifeOS Ofis: a new document opens as Word, and saving as UDF is at the end of the file menu; UDF files still open and save. The window fits small screens."
+  }
+}
