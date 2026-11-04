@@ -5,6 +5,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../../services/speech/speech_session.dart';
 import 'speech_actions.dart';
+import '../../services/platform/app_language.dart';
 
 /// Use the app's Flutter Material toolbar. The viewer's default toolbar uses
 /// material_ui localizations, which are absent from our Flutter MaterialApp.
@@ -19,7 +20,7 @@ Widget? buildPreviewContextMenu(
         selection.isCopyAllowed &&
         selection.hasSelectedText)
       ContextMenuButtonItem(
-        label: 'Kopyala',
+        label: context.l.viewCopy,
         type: ContextMenuButtonType.copy,
         onPressed: () {
           params.dismissContextMenu();
@@ -33,7 +34,7 @@ Widget? buildPreviewContextMenu(
         selection.isCopyAllowed &&
         selection.hasSelectedText)
       ContextMenuButtonItem(
-        label: 'Sesli oku',
+        label: context.l.viewReadAloud,
         onPressed: () {
           params.dismissContextMenu();
           unawaited(
@@ -47,7 +48,7 @@ Widget? buildPreviewContextMenu(
       ),
     if (params.isTextSelectionEnabled && !selection.isSelectingAllText)
       ContextMenuButtonItem(
-        label: 'Tümünü seç',
+        label: context.l.viewSelectAll,
         type: ContextMenuButtonType.selectAll,
         onPressed: () {
           params.dismissContextMenu();

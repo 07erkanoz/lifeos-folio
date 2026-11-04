@@ -17,6 +17,7 @@ import '../../services/spreadsheet/workbook.dart';
 import 'draft_prompts.dart' show draftDate;
 import 'notice.dart';
 import 'pdf_viewer_widget.dart';
+import '../../services/platform/app_language.dart';
 
 /// The text a stored document reads as, for comparing two versions of it.
 /// Null for the kinds of file whose text is not compared, a spreadsheet.
@@ -63,7 +64,7 @@ Future<DocumentRevision?> showDocumentVersions(
   required String document,
   required String title,
   Future<String?> Function()? currentText,
-  String restoreLabel = 'Bu sürümü geri yükle',
+  String? restoreLabel,
   String? restoreHint,
   bool Function(DocumentRevision entry)? canRestore,
 }) => showDialog<DocumentRevision>(
@@ -72,7 +73,7 @@ Future<DocumentRevision?> showDocumentVersions(
     document: document,
     title: title,
     currentText: currentText,
-    restoreLabel: restoreLabel,
+    restoreLabel: restoreLabel ?? context.l.viewRestoreVersion,
     restoreHint: restoreHint,
     canRestore: canRestore,
   ),
@@ -137,7 +138,9 @@ class _VersionsWindowState extends State<_VersionsWindow> {
           return null;
         }
         final model = await ConverterService.extractDocModel(bytes, kind);
-        if (model == null) throw const FormatException('Bu sürüm okunamadı.');
+        if (model == null) {
+          throw FormatException(AppLanguage.t.viewVersionUnreadable);
+        }
         return PdfService.modelToPdfBytes(
           model,
           title: p.basenameWithoutExtension(entry.name),
@@ -162,8 +165,8 @@ class _VersionsWindowState extends State<_VersionsWindow> {
     final today = DateTime.now();
     final day = DateTime(d.year, d.month, d.day);
     final gap = DateTime(today.year, today.month, today.day).difference(day);
-    if (gap.inDays == 0) return 'Bugün';
-    if (gap.inDays == 1) return 'Dün';
+    if (gap.inDays == 0) return context.l.viewToday;
+    if (gap.inDays == 1) return context.l.viewYesterday;
     return draftDate(date).split(' ').first;
   }
 
@@ -182,6 +185,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
 
   Future<void> _saveCopy(DocumentRevision entry) async {
     if (_saving) return;
+    final l = context.l;
     setState(() => _saving = true);
     final messenger = _messenger.currentState;
     void show(SnackBar bar) => messenger
@@ -195,7 +199,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
       final path = PhoneDocumentSave.here
           ? await PhoneDocumentSave.save(fileName: name, bytes: bytes)
           : await FilePicker.saveFile(
-              dialogTitle: 'Sürümü kopya olarak kaydet',
+              dialogTitle: l.viewSaveVersionCopyDialog,
               fileName: name,
               type: FileType.custom,
               allowedExtensions: [entry.format],
@@ -210,10 +214,8 @@ class _VersionsWindowState extends State<_VersionsWindow> {
                     await FileSystemEntity.identical(path, source)))) {
           show(
             noticeBar(
-              'Kopya belgenin kendisinin üzerine yazılmaz',
-              detail:
-                  'Belgeyi bu sürüme döndürmek için «${widget.restoreLabel}» '
-                  'düğmesini kullanın.',
+              l.viewCopyOverOriginal,
+              detail: l.viewCopyOverOriginalHint(widget.restoreLabel),
               kind: NoticeKind.error,
             ),
           );
@@ -223,14 +225,14 @@ class _VersionsWindowState extends State<_VersionsWindow> {
       }
       show(
         noticeBar(
-          'Sürümün kopyası kaydedildi',
+          l.viewCopySaved,
           detail: PhoneDocumentSave.here ? null : path,
           kind: NoticeKind.success,
         ),
       );
     } catch (e) {
       show(
-        noticeBar('Kopya kaydedilemedi', detail: '$e', kind: NoticeKind.error),
+        noticeBar(l.viewCopySaveFailed, detail: '$e', kind: NoticeKind.error),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -250,7 +252,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
             children: [
               if (_phone && _selected != null)
                 IconButton(
-                  tooltip: 'Sürüm listesi',
+                  tooltip: context.l.viewVersionList,
                   onPressed: () => setState(() => _selected = null),
                   icon: const Icon(Icons.arrow_back_rounded),
                 )
@@ -261,9 +263,9 @@ class _VersionsWindowState extends State<_VersionsWindow> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Belge geçmişi',
-                      style: TextStyle(
+                    Text(
+                      context.l.viewHistoryTitle,
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
                       ),
@@ -281,7 +283,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
                 ),
               ),
               IconButton(
-                tooltip: 'Kapat · Esc',
+                tooltip: context.l.viewCloseEsc,
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close_rounded),
               ),
@@ -291,8 +293,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
           child: Text(
-            'Folio’da her kaydettiğinizde dosyanın önceki ve yeni hali bu '
-            'cihazda saklanır: belge başına son 20 sürüm, en fazla 100 MB.',
+            context.l.viewHistoryNote,
             style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
           ),
         ),
@@ -302,7 +303,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
             future: _entries,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return const Center(child: Text('Yerel geçmişe ulaşılamadı.'));
+                return Center(child: Text(context.l.viewHistoryUnreachable));
               }
               if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
@@ -359,14 +360,13 @@ class _VersionsWindowState extends State<_VersionsWindow> {
             color: colors.outline,
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Bu belgenin henüz saklanmış bir sürümü yok.',
-            style: TextStyle(fontWeight: FontWeight.w600),
+          Text(
+            context.l.viewHistoryEmpty,
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
           Text(
-            'Belgeyi Folio’da ilk kaydettiğinizde, dosyanın o ana kadarki hali '
-            've kaydettiğiniz yeni hali burada listelenir.',
+            context.l.viewHistoryEmptyHint,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12.5, color: colors.onSurfaceVariant),
           ),
@@ -408,7 +408,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
               Text(_time(entry.created)),
               if (entry.signed) ...[
                 const SizedBox(width: 8),
-                _chip('E-imzalı', colors),
+                _chip(context.l.viewSigned, colors),
               ],
             ],
           ),
@@ -447,18 +447,13 @@ class _VersionsWindowState extends State<_VersionsWindow> {
       OutlinedButton.icon(
         onPressed: _saving ? null : () => _saveCopy(entry),
         icon: const Icon(Icons.file_copy_outlined, size: 17),
-        label: const Text('Kopya olarak kaydet…'),
+        label: Text(context.l.viewSaveCopy),
       ),
       const SizedBox(width: 8),
       if (restorable)
         restore
       else
-        Tooltip(
-          message:
-              'Bu sürüm başka bir biçimde saklanmış; kopya olarak '
-              'kaydedebilirsiniz.',
-          child: restore,
-        ),
+        Tooltip(message: context.l.viewOtherFormatHint, child: restore),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -481,7 +476,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
                   ),
                   Text(
                     '${entry.format.toUpperCase()} · ${_size(entry.size)}'
-                    '${entry.signed ? ' · E-imzalı' : ''}',
+                    '${entry.signed ? ' · ${context.l.viewSigned}' : ''}',
                     style: TextStyle(
                       fontSize: 12,
                       color: colors.onSurfaceVariant,
@@ -511,12 +506,12 @@ class _VersionsWindowState extends State<_VersionsWindow> {
                 value: false,
                 enabled: compare,
                 icon: const Icon(Icons.compare_arrows_rounded, size: 17),
-                label: const Text('Şimdikiyle karşılaştır'),
+                label: Text(context.l.viewCompareCurrent),
               ),
-              const ButtonSegment(
+              ButtonSegment(
                 value: true,
-                icon: Icon(Icons.article_outlined, size: 17),
-                label: Text('Sayfa görünümü'),
+                icon: const Icon(Icons.article_outlined, size: 17),
+                label: Text(context.l.viewPageView),
               ),
             ],
             selected: {_pages || !compare},
@@ -542,7 +537,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
         future: _pagesOf(entry),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return _message('Sayfa görünümü hazırlanamadı: ${snapshot.error}');
+            return _message(context.l.viewPageViewFailed('${snapshot.error}'));
           }
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -557,10 +552,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (text.data == null) {
-                return _message(
-                  'Bu tür bir belge burada gösterilemiyor. «Kopya olarak '
-                  'kaydet» ile ayrı bir dosya olarak açabilirsiniz.',
-                );
+                return _message(context.l.viewTypeNotShown);
               }
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(18),
@@ -590,23 +582,17 @@ class _VersionsWindowState extends State<_VersionsWindow> {
         future: _diffOf(entry),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return _message('Karşılaştırılamadı: ${snapshot.error}');
+            return _message(context.l.viewCompareFailed('${snapshot.error}'));
           }
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
           final diff = snapshot.data;
           if (diff == null) {
-            return _message(
-              'Bu tür bir belgede metin karşılaştırılamıyor; sürümü «Sayfa '
-              'görünümü»nden inceleyebilirsiniz.',
-            );
+            return _message(context.l.viewCompareUnsupported);
           }
           if (diff.identical) {
-            return _message(
-              'Bu sürümün metni şu anki haliyle aynı. Yazı tipi, boşluk gibi '
-              'biçim farkları burada gösterilmez; «Sayfa görünümü»ne bakın.',
-            );
+            return _message(context.l.viewCompareIdentical);
           }
           final dark = Theme.of(context).brightness == Brightness.dark;
           final added = dark
@@ -626,12 +612,14 @@ class _VersionsWindowState extends State<_VersionsWindow> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
-                      'Bu sürümden bu yana ${diff.addedWords} kelime '
-                      'eklenmiş, ${diff.removedWords} kelime silinmiş.',
+                      context.l.viewDiffSummary(
+                        diff.addedWords,
+                        diff.removedWords,
+                      ),
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    _legend('Sonradan eklenen', added, colors),
-                    _legend('Sonradan silinen', removed, colors),
+                    _legend(context.l.viewAddedLater, added, colors),
+                    _legend(context.l.viewRemovedLater, removed, colors),
                   ],
                 ),
               ),
@@ -733,7 +721,7 @@ class _VersionsWindowState extends State<_VersionsWindow> {
     return [
       if (head > 0) TextSpan(text: '${lines.take(head).join('\n')}\n'),
       TextSpan(
-        text: '⋯ değişmeyen $hidden satır ⋯\n',
+        text: '${context.l.viewUnchangedLines(hidden)}\n',
         style: TextStyle(
           fontSize: 12,
           fontStyle: FontStyle.italic,

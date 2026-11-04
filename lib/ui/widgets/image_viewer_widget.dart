@@ -18,6 +18,7 @@ import 'notice.dart';
 import 'ocr_text_panel.dart';
 import 'swipe_pages.dart';
 import 'viewer_shortcuts.dart';
+import '../../services/platform/app_language.dart';
 
 class ImageViewerWidget extends StatefulWidget {
   final String filePath;
@@ -120,10 +121,7 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
     }
     if (!HeifImages.supported) {
       if (mounted) {
-        setState(
-          () => _sourceError =
-              'iPhone fotoğrafları (HEIC) şimdilik yalnız Android’de açılıyor.',
-        );
+        setState(() => _sourceError = context.l.viewHeicAndroidOnly);
       }
       return;
     }
@@ -131,7 +129,7 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
     if (!mounted || widget.filePath != path) return;
     setState(() {
       _source = decoded;
-      _sourceError = decoded == null ? 'Fotoğraf çözülemedi.' : null;
+      _sourceError = decoded == null ? context.l.viewPhotoDecodeFailed : null;
     });
     if (decoded != null) await _measure(decoded, path);
   }
@@ -280,7 +278,11 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
       messenger
         ?..clearSnackBars()
         ..showSnackBar(
-          noticeBar('Kırpılamadı', detail: '$trouble', kind: NoticeKind.error),
+          noticeBar(
+            context.l.viewCropFailed,
+            detail: '$trouble',
+            kind: NoticeKind.error,
+          ),
         );
     }
   }
@@ -334,31 +336,31 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
     child: Row(
       children: [
         IconButton(
-          tooltip: 'Sola 90° döndür',
+          tooltip: context.l.viewRotateLeft,
           icon: const Icon(Icons.rotate_left_rounded),
           onPressed: _cropping
               ? null
               : () => setState(() => _turns = (_turns + 3) % 4),
         ),
         IconButton(
-          tooltip: 'Sağa 90° döndür (R)',
+          tooltip: context.l.viewRotateRightKey,
           icon: const Icon(Icons.rotate_right_rounded),
           onPressed: _cropping
               ? null
               : () => setState(() => _turns = (_turns + 1) % 4),
         ),
         IconButton(
-          tooltip: 'Uzaklaştır (−)',
+          tooltip: context.l.viewZoomOutKey,
           icon: const Icon(Icons.zoom_out_rounded),
           onPressed: _cropping ? null : () => _zoom(.8),
         ),
         IconButton(
-          tooltip: 'Yakınlaştır (+)',
+          tooltip: context.l.viewZoomInKey,
           icon: const Icon(Icons.zoom_in_rounded),
           onPressed: _cropping ? null : () => _zoom(1.25),
         ),
         IconButton(
-          tooltip: 'Sığdır (0)',
+          tooltip: context.l.viewFitKey,
           icon: const Icon(Icons.fit_screen_rounded),
           onPressed: _cropping ? null : _fit,
         ),
@@ -366,8 +368,8 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
           IconButton(
             key: const ValueKey('image-crop'),
             tooltip: _intrinsic == null
-                ? 'Bu görsel ölçülemedi, kırpılamıyor'
-                : 'Kırp',
+                ? context.l.viewCropUnmeasured
+                : context.l.viewCrop,
             isSelected: _cropping,
             icon: const Icon(Icons.crop_rounded),
             onPressed: _intrinsic == null ? null : _toggleCrop,
@@ -375,7 +377,7 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
         if (widget.onFullScreen != null)
           IconButton(
             key: const ValueKey('image-fullscreen'),
-            tooltip: 'Tam ekran (F, ya da çift tık)',
+            tooltip: context.l.viewFullScreenKey,
             icon: const Icon(Icons.fullscreen_rounded),
             onPressed: widget.onFullScreen,
           ),
@@ -398,7 +400,9 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
     child: Center(
       child: _EdgeButton(
         buttonKey: ValueKey(forward ? 'image-next' : 'image-previous'),
-        tooltip: forward ? 'Sonraki fotoğraf (→)' : 'Önceki fotoğraf (←)',
+        tooltip: forward
+            ? context.l.viewNextPhoto
+            : context.l.viewPreviousPhoto,
         icon: forward
             ? Icons.chevron_right_rounded
             : Icons.chevron_left_rounded,
@@ -465,8 +469,8 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
               children: [
                 Text(
                   _crop == null
-                      ? 'Saklamak istediğiniz yeri sürükleyin'
-                      : 'Aslı olduğu gibi kalır, kırpılan yanına kaydedilir',
+                      ? context.l.viewCropDrag
+                      : context.l.viewCropKeepsOriginal,
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
@@ -476,9 +480,9 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
                   children: [
                     TextButton(
                       onPressed: _saving ? null : _toggleCrop,
-                      child: const Text(
-                        'Vazgeç',
-                        style: TextStyle(color: Colors.white),
+                      child: Text(
+                        context.l.viewCancel,
+                        style: const TextStyle(color: Colors.white),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -492,7 +496,7 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.check_rounded, size: 18),
-                      label: const Text('Kırp'),
+                      label: Text(context.l.viewCrop),
                     ),
                   ],
                 ),
@@ -532,7 +536,9 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
                       future: _svg,
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
-                          return Text('SVG açılamadı: ${snapshot.error}');
+                          return Text(
+                            context.l.viewSvgOpenFailed('${snapshot.error}'),
+                          );
                         }
                         if (!snapshot.hasData) {
                           return const CircularProgressIndicator();
@@ -561,7 +567,7 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
                       gaplessPlayback: true,
                       filterQuality: FilterQuality.medium,
                       errorBuilder: (_, error, stack) =>
-                          const Text('Görsel açılamadı.'),
+                          Text(context.l.viewImageOpenFailed),
                     ),
             ),
           ),

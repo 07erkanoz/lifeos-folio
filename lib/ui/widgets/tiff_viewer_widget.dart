@@ -11,6 +11,7 @@ import '../../services/search/library_controller.dart';
 import 'ocr_text_panel.dart';
 import 'page_jump.dart';
 import 'viewer_shortcuts.dart';
+import '../../services/platform/app_language.dart';
 
 class TiffViewerWidget extends StatefulWidget {
   final String filePath;
@@ -214,7 +215,7 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
       setState(() {
         _activePage = image;
         _pageLoading = false;
-        if (image == null) _pageError = 'Bu sayfa açılamadı.';
+        if (image == null) _pageError = context.l.viewPageOpenFailed;
       });
       _preloadNeighbors(pageIndex);
     } catch (e) {
@@ -302,19 +303,19 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.first_page_rounded, size: 20),
-                    tooltip: 'İlk Sayfa',
+                    tooltip: context.l.viewFirstPage,
                     onPressed: _currentPage > 0 ? () => _loadPage(0) : null,
                   ),
                   IconButton(
                     icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                    tooltip: 'Önceki Sayfa',
+                    tooltip: context.l.viewPreviousPage,
                     onPressed: _currentPage > 0
                         ? () => _loadPage(_currentPage - 1)
                         : null,
                   ),
                   const SizedBox(width: 8),
                   PageJump(
-                    label: 'Sayfa ${_currentPage + 1} / $_pageCount',
+                    label: context.l.viewPageOf(_currentPage + 1, _pageCount),
                     current: _currentPage + 1,
                     count: _pageCount,
                     width: 108,
@@ -324,14 +325,14 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.chevron_right_rounded, size: 20),
-                    tooltip: 'Sonraki Sayfa',
+                    tooltip: context.l.viewNextPage,
                     onPressed: _currentPage < _pageCount - 1
                         ? () => _loadPage(_currentPage + 1)
                         : null,
                   ),
                   IconButton(
                     icon: const Icon(Icons.last_page_rounded, size: 20),
-                    tooltip: 'Son Sayfa',
+                    tooltip: context.l.viewLastPage,
                     onPressed: _currentPage < _pageCount - 1
                         ? () => _loadPage(_pageCount - 1)
                         : null,
@@ -341,7 +342,7 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
                     FilledButton.tonalIcon(
                       onPressed: widget.onConvertToPdfRequested,
                       icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-                      label: const Text('TIF → PDF Dönüştür'),
+                      label: Text(context.l.viewTifToPdf),
                       style: FilledButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -350,30 +351,30 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
                     const SizedBox(width: 12),
                   ],
                   IconButton(
-                    tooltip: 'Sola 90° döndür',
+                    tooltip: context.l.viewRotateLeft,
                     icon: const Icon(Icons.rotate_left_rounded),
                     onPressed: () =>
                         setState(() => _quarterTurns = (_quarterTurns + 3) % 4),
                   ),
                   IconButton(
-                    tooltip: 'Sağa 90° döndür',
+                    tooltip: context.l.viewRotateRight,
                     icon: const Icon(Icons.rotate_right_rounded),
                     onPressed: () =>
                         setState(() => _quarterTurns = (_quarterTurns + 1) % 4),
                   ),
                   IconButton(
                     icon: const Icon(Icons.zoom_out_rounded, size: 20),
-                    tooltip: 'Uzaklaştır',
+                    tooltip: context.l.viewZoomOut,
                     onPressed: () => _setScale(_scale - 0.25),
                   ),
                   IconButton(
                     icon: const Icon(Icons.zoom_in_rounded, size: 20),
-                    tooltip: 'Yakınlaştır',
+                    tooltip: context.l.viewZoomIn,
                     onPressed: () => _setScale(_scale + 0.25),
                   ),
                   IconButton(
                     icon: const Icon(Icons.fit_screen_rounded, size: 20),
-                    tooltip: 'Sığdır',
+                    tooltip: context.l.viewFit,
                     onPressed: () => _setScale(1.0),
                   ),
                   const VerticalDivider(width: 16, indent: 10, endIndent: 10),

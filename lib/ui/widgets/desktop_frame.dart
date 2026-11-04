@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../services/platform/app_language.dart';
+
 /// Application chrome stays outside the Navigator, including on license pages.
 class DesktopFrame extends StatefulWidget {
   /// Whether the window's own bar is Folio's, with its name and mark: the
@@ -25,7 +27,7 @@ class DesktopFrame extends StatefulWidget {
   final List<Widget> leading;
 
   /// The icon's tooltip, naming the program now that the bar may not.
-  final String iconTooltip;
+  final String? iconTooltip;
 
   /// Shown before and after [title]: the standalone editor's document icon
   /// and its unsaved-changes dot.
@@ -39,7 +41,7 @@ class DesktopFrame extends StatefulWidget {
     this.title = 'LifeOS Folio',
     this.icon = 'assets/branding/lifeos_folio.png',
     this.leading = const [],
-    this.iconTooltip = 'LifeOS Folio hakkında',
+    this.iconTooltip,
     this.titleIcon,
     this.titleTrailing,
   });
@@ -91,7 +93,7 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
       await action();
       await _sync();
     } catch (_) {
-      if (mounted) setState(() => _error = 'Pencere işlemi tamamlanamadı');
+      if (mounted) setState(() => _error = context.l.viewWindowActionFailed);
     }
   }
 
@@ -256,7 +258,11 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                                 onTap: widget.onAbout,
                                 borderRadius: BorderRadius.circular(6),
                                 child: Tooltip(
-                                  message: widget.iconTooltip,
+                                  message:
+                                      widget.iconTooltip ??
+                                      context.l.viewAboutProduct(
+                                        'LifeOS Folio',
+                                      ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(5),
                                     child: Image.asset(
@@ -340,12 +346,12 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                                 ),
                               ),
                               _control(
-                                'Hakkında',
+                                context.l.viewAbout,
                                 Icons.info_outline_rounded,
                                 widget.onAbout,
                               ),
                               _control(
-                                '${_fullScreen ? 'Tam ekrandan çık' : 'Tam ekran'}'
+                                '${_fullScreen ? context.l.viewExitFullScreen : context.l.viewFullScreen}'
                                 ' (${_mac ? '⌃⌘F' : 'F11'})',
                                 _fullScreen
                                     ? Icons.fullscreen_exit_rounded
@@ -359,12 +365,14 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                                   width: 1,
                                 ),
                                 _control(
-                                  'Simge durumuna küçült',
+                                  context.l.viewMinimize,
                                   Icons.remove_rounded,
                                   () => _run(windowManager.minimize),
                                 ),
                                 _control(
-                                  _maximized ? 'Önceki boyut' : 'Ekranı kapla',
+                                  _maximized
+                                      ? context.l.viewRestoreSize
+                                      : context.l.viewMaximize,
                                   _maximized
                                       ? Icons.filter_none_rounded
                                       : Icons.crop_square_rounded,
@@ -372,8 +380,8 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                                 ),
                                 _control(
                                   widget.closeToTray
-                                      ? 'Tepsiye gizle'
-                                      : 'Uygulamayı kapat',
+                                      ? context.l.viewHideToTray
+                                      : context.l.viewCloseApp,
                                   Icons.close_rounded,
                                   () => _run(windowManager.close),
                                   close: true,

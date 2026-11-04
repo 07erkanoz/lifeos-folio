@@ -5,6 +5,7 @@ import 'document_preview_widget.dart';
 import 'image_viewer_widget.dart';
 import 'pdf_viewer_widget.dart';
 import 'tiff_viewer_widget.dart';
+import '../../services/platform/app_language.dart';
 
 /// A document shown, from its path, by the viewer its kind needs: a PDF on
 /// its own pages, a UDF or Word file laid out as it prints, a scan page by
@@ -46,7 +47,7 @@ class FilePreview extends StatelessWidget {
         file: file,
         chrome: chrome,
       ),
-      _ => const Center(child: Text('Bu biçim önizlenemiyor.')),
+      _ => Center(child: Text(context.l.viewFormatNotPreviewable)),
     };
   }
 }

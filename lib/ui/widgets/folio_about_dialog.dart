@@ -10,6 +10,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../mobile/settings_parts.dart';
 import 'notice.dart';
 import '../../services/platform/app_edition.dart';
+import '../../services/platform/app_language.dart';
 
 void showFolioAbout(BuildContext context) => showDialog<void>(
   context: context,
@@ -72,7 +73,7 @@ class FolioAboutDialog extends StatelessWidget {
     if (context.mounted) {
       showNotice(
         context,
-        'Adres açılamadı',
+        context.l.viewAddressOpenFailed,
         detail: 'https://lifeos.com.tr$path',
         kind: NoticeKind.error,
       );
@@ -108,7 +109,7 @@ class FolioAboutDialog extends StatelessWidget {
               Align(
                 alignment: Alignment.topRight,
                 child: IconButton(
-                  tooltip: 'Kapat',
+                  tooltip: context.l.viewClose,
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close_rounded, size: 20),
                 ),
@@ -141,7 +142,10 @@ class FolioAboutDialog extends StatelessWidget {
                 future: PackageInfo.fromPlatform(),
                 builder: (context, info) => Text(
                   info.hasData
-                      ? 'Sürüm ${info.data!.version} (${info.data!.buildNumber})'
+                      ? context.l.viewVersion(
+                          info.data!.version,
+                          info.data!.buildNumber,
+                        )
                       : ' ',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: muted),
@@ -150,45 +154,35 @@ class FolioAboutDialog extends StatelessWidget {
               const SizedBox(height: 14),
               Text(
                 AppEdition.isOfis
-                    ? 'Belgeleri açan, düzenleyen ve imzalayan uygulama'
-                    : 'Avukatlar için dilekçe, dava ve büro uygulaması',
+                    ? context.l.viewAboutTaglineOfis
+                    : context.l.viewAboutTaglineFolio,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(
                 AppEdition.isOfis
-                    ? 'Ofis ile UDF, Word, ODT, RTF ve PDF belgelerinizi açar, '
-                          'düzenler, yazdırır ve e-imza kartınızla imzalarsınız. '
-                          'Kanun maddesi ve karar atıflarını denetler, yazım '
-                          'hatalarını bulur, metni sesli okur ve söylediklerinizi '
-                          'yazarsınız.'
-                    : 'Folio ile UDF dilekçenizi yazar, e-imza ya da mobil '
-                          'imzayla imzalar ve dava dosyanıza gönderirsiniz. '
-                          'Müvekkillerinizi, duruşma ve süre takviminizi, '
-                          'büronuzun kasasını ve ekibinizi aynı uygulamadan '
-                          'yönetirsiniz.',
+                    ? context.l.viewAboutDescOfis
+                    : context.l.viewAboutDescFolio,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, height: 1.55, color: muted),
               ),
               const SizedBox(height: 8),
               Text(
-                'Verileriniz yalnız sizin cihazlarınızda tutulur. '
-                '${AppEdition.isOfis ? 'Ofis’in verilerinizi tutan bir sunucusu yoktur ve yapay zekâ hizmeti kullanmaz.' : 'Folio’nun verilerinizi tutan bir sunucusu yoktur. Yapay zekâ özellikleri isteğe bağlıdır ve siz açmadıkça kapalıdır.'} '
-                'Başka bir büroyla uzaktan canlı paylaşımda belge '
-                've yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu '
-                'içeriği göremez ve hiçbir şey saklamaz.',
+                AppEdition.isOfis
+                    ? context.l.viewAboutDataOfis
+                    : context.l.viewAboutDataFolio,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, height: 1.55, color: muted),
               ),
-              const SettingsSection('SÖZLEŞMELER'),
+              SettingsSection(context.l.viewAgreements),
               SettingsGroup(
                 children: [
                   SettingsRow(
                     key: const ValueKey('about-terms'),
                     icon: Icons.description_outlined,
-                    title: folioTerms.title,
-                    subtitle: 'Kullanım izni ve sorumluluklar',
+                    title: context.l.viewTermsTitle,
+                    subtitle: context.l.viewTermsSubtitle,
                     onTap: () => unawaited(openFolioLegal(context, folioTerms)),
                   ),
                   SettingsRow(
@@ -196,8 +190,8 @@ class FolioAboutDialog extends StatelessWidget {
                     icon: Icons.shield_outlined,
                     fill: AgendaColors.eHearingFill,
                     tint: AgendaColors.eHearing,
-                    title: folioPrivacy.title,
-                    subtitle: 'Kişisel verileriniz nasıl korunur',
+                    title: context.l.viewPrivacyTitle,
+                    subtitle: context.l.viewPrivacySubtitle,
                     onTap: () =>
                         unawaited(openFolioLegal(context, folioPrivacy)),
                   ),
@@ -206,8 +200,8 @@ class FolioAboutDialog extends StatelessWidget {
                     icon: Icons.copyright_rounded,
                     fill: AgendaColors.line,
                     tint: AgendaColors.muted,
-                    title: folioLicense.title,
-                    subtitle: 'Tescilli yazılım',
+                    title: context.l.viewLicenseTitle,
+                    subtitle: context.l.viewLicenseSubtitle,
                     onTap: () =>
                         unawaited(openFolioLegal(context, folioLicense)),
                   ),
@@ -216,13 +210,13 @@ class FolioAboutDialog extends StatelessWidget {
                     icon: Icons.layers_outlined,
                     fill: AgendaColors.line,
                     tint: AgendaColors.muted,
-                    title: 'Açık kaynak lisansları',
-                    subtitle: 'Folio’da kullanılan bileşenler',
+                    title: context.l.viewOpenSourceLicenses,
+                    subtitle: context.l.viewComponentsSubtitle,
                     onTap: () => unawaited(_components(context)),
                   ),
                 ],
               ),
-              const SettingsSection('DESTEK'),
+              SettingsSection(context.l.viewSupport),
               SettingsGroup(
                 children: [
                   if (!AppEdition.isOfis)
@@ -231,15 +225,15 @@ class FolioAboutDialog extends StatelessWidget {
                       icon: Icons.devices_outlined,
                       fill: AgendaColors.taskFill,
                       tint: AgendaColors.task,
-                      title: 'Diğer cihazlarınıza indirin',
+                      title: context.l.viewDownloadOther,
                       subtitle: _otherDevices,
                       onTap: () => unawaited(_open(context, '/', 'indir')),
                     ),
                   SettingsRow(
                     key: const ValueKey('about-contact'),
                     icon: Icons.mail_outline_rounded,
-                    title: 'Destek ve iletişim',
-                    subtitle: 'İletişim formuyla bize yazın',
+                    title: context.l.viewContact,
+                    subtitle: context.l.viewContactSubtitle,
                     onTap: () => unawaited(_open(context, '/iletisim')),
                   ),
                   SettingsRow(
@@ -248,16 +242,14 @@ class FolioAboutDialog extends StatelessWidget {
                     fill: AgendaColors.line,
                     tint: AgendaColors.muted,
                     title: 'lifeos.com.tr',
-                    subtitle: 'Folio’nun web sitesi',
+                    subtitle: context.l.viewWebsite,
                     onTap: () => unawaited(_open(context, '/')),
                   ),
                 ],
               ),
               const SizedBox(height: 18),
               Text(
-                '© 2026 LifeOS. Tüm hakları saklıdır. '
-                '${AppEdition.isOfis ? 'Ofis' : 'Folio'} tescilli bir '
-                'yazılımdır, açık kaynak değildir.',
+                context.l.viewCopyright(AppEdition.isOfis ? 'Ofis' : 'Folio'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: muted),
               ),

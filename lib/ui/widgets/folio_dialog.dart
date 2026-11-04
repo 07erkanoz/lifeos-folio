@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../services/platform/app_language.dart';
+
 /// A dialog in Folio's own shape: a heading with its icon and a line under
 /// it, a close button in the corner, the body scrolling between them, and
 /// the buttons on a quiet band at the bottom.
@@ -108,7 +110,7 @@ class FolioDialog extends StatelessWidget {
                   ),
                   if (onClose != null)
                     IconButton(
-                      tooltip: 'Kapat',
+                      tooltip: context.l.viewClose,
                       onPressed: canClose ? onClose : null,
                       visualDensity: VisualDensity.compact,
                       icon: const Icon(Icons.close_rounded, size: 20),

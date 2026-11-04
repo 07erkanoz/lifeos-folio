@@ -7,6 +7,7 @@ import '../../services/preview/preview_cache.dart';
 import 'flowing_document_view.dart';
 import 'pdf_viewer_widget.dart';
 import 'signature_banner.dart';
+import '../../services/platform/app_language.dart';
 
 class DocumentPreviewWidget extends StatefulWidget {
   final EvrakFile file;
@@ -73,7 +74,9 @@ class _DocumentPreviewWidgetState extends State<DocumentPreviewWidget> {
     builder: (context, snapshot) {
       if (snapshot.hasError) {
         return Center(
-          child: SelectableText('Önizleme açılamadı: ${snapshot.error}'),
+          child: SelectableText(
+            context.l.viewPreviewFailed('${snapshot.error}'),
+          ),
         );
       }
       if (!snapshot.hasData) {

@@ -11,6 +11,7 @@ import '../../services/udf/signature_parser.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import 'file_preview.dart';
 import 'notice.dart';
+import '../../services/platform/app_language.dart';
 
 /// An `.imz` opened: whether its signature holds and who signed it, above
 /// the document it holds, read as any document is. The document is taken
@@ -64,7 +65,7 @@ class _ImzViewState extends State<ImzView> {
 
   Future<void> _save(ImzContent read) async {
     final target = await FilePicker.saveFile(
-      dialogTitle: 'İmzalı belgenin içeriğini kaydet',
+      dialogTitle: context.l.viewImzSaveDialog,
       fileName: read.name,
     );
     if (target == null) return;
@@ -72,7 +73,7 @@ class _ImzViewState extends State<ImzView> {
     if (mounted) {
       showNotice(
         context,
-        'Belge kaydedildi',
+        context.l.viewDocumentSaved,
         detail: target,
         kind: NoticeKind.success,
       );
@@ -101,9 +102,10 @@ class _ImzViewState extends State<ImzView> {
     final lines = [
       if ((s.organization ?? '').isNotEmpty) s.organization!,
       if ((s.subjectIdentifier ?? '').isNotEmpty)
-        'T.C. kimlik no: ${_masked(s.subjectIdentifier)}',
-      if (s.signedAt != null) 'İmza tarihi: ${_date(s.signedAt)}',
-      if ((s.issuerName ?? '').isNotEmpty) 'Sertifikayı veren: ${s.issuerName}',
+        context.l.viewImzIdNumber(_masked(s.subjectIdentifier)),
+      if (s.signedAt != null) context.l.viewImzSignedAt(_date(s.signedAt)),
+      if ((s.issuerName ?? '').isNotEmpty)
+        context.l.viewImzIssuer(s.issuerName!),
     ];
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -111,7 +113,7 @@ class _ImzViewState extends State<ImzView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            s.signerName ?? 'Adı okunamayan imzacı',
+            s.signerName ?? context.l.viewImzUnnamedSigner,
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           for (final line in lines)
@@ -151,10 +153,7 @@ class _ImzViewState extends State<ImzView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  ok
-                      ? 'E-imza geçerli'
-                      : 'E-imza doğrulanamadı: belge imzadan sonra değişmiş '
-                            'olabilir',
+                  ok ? context.l.viewImzValid : context.l.viewImzInvalid,
                   key: const ValueKey('imz-state'),
                   style: TextStyle(
                     fontSize: 15,
@@ -165,9 +164,7 @@ class _ImzViewState extends State<ImzView> {
                 for (final s in read.signers) _signer(s),
                 const SizedBox(height: 8),
                 Text(
-                  'İmza, içindeki belgeyle ve imzacının kendi sertifikasıyla '
-                  'denetlendi. Sertifikanın yetkili bir kuruluşça verildiği ve '
-                  'iptal edilmediği ayrıca denetlenmedi.',
+                  context.l.viewImzCheckedNote,
                   style: TextStyle(fontSize: 11.5, color: AgendaColors.muted),
                 ),
               ],
@@ -178,7 +175,7 @@ class _ImzViewState extends State<ImzView> {
             key: const ValueKey('imz-save'),
             onPressed: () => unawaited(_save(read)),
             icon: const Icon(Icons.save_alt_rounded, size: 18),
-            label: const Text('Belgeyi kaydet…'),
+            label: Text(context.l.viewImzSaveDocument),
           ),
         ],
       ),
@@ -198,8 +195,7 @@ class _ImzViewState extends State<ImzView> {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              'Bu dosya okunamadı: içinde belge olan bir e-imza dosyası değil '
-              'ya da bozuk.',
+              context.l.viewImzUnreadable,
               key: const ValueKey('imz-unreadable'),
               textAlign: TextAlign.center,
               style: TextStyle(color: AgendaColors.muted),
@@ -219,8 +215,7 @@ class _ImzViewState extends State<ImzView> {
                 ? FilePreview(path: inside)
                 : Center(
                     child: Text(
-                      'İçindeki belge (${read.name}) burada gösterilemiyor; '
-                      'kaydedip açabilirsiniz.',
+                      context.l.viewImzInsideNotShown(read.name),
                       style: TextStyle(color: AgendaColors.muted),
                     ),
                   ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../services/platform/app_language.dart';
+
 /// A card shown over the document, near what the reader pressed.
 ///
 /// Built like the quick look on the archive: an overlay rather than a
@@ -182,7 +184,7 @@ class OverlayCardFrame extends StatelessWidget {
                     ...actions,
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
-                      tooltip: 'Kapat (Esc)',
+                      tooltip: context.l.viewCloseEscParen,
                       onPressed: onClose,
                     ),
                   ],

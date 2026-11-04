@@ -31,6 +31,7 @@ import 'citation_list_panel.dart';
 import 'editor_citations.dart';
 import 'notice.dart';
 import 'folio_select.dart';
+import '../../services/platform/app_language.dart';
 
 enum _PageFit { reading, page, width, manual }
 
@@ -398,7 +399,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
         if (!mounted) return;
         showNotice(
           context,
-          'Vurgu kaydedilemedi',
+          context.l.viewHighlightSaveFailed,
           detail: '$error',
           kind: NoticeKind.error,
         );
@@ -439,12 +440,19 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Text(mark.color == color ? 'Bu renk' : 'Rengi değiştir'),
+                Text(
+                  mark.color == color
+                      ? context.l.viewThisColor
+                      : context.l.viewChangeColor,
+                ),
               ],
             ),
           ),
         const PopupMenuDivider(),
-        const PopupMenuItem(value: 'delete', child: Text('Vurguyu sil')),
+        PopupMenuItem(
+          value: 'delete',
+          child: Text(context.l.viewDeleteHighlight),
+        ),
       ],
     );
     if (choice == null || !mounted) return;
@@ -644,10 +652,10 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                 focusNode: _searchFocus,
                 autofocus: true,
                 style: const TextStyle(fontSize: 13),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  hintText: 'Belgede bul',
+                  hintText: context.l.viewFindInDocument,
                 ),
                 onChanged: (value) => value.isEmpty
                     ? search.resetTextSearch()
@@ -659,21 +667,23 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
             _searchField.text.isEmpty
                 ? ''
                 : found == 0
-                ? (search.isSearching ? 'aranıyor…' : 'bulunamadı')
+                ? (search.isSearching
+                      ? context.l.viewSearching
+                      : context.l.viewNotFound)
                 : '${(at ?? 0) + 1} / $found',
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
           ),
           _button(
-            'Önceki · Shift+Enter',
+            context.l.viewPreviousMatch,
             Icons.keyboard_arrow_up_rounded,
             found == 0 ? null : () => search.goToPrevMatch(),
           ),
           _button(
-            'Sonraki · Enter',
+            context.l.viewNextMatch,
             Icons.keyboard_arrow_down_rounded,
             found == 0 ? null : () => search.goToNextMatch(),
           ),
-          _button('Kapat · Esc', Icons.close_rounded, _closeSearch),
+          _button(context.l.viewCloseEsc, Icons.close_rounded, _closeSearch),
         ],
       ),
     );
@@ -725,12 +735,12 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                 children: [
                   _pill([
                     _button(
-                      'İlk Sayfa',
+                      context.l.viewFirstPage,
                       Icons.first_page_rounded,
                       _currentPage > 1 ? () => _goToPage(1) : null,
                     ),
                     _button(
-                      'Önceki Sayfa',
+                      context.l.viewPreviousPage,
                       Icons.chevron_left_rounded,
                       _currentPage > 1
                           ? () => _goToPage(_currentPage - 1)
@@ -744,14 +754,14 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                       onGo: _goToPage,
                     ),
                     _button(
-                      'Sonraki Sayfa',
+                      context.l.viewNextPage,
                       Icons.chevron_right_rounded,
                       _currentPage < _pageCount
                           ? () => _goToPage(_currentPage + 1)
                           : null,
                     ),
                     _button(
-                      'Son Sayfa',
+                      context.l.viewLastPage,
                       Icons.last_page_rounded,
                       _currentPage < _pageCount
                           ? () => _goToPage(_pageCount)
@@ -761,7 +771,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                   const SizedBox(width: 10),
                   _pill([
                     _button(
-                      'Uzaklaştır',
+                      context.l.viewZoomOut,
                       Icons.remove_rounded,
                       ready
                           ? () {
@@ -771,7 +781,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                           : null,
                     ),
                     _button(
-                      'Yakınlaştır',
+                      context.l.viewZoomIn,
                       Icons.add_rounded,
                       ready
                           ? () {
@@ -790,22 +800,22 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                           fontSize: 12,
                           color: scheme.onSurface,
                         ),
-                        items: const [
-                          DropdownMenuItem(
+                        items: [
+                          const DropdownMenuItem(
                             value: _PageFit.reading,
                             child: Text('%120'),
                           ),
                           DropdownMenuItem(
                             value: _PageFit.page,
-                            child: Text('Sayfaya sığdır'),
+                            child: Text(context.l.viewFitPage),
                           ),
                           DropdownMenuItem(
                             value: _PageFit.width,
-                            child: Text('Genişliğe sığdır'),
+                            child: Text(context.l.viewFitWidth),
                           ),
                           DropdownMenuItem(
                             value: _PageFit.manual,
-                            child: Text('Serbest yakınlaştırma'),
+                            child: Text(context.l.viewFreeZoom),
                           ),
                         ],
                         onChanged: ready
@@ -821,12 +831,12 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                   const SizedBox(width: 10),
                   _pill([
                     _button(
-                      'Sola 90° döndür',
+                      context.l.viewRotateLeft,
                       Icons.rotate_left_rounded,
                       ready ? () => _rotate(false) : null,
                     ),
                     _button(
-                      'Sağa 90° döndür',
+                      context.l.viewRotateRight,
                       Icons.rotate_right_rounded,
                       ready ? () => _rotate(true) : null,
                     ),
@@ -841,7 +851,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                   if (_allCited.isNotEmpty) ...[
                     const SizedBox(width: 8),
                     _button(
-                      'Dayanaklar · madde ve kararlar',
+                      context.l.viewCitations,
                       Icons.format_list_bulleted_rounded,
                       () => setState(
                         () => _citationListOpen = !_citationListOpen,
@@ -852,8 +862,8 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                     const SizedBox(width: 8),
                     _button(
                       _hasSelection
-                          ? 'Seçimi vurgula'
-                          : 'Vurgulamak için metin seçin',
+                          ? context.l.viewHighlightSelection
+                          : context.l.viewSelectToHighlight,
                       Icons.border_color_rounded,
                       _hasSelection ? _addHighlight : null,
                     ),
@@ -908,7 +918,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                             child: Padding(
                               padding: const EdgeInsets.all(24),
                               child: SelectableText(
-                                'Önizleme açılamadı: $error',
+                                context.l.viewPreviewFailed('$error'),
                               ),
                             ),
                           ),
@@ -1312,7 +1322,7 @@ class _ColorDot extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Tooltip(
-      message: 'Vurgu rengi',
+      message: context.l.viewHighlightColor,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),

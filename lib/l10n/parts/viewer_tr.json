@@ -1,0 +1,278 @@
+{
+  "viewClose": "Kapat",
+  "viewCloseEsc": "Kapat · Esc",
+  "viewCloseEscParen": "Kapat (Esc)",
+  "viewCancel": "Vazgeç",
+  "viewFirstPage": "İlk Sayfa",
+  "viewPreviousPage": "Önceki Sayfa",
+  "viewNextPage": "Sonraki Sayfa",
+  "viewLastPage": "Son Sayfa",
+  "viewZoomIn": "Yakınlaştır",
+  "viewZoomOut": "Uzaklaştır",
+  "viewZoomInKey": "Yakınlaştır (+)",
+  "viewZoomOutKey": "Uzaklaştır (−)",
+  "viewRotateLeft": "Sola 90° döndür",
+  "viewRotateRight": "Sağa 90° döndür",
+  "viewRotateRightKey": "Sağa 90° döndür (R)",
+  "viewFit": "Sığdır",
+  "viewFitKey": "Sığdır (0)",
+  "viewPreviewFailed": "Önizleme açılamadı: {error}",
+  "@viewPreviewFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewHighlightSaveFailed": "Vurgu kaydedilemedi",
+  "viewThisColor": "Bu renk",
+  "viewChangeColor": "Rengi değiştir",
+  "viewDeleteHighlight": "Vurguyu sil",
+  "viewFindInDocument": "Belgede bul",
+  "viewSearching": "aranıyor…",
+  "viewNotFound": "bulunamadı",
+  "viewPreviousMatch": "Önceki · Shift+Enter",
+  "viewNextMatch": "Sonraki · Enter",
+  "viewFitPage": "Sayfaya sığdır",
+  "viewFitWidth": "Genişliğe sığdır",
+  "viewFreeZoom": "Serbest yakınlaştırma",
+  "viewCitations": "Dayanaklar · madde ve kararlar",
+  "viewHighlightSelection": "Seçimi vurgula",
+  "viewSelectToHighlight": "Vurgulamak için metin seçin",
+  "viewHighlightColor": "Vurgu rengi",
+  "viewPageOpenFailed": "Bu sayfa açılamadı.",
+  "viewPageOf": "Sayfa {page} / {count}",
+  "@viewPageOf": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "viewTifToPdf": "TIF → PDF Dönüştür",
+  "viewHeicAndroidOnly": "iPhone fotoğrafları (HEIC) şimdilik yalnız Android’de açılıyor.",
+  "viewPhotoDecodeFailed": "Fotoğraf çözülemedi.",
+  "viewCropFailed": "Kırpılamadı",
+  "viewCropUnmeasured": "Bu görsel ölçülemedi, kırpılamıyor",
+  "viewCrop": "Kırp",
+  "viewFullScreenKey": "Tam ekran (F, ya da çift tık)",
+  "viewNextPhoto": "Sonraki fotoğraf (→)",
+  "viewPreviousPhoto": "Önceki fotoğraf (←)",
+  "viewCropDrag": "Saklamak istediğiniz yeri sürükleyin",
+  "viewCropKeepsOriginal": "Aslı olduğu gibi kalır, kırpılan yanına kaydedilir",
+  "viewSvgOpenFailed": "SVG açılamadı: {error}",
+  "@viewSvgOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewImageOpenFailed": "Görsel açılamadı.",
+  "viewCopy": "Kopyala",
+  "viewReadAloud": "Sesli oku",
+  "viewSelectAll": "Tümünü seç",
+  "viewFormatNotPreviewable": "Bu biçim önizlenemiyor.",
+  "viewImzSaveDialog": "İmzalı belgenin içeriğini kaydet",
+  "viewDocumentSaved": "Belge kaydedildi",
+  "viewImzIdNumber": "T.C. kimlik no: {id}",
+  "@viewImzIdNumber": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "viewImzSignedAt": "İmza tarihi: {date}",
+  "@viewImzSignedAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "viewImzIssuer": "Sertifikayı veren: {issuer}",
+  "@viewImzIssuer": {
+    "placeholders": {
+      "issuer": {
+        "type": "String"
+      }
+    }
+  },
+  "viewImzUnnamedSigner": "Adı okunamayan imzacı",
+  "viewImzValid": "E-imza geçerli",
+  "viewImzInvalid": "E-imza doğrulanamadı: belge imzadan sonra değişmiş olabilir",
+  "viewImzCheckedNote": "İmza, içindeki belgeyle ve imzacının kendi sertifikasıyla denetlendi. Sertifikanın yetkili bir kuruluşça verildiği ve iptal edilmediği ayrıca denetlenmedi.",
+  "viewImzSaveDocument": "Belgeyi kaydet…",
+  "viewImzUnreadable": "Bu dosya okunamadı: içinde belge olan bir e-imza dosyası değil ya da bozuk.",
+  "viewImzInsideNotShown": "İçindeki belge ({name}) burada gösterilemiyor; kaydedip açabilirsiniz.",
+  "@viewImzInsideNotShown": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "viewOcrTitle": "Arama için çıkarılan metin",
+  "viewOcrNote": "Birebir çeviriyazı değildir: tanıma hataları olabilir ve kutulu bölümler ana metnin arasına karışabilir. Kaynak belge değişmedi.",
+  "viewOcrCopy": "Metni kopyala",
+  "viewOcrCopied": "Metin panoya kopyalandı.",
+  "viewOcrReading": "Okunuyor…",
+  "viewOcrShowDocument": "Belgeyi göster",
+  "viewOcrShowText": "Okunan metin",
+  "viewOcrNothingFound": "Okunabilir yazı bulunamadı",
+  "viewOcrRun": "Metne dönüştür",
+  "viewDraftDeleteFailed": "Taslak silinemedi",
+  "viewDeleteAllDraftsTitle": "Bütün taslaklar silinsin mi?",
+  "viewDeleteAllDraftsBody": "{count} kaydedilmemiş taslak kalıcı olarak silinecek. Belgelerin kendileri değişmez.",
+  "@viewDeleteAllDraftsBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "viewDeleteAll": "Hepsini sil",
+  "viewDraftsDeleteFailed": "Taslaklar silinemedi",
+  "viewDraftNeverSaved": "Hiç kaydedilmemiş yeni belge",
+  "viewDraftSourceGone": "Kaynak dosya artık yok, yeni belge olarak açılır\n{source}",
+  "@viewDraftSourceGone": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "viewDraftsTitle": "Kurtarılabilir taslaklar",
+  "viewDraftsNote": "Kaydedilmeden kapanan belgelerin son hali bu cihazda saklanır. Bir taslağı açtığınızda editöre kaydedilmemiş değişiklik olarak gelir; siz kaydedene kadar dosyaya yazılmaz.",
+  "viewDraftsUnreachable": "Yerel taslaklara ulaşılamadı.",
+  "viewDraftsEmpty": "Kurtarılmayı bekleyen taslak yok.",
+  "viewDeleteDraft": "Taslağı sil",
+  "viewVersionUnreadable": "Bu sürüm okunamadı.",
+  "viewToday": "Bugün",
+  "viewYesterday": "Dün",
+  "viewSaveVersionCopyDialog": "Sürümü kopya olarak kaydet",
+  "viewCopyOverOriginal": "Kopya belgenin kendisinin üzerine yazılmaz",
+  "viewCopyOverOriginalHint": "Belgeyi bu sürüme döndürmek için «{label}» düğmesini kullanın.",
+  "@viewCopyOverOriginalHint": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "viewCopySaved": "Sürümün kopyası kaydedildi",
+  "viewCopySaveFailed": "Kopya kaydedilemedi",
+  "viewVersionList": "Sürüm listesi",
+  "viewHistoryTitle": "Belge geçmişi",
+  "viewHistoryNote": "Folio’da her kaydettiğinizde dosyanın önceki ve yeni hali bu cihazda saklanır: belge başına son 20 sürüm, en fazla 100 MB.",
+  "viewHistoryUnreachable": "Yerel geçmişe ulaşılamadı.",
+  "viewHistoryEmpty": "Bu belgenin henüz saklanmış bir sürümü yok.",
+  "viewHistoryEmptyHint": "Belgeyi Folio’da ilk kaydettiğinizde, dosyanın o ana kadarki hali ve kaydettiğiniz yeni hali burada listelenir.",
+  "viewSigned": "E-imzalı",
+  "viewSaveCopy": "Kopya olarak kaydet…",
+  "viewOtherFormatHint": "Bu sürüm başka bir biçimde saklanmış; kopya olarak kaydedebilirsiniz.",
+  "viewCompareCurrent": "Şimdikiyle karşılaştır",
+  "viewPageView": "Sayfa görünümü",
+  "viewPageViewFailed": "Sayfa görünümü hazırlanamadı: {error}",
+  "@viewPageViewFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewTypeNotShown": "Bu tür bir belge burada gösterilemiyor. «Kopya olarak kaydet» ile ayrı bir dosya olarak açabilirsiniz.",
+  "viewCompareFailed": "Karşılaştırılamadı: {error}",
+  "@viewCompareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewCompareUnsupported": "Bu tür bir belgede metin karşılaştırılamıyor; sürümü «Sayfa görünümü»nden inceleyebilirsiniz.",
+  "viewCompareIdentical": "Bu sürümün metni şu anki haliyle aynı. Yazı tipi, boşluk gibi biçim farkları burada gösterilmez; «Sayfa görünümü»ne bakın.",
+  "viewDiffSummary": "Bu sürümden bu yana {added} kelime eklenmiş, {removed} kelime silinmiş.",
+  "@viewDiffSummary": {
+    "placeholders": {
+      "added": {
+        "type": "int"
+      },
+      "removed": {
+        "type": "int"
+      }
+    }
+  },
+  "viewAddedLater": "Sonradan eklenen",
+  "viewRemovedLater": "Sonradan silinen",
+  "viewUnchangedLines": "⋯ değişmeyen {count} satır ⋯",
+  "@viewUnchangedLines": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "viewRestoreVersion": "Bu sürümü geri yükle",
+  "viewAboutProduct": "{name} hakkında",
+  "@viewAboutProduct": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "viewWindowActionFailed": "Pencere işlemi tamamlanamadı",
+  "viewAbout": "Hakkında",
+  "viewFullScreen": "Tam ekran",
+  "viewExitFullScreen": "Tam ekrandan çık",
+  "viewMinimize": "Simge durumuna küçült",
+  "viewRestoreSize": "Önceki boyut",
+  "viewMaximize": "Ekranı kapla",
+  "viewHideToTray": "Tepsiye gizle",
+  "viewCloseApp": "Uygulamayı kapat",
+  "viewAddressOpenFailed": "Adres açılamadı",
+  "viewVersion": "Sürüm {version} ({build})",
+  "@viewVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "viewAboutTaglineOfis": "Belgeleri açan, düzenleyen ve imzalayan uygulama",
+  "viewAboutTaglineFolio": "Avukatlar için dilekçe, dava ve büro uygulaması",
+  "viewAboutDescOfis": "Ofis ile UDF, Word, ODT, RTF ve PDF belgelerinizi açar, düzenler, yazdırır ve e-imza kartınızla imzalarsınız. Kanun maddesi ve karar atıflarını denetler, yazım hatalarını bulur, metni sesli okur ve söylediklerinizi yazarsınız.",
+  "viewAboutDescFolio": "Folio ile UDF dilekçenizi yazar, e-imza ya da mobil imzayla imzalar ve dava dosyanıza gönderirsiniz. Müvekkillerinizi, duruşma ve süre takviminizi, büronuzun kasasını ve ekibinizi aynı uygulamadan yönetirsiniz.",
+  "viewAboutDataOfis": "Verileriniz yalnız sizin cihazlarınızda tutulur. Ofis’in verilerinizi tutan bir sunucusu yoktur ve yapay zekâ hizmeti kullanmaz. Başka bir büroyla uzaktan canlı paylaşımda belge ve yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu içeriği göremez ve hiçbir şey saklamaz.",
+  "viewAboutDataFolio": "Verileriniz yalnız sizin cihazlarınızda tutulur. Folio’nun verilerinizi tutan bir sunucusu yoktur. Yapay zekâ özellikleri isteğe bağlıdır ve siz açmadıkça kapalıdır. Başka bir büroyla uzaktan canlı paylaşımda belge ve yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu içeriği göremez ve hiçbir şey saklamaz.",
+  "viewAgreements": "SÖZLEŞMELER",
+  "viewTermsTitle": "Kullanım Koşulları",
+  "viewTermsSubtitle": "Kullanım izni ve sorumluluklar",
+  "viewPrivacyTitle": "Gizlilik ve KVKK Aydınlatma Metni",
+  "viewPrivacySubtitle": "Kişisel verileriniz nasıl korunur",
+  "viewLicenseTitle": "Lisans",
+  "viewLicenseSubtitle": "Tescilli yazılım",
+  "viewOpenSourceLicenses": "Açık kaynak lisansları",
+  "viewComponentsSubtitle": "Folio’da kullanılan bileşenler",
+  "viewSupport": "DESTEK",
+  "viewDownloadOther": "Diğer cihazlarınıza indirin",
+  "viewContact": "Destek ve iletişim",
+  "viewContactSubtitle": "İletişim formuyla bize yazın",
+  "viewWebsite": "Folio’nun web sitesi",
+  "viewCopyright": "© 2026 LifeOS. Tüm hakları saklıdır. {product} tescilli bir yazılımdır, açık kaynak değildir.",
+  "@viewCopyright": {
+    "placeholders": {
+      "product": {
+        "type": "String"
+      }
+    }
+  }
+}

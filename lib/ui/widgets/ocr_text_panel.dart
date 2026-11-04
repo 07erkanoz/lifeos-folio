@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/evrak_file.dart';
 import '../../services/ocr/preview_ocr.dart';
 import 'notice.dart';
+import '../../services/platform/app_language.dart';
 
 /// Recognised text beside the page. Its job is to make the document findable,
 /// not to reproduce it: Tesseract reads a boxed sidebar and the body column in
@@ -41,7 +42,7 @@ class OcrTextPanel extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Arama için çıkarılan metin',
+                        context.l.viewOcrTitle,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -49,9 +50,7 @@ class OcrTextPanel extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Birebir çeviriyazı değildir: tanıma hataları olabilir '
-                        've kutulu bölümler ana metnin arasına karışabilir. '
-                        'Kaynak belge değişmedi.',
+                        context.l.viewOcrNote,
                         style: TextStyle(
                           fontSize: 11,
                           height: 1.35,
@@ -62,19 +61,17 @@ class OcrTextPanel extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Metni kopyala',
+                  tooltip: context.l.viewOcrCopy,
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.copy_rounded, size: 16),
                   onPressed: () async {
                     final messenger = ScaffoldMessenger.of(context);
+                    final copied = context.l.viewOcrCopied;
                     await Clipboard.setData(ClipboardData(text: text));
                     messenger
                       ..clearSnackBars()
                       ..showSnackBar(
-                        noticeBar(
-                          'Metin panoya kopyalandı.',
-                          kind: NoticeKind.success,
-                        ),
+                        noticeBar(copied, kind: NoticeKind.success),
                       );
                   },
                 ),
@@ -116,18 +113,21 @@ class OcrTextButton extends StatelessWidget {
     listenable: ocr,
     builder: (context, _) {
       if (ocr.running) {
-        return const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
+              const SizedBox(
                 width: 14,
                 height: 14,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              SizedBox(width: 8),
-              Text('Okunuyor…', style: TextStyle(fontSize: 12)),
+              const SizedBox(width: 8),
+              Text(
+                context.l.viewOcrReading,
+                style: const TextStyle(fontSize: 12),
+              ),
             ],
           ),
         );
@@ -139,15 +139,17 @@ class OcrTextButton extends StatelessWidget {
             showing ? Icons.image_outlined : Icons.text_snippet_outlined,
             size: 18,
           ),
-          label: Text(showing ? 'Belgeyi göster' : 'Okunan metin'),
+          label: Text(
+            showing ? context.l.viewOcrShowDocument : context.l.viewOcrShowText,
+          ),
         );
       }
       if (ocr.foundNothing) {
-        return const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
-            'Okunabilir yazı bulunamadı',
-            style: TextStyle(fontSize: 12),
+            context.l.viewOcrNothingFound,
+            style: const TextStyle(fontSize: 12),
           ),
         );
       }
@@ -158,7 +160,7 @@ class OcrTextButton extends StatelessWidget {
       return TextButton.icon(
         onPressed: () => ocr.run(format),
         icon: const Icon(Icons.document_scanner_outlined, size: 18),
-        label: const Text('Metne dönüştür'),
+        label: Text(context.l.viewOcrRun),
       );
     },
   );

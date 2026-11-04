@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/editor/document_history.dart';
 import 'draft_prompts.dart';
 import 'notice.dart';
+import '../../services/platform/app_language.dart';
 
 /// Unsaved work left behind by editors that closed without a decision — a
 /// crash, a power cut, a window that went away. Returns the draft to open.
@@ -47,7 +48,7 @@ class _DraftsDialogState extends State<_DraftsDialog> {
       if (mounted) {
         showNotice(
           context,
-          'Taslak silinemedi',
+          context.l.viewDraftDeleteFailed,
           detail: '$e',
           kind: NoticeKind.error,
         );
@@ -59,19 +60,16 @@ class _DraftsDialogState extends State<_DraftsDialog> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Bütün taslaklar silinsin mi?'),
-        content: Text(
-          '${drafts.length} kaydedilmemiş taslak kalıcı olarak silinecek. '
-          'Belgelerin kendileri değişmez.',
-        ),
+        title: Text(context.l.viewDeleteAllDraftsTitle),
+        content: Text(context.l.viewDeleteAllDraftsBody(drafts.length)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
+            child: Text(context.l.viewCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Hepsini sil'),
+            child: Text(context.l.viewDeleteAll),
           ),
         ],
       ),
@@ -85,7 +83,7 @@ class _DraftsDialogState extends State<_DraftsDialog> {
       if (mounted) {
         showNotice(
           context,
-          'Taslaklar silinemedi',
+          context.l.viewDraftsDeleteFailed,
           detail: '$e',
           kind: NoticeKind.error,
         );
@@ -96,9 +94,9 @@ class _DraftsDialogState extends State<_DraftsDialog> {
 
   String _where(_Draft draft) {
     final source = draft.entry.sourcePath;
-    if (source == null) return 'Hiç kaydedilmemiş yeni belge';
+    if (source == null) return context.l.viewDraftNeverSaved;
     if (!draft.sourceExists) {
-      return 'Kaynak dosya artık yok, yeni belge olarak açılır\n$source';
+      return context.l.viewDraftSourceGone(source);
     }
     return source;
   }
@@ -112,7 +110,7 @@ class _DraftsDialogState extends State<_DraftsDialog> {
         final drafts = snapshot.data ?? const <_Draft>[];
         return AlertDialog(
           icon: Icon(Icons.restore_rounded, color: colors.primary),
-          title: const Text('Kurtarılabilir taslaklar'),
+          title: Text(context.l.viewDraftsTitle),
           content: SizedBox(
             width: 560,
             height: MediaQuery.sizeOf(context).height.clamp(280, 560) - 190,
@@ -120,10 +118,7 @@ class _DraftsDialogState extends State<_DraftsDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Kaydedilmeden kapanan belgelerin son hali bu cihazda '
-                  'saklanır. Bir taslağı açtığınızda editöre kaydedilmemiş '
-                  'değişiklik olarak gelir; siz kaydedene kadar dosyaya '
-                  'yazılmaz.',
+                  context.l.viewDraftsNote,
                   style: TextStyle(
                     fontSize: 12,
                     color: colors.onSurfaceVariant,
@@ -138,11 +133,11 @@ class _DraftsDialogState extends State<_DraftsDialog> {
             if (drafts.length > 1)
               TextButton(
                 onPressed: () => _deleteAll(drafts),
-                child: const Text('Hepsini sil'),
+                child: Text(context.l.viewDeleteAll),
               ),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Kapat'),
+              child: Text(context.l.viewClose),
             ),
           ],
         );
@@ -156,13 +151,13 @@ class _DraftsDialogState extends State<_DraftsDialog> {
     ColorScheme colors,
   ) {
     if (snapshot.hasError) {
-      return const Center(child: Text('Yerel taslaklara ulaşılamadı.'));
+      return Center(child: Text(context.l.viewDraftsUnreachable));
     }
     if (!snapshot.hasData) {
       return const Center(child: CircularProgressIndicator());
     }
     if (drafts.isEmpty) {
-      return const Center(child: Text('Kurtarılmayı bekleyen taslak yok.'));
+      return Center(child: Text(context.l.viewDraftsEmpty));
     }
     return ListView.separated(
       itemCount: drafts.length,
@@ -194,7 +189,7 @@ class _DraftsDialogState extends State<_DraftsDialog> {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: IconButton(
-              tooltip: 'Taslağı sil',
+              tooltip: context.l.viewDeleteDraft,
               onPressed: () => _delete(item),
               icon: const Icon(Icons.delete_outline, size: 20),
             ),
