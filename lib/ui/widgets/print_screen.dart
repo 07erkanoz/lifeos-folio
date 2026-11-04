@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 import '../../services/platform/phone_document_save.dart';
 import '../../services/print/print_job.dart';
 import '../../services/print/print_selection.dart';
+import '../../services/platform/app_language.dart';
 import 'notice.dart';
 import 'folio_select.dart';
 
@@ -171,7 +172,7 @@ class _PrintScreenState extends State<PrintScreen> {
       if (mounted) {
         showNotice(
           context,
-          'Yazdırılamadı',
+          context.l.tbPrintFailed,
           detail: '$e',
           kind: NoticeKind.error,
         );
@@ -185,6 +186,7 @@ class _PrintScreenState extends State<PrintScreen> {
     final pages = _pages;
     if (pages == null || pages.isEmpty || _busy) return;
     setState(() => _busy = true);
+    final title = context.l.tbSaveAsPdf;
     try {
       final pdf = await _chosenPdf(pages);
       final base = widget.name.replaceAll(RegExp(r'\.[^.]+$'), '');
@@ -192,7 +194,7 @@ class _PrintScreenState extends State<PrintScreen> {
       final path = PhoneDocumentSave.here
           ? await PhoneDocumentSave.save(fileName: fileName, bytes: pdf)
           : await FilePicker.saveFile(
-              dialogTitle: 'PDF olarak kaydet',
+              dialogTitle: title,
               fileName: fileName,
               type: FileType.custom,
               allowedExtensions: const ['pdf'],
@@ -202,13 +204,13 @@ class _PrintScreenState extends State<PrintScreen> {
         await File(path).writeAsBytes(pdf, flush: true);
       }
       if (mounted) {
-        showNotice(context, 'PDF kaydedildi', kind: NoticeKind.success);
+        showNotice(context, context.l.tbPdfSaved, kind: NoticeKind.success);
       }
     } catch (e) {
       if (mounted) {
         showNotice(
           context,
-          'PDF kaydedilemedi',
+          context.l.tbPdfSaveFailed,
           detail: '$e',
           kind: NoticeKind.error,
         );
@@ -284,10 +286,13 @@ class _PrintScreenState extends State<PrintScreen> {
               Icon(Icons.print_outlined, color: scheme.primary),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('Yazdır', style: theme.textTheme.titleLarge),
+                child: Text(
+                  context.l.tbPrint,
+                  style: theme.textTheme.titleLarge,
+                ),
               ),
               IconButton(
-                tooltip: 'Kapat',
+                tooltip: context.l.tbClose,
                 onPressed: () => Navigator.pop(context, false),
                 icon: const Icon(Icons.close),
               ),
@@ -315,7 +320,10 @@ class _PrintScreenState extends State<PrintScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.print),
-                    label: const Text('Yazdır', style: TextStyle(fontSize: 16)),
+                    label: Text(
+                      context.l.tbPrint,
+                      style: const TextStyle(fontSize: 16),
+                    ),
                   ),
                 ),
               ),
@@ -323,10 +331,10 @@ class _PrintScreenState extends State<PrintScreen> {
               _copiesField(context),
             ],
           ),
-          label('Yazıcı'),
+          label(context.l.tbPrinter),
           if (_printers.isEmpty)
             Text(
-              'Yazıcıyı sistemin yazdırma penceresinde seçeceksiniz.',
+              context.l.tbPrinterInSystemDialog,
               style: theme.textTheme.bodySmall,
             )
           else
@@ -344,19 +352,19 @@ class _PrintScreenState extends State<PrintScreen> {
                     value: printer,
                     child: Text(
                       printer.isDefault
-                          ? '${printer.name}  (varsayılan)'
+                          ? context.l.tbPrinterDefault(printer.name)
                           : printer.name,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                const DropdownMenuItem(
+                DropdownMenuItem(
                   value: null,
-                  child: Text('Sistemin yazdırma penceresi…'),
+                  child: Text(context.l.tbSystemPrintDialog),
                 ),
               ],
               onChanged: (p) => setState(() => _printer = p),
             ),
-          label('Sayfalar'),
+          label(context.l.tbPages),
           RadioGroup<PrintPages>(
             groupValue: _which,
             onChanged: (v) => setState(() => _which = v ?? PrintPages.all),
@@ -366,19 +374,19 @@ class _PrintScreenState extends State<PrintScreen> {
                   value: PrintPages.all,
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: Text('Tüm sayfalar ($_pageCount)'),
+                  title: Text(context.l.tbAllPages(_pageCount)),
                 ),
                 RadioListTile<PrintPages>(
                   value: PrintPages.current,
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: Text('Geçerli sayfa ($_page)'),
+                  title: Text(context.l.tbCurrentPage(_page)),
                 ),
                 RadioListTile<PrintPages>(
                   value: PrintPages.custom,
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Sayfa aralığı'),
+                  title: Text(context.l.tbPageRange),
                 ),
               ],
             ),
@@ -390,11 +398,11 @@ class _PrintScreenState extends State<PrintScreen> {
               controller: _range,
               enabled: _which == PrintPages.custom,
               decoration: InputDecoration(
-                hintText: 'ör. 1-3, 5, 8-',
+                hintText: context.l.tbPageRangeHint,
                 isDense: true,
                 border: const OutlineInputBorder(),
                 errorText: invalid
-                    ? 'Belgede $_pageCount sayfa var; aralığı kontrol edin.'
+                    ? context.l.tbPageRangeInvalid(_pageCount)
                     : null,
               ),
               onTap: () => setState(() => _which = PrintPages.custom),
@@ -409,18 +417,18 @@ class _PrintScreenState extends State<PrintScreen> {
               border: OutlineInputBorder(),
               isDense: true,
             ),
-            items: const [
+            items: [
               DropdownMenuItem(
                 value: PrintParity.all,
-                child: Text('Tek ve çift sayfalar'),
+                child: Text(context.l.tbOddAndEvenPages),
               ),
               DropdownMenuItem(
                 value: PrintParity.odd,
-                child: Text('Yalnız tek sayfalar'),
+                child: Text(context.l.tbOddPagesOnly),
               ),
               DropdownMenuItem(
                 value: PrintParity.even,
-                child: Text('Yalnız çift sayfalar'),
+                child: Text(context.l.tbEvenPagesOnly),
               ),
             ],
             onChanged: (v) => setState(() => _parity = v ?? PrintParity.all),
@@ -433,7 +441,7 @@ class _PrintScreenState extends State<PrintScreen> {
               controlAffinity: ListTileControlAffinity.leading,
               value: _collate,
               onChanged: (v) => setState(() => _collate = v ?? true),
-              title: const Text('Harmanla'),
+              title: Text(context.l.tbCollate),
               subtitle: Text(
                 _collate ? '1, 2, 3 · 1, 2, 3' : '1, 1 · 2, 2 · 3, 3',
               ),
@@ -454,10 +462,14 @@ class _PrintScreenState extends State<PrintScreen> {
                 Expanded(
                   child: Text(
                     pages == null
-                        ? 'Yazdırılacak sayfayı seçin.'
-                        : '${pages.length} sayfa'
-                              '${_copies > 1 ? ' × $_copies kopya' : ''}'
-                              ' · $sheets yaprak A4',
+                        ? context.l.tbChoosePageToPrint
+                        : _copies > 1
+                        ? context.l.tbPrintSummaryCopies(
+                            pages.length,
+                            _copies,
+                            sheets,
+                          )
+                        : context.l.tbPrintSummary(pages.length, sheets),
                     key: const ValueKey('print-summary'),
                   ),
                 ),
@@ -470,7 +482,7 @@ class _PrintScreenState extends State<PrintScreen> {
                 ? null
                 : _savePdf,
             icon: const Icon(Icons.picture_as_pdf_outlined),
-            label: const Text('Seçili sayfaları PDF olarak kaydet'),
+            label: Text(context.l.tbSaveSelectedPagesPdf),
           ),
         ],
       ),
@@ -489,7 +501,7 @@ class _PrintScreenState extends State<PrintScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            tooltip: 'Bir kopya az',
+            tooltip: context.l.tbOneCopyFewer,
             onPressed: _copies > 1 ? () => setState(() => _copies--) : null,
             icon: const Icon(Icons.remove, size: 18),
           ),
@@ -505,13 +517,13 @@ class _PrintScreenState extends State<PrintScreen> {
                 ),
               ),
               Text(
-                'kopya',
+                context.l.tbCopiesLabel,
                 style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
               ),
             ],
           ),
           IconButton(
-            tooltip: 'Bir kopya fazla',
+            tooltip: context.l.tbOneCopyMore,
             onPressed: _copies < 99 ? () => setState(() => _copies++) : null,
             icon: const Icon(Icons.add, size: 18),
           ),
@@ -533,7 +545,9 @@ class _PrintScreenState extends State<PrintScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(28, 28, 28, 12),
               child: _openError != null
-                  ? Center(child: Text('Önizleme açılamadı: $_openError'))
+                  ? Center(
+                      child: Text(context.l.tbPreviewFailed('$_openError')),
+                    )
                   : document == null
                   ? const Center(child: CircularProgressIndicator())
                   : Center(
@@ -569,7 +583,7 @@ class _PrintScreenState extends State<PrintScreen> {
                                 child: Center(
                                   child: Chip(
                                     avatar: const Icon(Icons.block, size: 16),
-                                    label: const Text('Yazdırılmayacak'),
+                                    label: Text(context.l.tbNotPrinted),
                                     backgroundColor: scheme.surface,
                                   ),
                                 ),
@@ -586,7 +600,7 @@ class _PrintScreenState extends State<PrintScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
-                  tooltip: 'Önceki sayfa',
+                  tooltip: context.l.tbPreviousPage,
                   onPressed: _page > 1 ? () => _turn(-1) : null,
                   icon: const Icon(Icons.chevron_left),
                 ),
@@ -605,7 +619,7 @@ class _PrintScreenState extends State<PrintScreen> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Sonraki sayfa',
+                  tooltip: context.l.tbNextPage,
                   onPressed: _page < _pageCount ? () => _turn(1) : null,
                   icon: const Icon(Icons.chevron_right),
                 ),

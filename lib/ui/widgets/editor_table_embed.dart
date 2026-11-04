@@ -10,6 +10,7 @@ import 'editor_line_layout.dart';
 import 'editor_paged_table.dart';
 import 'editor_tab_spans.dart';
 import 'editor_clipboard.dart';
+import '../../services/platform/app_language.dart';
 
 /// Draws tables inside the editor, and lets their cells be typed in.
 ///
@@ -89,11 +90,11 @@ class EditorTableEmbed extends EmbedBuilder {
         ? all[index].table
         : null;
     if (table == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 4),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: Text(
-          '〔Korunan içerik — kaydetmede korunur〕',
-          style: TextStyle(fontStyle: FontStyle.italic),
+          context.l.tbProtectedContent,
+          style: const TextStyle(fontStyle: FontStyle.italic),
         ),
       );
     }
@@ -907,43 +908,45 @@ class _EditorTableViewState extends State<EditorTableView> {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _control(Icons.add, 'Satır ekle', _addRow),
+        _control(Icons.add, context.l.tbAddRow, _addRow),
         _control(
           Icons.remove,
-          'Satırı sil',
+          context.l.tbDeleteRow,
           _table.rows.length > 1 ? _removeRow : null,
         ),
         const SizedBox(width: 6),
-        _control(Icons.add, 'Sütun ekle', _addColumn, vertical: true),
+        _control(Icons.add, context.l.tbAddColumn, _addColumn, vertical: true),
         _control(
           Icons.remove,
-          'Sütunu sil',
+          context.l.tbDeleteColumn,
           _columnCount > 1 ? _removeColumn : null,
           vertical: true,
         ),
         const SizedBox(width: 8),
         _control(
           _wholeTable ? Icons.select_all : Icons.border_outer,
-          _wholeTable ? 'Tablo seçili — bırak' : 'Tüm tabloyu seç',
+          _wholeTable
+              ? context.l.tbTableSelectedRelease
+              : context.l.tbSelectWholeTable,
           _wholeTable ? _releaseWholeTable : _selectWholeTable,
         ),
         const SizedBox(width: 8),
         _shadeButton(),
         const SizedBox(width: 8),
         if (widget.onDelete != null)
-          _control(Icons.delete_outline, 'Tabloyu sil', _deleteTable),
+          _control(Icons.delete_outline, context.l.tbDeleteTable, _deleteTable),
         const SizedBox(width: 8),
         _control(
           _table.bordered ? Icons.border_all : Icons.border_clear,
-          _table.bordered ? 'Çerçeveyi kaldır' : 'Çerçeve çiz',
+          _table.bordered ? context.l.tbRemoveBorders : context.l.tbDrawBorders,
           _toggleBorder,
         ),
         if (!_table.bordered)
-          const Padding(
-            padding: EdgeInsets.only(left: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
             child: Text(
-              'kılavuz çizgiler yazdırılmaz',
-              style: TextStyle(fontSize: 10, color: Color(0xFF7A8396)),
+              context.l.tbGridlinesNotPrinted,
+              style: const TextStyle(fontSize: 10, color: Color(0xFF7A8396)),
             ),
           ),
       ],
@@ -952,18 +955,18 @@ class _EditorTableViewState extends State<EditorTableView> {
 
   /// The fills a table is given in practice: a grey or a pale tint behind a
   /// heading row, and nothing at all.
-  static const _shades = <(String, String?)>[
-    ('Dolgu yok', null),
-    ('Açık gri', '#f1f3f7'),
-    ('Gri', '#d9dde5'),
-    ('Sarı', '#fff3c4'),
-    ('Yeşil', '#ddf3e0'),
-    ('Mavi', '#dce9fa'),
-    ('Kırmızı', '#fadcdc'),
+  List<(String, String?)> get _shades => [
+    (context.l.tbNoFill, null),
+    (context.l.tbLightGrey, '#f1f3f7'),
+    (context.l.tbGrey, '#d9dde5'),
+    (context.l.tbYellow, '#fff3c4'),
+    (context.l.tbGreen, '#ddf3e0'),
+    (context.l.tbBlue, '#dce9fa'),
+    (context.l.tbRed, '#fadcdc'),
   ];
 
   Widget _shadeButton() => PopupMenuButton<int>(
-    tooltip: _wholeTable ? 'Tabloyu boya' : 'Hücreyi boya',
+    tooltip: _wholeTable ? context.l.tbShadeTable : context.l.tbShadeCell,
     padding: EdgeInsets.zero,
     iconSize: 13,
     icon: const Icon(

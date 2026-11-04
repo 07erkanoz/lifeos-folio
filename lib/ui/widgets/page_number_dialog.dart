@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/layout/page_numbers.dart';
+import '../../services/platform/app_language.dart';
 import 'folio_select.dart';
 
 /// Where the page numbers go, and how they read: what UYAP's own page
@@ -80,7 +81,7 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
       child: Text(text, style: Theme.of(context).textTheme.labelLarge),
     );
     return AlertDialog(
-      title: const Text('Sayfa numarası'),
+      title: Text(context.l.tbPageNumber),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -90,10 +91,19 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
             children: [
               SegmentedButton<String>(
                 key: const ValueKey('page-number-region'),
-                segments: const [
-                  ButtonSegment(value: 'none', label: Text('Yok')),
-                  ButtonSegment(value: 'header', label: Text('Üst bilgide')),
-                  ButtonSegment(value: 'footer', label: Text('Alt bilgide')),
+                segments: [
+                  ButtonSegment(
+                    value: 'none',
+                    label: Text(context.l.tbPageNumberNone),
+                  ),
+                  ButtonSegment(
+                    value: 'header',
+                    label: Text(context.l.tbPageNumberInHeader),
+                  ),
+                  ButtonSegment(
+                    value: 'footer',
+                    label: Text(context.l.tbPageNumberInFooter),
+                  ),
                 ],
                 selected: {_region ?? 'none'},
                 onSelectionChanged: (v) => setState(() {
@@ -105,33 +115,39 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                 }),
               ),
               if (!off) ...[
-                label('Yeri'),
+                label(context.l.tbPageNumberPosition),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
                     SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment(value: true, label: Text('Üstte')),
-                        ButtonSegment(value: false, label: Text('Altta')),
+                      segments: [
+                        ButtonSegment(
+                          value: true,
+                          label: Text(context.l.tbPageNumberTop),
+                        ),
+                        ButtonSegment(
+                          value: false,
+                          label: Text(context.l.tbPageNumberBottom),
+                        ),
                       ],
                       selected: {_top},
                       onSelectionChanged: (v) => setState(() => _top = v.first),
                     ),
                     SegmentedButton<PageNumberAlign>(
                       key: const ValueKey('page-number-align'),
-                      segments: const [
+                      segments: [
                         ButtonSegment(
                           value: PageNumberAlign.left,
-                          label: Text('Sol'),
+                          label: Text(context.l.tbPageNumberLeft),
                         ),
                         ButtonSegment(
                           value: PageNumberAlign.center,
-                          label: Text('Orta'),
+                          label: Text(context.l.tbPageNumberCenter),
                         ),
                         ButtonSegment(
                           value: PageNumberAlign.right,
-                          label: Text('Sağ'),
+                          label: Text(context.l.tbPageNumberRight),
                         ),
                       ],
                       selected: {_align},
@@ -140,15 +156,15 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                     ),
                   ],
                 ),
-                label('Biçimi'),
+                label(context.l.tbPageNumberFormat),
                 Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _prefix,
-                        decoration: const InputDecoration(
-                          labelText: 'Ön metin',
-                          hintText: 'Sayfa ',
+                        decoration: InputDecoration(
+                          labelText: context.l.tbPageNumberPrefix,
+                          hintText: context.l.tbPageNumberPrefixHint,
                           isDense: true,
                         ),
                         onChanged: (_) => setState(() {}),
@@ -160,8 +176,8 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                       child: TextField(
                         controller: _start,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'İlk numara',
+                        decoration: InputDecoration(
+                          labelText: context.l.tbPageNumberStart,
                           hintText: '1',
                           isDense: true,
                         ),
@@ -178,7 +194,7 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                     ),
                     GestureDetector(
                       onTap: () => setState(() => _total = !_total),
-                      child: const Text('Toplam sayfayla'),
+                      child: Text(context.l.tbPageNumberWithTotal),
                     ),
                     const SizedBox(width: 12),
                     if (_total)
@@ -197,7 +213,7 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,
                   value: _skipFirst,
-                  title: const Text('İlk sayfada gösterme'),
+                  title: Text(context.l.tbPageNumberSkipFirst),
                   onChanged: (v) => setState(() => _skipFirst = v ?? false),
                 ),
                 CheckboxListTile(
@@ -205,10 +221,10 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,
                   value: _skipSingle,
-                  title: const Text('Tek sayfaysa gösterme'),
+                  title: Text(context.l.tbPageNumberSkipSingle),
                   onChanged: (v) => setState(() => _skipSingle = v ?? false),
                 ),
-                label('Yazı'),
+                label(context.l.tbPageNumberFont),
                 Wrap(
                   spacing: 4,
                   runSpacing: 4,
@@ -239,7 +255,7 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                     ),
                     const SizedBox(width: 12),
                     FilterChip(
-                      label: const Text('Kalın'),
+                      label: Text(context.l.tbBoldLabel),
                       selected: _bold,
                       onSelected: (v) => setState(() => _bold = v),
                     ),
@@ -247,7 +263,7 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Örnek: ${_numbering.label(1, 5)}',
+                  context.l.tbSample(_numbering.label(1, 5)),
                   key: const ValueKey('page-number-sample'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
@@ -259,14 +275,14 @@ class _PageNumberDialogState extends State<PageNumberDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Vazgeç'),
+          child: Text(context.l.tbCancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop<PageNumberChoice>(context, (
             region: _region,
             numbering: _numbering,
           )),
-          child: const Text('Tamam'),
+          child: Text(context.l.tbOk),
         ),
       ],
     );

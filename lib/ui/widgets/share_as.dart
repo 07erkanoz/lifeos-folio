@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../models/evrak_file.dart';
+import '../../services/platform/app_language.dart';
 import '../../services/platform/file_actions.dart';
 import '../../services/preview/preview_cache.dart';
 import '../../services/tiff/tiff_service.dart';
@@ -34,8 +35,9 @@ Future<void> shareAs(BuildContext context, String path, {String? name}) async {
       chosen = await _pdfOf(file, name: name);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.maybeOf(context)
-            ?.showSnackBar(SnackBar(content: Text('PDF hazırlanamadı: $e')));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(context.l.tbPdfPrepareFailed('$e'))),
+        );
       }
       return;
     }
@@ -51,15 +53,15 @@ Future<void> shareAs(BuildContext context, String path, {String? name}) async {
           ListTile(
             key: const ValueKey('share-original'),
             leading: const Icon(Icons.description_outlined),
-            title: Text('$kind olarak paylaş'),
-            subtitle: const Text('Dosyanın kendisi, olduğu gibi'),
+            title: Text(context.l.tbShareAsKind(kind)),
+            subtitle: Text(context.l.tbShareOriginalHelp),
             onTap: () => Navigator.pop(context, false),
           ),
           ListTile(
             key: const ValueKey('share-pdf'),
             leading: const Icon(Icons.picture_as_pdf_outlined),
-            title: const Text('PDF olarak paylaş'),
-            subtitle: const Text('Her telefonda ve bilgisayarda açılır'),
+            title: Text(context.l.tbShareAsPdf),
+            subtitle: Text(context.l.tbShareAsPdfHelp),
             onTap: () => Navigator.pop(context, true),
           ),
           const SizedBox(height: 8),
@@ -72,8 +74,9 @@ Future<void> shareAs(BuildContext context, String path, {String? name}) async {
         chosen = await _pdfOf(file, name: name);
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.maybeOf(context)
-              ?.showSnackBar(SnackBar(content: Text('PDF hazırlanamadı: $e')));
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(content: Text(context.l.tbPdfPrepareFailed('$e'))),
+          );
         }
         return;
       }
@@ -85,8 +88,9 @@ Future<void> shareAs(BuildContext context, String path, {String? name}) async {
       await FileActions.invoke('share', chosen);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.maybeOf(context)
-            ?.showSnackBar(SnackBar(content: Text('Paylaşılamadı: $e')));
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(context.l.tbShareFailed('$e'))));
       }
     }
     return;

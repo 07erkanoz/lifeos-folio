@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../models/evrak_file.dart';
+import '../../services/platform/app_language.dart';
 
 /// What the program around an editor adds to its Dosya menu: a new document,
 /// opening one, the recently opened documents and unsaved drafts. Folio and
@@ -124,9 +125,9 @@ class EditorFileMenu extends StatelessWidget {
     ].take(recentLimit).toList();
     if (files.isEmpty) {
       return [
-        const MenuItemButton(
+        MenuItemButton(
           onPressed: null,
-          child: Text('Henüz açılmış belge yok'),
+          child: Text(context.l.tbNoRecentDocuments),
         ),
       ];
     }
@@ -166,16 +167,16 @@ class EditorFileMenu extends StatelessWidget {
       menuChildren: [
         if (host?.onNew != null)
           _item(
-            'Yeni belge',
+            context.l.tbNewDocument,
             Icons.note_add_outlined,
             host!.onNew,
             keys: _key('N'),
           ),
         if (onNewWindow != null)
-          _item('Yeni pencere', Icons.open_in_new_rounded, onNewWindow),
+          _item(context.l.tbNewWindow, Icons.open_in_new_rounded, onNewWindow),
         if (host?.onOpen != null)
           _item(
-            'Aç…',
+            context.l.tbOpen,
             Icons.folder_open_outlined,
             host!.onOpen,
             keys: _key('O'),
@@ -185,52 +186,65 @@ class EditorFileMenu extends StatelessWidget {
             key: const ValueKey('editor-recent-menu'),
             leadingIcon: const Icon(Icons.history_rounded, size: 19),
             menuChildren: _recent(context),
-            child: const Text('Son açılanlar'),
+            child: Text(context.l.tbRecent),
           ),
         if (host?.onNew != null ||
             host?.onOpen != null ||
             host?.recent != null ||
             onNewWindow != null)
           const Divider(height: 8),
-        _item('Kaydet', Icons.save_outlined, save, keys: _key('S')),
+        _item(context.l.tbSave, Icons.save_outlined, save, keys: _key('S')),
         if (onLiveShare != null)
-          _item('Canlı paylaş…', Icons.cast_outlined, onLiveShare),
-        _item('Farklı kaydet…', Icons.save_as_outlined, busy ? null : onSaveAs),
-        if (onShare != null)
-          _item('Paylaş…', Icons.ios_share_rounded, busy ? null : onShare),
+          _item(context.l.tbLiveShare, Icons.cast_outlined, onLiveShare),
         _item(
-          'UYAP UDF Olarak Kaydet',
+          context.l.tbSaveAs,
+          Icons.save_as_outlined,
+          busy ? null : onSaveAs,
+        ),
+        if (onShare != null)
+          _item(
+            context.l.tbShareEllipsis,
+            Icons.ios_share_rounded,
+            busy ? null : onShare,
+          ),
+        _item(
+          context.l.tbSaveAsUdf,
           Icons.edit_note_rounded,
           busy ? null : () => onSaveIn(EvrakFormat.udf),
         ),
         _item(
-          'Word (DOCX) Olarak Kaydet',
+          context.l.tbSaveAsDocx,
           Icons.description_outlined,
           busy ? null : () => onSaveIn(EvrakFormat.docx),
         ),
         _item(
-          'Zengin Metin (RTF) Olarak Kaydet',
+          context.l.tbSaveAsRtf,
           Icons.article_outlined,
           busy ? null : () => onSaveIn(EvrakFormat.rtf),
         ),
         _item(
-          'PDF’e dönüştür',
+          context.l.tbConvertToPdf,
           Icons.picture_as_pdf_outlined,
           busy ? null : () => onSaveIn(EvrakFormat.pdf),
         ),
         const Divider(height: 8),
-        _item('Yazdır', Icons.print_outlined, onPrint, keys: _key('P')),
-        _item('Belge geçmişi', Icons.restore_outlined, onHistory),
+        _item(
+          context.l.tbPrint,
+          Icons.print_outlined,
+          onPrint,
+          keys: _key('P'),
+        ),
+        _item(context.l.tbDocumentHistory, Icons.restore_outlined, onHistory),
         if (host?.onRecovery != null)
           _item(
-            'Kurtarılabilir taslaklar',
+            context.l.tbRecoverableDrafts,
             Icons.settings_backup_restore_rounded,
             host!.onRecovery,
           ),
         if (onSign != null || onSendUyap != null || onUyapOperations != null)
           const Divider(height: 8),
         if (onSign != null)
-          _item('UDF e-imzala', Icons.draw_outlined, busy ? null : onSign),
+          _item(context.l.tbSignUdf, Icons.draw_outlined, busy ? null : onSign),
         if (onSendUyap != null)
           _item(
             'UYAP’a gönder',
@@ -250,7 +264,7 @@ class EditorFileMenu extends StatelessWidget {
         if (compact) {
           return IconButton(
             key: const ValueKey('editor-file-menu'),
-            tooltip: 'Dosya',
+            tooltip: context.l.tbFile,
             onPressed: toggle,
             icon: const Icon(Icons.folder_outlined, size: 20),
           );
@@ -259,7 +273,7 @@ class EditorFileMenu extends StatelessWidget {
         // rather than squeezing the groups beside it.
         final colors = Theme.of(context).colorScheme;
         return Tooltip(
-          message: 'Dosya menüsü',
+          message: context.l.tbFileMenu,
           child: InkWell(
             key: const ValueKey('editor-file-menu'),
             onTap: toggle,
@@ -279,7 +293,7 @@ class EditorFileMenu extends StatelessWidget {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      'Dosya',
+                      context.l.tbFile,
                       maxLines: 1,
                       softWrap: false,
                       style: TextStyle(

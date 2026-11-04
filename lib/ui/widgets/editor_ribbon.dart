@@ -10,23 +10,26 @@ import '../../services/editor/doc_delta_map.dart';
 import '../../services/editor/petition_templates.dart';
 import '../help/help_button.dart';
 import '../../services/platform/app_edition.dart';
+import '../../services/platform/app_language.dart';
 
 /// The editor's ribbon tabs (docs/design/editor-serit-taslak.png), after
 /// Banaozel's: Giriş holds the writing tools, Hukuk the petition, the case,
 /// the signature, the agenda and research; Ekle and Görünüm what is put in
 /// a document and how it is looked at.
 enum RibbonTab {
-  home('Giriş'),
-  legal('Hukuk'),
-  insert('Ekle'),
-  view('Görünüm');
-
-  const RibbonTab(this._label);
-  final String _label;
+  home,
+  legal,
+  insert,
+  view;
 
   /// LifeOS Ofis keeps the legal tab's research, not its petitions or UYAP:
   /// named for what is left.
-  String get label => this == legal && AppEdition.isOfis ? 'Araştırma' : _label;
+  String get label => switch (this) {
+    home => AppLanguage.t.tbTabHome,
+    legal => AppEdition.isOfis ? AppLanguage.t.tbTabResearch : 'Hukuk',
+    insert => AppLanguage.t.tbTabInsert,
+    view => AppLanguage.t.tbTabView,
+  };
 }
 
 /// The tab chosen, shared by the editor and the heading that shows the tabs,
@@ -247,14 +250,14 @@ class RibbonTabPicker extends StatelessWidget {
             key: const ValueKey('ribbon-pick-help'),
             onPressed: () => unawaited(showHelp(context, Help.editor)),
             leadingIcon: const Icon(Icons.help_outline_rounded, size: 18),
-            child: const Text('Bu sayfa nasıl kullanılır?'),
+            child: Text(context.l.tbHowToUsePage),
           ),
         ],
         builder: (context, menu, _) => MediaQuery.sizeOf(context).width < 600
             // A phone keeps the row's room for its tools: an icon alone.
             ? IconButton(
                 key: const ValueKey('ribbon-tab-picker'),
-                tooltip: 'Şerit: ${chosen.label}',
+                tooltip: context.l.tbRibbonTip(chosen.label),
                 onPressed: () => menu.isOpen ? menu.close() : menu.open(),
                 style: IconButton.styleFrom(
                   backgroundColor: scheme.primary.withValues(alpha: .08),

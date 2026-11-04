@@ -6,6 +6,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/editor/doc_delta_map.dart';
 import '../../services/layout/image_box.dart';
+import '../../services/platform/app_language.dart';
 
 /// Draws pictures inside the editor.
 ///
@@ -72,11 +73,11 @@ class EditorImageEmbed extends EmbedBuilder {
   Widget build(BuildContext context, EmbedContext embedContext) {
     final bytes = _bytesOf(embedContext.node);
     if (bytes == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 4),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: Text(
-          '〔Görsel okunamadı — kaydetmede korunur〕',
-          style: TextStyle(fontStyle: FontStyle.italic),
+          context.l.tbImageUnreadable,
+          style: const TextStyle(fontStyle: FontStyle.italic),
         ),
       );
     }
@@ -106,9 +107,9 @@ class EditorImageEmbed extends EmbedBuilder {
               gaplessPlayback: true,
               // A picture that cannot be decoded must not take the editor
               // down with it; the bytes are still written back on save.
-              errorBuilder: (context, _, _) => const Text(
-                '〔Görsel çizilemedi — kaydetmede korunur〕',
-                style: TextStyle(fontStyle: FontStyle.italic),
+              errorBuilder: (context, _, _) => Text(
+                context.l.tbImageUndrawable,
+                style: const TextStyle(fontStyle: FontStyle.italic),
               ),
             ),
           ),
@@ -151,14 +152,14 @@ class EditorImageEmbed extends EmbedBuilder {
         overlay.size.height - local.dy,
       ),
       items: [
-        const PopupMenuItem(enabled: false, child: Text('Görsel genişliği')),
-        for (final (label, value) in const [
-          ('Sütun genişliği', 1.0),
-          ('Sütunun %75\'i', .75),
-          ('Yarım sütun', .5),
-          ('Sütunun %33\'ü', 1 / 3),
-          ('Sütunun %25\'i', .25),
-          ('Özgün boyut', 0.0),
+        PopupMenuItem(enabled: false, child: Text(context.l.tbImageWidth)),
+        for (final (label, value) in [
+          (context.l.tbImageColumnWidth, 1.0),
+          (context.l.tbImageColumn75, .75),
+          (context.l.tbImageHalfColumn, .5),
+          (context.l.tbImageColumn33, 1 / 3),
+          (context.l.tbImageColumn25, .25),
+          (context.l.tbImageOriginalSize, 0.0),
         ])
           PopupMenuItem(value: value, child: Text(label)),
       ],

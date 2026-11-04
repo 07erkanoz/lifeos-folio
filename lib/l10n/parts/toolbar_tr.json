@@ -1,0 +1,352 @@
+{
+  "tbAddColumn": "Sütun ekle",
+  "tbAddRow": "Satır ekle",
+  "tbAlignCenter": "Ortala · Ctrl+E",
+  "tbAlignLeft": "Sola hizala · Ctrl+L",
+  "tbAlignRight": "Sağa hizala · Ctrl+R",
+  "tbAllFormatting": "Tüm biçimlendirme araçları…",
+  "tbAllPages": "Tüm sayfalar ({count})",
+  "@tbAllPages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tbApply": "Uygula",
+  "tbAttachToEmail": "E-postaya ekle",
+  "tbAttachToEmailHelp": "Ekli yeni ileti açılır",
+  "tbBlue": "Mavi",
+  "tbBold": "Kalın · Ctrl+B",
+  "tbBoldLabel": "Kalın",
+  "tbBullets": "Madde işaretleri · Ctrl+Shift+L",
+  "tbCancel": "Vazgeç",
+  "tbChooseFolder": "Klasör seç",
+  "tbChoosePageToPrint": "Yazdırılacak sayfayı seçin.",
+  "tbChooseTargetFolder": "Gönderilecek klasörü seçin",
+  "tbClearFormatting": "Karakter biçimini temizle",
+  "tbClose": "Kapat",
+  "tbCollate": "Harmanla",
+  "tbConvertToPdf": "PDF’e dönüştür",
+  "tbCopiedTo": "Kopyalandı: {target}",
+  "@tbCopiedTo": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "tbCopiesLabel": "kopya",
+  "tbCopyFile": "Dosyayı kopyala",
+  "tbCopyFileHelp": "E-postaya, sohbete veya klasöre yapıştırın",
+  "tbCopyToFolder": "Klasöre kopyala",
+  "tbCopyToFolderHelp": "USB bellek veya başka bir klasör seçin",
+  "tbCurrentPage": "Geçerli sayfa ({page})",
+  "@tbCurrentPage": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      }
+    }
+  },
+  "tbCustomSize": "Özel punto…",
+  "tbDefaultLetterheadName": "Antetim",
+  "tbDelete": "Sil",
+  "tbDeleteColumn": "Sütunu sil",
+  "tbDeleteRow": "Satırı sil",
+  "tbDeleteTable": "Tabloyu sil",
+  "tbDictate": "Sesli yaz",
+  "tbDictateShortTip": "Sesli yaz · söylediğiniz imlecin yerine yazılır",
+  "tbDictateTip": "Söylediğinizi imlecin yerine yazar",
+  "tbDocumentHistory": "Belge geçmişi",
+  "tbDrawBorders": "Çerçeve çiz",
+  "tbEvenPagesOnly": "Yalnız çift sayfalar",
+  "tbFile": "Dosya",
+  "tbFileCopied": "Dosya kopyalandı. Hedef uygulamaya yapıştırabilirsiniz.",
+  "tbFileMenu": "Dosya menüsü",
+  "tbFind": "Bul",
+  "tbFindInDocument": "Belgede bul · Ctrl+F",
+  "tbFindReplace": "Bul ve değiştir · Ctrl+H",
+  "tbFirstPageOnly": "Yalnız ilk sayfada",
+  "tbFirstPageOnlyHelp": "Kapalıyken antet her sayfanın başında basılır.",
+  "tbFont": "Yazı tipi",
+  "tbFontCount": "{count} yazı tipi · Sistem ve belge yazı tipleri",
+  "@tbFontCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tbFontSizePoints": "Yazı boyutu (punto)",
+  "tbFontSizeTitle": "Yazı boyutu",
+  "tbFooter": "Alt bilgi",
+  "tbGreen": "Yeşil",
+  "tbGrey": "Gri",
+  "tbGridlinesNotPrinted": "kılavuz çizgiler yazdırılmaz",
+  "tbGroupEditing": "Düzenleme",
+  "tbGroupHistory": "Geçmiş",
+  "tbGroupInsert": "Ekle",
+  "tbGroupParagraph": "Paragraf",
+  "tbGroupStyle": "Stil",
+  "tbGroupView": "Görünüm",
+  "tbGroupVoice": "Ses",
+  "tbGrowFont": "Yazıyı büyüt",
+  "tbHeader": "Üst bilgi",
+  "tbHeaderFooter": "Üst bilgi ve alt bilgi",
+  "tbHeaderFooterShort": "Üst/alt bilgi",
+  "tbHorizontalRuler": "Yatay cetvel",
+  "tbHowToUsePage": "Bu sayfa nasıl kullanılır?",
+  "tbImageColumn25": "Sütunun %25'i",
+  "tbImageColumn33": "Sütunun %33'ü",
+  "tbImageColumn75": "Sütunun %75'i",
+  "tbImageColumnWidth": "Sütun genişliği",
+  "tbImageHalfColumn": "Yarım sütun",
+  "tbImageOriginalSize": "Özgün boyut",
+  "tbImageUndrawable": "〔Görsel çizilemedi — kaydetmede korunur〕",
+  "tbImageUnreadable": "〔Görsel okunamadı — kaydetmede korunur〕",
+  "tbImageWidth": "Görsel genişliği",
+  "tbInNewDocuments": "Yeni belgelerde",
+  "tbIndentDecrease": "Girintiyi azalt · Ctrl+Shift+M",
+  "tbIndentIncrease": "Girintiyi artır · Ctrl+M",
+  "tbInsertTable": "Tablo ekle",
+  "tbItalic": "İtalik · Ctrl+I",
+  "tbJustify": "İki yana yasla · Ctrl+J",
+  "tbKeyboardShortcuts": "Klavye kısayolları",
+  "tbLetterheadMenu": "Antet…",
+  "tbLetterheads": "Antetler",
+  "tbLightGrey": "Açık gri",
+  "tbLineSpacing": "Satır aralığı",
+  "tbLineSpacingValue": "{value} satır",
+  "@tbLineSpacingValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tbLiveShare": "Canlı paylaş…",
+  "tbMixed": "Karışık",
+  "tbMore": "Diğer",
+  "tbMoreTools": "Diğer düzenleme araçları",
+  "tbName": "Adı",
+  "tbNewDocument": "Yeni belge",
+  "tbNewWindow": "Yeni pencere",
+  "tbNextPage": "Sonraki sayfa",
+  "tbNoFill": "Dolgu yok",
+  "tbNoFontFound": "Yazı tipi bulunamadı",
+  "tbNoLetterheads": "Henüz antet yok. Anteti belgenin üst bilgisinde tasarlayın: yazı, hizalama ve Ekle › Görsel ile logo. Sonra aşağıdan antet olarak kaydedin; her belgeye tek tıkla eklenir.",
+  "tbNoRecentDocuments": "Henüz açılmış belge yok",
+  "tbNormalText": "Normal metin",
+  "tbNotPrinted": "Yazdırılmayacak",
+  "tbNumbering": "Numaralı liste · Ctrl+Shift+7",
+  "tbOddAndEvenPages": "Tek ve çift sayfalar",
+  "tbOddPagesOnly": "Yalnız tek sayfalar",
+  "tbOk": "Tamam",
+  "tbOneCopyFewer": "Bir kopya az",
+  "tbOneCopyMore": "Bir kopya fazla",
+  "tbOpen": "Aç…",
+  "tbPageNumber": "Sayfa numarası",
+  "tbPageNumberBottom": "Altta",
+  "tbPageNumberCenter": "Orta",
+  "tbPageNumberFont": "Yazı",
+  "tbPageNumberFormat": "Biçimi",
+  "tbPageNumberInFooter": "Alt bilgide",
+  "tbPageNumberInHeader": "Üst bilgide",
+  "tbPageNumberLeft": "Sol",
+  "tbPageNumberMenu": "Sayfa numarası…",
+  "tbPageNumberNone": "Yok",
+  "tbPageNumberPosition": "Yeri",
+  "tbPageNumberPrefix": "Ön metin",
+  "tbPageNumberPrefixHint": "Sayfa ",
+  "tbPageNumberRight": "Sağ",
+  "tbPageNumberSkipFirst": "İlk sayfada gösterme",
+  "tbPageNumberSkipSingle": "Tek sayfaysa gösterme",
+  "tbPageNumberStart": "İlk numara",
+  "tbPageNumberTop": "Üstte",
+  "tbPageNumberWithTotal": "Toplam sayfayla",
+  "tbPageRange": "Sayfa aralığı",
+  "tbPageRangeHint": "ör. 1-3, 5, 8-",
+  "tbPageRangeInvalid": "Belgede {count} sayfa var; aralığı kontrol edin.",
+  "@tbPageRangeInvalid": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tbPages": "Sayfalar",
+  "tbParagraphStyle": "Paragraf stili",
+  "tbPdfPrepareFailed": "PDF hazırlanamadı: {error}",
+  "@tbPdfPrepareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tbPdfSaveFailed": "PDF kaydedilemedi",
+  "tbPdfSaved": "PDF kaydedildi",
+  "tbPickSize": "Boyut seçin",
+  "tbPicture": "Görsel",
+  "tbPointSize": "Punto",
+  "tbPointSizeHelp": "1–200 arasında, örneğin 10,5",
+  "tbPreviewFailed": "Önizleme açılamadı: {error}",
+  "@tbPreviewFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tbPreviousPage": "Önceki sayfa",
+  "tbPrint": "Yazdır",
+  "tbPrintFailed": "Yazdırılamadı",
+  "tbPrintShortcut": "Yazdır · Ctrl+P",
+  "tbPrintSummary": "{pages} sayfa · {sheets} yaprak A4",
+  "@tbPrintSummary": {
+    "placeholders": {
+      "pages": {
+        "type": "int"
+      },
+      "sheets": {
+        "type": "int"
+      }
+    }
+  },
+  "tbPrintSummaryCopies": "{pages} sayfa × {copies} kopya · {sheets} yaprak A4",
+  "@tbPrintSummaryCopies": {
+    "placeholders": {
+      "pages": {
+        "type": "int"
+      },
+      "copies": {
+        "type": "int"
+      },
+      "sheets": {
+        "type": "int"
+      }
+    }
+  },
+  "tbPrinter": "Yazıcı",
+  "tbPrinterDefault": "{name}  (varsayılan)",
+  "@tbPrinterDefault": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tbPrinterInSystemDialog": "Yazıcıyı sistemin yazdırma penceresinde seçeceksiniz.",
+  "tbProtectedContent": "〔Korunan içerik — kaydetmede korunur〕",
+  "tbReadAloud": "Sesli oku",
+  "tbReadAloudShortTip": "Sesli oku · seçimi ya da imleçten sonrasını",
+  "tbReadAloudTip": "Seçimi ya da imleçten sonrasını okur",
+  "tbRecent": "Son açılanlar",
+  "tbRecoverableDrafts": "Kurtarılabilir taslaklar",
+  "tbRed": "Kırmızı",
+  "tbRedo": "Yinele · Ctrl+Y",
+  "tbRemoveBorders": "Çerçeveyi kaldır",
+  "tbRename": "Yeniden adlandır",
+  "tbRenameLetterhead": "Anteti yeniden adlandır",
+  "tbReplace": "Değiştir",
+  "tbReplaceLetterheadBody": "Bu adla kayıtlı antet, belgenin üst bilgisiyle değiştirilecek.",
+  "tbReplaceLetterheadTitle": "\"{name}\" değiştirilsin mi?",
+  "@tbReplaceLetterheadTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tbRibbonTip": "Şerit: {tab}",
+  "@tbRibbonTip": {
+    "placeholders": {
+      "tab": {
+        "type": "String"
+      }
+    }
+  },
+  "tbSample": "Örnek: {sample}",
+  "@tbSample": {
+    "placeholders": {
+      "sample": {
+        "type": "String"
+      }
+    }
+  },
+  "tbSave": "Kaydet",
+  "tbSaveAs": "Farklı kaydet…",
+  "tbSaveAsDocx": "Word (DOCX) Olarak Kaydet",
+  "tbSaveAsPdf": "PDF olarak kaydet",
+  "tbSaveAsRtf": "Zengin Metin (RTF) Olarak Kaydet",
+  "tbSaveAsUdf": "UYAP UDF Olarak Kaydet",
+  "tbSaveFolderBody": "Bir kez seçersiniz; sonra Kaydet doğrudan oraya yazar. İmzaladığınız belgeler de oraya kaydedilir.",
+  "tbSaveFolderTitle": "Belgeler nereye kaydedilsin?",
+  "tbSaveHeaderAsLetterhead": "Üst bilgiyi antet olarak kaydet",
+  "tbSaveHeaderAsLetterheadEllipsis": "Üst bilgiyi antet olarak kaydet…",
+  "tbSaveSelectedPagesPdf": "Seçili sayfaları PDF olarak kaydet",
+  "tbSavedCopyUsed": "Diskte kayıtlı belge kullanılır.",
+  "tbSearchFonts": "Yazı tipi ara…",
+  "tbSelectWholeTable": "Tüm tabloyu seç",
+  "tbShadeCell": "Hücreyi boya",
+  "tbShadeTable": "Tabloyu boya",
+  "tbShare": "Paylaş",
+  "tbShareAsKind": "{kind} olarak paylaş",
+  "@tbShareAsKind": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "tbShareAsPdf": "PDF olarak paylaş",
+  "tbShareAsPdfHelp": "Her telefonda ve bilgisayarda açılır",
+  "tbShareEllipsis": "Paylaş…",
+  "tbShareFailed": "Paylaşılamadı: {error}",
+  "@tbShareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tbShareMacHelp": "AirDrop, Mesajlar ve yüklü uygulamalar",
+  "tbShareOriginalHelp": "Dosyanın kendisi, olduğu gibi",
+  "tbShareSend": "Paylaş / Gönder",
+  "tbShareWindowsHelp": "Yüklü paylaşım uygulamalarından seçin",
+  "tbShareWithWindows": "Windows ile paylaş",
+  "tbShortcuts": "Kısayollar",
+  "tbShrinkFont": "Yazıyı küçült",
+  "tbSignUdf": "UDF e-imzala",
+  "tbSnippets": "Kalıp metin",
+  "tbSnippetsShortcut": "Kalıp metin · Ctrl+Boşluk",
+  "tbStrikethrough": "Üstü çizili",
+  "tbSubscript": "Alt simge",
+  "tbSuperscript": "Üst simge",
+  "tbSystemPrintDialog": "Sistemin yazdırma penceresi…",
+  "tbTabHome": "Giriş",
+  "tbTabInsert": "Ekle",
+  "tbTabResearch": "Araştırma",
+  "tbTabView": "Görünüm",
+  "tbTable": "Tablo",
+  "tbTableSelectedRelease": "Tablo seçili — bırak",
+  "tbTableSize": "{rows} × {columns} tablo",
+  "@tbTableSize": {
+    "placeholders": {
+      "rows": {
+        "type": "int"
+      },
+      "columns": {
+        "type": "int"
+      }
+    }
+  },
+  "tbTextAndParagraph": "Yazı ve paragraf",
+  "tbUnderline": "Altı çizili · Ctrl+U",
+  "tbUndo": "Geri al · Ctrl+Z",
+  "tbUseInNewDocuments": "Yeni belgelerde kullan",
+  "tbVerticalRuler": "Dikey cetvel",
+  "tbViewRulers": "Görünüm ve cetveller",
+  "tbYellow": "Sarı"
+}

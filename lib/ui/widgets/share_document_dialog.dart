@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../../services/platform/app_language.dart';
 import '../../services/platform/file_actions.dart';
 
 class ShareDocumentDialog extends StatefulWidget {
@@ -37,7 +38,7 @@ class _ShareDocumentDialogState extends State<ShareDocumentDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Paylaş / Gönder'),
+    title: Text(context.l.tbShareSend),
     content: SizedBox(
       width: 420,
       child: SingleChildScrollView(
@@ -52,21 +53,20 @@ class _ShareDocumentDialogState extends State<ShareDocumentDialog> {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Diskte kayıtlı belge kullanılır.',
-              style: TextStyle(fontSize: 12),
+            Text(
+              context.l.tbSavedCopyUsed,
+              style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 12),
             ListTile(
               leading: const Icon(Icons.copy_all_outlined),
-              title: const Text('Dosyayı kopyala'),
-              subtitle: const Text(
-                'E-postaya, sohbete veya klasöre yapıştırın',
-              ),
+              title: Text(context.l.tbCopyFile),
+              subtitle: Text(context.l.tbCopyFileHelp),
               enabled: !_busy,
               onTap: () => _run(() async {
+                final copied = context.l.tbFileCopied;
                 await FileActions.invoke('copyFile', widget.path);
-                return 'Dosya kopyalandı. Hedef uygulamaya yapıştırabilirsiniz.';
+                return copied;
               }),
             ),
             // The system's own share: Windows's, and a Mac's (AirDrop,
@@ -77,13 +77,13 @@ class _ShareDocumentDialogState extends State<ShareDocumentDialog> {
                 leading: const Icon(Icons.ios_share_rounded),
                 title: Text(
                   defaultTargetPlatform == TargetPlatform.macOS
-                      ? 'Paylaş'
-                      : 'Windows ile paylaş',
+                      ? context.l.tbShare
+                      : context.l.tbShareWithWindows,
                 ),
                 subtitle: Text(
                   defaultTargetPlatform == TargetPlatform.macOS
-                      ? 'AirDrop, Mesajlar ve yüklü uygulamalar'
-                      : 'Yüklü paylaşım uygulamalarından seçin',
+                      ? context.l.tbShareMacHelp
+                      : context.l.tbShareWindowsHelp,
                 ),
                 enabled: !_busy,
                 onTap: () => _run(() async {
@@ -96,8 +96,8 @@ class _ShareDocumentDialogState extends State<ShareDocumentDialog> {
                 defaultTargetPlatform == TargetPlatform.macOS)
               ListTile(
                 leading: const Icon(Icons.mail_outline),
-                title: const Text('E-postaya ekle'),
-                subtitle: const Text('Ekli yeni ileti açılır'),
+                title: Text(context.l.tbAttachToEmail),
+                subtitle: Text(context.l.tbAttachToEmailHelp),
                 enabled: !_busy,
                 onTap: () => _run(() async {
                   await FileActions.composeEmail(widget.path);
@@ -106,19 +106,20 @@ class _ShareDocumentDialogState extends State<ShareDocumentDialog> {
               ),
             ListTile(
               leading: const Icon(Icons.drive_file_move_outlined),
-              title: const Text('Klasöre kopyala'),
-              subtitle: const Text('USB bellek veya başka bir klasör seçin'),
+              title: Text(context.l.tbCopyToFolder),
+              subtitle: Text(context.l.tbCopyToFolderHelp),
               enabled: !_busy,
               onTap: () => _run(() async {
+                final l = context.l;
                 final directory = await FilePicker.getDirectoryPath(
-                  dialogTitle: 'Gönderilecek klasörü seçin',
+                  dialogTitle: l.tbChooseTargetFolder,
                 );
                 if (directory == null) return null;
                 final target = await FileActions.copyToDirectory(
                   widget.path,
                   directory,
                 );
-                return 'Kopyalandı: $target';
+                return l.tbCopiedTo(target);
               }),
             ),
             if (_busy) const LinearProgressIndicator(),
@@ -134,7 +135,7 @@ class _ShareDocumentDialogState extends State<ShareDocumentDialog> {
     actions: [
       TextButton(
         onPressed: _busy ? null : () => Navigator.pop(context),
-        child: const Text('Kapat'),
+        child: Text(context.l.tbClose),
       ),
     ],
   );

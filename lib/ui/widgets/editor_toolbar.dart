@@ -3,6 +3,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/fonts/document_fonts.dart';
 import '../../services/editor/doc_delta_map.dart';
+import '../../services/platform/app_language.dart';
 import 'editor_ribbon.dart';
 
 /// Two-row groups on desktop; the same tools remain available on narrow screens.
@@ -115,15 +116,15 @@ class EditorToolbar extends StatelessWidget {
     final size = await showDialog<double>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Yazı boyutu'),
+        title: Text(context.l.tbFontSizeTitle),
         content: TextFormField(
           initialValue: input,
           onChanged: (value) => input = value,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Punto',
-            helperText: '1–200 arasında, örneğin 10,5',
+          decoration: InputDecoration(
+            labelText: context.l.tbPointSize,
+            helperText: context.l.tbPointSizeHelp,
           ),
           onFieldSubmitted: (value) {
             final n = double.tryParse(value.replaceAll(',', '.'));
@@ -133,14 +134,14 @@ class EditorToolbar extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Vazgeç'),
+            child: Text(context.l.tbCancel),
           ),
           FilledButton(
             onPressed: () {
               final n = double.tryParse(input.replaceAll(',', '.'));
               if (n != null && n >= 1 && n <= 200) Navigator.pop(context, n);
             },
-            child: const Text('Uygula'),
+            child: Text(context.l.tbApply),
           ),
         ],
       ),
@@ -180,7 +181,7 @@ class EditorToolbar extends StatelessWidget {
       final attrs = controller.getSelectionStyle().attributes;
       final font =
           attrs[Attribute.font.key]?.value?.toString() ??
-          (controller.selection.isCollapsed ? defaultFont : 'Karışık');
+          (controller.selection.isCollapsed ? defaultFont : context.l.tbMixed);
       final heading = attrs[Attribute.header.key]?.value as int?;
       final rawSize = double.tryParse('${attrs[Attribute.size.key]?.value}');
       final points = rawSize == null ? defaultFontSize : rawSize * 72 / 96;
@@ -240,12 +241,12 @@ class EditorToolbar extends StatelessWidget {
         width: 132,
         height: 30,
         child: PopupMenuButton<int>(
-          tooltip: 'Paragraf stili',
+          tooltip: context.l.tbParagraphStyle,
           padding: EdgeInsets.zero,
           position: PopupMenuPosition.under,
           onSelected: (level) => _heading(level == 0 ? null : level),
           itemBuilder: (_) => [
-            const PopupMenuItem(value: 0, child: Text('Normal metin')),
+            PopupMenuItem(value: 0, child: Text(context.l.tbNormalText)),
             for (final entry in DocDeltaMap.headingNames.entries)
               PopupMenuItem(
                 value: entry.key,
@@ -268,7 +269,7 @@ class EditorToolbar extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    DocDeltaMap.headingNames[heading] ?? 'Normal metin',
+                    DocDeltaMap.headingNames[heading] ?? context.l.tbNormalText,
                     key: const ValueKey('editor-style-label'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -312,7 +313,7 @@ class EditorToolbar extends StatelessWidget {
         width: 65,
         height: 30,
         child: PopupMenuButton<double>(
-          tooltip: 'Yazı boyutu (punto)',
+          tooltip: context.l.tbFontSizePoints,
           padding: EdgeInsets.zero,
           onSelected: (value) =>
               value == 0 ? _customSize(context, points) : _size(value),
@@ -336,7 +337,7 @@ class EditorToolbar extends StatelessWidget {
               72,
             ])
               PopupMenuItem(value: value.toDouble(), child: Text('$value')),
-            const PopupMenuItem(value: 0, child: Text('Özel punto…')),
+            PopupMenuItem(value: 0, child: Text(context.l.tbCustomSize)),
           ],
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -360,44 +361,48 @@ class EditorToolbar extends StatelessWidget {
         ),
       );
       final characterButtons = [
-        attrButton(Icons.format_bold, 'Kalın · Ctrl+B', Attribute.bold),
-        attrButton(Icons.format_italic, 'İtalik · Ctrl+I', Attribute.italic),
+        attrButton(Icons.format_bold, context.l.tbBold, Attribute.bold),
+        attrButton(Icons.format_italic, context.l.tbItalic, Attribute.italic),
         attrButton(
           Icons.format_underlined,
-          'Altı çizili · Ctrl+U',
+          context.l.tbUnderline,
           Attribute.underline,
         ),
         attrButton(
           Icons.strikethrough_s,
-          'Üstü çizili',
+          context.l.tbStrikethrough,
           Attribute.strikeThrough,
         ),
-        attrButton(Icons.subscript, 'Alt simge', Attribute.subscript),
-        attrButton(Icons.superscript, 'Üst simge', Attribute.superscript),
+        attrButton(Icons.subscript, context.l.tbSubscript, Attribute.subscript),
+        attrButton(
+          Icons.superscript,
+          context.l.tbSuperscript,
+          Attribute.superscript,
+        ),
         color(false),
         color(true),
-        button(Icons.format_clear, 'Karakter biçimini temizle', _clear),
+        button(Icons.format_clear, context.l.tbClearFormatting, _clear),
       ];
       final alignments = [
         for (final item in [
           (
             Icons.format_align_left,
-            'Sola hizala · Ctrl+L',
+            context.l.tbAlignLeft,
             Attribute.leftAlignment,
           ),
           (
             Icons.format_align_center,
-            'Ortala · Ctrl+E',
+            context.l.tbAlignCenter,
             Attribute.centerAlignment,
           ),
           (
             Icons.format_align_right,
-            'Sağa hizala · Ctrl+R',
+            context.l.tbAlignRight,
             Attribute.rightAlignment,
           ),
           (
             Icons.format_align_justify,
-            'İki yana yasla · Ctrl+J',
+            context.l.tbJustify,
             Attribute.justifyAlignment,
           ),
         ])
@@ -412,33 +417,33 @@ class EditorToolbar extends StatelessWidget {
       final lists = [
         attrButton(
           Icons.format_list_bulleted,
-          'Madde işaretleri · Ctrl+Shift+L',
+          context.l.tbBullets,
           Attribute.ul,
         ),
         attrButton(
           Icons.format_list_numbered,
-          'Numaralı liste · Ctrl+Shift+7',
+          context.l.tbNumbering,
           Attribute.ol,
         ),
         button(
           Icons.format_indent_decrease,
-          'Girintiyi azalt · Ctrl+Shift+M',
+          context.l.tbIndentDecrease,
           () => controller.indentSelection(false),
         ),
         button(
           Icons.format_indent_increase,
-          'Girintiyi artır · Ctrl+M',
+          context.l.tbIndentIncrease,
           () => controller.indentSelection(true),
         ),
         menu<double>(
-          'Satır aralığı',
+          context.l.tbLineSpacing,
           Icons.format_line_spacing,
           [
             for (final value in [1.0, 1.15, 1.5, 2.0])
               CheckedPopupMenuItem(
                 value: value,
                 checked: attrs[Attribute.lineHeight.key]?.value == value,
-                child: Text('$value satır'),
+                child: Text(context.l.tbLineSpacingValue('$value')),
               ),
           ],
           (value) => controller.formatSelection(
@@ -473,25 +478,25 @@ class EditorToolbar extends StatelessWidget {
         ),
       );
       final view = menu<String>(
-        'Görünüm ve cetveller',
+        context.l.tbViewRulers,
         Icons.straighten,
         [
           CheckedPopupMenuItem(
             value: 'horizontal',
             checked: showHorizontalRuler,
-            child: const Text('Yatay cetvel'),
+            child: Text(context.l.tbHorizontalRuler),
           ),
           CheckedPopupMenuItem(
             value: 'vertical',
             checked: showVerticalRuler,
-            child: const Text('Dikey cetvel'),
+            child: Text(context.l.tbVerticalRuler),
           ),
         ],
         (value) =>
             value == 'horizontal' ? onHorizontalRuler() : onVerticalRuler(),
       );
       Widget regionMenu() => PopupMenuButton<String>(
-        tooltip: 'Üst bilgi ve alt bilgi',
+        tooltip: context.l.tbHeaderFooter,
         padding: EdgeInsets.zero,
         position: PopupMenuPosition.under,
         onSelected: (key) => onToggleRegion!(key),
@@ -499,19 +504,22 @@ class EditorToolbar extends StatelessWidget {
           CheckedPopupMenuItem(
             value: 'header',
             checked: hasHeader,
-            child: const Text('Üst bilgi'),
+            child: Text(context.l.tbHeader),
           ),
           CheckedPopupMenuItem(
             value: 'footer',
             checked: hasFooter,
-            child: const Text('Alt bilgi'),
+            child: Text(context.l.tbFooter),
           ),
           const PopupMenuDivider(),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'page-numbers',
-            child: Text('Sayfa numarası…'),
+            child: Text(context.l.tbPageNumberMenu),
           ),
-          const PopupMenuItem(value: 'letterheads', child: Text('Antet…')),
+          PopupMenuItem(
+            value: 'letterheads',
+            child: Text(context.l.tbLetterheadMenu),
+          ),
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -524,7 +532,10 @@ class EditorToolbar extends StatelessWidget {
                 color: scheme.onSurfaceVariant,
               ),
               const SizedBox(width: 6),
-              const Text('Üst/alt bilgi', style: TextStyle(fontSize: 12)),
+              Text(
+                context.l.tbHeaderFooterShort,
+                style: const TextStyle(fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -571,54 +582,60 @@ class EditorToolbar extends StatelessWidget {
           // Wider still, the tools that are only icons are named too.
           final named = expanded && constraints.maxWidth >= namedWidth;
           final overflow = menu<String>(
-            'Diğer düzenleme araçları',
+            context.l.tbMoreTools,
             Icons.more_horiz,
             [
               if (onSnippets != null)
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'snippets',
-                  child: Text('Kalıp metin · Ctrl+Boşluk'),
+                  child: Text(context.l.tbSnippetsShortcut),
                 ),
               if (onHistory != null)
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'history',
-                  child: Text('Belge geçmişi'),
+                  child: Text(context.l.tbDocumentHistory),
                 ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'find',
-                child: Text('Belgede bul · Ctrl+F'),
+                child: Text(context.l.tbFindInDocument),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'replace',
-                child: Text('Bul ve değiştir · Ctrl+H'),
+                child: Text(context.l.tbFindReplace),
               ),
               CheckedPopupMenuItem(
                 value: 'horizontal',
                 checked: showHorizontalRuler,
-                child: const Text('Yatay cetvel'),
+                child: Text(context.l.tbHorizontalRuler),
               ),
               CheckedPopupMenuItem(
                 value: 'vertical',
                 checked: showVerticalRuler,
-                child: const Text('Dikey cetvel'),
+                child: Text(context.l.tbVerticalRuler),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'format',
-                child: Text('Tüm biçimlendirme araçları…'),
+                child: Text(context.l.tbAllFormatting),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'print',
-                child: Text('Yazdır · Ctrl+P'),
+                child: Text(context.l.tbPrintShortcut),
               ),
               if (onUyapCase != null)
                 const PopupMenuItem(value: 'uyap', child: Text('UYAP dosyası')),
               if (onReadAloud != null)
-                const PopupMenuItem(value: 'read', child: Text('Sesli oku')),
+                PopupMenuItem(
+                  value: 'read',
+                  child: Text(context.l.tbReadAloud),
+                ),
               if (onDictate != null)
-                const PopupMenuItem(value: 'dictate', child: Text('Sesli yaz')),
-              const PopupMenuItem(
+                PopupMenuItem(
+                  value: 'dictate',
+                  child: Text(context.l.tbDictate),
+                ),
+              PopupMenuItem(
                 value: 'help',
-                child: Text('Klavye kısayolları'),
+                child: Text(context.l.tbKeyboardShortcuts),
               ),
             ],
             (value) {
@@ -649,7 +666,7 @@ class EditorToolbar extends StatelessWidget {
                   showDialog<void>(
                     context: context,
                     builder: (context) => AlertDialog(
-                      title: const Text('Yazı ve paragraf'),
+                      title: Text(context.l.tbTextAndParagraph),
                       content: SingleChildScrollView(
                         child: SizedBox(
                           width: 460,
@@ -670,7 +687,7 @@ class EditorToolbar extends StatelessWidget {
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context),
-                          child: const Text('Tamam'),
+                          child: Text(context.l.tbOk),
                         ),
                       ],
                     ),
@@ -687,46 +704,52 @@ class EditorToolbar extends StatelessWidget {
                     children: expanded
                         ? [
                             group(
-                              'Geçmiş',
+                              context.l.tbGroupHistory,
                               [
                                 button(
                                   Icons.undo,
-                                  'Geri al · Ctrl+Z',
+                                  context.l.tbUndo,
                                   controller.hasUndo ? controller.undo : null,
                                 ),
                               ],
                               [
                                 button(
                                   Icons.redo,
-                                  'Yinele · Ctrl+Y',
+                                  context.l.tbRedo,
                                   controller.hasRedo ? controller.redo : null,
                                 ),
                               ],
                             ),
-                            group('Stil', [styleField()], const []),
-                            group('Yazı tipi', [
+                            group(context.l.tbGroupStyle, [
+                              styleField(),
+                            ], const []),
+                            group(context.l.tbFont, [
                               fontField(),
                               const SizedBox(width: 4),
                               sizeField(),
                               button(
                                 Icons.text_increase,
-                                'Yazıyı büyüt',
+                                context.l.tbGrowFont,
                                 () => _size((points + 1).clamp(1, 200)),
                               ),
                               button(
                                 Icons.text_decrease,
-                                'Yazıyı küçült',
+                                context.l.tbShrinkFont,
                                 () => _size((points - 1).clamp(1, 200)),
                               ),
                             ], characterButtons),
-                            group('Paragraf', alignments, lists),
                             group(
-                              'Düzenleme',
+                              context.l.tbGroupParagraph,
+                              alignments,
+                              lists,
+                            ),
+                            group(
+                              context.l.tbGroupEditing,
                               [
-                                labeled(Icons.search, 'Bul', onFind),
+                                labeled(Icons.search, context.l.tbFind, onFind),
                                 labeled(
                                   Icons.find_replace,
-                                  'Değiştir',
+                                  context.l.tbReplace,
                                   onReplace,
                                 ),
                               ],
@@ -741,40 +764,40 @@ class EditorToolbar extends StatelessWidget {
                                 if (roomy)
                                   labeled(
                                     Icons.print_outlined,
-                                    'Yazdır',
+                                    context.l.tbPrint,
                                     onPrint,
                                   )
                                 else
                                   button(
                                     Icons.print_outlined,
-                                    'Yazdır · Ctrl+P',
+                                    context.l.tbPrintShortcut,
                                     onPrint,
                                   ),
                                 if (onSnippets != null && named)
                                   Tooltip(
-                                    message: 'Kalıp metin · Ctrl+Boşluk',
+                                    message: context.l.tbSnippetsShortcut,
                                     child: labeled(
                                       Icons.bookmark_add_outlined,
-                                      'Kalıp metin',
+                                      context.l.tbSnippets,
                                       onSnippets!,
                                     ),
                                   )
                                 else if (onSnippets != null)
                                   button(
                                     Icons.bookmark_add_outlined,
-                                    'Kalıp metin · Ctrl+Boşluk',
+                                    context.l.tbSnippetsShortcut,
                                     onSnippets,
                                   ),
                                 if (!roomy && onReadAloud != null)
                                   button(
                                     Icons.record_voice_over_outlined,
-                                    'Sesli oku · seçimi ya da imleçten sonrasını',
+                                    context.l.tbReadAloudShortTip,
                                     onReadAloud,
                                   ),
                                 if (!roomy && onDictate != null)
                                   button(
                                     Icons.mic_none_rounded,
-                                    'Sesli yaz · söylediğiniz imlecin yerine yazılır',
+                                    context.l.tbDictateShortTip,
                                     onDictate,
                                   ),
                               ],
@@ -782,14 +805,14 @@ class EditorToolbar extends StatelessWidget {
                             if (roomy &&
                                 (onReadAloud != null || onDictate != null))
                               group(
-                                'Ses',
+                                context.l.tbGroupVoice,
                                 [
                                   if (onReadAloud != null)
                                     Tooltip(
-                                      message: 'Seçimi ya da imleçten sonrasını okur',
+                                      message: context.l.tbReadAloudTip,
                                       child: labeled(
                                         Icons.record_voice_over_outlined,
-                                        'Sesli oku',
+                                        context.l.tbReadAloud,
                                         onReadAloud!,
                                       ),
                                     ),
@@ -797,11 +820,10 @@ class EditorToolbar extends StatelessWidget {
                                 [
                                   if (onDictate != null)
                                     Tooltip(
-                                      message:
-                                          'Söylediğinizi imlecin yerine yazar',
+                                      message: context.l.tbDictateTip,
                                       child: labeled(
                                         Icons.mic_none_rounded,
-                                        'Sesli yaz',
+                                        context.l.tbDictate,
                                         onDictate!,
                                       ),
                                     ),
@@ -811,28 +833,28 @@ class EditorToolbar extends StatelessWidget {
                                 onToggleRegion != null ||
                                 onInsertTable != null)
                               group(
-                                'Ekle',
+                                context.l.tbGroupInsert,
                                 [
                                   if (onInsertTable != null)
                                     TableSizeButton(onPick: onInsertTable!),
                                   if (onInsertImage != null)
                                     labeled(
                                       Icons.image_outlined,
-                                      'Görsel',
+                                      context.l.tbPicture,
                                       onInsertImage!,
                                     ),
                                 ],
                                 [if (onToggleRegion != null) regionMenu()],
                               ),
                             group(
-                              'Görünüm',
+                              context.l.tbGroupView,
                               named
                                   ? [
                                       view,
                                       if (onHistory != null)
                                         labeled(
                                           Icons.history_rounded,
-                                          'Belge geçmişi',
+                                          context.l.tbDocumentHistory,
                                           onHistory!,
                                         ),
                                       if (onUyapCase != null)
@@ -848,7 +870,7 @@ class EditorToolbar extends StatelessWidget {
                                       if (onHistory != null)
                                         button(
                                           Icons.history_rounded,
-                                          'Belge geçmişi',
+                                          context.l.tbDocumentHistory,
                                           onHistory,
                                         ),
                                       if (onCaseLaw != null)
@@ -876,10 +898,10 @@ class EditorToolbar extends StatelessWidget {
                                           selected: caseLawOpen,
                                         ),
                                       Tooltip(
-                                        message: 'Klavye kısayolları',
+                                        message: context.l.tbKeyboardShortcuts,
                                         child: labeled(
                                           Icons.keyboard_outlined,
-                                          'Kısayollar',
+                                          context.l.tbShortcuts,
                                           onHelp,
                                         ),
                                       ),
@@ -887,7 +909,7 @@ class EditorToolbar extends StatelessWidget {
                                   : [
                                       button(
                                         Icons.keyboard_outlined,
-                                        'Klavye kısayolları',
+                                        context.l.tbKeyboardShortcuts,
                                         onHelp,
                                       ),
                                     ],
@@ -896,12 +918,12 @@ class EditorToolbar extends StatelessWidget {
                         : [
                             button(
                               Icons.undo,
-                              'Geri al · Ctrl+Z',
+                              context.l.tbUndo,
                               controller.hasUndo ? controller.undo : null,
                             ),
                             button(
                               Icons.redo,
-                              'Yinele · Ctrl+Y',
+                              context.l.tbRedo,
                               controller.hasRedo ? controller.redo : null,
                             ),
                             fontField(),
@@ -910,7 +932,7 @@ class EditorToolbar extends StatelessWidget {
                             ...characterButtons.take(3),
                             button(
                               Icons.find_replace,
-                              'Bul ve değiştir · Ctrl+H',
+                              context.l.tbFindReplace,
                               onReplace,
                             ),
                             view,
@@ -965,7 +987,7 @@ class _FontPickerState extends State<_FontPicker> {
         .where((font) => font.toLowerCase().contains(_query.toLowerCase()))
         .toList();
     return AlertDialog(
-      title: const Text('Yazı tipi'),
+      title: Text(context.l.tbFont),
       content: SizedBox(
         width: 420,
         height: (MediaQuery.sizeOf(context).height * .48).clamp(100, 440),
@@ -973,16 +995,16 @@ class _FontPickerState extends State<_FontPicker> {
           children: [
             TextField(
               autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Yazı tipi ara…',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: context.l.tbSearchFonts,
+                prefixIcon: const Icon(Icons.search),
               ),
               onChanged: (value) => setState(() => _query = value),
             ),
             const SizedBox(height: 8),
             Expanded(
               child: matches.isEmpty
-                  ? const Center(child: Text('Yazı tipi bulunamadı'))
+                  ? Center(child: Text(context.l.tbNoFontFound))
                   : ListView.builder(
                       itemCount: matches.length,
                       itemBuilder: (_, index) => ListTile(
@@ -997,7 +1019,7 @@ class _FontPickerState extends State<_FontPicker> {
                     ),
             ),
             Text(
-              '${_families.length} yazı tipi · Sistem ve belge yazı tipleri',
+              context.l.tbFontCount(_families.length),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -1006,7 +1028,7 @@ class _FontPickerState extends State<_FontPicker> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Kapat'),
+          child: Text(context.l.tbClose),
         ),
       ],
     );
@@ -1031,7 +1053,7 @@ class _TableSizeButtonState extends State<TableSizeButton> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return PopupMenuButton<void>(
-      tooltip: 'Tablo ekle',
+      tooltip: context.l.tbInsertTable,
       padding: EdgeInsets.zero,
       position: PopupMenuPosition.under,
       itemBuilder: (_) => [
@@ -1082,8 +1104,8 @@ class _TableSizeButtonState extends State<TableSizeButton> {
                   const SizedBox(height: 6),
                   Text(
                     _hoverRow == 0
-                        ? 'Boyut seçin'
-                        : '$_hoverRow × $_hoverColumn tablo',
+                        ? context.l.tbPickSize
+                        : context.l.tbTableSize(_hoverRow, _hoverColumn),
                     style: const TextStyle(fontSize: 12),
                   ),
                 ],
@@ -1103,7 +1125,7 @@ class _TableSizeButtonState extends State<TableSizeButton> {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 6),
-            const Text('Tablo', style: TextStyle(fontSize: 12)),
+            Text(context.l.tbTable, style: const TextStyle(fontSize: 12)),
           ],
         ),
       ),

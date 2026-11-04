@@ -5,6 +5,7 @@ import '../../models/document_model.dart';
 import '../../services/editor/doc_delta_map.dart';
 import '../../services/editor/letterheads.dart';
 import '../../services/fonts/document_fonts.dart';
+import '../../services/platform/app_language.dart';
 import 'editor_image_embed.dart';
 import 'editor_line_layout.dart';
 import 'editor_tab_spans.dart';
@@ -83,8 +84,8 @@ class _LetterheadDialogState extends State<LetterheadDialog> {
 
   Future<void> _keepHeader() async {
     final name = await _askName(
-      'Üst bilgiyi antet olarak kaydet',
-      widget.store.all.isEmpty ? 'Antetim' : '',
+      context.l.tbSaveHeaderAsLetterhead,
+      widget.store.all.isEmpty ? context.l.tbDefaultLetterheadName : '',
     );
     if (name == null || name.trim().isEmpty || !mounted) return;
     final taken = widget.store.byName(name);
@@ -92,18 +93,16 @@ class _LetterheadDialogState extends State<LetterheadDialog> {
       final replace = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('"${taken.name}" değiştirilsin mi?'),
-          content: const Text(
-            'Bu adla kayıtlı antet, belgenin üst bilgisiyle değiştirilecek.',
-          ),
+          title: Text(context.l.tbReplaceLetterheadTitle(taken.name)),
+          content: Text(context.l.tbReplaceLetterheadBody),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Vazgeç'),
+              child: Text(context.l.tbCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Değiştir'),
+              child: Text(context.l.tbReplace),
             ),
           ],
         ),
@@ -118,7 +117,7 @@ class _LetterheadDialogState extends State<LetterheadDialog> {
     final all = widget.store.all;
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('Antetler'),
+      title: Text(context.l.tbLetterheads),
       content: SizedBox(
         width: 560,
         child: Column(
@@ -129,10 +128,7 @@ class _LetterheadDialogState extends State<LetterheadDialog> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
-                  'Henüz antet yok. Anteti belgenin üst bilgisinde '
-                  'tasarlayın: yazı, hizalama ve Ekle › Görsel ile logo. '
-                  'Sonra aşağıdan antet olarak kaydedin; her belgeye tek '
-                  'tıkla eklenir.',
+                  context.l.tbNoLetterheads,
                   style: theme.textTheme.bodyMedium,
                 ),
               )
@@ -152,7 +148,7 @@ class _LetterheadDialogState extends State<LetterheadDialog> {
                         ),
                         onRename: () async {
                           final name = await _askName(
-                            'Anteti yeniden adlandır',
+                            context.l.tbRenameLetterhead,
                             one.name,
                           );
                           if (name != null) {
@@ -173,10 +169,8 @@ class _LetterheadDialogState extends State<LetterheadDialog> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 value: _firstPageOnly,
-                title: const Text('Yalnız ilk sayfada'),
-                subtitle: const Text(
-                  'Kapalıyken antet her sayfanın başında basılır.',
-                ),
+                title: Text(context.l.tbFirstPageOnly),
+                subtitle: Text(context.l.tbFirstPageOnlyHelp),
                 onChanged: (v) => setState(() => _firstPageOnly = v ?? false),
               ),
           ],
@@ -186,11 +180,11 @@ class _LetterheadDialogState extends State<LetterheadDialog> {
         TextButton.icon(
           onPressed: _headerWritten ? _keepHeader : null,
           icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-          label: const Text('Üst bilgiyi antet olarak kaydet…'),
+          label: Text(context.l.tbSaveHeaderAsLetterheadEllipsis),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Kapat'),
+          child: Text(context.l.tbClose),
         ),
       ],
     );
@@ -264,16 +258,16 @@ class _LetterheadTileState extends State<_LetterheadTile> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: Chip(
-                      label: const Text('Yeni belgelerde'),
+                      label: Text(context.l.tbInNewDocuments),
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
                 FilledButton.tonal(
                   onPressed: widget.onApply,
-                  child: const Text('Uygula'),
+                  child: Text(context.l.tbApply),
                 ),
                 PopupMenuButton<String>(
-                  tooltip: 'Diğer',
+                  tooltip: context.l.tbMore,
                   onSelected: (v) => switch (v) {
                     'rename' => widget.onRename(),
                     'delete' => widget.onDelete(),
@@ -283,13 +277,16 @@ class _LetterheadTileState extends State<_LetterheadTile> {
                     CheckedPopupMenuItem(
                       value: 'default',
                       checked: one.isDefault,
-                      child: const Text('Yeni belgelerde kullan'),
+                      child: Text(context.l.tbUseInNewDocuments),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'rename',
-                      child: Text('Yeniden adlandır'),
+                      child: Text(context.l.tbRename),
                     ),
-                    const PopupMenuItem(value: 'delete', child: Text('Sil')),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text(context.l.tbDelete),
+                    ),
                   ],
                 ),
               ],
@@ -385,17 +382,17 @@ class _NameDialogState extends State<_NameDialog> {
     content: TextField(
       controller: _field,
       autofocus: true,
-      decoration: const InputDecoration(labelText: 'Adı'),
+      decoration: InputDecoration(labelText: context.l.tbName),
       onSubmitted: (v) => Navigator.pop(context, v),
     ),
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Vazgeç'),
+        child: Text(context.l.tbCancel),
       ),
       FilledButton(
         onPressed: () => Navigator.pop(context, _field.text),
-        child: const Text('Tamam'),
+        child: Text(context.l.tbOk),
       ),
     ],
   );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/platform/app_language.dart';
 import '../../services/platform/phone_document_save.dart';
 
 /// The folder a phone saves into, asked for once (21 Ekim 2026, approved
@@ -19,14 +20,13 @@ Future<PhoneSaveFolder?> ensureSaveFolder(BuildContext context) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Belgeler nereye kaydedilsin?',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            Text(
+              context.l.tbSaveFolderTitle,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
-              'Bir kez seçersiniz; sonra Kaydet doğrudan oraya yazar. '
-              'İmzaladığınız belgeler de oraya kaydedilir.',
+              context.l.tbSaveFolderBody,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -36,7 +36,7 @@ Future<PhoneSaveFolder?> ensureSaveFolder(BuildContext context) async {
               key: const ValueKey('save-folder-choose'),
               onPressed: () => Navigator.pop(context, true),
               icon: const Icon(Icons.folder_outlined),
-              label: const Text('Klasör seç'),
+              label: Text(context.l.tbChooseFolder),
             ),
           ],
         ),
