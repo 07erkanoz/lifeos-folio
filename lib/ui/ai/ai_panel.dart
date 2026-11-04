@@ -990,7 +990,7 @@ class _AiPanelState extends State<AiPanel> {
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: TextButton.icon(
-            onPressed: () => setState(() => _documentsOpen = true),
+            onPressed: () => setState(() => _documentsChoice = true),
             icon: const Icon(Icons.description_outlined, size: 16),
             label: Text(
               t.documents.length == 1
@@ -1177,8 +1177,11 @@ class _AiPanelState extends State<AiPanel> {
   /// first; kept with the case's drafts when it is of one.
   final _documents = <_Doc>[];
 
-  /// Whether the documents are beside the conversation (on the page).
-  bool _documentsOpen = true;
+  /// Whether the documents are beside the conversation (on the page): as
+  /// the lawyer chose, or when there is room for them.
+  bool? _documentsChoice;
+  bool _roomy = true;
+  bool get _documentsOpen => _documentsChoice ?? _roomy;
 
   void _wrote(_Turn turn, Map<String, Object?> body) {
     final doc = _Doc(
@@ -1188,7 +1191,7 @@ class _AiPanelState extends State<AiPanel> {
     );
     turn.documents.add(doc);
     _documents.insert(0, doc);
-    _documentsOpen = true;
+    if (_documentsChoice == false) _documentsChoice = null;
     final kase = _case;
     if (kase == null) return;
     unawaited(() async {
@@ -1377,7 +1380,7 @@ class _AiPanelState extends State<AiPanel> {
             ),
             IconButton(
               tooltip: 'Gizle',
-              onPressed: () => setState(() => _documentsOpen = false),
+              onPressed: () => setState(() => _documentsChoice = false),
               icon: const Icon(Icons.close_rounded, size: 18),
             ),
           ],
@@ -1618,298 +1621,319 @@ class _AiPanelState extends State<AiPanel> {
       for (final s in found ?? const <AiStatus>[])
         if (s.usable) s.provider,
     ];
-    return Container(
-      key: const ValueKey('ai-panel'),
-      width: widget.embedded ? null : 380,
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        border: widget.embedded
-            ? null
-            : Border(left: BorderSide(color: scheme.outlineVariant)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!widget.embedded ||
-              usable.length > 1 ||
-              (!_documentsOpen &&
-                  (_documents.isNotEmpty || _attached.isNotEmpty)))
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
-              child: Row(
-                children: [
-                  // On the Yapay zekâ page the page says it already.
-                  if (widget.embedded)
-                    const Spacer()
-                  else ...[
-                    Icon(
-                      Icons.auto_awesome_outlined,
-                      size: 18,
-                      color: scheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Yapay zekâ',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                  if (usable.length > 1)
-                    DropdownButton<AiProvider>(
-                      key: const ValueKey('ai-provider'),
-                      value: _provider,
-                      isDense: true,
-                      underline: const SizedBox.shrink(),
-                      items: [
-                        for (final u in usable)
-                          DropdownMenuItem(value: u, child: Text(u.label)),
+    return LayoutBuilder(
+      builder: (context, box) {
+        // A small screen gives the conversation the room; the documents
+        // wait behind their button.
+        _roomy = box.maxWidth >= 760;
+        return Container(
+          key: const ValueKey('ai-panel'),
+          width: widget.embedded ? null : 380,
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: widget.embedded
+                ? null
+                : Border(left: BorderSide(color: scheme.outlineVariant)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!widget.embedded ||
+                  usable.length > 1 ||
+                  (!_documentsOpen &&
+                      (_documents.isNotEmpty || _attached.isNotEmpty)))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 6, 6),
+                  child: Row(
+                    children: [
+                      // On the Yapay zekâ page the page says it already.
+                      if (widget.embedded)
+                        const Spacer()
+                      else ...[
+                        Icon(
+                          Icons.auto_awesome_outlined,
+                          size: 18,
+                          color: scheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Yapay zekâ',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
                       ],
-                      onChanged: _busy
-                          ? null
-                          : (v) => setState(() => _provider = v),
-                    ),
-                  if (widget.embedded &&
-                      !_documentsOpen &&
-                      (_documents.isNotEmpty || _attached.isNotEmpty))
-                    TextButton.icon(
-                      key: const ValueKey('ai-documents-open'),
-                      onPressed: () => setState(() => _documentsOpen = true),
-                      icon: const Icon(Icons.description_outlined, size: 16),
-                      label: Text(
-                        'Belgeler (${_documents.length + _attached.length})',
-                      ),
-                    ),
-                  if (widget.onClose != null)
-                    IconButton(
-                      tooltip: 'Kapat',
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                      onPressed: widget.onClose,
-                    ),
-                ],
-              ),
-            ),
-          if (_case case final c? when !widget.embedded || widget.showCase)
-            Padding(
-              key: const ValueKey('ai-case'),
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.folder_outlined,
-                    size: 15,
-                    color: scheme.onSurfaceVariant,
+                      if (usable.length > 1)
+                        DropdownButton<AiProvider>(
+                          key: const ValueKey('ai-provider'),
+                          value: _provider,
+                          isDense: true,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            for (final u in usable)
+                              DropdownMenuItem(value: u, child: Text(u.label)),
+                          ],
+                          onChanged: _busy
+                              ? null
+                              : (v) => setState(() => _provider = v),
+                        ),
+                      if (widget.embedded &&
+                          !_documentsOpen &&
+                          (_documents.isNotEmpty || _attached.isNotEmpty))
+                        TextButton.icon(
+                          key: const ValueKey('ai-documents-open'),
+                          onPressed: () =>
+                              setState(() => _documentsChoice = true),
+                          icon: const Icon(
+                            Icons.description_outlined,
+                            size: 16,
+                          ),
+                          label: Text(
+                            'Belgeler (${_documents.length + _attached.length})',
+                          ),
+                        ),
+                      if (widget.onClose != null)
+                        IconButton(
+                          tooltip: 'Kapat',
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          onPressed: widget.onClose,
+                        ),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '${c.court} · ${c.number}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
+                ),
+              if (_case case final c? when !widget.embedded || widget.showCase)
+                Padding(
+                  key: const ValueKey('ai-case'),
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.folder_outlined,
+                        size: 15,
                         color: scheme.onSurfaceVariant,
                       ),
-                    ),
-                  ),
-                  // Of no document: the case was chosen, and may be
-                  // taken off; the conversation goes on of none.
-                  if (widget.path == null && widget.showCase)
-                    TextButton(
-                      key: const ValueKey('ai-case-off'),
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() => _case = null),
-                      child: const Text('Kaldır'),
-                    ),
-                ],
-              ),
-            ),
-          const Divider(height: 1),
-          if (found == null)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
-          else if (_provider == null)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Text(
-                  'Bu bilgisayarda oturumu açık bir yapay zekâ programı '
-                  'bulunamadı. Ayarlar › Yapay zekâ’dan Claude, Codex ya da '
-                  'Antigravity’yi kurabilir ve oturum açabilirsiniz.',
-                  key: const ValueKey('ai-none'),
-                  style: TextStyle(
-                    color: scheme.onSurfaceVariant,
-                    height: 1.45,
-                  ),
-                ),
-              ),
-            )
-          else ...[
-            if (widget.path != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
-                    key: const ValueKey('ai-summary'),
-                    onPressed: _busy ? null : () => _ask(AiTask.summary),
-                    icon: const Icon(Icons.subject_rounded, size: 18),
-                    label: const Text('Özetle'),
-                  ),
-                ),
-              ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _turns.isEmpty
-                        ? _empty(scheme)
-                        : NotificationListener<ScrollNotification>(
-                            onNotification: _onScroll,
-                            child: ListView(
-                              controller: _scroll,
-                              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-                              children: [
-                                for (final t in _turns) ..._turnView(t, scheme),
-                              ],
-                            ),
-                          ),
-                  ),
-                  if (widget.embedded &&
-                      _documentsOpen &&
-                      (_documents.isNotEmpty || _attached.isNotEmpty))
-                    _documentsPanel(scheme),
-                ],
-              ),
-            ),
-            if (_sentTo case final to?)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-                child: Text(
-                  '${widget.path == null
-                      ? 'Sorunuz ve yapay zekânın okuduğu dosya bilgileri'
-                      : _case == null
-                      ? 'Bu belgenin metni'
-                      : 'Bu belgenin ve yapay zekânın okuduğu dosya evrakının metni'} '
-                  '${_to(to)} gönderildi. Yanıtlar yanlış olabilir; karar '
-                  'sizindir.',
-                  key: const ValueKey('ai-sent-note'),
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            if (_attached.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        for (final path in _attached)
-                          InputChip(
-                            key: ValueKey('ai-attached-$path'),
-                            avatar: const Icon(
-                              Icons.description_outlined,
-                              size: 16,
-                            ),
-                            label: Text(
-                              p.basename(path),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onDeleted: _busy
-                                ? null
-                                : () => setState(() => _attached.remove(path)),
-                          ),
-                      ],
-                    ),
-                    if (_sendsPictures)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
+                      const SizedBox(width: 6),
+                      Expanded(
                         child: Text(
-                          'Taranmış belge ve resimler görüntü olarak gider; '
-                          'içlerindeki kimlik numaraları gizlenemez.',
+                          '${c.court} · ${c.number}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 11.5,
+                            fontSize: 12,
                             color: scheme.onSurfaceVariant,
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 8, 12),
-              child: Row(
-                children: [
-                  IconButton(
-                    key: const ValueKey('ai-attach'),
-                    tooltip: 'Belge ekle',
-                    onPressed: _busy ? null : () => unawaited(_attach()),
-                    icon: const Icon(Icons.attach_file_rounded, size: 20),
+                      // Of no document: the case was chosen, and may be
+                      // taken off; the conversation goes on of none.
+                      if (widget.path == null && widget.showCase)
+                        TextButton(
+                          key: const ValueKey('ai-case-off'),
+                          onPressed: _busy
+                              ? null
+                              : () => setState(() => _case = null),
+                          child: const Text('Kaldır'),
+                        ),
+                    ],
                   ),
-                  Expanded(
-                    // Enter sends, Shift+Enter starts a new line.
-                    child: Focus(
-                      onKeyEvent: (_, event) {
-                        if (event is KeyDownEvent &&
-                            (event.logicalKey == LogicalKeyboardKey.enter ||
-                                event.logicalKey ==
-                                    LogicalKeyboardKey.numpadEnter) &&
-                            !HardwareKeyboard.instance.isShiftPressed) {
-                          _send();
-                          return KeyEventResult.handled;
-                        }
-                        return KeyEventResult.ignored;
-                      },
-                      child: TextField(
-                        key: const ValueKey('ai-question'),
-                        controller: _question,
-                        enabled: !_busy,
-                        minLines: 1,
-                        maxLines: 6,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        decoration: InputDecoration(
-                          hintText: widget.path != null
-                              ? 'Belgeye sorun…'
-                              : _case != null
-                              ? 'Dosyaya sorun…'
-                              : 'Sorun…',
-                          isDense: true,
+                ),
+              const Divider(height: 1),
+              if (found == null)
+                const Expanded(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_provider == null)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Text(
+                      'Bu bilgisayarda oturumu açık bir yapay zekâ programı '
+                      'bulunamadı. Ayarlar › Yapay zekâ’dan Claude, Codex ya da '
+                      'Antigravity’yi kurabilir ve oturum açabilirsiniz.',
+                      key: const ValueKey('ai-none'),
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                )
+              else ...[
+                if (widget.path != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.icon(
+                        key: const ValueKey('ai-summary'),
+                        onPressed: _busy ? null : () => _ask(AiTask.summary),
+                        icon: const Icon(Icons.subject_rounded, size: 18),
+                        label: const Text('Özetle'),
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _turns.isEmpty
+                            ? _empty(scheme)
+                            : NotificationListener<ScrollNotification>(
+                                onNotification: _onScroll,
+                                child: ListView(
+                                  controller: _scroll,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    14,
+                                    8,
+                                    14,
+                                    8,
+                                  ),
+                                  children: [
+                                    for (final t in _turns)
+                                      ..._turnView(t, scheme),
+                                  ],
+                                ),
+                              ),
+                      ),
+                      if (widget.embedded &&
+                          _documentsOpen &&
+                          (_documents.isNotEmpty || _attached.isNotEmpty))
+                        _documentsPanel(scheme),
+                    ],
+                  ),
+                ),
+                if (_sentTo case final to?)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+                    child: Text(
+                      '${widget.path == null
+                          ? 'Sorunuz ve yapay zekânın okuduğu dosya bilgileri'
+                          : _case == null
+                          ? 'Bu belgenin metni'
+                          : 'Bu belgenin ve yapay zekânın okuduğu dosya evrakının metni'} '
+                      '${_to(to)} gönderildi. Yanıtlar yanlış olabilir; karar '
+                      'sizindir.',
+                      key: const ValueKey('ai-sent-note'),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                if (_attached.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final path in _attached)
+                              InputChip(
+                                key: ValueKey('ai-attached-$path'),
+                                avatar: const Icon(
+                                  Icons.description_outlined,
+                                  size: 16,
+                                ),
+                                label: Text(
+                                  p.basename(path),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onDeleted: _busy
+                                    ? null
+                                    : () => setState(
+                                        () => _attached.remove(path),
+                                      ),
+                              ),
+                          ],
+                        ),
+                        if (_sendsPictures)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Taranmış belge ve resimler görüntü olarak gider; '
+                              'içlerindeki kimlik numaraları gizlenemez.',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 8, 12),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        key: const ValueKey('ai-attach'),
+                        tooltip: 'Belge ekle',
+                        onPressed: _busy ? null : () => unawaited(_attach()),
+                        icon: const Icon(Icons.attach_file_rounded, size: 20),
+                      ),
+                      Expanded(
+                        // Enter sends, Shift+Enter starts a new line.
+                        child: Focus(
+                          onKeyEvent: (_, event) {
+                            if (event is KeyDownEvent &&
+                                (event.logicalKey == LogicalKeyboardKey.enter ||
+                                    event.logicalKey ==
+                                        LogicalKeyboardKey.numpadEnter) &&
+                                !HardwareKeyboard.instance.isShiftPressed) {
+                              _send();
+                              return KeyEventResult.handled;
+                            }
+                            return KeyEventResult.ignored;
+                          },
+                          child: TextField(
+                            key: const ValueKey('ai-question'),
+                            controller: _question,
+                            enabled: !_busy,
+                            minLines: 1,
+                            maxLines: 6,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            decoration: InputDecoration(
+                              hintText: widget.path != null
+                                  ? 'Belgeye sorun…'
+                                  : _case != null
+                                  ? 'Dosyaya sorun…'
+                                  : 'Sorun…',
+                              isDense: true,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      if (_busy)
+                        IconButton(
+                          key: const ValueKey('ai-stop'),
+                          tooltip: 'Durdur',
+                          onPressed: () => _cancel?.complete(),
+                          icon: Icon(
+                            Icons.stop_circle_rounded,
+                            size: 24,
+                            color: scheme.primary,
+                          ),
+                        )
+                      else
+                        IconButton(
+                          key: const ValueKey('ai-send'),
+                          tooltip: 'Sor',
+                          onPressed: _send,
+                          icon: const Icon(Icons.send_rounded, size: 20),
+                        ),
+                    ],
                   ),
-                  if (_busy)
-                    IconButton(
-                      key: const ValueKey('ai-stop'),
-                      tooltip: 'Durdur',
-                      onPressed: () => _cancel?.complete(),
-                      icon: Icon(
-                        Icons.stop_circle_rounded,
-                        size: 24,
-                        color: scheme.primary,
-                      ),
-                    )
-                  else
-                    IconButton(
-                      key: const ValueKey('ai-send'),
-                      tooltip: 'Sor',
-                      onPressed: _send,
-                      icon: const Icon(Icons.send_rounded, size: 20),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

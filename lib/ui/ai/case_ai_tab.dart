@@ -301,8 +301,10 @@ class _CaseAiTabState extends State<CaseAiTab> {
   /// turns: whether the conversation has it.
   bool _talking = false;
 
-  /// On a wide one, whether the list is beside the conversation.
-  bool _listShown = true;
+  /// On a wide one, whether the list is beside the conversation: as the
+  /// lawyer last chose, kept while Folio is open; else when the page has
+  /// room for both (not on a 1280 or 1366 laptop's screen).
+  static bool? _listChoice;
 
   Map<String, Object?>? get _open =>
       _chats.where((c) => c['id'] == _openId).firstOrNull;
@@ -436,37 +438,50 @@ class _CaseAiTabState extends State<CaseAiTab> {
             final wide = box.maxWidth >= 720;
             final list = _chatList(scheme);
             final talk = _conversation(scheme, back: !wide);
+            final listShown = _listChoice ?? box.maxWidth >= 1000;
             if (wide) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (_listShown) ...[
+                  if (listShown) ...[
                     SizedBox(width: 320, child: list),
                     VerticalDivider(width: 1, color: scheme.outlineVariant),
                   ],
                   Expanded(
-                    child: Stack(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Positioned.fill(child: talk),
-                        // The list put away for the conversation's room.
-                        Positioned(
-                          left: 4,
-                          top: 4,
-                          child: IconButton(
-                            key: const ValueKey('case-ai-list-toggle'),
-                            tooltip: _listShown
-                                ? 'Sohbet listesini gizle'
-                                : 'Sohbet listesini göster',
-                            onPressed: () =>
-                                setState(() => _listShown = !_listShown),
-                            icon: Icon(
-                              _listShown
-                                  ? Icons.keyboard_double_arrow_left_rounded
-                                  : Icons.keyboard_double_arrow_right_rounded,
-                              size: 18,
-                            ),
+                        // The list put away for the conversation's room;
+                        // above the conversation, not over its first line.
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: listShown
+                                ? IconButton(
+                                    key: const ValueKey('case-ai-list-toggle'),
+                                    tooltip: 'Sohbet listesini gizle',
+                                    onPressed: () =>
+                                        setState(() => _listChoice = false),
+                                    icon: const Icon(
+                                      Icons.keyboard_double_arrow_left_rounded,
+                                      size: 18,
+                                    ),
+                                  )
+                                // Put away, named: the lawyer finds it again.
+                                : TextButton.icon(
+                                    key: const ValueKey('case-ai-list-toggle'),
+                                    onPressed: () =>
+                                        setState(() => _listChoice = true),
+                                    icon: const Icon(
+                                      Icons.keyboard_double_arrow_right_rounded,
+                                      size: 18,
+                                    ),
+                                    label: Text('Sohbetler · ${_chats.length}'),
+                                  ),
                           ),
                         ),
+                        Expanded(child: talk),
                       ],
                     ),
                   ),
