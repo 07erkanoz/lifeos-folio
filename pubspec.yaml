@@ -43,6 +43,7 @@ dependencies:
   sqlite3_flutter_libs: 0.5.42
   watcher: ^1.2.1
   window_manager: ^0.5.1
+  screen_retriever: ^0.2.0
   tray_manager: 0.5.3
   dbus: ^0.7.15
   url_launcher: ^6.3.2

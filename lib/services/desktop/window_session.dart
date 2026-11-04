@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
+import 'screen_fit.dart';
 
 class WindowSessionData {
   final Size size;
@@ -72,7 +73,7 @@ class WindowSession with WindowListener {
   Future<void> restore({Future<void> Function()? showMaximized}) async {
     suspended = true;
     try {
-      await windowManager.setSize(data.size);
+      await windowManager.setSize(await fitToPrimaryScreen(data.size));
       await windowManager.center();
       if (data.maximized) {
         await (showMaximized ?? windowManager.maximize)();

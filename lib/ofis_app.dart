@@ -22,6 +22,7 @@ import 'services/platform/document_launch.dart';
 import 'services/preview/pdf_fonts.dart';
 import 'services/signing/imz_file.dart';
 import 'services/desktop/mac_quit.dart';
+import 'services/desktop/screen_fit.dart';
 import 'ui/agenda/agenda_page.dart' show AgendaColors;
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
@@ -58,7 +59,7 @@ Future<void> runOfisApp(List<String> arguments) async {
       options = WindowOptions(
         titleBarStyle: TitleBarStyle.hidden,
         windowButtonVisibility: Platform.isMacOS,
-        size: const Size(1280, 840),
+        size: await fitToPrimaryScreen(const Size(1280, 840)),
         minimumSize: const Size(760, 540),
         center: true,
         title: ofisTitle(path),

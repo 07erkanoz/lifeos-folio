@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'services/desktop/desktop_instance.dart';
 import 'services/desktop/mac_quit.dart';
+import 'services/desktop/screen_fit.dart';
 import 'services/platform/agenda_launch.dart';
 import 'services/portal/lifeos_agenda.dart';
 import 'services/ai/folio_mcp.dart';
@@ -161,7 +162,9 @@ void main(List<String> arguments) async {
       final windowOptions = WindowOptions(
         titleBarStyle: TitleBarStyle.hidden,
         windowButtonVisibility: Platform.isMacOS,
-        size: windowSession?.data.size ?? const Size(1200, 800),
+        size: await fitToPrimaryScreen(
+          windowSession?.data.size ?? const Size(1200, 800),
+        ),
         minimumSize: const Size(900, 600),
         center: true,
         title: 'LifeOS Folio',
