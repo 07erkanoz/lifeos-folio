@@ -66,5 +66,1466 @@
         "type": "int"
       }
     }
+  },
+  "formatTiff": "TIFF Evrak",
+  "formatImage": "Görsel",
+  "formatText": "Metin",
+  "formatRtf": "Zengin Metin RTF",
+  "formatData": "Veri / Metin",
+  "formatUnknown": "Bilinmeyen",
+  "editorFindReplacedCount": "{count} eşleşme değiştirildi.",
+  "@editorFindReplacedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorFindTitle": "Bul ve değiştir",
+  "editorFindQuery": "Aranan metin",
+  "editorFindMatchCase": "Büyük/küçük harf",
+  "editorFindWholeWord": "Tam sözcük",
+  "editorFindPrompt": "Belge içinde arayın",
+  "editorFindNoMatch": "Eşleşme bulunamadı",
+  "editorFindPosition": "{current} / {total} eşleşme",
+  "@editorFindPosition": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "editorFindPrevious": "Önceki eşleşme",
+  "editorFindNext": "Sonraki eşleşme",
+  "editorFindReplace": "Değiştir",
+  "editorFindReplacement": "Yeni metin",
+  "editorFindReplaceAll": "Tümünü değiştir",
+  "editorClose": "Kapat",
+  "editorPageJump": "Sayfaya git",
+  "editorPageSemantics": "Sayfa {current} / {count}",
+  "@editorPageSemantics": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorPageNumberField": "Sayfa numarası",
+  "editorCancel": "Vazgeç",
+  "editorPageJumpGo": "Git",
+  "editorZoomOut": "Uzaklaştır",
+  "editorZoomTooltip": "Yakınlaştırma · Ctrl + fare tekerleği",
+  "editorZoomPercent": "%{percent}",
+  "@editorZoomPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "editorZoomIn": "Yakınlaştır",
+  "editorZoomReset": "Sıfırla",
+  "editorRulerMarginLeft": "Sol kenar boşluğu",
+  "editorRulerMarginRight": "Sağ kenar boşluğu",
+  "editorRulerMarginTop": "Üst kenar boşluğu",
+  "editorRulerMarginBottom": "Alt kenar boşluğu",
+  "editorRulerMarginTip": "{label}: {cm} cm · Sürükleyin",
+  "@editorRulerMarginTip": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "cm": {
+        "type": "String"
+      }
+    }
+  },
+  "editorRulerTabKindTip": "Sekme türü: {kind} · Değiştirmek için tıklayın",
+  "@editorRulerTabKindTip": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "editorRulerTabStopTip": "{kind} sekme · {cm} cm · Silmek için aşağı sürükleyin ya da çift tıklayın",
+  "@editorRulerTabStopTip": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "cm": {
+        "type": "String"
+      }
+    }
+  },
+  "editorRulerFirstLineIndent": "İlk satır girintisi",
+  "editorRulerLeftIndent": "Sol ve asılı girinti",
+  "editorRulerRightIndent": "Sağ girinti",
+  "editorTabLeft": "Sol",
+  "editorTabCentre": "Orta",
+  "editorTabRight": "Sağ",
+  "editorTabDecimal": "Ondalık",
+  "editorTabBar": "Çubuk",
+  "editorHeaderPlaceholder": "Üst bilgi — her sayfanın başında yazılır",
+  "editorFooterPlaceholder": "Alt bilgi — her sayfanın sonunda yazılır",
+  "editorRegionRemove": "KALDIR",
+  "editorHeaderLabel": "ÜST BİLGİ",
+  "editorFooterLabel": "ALT BİLGİ",
+  "editorRegionPrintsFromPage": "{page}. sayfadan itibaren basılır",
+  "@editorRegionPrintsFromPage": {
+    "placeholders": {
+      "page": {
+        "type": "String"
+      }
+    }
+  },
+  "editorHistoryWriteFailed": "Belge geçmişine yazılamadı",
+  "editorHistoryWriteFailedDetail": "Belgeniz yine de kaydedilebilir; yalnız bu sürüm saklanmadı.",
+  "editorUnsavedChangesTitle": "Kaydedilmemiş değişiklikler var",
+  "editorShareSavedOnly": "Paylaşılan, belgenin kaydedilmiş hâlidir.",
+  "editorShareSavedVersion": "Kaydedilmiş hâlini paylaş",
+  "editorSaveAndShare": "Kaydet ve paylaş",
+  "editorReplaceWhatDraft": "Taslak",
+  "editorReplaceWhatVersion": "Seçilen sürüm",
+  "editorVersionUnreadable": "Sürüm okunamadı.",
+  "editorVersionOpenFailed": "Sürüm açılamadı",
+  "editorNotSavedYet": "Bu belge henüz kaydedilmedi",
+  "editorHistoryFromFirstSave": "Geçmiş, ilk kayıttan itibaren tutulur.",
+  "editorRestoreLabel": "Editöre yükle",
+  "editorRestoreHint": "Seçilen sürüm editöre kaydedilmemiş değişiklik olarak gelir; siz kaydedene kadar dosya değişmez.",
+  "editorVersionLoaded": "{date} sürümü editöre yüklendi",
+  "@editorVersionLoaded": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "editorSaveToKeep": "Dosyada kalıcı olması için kaydedin.",
+  "editorCitationLaws": "{count} kanun maddesi",
+  "@editorCitationLaws": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorCitationDecisions": "{count} karar",
+  "@editorCitationDecisions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorCitationShowTip": "{detail} · dayanakları göster",
+  "@editorCitationShowTip": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "editorCitationTotal": "{count} dayanak",
+  "@editorCitationTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorCitationTitle": "Bu belgenin dayanakları",
+  "editorCaseLawPanelTitle": "Emsal karar ara",
+  "editorClosePanel": "Paneli kapat",
+  "editorOpenInWindow": "Ayrı pencerede aç",
+  "editorReadAloud": "Sesli oku",
+  "editorTermMeaning": "“{term}” ne demek?",
+  "@editorTermMeaning": {
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "editorAddToDictionary": "Sözlüğe ekle",
+  "editorSnippetHotkeyUnassigned": "Alt+F{key} bir kalıba atanmamış.",
+  "@editorSnippetHotkeyUnassigned": {
+    "placeholders": {
+      "key": {
+        "type": "int"
+      }
+    }
+  },
+  "editorSnippetHotkeyHint": "Ctrl+Space → Kalıplarımı yönet ile atayabilirsiniz.",
+  "editorSnippetEmbedsSkipped": "Seçimdeki tablo ve görseller kalıba alınmadı.",
+  "editorSnippetTextOnly": "Kalıp yalnız metni ve biçimini tutar.",
+  "editorSnippetsAdded": "{count} kalıp eklendi.",
+  "@editorSnippetsAdded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorOpenElsewhere": "Bu belge başka bir pencerede açık",
+  "editorOpenElsewhereDetail": "Aynı belge iki pencerede düzenlenirse biri ötekinin kaydını ezer. Belgeyi açık olduğu pencerede düzenleyin.",
+  "editorHeldElsewhereBanner": "Bu belge başka bir Folio penceresinde düzenleniyor. Burada yalnız okunabilir; değişiklikleri o pencerede yapın.",
+  "editorRetry": "Yeniden dene",
+  "editorDictationFailed": "Sesli yazma başlamadı",
+  "editorFormatNothing": "Biçimlendirilecek bir şey bulunamadı",
+  "editorFormatted": "Biçimlendirildi",
+  "editorUndoHint": "Ctrl+Z ile geri alabilirsiniz.",
+  "editorPrintName": "Belge",
+  "editorPrintFailed": "Yazdırılamadı",
+  "editorInsertImageTitle": "Görsel ekle",
+  "editorImageTooLarge": "Görsel çok büyük — en çok 12 MB eklenebilir.",
+  "editorImageUnreadable": "Görsel okunamadı: {name}",
+  "@editorImageUnreadable": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editorImageInsertFailed": "Görsel eklenemedi: {error}",
+  "@editorImageInsertFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "editorDeleteHeaderTitle": "Üst bilgi silinsin mi?",
+  "editorDeleteFooterTitle": "Alt bilgi silinsin mi?",
+  "editorDeleteRegionBody": "Yazdıklarınız belgeden kaldırılacak. Kaydetmeden çıkarsanız değişiklik uygulanmaz.",
+  "editorDelete": "Sil",
+  "editorPageView": "Sayfa görünümü",
+  "editorMobileView": "Mobil görünüm",
+  "editorSign": "İmzala",
+  "editorSignWithCard": "E-imza kartıyla",
+  "editorCaseLaw": "İçtihat",
+  "editorMoreTools": "Diğer araçlar",
+  "editorTodaysDate": "Bugünün tarihi",
+  "editorSnippets": "Kalıp metin",
+  "editorDocumentHistory": "Belge geçmişi",
+  "editorResearch": "Araştırma",
+  "editorSearchCaseLaw": "İçtihat ara",
+  "editorCompare": "Karşılaştır",
+  "editorCompareTip": "Kaydedilmiş sürümlerle karşılaştır",
+  "editorSignCardButton": "E-imza\nkartı",
+  "editorSignWayCard": "e-imza kartıyla",
+  "editorSignOnlyUdf": "Yalnız UDF belgeler imzalanır: önce UDF olarak kaydedin",
+  "editorSignUnavailable": "{way} bu cihazda kullanılamıyor",
+  "@editorSignUnavailable": {
+    "placeholders": {
+      "way": {
+        "type": "String"
+      }
+    }
+  },
+  "editorSigning": "İmzalanıyor…",
+  "editorSignAsUdf": "UDF olarak {way} imzala",
+  "@editorSignAsUdf": {
+    "placeholders": {
+      "way": {
+        "type": "String"
+      }
+    }
+  },
+  "editorTableSize": "{rows} × {columns} tablo",
+  "@editorTableSize": {
+    "placeholders": {
+      "rows": {
+        "type": "int"
+      },
+      "columns": {
+        "type": "int"
+      }
+    }
+  },
+  "editorTable": "Tablo",
+  "editorImage": "Görsel",
+  "editorHeader": "Üst bilgi",
+  "editorFooter": "Alt bilgi",
+  "editorPageNumbers": "Sayfa numarası",
+  "editorLetterhead": "Antet",
+  "editorDate": "Tarih",
+  "editorTableAndImage": "Tablo ve görsel",
+  "editorHeaderAndFooter": "Üst ve alt bilgi",
+  "editorText": "Metin",
+  "editorSignatureBlock": "İmza bloğu",
+  "editorHorizontalRuler": "Yatay cetvel",
+  "editorVerticalRuler": "Dikey cetvel",
+  "editorShortcuts": "Kısayollar",
+  "editorView": "Görünüm",
+  "editorRulers": "Cetveller",
+  "editorOther": "Diğer",
+  "editorShortcutsTitle": "Editör kısayolları",
+  "editorShortcutsList": "Ctrl+S  Kaydet\nCtrl+Shift+S  Farklı kaydet\nCtrl+Z  Geri al\nCtrl+Y / Ctrl+Shift+Z  Yinele\nCtrl+B / I / U  Kalın / İtalik / Altı çizili\nCtrl+A / C / X / V  Seç / Kopyala / Kes / Yapıştır\nCtrl+F  Belgede bul\nCtrl+H  Bul ve değiştir\nCtrl+P  Yazdır\nCtrl+L / E / R / J  Sola / Ortaya / Sağa / İki yana\nCtrl+Shift+L / 8  Madde işaretleri\nCtrl+Shift+7  Numaralı liste\nCtrl+M / Ctrl+Shift+M  Girintiyi artır / azalt\n\nmacOS’ta Ctrl yerine ⌘ kullanılır.",
+  "editorOk": "Tamam",
+  "editorSaveFormatTitle": "Hangi biçimde kaydedilsin?",
+  "editorFormatUdf": "UYAP belgesi (.udf)",
+  "editorFormatDocx": "Word belgesi (.docx)",
+  "editorFormatRtf": "Zengin metin (.rtf)",
+  "editorFormatPdf": "Yazdırılmış hâli (.pdf)",
+  "editorContinue": "Devam",
+  "editorSignedTitle": "Bu belge e-imzalı",
+  "editorSignedBody": "İmza, belgenin imzalandığı andaki içeriğini kapsar; değiştirilmiş belgeye taşınamaz.\n\n• Üzerine kaydet: dosya değişikliklerinizle, imzasız olarak güncellenir. İmzalı hali belge geçmişinde saklanır; istediğinizde ona dönebilir ya da kopyasını alabilirsiniz.\n\n• İmzasız kopya: imzalı dosya olduğu gibi kalır, değişiklikler yeni bir dosyaya yazılır.",
+  "editorSaveUnsignedCopy": "İmzasız kopya kaydet…",
+  "editorOverwriteSave": "Üzerine kaydet",
+  "editorChangedElsewhereTitle": "Belge başka bir yerde değiştirildi",
+  "editorChangedElsewhereBody": "Bu dosya, siz burada açtıktan sonra başka bir programda değiştirilmiş. Kaydederseniz sizin hâliniz geçerli olur; öbür hâli belge geçmişinde saklanır.",
+  "editorSaveMine": "Benim hâlimi kaydet",
+  "editorOverwriteSignedTitle": "İmzalı dosyanın üzerine yazılsın mı?",
+  "editorOverwriteSignedBody": "Dosya değişikliklerinizle, imzasız olarak güncellenir. İmzalı hali belge geçmişinde saklanır.",
+  "editorOverwrite": "Üzerine yaz",
+  "editorPdfNoTextNoOcr": "Bu PDF’te metin katmanı yok: yazıları taranmış ya da yazdırılırken şekle dönüştürülmüş. Okumak için gereken OCR aracı bu kurulumda bulunamadı.",
+  "editorPdfNoTextUnreadable": "Bu PDF’te metin katmanı yok ve sayfalarında okunabilir yazı bulunamadı.",
+  "editorUnreadable": "Belge okunamadı veya bozuk.",
+  "editorOcrRead": "Bu PDF’te metin katmanı yoktu; metin sayfalardan okundu (OCR).",
+  "editorOcrCheck": "Kaydetmeden önce özellikle rakamları ve adları kontrol edin.",
+  "editorBlanksTitle": "Doldurulmamış yer var",
+  "editorBlanksBody": "Belgede kalıptan gelen {count} yer hâlâ boş: {names}.\n\nYine de kaydedilsin mi?",
+  "@editorBlanksBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "editorGoBack": "Geri dön",
+  "editorSaveAnyway": "Yine de kaydet",
+  "editorUnsignedCopyTitle": "İmzasız kopya kaydedilecek",
+  "editorUnderstoodSave": "Anladım, kaydet",
+  "editorSaveDialogTitle": "Evrakı Kaydet ({ext})",
+  "@editorSaveDialogTitle": {
+    "placeholders": {
+      "ext": {
+        "type": "String"
+      }
+    }
+  },
+  "editorOverwriteHeldDetail": "Üzerine yazmak, o penceredeki çalışmayı kaybettirebilir. Başka bir adla kaydedin ya da önce o pencereyi kapatın.",
+  "editorSignedNotOverwritten": "İmzalı dosyanın üzerine yazılmadı",
+  "editorSignedNotOverwrittenDetail": "İmzalı hali belge geçmişine saklanamadı. Değişiklikleri imzasız kopya olarak kaydedebilirsiniz.",
+  "editorNotOverwritten": "Belgenin üzerine yazılmadı",
+  "editorNotOverwrittenDetail": "Başka programdaki hâli belge geçmişine saklanamadı. Değişikliklerinizi başka bir adla kaydedebilirsiniz.",
+  "editorSaved": "Kaydedildi",
+  "editorSavedToLocation": "Belge seçtiğiniz konuma kaydedildi.",
+  "editorSavedAs": "Başarıyla kaydedildi: {name}",
+  "@editorSavedAs": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editorSaveAs": "Farklı kaydet",
+  "editorSaveFailed": "Kaydetme hatası: belge kaydedilemedi",
+  "editorOcrReading": "Bu PDF’te metin katmanı yok; sayfalar okunuyor (OCR)…",
+  "editorOcrPerPage": "Sayfa başına birkaç saniye sürebilir.",
+  "editorOpenFailed": "Belge açılamadı: {error}",
+  "@editorOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "editorRecoverFromHistory": "Belge geçmişinden kurtar",
+  "editorFontLoadFailed": "Yazı tipi yüklenemedi",
+  "editorSignUdf": "UDF e-imzala",
+  "editorSaveTooltip": "Kaydet · Ctrl+S",
+  "snipDeleteTitle": "Kalıp silinsin mi?",
+  "snipDeleteBody": "“{name}” kalıplarınızdan kaldırılacak. Bu kalıpla yazılmış belgeler değişmez.",
+  "@snipDeleteBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "snipCancel": "Vazgeç",
+  "snipDelete": "Sil",
+  "snipExportDialog": "Kalıpları dışa aktar",
+  "snipExported": "{count} kalıp dışa aktarıldı.",
+  "@snipExported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipExportFailed": "Kalıplar dışa aktarılamadı",
+  "snipImportDialog": "Kalıpları içe aktar",
+  "snipImportNone": "Yeni kalıp yok; hepsi zaten kalıplarınızda.",
+  "snipImported": "{count} kalıp eklendi.",
+  "@snipImported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipImportFailed": "Kalıplar içe aktarılamadı",
+  "snipManagerTitle": "Kalıplarım",
+  "snipImport": "İçe aktar",
+  "snipExport": "Dışa aktar",
+  "snipSearchHint": "Kalıp ara",
+  "snipManagerEmpty": "Henüz kalıp yok. \"Yeni kalıp\" ile ekleyebilir ya da belgede bir paragrafı seçip Ctrl+Space ile kalıba alabilirsiniz.",
+  "snipNoMatch": "Bu aramaya uyan kalıp yok.",
+  "snipUsedTimes": "{count} kez",
+  "@snipUsedTimes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipNew": "Yeni kalıp",
+  "snipClose": "Kapat",
+  "snipEditTitle": "Kalıbı düzenle",
+  "snipEmptyBody": "Kalıbın metni boş olamaz.",
+  "snipBadKeyword": "Anahtar kelime 2–20 harf ya da rakamdan oluşmalı, boşluk olmadan.",
+  "snipKeywordTaken": "“{keyword}” zaten “{name}” kalıbının anahtar kelimesi.",
+  "@snipKeywordTaken": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "snipHotkeyTaken": "Alt+F{key} zaten “{name}” kalıbında.",
+  "@snipHotkeyTaken": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "snipUntitled": "Adsız kalıp",
+  "snipName": "Ad",
+  "snipKeyword": "Anahtar kelime",
+  "snipKeywordHint": "örn. dil1",
+  "snipKeywordHelper": "Belgede yazıp Tab’a basınca kalıp gelir",
+  "snipHotkey": "Kısayol",
+  "snipHotkeyHelper": "Alt+F4 pencereyi kapatır",
+  "snipNoHotkey": "Yok",
+  "snipText": "Metin",
+  "snipBodyPlaceholder": "Kalıbın metni. Doldurulacak yerleri [MÜVEKKİL] gibi köşeli parantez ve büyük harfle yazın.",
+  "snipBlanksList": "Doldurulacak yerler: {blanks}",
+  "@snipBlanksList": {
+    "placeholders": {
+      "blanks": {
+        "type": "String"
+      }
+    }
+  },
+  "snipSave": "Kaydet",
+  "snipTableLeftOut": "〔Tablo — kalıpla eklenmez〕",
+  "snipPaletteHint": "Kalıp ya da profil bilgisi ara",
+  "snipFromProfile": "Profilden",
+  "snipProfileInsertTooltip": "{label} · belgeye ekle",
+  "@snipProfileInsertTooltip": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "snipFillProfile": "Avukat profilini doldurun",
+  "snipFillProfileDetail": "Adınız, baronuz, adresiniz buradan tek tıkla eklensin",
+  "snipKeepSelection": "Seçimi kalıba al",
+  "snipHarvestOpen": "Arşivden kalıp bul",
+  "snipHarvestOpenDetail": "Belgelerinizde tekrar eden paragraflar",
+  "snipManage": "Kalıplarımı yönet",
+  "snipManageDetail": "Ad, anahtar kelime, Alt+F kısayolu, silme",
+  "snipPaletteNoMatch": "Bu aramaya uyan kalıp ya da profil bilgisi yok.",
+  "snipPaletteEmptyHarvest": "Henüz kalıp yok.\n\nYukarıdan arşivinizde tekrar eden paragraflara bakabilir, ya da bir paragrafı belgede seçip yeniden Ctrl+Space’e basabilirsiniz.",
+  "snipPaletteEmptySelect": "Henüz kalıp yok.\n\nSık yazdığınız bir paragrafı belgede seçin, sonra Ctrl+Space’e basın — burada “Seçimi kalıba al” çıkacak.",
+  "snipPaletteEmptyKeep": "Henüz kalıp yok. Yukarıdan seçiminizi kalıba alabilirsiniz.",
+  "snipFromProfileLabel": "Profilden · {label}",
+  "@snipFromProfileLabel": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "snipPaletteKeys": "↑ ↓ ile seçin · Enter ile yerleştirin · Esc ile kapatın",
+  "snipNameIt": "Kalıba ad verin",
+  "snipNameItDetail": "Sonra bu adın ilk harflerini yazarak bulacaksınız.",
+  "snipBack": "Geri",
+  "snipKeep": "Kalıba al",
+  "snipFillCount": "Bu kalıpta doldurulacak {count} yer var.",
+  "@snipFillCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipFromLawyerProfile": "Avukat profilinden",
+  "snipLeaveBlank": "Boş bırak",
+  "snipInsert": "Yerleştir",
+  "snipHarvestTitle": "Arşivinizde tekrar eden paragraflar",
+  "snipHarvestNone": "Beş ya da daha fazla belgede aynen geçen bir paragraf bulunamadı. Arşiv henüz taranıyor olabilir.",
+  "snipHarvestFound": "{count} paragraf bulundu. Kalıba almak istediklerinizi işaretleyin.",
+  "@snipHarvestFound": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipHarvestBlank": "Tarih, esas numarası, kimlik ve tutarları boş bırak",
+  "snipHarvestBlankDetail": "Bir dosyaya ait olan kısımlar [TARİH] gibi doldurulacak yerlere çevrilir.",
+  "snipHarvestInDocuments": "{count} belgede",
+  "@snipHarvestInDocuments": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipHarvestTake": "{count} kalıbı al",
+  "@snipHarvestTake": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noteDraftTooltip": "Kaydedilmemiş taslak · {date}",
+  "@noteDraftTooltip": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "noteDraftTitle": "Kaydedilmemiş taslak",
+  "noteDraftBody": "“{name}” için {date} tarihli, kaydedilmemiş bir taslak var. Uygulama beklenmedik biçimde kapandığında kalmış olabilir.\n\nAçarsanız editöre kaydedilmemiş değişiklik olarak gelir; siz kaydedene kadar dosya değişmez.",
+  "@noteDraftBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "noteDraftMore": "\n\nBu belgenin {count} taslağı daha var; hepsi ana sayfadaki «Kurtarılabilir taslaklar»da.",
+  "@noteDraftMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noteDraftDelete": "Taslağı sil",
+  "noteCancel": "Vazgeç",
+  "noteDraftOpen": "Taslağı aç",
+  "noteDraftDeleteTitle": "Taslak silinsin mi?",
+  "noteDraftDeleteBody": "“{name}” için {date} tarihli kaydedilmemiş taslak kalıcı olarak silinecek. Belgenin kendisi değişmez.",
+  "@noteDraftDeleteBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "noteUnsavedTitle": "Kaydedilmemiş değişiklikler var",
+  "noteUnsavedBody": "{what} editöre alınınca şu anki kaydedilmemiş değişiklikler onun yerine geçer. Önce kaydederseniz bugünkü hali de belge geçmişinde kalır.",
+  "@noteUnsavedBody": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+  "noteOpenWithoutSaving": "Kaydetmeden aç",
+  "noteSaveFirst": "Önce kaydet",
+  "speechPreparingVoice": "Ses hazırlanıyor…",
+  "speechPaused": "Duraklatıldı",
+  "speechReading": "Okunuyor",
+  "speechSpeed": "Okuma hızı",
+  "speechResume": "Sürdür",
+  "speechPause": "Duraklat",
+  "speechStopReading": "Okumayı durdur",
+  "speechPreparing": "Hazırlanıyor…",
+  "speechTranscribing": "Yazıya dökülüyor…",
+  "speechListening": "Dinleniyor, konuşabilirsiniz",
+  "speechFinish": "Bitir",
+  "speechTextUnreadable": "Metin okunamadı",
+  "speechNothingToRead": "Okunacak metin yok",
+  "speechReadingStopped": "Sesli okuma durdu",
+  "speechDownloadIntro": "{need} ({size}). Model yalnızca bir kez indirilir ve bilgisayarınızda saklanır. {offline}",
+  "@speechDownloadIntro": {
+    "placeholders": {
+      "need": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      },
+      "offline": {
+        "type": "String"
+      }
+    }
+  },
+  "speechModelLicense": "Model lisansı: {license}",
+  "@speechModelLicense": {
+    "placeholders": {
+      "license": {
+        "type": "String"
+      }
+    }
+  },
+  "speechDownloadFailed": "İndirme tamamlanamadı. İndirilen kısım saklandı; yeniden denediğinizde kaldığı yerden devam eder.\n{error}",
+  "@speechDownloadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "speechCancelDownload": "İptal",
+  "speechCancel": "Vazgeç",
+  "speechDownload": "İndir ({size})",
+  "@speechDownload": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "speechTryAgain": "Yeniden dene",
+  "noteSecretSwitch": "Gizli not · büroyla paylaşılmaz",
+  "noteSecretSwitchDetail": "Yalnız sizin cihazlarınıza gider. Görevlere, paylaşılan dosyaya ve üretilen belgelere girmez.",
+  "noteSecretMark": "Gizli",
+  "noteSecretRecalled": "Büro kopyalarından silindi.",
+  "noteSecretRecalling": "Büro kopyalarından siliniyor; alanların cihazı açılınca tamamlanır.",
+  "noteSecretSharedTitle": "Not büroyla paylaşılmıştı",
+  "noteSecretSharedBody": "Bu not büroda {count} kişide var ({names}). Gizli yaparsanız onlardan da silinir.",
+  "@noteSecretSharedBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "noteSecretNoRecall": "Dışarı aktarılmış belge ve ekran görüntüsü geri alınamaz.",
+  "noteSecretConfirm": "Gizli yap",
+  "liveChat": "Yazışma",
+  "liveClosePanel": "Paneli kapat",
+  "liveChatEmpty": "Belge üzerinde birbirinize buradan yazın. Yazışma paylaşım bitince silinir.",
+  "liveRemoveQuote": "Alıntıyı kaldır",
+  "liveQuoteSelection": "Belgede seçili olanı alıntıla",
+  "liveMessageHint": "Mesaj yazın…",
+  "liveSend": "Gönder",
+  "liveVerification": "DOĞRULAMA",
+  "liveGuest": "Misafir",
+  "liveVisitorLeft": "Gelen kişi ayrıldı.",
+  "liveInviteCopied": "Davet kopyalandı",
+  "liveInviteMailSubject": "Canlı belge daveti",
+  "liveInviteAnother": "Bir kişi daha davet et",
+  "liveNewCode": "Yeni kod oluştur",
+  "livePreparingCode": "Davet kodu hazırlanıyor…",
+  "liveSendCode": "Kodu diğer büroya gönderin. Katılmak isteyen olunca size sorulur.",
+  "liveSendWhatsApp": "WhatsApp ile gönder",
+  "liveCopy": "Kopyala",
+  "liveEmail": "E-posta",
+  "liveCopyInvite": "Daveti kopyala",
+  "liveCodeValidUntil": "{time}’e kadar geçerli, bir kişi içindir. Belge şifreli gider; aradaki sunucu içeriği göremez.",
+  "@liveCodeValidUntil": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "liveWantsToJoin": "davet koduyla katılmak istiyor",
+  "liveDigitsMatchHost": "Aynı sayı onun ekranında da görünüyorsa doğru kişidir.",
+  "liveDecline": "Reddet",
+  "liveLetView": "Yalnız görsün",
+  "liveLetEdit": "Sırayla düzenlesin",
+  "liveJoinedName": "{name} katıldı.",
+  "@liveJoinedName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "liveInviteWithdrawn": "Davet geri alındı.",
+  "liveCodeExpired": "Davet kodunun süresi doldu.",
+  "liveInviteFailed": "Davet kurulamadı.",
+  "liveCancel": "Vazgeç",
+  "liveClose": "Kapat",
+  "liveJoinPrompt": "Size gönderilen kodu yazın ya da davet bağlantısını yapıştırın.",
+  "liveJoinName": "Adınız (paylaşana böyle görünür)",
+  "liveJoin": "Katıl",
+  "liveConnecting": "Bağlanılıyor…",
+  "liveAwaitingApproval": "Onay bekleniyor",
+  "liveOpensOnApproval": "Paylaşan onaylayınca belge açılır.",
+  "liveDigitsMatchGuest": "Paylaşanın ekranında da bu sayı görünür.",
+  "liveJoinRefused": "Paylaşan katılmanızı kabul etmedi.",
+  "liveJoinFailed": "Katılınamadı.",
+  "liveTryAgain": "Yeniden dene",
+  "liveJoinTitle": "Canlı belgeye katıl",
+  "liveShareTitle": "Canlı paylaş",
+  "liveOnThisNetwork": "Bu ağda",
+  "liveRemote": "Uzaktan",
+  "liveRemoteJoined": "UZAKTAN KATILANLAR",
+  "liveTakeBackPen": "Kalemi geri al · {name}",
+  "@liveTakeBackPen": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "liveRemoteHint": "Kodu alan kişi bağlantıya dokunur ya da Folio’da Canlı belge’ye basıp kodu yazar; siz onaylayınca belge onda açılır. Belge sizde kalır, paylaşım bitince onda kalmaz.",
+  "liveNearbyHint": "Davet ettiğiniz kişinin Folio’sunda bir pencere açılır; Katıl’a basınca belge onda açılır. Belge sizde kalır, paylaşım bitince onlarda kalmaz. \"Sırayla düzenleyebilir\" olanlara kalemi verince yazdıkları belgenize işlenir.",
+  "liveStopSharing": "Paylaşımı bitir",
+  "liveOk": "Tamam",
+  "liveNoDevices": "Aynı ağda davet edilebilecek bir cihaz görünmüyor. Karşı tarafta Folio açık ve aynı Wi-Fi’ye bağlı olmalı.",
+  "liveSearching": "Aynı ağdaki cihazlar aranıyor…",
+  "liveNetworkError": "Ağa bağlanılamadı: {error}",
+  "@liveNetworkError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "liveInvited": "DAVET EDİLENLER",
+  "liveMyDevices": "CİHAZLARIM",
+  "liveOffice": "BÜRO",
+  "liveNearby": "YAKINDAKİ FOLIO’LAR",
+  "livePeerJoining": "yanıt bekleniyor",
+  "livePeerWatching": "izliyor",
+  "livePeerGone": "ayrıldı",
+  "livePeerUnreachable": "ulaşılamadı",
+  "livePeerDeclined": "reddetti",
+  "livePeerUnanswered": "yanıt vermedi",
+  "liveWithdraw": "Geri al",
+  "liveRemovePeer": "Çıkar",
+  "liveInvite": "Davet et",
+  "liveInviteAgain": "Yeniden davet et",
+  "liveGivePen": "Kalemi ver",
+  "liveCanView": "Yalnız görebilir",
+  "liveCanEdit": "Sırayla düzenleyebilir",
+  "liveCodeChip": "kod {code}",
+  "@liveCodeChip": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "livePenHere": "kalem onda",
+  "liveDevice": "Cihaz",
+  "liveEnded": "Paylaşım bitti; belge bu cihazda kalmadı.",
+  "livePenSyncing": "Kalem sizde · belge paylaşanla eşitleniyor, bir an bekleyin",
+  "livePenYours": "Kalem sizde · yazdıklarınız paylaşanın belgesine işlenir",
+  "liveSharing": "{name} paylaşıyor",
+  "@liveSharing": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "liveWriting": "{name} yazıyor",
+  "@liveWriting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "liveEditRefused": "düzenleme isteğiniz geri çevrildi",
+  "liveYouCanEdit": "sırayla düzenleyebilirsiniz",
+  "liveYouCanView": "yalnız görebilirsiniz",
+  "liveReleasePen": "Kalemi bırak",
+  "livePenAsked": "İstendi",
+  "liveAskPen": "Düzenlemek iste",
+  "liveStopWatching": "İzlemeyi bırak",
+  "liveDocument": "Canlı belge",
+  "liveHubCodePrompt": "Size gönderilen kodu yazın:",
+  "liveHubOrShare": "YA DA BİR BELGEYİ PAYLAŞIN",
+  "liveHubPickPrompt": "Paylaşacağınız belgeyi seçin. Belge açılır ve diğer büroya göndereceğiniz kod hemen çıkar.",
+  "liveHubPickOther": "Başka belge seç…",
+  "liveSharesADocument": " bir belgeyi sizinle canlı paylaşıyor.",
+  "liveSharesDocument": " “{title}” belgesini sizinle canlı paylaşıyor.",
+  "@liveSharesDocument": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "liveInviteTitle": "Canlı paylaşım daveti",
+  "liveInviteCanEdit": "Belgeyi görürsünüz; paylaşan kalemi verince siz de yazabilirsiniz. Paylaşım bitince belge bu cihazda kalmaz.",
+  "liveInviteViewOnly": "Belgeyi yalnız görürsünüz. Paylaşım bitince belge bu cihazda kalmaz.",
+  "liveBusyConnecting": "Şu an başka bir bağlantı kuruluyor.",
+  "liveHostUnverified": "Davet eden cihaz doğrulanamadı.",
+  "liveDocumentDidNotCome": "Paylaşan kabul etti ama belge gelmedi.",
+  "liveSomeUser": "Bir Folio kullanıcısı",
+  "liveHostWithdrew": "Paylaşan daveti geri aldı.",
+  "liveConnectFailed": "Bağlantı kurulamadı.",
+  "liveOpeningDocument": "Belge açılıyor…",
+  "liveConnectingHost": "Paylaşanın cihazına bağlanılıyor…",
+  "liveGuestCodeNote": "Paylaşanın ekranında da bu kod görünür. Belge yalnız bu paylaşım sürerken görünür; paylaşım bitince bu cihazda kalmaz.",
+  "tbAddColumn": "Sütun ekle",
+  "tbAddRow": "Satır ekle",
+  "tbAlignCenter": "Ortala · Ctrl+E",
+  "tbAlignLeft": "Sola hizala · Ctrl+L",
+  "tbAlignRight": "Sağa hizala · Ctrl+R",
+  "tbAllFormatting": "Tüm biçimlendirme araçları…",
+  "tbAllPages": "Tüm sayfalar ({count})",
+  "@tbAllPages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tbApply": "Uygula",
+  "tbAttachToEmail": "E-postaya ekle",
+  "tbAttachToEmailHelp": "Ekli yeni ileti açılır",
+  "tbBlue": "Mavi",
+  "tbBold": "Kalın · Ctrl+B",
+  "tbBoldLabel": "Kalın",
+  "tbBullets": "Madde işaretleri · Ctrl+Shift+L",
+  "tbCancel": "Vazgeç",
+  "tbChooseFolder": "Klasör seç",
+  "tbChoosePageToPrint": "Yazdırılacak sayfayı seçin.",
+  "tbChooseTargetFolder": "Gönderilecek klasörü seçin",
+  "tbClearFormatting": "Karakter biçimini temizle",
+  "tbClose": "Kapat",
+  "tbCollate": "Harmanla",
+  "tbConvertToPdf": "PDF’e dönüştür",
+  "tbCopiedTo": "Kopyalandı: {target}",
+  "@tbCopiedTo": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "tbCopiesLabel": "kopya",
+  "tbCopyFile": "Dosyayı kopyala",
+  "tbCopyFileHelp": "E-postaya, sohbete veya klasöre yapıştırın",
+  "tbCopyToFolder": "Klasöre kopyala",
+  "tbCopyToFolderHelp": "USB bellek veya başka bir klasör seçin",
+  "tbCurrentPage": "Geçerli sayfa ({page})",
+  "@tbCurrentPage": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      }
+    }
+  },
+  "tbCustomSize": "Özel punto…",
+  "tbDefaultLetterheadName": "Antetim",
+  "tbDelete": "Sil",
+  "tbDeleteColumn": "Sütunu sil",
+  "tbDeleteRow": "Satırı sil",
+  "tbDeleteTable": "Tabloyu sil",
+  "tbDictate": "Sesli yaz",
+  "tbDictateShortTip": "Sesli yaz · söylediğiniz imlecin yerine yazılır",
+  "tbDictateTip": "Söylediğinizi imlecin yerine yazar",
+  "tbDocumentHistory": "Belge geçmişi",
+  "tbDrawBorders": "Çerçeve çiz",
+  "tbEvenPagesOnly": "Yalnız çift sayfalar",
+  "tbFile": "Dosya",
+  "tbFileCopied": "Dosya kopyalandı. Hedef uygulamaya yapıştırabilirsiniz.",
+  "tbFileMenu": "Dosya menüsü",
+  "tbFind": "Bul",
+  "tbFindInDocument": "Belgede bul · Ctrl+F",
+  "tbFindReplace": "Bul ve değiştir · Ctrl+H",
+  "tbFirstPageOnly": "Yalnız ilk sayfada",
+  "tbFirstPageOnlyHelp": "Kapalıyken antet her sayfanın başında basılır.",
+  "tbFont": "Yazı tipi",
+  "tbFontCount": "{count} yazı tipi · Sistem ve belge yazı tipleri",
+  "@tbFontCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tbFontSizePoints": "Yazı boyutu (punto)",
+  "tbFontSizeTitle": "Yazı boyutu",
+  "tbFooter": "Alt bilgi",
+  "tbGreen": "Yeşil",
+  "tbGrey": "Gri",
+  "tbGridlinesNotPrinted": "kılavuz çizgiler yazdırılmaz",
+  "tbGroupEditing": "Düzenleme",
+  "tbGroupHistory": "Geçmiş",
+  "tbGroupInsert": "Ekle",
+  "tbGroupParagraph": "Paragraf",
+  "tbGroupStyle": "Stil",
+  "tbGroupView": "Görünüm",
+  "tbGroupVoice": "Ses",
+  "tbGrowFont": "Yazıyı büyüt",
+  "tbHeader": "Üst bilgi",
+  "tbHeaderFooter": "Üst bilgi ve alt bilgi",
+  "tbHeaderFooterShort": "Üst/alt bilgi",
+  "tbHorizontalRuler": "Yatay cetvel",
+  "tbHowToUsePage": "Bu sayfa nasıl kullanılır?",
+  "tbImageColumn25": "Sütunun %25'i",
+  "tbImageColumn33": "Sütunun %33'ü",
+  "tbImageColumn75": "Sütunun %75'i",
+  "tbImageColumnWidth": "Sütun genişliği",
+  "tbImageHalfColumn": "Yarım sütun",
+  "tbImageOriginalSize": "Özgün boyut",
+  "tbImageUndrawable": "〔Görsel çizilemedi — kaydetmede korunur〕",
+  "tbImageUnreadable": "〔Görsel okunamadı — kaydetmede korunur〕",
+  "tbImageWidth": "Görsel genişliği",
+  "tbInNewDocuments": "Yeni belgelerde",
+  "tbIndentDecrease": "Girintiyi azalt · Ctrl+Shift+M",
+  "tbIndentIncrease": "Girintiyi artır · Ctrl+M",
+  "tbInsertTable": "Tablo ekle",
+  "tbItalic": "İtalik · Ctrl+I",
+  "tbJustify": "İki yana yasla · Ctrl+J",
+  "tbKeyboardShortcuts": "Klavye kısayolları",
+  "tbLetterheadMenu": "Antet…",
+  "tbLetterheads": "Antetler",
+  "tbLightGrey": "Açık gri",
+  "tbLineSpacing": "Satır aralığı",
+  "tbLineSpacingValue": "{value} satır",
+  "@tbLineSpacingValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tbLiveShare": "Canlı paylaş…",
+  "tbMixed": "Karışık",
+  "tbMore": "Diğer",
+  "tbMoreTools": "Diğer düzenleme araçları",
+  "tbName": "Adı",
+  "tbNewDocument": "Yeni belge",
+  "tbNewWindow": "Yeni pencere",
+  "tbNextPage": "Sonraki sayfa",
+  "tbNoFill": "Dolgu yok",
+  "tbNoFontFound": "Yazı tipi bulunamadı",
+  "tbNoLetterheads": "Henüz antet yok. Anteti belgenin üst bilgisinde tasarlayın: yazı, hizalama ve Ekle › Görsel ile logo. Sonra aşağıdan antet olarak kaydedin; her belgeye tek tıkla eklenir.",
+  "tbNoRecentDocuments": "Henüz açılmış belge yok",
+  "tbNormalText": "Normal metin",
+  "tbNotPrinted": "Yazdırılmayacak",
+  "tbNumbering": "Numaralı liste · Ctrl+Shift+7",
+  "tbOddAndEvenPages": "Tek ve çift sayfalar",
+  "tbOddPagesOnly": "Yalnız tek sayfalar",
+  "tbOk": "Tamam",
+  "tbOneCopyFewer": "Bir kopya az",
+  "tbOneCopyMore": "Bir kopya fazla",
+  "tbOpen": "Aç…",
+  "tbPageNumber": "Sayfa numarası",
+  "tbPageNumberBottom": "Altta",
+  "tbPageNumberCenter": "Orta",
+  "tbPageNumberFont": "Yazı",
+  "tbPageNumberFormat": "Biçimi",
+  "tbPageNumberInFooter": "Alt bilgide",
+  "tbPageNumberInHeader": "Üst bilgide",
+  "tbPageNumberLeft": "Sol",
+  "tbPageNumberMenu": "Sayfa numarası…",
+  "tbPageNumberNone": "Yok",
+  "tbPageNumberPosition": "Yeri",
+  "tbPageNumberPrefix": "Ön metin",
+  "tbPageNumberPrefixHint": "Sayfa ",
+  "tbPageNumberRight": "Sağ",
+  "tbPageNumberSkipFirst": "İlk sayfada gösterme",
+  "tbPageNumberSkipSingle": "Tek sayfaysa gösterme",
+  "tbPageNumberStart": "İlk numara",
+  "tbPageNumberTop": "Üstte",
+  "tbPageNumberWithTotal": "Toplam sayfayla",
+  "tbPageRange": "Sayfa aralığı",
+  "tbPageRangeHint": "ör. 1-3, 5, 8-",
+  "tbPageRangeInvalid": "Belgede {count} sayfa var; aralığı kontrol edin.",
+  "@tbPageRangeInvalid": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tbPages": "Sayfalar",
+  "tbParagraphStyle": "Paragraf stili",
+  "tbPdfPrepareFailed": "PDF hazırlanamadı: {error}",
+  "@tbPdfPrepareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tbPdfSaveFailed": "PDF kaydedilemedi",
+  "tbPdfSaved": "PDF kaydedildi",
+  "tbPickSize": "Boyut seçin",
+  "tbPicture": "Görsel",
+  "tbPointSize": "Punto",
+  "tbPointSizeHelp": "1–200 arasında, örneğin 10,5",
+  "tbPreviewFailed": "Önizleme açılamadı: {error}",
+  "@tbPreviewFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tbPreviousPage": "Önceki sayfa",
+  "tbPrint": "Yazdır",
+  "tbPrintFailed": "Yazdırılamadı",
+  "tbPrintShortcut": "Yazdır · Ctrl+P",
+  "tbPrintSummary": "{pages} sayfa · {sheets} yaprak A4",
+  "@tbPrintSummary": {
+    "placeholders": {
+      "pages": {
+        "type": "int"
+      },
+      "sheets": {
+        "type": "int"
+      }
+    }
+  },
+  "tbPrintSummaryCopies": "{pages} sayfa × {copies} kopya · {sheets} yaprak A4",
+  "@tbPrintSummaryCopies": {
+    "placeholders": {
+      "pages": {
+        "type": "int"
+      },
+      "copies": {
+        "type": "int"
+      },
+      "sheets": {
+        "type": "int"
+      }
+    }
+  },
+  "tbPrinter": "Yazıcı",
+  "tbPrinterDefault": "{name}  (varsayılan)",
+  "@tbPrinterDefault": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tbPrinterInSystemDialog": "Yazıcıyı sistemin yazdırma penceresinde seçeceksiniz.",
+  "tbProtectedContent": "〔Korunan içerik — kaydetmede korunur〕",
+  "tbReadAloud": "Sesli oku",
+  "tbReadAloudShortTip": "Sesli oku · seçimi ya da imleçten sonrasını",
+  "tbReadAloudTip": "Seçimi ya da imleçten sonrasını okur",
+  "tbRecent": "Son açılanlar",
+  "tbRecoverableDrafts": "Kurtarılabilir taslaklar",
+  "tbRed": "Kırmızı",
+  "tbRedo": "Yinele · Ctrl+Y",
+  "tbRemoveBorders": "Çerçeveyi kaldır",
+  "tbRename": "Yeniden adlandır",
+  "tbRenameLetterhead": "Anteti yeniden adlandır",
+  "tbReplace": "Değiştir",
+  "tbReplaceLetterheadBody": "Bu adla kayıtlı antet, belgenin üst bilgisiyle değiştirilecek.",
+  "tbReplaceLetterheadTitle": "\"{name}\" değiştirilsin mi?",
+  "@tbReplaceLetterheadTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tbRibbonTip": "Şerit: {tab}",
+  "@tbRibbonTip": {
+    "placeholders": {
+      "tab": {
+        "type": "String"
+      }
+    }
+  },
+  "tbSample": "Örnek: {sample}",
+  "@tbSample": {
+    "placeholders": {
+      "sample": {
+        "type": "String"
+      }
+    }
+  },
+  "tbSave": "Kaydet",
+  "tbSaveAs": "Farklı kaydet…",
+  "tbSaveAsDocx": "Word (DOCX) Olarak Kaydet",
+  "tbSaveAsPdf": "PDF olarak kaydet",
+  "tbSaveAsRtf": "Zengin Metin (RTF) Olarak Kaydet",
+  "tbSaveAsUdf": "UYAP UDF Olarak Kaydet",
+  "tbSaveFolderBody": "Bir kez seçersiniz; sonra Kaydet doğrudan oraya yazar. İmzaladığınız belgeler de oraya kaydedilir.",
+  "tbSaveFolderTitle": "Belgeler nereye kaydedilsin?",
+  "tbSaveHeaderAsLetterhead": "Üst bilgiyi antet olarak kaydet",
+  "tbSaveHeaderAsLetterheadEllipsis": "Üst bilgiyi antet olarak kaydet…",
+  "tbSaveSelectedPagesPdf": "Seçili sayfaları PDF olarak kaydet",
+  "tbSavedCopyUsed": "Diskte kayıtlı belge kullanılır.",
+  "tbSearchFonts": "Yazı tipi ara…",
+  "tbSelectWholeTable": "Tüm tabloyu seç",
+  "tbShadeCell": "Hücreyi boya",
+  "tbShadeTable": "Tabloyu boya",
+  "tbShare": "Paylaş",
+  "tbShareAsKind": "{kind} olarak paylaş",
+  "@tbShareAsKind": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "tbShareAsPdf": "PDF olarak paylaş",
+  "tbShareAsPdfHelp": "Her telefonda ve bilgisayarda açılır",
+  "tbShareEllipsis": "Paylaş…",
+  "tbShareFailed": "Paylaşılamadı: {error}",
+  "@tbShareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tbShareMacHelp": "AirDrop, Mesajlar ve yüklü uygulamalar",
+  "tbShareOriginalHelp": "Dosyanın kendisi, olduğu gibi",
+  "tbShareSend": "Paylaş / Gönder",
+  "tbShareWindowsHelp": "Yüklü paylaşım uygulamalarından seçin",
+  "tbShareWithWindows": "Windows ile paylaş",
+  "tbShortcuts": "Kısayollar",
+  "tbShrinkFont": "Yazıyı küçült",
+  "tbSignUdf": "UDF e-imzala",
+  "tbSnippets": "Kalıp metin",
+  "tbSnippetsShortcut": "Kalıp metin · Ctrl+Boşluk",
+  "tbStrikethrough": "Üstü çizili",
+  "tbSubscript": "Alt simge",
+  "tbSuperscript": "Üst simge",
+  "tbSystemPrintDialog": "Sistemin yazdırma penceresi…",
+  "tbTabHome": "Giriş",
+  "tbTabInsert": "Ekle",
+  "tbTabResearch": "Araştırma",
+  "tbTabView": "Görünüm",
+  "tbTable": "Tablo",
+  "tbTableSelectedRelease": "Tablo seçili — bırak",
+  "tbTableSize": "{rows} × {columns} tablo",
+  "@tbTableSize": {
+    "placeholders": {
+      "rows": {
+        "type": "int"
+      },
+      "columns": {
+        "type": "int"
+      }
+    }
+  },
+  "tbTextAndParagraph": "Yazı ve paragraf",
+  "tbUnderline": "Altı çizili · Ctrl+U",
+  "tbUndo": "Geri al · Ctrl+Z",
+  "tbUseInNewDocuments": "Yeni belgelerde kullan",
+  "tbVerticalRuler": "Dikey cetvel",
+  "tbViewRulers": "Görünüm ve cetveller",
+  "tbYellow": "Sarı",
+  "viewClose": "Kapat",
+  "viewCloseEsc": "Kapat · Esc",
+  "viewCloseEscParen": "Kapat (Esc)",
+  "viewCancel": "Vazgeç",
+  "viewFirstPage": "İlk Sayfa",
+  "viewPreviousPage": "Önceki Sayfa",
+  "viewNextPage": "Sonraki Sayfa",
+  "viewLastPage": "Son Sayfa",
+  "viewZoomIn": "Yakınlaştır",
+  "viewZoomOut": "Uzaklaştır",
+  "viewZoomInKey": "Yakınlaştır (+)",
+  "viewZoomOutKey": "Uzaklaştır (−)",
+  "viewRotateLeft": "Sola 90° döndür",
+  "viewRotateRight": "Sağa 90° döndür",
+  "viewRotateRightKey": "Sağa 90° döndür (R)",
+  "viewFit": "Sığdır",
+  "viewFitKey": "Sığdır (0)",
+  "viewPreviewFailed": "Önizleme açılamadı: {error}",
+  "@viewPreviewFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewHighlightSaveFailed": "Vurgu kaydedilemedi",
+  "viewThisColor": "Bu renk",
+  "viewChangeColor": "Rengi değiştir",
+  "viewDeleteHighlight": "Vurguyu sil",
+  "viewFindInDocument": "Belgede bul",
+  "viewSearching": "aranıyor…",
+  "viewNotFound": "bulunamadı",
+  "viewPreviousMatch": "Önceki · Shift+Enter",
+  "viewNextMatch": "Sonraki · Enter",
+  "viewFitPage": "Sayfaya sığdır",
+  "viewFitWidth": "Genişliğe sığdır",
+  "viewFreeZoom": "Serbest yakınlaştırma",
+  "viewCitations": "Dayanaklar · madde ve kararlar",
+  "viewHighlightSelection": "Seçimi vurgula",
+  "viewSelectToHighlight": "Vurgulamak için metin seçin",
+  "viewHighlightColor": "Vurgu rengi",
+  "viewPageOpenFailed": "Bu sayfa açılamadı.",
+  "viewPageOf": "Sayfa {page} / {count}",
+  "@viewPageOf": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "viewTifToPdf": "TIF → PDF Dönüştür",
+  "viewHeicAndroidOnly": "iPhone fotoğrafları (HEIC) şimdilik yalnız Android’de açılıyor.",
+  "viewPhotoDecodeFailed": "Fotoğraf çözülemedi.",
+  "viewCropFailed": "Kırpılamadı",
+  "viewCropUnmeasured": "Bu görsel ölçülemedi, kırpılamıyor",
+  "viewCrop": "Kırp",
+  "viewFullScreenKey": "Tam ekran (F, ya da çift tık)",
+  "viewNextPhoto": "Sonraki fotoğraf (→)",
+  "viewPreviousPhoto": "Önceki fotoğraf (←)",
+  "viewCropDrag": "Saklamak istediğiniz yeri sürükleyin",
+  "viewCropKeepsOriginal": "Aslı olduğu gibi kalır, kırpılan yanına kaydedilir",
+  "viewSvgOpenFailed": "SVG açılamadı: {error}",
+  "@viewSvgOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewImageOpenFailed": "Görsel açılamadı.",
+  "viewCopy": "Kopyala",
+  "viewReadAloud": "Sesli oku",
+  "viewSelectAll": "Tümünü seç",
+  "viewFormatNotPreviewable": "Bu biçim önizlenemiyor.",
+  "viewImzSaveDialog": "İmzalı belgenin içeriğini kaydet",
+  "viewDocumentSaved": "Belge kaydedildi",
+  "viewImzIdNumber": "T.C. kimlik no: {id}",
+  "@viewImzIdNumber": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "viewImzSignedAt": "İmza tarihi: {date}",
+  "@viewImzSignedAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "viewImzIssuer": "Sertifikayı veren: {issuer}",
+  "@viewImzIssuer": {
+    "placeholders": {
+      "issuer": {
+        "type": "String"
+      }
+    }
+  },
+  "viewImzUnnamedSigner": "Adı okunamayan imzacı",
+  "viewImzValid": "E-imza geçerli",
+  "viewImzInvalid": "E-imza doğrulanamadı: belge imzadan sonra değişmiş olabilir",
+  "viewImzCheckedNote": "İmza, içindeki belgeyle ve imzacının kendi sertifikasıyla denetlendi. Sertifikanın yetkili bir kuruluşça verildiği ve iptal edilmediği ayrıca denetlenmedi.",
+  "viewImzSaveDocument": "Belgeyi kaydet…",
+  "viewImzUnreadable": "Bu dosya okunamadı: içinde belge olan bir e-imza dosyası değil ya da bozuk.",
+  "viewImzInsideNotShown": "İçindeki belge ({name}) burada gösterilemiyor; kaydedip açabilirsiniz.",
+  "@viewImzInsideNotShown": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "viewOcrTitle": "Arama için çıkarılan metin",
+  "viewOcrNote": "Birebir çeviriyazı değildir: tanıma hataları olabilir ve kutulu bölümler ana metnin arasına karışabilir. Kaynak belge değişmedi.",
+  "viewOcrCopy": "Metni kopyala",
+  "viewOcrCopied": "Metin panoya kopyalandı.",
+  "viewOcrReading": "Okunuyor…",
+  "viewOcrShowDocument": "Belgeyi göster",
+  "viewOcrShowText": "Okunan metin",
+  "viewOcrNothingFound": "Okunabilir yazı bulunamadı",
+  "viewOcrRun": "Metne dönüştür",
+  "viewDraftDeleteFailed": "Taslak silinemedi",
+  "viewDeleteAllDraftsTitle": "Bütün taslaklar silinsin mi?",
+  "viewDeleteAllDraftsBody": "{count} kaydedilmemiş taslak kalıcı olarak silinecek. Belgelerin kendileri değişmez.",
+  "@viewDeleteAllDraftsBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "viewDeleteAll": "Hepsini sil",
+  "viewDraftsDeleteFailed": "Taslaklar silinemedi",
+  "viewDraftNeverSaved": "Hiç kaydedilmemiş yeni belge",
+  "viewDraftSourceGone": "Kaynak dosya artık yok, yeni belge olarak açılır\n{source}",
+  "@viewDraftSourceGone": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "viewDraftsTitle": "Kurtarılabilir taslaklar",
+  "viewDraftsNote": "Kaydedilmeden kapanan belgelerin son hali bu cihazda saklanır. Bir taslağı açtığınızda editöre kaydedilmemiş değişiklik olarak gelir; siz kaydedene kadar dosyaya yazılmaz.",
+  "viewDraftsUnreachable": "Yerel taslaklara ulaşılamadı.",
+  "viewDraftsEmpty": "Kurtarılmayı bekleyen taslak yok.",
+  "viewDeleteDraft": "Taslağı sil",
+  "viewVersionUnreadable": "Bu sürüm okunamadı.",
+  "viewToday": "Bugün",
+  "viewYesterday": "Dün",
+  "viewSaveVersionCopyDialog": "Sürümü kopya olarak kaydet",
+  "viewCopyOverOriginal": "Kopya belgenin kendisinin üzerine yazılmaz",
+  "viewCopyOverOriginalHint": "Belgeyi bu sürüme döndürmek için «{label}» düğmesini kullanın.",
+  "@viewCopyOverOriginalHint": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "viewCopySaved": "Sürümün kopyası kaydedildi",
+  "viewCopySaveFailed": "Kopya kaydedilemedi",
+  "viewVersionList": "Sürüm listesi",
+  "viewHistoryTitle": "Belge geçmişi",
+  "viewHistoryNote": "Folio’da her kaydettiğinizde dosyanın önceki ve yeni hali bu cihazda saklanır: belge başına son 20 sürüm, en fazla 100 MB.",
+  "viewHistoryUnreachable": "Yerel geçmişe ulaşılamadı.",
+  "viewHistoryEmpty": "Bu belgenin henüz saklanmış bir sürümü yok.",
+  "viewHistoryEmptyHint": "Belgeyi Folio’da ilk kaydettiğinizde, dosyanın o ana kadarki hali ve kaydettiğiniz yeni hali burada listelenir.",
+  "viewSigned": "E-imzalı",
+  "viewSaveCopy": "Kopya olarak kaydet…",
+  "viewOtherFormatHint": "Bu sürüm başka bir biçimde saklanmış; kopya olarak kaydedebilirsiniz.",
+  "viewCompareCurrent": "Şimdikiyle karşılaştır",
+  "viewPageView": "Sayfa görünümü",
+  "viewPageViewFailed": "Sayfa görünümü hazırlanamadı: {error}",
+  "@viewPageViewFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewTypeNotShown": "Bu tür bir belge burada gösterilemiyor. «Kopya olarak kaydet» ile ayrı bir dosya olarak açabilirsiniz.",
+  "viewCompareFailed": "Karşılaştırılamadı: {error}",
+  "@viewCompareFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "viewCompareUnsupported": "Bu tür bir belgede metin karşılaştırılamıyor; sürümü «Sayfa görünümü»nden inceleyebilirsiniz.",
+  "viewCompareIdentical": "Bu sürümün metni şu anki haliyle aynı. Yazı tipi, boşluk gibi biçim farkları burada gösterilmez; «Sayfa görünümü»ne bakın.",
+  "viewDiffSummary": "Bu sürümden bu yana {added} kelime eklenmiş, {removed} kelime silinmiş.",
+  "@viewDiffSummary": {
+    "placeholders": {
+      "added": {
+        "type": "int"
+      },
+      "removed": {
+        "type": "int"
+      }
+    }
+  },
+  "viewAddedLater": "Sonradan eklenen",
+  "viewRemovedLater": "Sonradan silinen",
+  "viewUnchangedLines": "⋯ değişmeyen {count} satır ⋯",
+  "@viewUnchangedLines": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "viewRestoreVersion": "Bu sürümü geri yükle",
+  "viewAboutProduct": "{name} hakkında",
+  "@viewAboutProduct": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "viewWindowActionFailed": "Pencere işlemi tamamlanamadı",
+  "viewAbout": "Hakkında",
+  "viewFullScreen": "Tam ekran",
+  "viewExitFullScreen": "Tam ekrandan çık",
+  "viewMinimize": "Simge durumuna küçült",
+  "viewRestoreSize": "Önceki boyut",
+  "viewMaximize": "Ekranı kapla",
+  "viewHideToTray": "Tepsiye gizle",
+  "viewCloseApp": "Uygulamayı kapat",
+  "viewAddressOpenFailed": "Adres açılamadı",
+  "viewVersion": "Sürüm {version} ({build})",
+  "@viewVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "viewAboutTaglineOfis": "Belgeleri açan, düzenleyen ve imzalayan uygulama",
+  "viewAboutTaglineFolio": "Avukatlar için dilekçe, dava ve büro uygulaması",
+  "viewAboutDescOfis": "Ofis ile UDF, Word, ODT, RTF ve PDF belgelerinizi açar, düzenler, yazdırır ve e-imza kartınızla imzalarsınız. Kanun maddesi ve karar atıflarını denetler, yazım hatalarını bulur, metni sesli okur ve söylediklerinizi yazarsınız.",
+  "viewAboutDescFolio": "Folio ile UDF dilekçenizi yazar, e-imza ya da mobil imzayla imzalar ve dava dosyanıza gönderirsiniz. Müvekkillerinizi, duruşma ve süre takviminizi, büronuzun kasasını ve ekibinizi aynı uygulamadan yönetirsiniz.",
+  "viewAboutDataOfis": "Verileriniz yalnız sizin cihazlarınızda tutulur. Ofis’in verilerinizi tutan bir sunucusu yoktur ve yapay zekâ hizmeti kullanmaz. Başka bir büroyla uzaktan canlı paylaşımda belge ve yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu içeriği göremez ve hiçbir şey saklamaz.",
+  "viewAboutDataFolio": "Verileriniz yalnız sizin cihazlarınızda tutulur. Folio’nun verilerinizi tutan bir sunucusu yoktur. Yapay zekâ özellikleri isteğe bağlıdır ve siz açmadıkça kapalıdır. Başka bir büroyla uzaktan canlı paylaşımda belge ve yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu içeriği göremez ve hiçbir şey saklamaz.",
+  "viewAgreements": "SÖZLEŞMELER",
+  "viewTermsTitle": "Kullanım Koşulları",
+  "viewTermsSubtitle": "Kullanım izni ve sorumluluklar",
+  "viewPrivacyTitle": "Gizlilik ve KVKK Aydınlatma Metni",
+  "viewPrivacySubtitle": "Kişisel verileriniz nasıl korunur",
+  "viewLicenseTitle": "Lisans",
+  "viewLicenseSubtitle": "Tescilli yazılım",
+  "viewOpenSourceLicenses": "Açık kaynak lisansları",
+  "viewComponentsSubtitle": "Folio’da kullanılan bileşenler",
+  "viewSupport": "DESTEK",
+  "viewDownloadOther": "Diğer cihazlarınıza indirin",
+  "viewContact": "Destek ve iletişim",
+  "viewContactSubtitle": "İletişim formuyla bize yazın",
+  "viewWebsite": "Folio’nun web sitesi",
+  "viewCopyright": "© 2026 LifeOS. Tüm hakları saklıdır. {product} tescilli bir yazılımdır, açık kaynak değildir.",
+  "@viewCopyright": {
+    "placeholders": {
+      "product": {
+        "type": "String"
+      }
+    }
   }
 }

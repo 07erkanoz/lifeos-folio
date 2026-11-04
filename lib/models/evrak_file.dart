@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../services/platform/app_language.dart';
+
 enum EvrakFormat {
   pdf,
   spreadsheet,
@@ -78,15 +80,15 @@ enum EvrakFormat {
       case EvrakFormat.docx:
         return 'Word DOCX';
       case EvrakFormat.tif:
-        return 'TIFF Evrak';
+        return AppLanguage.t.formatTiff;
       case EvrakFormat.image:
-        return 'Görsel';
+        return AppLanguage.t.formatImage;
       case EvrakFormat.text:
-        return 'Metin';
+        return AppLanguage.t.formatText;
       case EvrakFormat.odt:
         return 'OpenDocument';
       case EvrakFormat.rtf:
-        return 'Zengin Metin RTF';
+        return AppLanguage.t.formatRtf;
       case EvrakFormat.doc:
         return 'Word 97-2003';
       case EvrakFormat.html:
@@ -94,11 +96,11 @@ enum EvrakFormat {
       case EvrakFormat.markdown:
         return 'Markdown';
       case EvrakFormat.data:
-        return 'Veri / Metin';
+        return AppLanguage.t.formatData;
       case EvrakFormat.svg:
         return 'SVG';
       case EvrakFormat.unknown:
-        return 'Bilinmeyen';
+        return AppLanguage.t.formatUnknown;
     }
   }
 

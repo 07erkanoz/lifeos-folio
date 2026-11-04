@@ -2,6 +2,7 @@ import 'package:evrak_convert/models/evrak_file.dart';
 import 'package:evrak_convert/ofis_app.dart';
 import 'package:evrak_convert/services/editor/editor_drafts.dart';
 import 'package:evrak_convert/services/platform/app_edition.dart';
+import 'package:evrak_convert/services/platform/app_language.dart';
 import 'package:evrak_convert/services/platform/document_launch.dart';
 import 'package:evrak_convert/ui/widgets/editor_ribbon.dart';
 import 'package:evrak_convert/ui/widgets/editor_widget.dart';
@@ -12,6 +13,8 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  tearDown(() => AppLanguage.instance.chosen = null);
+
   tearDown(() => AppEdition.current = AppEdition.folio);
 
   testWidgets('Ofis\'s first page: open, a new UDF or Word document, and '
@@ -52,6 +55,8 @@ void main() {
       'by card and the history; no petitions, UYAP, mobile signature, '
       'agenda or live sharing', (tester) async {
     AppEdition.current = AppEdition.ofis;
+    // Ofis follows the system's language; these read its Turkish.
+    AppLanguage.instance.chosen = const Locale('tr');
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -105,6 +110,8 @@ void main() {
     tester,
   ) async {
     AppEdition.current = AppEdition.ofis;
+    // Ofis follows the system's language; these read its Turkish.
+    AppLanguage.instance.chosen = const Locale('tr');
     tester.view.physicalSize = const Size(900, 1500);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
