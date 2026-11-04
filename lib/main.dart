@@ -19,6 +19,9 @@ import 'services/desktop/native_window.dart';
 import 'ui/desktop/quick_search_palette.dart';
 
 import 'package:flutter/material.dart';
+
+import 'services/platform/app_language.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -574,6 +577,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
       GlobalWidgetsLocalizations.delegate,
       GlobalCupertinoLocalizations.delegate,
       FlutterQuillLocalizations.delegate,
+      AppLocalizations.delegate,
     ],
     supportedLocales: const [Locale('tr', 'TR'), Locale('en', 'US')],
     locale: const Locale('tr', 'TR'),

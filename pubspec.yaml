@@ -89,6 +89,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # LifeOS Ofis's translations (l10n.yaml).
+  generate: true
   assets:
     - assets/legal/
     - assets/mevzuat/laws.json

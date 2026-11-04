@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+import 'services/platform/app_language.dart';
+
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
@@ -89,9 +92,13 @@ class _PreviewAppState extends State<PreviewApp> {
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
+          AppLocalizations.delegate,
         ],
-        supportedLocales: const [Locale('tr', 'TR'), Locale('en', 'US')],
-        locale: const Locale('tr', 'TR'),
+        // Ofis's language (the system's or the one chosen); Turkish in
+        // Folio.
+        supportedLocales: AppLanguage.supported,
+        locale: AppLanguage.instance.locale,
+        localeResolutionCallback: AppLanguage.resolve,
         builder: (context, child) => widget.desktopChrome
             ? DesktopFrame(
                 title: name,

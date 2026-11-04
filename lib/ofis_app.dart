@@ -17,8 +17,8 @@ import 'services/editor/editor_drafts.dart';
 import 'services/editor/suggestions/phrase_memory.dart';
 import 'services/library/recent_documents.dart';
 import 'services/platform/app_edition.dart';
+import 'services/platform/app_language.dart';
 import 'services/platform/document_launch.dart';
-import 'services/platform/platform_capabilities.dart';
 import 'services/preview/pdf_fonts.dart';
 import 'services/signing/imz_file.dart';
 import 'services/desktop/mac_quit.dart';
@@ -32,7 +32,7 @@ import 'ui/widgets/editor_ribbon.dart';
 import 'ui/widgets/editor_widget.dart';
 import 'ui/widgets/file_preview.dart';
 import 'ui/widgets/imz_view.dart';
-import 'ui/widgets/signing_dialog.dart';
+import 'ui/widgets/language_button.dart';
 import 'ui/widgets/folio_about_dialog.dart';
 import 'ui/widgets/notice.dart';
 
@@ -135,7 +135,8 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
   late bool _editing = widget.edit;
 
   /// What a new document is made as.
-  EvrakFormat _newFormat = EvrakFormat.udf;
+  // Ofis writes Word first: its users' documents; UDF is UYAP's.
+  EvrakFormat _newFormat = EvrakFormat.docx;
   DocumentRevision? _recovery;
   late EditorDraft _draft = _draftFor(widget.path);
   int _generation = 0;
@@ -147,6 +148,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
   void initState() {
     super.initState();
     unawaited(_appearance.load());
+    unawaited(AppLanguage.instance.load());
     if (widget.desktopChrome) windowManager.addListener(this);
     MacQuit.handle(_approveQuit);
     unawaited(
@@ -196,7 +198,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
   EditorDraft _draftFor(String? path) => _drafts.draft(
     'ofis-$_generation',
     path == null
-        ? 'Yeni belge.${_newFormat.defaultExtension}'
+        ? AppLanguage.t.ofisNewDocumentTitle(_newFormat.defaultExtension)
         : p.basename(path),
   );
 
@@ -231,7 +233,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
 
   Future<void> _open() async {
     final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Belge aç',
+      dialogTitle: AppLanguage.t.ofisOpenDialog,
       type: FileType.custom,
       allowedExtensions: [
         ...EvrakFormat.supportedExtensions,
@@ -248,7 +250,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
       await _recent.remove(path);
       if (mounted) setState(() {});
       if (context != null && context.mounted) {
-        showNotice(context, 'Belge taşınmış veya kaldırılmış', detail: path);
+        showNotice(context, context.l.ofisFileMoved, detail: path);
       }
       return;
     }
@@ -256,7 +258,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
       if (context != null && context.mounted) {
         showNotice(
           context,
-          'Bu belge türü açılamıyor',
+          context.l.ofisCannotOpenType,
           detail: p.basename(path),
           kind: NoticeKind.error,
         );
@@ -266,34 +268,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     await _show(path);
   }
 
-  /// Any file signed with the e-signature card into an `.imz` beside it,
-  /// then shown: its signature checked, its document read.
-  Future<void> _sign([String? path]) async {
-    final context = _context;
-    if (context == null) return;
-    final chosen =
-        path ??
-        (await FilePicker.pickFiles(dialogTitle: 'İmzalanacak dosya'))
-            ?.files
-            .single
-            .path;
-    if (chosen == null || !context.mounted) return;
-    final signed = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => SigningDialog(filePath: chosen, imz: true),
-    );
-    if (signed == null || !context.mounted) return;
-    showNotice(
-      context,
-      'Dosya e-imzalandı',
-      detail: signed,
-      kind: NoticeKind.success,
-    );
-    await _openPath(signed);
-  }
-
-  Future<void> _new([EvrakFormat format = EvrakFormat.udf]) async {
+  Future<void> _new([EvrakFormat format = EvrakFormat.docx]) async {
     _newFormat = format;
     await _show(null, edit: true);
   }
@@ -310,7 +285,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     final entry = await showRecoverableDrafts(context);
     if (entry == null || !context.mounted) return;
     if (entry.format != 'rich-draft') {
-      showNotice(context, 'Bu taslak burada açılamıyor', detail: entry.name);
+      showNotice(context, context.l.ofisDraftCannotOpen, detail: entry.name);
       return;
     }
     final source = entry.sourcePath;
@@ -330,17 +305,6 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     }
   }
 
-  void _signed(String path) {
-    final context = _context;
-    if (context == null || !context.mounted) return;
-    showNotice(
-      context,
-      'Belge imzalandı.',
-      detail: path,
-      kind: NoticeKind.success,
-    );
-  }
-
   Widget _body() {
     if (_home) {
       return OfisHome(
@@ -348,7 +312,6 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
         onOpen: () => unawaited(_open()),
         onNew: (format) => unawaited(_new(format)),
         onOpenFile: (path) => unawaited(_openPath(path)),
-        onSign: desktopSigningAvailable ? () => unawaited(_sign()) : null,
       );
     }
     final path = _path;
@@ -366,24 +329,16 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (desktopSigningAvailable)
-              FloatingActionButton.extended(
-                key: const ValueKey('ofis-sign'),
-                heroTag: 'ofis-sign',
-                onPressed: () => unawaited(_sign(path)),
-                icon: const Icon(Icons.draw_outlined),
-                label: const Text('E-imzala'),
-              ),
-            if (_editable(path)) ...[
-              const SizedBox(height: 10),
+            // E-signing with a card is a Turkish lawyer's work, not Ofis's
+            // users': an .imz is opened and shown, none is made here.
+            if (_editable(path))
               FloatingActionButton.extended(
                 key: const ValueKey('ofis-edit'),
                 heroTag: 'ofis-edit',
                 onPressed: () => unawaited(_edit()),
                 icon: const Icon(Icons.edit_note_rounded),
-                label: const Text('Düzenle'),
+                label: Text(context.l.ofisEdit),
               ),
-            ],
           ],
         ),
       );
@@ -406,14 +361,13 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
           onRecovery: () => unawaited(_openRecovery()),
         ),
         onSaved: _saved,
-        onSigned: _signed,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: _appearance,
+    listenable: Listenable.merge([_appearance, AppLanguage.instance]),
     builder: (context, _) => MaterialApp(
       navigatorKey: _navigator,
       title: ofisTitle(_path),
@@ -426,14 +380,19 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
         FlutterQuillLocalizations.delegate,
+        AppLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('tr', 'TR'), Locale('en', 'US')],
-      locale: const Locale('tr', 'TR'),
+      // The system's language, or the one chosen in the language menu.
+      supportedLocales: AppLanguage.supported,
+      locale: AppLanguage.instance.locale,
+      localeResolutionCallback: AppLanguage.resolve,
       builder: (context, child) => widget.desktopChrome
           ? DesktopFrame(
               title: _path == null
                   ? (_editing
-                        ? 'Yeni belge.${_newFormat.defaultExtension}'
+                        ? context.l.ofisNewDocumentTitle(
+                            _newFormat.defaultExtension,
+                          )
                         : 'LifeOS Ofis')
                   : p.basename(_path!),
               titleIcon: _home ? null : Icons.description_outlined,
@@ -448,28 +407,28 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
                     )
                   : null,
               icon: AppEdition.ofis.icon,
-              iconTooltip: 'LifeOS Ofis hakkında',
+              iconTooltip: context.l.ofisAbout,
               leading: [
                 if (!_home)
                   FrameButton(
                     key: const ValueKey('ofis-home'),
                     icon: Icons.grid_view_rounded,
-                    label: 'Belgeler',
-                    tooltip: 'Belgeler',
+                    label: context.l.ofisDocuments,
+                    tooltip: context.l.ofisDocuments,
                     onPressed: () => unawaited(_show(null)),
                   ),
                 FrameButton(
                   key: const ValueKey('ofis-new'),
                   icon: Icons.note_add_rounded,
-                  label: 'Yeni',
-                  tooltip: 'Yeni UDF belge · Ctrl+N',
+                  label: context.l.ofisNew,
+                  tooltip: context.l.ofisNewTooltip,
                   onPressed: () => unawaited(_new()),
                 ),
                 FrameButton(
                   key: const ValueKey('ofis-open'),
                   icon: Icons.folder_open_rounded,
-                  label: 'Aç',
-                  tooltip: 'Belge aç · Ctrl+O',
+                  label: context.l.ofisOpen,
+                  tooltip: context.l.ofisOpenTooltip,
                   onPressed: () => unawaited(_open()),
                 ),
               ],
@@ -510,14 +469,10 @@ class OfisHome extends StatefulWidget {
     required this.onOpen,
     required this.onNew,
     required this.onOpenFile,
-    this.onSign,
   });
 
   final List<EvrakFile> recent;
   final VoidCallback onOpen;
-
-  /// Dosya imzala: any file signed into an `.imz`.
-  final VoidCallback? onSign;
   final ValueChanged<EvrakFormat> onNew;
   final ValueChanged<String> onOpenFile;
 
@@ -528,7 +483,7 @@ class OfisHome extends StatefulWidget {
 class _OfisHomeState extends State<OfisHome> {
   bool _dragging = false;
 
-  static String _when(DateTime t) {
+  static String _when(BuildContext context, DateTime t) {
     final now = DateTime.now();
     final days = DateTime(
       now.year,
@@ -538,9 +493,9 @@ class _OfisHomeState extends State<OfisHome> {
     final clock =
         '${t.hour.toString().padLeft(2, '0')}:'
         '${t.minute.toString().padLeft(2, '0')}';
-    if (days <= 0) return 'Bugün $clock';
-    if (days == 1) return 'Dün $clock';
-    if (days < 7) return '$days gün önce';
+    if (days <= 0) return context.l.whenToday(clock);
+    if (days == 1) return context.l.whenYesterday(clock);
+    if (days < 7) return context.l.whenDaysAgo(days);
     return '${t.day}.${t.month.toString().padLeft(2, '0')}.${t.year}';
   }
 
@@ -645,9 +600,19 @@ class _OfisHomeState extends State<OfisHome> {
           key: const ValueKey('ofis-home-page'),
           padding: const EdgeInsets.fromLTRB(36, 28, 36, 28),
           children: [
-            const Text(
-              'Belgeleriniz',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.l.ofisHomeTitle,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const LanguageButton(),
+              ],
             ),
             const SizedBox(height: 18),
             Wrap(
@@ -657,33 +622,25 @@ class _OfisHomeState extends State<OfisHome> {
                 _action(
                   key: const ValueKey('ofis-home-open'),
                   icon: Icons.folder_open_rounded,
-                  title: 'Belge aç',
-                  detail: 'UDF, Word, ODT, PDF, RTF, Excel, .imz',
+                  title: context.l.ofisOpenAction,
+                  detail: context.l.ofisOpenActionDetail,
                   onTap: widget.onOpen,
                   primary: true,
                 ),
                 _action(
-                  key: const ValueKey('ofis-home-new-udf'),
-                  icon: Icons.note_add_outlined,
-                  title: 'Yeni UDF belge',
-                  detail: 'UYAP’ın biçiminde',
-                  onTap: () => widget.onNew(EvrakFormat.udf),
-                ),
-                _action(
                   key: const ValueKey('ofis-home-new-docx'),
                   icon: Icons.description_outlined,
-                  title: 'Yeni Word belgesi',
-                  detail: 'DOCX olarak',
+                  title: context.l.ofisNewDocx,
+                  detail: context.l.ofisNewDocxDetail,
                   onTap: () => widget.onNew(EvrakFormat.docx),
                 ),
-                if (widget.onSign case final sign?)
-                  _action(
-                    key: const ValueKey('ofis-home-sign'),
-                    icon: Icons.draw_outlined,
-                    title: 'Dosya imzala',
-                    detail: 'E-imza kartıyla, .imz olarak',
-                    onTap: sign,
-                  ),
+                _action(
+                  key: const ValueKey('ofis-home-new-udf'),
+                  icon: Icons.note_add_outlined,
+                  title: context.l.ofisNewUdf,
+                  detail: context.l.ofisNewUdfDetail,
+                  onTap: () => widget.onNew(EvrakFormat.udf),
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -707,7 +664,7 @@ class _OfisHomeState extends State<OfisHome> {
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
-                      'Belgeyi buraya sürükleyin',
+                      context.l.ofisDropHere,
                       style: TextStyle(color: AgendaColors.muted),
                     ),
                   ),
@@ -716,7 +673,7 @@ class _OfisHomeState extends State<OfisHome> {
             ),
             const SizedBox(height: 24),
             Text(
-              'SON BELGELER',
+              context.l.ofisRecent,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -729,7 +686,7 @@ class _OfisHomeState extends State<OfisHome> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Text(
-                  'Açtığınız belgeler burada görünür.',
+                  context.l.ofisRecentEmpty,
                   style: TextStyle(color: AgendaColors.muted),
                 ),
               )
@@ -781,7 +738,9 @@ class _OfisHomeState extends State<OfisHome> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  imz ? 'İMZ' : f.format.defaultExtension.toUpperCase(),
+                  imz
+                      ? context.l.ofisImzBadge
+                      : f.format.defaultExtension.toUpperCase(),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -803,8 +762,10 @@ class _OfisHomeState extends State<OfisHome> {
                     ),
                     Text(
                       modified == null
-                          ? (imz ? 'E-imzalı belge' : f.format.label)
-                          : _when(modified),
+                          ? (imz
+                                ? context.l.ofisSignedDocument
+                                : f.format.label)
+                          : _when(context, modified),
                       style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                     ),
                   ],

@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'services/platform/app_language.dart';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -357,10 +360,14 @@ class _EditorAppState extends State<EditorApp> with WindowListener {
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
+        AppLocalizations.delegate,
         FlutterQuillLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('tr', 'TR'), Locale('en', 'US')],
-      locale: const Locale('tr', 'TR'),
+      // Ofis's language (the system's or the one chosen); Turkish in
+      // Folio.
+      supportedLocales: AppLanguage.supported,
+      locale: AppLanguage.instance.locale,
+      localeResolutionCallback: AppLanguage.resolve,
       builder: (context, child) => widget.desktopChrome
           ? DesktopFrame(
               title: _documentName,

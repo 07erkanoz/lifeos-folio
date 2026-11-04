@@ -1,0 +1,70 @@
+{
+  "@@locale": "tr",
+  "languageName": "Türkçe",
+  "@languageName": {
+    "description": "This language's own name, in the language menu."
+  },
+  "languageSystem": "Sistemin dili",
+  "@languageSystem": {
+    "description": "Language menu: follow the computer's or phone's language."
+  },
+  "languageMenu": "Dil",
+  "@languageMenu": {
+    "description": "Tooltip of the language button."
+  },
+  "ofisNewDocumentTitle": "Yeni belge.{extension}",
+  "@ofisNewDocumentTitle": {
+    "placeholders": {
+      "extension": {
+        "type": "String"
+      }
+    }
+  },
+  "ofisAbout": "LifeOS Ofis hakkında",
+  "ofisDocuments": "Belgeler",
+  "ofisNew": "Yeni",
+  "ofisNewTooltip": "Yeni Word belgesi · Ctrl+N",
+  "ofisOpen": "Aç",
+  "ofisOpenTooltip": "Belge aç · Ctrl+O",
+  "ofisOpenDialog": "Belge aç",
+  "ofisFileMoved": "Belge taşınmış veya kaldırılmış",
+  "ofisCannotOpenType": "Bu belge türü açılamıyor",
+  "ofisDraftCannotOpen": "Bu taslak burada açılamıyor",
+  "ofisEdit": "Düzenle",
+  "ofisHomeTitle": "Belgeleriniz",
+  "ofisOpenAction": "Belge aç",
+  "ofisOpenActionDetail": "Word, PDF, RTF, ODT, Markdown, Excel, UDF, .imz",
+  "ofisNewUdf": "Yeni UDF belge",
+  "ofisNewUdfDetail": "UYAP’ın biçiminde",
+  "ofisNewDocx": "Yeni Word belgesi",
+  "ofisNewDocxDetail": "DOCX olarak",
+  "ofisDropHere": "Belgeyi buraya sürükleyin",
+  "ofisRecent": "SON BELGELER",
+  "ofisRecentEmpty": "Açtığınız belgeler burada görünür.",
+  "ofisImzBadge": "İMZ",
+  "ofisSignedDocument": "E-imzalı belge",
+  "whenToday": "Bugün {clock}",
+  "@whenToday": {
+    "placeholders": {
+      "clock": {
+        "type": "String"
+      }
+    }
+  },
+  "whenYesterday": "Dün {clock}",
+  "@whenYesterday": {
+    "placeholders": {
+      "clock": {
+        "type": "String"
+      }
+    }
+  },
+  "whenDaysAgo": "{days} gün önce",
+  "@whenDaysAgo": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  }
+}
