@@ -104,6 +104,50 @@ void main() {
     );
   });
 
+  test('pictures in a PDF read from their dictionaries; a screenshot is '
+      'evidence, a QR code or a logo is not, a thumbnail cannot be read', () {
+    final pdf = Uint8List.fromList(
+      latin1.encode(
+        '%PDF-1.7\n'
+        '5 0 obj\n<< /Type /XObject /Subtype /Image /Width 1366 '
+        '/Height 768 /BitsPerComponent 8 >>\nstream\nxx\nendstream\n'
+        '6 0 obj\n<</Subtype/Image/Width 51/Height 51>>stream\nendstream\n'
+        '7 0 obj\n<< /Subtype /Form /BBox [0 0 1 1] >>\nstream\nendstream\n',
+      ),
+    );
+    expect(AiAttachment.embeddedImages(pdf), [(1366, 768), (51, 51)]);
+    expect(AiAttachment.meaningfulPicture(1366, 768), isTrue);
+    expect(AiAttachment.meaningfulPicture(2023, 171), isFalse);
+    expect(AiAttachment.meaningfulPicture(289, 289), isFalse);
+
+    // UYAP's QR code and marks, a bank's logo: nothing said.
+    expect(
+      AiAttachment.unreadablePictures([(51, 51), (16, 17), (232, 29)]),
+      isNull,
+    );
+    expect(AiAttachment.unreadablePictures([(1366, 768), (76, 166)]), isNull);
+    // An e-mail's print, its attachments as thumbnails: said.
+    final note = AiAttachment.unreadablePictures([
+      (76, 166),
+      (221, 166),
+      (16, 16),
+    ]);
+    expect(note, contains('2 küçük gömülü görsel'));
+    expect(note, contains('221 piksel'));
+
+    final block = AiAttachment.block([
+      AiAttachment(path: '/x/mail.pdf', text: 'Gönderilen e-posta', note: note),
+      AiAttachment(
+        path: '/x/tarama.pdf',
+        text: 'Okunan',
+        ocr: true,
+        pagesLeft: 12,
+      ),
+    ]);
+    expect(block, contains('[Not: Belgede 2 küçük gömülü görsel'));
+    expect(block, contains('[Taramanın son 12 sayfası okunmadı.]'));
+  });
+
   test('a conversation read by its id; taken off, none', () {
     final db = PortalDatabase.memory();
     addTearDown(db.dispose);
