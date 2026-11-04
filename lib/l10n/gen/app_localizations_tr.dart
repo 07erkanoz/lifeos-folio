@@ -67,12 +67,6 @@ class AppLocalizationsTr extends AppLocalizations {
       'Word, PDF, RTF, ODT, Markdown, Excel, UDF, .imz';
 
   @override
-  String get ofisNewUdf => 'Yeni UDF belge';
-
-  @override
-  String get ofisNewUdfDetail => 'UYAP’ın biçiminde';
-
-  @override
   String get ofisNewDocx => 'Yeni Word belgesi';
 
   @override

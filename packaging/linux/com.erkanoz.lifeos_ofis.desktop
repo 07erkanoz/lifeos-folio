@@ -2,16 +2,16 @@
 Type=Application
 Name=LifeOS Ofis
 GenericName=Belge uygulaması
-Comment=UDF, Word, ODT, RTF ve PDF belgelerini açar, düzenler ve imzalar
+Comment=Word, PDF, RTF, ODT ve Markdown belgelerini açar ve düzenler
 Exec=lifeos_ofis %F
 Icon=com.erkanoz.lifeos_ofis
 StartupWMClass=com.erkanoz.lifeos_ofis
 Terminal=false
 Categories=Office;WordProcessor;Viewer;
-Keywords=UDF;UYAP;Word;DOCX;ODT;RTF;PDF;belge;e-imza;
+Keywords=Word;DOCX;PDF;RTF;ODT;Markdown;belge;document;
 MimeType=application/x-uyap-udf;application/udf;application/x-udf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;application/rtf;text/rtf;application/pdf;application/x-imz;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;text/plain;text/markdown;text/csv;text/tab-separated-values;text/html;application/json;application/xml;text/xml;image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;image/svg+xml;
 Actions=Yeni;
 
 [Desktop Action Yeni]
-Name=Yeni UDF belge
+Name=Yeni Word belgesi
 Exec=lifeos_ofis --edit

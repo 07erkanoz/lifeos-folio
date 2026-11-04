@@ -634,13 +634,6 @@ class _OfisHomeState extends State<OfisHome> {
                   detail: context.l.ofisNewDocxDetail,
                   onTap: () => widget.onNew(EvrakFormat.docx),
                 ),
-                _action(
-                  key: const ValueKey('ofis-home-new-udf'),
-                  icon: Icons.note_add_outlined,
-                  title: context.l.ofisNewUdf,
-                  detail: context.l.ofisNewUdfDetail,
-                  onTap: () => widget.onNew(EvrakFormat.udf),
-                ),
               ],
             ),
             const SizedBox(height: 14),

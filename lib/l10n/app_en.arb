@@ -18,8 +18,6 @@
   "ofisHomeTitle": "Your documents",
   "ofisOpenAction": "Open a document",
   "ofisOpenActionDetail": "Word, PDF, RTF, ODT, Markdown, Excel, UDF, .imz",
-  "ofisNewUdf": "New UDF document",
-  "ofisNewUdfDetail": "In UYAP’s format",
   "ofisNewDocx": "New Word document",
   "ofisNewDocxDetail": "As DOCX",
   "ofisDropHere": "Drop a document here",

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../models/evrak_file.dart';
+import '../../services/platform/app_edition.dart';
 import '../../services/platform/app_language.dart';
 
 /// What the program around an editor adds to its Dosya menu: a new document,
@@ -207,11 +208,13 @@ class EditorFileMenu extends StatelessWidget {
             Icons.ios_share_rounded,
             busy ? null : onShare,
           ),
-        _item(
-          context.l.tbSaveAsUdf,
-          Icons.edit_note_rounded,
-          busy ? null : () => onSaveIn(EvrakFormat.udf),
-        ),
+        // UDF first in Folio, UYAP's; last in Ofis, behind Word and PDF.
+        if (!AppEdition.isOfis)
+          _item(
+            context.l.tbSaveAsUdf,
+            Icons.edit_note_rounded,
+            busy ? null : () => onSaveIn(EvrakFormat.udf),
+          ),
         _item(
           context.l.tbSaveAsDocx,
           Icons.description_outlined,
@@ -227,6 +230,12 @@ class EditorFileMenu extends StatelessWidget {
           Icons.picture_as_pdf_outlined,
           busy ? null : () => onSaveIn(EvrakFormat.pdf),
         ),
+        if (AppEdition.isOfis)
+          _item(
+            context.l.tbSaveAsUdf,
+            Icons.edit_note_rounded,
+            busy ? null : () => onSaveIn(EvrakFormat.udf),
+          ),
         const Divider(height: 8),
         _item(
           context.l.tbPrint,

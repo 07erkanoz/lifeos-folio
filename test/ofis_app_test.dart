@@ -39,15 +39,15 @@ void main() {
     await tester.pump();
     expect(find.text('Belgeleriniz'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('ofis-home-open')));
-    await tester.tap(find.byKey(const ValueKey('ofis-home-new-udf')));
     await tester.tap(find.byKey(const ValueKey('ofis-home-new-docx')));
     await tester.tap(find.text('Kira sözleşmesi'));
     expect(done, [
       'open',
-      'new:udf',
       'new:docx',
       'file:/belgeler/Kira sözleşmesi.docx',
     ]);
+    // UDF is UYAP's: opened, not offered as a new document.
+    expect(find.byKey(const ValueKey('ofis-home-new-udf')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

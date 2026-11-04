@@ -206,18 +206,6 @@ abstract class AppLocalizations {
   /// **'Word, PDF, RTF, ODT, Markdown, Excel, UDF, .imz'**
   String get ofisOpenActionDetail;
 
-  /// No description provided for @ofisNewUdf.
-  ///
-  /// In tr, this message translates to:
-  /// **'Yeni UDF belge'**
-  String get ofisNewUdf;
-
-  /// No description provided for @ofisNewUdfDetail.
-  ///
-  /// In tr, this message translates to:
-  /// **'UYAP’ın biçiminde'**
-  String get ofisNewUdfDetail;
-
   /// No description provided for @ofisNewDocx.
   ///
   /// In tr, this message translates to:
