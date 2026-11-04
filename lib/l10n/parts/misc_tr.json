@@ -1,0 +1,458 @@
+{
+  "snipDeleteTitle": "Kalıp silinsin mi?",
+  "snipDeleteBody": "“{name}” kalıplarınızdan kaldırılacak. Bu kalıpla yazılmış belgeler değişmez.",
+  "@snipDeleteBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "snipCancel": "Vazgeç",
+  "snipDelete": "Sil",
+  "snipExportDialog": "Kalıpları dışa aktar",
+  "snipExported": "{count} kalıp dışa aktarıldı.",
+  "@snipExported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipExportFailed": "Kalıplar dışa aktarılamadı",
+  "snipImportDialog": "Kalıpları içe aktar",
+  "snipImportNone": "Yeni kalıp yok; hepsi zaten kalıplarınızda.",
+  "snipImported": "{count} kalıp eklendi.",
+  "@snipImported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipImportFailed": "Kalıplar içe aktarılamadı",
+  "snipManagerTitle": "Kalıplarım",
+  "snipImport": "İçe aktar",
+  "snipExport": "Dışa aktar",
+  "snipSearchHint": "Kalıp ara",
+  "snipManagerEmpty": "Henüz kalıp yok. \"Yeni kalıp\" ile ekleyebilir ya da belgede bir paragrafı seçip Ctrl+Space ile kalıba alabilirsiniz.",
+  "snipNoMatch": "Bu aramaya uyan kalıp yok.",
+  "snipUsedTimes": "{count} kez",
+  "@snipUsedTimes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipNew": "Yeni kalıp",
+  "snipClose": "Kapat",
+  "snipEditTitle": "Kalıbı düzenle",
+  "snipEmptyBody": "Kalıbın metni boş olamaz.",
+  "snipBadKeyword": "Anahtar kelime 2–20 harf ya da rakamdan oluşmalı, boşluk olmadan.",
+  "snipKeywordTaken": "“{keyword}” zaten “{name}” kalıbının anahtar kelimesi.",
+  "@snipKeywordTaken": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "snipHotkeyTaken": "Alt+F{key} zaten “{name}” kalıbında.",
+  "@snipHotkeyTaken": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "snipUntitled": "Adsız kalıp",
+  "snipName": "Ad",
+  "snipKeyword": "Anahtar kelime",
+  "snipKeywordHint": "örn. dil1",
+  "snipKeywordHelper": "Belgede yazıp Tab’a basınca kalıp gelir",
+  "snipHotkey": "Kısayol",
+  "snipHotkeyHelper": "Alt+F4 pencereyi kapatır",
+  "snipNoHotkey": "Yok",
+  "snipText": "Metin",
+  "snipBodyPlaceholder": "Kalıbın metni. Doldurulacak yerleri [MÜVEKKİL] gibi köşeli parantez ve büyük harfle yazın.",
+  "snipBlanksList": "Doldurulacak yerler: {blanks}",
+  "@snipBlanksList": {
+    "placeholders": {
+      "blanks": {
+        "type": "String"
+      }
+    }
+  },
+  "snipSave": "Kaydet",
+  "snipTableLeftOut": "〔Tablo — kalıpla eklenmez〕",
+  "snipPaletteHint": "Kalıp ya da profil bilgisi ara",
+  "snipFromProfile": "Profilden",
+  "snipProfileInsertTooltip": "{label} · belgeye ekle",
+  "@snipProfileInsertTooltip": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "snipFillProfile": "Avukat profilini doldurun",
+  "snipFillProfileDetail": "Adınız, baronuz, adresiniz buradan tek tıkla eklensin",
+  "snipKeepSelection": "Seçimi kalıba al",
+  "snipHarvestOpen": "Arşivden kalıp bul",
+  "snipHarvestOpenDetail": "Belgelerinizde tekrar eden paragraflar",
+  "snipManage": "Kalıplarımı yönet",
+  "snipManageDetail": "Ad, anahtar kelime, Alt+F kısayolu, silme",
+  "snipPaletteNoMatch": "Bu aramaya uyan kalıp ya da profil bilgisi yok.",
+  "snipPaletteEmptyHarvest": "Henüz kalıp yok.\n\nYukarıdan arşivinizde tekrar eden paragraflara bakabilir, ya da bir paragrafı belgede seçip yeniden Ctrl+Space’e basabilirsiniz.",
+  "snipPaletteEmptySelect": "Henüz kalıp yok.\n\nSık yazdığınız bir paragrafı belgede seçin, sonra Ctrl+Space’e basın — burada “Seçimi kalıba al” çıkacak.",
+  "snipPaletteEmptyKeep": "Henüz kalıp yok. Yukarıdan seçiminizi kalıba alabilirsiniz.",
+  "snipFromProfileLabel": "Profilden · {label}",
+  "@snipFromProfileLabel": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "snipPaletteKeys": "↑ ↓ ile seçin · Enter ile yerleştirin · Esc ile kapatın",
+  "snipNameIt": "Kalıba ad verin",
+  "snipNameItDetail": "Sonra bu adın ilk harflerini yazarak bulacaksınız.",
+  "snipBack": "Geri",
+  "snipKeep": "Kalıba al",
+  "snipFillCount": "Bu kalıpta doldurulacak {count} yer var.",
+  "@snipFillCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipFromLawyerProfile": "Avukat profilinden",
+  "snipLeaveBlank": "Boş bırak",
+  "snipInsert": "Yerleştir",
+  "snipHarvestTitle": "Arşivinizde tekrar eden paragraflar",
+  "snipHarvestNone": "Beş ya da daha fazla belgede aynen geçen bir paragraf bulunamadı. Arşiv henüz taranıyor olabilir.",
+  "snipHarvestFound": "{count} paragraf bulundu. Kalıba almak istediklerinizi işaretleyin.",
+  "@snipHarvestFound": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipHarvestBlank": "Tarih, esas numarası, kimlik ve tutarları boş bırak",
+  "snipHarvestBlankDetail": "Bir dosyaya ait olan kısımlar [TARİH] gibi doldurulacak yerlere çevrilir.",
+  "snipHarvestInDocuments": "{count} belgede",
+  "@snipHarvestInDocuments": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "snipHarvestTake": "{count} kalıbı al",
+  "@snipHarvestTake": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noteDraftTooltip": "Kaydedilmemiş taslak · {date}",
+  "@noteDraftTooltip": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "noteDraftTitle": "Kaydedilmemiş taslak",
+  "noteDraftBody": "“{name}” için {date} tarihli, kaydedilmemiş bir taslak var. Uygulama beklenmedik biçimde kapandığında kalmış olabilir.\n\nAçarsanız editöre kaydedilmemiş değişiklik olarak gelir; siz kaydedene kadar dosya değişmez.",
+  "@noteDraftBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "noteDraftMore": "\n\nBu belgenin {count} taslağı daha var; hepsi ana sayfadaki «Kurtarılabilir taslaklar»da.",
+  "@noteDraftMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noteDraftDelete": "Taslağı sil",
+  "noteCancel": "Vazgeç",
+  "noteDraftOpen": "Taslağı aç",
+  "noteDraftDeleteTitle": "Taslak silinsin mi?",
+  "noteDraftDeleteBody": "“{name}” için {date} tarihli kaydedilmemiş taslak kalıcı olarak silinecek. Belgenin kendisi değişmez.",
+  "@noteDraftDeleteBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "noteUnsavedTitle": "Kaydedilmemiş değişiklikler var",
+  "noteUnsavedBody": "{what} editöre alınınca şu anki kaydedilmemiş değişiklikler onun yerine geçer. Önce kaydederseniz bugünkü hali de belge geçmişinde kalır.",
+  "@noteUnsavedBody": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+  "noteOpenWithoutSaving": "Kaydetmeden aç",
+  "noteSaveFirst": "Önce kaydet",
+  "speechPreparingVoice": "Ses hazırlanıyor…",
+  "speechPaused": "Duraklatıldı",
+  "speechReading": "Okunuyor",
+  "speechSpeed": "Okuma hızı",
+  "speechResume": "Sürdür",
+  "speechPause": "Duraklat",
+  "speechStopReading": "Okumayı durdur",
+  "speechPreparing": "Hazırlanıyor…",
+  "speechTranscribing": "Yazıya dökülüyor…",
+  "speechListening": "Dinleniyor, konuşabilirsiniz",
+  "speechFinish": "Bitir",
+  "speechTextUnreadable": "Metin okunamadı",
+  "speechNothingToRead": "Okunacak metin yok",
+  "speechReadingStopped": "Sesli okuma durdu",
+  "speechDownloadIntro": "{need} ({size}). Model yalnızca bir kez indirilir ve bilgisayarınızda saklanır. {offline}",
+  "@speechDownloadIntro": {
+    "placeholders": {
+      "need": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      },
+      "offline": {
+        "type": "String"
+      }
+    }
+  },
+  "speechModelLicense": "Model lisansı: {license}",
+  "@speechModelLicense": {
+    "placeholders": {
+      "license": {
+        "type": "String"
+      }
+    }
+  },
+  "speechDownloadFailed": "İndirme tamamlanamadı. İndirilen kısım saklandı; yeniden denediğinizde kaldığı yerden devam eder.\n{error}",
+  "@speechDownloadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "speechCancelDownload": "İptal",
+  "speechCancel": "Vazgeç",
+  "speechDownload": "İndir ({size})",
+  "@speechDownload": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "speechTryAgain": "Yeniden dene",
+  "noteSecretSwitch": "Gizli not · büroyla paylaşılmaz",
+  "noteSecretSwitchDetail": "Yalnız sizin cihazlarınıza gider. Görevlere, paylaşılan dosyaya ve üretilen belgelere girmez.",
+  "noteSecretMark": "Gizli",
+  "noteSecretRecalled": "Büro kopyalarından silindi.",
+  "noteSecretRecalling": "Büro kopyalarından siliniyor; alanların cihazı açılınca tamamlanır.",
+  "noteSecretSharedTitle": "Not büroyla paylaşılmıştı",
+  "noteSecretSharedBody": "Bu not büroda {count} kişide var ({names}). Gizli yaparsanız onlardan da silinir.",
+  "@noteSecretSharedBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "noteSecretNoRecall": "Dışarı aktarılmış belge ve ekran görüntüsü geri alınamaz.",
+  "noteSecretConfirm": "Gizli yap",
+  "liveChat": "Yazışma",
+  "liveClosePanel": "Paneli kapat",
+  "liveChatEmpty": "Belge üzerinde birbirinize buradan yazın. Yazışma paylaşım bitince silinir.",
+  "liveRemoveQuote": "Alıntıyı kaldır",
+  "liveQuoteSelection": "Belgede seçili olanı alıntıla",
+  "liveMessageHint": "Mesaj yazın…",
+  "liveSend": "Gönder",
+  "liveVerification": "DOĞRULAMA",
+  "liveGuest": "Misafir",
+  "liveVisitorLeft": "Gelen kişi ayrıldı.",
+  "liveInviteCopied": "Davet kopyalandı",
+  "liveInviteMailSubject": "Canlı belge daveti",
+  "liveInviteAnother": "Bir kişi daha davet et",
+  "liveNewCode": "Yeni kod oluştur",
+  "livePreparingCode": "Davet kodu hazırlanıyor…",
+  "liveSendCode": "Kodu diğer büroya gönderin. Katılmak isteyen olunca size sorulur.",
+  "liveSendWhatsApp": "WhatsApp ile gönder",
+  "liveCopy": "Kopyala",
+  "liveEmail": "E-posta",
+  "liveCopyInvite": "Daveti kopyala",
+  "liveCodeValidUntil": "{time}’e kadar geçerli, bir kişi içindir. Belge şifreli gider; aradaki sunucu içeriği göremez.",
+  "@liveCodeValidUntil": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "liveWantsToJoin": "davet koduyla katılmak istiyor",
+  "liveDigitsMatchHost": "Aynı sayı onun ekranında da görünüyorsa doğru kişidir.",
+  "liveDecline": "Reddet",
+  "liveLetView": "Yalnız görsün",
+  "liveLetEdit": "Sırayla düzenlesin",
+  "liveJoinedName": "{name} katıldı.",
+  "@liveJoinedName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "liveInviteWithdrawn": "Davet geri alındı.",
+  "liveCodeExpired": "Davet kodunun süresi doldu.",
+  "liveInviteFailed": "Davet kurulamadı.",
+  "liveCancel": "Vazgeç",
+  "liveClose": "Kapat",
+  "liveJoinPrompt": "Size gönderilen kodu yazın ya da davet bağlantısını yapıştırın.",
+  "liveJoinName": "Adınız (paylaşana böyle görünür)",
+  "liveJoin": "Katıl",
+  "liveConnecting": "Bağlanılıyor…",
+  "liveAwaitingApproval": "Onay bekleniyor",
+  "liveOpensOnApproval": "Paylaşan onaylayınca belge açılır.",
+  "liveDigitsMatchGuest": "Paylaşanın ekranında da bu sayı görünür.",
+  "liveJoinRefused": "Paylaşan katılmanızı kabul etmedi.",
+  "liveJoinFailed": "Katılınamadı.",
+  "liveTryAgain": "Yeniden dene",
+  "liveJoinTitle": "Canlı belgeye katıl",
+  "liveShareTitle": "Canlı paylaş",
+  "liveOnThisNetwork": "Bu ağda",
+  "liveRemote": "Uzaktan",
+  "liveRemoteJoined": "UZAKTAN KATILANLAR",
+  "liveTakeBackPen": "Kalemi geri al · {name}",
+  "@liveTakeBackPen": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "liveRemoteHint": "Kodu alan kişi bağlantıya dokunur ya da Folio’da Canlı belge’ye basıp kodu yazar; siz onaylayınca belge onda açılır. Belge sizde kalır, paylaşım bitince onda kalmaz.",
+  "liveNearbyHint": "Davet ettiğiniz kişinin Folio’sunda bir pencere açılır; Katıl’a basınca belge onda açılır. Belge sizde kalır, paylaşım bitince onlarda kalmaz. \"Sırayla düzenleyebilir\" olanlara kalemi verince yazdıkları belgenize işlenir.",
+  "liveStopSharing": "Paylaşımı bitir",
+  "liveOk": "Tamam",
+  "liveNoDevices": "Aynı ağda davet edilebilecek bir cihaz görünmüyor. Karşı tarafta Folio açık ve aynı Wi-Fi’ye bağlı olmalı.",
+  "liveSearching": "Aynı ağdaki cihazlar aranıyor…",
+  "liveNetworkError": "Ağa bağlanılamadı: {error}",
+  "@liveNetworkError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "liveInvited": "DAVET EDİLENLER",
+  "liveMyDevices": "CİHAZLARIM",
+  "liveOffice": "BÜRO",
+  "liveNearby": "YAKINDAKİ FOLIO’LAR",
+  "livePeerJoining": "yanıt bekleniyor",
+  "livePeerWatching": "izliyor",
+  "livePeerGone": "ayrıldı",
+  "livePeerUnreachable": "ulaşılamadı",
+  "livePeerDeclined": "reddetti",
+  "livePeerUnanswered": "yanıt vermedi",
+  "liveWithdraw": "Geri al",
+  "liveRemovePeer": "Çıkar",
+  "liveInvite": "Davet et",
+  "liveInviteAgain": "Yeniden davet et",
+  "liveGivePen": "Kalemi ver",
+  "liveCanView": "Yalnız görebilir",
+  "liveCanEdit": "Sırayla düzenleyebilir",
+  "liveCodeChip": "kod {code}",
+  "@liveCodeChip": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "livePenHere": "kalem onda",
+  "liveDevice": "Cihaz",
+  "liveEnded": "Paylaşım bitti; belge bu cihazda kalmadı.",
+  "livePenSyncing": "Kalem sizde · belge paylaşanla eşitleniyor, bir an bekleyin",
+  "livePenYours": "Kalem sizde · yazdıklarınız paylaşanın belgesine işlenir",
+  "liveSharing": "{name} paylaşıyor",
+  "@liveSharing": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "liveWriting": "{name} yazıyor",
+  "@liveWriting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "liveEditRefused": "düzenleme isteğiniz geri çevrildi",
+  "liveYouCanEdit": "sırayla düzenleyebilirsiniz",
+  "liveYouCanView": "yalnız görebilirsiniz",
+  "liveReleasePen": "Kalemi bırak",
+  "livePenAsked": "İstendi",
+  "liveAskPen": "Düzenlemek iste",
+  "liveStopWatching": "İzlemeyi bırak",
+  "liveDocument": "Canlı belge",
+  "liveHubCodePrompt": "Size gönderilen kodu yazın:",
+  "liveHubOrShare": "YA DA BİR BELGEYİ PAYLAŞIN",
+  "liveHubPickPrompt": "Paylaşacağınız belgeyi seçin. Belge açılır ve diğer büroya göndereceğiniz kod hemen çıkar.",
+  "liveHubPickOther": "Başka belge seç…",
+  "liveSharesADocument": " bir belgeyi sizinle canlı paylaşıyor.",
+  "liveSharesDocument": " “{title}” belgesini sizinle canlı paylaşıyor.",
+  "@liveSharesDocument": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "liveInviteTitle": "Canlı paylaşım daveti",
+  "liveInviteCanEdit": "Belgeyi görürsünüz; paylaşan kalemi verince siz de yazabilirsiniz. Paylaşım bitince belge bu cihazda kalmaz.",
+  "liveInviteViewOnly": "Belgeyi yalnız görürsünüz. Paylaşım bitince belge bu cihazda kalmaz.",
+  "liveBusyConnecting": "Şu an başka bir bağlantı kuruluyor.",
+  "liveHostUnverified": "Davet eden cihaz doğrulanamadı.",
+  "liveDocumentDidNotCome": "Paylaşan kabul etti ama belge gelmedi.",
+  "liveSomeUser": "Bir Folio kullanıcısı",
+  "liveHostWithdrew": "Paylaşan daveti geri aldı.",
+  "liveConnectFailed": "Bağlantı kurulamadı.",
+  "liveOpeningDocument": "Belge açılıyor…",
+  "liveConnectingHost": "Paylaşanın cihazına bağlanılıyor…",
+  "liveGuestCodeNote": "Paylaşanın ekranında da bu kod görünür. Belge yalnız bu paylaşım sürerken görünür; paylaşım bitince bu cihazda kalmaz."
+}

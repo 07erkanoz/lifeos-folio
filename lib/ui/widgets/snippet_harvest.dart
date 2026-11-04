@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/quill_delta.dart';
 
 import '../../services/editor/snippets.dart';
+import '../../services/platform/app_language.dart';
 
 /// The passages the archive already repeats, offered one by one.
 ///
@@ -96,18 +97,18 @@ class _SnippetHarvestState extends State<SnippetHarvest> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Arşivinizde tekrar eden paragraflar',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  Text(
+                    context.l.snipHarvestTitle,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     widget.found.isEmpty
-                        ? 'Beş ya da daha fazla belgede aynen geçen bir '
-                              'paragraf bulunamadı. Arşiv henüz taranıyor '
-                              'olabilir.'
-                        : '${widget.found.length} paragraf bulundu. '
-                              'Kalıba almak istediklerinizi işaretleyin.',
+                        ? context.l.snipHarvestNone
+                        : context.l.snipHarvestFound(widget.found.length),
                     style: TextStyle(
                       fontSize: 12,
                       color: theme.colorScheme.onSurfaceVariant,
@@ -122,14 +123,13 @@ class _SnippetHarvestState extends State<SnippetHarvest> {
                 dense: true,
                 value: _blank,
                 onChanged: (on) => setState(() => _blank = on ?? true),
-                title: const Text(
-                  'Tarih, esas numarası, kimlik ve tutarları boş bırak',
-                  style: TextStyle(fontSize: 13),
+                title: Text(
+                  context.l.snipHarvestBlank,
+                  style: const TextStyle(fontSize: 13),
                 ),
-                subtitle: const Text(
-                  'Bir dosyaya ait olan kısımlar [TARİH] gibi doldurulacak '
-                  'yerlere çevrilir.',
-                  style: TextStyle(fontSize: 11),
+                subtitle: Text(
+                  context.l.snipHarvestBlankDetail,
+                  style: const TextStyle(fontSize: 11),
                 ),
               ),
             const Divider(height: 1),
@@ -149,7 +149,7 @@ class _SnippetHarvestState extends State<SnippetHarvest> {
                     ),
                     isThreeLine: true,
                     title: Text(
-                      '${one.documents} belgede',
+                      context.l.snipHarvestInDocuments(one.documents),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -174,7 +174,7 @@ class _SnippetHarvestState extends State<SnippetHarvest> {
                 children: [
                   TextButton(
                     onPressed: _busy ? null : () => Navigator.pop(context),
-                    child: const Text('Vazgeç'),
+                    child: Text(context.l.snipCancel),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
@@ -182,8 +182,8 @@ class _SnippetHarvestState extends State<SnippetHarvest> {
                     onPressed: _taken.isEmpty || _busy ? null : _keep,
                     child: Text(
                       _taken.isEmpty
-                          ? 'Kalıba al'
-                          : '${_taken.length} kalıbı al',
+                          ? context.l.snipKeep
+                          : context.l.snipHarvestTake(_taken.length),
                     ),
                   ),
                 ],

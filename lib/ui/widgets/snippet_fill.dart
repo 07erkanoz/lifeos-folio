@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/editor/snippets.dart';
+import '../../services/platform/app_language.dart';
 
 /// Filling the blanks in a passage, once, before it goes in.
 ///
@@ -73,7 +74,7 @@ class _SnippetFillState extends State<SnippetFill> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Bu kalıpta doldurulacak ${blanks.length} yer var.',
+                context.l.snipFillCount(blanks.length),
                 style: TextStyle(
                   fontSize: 12,
                   color: theme.colorScheme.onSurfaceVariant,
@@ -95,7 +96,7 @@ class _SnippetFillState extends State<SnippetFill> {
                     isDense: true,
                     labelText: blank,
                     helperText: widget.known.containsKey(blank)
-                        ? 'Avukat profilinden'
+                        ? context.l.snipFromLawyerProfile
                         : null,
                     border: const OutlineInputBorder(),
                   ),
@@ -109,7 +110,7 @@ class _SnippetFillState extends State<SnippetFill> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Vazgeç'),
+          child: Text(context.l.snipCancel),
         ),
         // Boş bırakmak meşru: değeri henüz bilmiyor olabilir. O zaman
         // köşeli parantezler metinde kalır ve kaydederken uyarı çıkar.
@@ -118,12 +119,12 @@ class _SnippetFillState extends State<SnippetFill> {
           onPressed: () => Navigator.pop(context, {
             for (final blank in blanks) blank: ?widget.known[blank],
           }),
-          child: const Text('Boş bırak'),
+          child: Text(context.l.snipLeaveBlank),
         ),
         FilledButton(
           key: const ValueKey('snippet-blanks-fill'),
           onPressed: () => Navigator.pop(context, _given),
-          child: const Text('Yerleştir'),
+          child: Text(context.l.snipInsert),
         ),
       ],
     );

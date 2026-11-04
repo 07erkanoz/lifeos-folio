@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/platform/app_language.dart';
 import '../../services/speech/speech_models.dart';
 
 /// Asks before fetching a voice model, then shows it coming. The model is
@@ -93,11 +94,14 @@ class _SpeechDownloadDialogState extends State<SpeechDownloadDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${model.need} (${megabytes(total)}). Model yalnızca bir kez '
-              'indirilir ve bilgisayarınızda saklanır. ${model.offline}',
+              context.l.speechDownloadIntro(
+                model.need,
+                megabytes(total),
+                model.offline,
+              ),
             ),
             const SizedBox(height: 10),
-            Text('Model lisansı: ${model.license}', style: muted),
+            Text(context.l.speechModelLicense(model.license), style: muted),
             if (_started) ...[
               const SizedBox(height: 18),
               LinearProgressIndicator(
@@ -116,8 +120,7 @@ class _SpeechDownloadDialogState extends State<SpeechDownloadDialog> {
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(
-                'İndirme tamamlanamadı. İndirilen kısım saklandı; yeniden '
-                'denediğinizde kaldığı yerden devam eder.\n$_error',
+                context.l.speechDownloadFailed('$_error'),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ],
@@ -130,7 +133,11 @@ class _SpeechDownloadDialogState extends State<SpeechDownloadDialog> {
             _cancel?.cancel();
             Navigator.pop(context);
           },
-          child: Text(downloading ? 'İptal' : 'Vazgeç'),
+          child: Text(
+            downloading
+                ? context.l.speechCancelDownload
+                : context.l.speechCancel,
+          ),
         ),
         if (!downloading)
           FilledButton.icon(
@@ -138,7 +145,9 @@ class _SpeechDownloadDialogState extends State<SpeechDownloadDialog> {
             onPressed: _download,
             icon: const Icon(Icons.download_rounded, size: 18),
             label: Text(
-              _error == null ? 'İndir (${megabytes(total)})' : 'Yeniden dene',
+              _error == null
+                  ? context.l.speechDownload(megabytes(total))
+                  : context.l.speechTryAgain,
             ),
           ),
       ],

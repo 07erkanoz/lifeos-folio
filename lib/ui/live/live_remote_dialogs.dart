@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/editor/lawyer_profile.dart';
 import '../../services/live/live_remote.dart';
 import '../../services/live/live_share.dart';
+import '../../services/platform/app_language.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/notice.dart';
 
@@ -20,7 +21,7 @@ class _Digits extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       Text(
-        'DOĞRULAMA',
+        context.l.liveVerification,
         style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w800,
@@ -78,7 +79,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
   }
 
   String _who(RemoteInvite invite) => [
-    if (invite.name.isNotEmpty) invite.name else 'Misafir',
+    if (invite.name.isNotEmpty) invite.name else context.l.liveGuest,
     if (invite.office.isNotEmpty) '(${invite.office})',
   ].join(' ');
 
@@ -87,7 +88,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
     final channel = invite.accept();
     if (id == null || channel == null) {
       if (mounted) {
-        showNotice(context, 'Gelen kişi ayrıldı.', kind: NoticeKind.error);
+        showNotice(context, context.l.liveVisitorLeft, kind: NoticeKind.error);
       }
       return;
     }
@@ -99,7 +100,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
       ClipboardData(text: RemoteCode.message(code, _host.title)),
     );
     if (mounted) {
-      showNotice(context, 'Davet kopyalandı', kind: NoticeKind.success);
+      showNotice(context, context.l.liveInviteCopied, kind: NoticeKind.success);
     }
   }
 
@@ -107,7 +108,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
     final text = RemoteCode.message(code, _host.title);
     final uri = mail
         ? Uri.parse(
-            'mailto:?subject=${Uri.encodeComponent('Canlı belge daveti')}'
+            'mailto:?subject=${Uri.encodeComponent(context.l.liveInviteMailSubject)}'
             '&body=${Uri.encodeComponent(text)}',
           )
         : Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
@@ -139,24 +140,24 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
         icon: const Icon(Icons.refresh_rounded, size: 18),
         label: Text(
           invite.state == RemoteInviteState.accepted
-              ? 'Bir kişi daha davet et'
-              : 'Yeni kod oluştur',
+              ? context.l.liveInviteAnother
+              : context.l.liveNewCode,
         ),
       ),
     );
     switch (invite.state) {
       case RemoteInviteState.opening:
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox.square(
+              const SizedBox.square(
                 dimension: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              SizedBox(width: 10),
-              Flexible(child: Text('Davet kodu hazırlanıyor…')),
+              const SizedBox(width: 10),
+              Flexible(child: Text(context.l.livePreparingCode)),
             ],
           ),
         );
@@ -167,8 +168,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Kodu diğer büroya gönderin. Katılmak isteyen olunca size '
-              'sorulur.',
+              context.l.liveSendCode,
               style: TextStyle(color: AgendaColors.muted),
             ),
             const SizedBox(height: 10),
@@ -203,7 +203,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                       onPressed: () =>
                           unawaited(_send(invite.code, mail: false)),
                       icon: const Icon(Icons.chat_rounded, size: 18),
-                      label: const Text('WhatsApp ile gönder'),
+                      label: Text(context.l.liveSendWhatsApp),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -216,7 +216,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                               Icons.content_copy_rounded,
                               size: 17,
                             ),
-                            label: const Text('Kopyala'),
+                            label: Text(context.l.liveCopy),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -229,7 +229,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                               Icons.mail_outline_rounded,
                               size: 17,
                             ),
-                            label: const Text('E-posta'),
+                            label: Text(context.l.liveEmail),
                           ),
                         ),
                       ],
@@ -247,7 +247,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                             Icons.content_copy_rounded,
                             size: 17,
                           ),
-                          label: const Text('Daveti kopyala'),
+                          label: Text(context.l.liveCopyInvite),
                         ),
                         OutlinedButton.icon(
                           key: const ValueKey('remote-whatsapp'),
@@ -264,14 +264,13 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                             Icons.mail_outline_rounded,
                             size: 17,
                           ),
-                          label: const Text('E-posta'),
+                          label: Text(context.l.liveEmail),
                         ),
                       ],
                     ),
                   const SizedBox(height: 8),
                   Text(
-                    '$until’e kadar geçerli, bir kişi içindir. Belge şifreli '
-                    'gider; aradaki sunucu içeriği göremez.',
+                    context.l.liveCodeValidUntil(until),
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
@@ -300,16 +299,11 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                 ),
               ),
               Text(
-                'davet koduyla katılmak istiyor',
+                context.l.liveWantsToJoin,
                 style: TextStyle(color: AgendaColors.muted),
               ),
               const SizedBox(height: 10),
-              _Digits(
-                invite.digits,
-                note:
-                    'Aynı sayı onun ekranında da görünüyorsa doğru '
-                    'kişidir.',
-              ),
+              _Digits(invite.digits, note: context.l.liveDigitsMatchHost),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
@@ -319,18 +313,18 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                   TextButton(
                     key: const ValueKey('remote-decline'),
                     onPressed: () => unawaited(invite.decline()),
-                    child: const Text('Reddet'),
+                    child: Text(context.l.liveDecline),
                   ),
                   OutlinedButton(
                     key: const ValueKey('remote-let-view'),
                     onPressed: () => unawaited(_let(invite, LiveRight.view)),
-                    child: const Text('Yalnız görsün'),
+                    child: Text(context.l.liveLetView),
                   ),
                   if (_host.apply != null)
                     FilledButton(
                       key: const ValueKey('remote-let-edit'),
                       onPressed: () => unawaited(_let(invite, LiveRight.edit)),
-                      child: const Text('Sırayla düzenlesin'),
+                      child: Text(context.l.liveLetEdit),
                     ),
                 ],
               ),
@@ -342,7 +336,7 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '${_who(invite)} katıldı.',
+              context.l.liveJoinedName(_who(invite)),
               style: TextStyle(color: AgendaColors.muted),
             ),
             const SizedBox(height: 8),
@@ -357,9 +351,9 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
           children: [
             Text(
               switch (invite.state) {
-                RemoteInviteState.declined => 'Davet geri alındı.',
-                RemoteInviteState.expired => 'Davet kodunun süresi doldu.',
-                _ => invite.error ?? 'Davet kurulamadı.',
+                RemoteInviteState.declined => context.l.liveInviteWithdrawn,
+                RemoteInviteState.expired => context.l.liveCodeExpired,
+                _ => invite.error ?? context.l.liveInviteFailed,
               },
               key: const ValueKey('remote-ended'),
               style: TextStyle(
@@ -477,7 +471,7 @@ class _RemoteJoinDialogState extends State<RemoteJoinDialog> {
       TextButton(
         key: const ValueKey('remote-join-cancel'),
         onPressed: () => Navigator.of(context).pop(),
-        child: Text(join == null ? 'Vazgeç' : 'Kapat'),
+        child: Text(join == null ? context.l.liveCancel : context.l.liveClose),
       ),
     ];
     if (join == null) {
@@ -486,8 +480,7 @@ class _RemoteJoinDialogState extends State<RemoteJoinDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Size gönderilen kodu yazın ya da davet bağlantısını '
-            'yapıştırın.',
+            context.l.liveJoinPrompt,
             style: TextStyle(color: AgendaColors.muted),
           ),
           const SizedBox(height: 12),
@@ -513,9 +506,9 @@ class _RemoteJoinDialogState extends State<RemoteJoinDialog> {
           TextField(
             key: const ValueKey('remote-join-name'),
             controller: _name,
-            decoration: const InputDecoration(
-              labelText: 'Adınız (paylaşana böyle görünür)',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: context.l.liveJoinName,
+              border: const OutlineInputBorder(),
             ),
           ),
         ],
@@ -524,22 +517,22 @@ class _RemoteJoinDialogState extends State<RemoteJoinDialog> {
         FilledButton(
           key: const ValueKey('remote-join-go'),
           onPressed: ready ? _start : null,
-          child: const Text('Katıl'),
+          child: Text(context.l.liveJoin),
         ),
       );
     } else {
       body = switch (join.state) {
-        RemoteJoinState.connecting || RemoteJoinState.joined => const Padding(
-          padding: EdgeInsets.symmetric(vertical: 20),
+        RemoteJoinState.connecting || RemoteJoinState.joined => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox.square(
+              const SizedBox.square(
                 dimension: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              SizedBox(width: 10),
-              Flexible(child: Text('Bağlanılıyor…')),
+              const SizedBox(width: 10),
+              Flexible(child: Text(context.l.liveConnecting)),
             ],
           ),
         ),
@@ -549,25 +542,22 @@ class _RemoteJoinDialogState extends State<RemoteJoinDialog> {
           children: [
             Icon(Icons.hourglass_top_rounded, size: 30, color: scheme.primary),
             const SizedBox(height: 6),
-            const Text(
-              'Onay bekleniyor',
-              style: TextStyle(fontWeight: FontWeight.w700),
+            Text(
+              context.l.liveAwaitingApproval,
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             Text(
-              'Paylaşan onaylayınca belge açılır.',
+              context.l.liveOpensOnApproval,
               style: TextStyle(color: AgendaColors.muted),
             ),
             const SizedBox(height: 14),
-            _Digits(
-              join.digits,
-              note: 'Paylaşanın ekranında da bu sayı görünür.',
-            ),
+            _Digits(join.digits, note: context.l.liveDigitsMatchGuest),
           ],
         ),
         RemoteJoinState.declined || RemoteJoinState.failed => Text(
           join.state == RemoteJoinState.declined
-              ? 'Paylaşan katılmanızı kabul etmedi.'
-              : join.error ?? 'Katılınamadı.',
+              ? context.l.liveJoinRefused
+              : join.error ?? context.l.liveJoinFailed,
           key: const ValueKey('remote-join-error'),
           style: TextStyle(color: scheme.error),
         ),
@@ -578,13 +568,13 @@ class _RemoteJoinDialogState extends State<RemoteJoinDialog> {
           FilledButton(
             key: const ValueKey('remote-join-again'),
             onPressed: _again,
-            child: const Text('Yeniden dene'),
+            child: Text(context.l.liveTryAgain),
           ),
         );
       }
     }
     return AlertDialog(
-      title: const Text('Canlı belgeye katıl'),
+      title: Text(context.l.liveJoinTitle),
       content: SizedBox(width: 420, child: SingleChildScrollView(child: body)),
       actions: actions,
     );

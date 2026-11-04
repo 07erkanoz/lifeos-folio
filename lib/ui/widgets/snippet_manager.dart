@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../services/editor/snippets.dart';
+import '../../services/platform/app_language.dart';
 import 'editor_image_embed.dart';
 import 'notice.dart';
 import 'folio_select.dart';
@@ -58,20 +59,17 @@ class _SnippetManagerState extends State<SnippetManager> {
     final sure = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Kalıp silinsin mi?'),
-        content: Text(
-          '“${one.name}” kalıplarınızdan kaldırılacak. Bu kalıpla yazılmış '
-          'belgeler değişmez.',
-        ),
+        title: Text(context.l.snipDeleteTitle),
+        content: Text(context.l.snipDeleteBody(one.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
+            child: Text(context.l.snipCancel),
           ),
           FilledButton(
             key: const ValueKey('snippet-delete-confirm'),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sil'),
+            child: Text(context.l.snipDelete),
           ),
         ],
       ),
@@ -81,7 +79,7 @@ class _SnippetManagerState extends State<SnippetManager> {
 
   Future<void> _export() async {
     final where = await FilePicker.saveFile(
-      dialogTitle: 'Kalıpları dışa aktar',
+      dialogTitle: AppLanguage.t.snipExportDialog,
       fileName: 'kaliplar.json',
       type: FileType.custom,
       allowedExtensions: ['json'],
@@ -92,14 +90,14 @@ class _SnippetManagerState extends State<SnippetManager> {
       if (!mounted) return;
       showNotice(
         context,
-        '${widget.store.all.length} kalıp dışa aktarıldı.',
+        context.l.snipExported(widget.store.all.length),
         kind: NoticeKind.success,
       );
     } catch (e) {
       if (!mounted) return;
       showNotice(
         context,
-        'Kalıplar dışa aktarılamadı',
+        context.l.snipExportFailed,
         detail: '$e',
         kind: NoticeKind.error,
       );
@@ -108,7 +106,7 @@ class _SnippetManagerState extends State<SnippetManager> {
 
   Future<void> _import() async {
     final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Kalıpları içe aktar',
+      dialogTitle: AppLanguage.t.snipImportDialog,
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
@@ -119,16 +117,14 @@ class _SnippetManagerState extends State<SnippetManager> {
       if (!mounted) return;
       showNotice(
         context,
-        added == 0
-            ? 'Yeni kalıp yok; hepsi zaten kalıplarınızda.'
-            : '$added kalıp eklendi.',
+        added == 0 ? context.l.snipImportNone : context.l.snipImported(added),
         kind: NoticeKind.success,
       );
     } catch (e) {
       if (!mounted) return;
       showNotice(
         context,
-        'Kalıplar içe aktarılamadı',
+        context.l.snipImportFailed,
         detail: e is FormatException ? e.message : '$e',
         kind: NoticeKind.error,
       );
@@ -142,14 +138,14 @@ class _SnippetManagerState extends State<SnippetManager> {
     return AlertDialog(
       title: Row(
         children: [
-          const Expanded(child: Text('Kalıplarım')),
+          Expanded(child: Text(context.l.snipManagerTitle)),
           IconButton(
-            tooltip: 'İçe aktar',
+            tooltip: context.l.snipImport,
             onPressed: _import,
             icon: const Icon(Icons.file_download_outlined, size: 20),
           ),
           IconButton(
-            tooltip: 'Dışa aktar',
+            tooltip: context.l.snipExport,
             onPressed: widget.store.all.isEmpty ? null : _export,
             icon: const Icon(Icons.file_upload_outlined, size: 20),
           ),
@@ -164,10 +160,10 @@ class _SnippetManagerState extends State<SnippetManager> {
               key: const ValueKey('snippet-manager-search'),
               controller: _search,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
-                prefixIcon: Icon(Icons.search_rounded, size: 20),
-                hintText: 'Kalıp ara',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                hintText: context.l.snipSearchHint,
                 border: OutlineInputBorder(),
               ),
             ),
@@ -177,10 +173,8 @@ class _SnippetManagerState extends State<SnippetManager> {
                   ? Center(
                       child: Text(
                         widget.store.all.isEmpty
-                            ? 'Henüz kalıp yok. "Yeni kalıp" ile ekleyebilir '
-                                  'ya da belgede bir paragrafı seçip '
-                                  'Ctrl+Space ile kalıba alabilirsiniz.'
-                            : 'Bu aramaya uyan kalıp yok.',
+                            ? context.l.snipManagerEmpty
+                            : context.l.snipNoMatch,
                         textAlign: TextAlign.center,
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
@@ -218,7 +212,10 @@ class _SnippetManagerState extends State<SnippetManager> {
                                   if (one.hotkey != null)
                                     _Badge('Alt+F${one.hotkey}'),
                                   if (one.used > 0)
-                                    _Badge('${one.used} kez', muted: true),
+                                    _Badge(
+                                      context.l.snipUsedTimes(one.used),
+                                      muted: true,
+                                    ),
                                 ],
                               ),
                             ],
@@ -226,7 +223,7 @@ class _SnippetManagerState extends State<SnippetManager> {
                           onTap: () => _edit(one),
                           trailing: IconButton(
                             key: ValueKey('snippet-delete-${one.id}'),
-                            tooltip: 'Sil',
+                            tooltip: context.l.snipDelete,
                             onPressed: () => _delete(one),
                             icon: const Icon(
                               Icons.delete_outline_rounded,
@@ -245,11 +242,11 @@ class _SnippetManagerState extends State<SnippetManager> {
           key: const ValueKey('snippet-new'),
           onPressed: () => _edit(),
           icon: const Icon(Icons.add_rounded, size: 18),
-          label: const Text('Yeni kalıp'),
+          label: Text(context.l.snipNew),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Kapat'),
+          child: Text(context.l.snipClose),
         ),
       ],
     );
@@ -329,28 +326,28 @@ class _SnippetEditorState extends State<SnippetEditor> {
     final id = widget.snippet?.id;
     String? error;
     if (_body.document.toPlainText().trim().isEmpty) {
-      error = 'Kalıbın metni boş olamaz.';
+      error = context.l.snipEmptyBody;
     } else if (keyword.isNotEmpty && !Snippet.validKeyword(keyword)) {
-      error =
-          'Anahtar kelime 2–20 harf ya da rakamdan oluşmalı, boşluk '
-          'olmadan.';
+      error = context.l.snipBadKeyword;
     } else if (keyword.isNotEmpty) {
       final taken = store.keywordTaken(keyword, except: id);
       if (taken != null) {
-        error = '“$keyword” zaten “${taken.name}” kalıbının anahtar kelimesi.';
+        error = context.l.snipKeywordTaken(keyword, taken.name);
       }
     }
     if (error == null && hotkey != null) {
       final taken = store.hotkeyTaken(hotkey, except: id);
       if (taken != null) {
-        error = 'Alt+F$hotkey zaten “${taken.name}” kalıbında.';
+        error = context.l.snipHotkeyTaken('$hotkey', taken.name);
       }
     }
     if (error != null) {
       setState(() => _error = error);
       return;
     }
-    final name = _name.text.trim().isEmpty ? 'Adsız kalıp' : _name.text.trim();
+    final name = _name.text.trim().isEmpty
+        ? context.l.snipUntitled
+        : _name.text.trim();
     final body = _body.document.toDelta();
     final kept = widget.snippet;
     if (kept == null) {
@@ -380,7 +377,9 @@ class _SnippetEditorState extends State<SnippetEditor> {
       body: _body.document.toDelta(),
     ).blanks;
     return AlertDialog(
-      title: Text(widget.snippet == null ? 'Yeni kalıp' : 'Kalıbı düzenle'),
+      title: Text(
+        widget.snippet == null ? context.l.snipNew : context.l.snipEditTitle,
+      ),
       content: SizedBox(
         width: 600,
         child: SingleChildScrollView(
@@ -391,10 +390,10 @@ class _SnippetEditorState extends State<SnippetEditor> {
               TextField(
                 key: const ValueKey('snippet-edit-name'),
                 controller: _name,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   isDense: true,
-                  labelText: 'Ad',
-                  border: OutlineInputBorder(),
+                  labelText: context.l.snipName,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 10),
@@ -405,12 +404,12 @@ class _SnippetEditorState extends State<SnippetEditor> {
                     child: TextField(
                       key: const ValueKey('snippet-edit-keyword'),
                       controller: _keyword,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         isDense: true,
-                        labelText: 'Anahtar kelime',
-                        hintText: 'örn. dil1',
-                        helperText: 'Belgede yazıp Tab’a basınca kalıp gelir',
-                        border: OutlineInputBorder(),
+                        labelText: context.l.snipKeyword,
+                        hintText: context.l.snipKeywordHint,
+                        helperText: context.l.snipKeywordHelper,
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                   ),
@@ -421,14 +420,16 @@ class _SnippetEditorState extends State<SnippetEditor> {
                       key: const ValueKey('snippet-edit-hotkey'),
                       initialValue: _hotkey,
                       isDense: true,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         isDense: true,
-                        labelText: 'Kısayol',
-                        helperText: 'Alt+F4 pencereyi kapatır',
-                        border: OutlineInputBorder(),
+                        labelText: context.l.snipHotkey,
+                        helperText: context.l.snipHotkeyHelper,
+                        border: const OutlineInputBorder(),
                       ),
                       items: [
-                        const DropdownMenuItem<int?>(child: Text('Yok')),
+                        DropdownMenuItem<int?>(
+                          child: Text(context.l.snipNoHotkey),
+                        ),
                         for (final key in Snippet.hotkeys)
                           DropdownMenuItem<int?>(
                             value: key,
@@ -442,7 +443,7 @@ class _SnippetEditorState extends State<SnippetEditor> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Metin',
+                context.l.snipText,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -465,9 +466,7 @@ class _SnippetEditorState extends State<SnippetEditor> {
                     controller: _body,
                     focusNode: _focus,
                     config: QuillEditorConfig(
-                      placeholder:
-                          'Kalıbın metni. Doldurulacak yerleri [MÜVEKKİL] gibi '
-                          'köşeli parantez ve büyük harfle yazın.',
+                      placeholder: context.l.snipBodyPlaceholder,
                       // A snippet an earlier Folio kept with a picture or a
                       // table in it opens, rather than breaking the editor.
                       embedBuilders: [EditorImageEmbed()],
@@ -479,7 +478,9 @@ class _SnippetEditorState extends State<SnippetEditor> {
               if (blanks.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Doldurulacak yerler: ${blanks.map((b) => '[$b]').join(', ')}',
+                  context.l.snipBlanksList(
+                    blanks.map((b) => '[$b]').join(', '),
+                  ),
                   style: TextStyle(
                     fontSize: 12,
                     color: scheme.onSurfaceVariant,
@@ -501,12 +502,12 @@ class _SnippetEditorState extends State<SnippetEditor> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Vazgeç'),
+          child: Text(context.l.snipCancel),
         ),
         FilledButton(
           key: const ValueKey('snippet-edit-save'),
           onPressed: _save,
-          child: const Text('Kaydet'),
+          child: Text(context.l.snipSave),
         ),
       ],
     );
@@ -523,12 +524,14 @@ class _LeftOutEmbed extends EmbedBuilder {
   bool get expanded => false;
 
   @override
-  Widget build(BuildContext context, EmbedContext embedContext) =>
-      const Padding(
-        padding: EdgeInsets.symmetric(vertical: 4),
-        child: Text(
-          '〔Tablo — kalıpla eklenmez〕',
-          style: TextStyle(fontStyle: FontStyle.italic, color: Colors.black54),
-        ),
-      );
+  Widget build(BuildContext context, EmbedContext embedContext) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Text(
+      context.l.snipTableLeftOut,
+      style: const TextStyle(
+        fontStyle: FontStyle.italic,
+        color: Colors.black54,
+      ),
+    ),
+  );
 }

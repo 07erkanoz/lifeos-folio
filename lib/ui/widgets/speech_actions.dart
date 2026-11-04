@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/platform/app_language.dart';
 import '../../services/speech/reading_text.dart';
 import '../../services/speech/speech_models.dart';
 import '../../services/speech/speech_session.dart';
@@ -36,7 +37,7 @@ Future<void> readAloud(
     if (context.mounted) {
       showNotice(
         context,
-        'Metin okunamadı',
+        context.l.speechTextUnreadable,
         detail: '$e',
         kind: NoticeKind.error,
       );
@@ -45,7 +46,7 @@ Future<void> readAloud(
   }
   if (sentences.isEmpty) {
     if (context.mounted) {
-      showNotice(context, 'Okunacak metin yok', detail: emptyDetail);
+      showNotice(context, context.l.speechNothingToRead, detail: emptyDetail);
     }
     return;
   }
@@ -60,7 +61,7 @@ Future<void> readAloud(
   if (reading.error != null && context.mounted) {
     showNotice(
       context,
-      'Sesli okuma durdu',
+      context.l.speechReadingStopped,
       detail: reading.error,
       kind: NoticeKind.error,
     );

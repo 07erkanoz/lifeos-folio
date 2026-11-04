@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/editor/document_history.dart';
+import '../../services/platform/app_language.dart';
 
 String draftDate(DateTime date) {
   final d = date.toLocal();
@@ -27,7 +28,7 @@ class LeftDraftButton extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return IconButton(
       key: const ValueKey('left-draft'),
-      tooltip: 'Kaydedilmemiş taslak · ${draftDate(draft.created)}',
+      tooltip: context.l.noteDraftTooltip(draftDate(draft.created)),
       onPressed: onPressed,
       icon: Badge(
         smallSize: 8,
@@ -52,27 +53,23 @@ Future<LeftDraftAction?> askLeftDraft(
       Icons.restore_page_outlined,
       color: Theme.of(context).colorScheme.primary,
     ),
-    title: const Text('Kaydedilmemiş taslak'),
+    title: Text(context.l.noteDraftTitle),
     content: Text(
-      '“${draft.name}” için ${draftDate(draft.created)} tarihli, '
-      'kaydedilmemiş bir taslak var. Uygulama beklenmedik biçimde kapandığında '
-      'kalmış olabilir.\n\nAçarsanız editöre kaydedilmemiş değişiklik olarak '
-      'gelir; siz kaydedene kadar dosya değişmez.'
-      '${count > 1 ? '\n\nBu belgenin ${count - 1} taslağı daha var; hepsi ana '
-                'sayfadaki «Kurtarılabilir taslaklar»da.' : ''}',
+      context.l.noteDraftBody(draft.name, draftDate(draft.created)) +
+          (count > 1 ? context.l.noteDraftMore(count - 1) : ''),
     ),
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context, LeftDraftAction.delete),
-        child: const Text('Taslağı sil'),
+        child: Text(context.l.noteDraftDelete),
       ),
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Vazgeç'),
+        child: Text(context.l.noteCancel),
       ),
       FilledButton(
         onPressed: () => Navigator.pop(context, LeftDraftAction.open),
-        child: const Text('Taslağı aç'),
+        child: Text(context.l.noteDraftOpen),
       ),
     ],
   ),
@@ -86,20 +83,18 @@ Future<bool> confirmDraftDelete(
     await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Taslak silinsin mi?'),
+        title: Text(context.l.noteDraftDeleteTitle),
         content: Text(
-          '“${draft.name}” için ${draftDate(draft.created)} tarihli '
-          'kaydedilmemiş taslak kalıcı olarak silinecek. Belgenin kendisi '
-          'değişmez.',
+          context.l.noteDraftDeleteBody(draft.name, draftDate(draft.created)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
+            child: Text(context.l.noteCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Taslağı sil'),
+            child: Text(context.l.noteDraftDelete),
           ),
         ],
       ),
@@ -111,30 +106,25 @@ enum ReplaceChoice { saveFirst, replace }
 /// Asks before a draft or an old version replaces edits that were never
 /// saved. The question the save guard asks on the way out — “Kaydetmeden
 /// çık” — made no sense here: nothing is being left.
-Future<ReplaceChoice?> confirmReplaceEdits(
-  BuildContext context,
-  String what,
-) => showDialog<ReplaceChoice>(
-  context: context,
-  builder: (context) => AlertDialog(
-    title: const Text('Kaydedilmemiş değişiklikler var'),
-    content: Text(
-      '$what editöre alınınca şu anki kaydedilmemiş değişiklikler onun yerine '
-      'geçer. Önce kaydederseniz bugünkü hali de belge geçmişinde kalır.',
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Vazgeç'),
+Future<ReplaceChoice?> confirmReplaceEdits(BuildContext context, String what) =>
+    showDialog<ReplaceChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l.noteUnsavedTitle),
+        content: Text(context.l.noteUnsavedBody(what)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(context.l.noteCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ReplaceChoice.replace),
+            child: Text(context.l.noteOpenWithoutSaving),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ReplaceChoice.saveFirst),
+            child: Text(context.l.noteSaveFirst),
+          ),
+        ],
       ),
-      TextButton(
-        onPressed: () => Navigator.pop(context, ReplaceChoice.replace),
-        child: const Text('Kaydetmeden aç'),
-      ),
-      FilledButton(
-        onPressed: () => Navigator.pop(context, ReplaceChoice.saveFirst),
-        child: const Text('Önce kaydet'),
-      ),
-    ],
-  ),
-);
+    );

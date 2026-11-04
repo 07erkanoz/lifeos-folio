@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/notes/secret_notes.dart';
 import '../../services/office/office_network.dart';
+import '../../services/platform/app_language.dart';
 import '../../services/portal/portal_database.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 
@@ -31,7 +32,7 @@ class SecretNoteSwitch extends StatelessWidget {
       color: AgendaColors.taskText,
     );
     final title = Text(
-      'Gizli not · büroyla paylaşılmaz',
+      context.l.noteSecretSwitch,
       style: TextStyle(
         fontSize: full ? 13.5 : 13,
         fontWeight: full ? FontWeight.w600 : FontWeight.normal,
@@ -55,8 +56,7 @@ class SecretNoteSwitch extends StatelessWidget {
                     title,
                     const SizedBox(height: 2),
                     Text(
-                      'Yalnız sizin cihazlarınıza gider. Görevlere, paylaşılan '
-                      'dosyaya ve üretilen belgelere girmez.',
+                      context.l.noteSecretSwitchDetail,
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.4,
@@ -109,7 +109,7 @@ class SecretNoteMark extends StatelessWidget {
         ),
         const SizedBox(width: 3),
         Text(
-          'Gizli',
+          context.l.noteSecretMark,
           style: TextStyle(fontSize: 11.5, color: AgendaColors.taskText),
         ),
       ],
@@ -145,9 +145,8 @@ class SecretNoteStatus extends StatelessWidget {
     final done = r.waiting.isEmpty;
     // Two words, no counting: on its way, or done.
     final text = done
-        ? 'Büro kopyalarından silindi.'
-        : 'Büro kopyalarından siliniyor; alanların cihazı açılınca '
-              'tamamlanır.';
+        ? context.l.noteSecretRecalled
+        : context.l.noteSecretRecalling;
     return Padding(
       key: const ValueKey('secret-note-status'),
       padding: const EdgeInsets.only(top: 6),
@@ -201,7 +200,7 @@ Future<bool> confirmSecretNote(
   final ok = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Not büroyla paylaşılmıştı'),
+      title: Text(context.l.noteSecretSharedTitle),
       content: SizedBox(
         width: 440,
         child: Column(
@@ -209,9 +208,10 @@ Future<bool> confirmSecretNote(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Bu not büroda ${ways.length} kişide var '
-              '(${[for (final p in ways.keys) _nameOf(p)].join(', ')}). '
-              'Gizli yaparsanız onlardan da silinir.',
+              context.l.noteSecretSharedBody(
+                ways.length,
+                [for (final p in ways.keys) _nameOf(p)].join(', '),
+              ),
               style: const TextStyle(fontSize: 13.5, height: 1.5),
             ),
             const SizedBox(height: 10),
@@ -222,7 +222,7 @@ Future<bool> confirmSecretNote(
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Dışarı aktarılmış belge ve ekran görüntüsü geri alınamaz.',
+                context.l.noteSecretNoRecall,
                 style: TextStyle(
                   fontSize: 12.5,
                   height: 1.45,
@@ -236,12 +236,12 @@ Future<bool> confirmSecretNote(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Vazgeç'),
+          child: Text(context.l.noteCancel),
         ),
         FilledButton(
           key: const ValueKey('secret-note-confirm'),
           onPressed: () => Navigator.pop(context, true),
-          child: const Text('Gizli yap'),
+          child: Text(context.l.noteSecretConfirm),
         ),
       ],
     ),

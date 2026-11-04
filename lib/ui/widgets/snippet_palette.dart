@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/editor/snippets.dart';
+import '../../services/platform/app_language.dart';
 
 /// What the reader asked the palette for.
 sealed class SnippetChoice {
@@ -196,11 +197,11 @@ class _SnippetPaletteState extends State<SnippetPalette> {
             textInputAction: TextInputAction.go,
             onChanged: (_) => setState(() => _at = 0),
             onSubmitted: (_) => _take(),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               isDense: true,
-              prefixIcon: Icon(Icons.bookmark_border_rounded, size: 20),
-              hintText: 'Kalıp ya da profil bilgisi ara',
-              border: OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.bookmark_border_rounded, size: 20),
+              hintText: context.l.snipPaletteHint,
+              border: const OutlineInputBorder(),
             ),
           ),
         ),
@@ -211,7 +212,7 @@ class _SnippetPaletteState extends State<SnippetPalette> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Profilden',
+                  context.l.snipFromProfile,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -225,7 +226,7 @@ class _SnippetPaletteState extends State<SnippetPalette> {
                   children: [
                     for (final (label, value) in widget.profile)
                       Tooltip(
-                        message: '$label · belgeye ekle',
+                        message: context.l.snipProfileInsertTooltip(label),
                         child: ActionChip(
                           key: ValueKey('profile-$label'),
                           visualDensity: VisualDensity.compact,
@@ -252,10 +253,8 @@ class _SnippetPaletteState extends State<SnippetPalette> {
             key: const ValueKey('profile-fill'),
             dense: true,
             leading: const Icon(Icons.badge_outlined, size: 20),
-            title: const Text('Avukat profilini doldurun'),
-            subtitle: const Text(
-              'Adınız, baronuz, adresiniz buradan tek tıkla eklensin',
-            ),
+            title: Text(context.l.snipFillProfile),
+            subtitle: Text(context.l.snipFillProfileDetail),
             onTap: () => Navigator.pop(context, const EditProfile()),
           ),
         if (widget.selection.trim().isNotEmpty)
@@ -263,7 +262,7 @@ class _SnippetPaletteState extends State<SnippetPalette> {
             key: const ValueKey('snippet-keep'),
             dense: true,
             leading: const Icon(Icons.add_rounded, size: 20),
-            title: const Text('Seçimi kalıba al'),
+            title: Text(context.l.snipKeepSelection),
             subtitle: Text(
               widget.selection.replaceAll(RegExp(r'\s+'), ' ').trim(),
               maxLines: 1,
@@ -276,16 +275,16 @@ class _SnippetPaletteState extends State<SnippetPalette> {
             key: const ValueKey('snippet-harvest'),
             dense: true,
             leading: const Icon(Icons.travel_explore_rounded, size: 20),
-            title: const Text('Arşivden kalıp bul'),
-            subtitle: const Text('Belgelerinizde tekrar eden paragraflar'),
+            title: Text(context.l.snipHarvestOpen),
+            subtitle: Text(context.l.snipHarvestOpenDetail),
             onTap: () => Navigator.pop(context, const HarvestArchive()),
           ),
         ListTile(
           key: const ValueKey('snippet-manage'),
           dense: true,
           leading: const Icon(Icons.tune_rounded, size: 20),
-          title: const Text('Kalıplarımı yönet'),
-          subtitle: const Text('Ad, anahtar kelime, Alt+F kısayolu, silme'),
+          title: Text(context.l.snipManage),
+          subtitle: Text(context.l.snipManageDetail),
           onTap: () => Navigator.pop(context, const ManageSnippets()),
         ),
         const Divider(height: 1),
@@ -298,18 +297,12 @@ class _SnippetPaletteState extends State<SnippetPalette> {
                     // ekranda yapılacak bir şey yoksa özellik çıkmaz sokak
                     // olur. Seçim yokken ilk adımın ne olduğu yazılı durur.
                     widget.store.all.isNotEmpty || searching
-                        ? 'Bu aramaya uyan kalıp ya da profil bilgisi yok.'
+                        ? context.l.snipPaletteNoMatch
                         : widget.canHarvest
-                        ? 'Henüz kalıp yok.\n\nYukarıdan arşivinizde tekrar '
-                              'eden paragraflara bakabilir, ya da bir '
-                              'paragrafı belgede seçip yeniden Ctrl+Space’e '
-                              'basabilirsiniz.'
+                        ? context.l.snipPaletteEmptyHarvest
                         : widget.selection.trim().isEmpty
-                        ? 'Henüz kalıp yok.\n\nSık yazdığınız bir paragrafı '
-                              'belgede seçin, sonra Ctrl+Space’e basın — '
-                              'burada “Seçimi kalıba al” çıkacak.'
-                        : 'Henüz kalıp yok. Yukarıdan seçiminizi kalıba '
-                              'alabilirsiniz.',
+                        ? context.l.snipPaletteEmptySelect
+                        : context.l.snipPaletteEmptyKeep,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -339,7 +332,9 @@ class _SnippetPaletteState extends State<SnippetPalette> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            subtitle: Text('Profilden · ${profile[i].$1}'),
+                            subtitle: Text(
+                              context.l.snipFromProfileLabel(profile[i].$1),
+                            ),
                             onTap: () => Navigator.pop(
                               context,
                               InsertText(profile[i].$2),
@@ -352,7 +347,7 @@ class _SnippetPaletteState extends State<SnippetPalette> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
           child: Text(
-            '↑ ↓ ile seçin · Enter ile yerleştirin · Esc ile kapatın',
+            context.l.snipPaletteKeys,
             style: TextStyle(
               fontSize: 11,
               color: theme.colorScheme.onSurfaceVariant,
@@ -395,13 +390,13 @@ class _SnippetPaletteState extends State<SnippetPalette> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Kalıba ad verin',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        Text(
+          context.l.snipNameIt,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
         Text(
-          'Sonra bu adın ilk harflerini yazarak bulacaksınız.',
+          context.l.snipNameItDetail,
           style: TextStyle(
             fontSize: 12,
             color: theme.colorScheme.onSurfaceVariant,
@@ -414,10 +409,10 @@ class _SnippetPaletteState extends State<SnippetPalette> {
           autofocus: true,
           onSubmitted: (value) =>
               Navigator.pop(context, KeepSelection(value.trim())),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             isDense: true,
-            labelText: 'Ad',
-            border: OutlineInputBorder(),
+            labelText: context.l.snipName,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 14),
@@ -426,14 +421,14 @@ class _SnippetPaletteState extends State<SnippetPalette> {
           children: [
             TextButton(
               onPressed: () => setState(() => _naming = false),
-              child: const Text('Geri'),
+              child: Text(context.l.snipBack),
             ),
             const SizedBox(width: 8),
             FilledButton(
               key: const ValueKey('snippet-keep-save'),
               onPressed: () =>
                   Navigator.pop(context, KeepSelection(_named.text.trim())),
-              child: const Text('Kalıba al'),
+              child: Text(context.l.snipKeep),
             ),
           ],
         ),

@@ -6,6 +6,7 @@ import '../../services/editor/lawyer_profile.dart';
 import '../../services/live/live_share.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_pairing.dart';
+import '../../services/platform/app_language.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 
 /// The code a guest's pairing makes, large, as both screens show it.
@@ -62,8 +63,8 @@ Widget _asks(BuildContext context, String who, String title) => Row(
             ),
             TextSpan(
               text: title.isEmpty
-                  ? ' bir belgeyi sizinle canlı paylaşıyor.'
-                  : ' “$title” belgesini sizinle canlı paylaşıyor.',
+                  ? context.l.liveSharesADocument
+                  : context.l.liveSharesDocument(title),
             ),
           ],
         ),
@@ -124,7 +125,7 @@ class _LiveInviteDialogState extends State<LiveInviteDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Canlı paylaşım daveti'),
+    title: Text(context.l.liveInviteTitle),
     content: SizedBox(
       width: 400,
       child: Column(
@@ -135,10 +136,8 @@ class _LiveInviteDialogState extends State<LiveInviteDialog> {
           const SizedBox(height: 12),
           Text(
             widget.session.right == LiveRight.edit
-                ? 'Belgeyi görürsünüz; paylaşan kalemi verince siz de '
-                      'yazabilirsiniz. Paylaşım bitince belge bu cihazda kalmaz.'
-                : 'Belgeyi yalnız görürsünüz. Paylaşım bitince belge bu '
-                      'cihazda kalmaz.',
+                ? context.l.liveInviteCanEdit
+                : context.l.liveInviteViewOnly,
             style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
           ),
         ],
@@ -151,7 +150,7 @@ class _LiveInviteDialogState extends State<LiveInviteDialog> {
           unawaited(widget.session.decline());
           Navigator.of(context).pop(false);
         },
-        child: const Text('Reddet'),
+        child: Text(context.l.liveDecline),
       ),
       FilledButton(
         key: const ValueKey('live-invite-join'),
@@ -159,7 +158,7 @@ class _LiveInviteDialogState extends State<LiveInviteDialog> {
           widget.session.accept();
           Navigator.of(context).pop(true);
         },
-        child: const Text('Katıl'),
+        child: Text(context.l.liveJoin),
       ),
     ],
   );
@@ -244,7 +243,7 @@ class _LiveGuestInviteDialogState extends State<LiveGuestInviteDialog> {
       office: office,
     );
     if (pairing == null) {
-      setState(() => _error = 'Şu an başka bir bağlantı kuruluyor.');
+      setState(() => _error = context.l.liveBusyConnecting);
       return;
     }
     _before = Set<LiveSession>.identity()..addAll(_share.incoming.value);
@@ -260,13 +259,13 @@ class _LiveGuestInviteDialogState extends State<LiveGuestInviteDialog> {
         other != widget.invite.from.deviceId &&
         !pairing.finished) {
       pairing.reject();
-      setState(() => _error = 'Davet eden cihaz doğrulanamadı.');
+      setState(() => _error = context.l.liveHostUnverified);
       return;
     }
     if (pairing.state == PairingState.done) {
       _late ??= Timer(_wait, () {
         if (mounted && _came == null) {
-          setState(() => _error = 'Paylaşan kabul etti ama belge gelmedi.');
+          setState(() => _error = context.l.liveDocumentDidNotCome);
         }
       });
       _arrived();
@@ -335,10 +334,10 @@ class _LiveGuestInviteDialogState extends State<LiveGuestInviteDialog> {
         ? widget.invite.name
         : (widget.invite.from.device.isNotEmpty
               ? widget.invite.from.device
-              : 'Bir Folio kullanıcısı');
+              : context.l.liveSomeUser);
     final code = pairing?.code;
     return AlertDialog(
-      title: const Text('Canlı paylaşım daveti'),
+      title: Text(context.l.liveInviteTitle),
       content: SizedBox(
         width: 400,
         child: Column(
@@ -351,21 +350,19 @@ class _LiveGuestInviteDialogState extends State<LiveGuestInviteDialog> {
               Text(
                 _error ??
                     (state == PairingState.rejected
-                        ? 'Paylaşan daveti geri aldı.'
-                        : pairing?.reason ?? 'Bağlantı kurulamadı.'),
+                        ? context.l.liveHostWithdrew
+                        : pairing?.reason ?? context.l.liveConnectFailed),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               )
             else if (_joined)
-              _waiting('Belge açılıyor…')
+              _waiting(context.l.liveOpeningDocument)
             else if (code == null)
-              _waiting('Paylaşanın cihazına bağlanılıyor…')
+              _waiting(context.l.liveConnectingHost)
             else ...[
               LiveCode(code),
               const SizedBox(height: 8),
               Text(
-                'Paylaşanın ekranında da bu kod görünür. Belge yalnız bu '
-                'paylaşım sürerken görünür; paylaşım bitince bu cihazda '
-                'kalmaz.',
+                context.l.liveGuestCodeNote,
                 style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
               ),
             ],
@@ -376,19 +373,19 @@ class _LiveGuestInviteDialogState extends State<LiveGuestInviteDialog> {
         if (failed)
           FilledButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Tamam'),
+            child: Text(context.l.liveOk),
           )
         else ...[
           TextButton(
             key: const ValueKey('live-invite-decline'),
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(_joined ? 'Vazgeç' : 'Reddet'),
+            child: Text(_joined ? context.l.liveCancel : context.l.liveDecline),
           ),
           if (!_joined)
             FilledButton(
               key: const ValueKey('live-invite-join'),
               onPressed: state == PairingState.code ? _join : null,
-              child: const Text('Katıl'),
+              child: Text(context.l.liveJoin),
             ),
         ],
       ],

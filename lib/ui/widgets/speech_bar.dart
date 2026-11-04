@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/platform/app_language.dart';
 import '../../services/speech/speech_session.dart';
 
 /// The controls of reading aloud or of dictation, floating over the page
@@ -67,13 +68,13 @@ class SpeechBar extends StatelessWidget {
       const SizedBox(width: 10),
       Text(
         loading
-            ? 'Ses hazırlanıyor…'
-            : '${paused ? 'Duraklatıldı' : 'Okunuyor'} · '
+            ? context.l.speechPreparingVoice
+            : '${paused ? context.l.speechPaused : context.l.speechReading} · '
                   '${reading.index + 1} / ${reading.count}',
       ),
       const SizedBox(width: 6),
       PopupMenuButton<double>(
-        tooltip: 'Okuma hızı',
+        tooltip: context.l.speechSpeed,
         initialValue: reading.speed,
         onSelected: (v) => reading.speed = v,
         itemBuilder: (_) => [
@@ -86,7 +87,7 @@ class SpeechBar extends StatelessWidget {
         ),
       ),
       IconButton(
-        tooltip: paused ? 'Sürdür' : 'Duraklat',
+        tooltip: paused ? context.l.speechResume : context.l.speechPause,
         onPressed: loading
             ? null
             : paused
@@ -95,7 +96,7 @@ class SpeechBar extends StatelessWidget {
         icon: Icon(paused ? Icons.play_arrow_rounded : Icons.pause_rounded),
       ),
       IconButton(
-        tooltip: 'Okumayı durdur',
+        tooltip: context.l.speechStopReading,
         onPressed: reading.stop,
         icon: const Icon(Icons.stop_rounded),
       ),
@@ -119,16 +120,16 @@ class SpeechBar extends StatelessWidget {
       const SizedBox(width: 10),
       Text(
         loading
-            ? 'Hazırlanıyor…'
+            ? context.l.speechPreparing
             : dictation.writing
-            ? 'Yazıya dökülüyor…'
-            : 'Dinleniyor, konuşabilirsiniz',
+            ? context.l.speechTranscribing
+            : context.l.speechListening,
       ),
       const SizedBox(width: 8),
       TextButton.icon(
         onPressed: dictation.stop,
         icon: const Icon(Icons.stop_rounded, size: 18),
-        label: const Text('Bitir'),
+        label: Text(context.l.speechFinish),
       ),
     ]);
   }

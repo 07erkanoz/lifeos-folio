@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../models/evrak_file.dart';
 import '../../services/live/live_remote.dart';
+import '../../services/platform/app_language.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 
 /// "Canlı belge", from the home page without going into the editor
@@ -157,14 +158,14 @@ class _LiveHubState extends State<LiveHub> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Canlı belge',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          Text(
+            context.l.liveDocument,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           if (widget.join) ...[
             Text(
-              'Size gönderilen kodu yazın:',
+              context.l.liveHubCodePrompt,
               style: TextStyle(color: AgendaColors.muted),
             ),
             const SizedBox(height: 10),
@@ -189,17 +190,16 @@ class _LiveHubState extends State<LiveHub> {
             FilledButton(
               key: const ValueKey('live-hub-join'),
               onPressed: ready ? _join : null,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
-                child: Text('Katıl'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Text(context.l.liveJoin),
               ),
             ),
             const SizedBox(height: 18),
-            heading('YA DA BİR BELGEYİ PAYLAŞIN'),
+            heading(context.l.liveHubOrShare),
           ] else ...[
             Text(
-              'Paylaşacağınız belgeyi seçin. Belge açılır ve diğer büroya '
-              'göndereceğiniz kod hemen çıkar.',
+              context.l.liveHubPickPrompt,
               style: TextStyle(color: AgendaColors.muted),
             ),
             const SizedBox(height: 12),
@@ -239,7 +239,7 @@ class _LiveHubState extends State<LiveHub> {
             key: const ValueKey('live-hub-pick'),
             onPressed: widget.onPick,
             icon: const Icon(Icons.folder_open_outlined, size: 18),
-            label: const Text('Başka belge seç…'),
+            label: Text(context.l.liveHubPickOther),
           ),
         ],
       ),

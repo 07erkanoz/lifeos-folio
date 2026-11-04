@@ -6,6 +6,7 @@ import '../help/help_button.dart';
 import '../../services/live/live_share.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_peer.dart';
+import '../../services/platform/app_language.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import 'live_remote_dialogs.dart';
 
@@ -131,7 +132,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Canlı paylaş'),
+              Text(context.l.liveShareTitle),
               Text(
                 _host.title,
                 overflow: TextOverflow.ellipsis,
@@ -164,16 +165,16 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
             SegmentedButton<bool>(
               key: const ValueKey('live-where'),
               showSelectedIcon: false,
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: false,
-                  label: Text('Bu ağda'),
-                  icon: Icon(Icons.wifi_rounded, size: 18),
+                  label: Text(context.l.liveOnThisNetwork),
+                  icon: const Icon(Icons.wifi_rounded, size: 18),
                 ),
                 ButtonSegment(
                   value: true,
-                  label: Text('Uzaktan'),
-                  icon: Icon(Icons.public_rounded, size: 18),
+                  label: Text(context.l.liveRemote),
+                  icon: const Icon(Icons.public_rounded, size: 18),
                 ),
               ],
               selected: {_remote},
@@ -192,7 +193,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
                       ? [
                           RemoteInvitePane(host: _host),
                           if (remote.isNotEmpty) ...[
-                            _heading('UZAKTAN KATILANLAR'),
+                            _heading(context.l.liveRemoteJoined),
                             for (final t in remote) _row(t),
                           ],
                         ]
@@ -216,7 +217,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
                   onPressed: _host.takeBack,
                   icon: const Icon(Icons.edit_off_outlined, size: 16),
                   label: Text(
-                    'Kalemi geri al · ${_host.nameOf(_host.pen.value!)}',
+                    context.l.liveTakeBackPen(_host.nameOf(_host.pen.value!)),
                   ),
                 ),
               ),
@@ -229,16 +230,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                _remote
-                    ? 'Kodu alan kişi bağlantıya dokunur ya da Folio’da '
-                          'Canlı belge’ye basıp kodu yazar; siz onaylayınca '
-                          'belge onda açılır. '
-                          'Belge sizde kalır, paylaşım bitince onda kalmaz.'
-                    : 'Davet ettiğiniz kişinin Folio’sunda bir pencere '
-                          'açılır; Katıl’a basınca belge onda açılır. Belge '
-                          'sizde kalır, paylaşım bitince onlarda kalmaz. '
-                          '"Sırayla düzenleyebilir" olanlara kalemi verince '
-                          'yazdıkları belgenize işlenir.',
+                _remote ? context.l.liveRemoteHint : context.l.liveNearbyHint,
                 style: TextStyle(fontSize: 12, color: AgendaColors.muted),
               ),
             ),
@@ -254,11 +246,11 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
             await _host.close();
             if (context.mounted) Navigator.pop(context);
           },
-          child: const Text('Paylaşımı bitir'),
+          child: Text(context.l.liveStopSharing),
         ),
       FilledButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Tamam'),
+        child: Text(context.l.liveOk),
       ),
     ];
     if (widget.sheet) {
@@ -313,8 +305,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Aynı ağda davet edilebilecek bir cihaz görünmüyor. Karşı '
-                'tarafta Folio açık ve aynı Wi-Fi’ye bağlı olmalı.',
+                context.l.liveNoDevices,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AgendaColors.muted),
               ),
@@ -330,8 +321,8 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
               const SizedBox(width: 10),
               Text(
                 _net.error == null
-                    ? 'Aynı ağdaki cihazlar aranıyor…'
-                    : 'Ağa bağlanılamadı: ${_net.error}',
+                    ? context.l.liveSearching
+                    : context.l.liveNetworkError('${_net.error}'),
                 style: TextStyle(color: AgendaColors.muted),
               ),
             ],
@@ -346,7 +337,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     if (self == null) {
       return [
         (
-          'DAVET EDİLENLER',
+          context.l.liveInvited,
           [
             for (final p in peers.values)
               if (!_host.isRemote(p.deviceId))
@@ -445,19 +436,19 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     }
     return [
       // Written in capitals here: Dart's own makes "i" an "I".
-      ('CİHAZLARIM', own),
-      ('BÜRO', office),
-      ('YAKINDAKİ FOLIO’LAR', nearby),
+      (context.l.liveMyDevices, own),
+      (context.l.liveOffice, office),
+      (context.l.liveNearby, nearby),
     ];
   }
 
   String _state(LivePeer? p) => switch (p?.state) {
-    LivePeerState.joining => 'yanıt bekleniyor',
-    LivePeerState.watching => 'izliyor',
-    LivePeerState.gone => 'ayrıldı',
-    LivePeerState.unreachable => 'ulaşılamadı',
-    LivePeerState.declined => 'reddetti',
-    LivePeerState.unanswered => 'yanıt vermedi',
+    LivePeerState.joining => context.l.livePeerJoining,
+    LivePeerState.watching => context.l.livePeerWatching,
+    LivePeerState.gone => context.l.livePeerGone,
+    LivePeerState.unreachable => context.l.livePeerUnreachable,
+    LivePeerState.declined => context.l.livePeerDeclined,
+    LivePeerState.unanswered => context.l.livePeerUnanswered,
     null => '',
   };
 
@@ -497,7 +488,11 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
         ? TextButton(
             key: ValueKey('live-remove-${t.id}'),
             onPressed: () => unawaited(_host.remove(t.id)),
-            child: Text(state == LivePeerState.joining ? 'Geri al' : 'Çıkar'),
+            child: Text(
+              state == LivePeerState.joining
+                  ? context.l.liveWithdraw
+                  : context.l.liveRemovePeer,
+            ),
           )
         // Gone from another office: asked again only by a new code.
         : t.remote
@@ -509,7 +504,9 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
               visualDensity: VisualDensity.compact,
               padding: const EdgeInsets.symmetric(horizontal: 14),
             ),
-            child: Text(peer == null ? 'Davet et' : 'Yeniden davet et'),
+            child: Text(
+              peer == null ? context.l.liveInvite : context.l.liveInviteAgain,
+            ),
           );
     final controls = <Widget>[
       if (state == LivePeerState.watching &&
@@ -519,7 +516,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
         TextButton(
           key: ValueKey('live-give-${t.id}'),
           onPressed: () => _host.give(t.id),
-          child: const Text('Kalemi ver'),
+          child: Text(context.l.liveGivePen),
         ),
       if (_host.apply != null)
         DropdownButton<LiveRight>(
@@ -533,14 +530,14 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
             _host.setRight(t.id, r);
             setState(() {});
           },
-          items: const [
+          items: [
             DropdownMenuItem(
               value: LiveRight.view,
-              child: Text('Yalnız görebilir'),
+              child: Text(context.l.liveCanView),
             ),
             DropdownMenuItem(
               value: LiveRight.edit,
-              child: Text('Sırayla düzenleyebilir'),
+              child: Text(context.l.liveCanEdit),
             ),
           ],
         ),
@@ -602,13 +599,13 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
                           ),
                         if (code != null && state == LivePeerState.joining)
                           _chip(
-                            'kod $code',
+                            context.l.liveCodeChip(code),
                             Icons.verified_user_outlined,
                             key: ValueKey('live-code-${t.id}'),
                           ),
                         if (holds)
                           _chip(
-                            'kalem onda',
+                            context.l.livePenHere,
                             Icons.edit_outlined,
                             key: ValueKey('live-holds-${t.id}'),
                           ),
@@ -674,6 +671,6 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     for (final n in [known?.device, seen?.device, known?.name, peer?.name]) {
       if (n != null && n.trim().isNotEmpty) return n.trim();
     }
-    return (known?.platform ?? seen?.platform)?.label ?? 'Cihaz';
+    return (known?.platform ?? seen?.platform)?.label ?? context.l.liveDevice;
   }
 }

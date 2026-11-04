@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/live/live_share.dart';
+import '../../services/platform/app_language.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 
 /// The talk beside a document shared live (approved mockup, 26 Ekim 2026):
@@ -182,14 +183,17 @@ class _LiveChatPanelState extends State<LiveChatPanel> {
               children: [
                 Icon(Icons.chat_outlined, size: 18, color: scheme.primary),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Yazışma',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    context.l.liveChat,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Paneli kapat',
+                  tooltip: context.l.liveClosePanel,
                   onPressed: widget.onClose,
                   icon: const Icon(Icons.close_rounded, size: 18),
                 ),
@@ -205,8 +209,7 @@ class _LiveChatPanelState extends State<LiveChatPanel> {
                       child: Padding(
                         padding: const EdgeInsets.all(20),
                         child: Text(
-                          'Belge üzerinde birbirinize buradan yazın. '
-                          'Yazışma paylaşım bitince silinir.',
+                          context.l.liveChatEmpty,
                           textAlign: TextAlign.center,
                           style: TextStyle(color: AgendaColors.muted),
                         ),
@@ -244,7 +247,7 @@ class _LiveChatPanelState extends State<LiveChatPanel> {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Alıntıyı kaldır',
+                    tooltip: context.l.liveRemoveQuote,
                     visualDensity: VisualDensity.compact,
                     onPressed: () => setState(() => _quote = null),
                     icon: const Icon(Icons.close_rounded, size: 16),
@@ -259,7 +262,7 @@ class _LiveChatPanelState extends State<LiveChatPanel> {
                 if (widget.quote != null)
                   IconButton(
                     key: const ValueKey('live-chat-take-quote'),
-                    tooltip: 'Belgede seçili olanı alıntıla',
+                    tooltip: context.l.liveQuoteSelection,
                     onPressed: _takeQuote,
                     icon: const Icon(Icons.format_quote_rounded),
                   ),
@@ -273,14 +276,14 @@ class _LiveChatPanelState extends State<LiveChatPanel> {
                     maxLength: 2000,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
-                    decoration: const InputDecoration(
-                      hintText: 'Mesaj yazın…',
+                    decoration: InputDecoration(
+                      hintText: context.l.liveMessageHint,
                       counterText: '',
                       isDense: true,
-                      border: OutlineInputBorder(
+                      border: const OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(20)),
                       ),
-                      contentPadding: EdgeInsets.symmetric(
+                      contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 10,
                       ),
@@ -290,7 +293,7 @@ class _LiveChatPanelState extends State<LiveChatPanel> {
                 const SizedBox(width: 6),
                 IconButton.filled(
                   key: const ValueKey('live-chat-send'),
-                  tooltip: 'Gönder',
+                  tooltip: context.l.liveSend,
                   onPressed: _send,
                   icon: const Icon(Icons.send_rounded, size: 18),
                 ),

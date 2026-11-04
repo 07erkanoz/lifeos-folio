@@ -8,6 +8,7 @@ import 'package:flutter_quill/quill_delta.dart';
 
 import '../../models/document_model.dart';
 import '../../services/live/live_share.dart';
+import '../../services/platform/app_language.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/flowing_document_view.dart';
 import 'live_chat_panel.dart';
@@ -224,31 +225,29 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
             AgendaColors.taskFill,
             AgendaColors.taskText,
             Icons.stop_circle_outlined,
-            'Paylaşım bitti; belge bu cihazda kalmadı.',
+            context.l.liveEnded,
           )
         : s.holding
         ? (
             AgendaColors.eHearingFill,
             AgendaColors.eHearingText,
             Icons.edit_outlined,
-            s.syncing
-                ? 'Kalem sizde · belge paylaşanla eşitleniyor, bir an bekleyin'
-                : 'Kalem sizde · yazdıklarınız paylaşanın belgesine işlenir',
+            s.syncing ? context.l.livePenSyncing : context.l.livePenYours,
           )
         : (
             AgendaColors.hearingFill,
             AgendaColors.hearingText,
             Icons.visibility_outlined,
             [
-              '${s.from} paylaşıyor',
-              if (s.penWith != null)
-                '${s.penWith} yazıyor'
+              context.l.liveSharing(s.from),
+              if (s.penWith case final pen?)
+                context.l.liveWriting(pen)
               else if (s.refused)
-                'düzenleme isteğiniz geri çevrildi'
+                context.l.liveEditRefused
               else if (s.right == LiveRight.edit)
-                'sırayla düzenleyebilirsiniz'
+                context.l.liveYouCanEdit
               else
-                'yalnız görebilirsiniz',
+                context.l.liveYouCanView,
             ].join(' · '),
           );
     return Container(
@@ -265,13 +264,15 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
             TextButton(
               key: const ValueKey('live-release'),
               onPressed: s.releasePen,
-              child: const Text('Kalemi bırak'),
+              child: Text(context.l.liveReleasePen),
             )
           else if (!s.ended && s.right == LiveRight.edit)
             FilledButton(
               key: const ValueKey('live-ask'),
               onPressed: s.askedPen ? null : s.askPen,
-              child: Text(s.askedPen ? 'İstendi' : 'Düzenlemek iste'),
+              child: Text(
+                s.askedPen ? context.l.livePenAsked : context.l.liveAskPen,
+              ),
             ),
         ],
       ),
@@ -288,7 +289,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
           if (!_s.ended)
             IconButton(
               key: const ValueKey('live-doc-chat'),
-              tooltip: 'Yazışma',
+              tooltip: context.l.liveChat,
               isSelected: _chatOpen,
               onPressed: () => unawaited(_toggleChat()),
               icon: Badge(
@@ -304,7 +305,7 @@ class _LiveDocumentPageState extends State<LiveDocumentPage> {
               await _s.leave();
               if (context.mounted) Navigator.of(context).maybePop();
             },
-            child: const Text('İzlemeyi bırak'),
+            child: Text(context.l.liveStopWatching),
           ),
         ],
       ),
