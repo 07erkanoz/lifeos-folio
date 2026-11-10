@@ -420,6 +420,17 @@ class DocxBridge {
     }
   }
 
+  /// [writeBytes] with the file it was opened from, away from the screen:
+  /// a document with large pictures takes most of a second to write, and
+  /// the editor must not stand still for it.
+  static Future<Uint8List> writeInBackground(
+    DocModel model, {
+    Uint8List? original,
+  }) => compute(_write, (model, original));
+
+  static Future<Uint8List> _write((DocModel, Uint8List?) job) =>
+      writeBytes(job.$1, original: job.$2);
+
   /// [model] as a Word file. With [original], the Word file the document
   /// was opened from, what was not touched keeps the bytes it had there
   /// ([DocxSplice]); written anew when that cannot be done, or with none.

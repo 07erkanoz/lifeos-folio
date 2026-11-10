@@ -42,14 +42,16 @@ abstract final class DocxSplice {
       if (_pagePrint(model) != _pagePrint(read)) return null;
       final body = await _body(origin, model);
       if (body == null) return null;
-      final out = origin.repack(body);
-      // What was written is read back and held against what was to be
-      // written: a file that does not say the same is not kept.
-      final back = await DocxBridge.readBytes(out);
+      // What is written is read back and held against what was to be
+      // written: a file that does not say the same is not kept. Read
+      // without its pictures, which say nothing and take the longest.
+      final back = await DocxBridge.readBytes(
+        origin.repack(body, pictures: false),
+      );
       if (back == null || _letters(back.blocks) != _letters(model.blocks)) {
         return null;
       }
-      return out;
+      return origin.repack(body);
     } catch (e) {
       debugPrint('DocxSplice.save: $e');
       return null;
@@ -365,6 +367,7 @@ class DocxOrigin {
   DocxOrigin._(this._archive, this.head, this.units, this.tail);
 
   final Archive _archive;
+  bool _marked = false;
 
   /// The document part before the body's first unit, and after its last
   /// (the last section's properties and the closing tags).
@@ -383,7 +386,8 @@ class DocxOrigin {
     final archive = ZipDecoder().decodeBytes(bytes);
     final part = archive.findFile('word/document.xml');
     if (part == null) return null;
-    final scanned = scan(utf8.decode(part.content as List<int>));
+    final content = part.content as List<int>;
+    final scanned = scan(utf8.decode(content));
     if (scanned == null) return null;
     final origin = DocxOrigin._(
       archive,
@@ -391,6 +395,13 @@ class DocxOrigin {
       scanned.units,
       scanned.tail,
     );
+    // The mark some programs begin the part with is read away with the
+    // text; written back, the part is what it was to the byte.
+    origin._marked =
+        content.length > 2 &&
+        content[0] == 0xEF &&
+        content[1] == 0xBB &&
+        content[2] == 0xBF;
     final through = DocxSplice.throughEditor(read);
     if (through.blocks.length != read.blocks.length) return null;
     if (!origin._lay(read.blocks)) return null;
@@ -586,16 +597,21 @@ class DocxOrigin {
 
   /// The package with [body] as the document's body, every other part as
   /// it was.
-  Uint8List repack(String body) {
+  Uint8List repack(String body, {bool pictures = true}) {
     final out = Archive();
     for (final file in _archive) {
       if (!file.isFile) continue;
+      if (!pictures && file.name.startsWith('word/media/')) continue;
       if (file.name == 'word/document.xml') {
-        final content = utf8.encode('$head$body$tail');
+        final content = [
+          if (_marked) ...const [0xEF, 0xBB, 0xBF],
+          ...utf8.encode('$head$body$tail'),
+        ];
         out.addFile(ArchiveFile(file.name, content.length, content));
       } else {
-        final content = file.content as List<int>;
-        out.addFile(ArchiveFile(file.name, content.length, content));
+        // As it is in the file, still compressed: a picture of megabytes
+        // is not opened and pressed again at every save.
+        out.addFile(file);
       }
     }
     return Uint8List.fromList(ZipEncoder().encode(out));

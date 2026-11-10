@@ -5440,7 +5440,7 @@ class _EditorWidgetState extends State<EditorWidget>
         EvrakFormat.udf => UdfWriter.writeBytes(model),
         // Into the Word file it was opened from: what was not touched
         // keeps what the editor cannot show.
-        EvrakFormat.docx => await DocxBridge.writeBytes(
+        EvrakFormat.docx => await DocxBridge.writeInBackground(
           model,
           original: await _wordOrigin(),
         ),
