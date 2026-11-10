@@ -6187,52 +6187,44 @@ class _EditorWidgetState extends State<EditorWidget>
                                             children: [
                                               if (_showHorizontalRuler)
                                                 Padding(
-                                                  padding: EdgeInsets.only(
-                                                    left: _showVerticalRuler
-                                                        ? 24
-                                                        : 0,
-                                                    bottom: 6,
-                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        bottom: 6,
+                                                      ),
                                                   // The caret's paragraph on
                                                   // it, as the caret moves.
-                                                  child:
-                                                      DistinctBuilder<
-                                                        RulerParagraph?
-                                                      >(
-                                                        listenable:
-                                                            _quillController,
-                                                        value: _rulerParagraph,
-                                                        builder:
-                                                            (
-                                                              context,
-                                                              now,
-                                                            ) => DocumentRuler(
-                                                              axis: Axis
-                                                                  .horizontal,
-                                                              pagePoints:
-                                                                  widthPoints,
-                                                              pixels:
-                                                                  paperWidth,
-                                                              leading:
-                                                                  _pageProperties
-                                                                      .marginLeft,
-                                                              trailing:
-                                                                  _pageProperties
-                                                                      .marginRight,
-                                                              onChanged:
-                                                                  (
-                                                                    start,
-                                                                    end,
-                                                                  ) => margins(
+                                                  child: DistinctBuilder<RulerParagraph?>(
+                                                    listenable:
+                                                        _quillController,
+                                                    value: _rulerParagraph,
+                                                    builder: (context, now) =>
+                                                        DocumentRuler(
+                                                          axis: Axis.horizontal,
+                                                          pagePoints:
+                                                              widthPoints,
+                                                          pixels: paperWidth,
+                                                          leading:
+                                                              _pageProperties
+                                                                  .marginLeft,
+                                                          trailing:
+                                                              _pageProperties
+                                                                  .marginRight,
+                                                          onChanged:
+                                                              (start, end) =>
+                                                                  margins(
                                                                     true,
                                                                     start,
                                                                     end,
                                                                   ),
-                                                              paragraph: now,
-                                                              onParagraph:
-                                                                  _applyRuler,
-                                                            ),
-                                                      ),
+                                                          paragraph: now,
+                                                          onParagraph:
+                                                              _applyRuler,
+                                                          corner:
+                                                              _showVerticalRuler
+                                                              ? 24
+                                                              : 0,
+                                                        ),
+                                                  ),
                                                 ),
                                               Row(
                                                 crossAxisAlignment:

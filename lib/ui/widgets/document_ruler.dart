@@ -99,6 +99,11 @@ class DocumentRuler extends StatefulWidget {
   /// The paragraph changed: told once, when a drag or a click is done.
   final ValueChanged<RulerParagraph>? onParagraph;
 
+  /// Room the ruler takes before the page begins (the corner over a side
+  /// ruler): the button of the stop's kind stands there, clear of the
+  /// triangles of a narrow margin.
+  final double corner;
+
   const DocumentRuler({
     super.key,
     required this.axis,
@@ -109,6 +114,7 @@ class DocumentRuler extends StatefulWidget {
     required this.onChanged,
     this.paragraph,
     this.onParagraph,
+    this.corner = 0,
   });
 
   @override
@@ -126,6 +132,9 @@ class _DocumentRulerState extends State<DocumentRuler> {
   TabAlign _kind = TabAlign.left;
 
   double get _scale => widget.pixels / widget.pagePoints;
+
+  /// How wide the margin's grip is beside a paragraph's triangles.
+  static const _gripWidth = 18.0;
 
   static double _snapped(double points) =>
       HardwareKeyboard.instance.isAltPressed
@@ -204,7 +213,7 @@ class _DocumentRulerState extends State<DocumentRuler> {
                     (start ? 1 : -1),
               ),
               child: SizedBox(
-                width: horizontal ? (grip ? 6 : 18) : 24,
+                width: horizontal ? (grip ? _gripWidth : 18) : 24,
                 height: horizontal ? 24 : 18,
                 child: grip
                     ? null
@@ -220,17 +229,20 @@ class _DocumentRulerState extends State<DocumentRuler> {
           ),
         ),
       );
-      final half = grip ? 3.0 : 9.0;
+      // The grip lies on the margin's side of the edge, where no triangle
+      // is: six pixels between two triangles could hardly be caught.
+      final half = grip ? _gripWidth / 2 : 9.0;
+      final from = grip
+          ? (start ? position - _gripWidth + 2 : position - 2)
+          : position - half;
       return Positioned(
-        left: horizontal
-            ? (position - half).clamp(0.0, widget.pixels - 2 * half)
-            : 0,
+        left: horizontal ? from.clamp(0.0, widget.pixels - 2 * half) : 0,
         top: horizontal ? 0 : (position - 9).clamp(0.0, widget.pixels - 18),
         child: child,
       );
     }
 
-    return SizedBox(
+    final ruler = SizedBox(
       width: horizontal ? widget.pixels : 24,
       height: horizontal ? 24 : widget.pixels,
       child: Stack(
@@ -279,7 +291,51 @@ class _DocumentRulerState extends State<DocumentRuler> {
         ],
       ),
     );
+    final corner = horizontal ? widget.corner : 0.0;
+    if (corner <= 0) return ruler;
+    return SizedBox(
+      width: widget.pixels + corner,
+      height: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(left: corner, top: 0, child: ruler),
+          if (paragraph != null)
+            Positioned(
+              left: (corner - 18) / 2,
+              top: 3,
+              child: _kindButton(scheme),
+            ),
+        ],
+      ),
+    );
   }
+
+  /// The kind of stop a click puts; a click on it takes the next kind.
+  Widget _kindButton(ColorScheme scheme) => Tooltip(
+    message: context.l.editorRulerTabKindTip(_kindName(_kind)),
+    child: InkWell(
+      key: const ValueKey('ruler-tab-kind'),
+      onTap: () => setState(
+        () => _kind = switch (_kind) {
+          TabAlign.left => TabAlign.centre,
+          TabAlign.centre => TabAlign.right,
+          TabAlign.right => TabAlign.decimal,
+          _ => TabAlign.left,
+        },
+      ),
+      child: Container(
+        width: 18,
+        height: 18,
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: CustomPaint(painter: _StopGlyph(_kind, scheme.onSurface)),
+      ),
+    ),
+  );
 
   /// A click on the ruler, inside the margins: a stop of the kind chosen.
   void _addStop(RulerParagraph p, double x) {
@@ -351,35 +407,10 @@ class _DocumentRulerState extends State<DocumentRuler> {
     }
 
     return [
-      // The kind of stop a click puts, at the ruler's start.
-      Positioned(
-        left: 1,
-        top: 3,
-        child: Tooltip(
-          message: context.l.editorRulerTabKindTip(_kindName(_kind)),
-          child: InkWell(
-            key: const ValueKey('ruler-tab-kind'),
-            onTap: () => setState(
-              () => _kind = switch (_kind) {
-                TabAlign.left => TabAlign.centre,
-                TabAlign.centre => TabAlign.right,
-                TabAlign.right => TabAlign.decimal,
-                _ => TabAlign.left,
-              },
-            ),
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                border: Border.all(color: scheme.outlineVariant),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: CustomPaint(painter: _StopGlyph(_kind, scheme.onSurface)),
-            ),
-          ),
-        ),
-      ),
+      // The kind of stop a click puts, at the ruler's start, unless it has
+      // a corner of its own to stand in.
+      if (widget.corner <= 0)
+        Positioned(left: 1, top: 3, child: _kindButton(scheme)),
       for (final (i, stop) in p.stops.indexed)
         Positioned(
           left: (left + p.origin + stop.position) * scale - 6,
@@ -559,7 +590,13 @@ class _RulerPainter extends CustomPainter {
     final horizontal = axis == Axis.horizontal;
     final extent = horizontal ? size.width : size.height;
     final scale = extent / points;
-    final paint = Paint()..color = scheme.surfaceContainerHighest;
+    // The margins a clear shade darker than the text's width, so that
+    // where one ends is seen at a glance and can be caught.
+    final paint = Paint()
+      ..color = Color.alphaBlend(
+        scheme.onSurface.withValues(alpha: .16),
+        scheme.surface,
+      );
     canvas.drawRect(Offset.zero & size, paint);
     paint.color = scheme.surface;
     canvas.drawRect(
