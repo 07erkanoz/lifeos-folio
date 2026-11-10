@@ -28,6 +28,7 @@ class DocxBridge {
 
   static Future<DocModel?> readBytes(Uint8List bytes) async {
     try {
+      bytes = _openContentControls(bytes);
       final regions = DocxPageRegions.read(bytes);
       final patched = _preprocessDocxForReading(bytes, regions);
       final doc = await DocxReader.loadFromBytes(patched);
@@ -88,6 +89,137 @@ class DocxBridge {
       return rawBytes;
     }
   }
+
+  /// The file with its content controls opened: what is in each stays, the
+  /// box around it goes. Word's own page number block is a footer paragraph
+  /// in such a box, and a table of contents is one too; the reader dropped
+  /// the box and what it held (18 of 63 real footers were lost whole). Done
+  /// before the page regions are read, for both to count the same parts.
+  static Uint8List _openContentControls(Uint8List rawBytes) {
+    try {
+      final input = ZipDecoder().decodeBytes(rawBytes);
+      if (!input.files.any(
+        (f) =>
+            f.isFile &&
+            _holdsBody(f.name) &&
+            (_contains(f.content as List<int>, _sdtOpen) ||
+                _contains(f.content as List<int>, _boxOpen.codeUnits)),
+      )) {
+        return rawBytes;
+      }
+      final output = Archive();
+      for (final file in input) {
+        if (!file.isFile) continue;
+        var content = file.content as List<int>;
+        if (_holdsBody(file.name)) {
+          content = textBoxesAsParagraphs(openContentControls(content));
+        }
+        output.addFile(ArchiveFile(file.name, content.length, content));
+      }
+      return Uint8List.fromList(ZipEncoder().encode(output));
+    } catch (_) {
+      return rawBytes;
+    }
+  }
+
+  static bool _holdsBody(String name) =>
+      name == 'word/document.xml' ||
+      name == 'word/footnotes.xml' ||
+      name == 'word/endnotes.xml' ||
+      ((name.startsWith('word/header') || name.startsWith('word/footer')) &&
+          name.endsWith('.xml'));
+
+  static final _sdtOpen = '<w:sdt>'.codeUnits;
+
+  static bool _contains(List<int> bytes, List<int> what) {
+    outer:
+    for (var i = 0; i <= bytes.length - what.length; i++) {
+      for (var j = 0; j < what.length; j++) {
+        if (bytes[i + j] != what[j]) continue outer;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  @visibleForTesting
+  static List<int> openContentControls(List<int> content) {
+    try {
+      return String.fromCharCodes(content)
+          .replaceAll(_sdtProperties, '')
+          .replaceAll(_sdtTags, '')
+          .codeUnits;
+    } catch (_) {
+      return content;
+    }
+  }
+
+  static const _boxOpen = '<w:txbxContent>', _boxClose = '</w:txbxContent>';
+  static final _paragraphEdge = RegExp(r'<w:p(?: [^>]*)?>|</w:p>');
+
+  /// A text box's paragraphs put after the paragraph the box hangs on. The
+  /// editor has no boxes; left in theirs, what they say was lost whole (a
+  /// real objection petition lost 1.400 letters of its 22.000). Word keeps
+  /// each box twice, for old readers; the second copy is dropped.
+  @visibleForTesting
+  static List<int> textBoxesAsParagraphs(List<int> content) {
+    try {
+      var xml = String.fromCharCodes(content);
+      if (!xml.contains(_boxOpen)) return content;
+      String letters(String x) =>
+          x.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll(RegExp(r'\s'), '');
+      // From the last box to the first: what is put in does not move the
+      // boxes still to be taken.
+      final seen = <String>{};
+      for (var guard = 0; guard < 2000; guard++) {
+        final open = xml.lastIndexOf(_boxOpen);
+        if (open < 0) break;
+        final close = xml.indexOf(_boxClose, open);
+        if (close < 0) break;
+        final inner = xml.substring(open + _boxOpen.length, close);
+        // The paragraph the box is in ends where as many close as opened.
+        var depth = 0, end = -1;
+        for (final m in _paragraphEdge.allMatches(xml, close)) {
+          if (m.group(0) == '</w:p>') {
+            if (depth == 0) {
+              end = m.end;
+              break;
+            }
+            depth--;
+          } else if (!m.group(0)!.endsWith('/>')) {
+            depth++;
+          }
+        }
+        if (end < 0) break;
+        // The same box's other copy is in the same paragraph.
+        final key = '$end:${letters(inner)}';
+        final again = !seen.add(key);
+        xml =
+            xml.substring(0, open) +
+            xml.substring(close + _boxClose.length, end) +
+            (again || letters(inner).isEmpty ? '' : inner) +
+            xml.substring(end);
+        if (!again) {
+          // The copy before this one ends at the same place less what was
+          // taken out; told apart by its letters alone.
+          seen
+            ..clear()
+            ..add(
+              '${end - (close + _boxClose.length - open)}:${letters(inner)}',
+            );
+        }
+      }
+      return xml.codeUnits;
+    } catch (_) {
+      return content;
+    }
+  }
+
+  static final _sdtProperties = RegExp(
+    r'<w:sdt(?:End)?Pr>.*?</w:sdt(?:End)?Pr>|<w:sdt(?:End)?Pr/>',
+    dotAll: true,
+  );
+  static final _sdtTags = RegExp(r'</?w:sdt(?:Content)?>|<w:sdtContent/>');
 
   /// A run that holds more than one thing split into runs of one thing
   /// each. Word writes `ADRESİ<tab>: Side Mah.` as one run; the reader takes
@@ -715,6 +847,25 @@ class DocxBridge {
     imageHeight: image.height,
   );
 
+  /// Word's highlighter pens as the colours they are.
+  static const _highlights = {
+    DocxHighlight.yellow: '#FFFF00',
+    DocxHighlight.green: '#00FF00',
+    DocxHighlight.cyan: '#00FFFF',
+    DocxHighlight.magenta: '#FF00FF',
+    DocxHighlight.blue: '#0000FF',
+    DocxHighlight.red: '#FF0000',
+    DocxHighlight.darkBlue: '#000080',
+    DocxHighlight.darkCyan: '#008080',
+    DocxHighlight.darkGreen: '#008000',
+    DocxHighlight.darkMagenta: '#800080',
+    DocxHighlight.darkRed: '#800000',
+    DocxHighlight.darkYellow: '#808000',
+    DocxHighlight.darkGray: '#808080',
+    DocxHighlight.lightGray: '#C0C0C0',
+    DocxHighlight.black: '#000000',
+  };
+
   /// A run of Word inlines as text and its formatting: line breaks and
   /// tabs as themselves, each text run's bold, italic, font, size and
   /// colours as a span of its own. A paragraph's, and a list item's.
@@ -745,6 +896,8 @@ class DocxBridge {
             child.color != null ||
             child.shadingFill != null ||
             child.isSuperscript ||
+            child.href != null ||
+            child.highlight != DocxHighlight.none ||
             child.isSubscript) {
           spans.add(
             DocSpan(
@@ -757,7 +910,9 @@ class DocxBridge {
               fontFamily: child.fontFamily,
               fontSize: child.fontSize,
               color: _hexColor(child.color?.hex),
-              background: _hexColor(child.shadingFill),
+              background:
+                  _hexColor(child.shadingFill) ?? _highlights[child.highlight],
+              link: child.href,
               superscript: child.isSuperscript,
               subscript: child.isSubscript,
             ),
@@ -1064,6 +1219,7 @@ class DocxBridge {
             fontSize: span.fontSize,
             color: span.color == null ? null : DocxColor(span.color!),
             shadingFill: span.background?.replaceFirst('#', ''),
+            href: span.link,
             isSuperscript: span.superscript,
             isSubscript: span.subscript,
           ),

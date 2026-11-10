@@ -807,6 +807,7 @@ class _Reader {
                 fontSize: s.fontSize,
                 color: s.color,
                 background: s.background,
+                link: s.link,
               ),
         ],
         alignment: _alignment(style['text-align']),

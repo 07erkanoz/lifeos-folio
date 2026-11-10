@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:evrak_convert/models/document_model.dart';
 import 'package:evrak_convert/services/docx/docx_bridge.dart';
+import 'package:evrak_convert/services/editor/doc_delta_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Word writes a label, its tab and what follows as one run. The reader takes
@@ -54,6 +56,55 @@ void main() {
     }
   });
 
+  test('a content control is opened: what it holds stays', () {
+    String open(String xml) =>
+        utf8.decode(DocxBridge.openContentControls(utf8.encode(xml)));
+    expect(
+      open(
+        '<w:sdt><w:sdtPr><w:id w:val="1"/><w:docPartObj><w:docPartGallery '
+        'w:val="Page Numbers"/></w:docPartObj></w:sdtPr><w:sdtEndPr/>'
+        '<w:sdtContent><w:p><w:r><w:t>Sayfa</w:t></w:r></w:p>'
+        '</w:sdtContent></w:sdt><w:p/>',
+      ),
+      '<w:p><w:r><w:t>Sayfa</w:t></w:r></w:p><w:p/>',
+    );
+  });
+
+  test('a text box\'s paragraphs come after the paragraph it hangs on, '
+      'once, though Word keeps the box twice', () {
+    String boxes(String xml) =>
+        utf8.decode(DocxBridge.textBoxesAsParagraphs(utf8.encode(xml)));
+    const box =
+        '<w:txbxContent><w:p><w:r><w:t>Kutudaki yazı</w:t></w:r></w:p>'
+        '</w:txbxContent>';
+    final out = boxes(
+      '<w:p><w:r><w:t>Önce</w:t></w:r><w:r><mc:AlternateContent><mc:Choice>'
+      '<w:drawing>$box</w:drawing></mc:Choice><mc:Fallback><w:pict>$box'
+      '</w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>'
+      '<w:p><w:r><w:t>Sonra</w:t></w:r></w:p>',
+    );
+    expect('Kutudaki yazı'.allMatches(out).length, 1);
+    expect(out, isNot(contains('txbxContent')));
+    expect(
+      out.indexOf('Önce') < out.indexOf('Kutudaki yazı') &&
+          out.indexOf('Kutudaki yazı') < out.indexOf('Sonra'),
+      isTrue,
+    );
+    // The box's paragraph is beside the one it hung on, not inside it.
+    expect(
+      out,
+      contains('</w:r></w:p><w:p><w:r><w:t>Kutudaki yazı</w:t></w:r></w:p>'),
+    );
+    // Two boxes saying different things are both kept.
+    final two = boxes(
+      '<w:p><w:r><w:pict><w:txbxContent><w:p><w:r><w:t>Bir</w:t></w:r></w:p>'
+      '</w:txbxContent></w:pict></w:r><w:r><w:pict><w:txbxContent><w:p><w:r>'
+      '<w:t>İki</w:t></w:r></w:p></w:txbxContent></w:pict></w:r></w:p>',
+    );
+    expect(two, contains('Bir'));
+    expect(two, contains('İki'));
+  });
+
   test('read from a document: the text after a tab is in the model', () async {
     final document =
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -91,5 +142,44 @@ void main() {
     );
     expect(model!.toPlainText(), contains('ADRESİ'));
     expect(model.toPlainText(), contains(': Side Mah. No: 34'));
+  });
+  test('a link and a highlighter pen survive Word → editor → Word', () async {
+    final model = DocModel(
+      blocks: [
+        DocBlock(
+          plainText: 'Karar için tıklayın, önemli.',
+          spans: const [
+            DocSpan(
+              startOffset: 11,
+              length: 8,
+              underline: true,
+              link: 'https://karararama.yargitay.gov.tr/',
+            ),
+            DocSpan(startOffset: 21, length: 6, background: '#FFFF00'),
+          ],
+        ),
+      ],
+    );
+    // Through the editor's own document and back.
+    final quill = DocDeltaMap.modeldenDelta(model);
+    final edited = DocDeltaMap.deltadanModel(
+      quill.delta,
+      korunanlar: quill.korunanlar,
+    );
+    expect(
+      edited.blocks.first.spans.map((s) => s.link).nonNulls.single,
+      'https://karararama.yargitay.gov.tr/',
+    );
+    final again = await DocxBridge.readBytes(
+      await DocxBridge.writeBytes(edited),
+    );
+    final spans = again!.blocks.first.spans;
+    final link = spans.firstWhere((s) => s.link != null);
+    expect(link.link, 'https://karararama.yargitay.gov.tr/');
+    expect(
+      again.blocks.first.plainText.substring(link.startOffset, link.endOffset),
+      'tıklayın',
+    );
+    expect(spans.any((s) => s.background == '#FFFF00'), isTrue);
   });
 }

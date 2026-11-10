@@ -92,6 +92,7 @@ abstract final class DocModelJson {
     'size': ?s.fontSize,
     'color': ?s.color,
     'background': ?s.background,
+    'link': ?s.link,
   };
 
   static Map<String, Object?> _table(DocTable t) => {
@@ -179,6 +180,7 @@ abstract final class DocModelJson {
       fontSize: _number(json['size']),
       color: _color(json['color']),
       background: _color(json['background']),
+      link: _string(json['link']),
     );
   }
 

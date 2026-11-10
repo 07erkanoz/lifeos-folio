@@ -354,6 +354,7 @@ mixin EditorClipboard on QuillController {
               fontSize: s.fontSize,
               color: s.color,
               background: s.background,
+              link: s.link,
             ),
           );
         }

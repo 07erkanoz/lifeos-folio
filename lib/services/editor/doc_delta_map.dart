@@ -139,6 +139,7 @@ class DocDeltaMap {
             }
             if (s.color != null) attrs['color'] = s.color;
             if (s.background != null) attrs['background'] = s.background;
+            if (s.link != null) attrs['link'] = s.link;
             if (s.superscript) attrs['script'] = 'super';
             if (s.subscript) attrs['script'] = 'sub';
           }
@@ -221,6 +222,7 @@ class DocDeltaMap {
       final color = a['color'] as String?;
       final background = a['background'] as String?;
       final script = a['script'];
+      final link = a['link'] as String?;
       if (!bold &&
           !italic &&
           !underline &&
@@ -229,6 +231,7 @@ class DocDeltaMap {
           size == null &&
           color == null &&
           background == null &&
+          link == null &&
           script == null) {
         return;
       }
@@ -246,6 +249,7 @@ class DocDeltaMap {
           background: background,
           superscript: script == 'super',
           subscript: script == 'sub',
+          link: link,
         ),
       );
     }

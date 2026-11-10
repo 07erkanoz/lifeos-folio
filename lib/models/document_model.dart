@@ -248,6 +248,9 @@ class DocSpan {
   final bool superscript;
   final bool subscript;
 
+  /// Where the text leads when it is a link (a web address, an e-mail).
+  final String? link;
+
   const DocSpan({
     required this.startOffset,
     required this.length,
@@ -261,6 +264,7 @@ class DocSpan {
     this.background,
     this.superscript = false,
     this.subscript = false,
+    this.link,
   });
 
   int get endOffset => startOffset + length;
