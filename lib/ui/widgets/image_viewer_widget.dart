@@ -18,6 +18,9 @@ import 'image_crop_overlay.dart';
 import 'notice.dart';
 import 'ocr_text_panel.dart';
 import 'swipe_pages.dart';
+import 'pdf_tools_dialogs.dart';
+import '../../services/pdf/pdf_tools.dart';
+import '../../services/platform/editor_window.dart';
 import 'viewer_bar.dart';
 import 'viewer_shortcuts.dart';
 import '../../services/platform/app_language.dart';
@@ -393,6 +396,27 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
                 icon: Icons.fullscreen_rounded,
                 onPressed: widget.onFullScreen,
               ),
+          ],
+        ),
+      if (_svg == null &&
+          EditorWindow.available &&
+          PdfPart.supports(widget.filePath))
+        ViewerPill(
+          children: [
+            ViewerButton(
+              key: const ValueKey('image-to-pdf'),
+              tooltip: context.l.pdfBuildTool,
+              icon: Icons.picture_as_pdf_outlined,
+              onPressed: _cropping
+                  ? null
+                  : () async {
+                      final saved = await PdfBuilderDialog.show(
+                        context,
+                        initial: [widget.filePath],
+                      );
+                      if (saved != null && mounted) pdfMade(context, saved);
+                    },
+            ),
           ],
         ),
       OcrTextButton(

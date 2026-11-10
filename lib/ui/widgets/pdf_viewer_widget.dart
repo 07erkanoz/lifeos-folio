@@ -24,6 +24,8 @@ import 'ocr_text_panel.dart';
 import 'swipe_pages.dart';
 import 'page_jump.dart';
 import 'page_zoom.dart';
+import 'pdf_tools_dialogs.dart';
+import '../../services/platform/editor_window.dart';
 import 'viewer_bar.dart';
 import 'viewer_shortcuts.dart';
 import 'pdf_context_menu.dart';
@@ -706,6 +708,21 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
     selected: selected,
   );
 
+  /// Chosen pages of this PDF as a PDF of their own.
+  Future<void> _splitPages() async {
+    final saved = await PdfPagesDialog.show(context, widget.filePath!);
+    if (saved != null && mounted) pdfMade(context, saved);
+  }
+
+  /// A PDF made of this one and what is added to it.
+  Future<void> _buildPdf() async {
+    final saved = await PdfBuilderDialog.show(
+      context,
+      initial: [widget.filePath!],
+    );
+    if (saved != null && mounted) pdfMade(context, saved);
+  }
+
   /// The page read, the sheet's size and the file's, and how large it is
   /// shown.
   Widget _status() => ListenableBuilder(
@@ -881,6 +898,23 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                       key: const ValueKey('pdf-find'),
                     ),
                   ]),
+                  if (widget.filePath != null && EditorWindow.available) ...[
+                    const SizedBox(width: 10),
+                    _pill([
+                      _button(
+                        context.l.pdfSplitTool,
+                        Icons.call_split_rounded,
+                        ready ? _splitPages : null,
+                        key: const ValueKey('pdf-split'),
+                      ),
+                      _button(
+                        context.l.pdfBuildTool,
+                        Icons.library_add_outlined,
+                        _buildPdf,
+                        key: const ValueKey('pdf-build'),
+                      ),
+                    ]),
+                  ],
                   const SizedBox(width: 8),
                   OcrTextButton(
                     ocr: _ocr,

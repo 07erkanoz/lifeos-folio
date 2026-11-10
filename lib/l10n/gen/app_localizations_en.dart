@@ -2647,7 +2647,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get viewCopySaved => 'A copy of the version was saved';
+  String get viewCopySaved => 'Copy saved.';
 
   @override
   String get viewCopySaveFailed => 'The copy could not be saved';
@@ -2678,7 +2678,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get viewSigned => 'E-signed';
 
   @override
-  String get viewSaveCopy => 'Save as copy…';
+  String get viewSaveCopy => 'Save a copy';
 
   @override
   String get viewOtherFormatHint =>
@@ -2860,4 +2860,101 @@ class AppLocalizationsEn extends AppLocalizations {
   String viewCopyright(String product) {
     return '© 2026 LifeOS. All rights reserved. $product is proprietary software, not open source.';
   }
+
+  @override
+  String get pdfPagesTitle => 'Extract pages';
+
+  @override
+  String get pdfPagesHint =>
+      'Choose the pages to take into a PDF of their own; their order can be typed in the box below too.';
+
+  @override
+  String get pdfPagesRange => 'Pages (for example: 1-3, 5)';
+
+  @override
+  String get pdfPagesAll => 'Select all';
+
+  @override
+  String get pdfPagesNone => 'Clear selection';
+
+  @override
+  String pdfPagesCount(int count) {
+    return '$count pages selected';
+  }
+
+  @override
+  String get pdfPagesBad => 'The page numbers could not be read.';
+
+  @override
+  String get pdfSave => 'Save as PDF';
+
+  @override
+  String pdfSaved(String name) {
+    return '$name saved.';
+  }
+
+  @override
+  String get pdfOpen => 'Open';
+
+  @override
+  String get pdfFailed => 'The PDF could not be made';
+
+  @override
+  String get pdfBuildTitle => 'Make a PDF';
+
+  @override
+  String get pdfBuildHint =>
+      'Add pictures and PDFs and put them in order. Each picture becomes a page; to take only some pages of a PDF, type their numbers.';
+
+  @override
+  String get pdfBuildAdd => 'Add files';
+
+  @override
+  String get pdfBuildAllPages => 'All';
+
+  @override
+  String get pdfBuildPagesLabel => 'Pages';
+
+  @override
+  String pdfBuildPagesOf(int count) {
+    return '$count pages';
+  }
+
+  @override
+  String get pdfBuildPicture => 'Picture · 1 page';
+
+  @override
+  String get pdfBuildRemove => 'Remove';
+
+  @override
+  String pdfBuildTotal(int count) {
+    return 'A PDF of $count pages';
+  }
+
+  @override
+  String get pdfBuildEmpty => 'No files added yet.';
+
+  @override
+  String get pdfSplitTool => 'Extract pages: a PDF of the pages you choose';
+
+  @override
+  String get pdfBuildTool => 'Make a PDF: add pictures and PDFs and join them';
+
+  @override
+  String get viewPrintKey => 'Print (Ctrl+P)';
+
+  @override
+  String get viewSaveAsPdf => 'Save as PDF';
+
+  @override
+  String get viewOpenInFolio => 'Open in Folio';
+
+  @override
+  String get viewShowInFolder => 'Show in folder';
+
+  @override
+  String get viewMore => 'File actions';
+
+  @override
+  String get viewThumbnails => 'Page thumbnails';
 }

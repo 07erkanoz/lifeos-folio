@@ -71,6 +71,38 @@ class ImagePdfWriter {
     );
   }
 
+  /// Adds a page filled by a JPEG as it is, not decoded: a photograph
+  /// keeps its bytes and its size ([components] 1 for grey, 3 for colour).
+  void addJpegPage({
+    required int width,
+    required int height,
+    required double pageWidth,
+    required double pageHeight,
+    required int components,
+    required Uint8List jpeg,
+  }) {
+    final image = _add(
+      _stream(
+        '/Type/XObject/Subtype/Image/Width $width/Height $height'
+        '/ColorSpace/${components == 1 ? 'DeviceGray' : 'DeviceRGB'}'
+        '/BitsPerComponent 8/Filter/DCTDecode',
+        jpeg,
+      ),
+    );
+    final w = _num(pageWidth), h = _num(pageHeight);
+    final content = _add(
+      _stream('', latin1.encode('q $w 0 0 $h 0 0 cm /Im0 Do Q')),
+    );
+    _pages.add(
+      _add(
+        latin1.encode(
+          '<</Type/Page/Parent 2 0 R/MediaBox[0 0 $w $h]'
+          '/Resources<</XObject<</Im0 $image 0 R>>>>/Contents $content 0 R>>',
+        ),
+      ),
+    );
+  }
+
   /// A text string as PDF wants it outside ASCII: UTF-16BE with a BOM, in hex.
   static String _text(String value) {
     final hex = StringBuffer('<FEFF');

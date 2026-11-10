@@ -4577,7 +4577,7 @@ abstract class AppLocalizations {
   /// No description provided for @viewCopySaved.
   ///
   /// In tr, this message translates to:
-  /// **'Sürümün kopyası kaydedildi'**
+  /// **'Kopya kaydedildi.'**
   String get viewCopySaved;
 
   /// No description provided for @viewCopySaveFailed.
@@ -4631,7 +4631,7 @@ abstract class AppLocalizations {
   /// No description provided for @viewSaveCopy.
   ///
   /// In tr, this message translates to:
-  /// **'Kopya olarak kaydet…'**
+  /// **'Farklı kaydet'**
   String get viewSaveCopy;
 
   /// No description provided for @viewOtherFormatHint.
@@ -4909,6 +4909,180 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'© 2026 LifeOS. Tüm hakları saklıdır. {product} tescilli bir yazılımdır, açık kaynak değildir.'**
   String viewCopyright(String product);
+
+  /// No description provided for @pdfPagesTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sayfaları ayır'**
+  String get pdfPagesTitle;
+
+  /// No description provided for @pdfPagesHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayrı bir PDF\'e alınacak sayfaları seçin; sırasını alttaki kutuya yazarak da verebilirsiniz.'**
+  String get pdfPagesHint;
+
+  /// No description provided for @pdfPagesRange.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sayfalar (örnek: 1-3, 5)'**
+  String get pdfPagesRange;
+
+  /// No description provided for @pdfPagesAll.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tümünü seç'**
+  String get pdfPagesAll;
+
+  /// No description provided for @pdfPagesNone.
+  ///
+  /// In tr, this message translates to:
+  /// **'Seçimi kaldır'**
+  String get pdfPagesNone;
+
+  /// No description provided for @pdfPagesCount.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} sayfa seçildi'**
+  String pdfPagesCount(int count);
+
+  /// No description provided for @pdfPagesBad.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sayfa numaraları anlaşılamadı.'**
+  String get pdfPagesBad;
+
+  /// No description provided for @pdfSave.
+  ///
+  /// In tr, this message translates to:
+  /// **'PDF olarak kaydet'**
+  String get pdfSave;
+
+  /// No description provided for @pdfSaved.
+  ///
+  /// In tr, this message translates to:
+  /// **'{name} kaydedildi.'**
+  String pdfSaved(String name);
+
+  /// No description provided for @pdfOpen.
+  ///
+  /// In tr, this message translates to:
+  /// **'Aç'**
+  String get pdfOpen;
+
+  /// No description provided for @pdfFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'PDF oluşturulamadı'**
+  String get pdfFailed;
+
+  /// No description provided for @pdfBuildTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'PDF oluştur'**
+  String get pdfBuildTitle;
+
+  /// No description provided for @pdfBuildHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Resimleri ve PDF\'leri ekleyip sıralayın. Her resim bir sayfa olur; bir PDF\'in yalnız bazı sayfalarını almak için numaralarını yazın.'**
+  String get pdfBuildHint;
+
+  /// No description provided for @pdfBuildAdd.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dosya ekle'**
+  String get pdfBuildAdd;
+
+  /// No description provided for @pdfBuildAllPages.
+  ///
+  /// In tr, this message translates to:
+  /// **'Tümü'**
+  String get pdfBuildAllPages;
+
+  /// No description provided for @pdfBuildPagesLabel.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sayfalar'**
+  String get pdfBuildPagesLabel;
+
+  /// No description provided for @pdfBuildPagesOf.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} sayfa'**
+  String pdfBuildPagesOf(int count);
+
+  /// No description provided for @pdfBuildPicture.
+  ///
+  /// In tr, this message translates to:
+  /// **'Resim · 1 sayfa'**
+  String get pdfBuildPicture;
+
+  /// No description provided for @pdfBuildRemove.
+  ///
+  /// In tr, this message translates to:
+  /// **'Çıkar'**
+  String get pdfBuildRemove;
+
+  /// No description provided for @pdfBuildTotal.
+  ///
+  /// In tr, this message translates to:
+  /// **'{count} sayfalık PDF'**
+  String pdfBuildTotal(int count);
+
+  /// No description provided for @pdfBuildEmpty.
+  ///
+  /// In tr, this message translates to:
+  /// **'Henüz dosya eklenmedi.'**
+  String get pdfBuildEmpty;
+
+  /// No description provided for @pdfSplitTool.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sayfaları ayır: seçtiğiniz sayfalardan ayrı bir PDF'**
+  String get pdfSplitTool;
+
+  /// No description provided for @pdfBuildTool.
+  ///
+  /// In tr, this message translates to:
+  /// **'PDF oluştur: resim ve PDF ekleyip birleştirin'**
+  String get pdfBuildTool;
+
+  /// No description provided for @viewPrintKey.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yazdır (Ctrl+P)'**
+  String get viewPrintKey;
+
+  /// No description provided for @viewSaveAsPdf.
+  ///
+  /// In tr, this message translates to:
+  /// **'PDF olarak kaydet'**
+  String get viewSaveAsPdf;
+
+  /// No description provided for @viewOpenInFolio.
+  ///
+  /// In tr, this message translates to:
+  /// **'Folio\'da aç'**
+  String get viewOpenInFolio;
+
+  /// No description provided for @viewShowInFolder.
+  ///
+  /// In tr, this message translates to:
+  /// **'Klasörde göster'**
+  String get viewShowInFolder;
+
+  /// No description provided for @viewMore.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dosya işlemleri'**
+  String get viewMore;
+
+  /// No description provided for @viewThumbnails.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sayfa küçük resimleri'**
+  String get viewThumbnails;
 }
 
 class _AppLocalizationsDelegate

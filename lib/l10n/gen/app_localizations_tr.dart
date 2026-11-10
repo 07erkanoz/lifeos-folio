@@ -2498,7 +2498,7 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get viewCopySaved => 'Sürümün kopyası kaydedildi';
+  String get viewCopySaved => 'Kopya kaydedildi.';
 
   @override
   String get viewCopySaveFailed => 'Kopya kaydedilemedi';
@@ -2527,7 +2527,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get viewSigned => 'E-imzalı';
 
   @override
-  String get viewSaveCopy => 'Kopya olarak kaydet…';
+  String get viewSaveCopy => 'Farklı kaydet';
 
   @override
   String get viewOtherFormatHint =>
@@ -2690,4 +2690,102 @@ class AppLocalizationsTr extends AppLocalizations {
   String viewCopyright(String product) {
     return '© 2026 LifeOS. Tüm hakları saklıdır. $product tescilli bir yazılımdır, açık kaynak değildir.';
   }
+
+  @override
+  String get pdfPagesTitle => 'Sayfaları ayır';
+
+  @override
+  String get pdfPagesHint =>
+      'Ayrı bir PDF\'e alınacak sayfaları seçin; sırasını alttaki kutuya yazarak da verebilirsiniz.';
+
+  @override
+  String get pdfPagesRange => 'Sayfalar (örnek: 1-3, 5)';
+
+  @override
+  String get pdfPagesAll => 'Tümünü seç';
+
+  @override
+  String get pdfPagesNone => 'Seçimi kaldır';
+
+  @override
+  String pdfPagesCount(int count) {
+    return '$count sayfa seçildi';
+  }
+
+  @override
+  String get pdfPagesBad => 'Sayfa numaraları anlaşılamadı.';
+
+  @override
+  String get pdfSave => 'PDF olarak kaydet';
+
+  @override
+  String pdfSaved(String name) {
+    return '$name kaydedildi.';
+  }
+
+  @override
+  String get pdfOpen => 'Aç';
+
+  @override
+  String get pdfFailed => 'PDF oluşturulamadı';
+
+  @override
+  String get pdfBuildTitle => 'PDF oluştur';
+
+  @override
+  String get pdfBuildHint =>
+      'Resimleri ve PDF\'leri ekleyip sıralayın. Her resim bir sayfa olur; bir PDF\'in yalnız bazı sayfalarını almak için numaralarını yazın.';
+
+  @override
+  String get pdfBuildAdd => 'Dosya ekle';
+
+  @override
+  String get pdfBuildAllPages => 'Tümü';
+
+  @override
+  String get pdfBuildPagesLabel => 'Sayfalar';
+
+  @override
+  String pdfBuildPagesOf(int count) {
+    return '$count sayfa';
+  }
+
+  @override
+  String get pdfBuildPicture => 'Resim · 1 sayfa';
+
+  @override
+  String get pdfBuildRemove => 'Çıkar';
+
+  @override
+  String pdfBuildTotal(int count) {
+    return '$count sayfalık PDF';
+  }
+
+  @override
+  String get pdfBuildEmpty => 'Henüz dosya eklenmedi.';
+
+  @override
+  String get pdfSplitTool =>
+      'Sayfaları ayır: seçtiğiniz sayfalardan ayrı bir PDF';
+
+  @override
+  String get pdfBuildTool => 'PDF oluştur: resim ve PDF ekleyip birleştirin';
+
+  @override
+  String get viewPrintKey => 'Yazdır (Ctrl+P)';
+
+  @override
+  String get viewSaveAsPdf => 'PDF olarak kaydet';
+
+  @override
+  String get viewOpenInFolio => 'Folio\'da aç';
+
+  @override
+  String get viewShowInFolder => 'Klasörde göster';
+
+  @override
+  String get viewMore => 'Dosya işlemleri';
+
+  @override
+  String get viewThumbnails => 'Sayfa küçük resimleri';
 }

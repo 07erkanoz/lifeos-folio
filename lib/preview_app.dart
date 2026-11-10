@@ -1,9 +1,9 @@
-import 'services/desktop/screen_fit.dart';
-
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'services/platform/app_language.dart';
 
@@ -12,6 +12,17 @@ import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
 
 import 'models/evrak_file.dart';
+import 'services/convert/converter_service.dart';
+import 'services/desktop/screen_fit.dart';
+import 'services/pdf/pdf_service.dart';
+import 'services/pdf/pdf_tools.dart';
+import 'services/platform/app_edition.dart';
+import 'services/platform/file_actions.dart';
+import 'services/tiff/tiff_service.dart';
+import 'ui/widgets/notice.dart';
+import 'ui/widgets/pdf_tools_dialogs.dart';
+import 'ui/widgets/print_screen.dart';
+import 'ui/widgets/viewer_bar.dart';
 import 'services/platform/editor_window.dart';
 import 'services/preview/pdf_fonts.dart';
 import 'ui/theme/app_theme.dart';
@@ -116,7 +127,17 @@ class _PreviewAppState extends State<PreviewApp> {
         home: Scaffold(
           body: path == null
               ? const Center(child: Text('Gösterilecek belge yok.'))
-              : FilePreview(path: path),
+              : Stack(
+                  children: [
+                    Positioned.fill(child: FilePreview(path: path)),
+                    // At the right end of the viewer's row of tools.
+                    Positioned(
+                      top: (ViewerToolbar.height - 36) / 2,
+                      right: 8,
+                      child: PreviewFileMenu(path: path),
+                    ),
+                  ],
+                ),
           // Opened from the file manager to be read; written in Folio itself
           // with one press, as the file manager's "Folio ile düzenle" does.
           floatingActionButton: path != null && _editable(path)
@@ -160,10 +181,140 @@ Future<void> _edit(String path) async {
 }
 
 /// [path] in a preview window of its own.
-Future<void> openPreviewWindow(String path) async {
-  if (!EditorWindow.available) return;
-  await Process.start(Platform.resolvedExecutable, [
-    previewFlag,
-    path,
-  ], mode: ProcessStartMode.detached);
+Future<void> openPreviewWindow(String path) => PreviewWindow.open(path);
+
+/// What is done with the document a preview window shows: printed, kept
+/// as a copy or as a PDF, taken to Folio's own window, found in its folder.
+class PreviewFileMenu extends StatelessWidget {
+  const PreviewFileMenu({super.key, required this.path});
+
+  final String path;
+
+  /// The document as the PDF that is printed or kept: a PDF as it is, a
+  /// scan or a picture as pages, anything else laid out as it prints.
+  static Future<Uint8List?> pdfOf(String path) async {
+    final file = EvrakFile.fromPath(path);
+    final bytes = await File(path).readAsBytes();
+    switch (file.format) {
+      case EvrakFormat.pdf:
+        return bytes;
+      case EvrakFormat.tif:
+        return TiffService.tiffToPdf(bytes);
+      case EvrakFormat.image:
+        return PdfTools.fromImages([path], title: file.baseName);
+      default:
+        final model = await ConverterService.extractDocModel(
+          bytes,
+          file.format,
+        );
+        return model == null
+            ? null
+            : PdfService.modelToPdfBytes(model, title: file.baseName);
+    }
+  }
+
+  Future<void> _run(BuildContext context, String action) async {
+    try {
+      switch (action) {
+        case 'print':
+          final pdf = await pdfOf(path);
+          if (pdf != null && context.mounted) {
+            await PrintScreen.show(context, pdf: pdf, name: p.basename(path));
+          }
+        case 'pdf':
+          final pdf = await pdfOf(path);
+          if (pdf == null || !context.mounted) return;
+          final saved = await savePdfAs(
+            context,
+            pdf,
+            '${p.basenameWithoutExtension(path)}.pdf',
+          );
+          if (saved != null && context.mounted) pdfMade(context, saved);
+        case 'copy':
+          final where = await FilePicker.saveFile(
+            dialogTitle: context.l.viewSaveCopy,
+            fileName: p.basename(path),
+          );
+          if (where == null) return;
+          await File(path).copy(where);
+          if (context.mounted) {
+            showNotice(
+              context,
+              context.l.viewCopySaved,
+              kind: NoticeKind.success,
+            );
+          }
+        case 'folio':
+          await PreviewWindow.inFolio(path);
+          try {
+            await windowManager.close();
+          } catch (_) {}
+        case 'folder':
+          await FileActions.invoke('showFolder', path);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showNotice(context, '$e', kind: NoticeKind.error);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPdf = p.extension(path).toLowerCase() == '.pdf';
+    PopupMenuItem<String> item(String value, IconData icon, String label) =>
+        PopupMenuItem(
+          value: value,
+          child: Row(
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 12),
+              Text(label),
+            ],
+          ),
+        );
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true): () =>
+            unawaited(_run(context, 'print')),
+      },
+      child: Material(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        child: PopupMenuButton<String>(
+          key: const ValueKey('preview-file-menu'),
+          tooltip: context.l.viewMore,
+          position: PopupMenuPosition.under,
+          onSelected: (action) => unawaited(_run(context, action)),
+          itemBuilder: (context) => [
+            item('print', Icons.print_outlined, context.l.viewPrintKey),
+            if (!isPdf)
+              item(
+                'pdf',
+                Icons.picture_as_pdf_outlined,
+                context.l.viewSaveAsPdf,
+              ),
+            item('copy', Icons.save_alt_rounded, context.l.viewSaveCopy),
+            const PopupMenuDivider(),
+            if (!AppEdition.isOfis)
+              item(
+                'folio',
+                Icons.open_in_new_rounded,
+                context.l.viewOpenInFolio,
+              ),
+            item(
+              'folder',
+              Icons.folder_open_outlined,
+              context.l.viewShowInFolder,
+            ),
+          ],
+          child: const SizedBox(
+            width: 36,
+            height: 36,
+            child: Icon(Icons.more_horiz_rounded, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
 }
