@@ -85,6 +85,10 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
     _ocr.dispose();
     _generation++;
     _session?.close();
+    _thumbSession?.close();
+    for (final image in _thumbs.values) {
+      image.dispose();
+    }
     for (final image in _pageCache.values) {
       image.dispose();
     }
@@ -95,10 +99,145 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
 
   void _release(ui.Image image) =>
       WidgetsBinding.instance.addPostFrameCallback((_) => image.dispose());
+
+  /// Whether the pages are listed as small pictures beside the one read.
+  bool _thumbnails = false;
+
+  /// The small pages, made by a decoder of their own so that the page read
+  /// never waits behind them: asked for as each comes into view, one at a
+  /// time, and kept small (a scanned page whole is tens of megabytes).
+  TiffPreviewSession? _thumbSession;
+  Future<TiffPreviewSession>? _thumbOpening;
+  final _thumbs = <int, ui.Image>{};
+  final _thumbAsked = <int>{};
+
+  void _dropThumbnails() {
+    _thumbSession?.close();
+    _thumbSession = null;
+    _thumbOpening = null;
+    for (final image in _thumbs.values) {
+      _release(image);
+    }
+    _thumbs.clear();
+    _thumbAsked.clear();
+  }
+
+  Future<void> _askThumbnail(int index) async {
+    if (!_thumbAsked.add(index)) return;
+    final generation = _generation;
+    try {
+      final session = await (_thumbOpening ??= TiffPreviewSession.open(
+        widget.filePath,
+      ));
+      if (!mounted || generation != _generation) {
+        if (!identical(session, _thumbSession)) session.close();
+        return;
+      }
+      _thumbSession = session;
+      final raster = await session.page(index, priority: false);
+      if (!mounted || generation != _generation) return;
+      final ready = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        raster.rgba,
+        raster.width,
+        raster.height,
+        ui.PixelFormat.rgba8888,
+        ready.complete,
+        // Twice the panel's width: sharp on a dense screen.
+        targetWidth: raster.width >= raster.height ? 232 : null,
+        targetHeight: raster.width >= raster.height ? null : 328,
+      );
+      final image = await ready.future;
+      if (!mounted || generation != _generation) {
+        image.dispose();
+        return;
+      }
+      setState(() => _thumbs[index] = image);
+    } catch (_) {
+      // A page that cannot be drawn small is left blank in the list; the
+      // page itself says what is wrong with it when it is opened.
+    }
+  }
+
+  /// [page] with the list of small pages at its left when it is open.
+  Widget _besideThumbnails(Widget page) {
+    if (!_thumbnails || _pageCount < 2) return page;
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          key: const ValueKey('tiff-thumbnail-panel'),
+          width: 148,
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(right: BorderSide(color: scheme.outlineVariant)),
+          ),
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            itemCount: _pageCount,
+            itemBuilder: (context, i) {
+              final on = i == _currentPage;
+              final image = _thumbs[i];
+              if (image == null) unawaited(_askThumbnail(i));
+              return InkWell(
+                key: ValueKey('tiff-thumbnail-${i + 1}'),
+                onTap: () => _loadPage(i),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+                  child: Column(
+                    children: [
+                      AspectRatio(
+                        aspectRatio: image == null
+                            ? 210 / 297
+                            : image.width / image.height,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(
+                              color: on
+                                  ? scheme.primary
+                                  : scheme.outlineVariant,
+                              width: on ? 2.5 : 1,
+                            ),
+                          ),
+                          child: image == null
+                              ? null
+                              : Padding(
+                                  padding: const EdgeInsets.all(2.5),
+                                  child: RawImage(
+                                    image: image,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${i + 1}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: on ? FontWeight.w700 : FontWeight.w400,
+                          color: on ? scheme.primary : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        Expanded(child: page),
+      ],
+    );
+  }
+
   Future<void> _loadTiff() async {
     final generation = ++_generation;
     _session?.close();
     _session = null;
+    _dropThumbnails();
     for (final image in _pageCache.values) {
       _release(image);
     }
@@ -292,6 +431,19 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
               ViewerPill(
                 children: [
                   ViewerButton(
+                    key: const ValueKey('tiff-thumbnails'),
+                    icon: Icons.view_sidebar_outlined,
+                    tooltip: context.l.viewThumbnails,
+                    selected: _thumbnails,
+                    onPressed: _pageCount > 1
+                        ? () => setState(() => _thumbnails = !_thumbnails)
+                        : null,
+                  ),
+                ],
+              ),
+              ViewerPill(
+                children: [
+                  ViewerButton(
                     icon: Icons.first_page_rounded,
                     tooltip: context.l.viewFirstPage,
                     onPressed: _currentPage > 0 ? () => _loadPage(0) : null,
@@ -383,56 +535,58 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
           else
             // Görüntüleme Alanı
             Expanded(
-              child: Container(
-                color: isDark ? AppColors.darkBg : AppColors.lightPanel,
-                child: _pageError != null
-                    ? Center(child: Text(_pageError!))
-                    : _activePage == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : Stack(
-                        children: [
-                          InteractiveViewer(
-                            transformationController: _zoomController,
-                            minScale: 0.5,
-                            maxScale: 4.0,
-                            onInteractionEnd: (_) {
-                              final s = _zoomController.value
-                                  .getMaxScaleOnAxis();
-                              if ((s - _scale).abs() > 0.01) {
-                                setState(() => _scale = s);
-                              }
-                            },
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Material(
-                                  elevation: 4,
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: RotatedBox(
-                                    quarterTurns: _quarterTurns,
-                                    child: RawImage(
-                                      image: _activePage,
-                                      fit: BoxFit.contain,
+              child: _besideThumbnails(
+                Container(
+                  color: isDark ? AppColors.darkBg : AppColors.lightPanel,
+                  child: _pageError != null
+                      ? Center(child: Text(_pageError!))
+                      : _activePage == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : Stack(
+                          children: [
+                            InteractiveViewer(
+                              transformationController: _zoomController,
+                              minScale: 0.5,
+                              maxScale: 4.0,
+                              onInteractionEnd: (_) {
+                                final s = _zoomController.value
+                                    .getMaxScaleOnAxis();
+                                if ((s - _scale).abs() > 0.01) {
+                                  setState(() => _scale = s);
+                                }
+                              },
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Material(
+                                    elevation: 4,
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: RotatedBox(
+                                      quarterTurns: _quarterTurns,
+                                      child: RawImage(
+                                        image: _activePage,
+                                        fit: BoxFit.contain,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          if (_pageLoading)
-                            const Positioned(
-                              top: 16,
-                              right: 16,
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                            if (_pageLoading)
+                              const Positioned(
+                                top: 16,
+                                right: 16,
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
+                          ],
+                        ),
+                ),
               ),
             ),
           ViewerStatusBar(
