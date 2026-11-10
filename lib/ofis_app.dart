@@ -26,6 +26,9 @@ import 'services/desktop/screen_fit.dart';
 import 'ui/agenda/agenda_page.dart' show AgendaColors;
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
+import 'preview_app.dart' show PreviewFileMenu;
+import 'ui/widgets/pdf_tools_dialogs.dart';
+import 'ui/widgets/viewer_bar.dart';
 import 'ui/widgets/desktop_frame.dart';
 import 'ui/widgets/document_history_dialog.dart';
 import 'ui/widgets/editor_file_menu.dart';
@@ -325,7 +328,18 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
       }
       return Scaffold(
         key: ValueKey('ofis-preview-$_generation'),
-        body: FilePreview(path: path),
+        body: Stack(
+          children: [
+            Positioned.fill(child: FilePreview(path: path)),
+            // At the right end of the viewer's row of tools: print, keep
+            // a copy, keep as a PDF, show in its folder.
+            Positioned(
+              top: (ViewerToolbar.height - 36) / 2,
+              right: 8,
+              child: PreviewFileMenu(path: path),
+            ),
+          ],
+        ),
         floatingActionButton: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -333,12 +347,16 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
             // E-signing with a card is a Turkish lawyer's work, not Ofis's
             // users': an .imz is opened and shown, none is made here.
             if (_editable(path))
-              FloatingActionButton.extended(
-                key: const ValueKey('ofis-edit'),
-                heroTag: 'ofis-edit',
-                onPressed: () => unawaited(_edit()),
-                icon: const Icon(Icons.edit_note_rounded),
-                label: Text(context.l.ofisEdit),
+              // Above the viewer's status line, not over it.
+              Padding(
+                padding: const EdgeInsets.only(bottom: 22),
+                child: FloatingActionButton.extended(
+                  key: const ValueKey('ofis-edit'),
+                  heroTag: 'ofis-edit',
+                  onPressed: () => unawaited(_edit()),
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: Text(context.l.ofisEdit),
+                ),
               ),
           ],
         ),
@@ -634,6 +652,16 @@ class _OfisHomeState extends State<OfisHome> {
                   title: context.l.ofisNewDocx,
                   detail: context.l.ofisNewDocxDetail,
                   onTap: () => widget.onNew(EvrakFormat.docx),
+                ),
+                _action(
+                  key: const ValueKey('ofis-home-make-pdf'),
+                  icon: Icons.picture_as_pdf_outlined,
+                  title: context.l.ofisMakePdf,
+                  detail: context.l.ofisMakePdfDetail,
+                  onTap: () async {
+                    final saved = await PdfBuilderDialog.show(context);
+                    if (saved != null) widget.onOpenFile(saved);
+                  },
                 ),
               ],
             ),

@@ -48,6 +48,8 @@ void main() {
     ]);
     // UDF is UYAP's: opened, not offered as a new document.
     expect(find.byKey(const ValueKey('ofis-home-new-udf')), findsNothing);
+    // Pictures and PDFs joined into one, from the home page too.
+    expect(find.byKey(const ValueKey('ofis-home-make-pdf')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

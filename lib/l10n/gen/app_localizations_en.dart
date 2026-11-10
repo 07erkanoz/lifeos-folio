@@ -2957,4 +2957,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get viewThumbnails => 'Page thumbnails';
+
+  @override
+  String get ofisMakePdf => 'Make a PDF';
+
+  @override
+  String get ofisMakePdfDetail => 'Join pictures and PDFs into one PDF.';
 }

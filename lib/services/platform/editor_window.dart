@@ -62,7 +62,8 @@ abstract final class PreviewWindow {
   static Future<void> _open(String path) async {
     if (!EditorWindow.available) return;
     await Process.start(Platform.resolvedExecutable, [
-      previewFlag,
+      // LifeOS Ofis shows a document in a window of its own, not Folio's.
+      AppEdition.isOfis ? ofisFlag : previewFlag,
       path,
     ], mode: ProcessStartMode.detached);
   }

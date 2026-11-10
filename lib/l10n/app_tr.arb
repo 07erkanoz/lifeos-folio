@@ -1564,5 +1564,7 @@
   "viewShowInFolder": "Klasörde göster",
   "viewMore": "Dosya işlemleri",
   "viewThumbnails": "Sayfa küçük resimleri",
-  "viewCopySaved": "Kopya kaydedildi."
+  "viewCopySaved": "Kopya kaydedildi.",
+  "ofisMakePdf": "PDF oluştur",
+  "ofisMakePdfDetail": "Resimleri ve PDF'leri tek bir PDF'te birleştirin."
 }

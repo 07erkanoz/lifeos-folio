@@ -832,5 +832,7 @@
   "viewShowInFolder": "Show in folder",
   "viewMore": "File actions",
   "viewThumbnails": "Page thumbnails",
-  "viewCopySaved": "Copy saved."
+  "viewCopySaved": "Copy saved.",
+  "ofisMakePdf": "Make a PDF",
+  "ofisMakePdfDetail": "Join pictures and PDFs into one PDF."
 }

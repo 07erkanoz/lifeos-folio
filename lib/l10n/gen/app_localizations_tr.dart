@@ -2788,4 +2788,11 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get viewThumbnails => 'Sayfa küçük resimleri';
+
+  @override
+  String get ofisMakePdf => 'PDF oluştur';
+
+  @override
+  String get ofisMakePdfDetail =>
+      'Resimleri ve PDF\'leri tek bir PDF\'te birleştirin.';
 }

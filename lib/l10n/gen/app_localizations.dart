@@ -5083,6 +5083,18 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Sayfa küçük resimleri'**
   String get viewThumbnails;
+
+  /// No description provided for @ofisMakePdf.
+  ///
+  /// In tr, this message translates to:
+  /// **'PDF oluştur'**
+  String get ofisMakePdf;
+
+  /// No description provided for @ofisMakePdfDetail.
+  ///
+  /// In tr, this message translates to:
+  /// **'Resimleri ve PDF\'leri tek bir PDF\'te birleştirin.'**
+  String get ofisMakePdfDetail;
 }
 
 class _AppLocalizationsDelegate
