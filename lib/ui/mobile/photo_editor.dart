@@ -274,8 +274,24 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
                       ),
                     ),
             ),
-            _panel(scheme),
-            _tools(scheme),
+            // On a computer's wide window the looks and the tools keep a
+            // phone's width, in the middle: stretched across it, each look
+            // was a bar and the tools a hand's breadth apart.
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: _panel(scheme),
+              ),
+            ),
+            ColoredBox(
+              color: _toolsColor,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: _tools(scheme),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -682,6 +698,8 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     );
   }
 
+  static const _toolsColor = Color(0xFF14171C);
+
   Widget _tools(ColorScheme scheme) {
     Widget tool(_Tool t, IconData icon, String label) {
       final on = _tool == t;
@@ -715,7 +733,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     }
 
     return Container(
-      color: const Color(0xFF14171C),
+      color: _toolsColor,
       padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
       child: Row(
         children: [
