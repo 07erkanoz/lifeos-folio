@@ -64,12 +64,24 @@ abstract base class Node extends LinkedListEntry<Node> {
     if (list == null || isFirst) {
       return 0;
     }
+    // FOLIO PATCH: counted on from the nearest node before that knows where
+    // it is, and each one passed told. An edit forgets the place of every
+    // node after it; each then counted from the first again, the whole
+    // document once for every line of it at every keystroke.
+    var known = previous;
+    while (known != null && known._offset == null && !known.isFirst) {
+      known = known.previous;
+    }
     var offset = 0;
-    for (final node in list!) {
-      if (node == this) {
-        break;
-      }
+    var node = known;
+    if (known != null) {
+      offset = (known._offset ?? 0) + known.length;
+      node = known.next;
+    }
+    while (node != null && node != this) {
+      node._offset = offset;
       offset += node.length;
+      node = node.next;
     }
 
     _offset = offset;

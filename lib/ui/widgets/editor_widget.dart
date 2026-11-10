@@ -3537,11 +3537,71 @@ class _EditorWidgetState extends State<EditorWidget>
   /// The sheets and the text on them, with the header and footer in the
   /// first page's margins, where UYAP and the printed page put them, rather
   /// than in the text.
+  Widget? _rulerStrip;
+  List<double>? _rulerStripOf;
+
+  /// The rulers beside the pages, one a page. Kept as they were built
+  /// while the sheet and its margins are the same: built anew with the
+  /// page at every movement of the caret, they were laid out and drawn
+  /// again each time, a quarter of every frame in a document of 75 pages.
+  Widget _verticalRulers(double paperHeight, double heightPoints) {
+    final of = [
+      paperHeight,
+      heightPoints,
+      _pageProperties.marginTop,
+      _pageProperties.marginBottom,
+    ];
+    if (_rulerStrip case final kept? when listEquals(_rulerStripOf, of)) {
+      return kept;
+    }
+    _rulerStripOf = of;
+    final top = _pageProperties.marginTop;
+    final bottom = _pageProperties.marginBottom;
+    return _rulerStrip = RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final pages = EditorSheetsPainter.pageCount(
+            box.maxHeight,
+            paperHeight,
+            EditorSheetsPainter.room,
+          );
+          return Column(
+            children: [
+              for (var page = 0; page < pages; page++) ...[
+                if (page > 0) const SizedBox(height: EditorSheetsPainter.room),
+                DocumentRuler(
+                  key: ValueKey('vertical-ruler-$page'),
+                  axis: Axis.vertical,
+                  pagePoints: heightPoints,
+                  pixels: paperHeight,
+                  leading: top,
+                  trailing: bottom,
+                  onChanged: _verticalMargins,
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// The top and bottom margins set on a ruler beside a page.
+  void _verticalMargins(double start, double end) => setState(() {
+    _recovery.changed();
+    _checkEditedSoon();
+    _pageProperties = _pageProperties.copyWith(
+      marginTop: start,
+      marginBottom: end,
+    );
+    // A header breaks its lines at the page's width.
+    _measureRegionsSoon();
+  });
+
   Widget _paged({
     required double scale,
     required double paperHeight,
     required double heightPoints,
-    required void Function(double start, double end) onMargins,
     required double textTop,
     required double textBottom,
     required Widget child,
@@ -3564,32 +3624,7 @@ class _EditorWidgetState extends State<EditorWidget>
             top: 0,
             bottom: 0,
             width: ruler,
-            child: LayoutBuilder(
-              builder: (context, box) {
-                final pages = EditorSheetsPainter.pageCount(
-                  box.maxHeight,
-                  paperHeight,
-                  EditorSheetsPainter.room,
-                );
-                return Column(
-                  children: [
-                    for (var page = 0; page < pages; page++) ...[
-                      if (page > 0)
-                        const SizedBox(height: EditorSheetsPainter.room),
-                      DocumentRuler(
-                        key: ValueKey('vertical-ruler-$page'),
-                        axis: Axis.vertical,
-                        pagePoints: heightPoints,
-                        pixels: paperHeight,
-                        leading: _pageProperties.marginTop,
-                        trailing: _pageProperties.marginBottom,
-                        onChanged: onMargins,
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
+            child: _verticalRulers(paperHeight, heightPoints),
           ),
         // The header and footer on every page, where the printed page draws
         // them: a header at its offset from the top edge, a footer ending at
@@ -6208,12 +6243,6 @@ class _EditorWidgetState extends State<EditorWidget>
                                                     scale: scale,
                                                     paperHeight: paperHeight,
                                                     heightPoints: heightPoints,
-                                                    onMargins: (start, end) =>
-                                                        margins(
-                                                          false,
-                                                          start,
-                                                          end,
-                                                        ),
                                                     textTop: textTop,
                                                     textBottom: textBottom,
                                                     child: CustomPaint(

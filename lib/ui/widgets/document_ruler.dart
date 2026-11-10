@@ -243,13 +243,19 @@ class _DocumentRulerState extends State<DocumentRuler> {
               onTapUp: paragraph == null
                   ? null
                   : (d) => _addStop(paragraph, d.localPosition.dx),
-              child: CustomPaint(
-                painter: _RulerPainter(
-                  widget.axis,
-                  widget.pagePoints,
-                  leading,
-                  trailing,
-                  scheme,
+              // A layer of its own: the ruler's ticks and numbers are
+              // drawn again when the ruler changes, not at every blink of
+              // the caret beside it (a fifth of each frame in a document of
+              // 75 pages, each with its ruler).
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  painter: _RulerPainter(
+                    widget.axis,
+                    widget.pagePoints,
+                    leading,
+                    trailing,
+                    scheme,
+                  ),
                 ),
               ),
             ),

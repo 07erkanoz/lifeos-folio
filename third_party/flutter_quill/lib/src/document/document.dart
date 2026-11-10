@@ -595,6 +595,12 @@ class Document {
       return false;
     }
 
+    // FOLIO PATCH: an empty document is one line of one character. Asked at
+    // every build, and a justified petition is one block of all its
+    // paragraphs: written out whole as a delta to be found not empty, it
+    // took half of every frame in a long document (12 to 15 ms of 30).
+    if (node.length != 1) return false;
+
     final delta = node.toDelta();
     return delta.length == 1 &&
         delta.first.data == '\n' &&
