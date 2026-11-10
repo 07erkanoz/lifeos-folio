@@ -14,6 +14,7 @@ import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
 import 'services/live/live_links.dart';
 import 'services/platform/onboarding_store.dart';
+import 'services/library/file_library.dart';
 import 'services/security/app_lock.dart';
 import 'services/desktop/desktop_companion.dart';
 import 'services/desktop/native_window.dart';
@@ -101,6 +102,22 @@ void main(List<String> arguments) async {
         if (argument != editorFlag) argument,
     ]);
     return;
+  }
+  // A document opened from outside (the file manager's double click) is
+  // shown in a window of its own, as Windows's "Folio ile önizle" always
+  // did: a second one no longer takes the first one's place in Folio's
+  // window, and two can be read side by side. Folio's own window is for
+  // its library, and for a document asked to be edited (`--edit`).
+  if (Platform.isLinux || Platform.isWindows) {
+    final own = previewLaunch(arguments);
+    if (own.isNotEmpty &&
+        (await const OnboardingStore().load()).licenseAccepted) {
+      for (final other in own.skip(1)) {
+        unawaited(openPreviewWindow(other));
+      }
+      await runPreviewApp([own.first]);
+      return;
+    }
   }
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks([
@@ -595,4 +612,28 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
           )
         : _home(),
   );
+}
+
+/// The documents [arguments] name to be shown, each in a preview window of
+/// its own: files alone, with nothing else asked of Folio (no `--edit`, no
+/// invitation, no agenda, no quick search, no folder). Empty otherwise, and
+/// Folio's own window takes the launch.
+@visibleForTesting
+List<String> previewLaunch(List<String> arguments) {
+  if (AgendaLaunch.parse(arguments) != null) return const [];
+  final launch = DocumentLaunch.parse(AgendaLaunch.without(arguments));
+  if (launch.edit || launch.link != null || launch.paths.isEmpty) {
+    return const [];
+  }
+  // Any flag of Folio's own (the tray's start, the quick search) is its
+  // window's to answer.
+  final separator = arguments.indexOf('--');
+  final flags = separator < 0 ? arguments : arguments.take(separator);
+  if (flags.any((a) => a.startsWith('-'))) return const [];
+  for (final path in launch.paths) {
+    if (!FileSystemEntity.isFileSync(path) || !FileLibrary.supports(path)) {
+      return const [];
+    }
+  }
+  return launch.paths;
 }

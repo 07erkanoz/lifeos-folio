@@ -1,3 +1,5 @@
+import 'services/desktop/screen_fit.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -33,7 +35,8 @@ Future<void> runPreviewApp(List<String> arguments) async {
       options = WindowOptions(
         titleBarStyle: TitleBarStyle.hidden,
         windowButtonVisibility: Platform.isMacOS,
-        size: const Size(860, 980),
+        // As tall as the screen lets it be: a page is read whole.
+        size: await fitToPrimaryScreen(const Size(900, 1100)),
         minimumSize: const Size(480, 420),
         center: true,
         title: path == null
