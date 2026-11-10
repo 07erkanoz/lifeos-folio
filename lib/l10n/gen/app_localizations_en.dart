@@ -3050,4 +3050,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get viewEditPicture =>
       'Edit picture: straighten by its corners, crop, adjust, redact, mark up';
+
+  @override
+  String get photoTilt => 'Tilt';
+
+  @override
+  String get photoTurn => 'Turn 90°';
+
+  @override
+  String get photoFlipH => 'Flip horizontally';
+
+  @override
+  String get photoFlipV => 'Flip vertically';
+
+  @override
+  String get photoTiltReset => 'Reset tilt';
 }

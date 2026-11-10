@@ -102,6 +102,42 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     _ => PhotoStage.finished,
   };
 
+  /// Each look as a small picture of this photograph, so that what is
+  /// chosen is seen before it is; made again when its shape changes.
+  final _looks = <PhotoFilter, Uint8List>{};
+  String? _looksOf;
+  int _lookRenders = 0;
+
+  Future<void> _renderLooks() async {
+    final work = _work;
+    if (work == null) return;
+    final e = _edit;
+    final shape =
+        '${e.corners}|${e.turns}|${e.flipH}|${e.flipV}|${e.tilt}|${e.crop}';
+    if (shape == _looksOf) return;
+    _looksOf = shape;
+    final token = ++_lookRenders;
+    for (final filter in PhotoFilter.values) {
+      final made = await compute(PhotoEditing.render, (
+        bytes: work,
+        edit: PhotoEdit(
+          corners: e.corners,
+          turns: e.turns,
+          flipH: e.flipH,
+          flipV: e.flipV,
+          tilt: e.tilt,
+          crop: e.crop,
+          filter: filter,
+        ),
+        stage: PhotoStage.finished,
+        maxSide: 0,
+        jpeg: true,
+      ));
+      if (!mounted || token != _lookRenders) return;
+      setState(() => _looks[filter] = made.bytes);
+    }
+  }
+
   Future<void> _render() async {
     final work = _work;
     if (work == null) return;
@@ -114,6 +150,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
       jpeg: false,
     ));
     if (mounted && token == _renders) setState(() => _shown = made);
+    if (mounted) unawaited(_renderLooks());
   }
 
   void _renderSoon() {
@@ -137,9 +174,6 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
   }
 
   void _choose(_Tool tool) {
-    if (tool == _Tool.rotate) {
-      _change(_edit.copyWith(turns: (_edit.turns + 1) % 4));
-    }
     setState(() {
       _tool = tool;
       _drawText = false;
@@ -585,6 +619,88 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
         ),
       );
     }
+    if (_tool == _Tool.rotate) {
+      Widget action(Key key, IconData icon, String label, VoidCallback run) =>
+          TextButton.icon(
+            key: key,
+            onPressed: run,
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            icon: Icon(icon, size: 18),
+            label: Text(label, style: const TextStyle(fontSize: 12)),
+          );
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 78,
+                  child: Text(
+                    context.l.photoTilt,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+                Expanded(
+                  child: Slider(
+                    key: const ValueKey('photo-tilt'),
+                    value: _edit.tilt.clamp(-15, 15),
+                    min: -15,
+                    max: 15,
+                    divisions: 120,
+                    onChangeStart: (_) => _history.add(_edit),
+                    onChanged: (v) {
+                      setState(() => _edit = _edit.copyWith(tilt: v));
+                      _renderSoon();
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 46,
+                  child: Text(
+                    '${_edit.tilt.toStringAsFixed(1).replaceFirst('.', ',')}°',
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 4,
+              children: [
+                action(
+                  const ValueKey('photo-turn'),
+                  Icons.rotate_right_rounded,
+                  context.l.photoTurn,
+                  () => _change(_edit.copyWith(turns: (_edit.turns + 1) % 4)),
+                ),
+                action(
+                  const ValueKey('photo-flip-h'),
+                  Icons.swap_horiz_rounded,
+                  context.l.photoFlipH,
+                  () => _change(_edit.copyWith(flipH: !_edit.flipH)),
+                ),
+                action(
+                  const ValueKey('photo-flip-v'),
+                  Icons.swap_vert_rounded,
+                  context.l.photoFlipV,
+                  () => _change(_edit.copyWith(flipV: !_edit.flipV)),
+                ),
+                if (_edit.tilt != 0)
+                  action(
+                    const ValueKey('photo-tilt-reset'),
+                    Icons.restart_alt_rounded,
+                    context.l.photoTiltReset,
+                    () => _change(_edit.copyWith(tilt: 0)),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
     if (_tool == _Tool.redact || _tool == _Tool.draw) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -640,14 +756,28 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
               children: [
                 Container(
                   height: 54,
+                  clipBehavior: Clip.antiAlias,
+                  foregroundDecoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: on
+                        ? Border.all(color: scheme.primary, width: 3)
+                        : null,
+                  ),
                   decoration: swatch is BoxDecoration
-                      ? swatch.copyWith(
-                          borderRadius: BorderRadius.circular(8),
-                          border: on
-                              ? Border.all(color: scheme.primary, width: 3)
-                              : null,
-                        )
+                      ? swatch.copyWith(borderRadius: BorderRadius.circular(8))
                       : swatch,
+                  // The photograph itself in this look, once it is made;
+                  // the look's colour until then.
+                  child: _looks[filter] == null
+                      ? null
+                      : Image.memory(
+                          _looks[filter]!,
+                          key: ValueKey('photo-look-${filter.name}'),
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
+                          gaplessPlayback: true,
+                        ),
                 ),
                 const SizedBox(height: 5),
                 Text(

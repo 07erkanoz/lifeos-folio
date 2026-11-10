@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' show Offset, Rect;
+import 'dart:ui' show Offset, Rect, Size;
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -36,6 +36,9 @@ class PhotoEdit {
   const PhotoEdit({
     this.corners,
     this.turns = 0,
+    this.flipH = false,
+    this.flipV = false,
+    this.tilt = 0,
     this.crop,
     this.filter = PhotoFilter.original,
     this.brightness = 0,
@@ -53,6 +56,15 @@ class PhotoEdit {
   /// Quarter turns clockwise, after the corners.
   final int turns;
 
+  /// Mirrored left to right, top to bottom, after the turns: a picture
+  /// taken in a mirror, a scan fed the wrong way.
+  final bool flipH, flipV;
+
+  /// Degrees the picture is turned clockwise to stand straight, -15 to
+  /// 15, after the turns: a page laid a little askew on the scanner. What
+  /// the turning leaves empty at the corners is cut away.
+  final double tilt;
+
   /// The part kept, of the straightened and turned picture.
   final Rect? crop;
   final PhotoFilter filter;
@@ -68,6 +80,9 @@ class PhotoEdit {
   bool get isEmpty =>
       corners == null &&
       turns % 4 == 0 &&
+      !flipH &&
+      !flipV &&
+      tilt == 0 &&
       crop == null &&
       filter == PhotoFilter.original &&
       brightness == 0 &&
@@ -80,6 +95,9 @@ class PhotoEdit {
   PhotoEdit copyWith({
     Object? corners = _keep,
     int? turns,
+    bool? flipH,
+    bool? flipV,
+    double? tilt,
     Object? crop = _keep,
     PhotoFilter? filter,
     double? brightness,
@@ -93,6 +111,9 @@ class PhotoEdit {
         ? this.corners
         : corners as List<Offset>?,
     turns: turns ?? this.turns,
+    flipH: flipH ?? this.flipH,
+    flipV: flipV ?? this.flipV,
+    tilt: tilt ?? this.tilt,
     crop: identical(crop, _keep) ? this.crop : crop as Rect?,
     filter: filter ?? this.filter,
     brightness: brightness ?? this.brightness,
@@ -140,6 +161,9 @@ abstract final class PhotoEditing {
       picture = _straighten(picture, edit.corners);
       final turns = edit.turns % 4;
       if (turns != 0) picture = img.copyRotate(picture, angle: turns * 90);
+      if (edit.flipH) picture = img.flipHorizontal(picture);
+      if (edit.flipV) picture = img.flipVertical(picture);
+      picture = _tilt(picture, edit.tilt);
       if (job.stage != PhotoStage.uncropped && edit.crop != null) {
         picture = _crop(picture, edit.crop!);
       }
@@ -178,6 +202,47 @@ abstract final class PhotoEditing {
         height: height,
         numChannels: picture.numChannels,
       ),
+    );
+  }
+
+  /// [picture] turned [degrees] clockwise and cut to the largest upright
+  /// part of it with no empty corner.
+  static img.Image _tilt(img.Image picture, double degrees) {
+    if (degrees.abs() < .05) return picture;
+    final kept = uprightPart(picture.width, picture.height, degrees);
+    final turned = img.copyRotate(
+      picture,
+      angle: degrees,
+      interpolation: img.Interpolation.linear,
+    );
+    final width = kept.width.floor().clamp(1, turned.width);
+    final height = kept.height.floor().clamp(1, turned.height);
+    return img.copyCrop(
+      turned,
+      x: (turned.width - width) ~/ 2,
+      y: (turned.height - height) ~/ 2,
+      width: width,
+      height: height,
+    );
+  }
+
+  /// The largest upright rectangle inside a [width] by [height] one
+  /// turned [degrees].
+  @visibleForTesting
+  static Size uprightPart(int width, int height, double degrees) {
+    final a = degrees.abs() * math.pi / 180;
+    final sin = math.sin(a), cos = math.cos(a);
+    final wide = width >= height;
+    final long = (wide ? width : height).toDouble();
+    final short = (wide ? height : width).toDouble();
+    if (short <= 2 * sin * cos * long || (sin - cos).abs() < 1e-10) {
+      final x = short / 2;
+      return wide ? Size(x / sin, x / cos) : Size(x / cos, x / sin);
+    }
+    final cos2 = cos * cos - sin * sin;
+    return Size(
+      (width * cos - height * sin) / cos2,
+      (height * cos - width * sin) / cos2,
     );
   }
 

@@ -331,6 +331,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
       ?..removeListener(_searched)
       ..dispose();
     _searchField.dispose();
+    _thumbnailScroll.dispose();
     _searchFocus.dispose();
     // A reading still under way answers into nothing.
     _ocr.dispose();
@@ -708,6 +709,87 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
     selected: selected,
   );
 
+  /// Whether the pages are listed as small pictures beside the one read.
+  bool _thumbnails = false;
+  final _thumbnailScroll = ScrollController();
+
+  /// [pages] with the list of small pages at its left when it is open: the
+  /// page read is marked, and a press goes to the page pressed.
+  Widget _besideThumbnails(Widget pages) {
+    if (!_thumbnails || !_controller.isReady || _pageCount < 2) return pages;
+    final scheme = Theme.of(context).colorScheme;
+    final document = _controller.document;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          key: const ValueKey('pdf-thumbnail-panel'),
+          width: 148,
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(right: BorderSide(color: scheme.outlineVariant)),
+          ),
+          child: ListView.builder(
+            controller: _thumbnailScroll,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            itemCount: _pageCount,
+            itemBuilder: (context, i) {
+              final number = i + 1;
+              final on = number == _currentPage;
+              final page = document.pages[i];
+              return InkWell(
+                key: ValueKey('pdf-thumbnail-$number'),
+                onTap: () => _goToPage(number),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+                  child: Column(
+                    children: [
+                      AspectRatio(
+                        aspectRatio: page.width / page.height,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(
+                              color: on
+                                  ? scheme.primary
+                                  : scheme.outlineVariant,
+                              width: on ? 2.5 : 1,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(2.5),
+                            child: PdfPageView(
+                              document: document,
+                              pageNumber: number,
+                              backgroundColor: Colors.white,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '$number',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: on ? FontWeight.w700 : FontWeight.w400,
+                          color: on ? scheme.primary : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        Expanded(child: pages),
+      ],
+    );
+  }
+
   /// Chosen pages of this PDF as a PDF of their own.
   Future<void> _splitPages() async {
     final saved = await PdfPagesDialog.show(context, widget.filePath!);
@@ -780,6 +862,18 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  _pill([
+                    _button(
+                      context.l.viewThumbnails,
+                      Icons.view_sidebar_outlined,
+                      ready && _pageCount > 1
+                          ? () => setState(() => _thumbnails = !_thumbnails)
+                          : null,
+                      selected: _thumbnails,
+                      key: const ValueKey('pdf-thumbnails'),
+                    ),
+                  ]),
+                  const SizedBox(width: 10),
                   _pill([
                     _button(
                       context.l.viewFirstPage,
@@ -957,189 +1051,196 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
           Expanded(child: OcrTextPanel(text: _ocr.text!))
         else
           Expanded(
-            child: ClipRect(
-              child: ViewerShortcuts(
-                onFind: _openSearch,
-                onPrevious: () => _swipe(false),
-                onNext: () => _swipe(true),
-                onFirst: () => _goToPage(1),
-                onLast: () => _goToPage(_pageCount),
-                onZoomIn: () {
-                  if (!_controller.isReady) return;
-                  setState(() => _fit = _PageFit.manual);
-                  _controller.zoomUp();
-                },
-                onZoomOut: () {
-                  if (!_controller.isReady) return;
-                  setState(() => _fit = _PageFit.manual);
-                  _controller.zoomDown();
-                },
-                onFit: () {
-                  setState(() => _fit = _PageFit.width);
-                  _applyFit();
-                },
-                onRotate: () => _rotate(true),
-                child: SwipePages(
-                  enabled: () => _canSwipe,
-                  onSwipe: _swipe,
-                  child: PdfViewer(
-                    _documentRef,
-                    controller: _controller,
-                    fontManager: previewFontManager,
-                    params: PdfViewerParams(
-                      errorBannerBuilder:
-                          (context, error, stackTrace, documentRef) => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: SelectableText(
-                                context.l.viewPreviewFailed('$error'),
+            child: _besideThumbnails(
+              ClipRect(
+                child: ViewerShortcuts(
+                  onFind: _openSearch,
+                  onPrevious: () => _swipe(false),
+                  onNext: () => _swipe(true),
+                  onFirst: () => _goToPage(1),
+                  onLast: () => _goToPage(_pageCount),
+                  onZoomIn: () {
+                    if (!_controller.isReady) return;
+                    setState(() => _fit = _PageFit.manual);
+                    _controller.zoomUp();
+                  },
+                  onZoomOut: () {
+                    if (!_controller.isReady) return;
+                    setState(() => _fit = _PageFit.manual);
+                    _controller.zoomDown();
+                  },
+                  onFit: () {
+                    setState(() => _fit = _PageFit.width);
+                    _applyFit();
+                  },
+                  onRotate: () => _rotate(true),
+                  child: SwipePages(
+                    enabled: () => _canSwipe,
+                    onSwipe: _swipe,
+                    child: PdfViewer(
+                      _documentRef,
+                      controller: _controller,
+                      fontManager: previewFontManager,
+                      params: PdfViewerParams(
+                        errorBannerBuilder:
+                            (context, error, stackTrace, documentRef) => Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: SelectableText(
+                                  context.l.viewPreviewFailed('$error'),
+                                ),
                               ),
                             ),
-                          ),
-                      buildContextMenu: buildPreviewContextMenu,
-                      onGeneralTap: widget.onEditAt == null
-                          ? null
-                          : _onGeneralTap,
-                      textSelectionParams: PdfTextSelectionParams(
-                        onTextSelectionChange: (selection) {
-                          _selection = selection;
-                          final has = selection.hasSelectedText;
-                          if (has != _hasSelection && mounted) {
-                            setState(() => _hasSelection = has);
+                        buildContextMenu: buildPreviewContextMenu,
+                        onGeneralTap: widget.onEditAt == null
+                            ? null
+                            : _onGeneralTap,
+                        textSelectionParams: PdfTextSelectionParams(
+                          onTextSelectionChange: (selection) {
+                            _selection = selection;
+                            final has = selection.hasSelectedText;
+                            if (has != _hasSelection && mounted) {
+                              setState(() => _hasSelection = has);
+                            }
+                          },
+                        ),
+                        pageOverlaysBuilder: (context, pageRect, page) {
+                          // Reading a page is put off until it is looked at: a
+                          // filing of two hundred pages should show its first
+                          // one without being read through.
+                          _readCitations(page);
+                          final marks = _canHighlight
+                              ? _highlights
+                                    .where((h) => h.page == page.pageNumber)
+                                    .toList()
+                              : const <PdfHighlight>[];
+                          final cited = LegalSettings.instance.articles
+                              ? _citations?.found(page.pageNumber) ??
+                                    const <PdfCitation>[]
+                              : const <PdfCitation>[];
+                          return [
+                            // Under the citations, so a law inside a highlight
+                            // is still the thing a press reaches.
+                            if (marks.isNotEmpty)
+                              Positioned.fill(
+                                child: _HighlightLayer(
+                                  marks: marks,
+                                  quarterTurns: _quarterTurns,
+                                  onTap: _onHighlightTap,
+                                  onWheel: _controller.handlePointerSignalEvent,
+                                ),
+                              ),
+                            if (cited.isNotEmpty)
+                              Positioned.fill(
+                                child: PdfCitationLayer(
+                                  marks: cited,
+                                  quarterTurns: _quarterTurns,
+                                  colour: citationInk,
+                                  onTap: _onCitationTap,
+                                  onWheel: _controller.handlePointerSignalEvent,
+                                ),
+                              ),
+                          ];
+                        },
+                        // The package default (0.2) discards 80% of desktop wheel movement.
+                        // Keep OS wheel/trackpad distance and direction, without queued easing.
+                        scrollByMouseWheel: 1.0,
+                        interactionDelegateProvider:
+                            const PdfViewerScrollInteractionDelegateProviderInstant(),
+                        margin: 16,
+                        backgroundColor:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF151719)
+                            : const Color(0xFFE9ECEF),
+                        pageDropShadow: const BoxShadow(
+                          color: Color(0x26000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                        sizeDelegateProvider:
+                            const PdfViewerSizeDelegateProviderSmart(),
+                        onViewSizeChanged: (size, oldSize, controller) {
+                          WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => _applyFit(animate: false),
+                          );
+                        },
+                        pagePaintCallbacks: [
+                          (canvas, pageRect, page) =>
+                              _search?.pageTextMatchPaintCallback(
+                                canvas,
+                                pageRect,
+                                page,
+                              ),
+                        ],
+                        onViewerReady: (document, controller) {
+                          if (!mounted) return;
+                          setState(() => _pageCount = document.pages.length);
+                          widget.onTextLoaderChanged?.call(_loadCopyableText);
+                          // The searcher reads the document as it is built, so
+                          // it cannot exist before there is one.
+                          _search ??= PdfTextSearcher(_controller)
+                            ..addListener(_searched);
+                          _applyFit(animate: false);
+                          // Where the reading stopped last time, once there is
+                          // a document to count the pages of.
+                          final page = widget.initialPage;
+                          if (page != null && page > 1 && page <= _pageCount) {
+                            _goToPage(page);
                           }
                         },
+                        onPageChanged: (page) {
+                          if (mounted && page != null && _currentPage != page) {
+                            setState(() => _currentPage = page);
+                            widget.onPageChanged?.call(page);
+                          }
+                        },
+                        viewerOverlayBuilder: (context, size, handleLinkTap) =>
+                            [
+                              PdfViewerScrollThumb(
+                                controller: _controller,
+                                thumbSize: const Size(24, 52),
+                                margin: 4,
+                                thumbBuilder:
+                                    (context, size, page, controller) =>
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: scheme.onSurfaceVariant
+                                                .withValues(alpha: .8),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              '$page',
+                                              style: TextStyle(
+                                                color: scheme.surface,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                              ),
+                              PdfViewerScrollThumb(
+                                controller: _controller,
+                                orientation: ScrollbarOrientation.bottom,
+                                thumbSize: const Size(52, 10),
+                                margin: 4,
+                                thumbBuilder:
+                                    (context, size, page, controller) =>
+                                        DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: scheme.onSurfaceVariant
+                                                .withValues(alpha: .6),
+                                            borderRadius: BorderRadius.circular(
+                                              5,
+                                            ),
+                                          ),
+                                        ),
+                              ),
+                            ],
                       ),
-                      pageOverlaysBuilder: (context, pageRect, page) {
-                        // Reading a page is put off until it is looked at: a
-                        // filing of two hundred pages should show its first
-                        // one without being read through.
-                        _readCitations(page);
-                        final marks = _canHighlight
-                            ? _highlights
-                                  .where((h) => h.page == page.pageNumber)
-                                  .toList()
-                            : const <PdfHighlight>[];
-                        final cited = LegalSettings.instance.articles
-                            ? _citations?.found(page.pageNumber) ??
-                                  const <PdfCitation>[]
-                            : const <PdfCitation>[];
-                        return [
-                          // Under the citations, so a law inside a highlight
-                          // is still the thing a press reaches.
-                          if (marks.isNotEmpty)
-                            Positioned.fill(
-                              child: _HighlightLayer(
-                                marks: marks,
-                                quarterTurns: _quarterTurns,
-                                onTap: _onHighlightTap,
-                                onWheel: _controller.handlePointerSignalEvent,
-                              ),
-                            ),
-                          if (cited.isNotEmpty)
-                            Positioned.fill(
-                              child: PdfCitationLayer(
-                                marks: cited,
-                                quarterTurns: _quarterTurns,
-                                colour: citationInk,
-                                onTap: _onCitationTap,
-                                onWheel: _controller.handlePointerSignalEvent,
-                              ),
-                            ),
-                        ];
-                      },
-                      // The package default (0.2) discards 80% of desktop wheel movement.
-                      // Keep OS wheel/trackpad distance and direction, without queued easing.
-                      scrollByMouseWheel: 1.0,
-                      interactionDelegateProvider:
-                          const PdfViewerScrollInteractionDelegateProviderInstant(),
-                      margin: 16,
-                      backgroundColor:
-                          Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF151719)
-                          : const Color(0xFFE9ECEF),
-                      pageDropShadow: const BoxShadow(
-                        color: Color(0x26000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 2),
-                      ),
-                      sizeDelegateProvider:
-                          const PdfViewerSizeDelegateProviderSmart(),
-                      onViewSizeChanged: (size, oldSize, controller) {
-                        WidgetsBinding.instance.addPostFrameCallback(
-                          (_) => _applyFit(animate: false),
-                        );
-                      },
-                      pagePaintCallbacks: [
-                        (canvas, pageRect, page) =>
-                            _search?.pageTextMatchPaintCallback(
-                              canvas,
-                              pageRect,
-                              page,
-                            ),
-                      ],
-                      onViewerReady: (document, controller) {
-                        if (!mounted) return;
-                        setState(() => _pageCount = document.pages.length);
-                        widget.onTextLoaderChanged?.call(_loadCopyableText);
-                        // The searcher reads the document as it is built, so
-                        // it cannot exist before there is one.
-                        _search ??= PdfTextSearcher(_controller)
-                          ..addListener(_searched);
-                        _applyFit(animate: false);
-                        // Where the reading stopped last time, once there is
-                        // a document to count the pages of.
-                        final page = widget.initialPage;
-                        if (page != null && page > 1 && page <= _pageCount) {
-                          _goToPage(page);
-                        }
-                      },
-                      onPageChanged: (page) {
-                        if (mounted && page != null && _currentPage != page) {
-                          setState(() => _currentPage = page);
-                          widget.onPageChanged?.call(page);
-                        }
-                      },
-                      viewerOverlayBuilder: (context, size, handleLinkTap) => [
-                        PdfViewerScrollThumb(
-                          controller: _controller,
-                          thumbSize: const Size(24, 52),
-                          margin: 4,
-                          thumbBuilder: (context, size, page, controller) =>
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: scheme.onSurfaceVariant.withValues(
-                                    alpha: .8,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '$page',
-                                    style: TextStyle(
-                                      color: scheme.surface,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                        ),
-                        PdfViewerScrollThumb(
-                          controller: _controller,
-                          orientation: ScrollbarOrientation.bottom,
-                          thumbSize: const Size(52, 10),
-                          margin: 4,
-                          thumbBuilder: (context, size, page, controller) =>
-                              DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: scheme.onSurfaceVariant.withValues(
-                                    alpha: .6,
-                                  ),
-                                  borderRadius: BorderRadius.circular(5),
-                                ),
-                              ),
-                        ),
-                      ],
                     ),
                   ),
                 ),

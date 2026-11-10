@@ -2882,4 +2882,19 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get viewEditPicture =>
       'Resmi düzenle: köşelerinden düzelt, kırp, ayarla, karart, işaretle';
+
+  @override
+  String get photoTilt => 'Eğim';
+
+  @override
+  String get photoTurn => '90° döndür';
+
+  @override
+  String get photoFlipH => 'Yatay çevir';
+
+  @override
+  String get photoFlipV => 'Dikey çevir';
+
+  @override
+  String get photoTiltReset => 'Eğimi sıfırla';
 }

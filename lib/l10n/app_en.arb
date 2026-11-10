@@ -861,5 +861,10 @@
   "photoToolAdjust": "Adjust",
   "photoToolRedact": "Redact",
   "photoToolDraw": "Mark up",
-  "viewEditPicture": "Edit picture: straighten by its corners, crop, adjust, redact, mark up"
+  "viewEditPicture": "Edit picture: straighten by its corners, crop, adjust, redact, mark up",
+  "photoTilt": "Tilt",
+  "photoTurn": "Turn 90°",
+  "photoFlipH": "Flip horizontally",
+  "photoFlipV": "Flip vertically",
+  "photoTiltReset": "Reset tilt"
 }

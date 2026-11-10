@@ -1595,5 +1595,10 @@
   "photoToolAdjust": "Ayarla",
   "photoToolRedact": "Karart",
   "photoToolDraw": "İşaretle",
-  "viewEditPicture": "Resmi düzenle: köşelerinden düzelt, kırp, ayarla, karart, işaretle"
+  "viewEditPicture": "Resmi düzenle: köşelerinden düzelt, kırp, ayarla, karart, işaretle",
+  "photoTilt": "Eğim",
+  "photoTurn": "90° döndür",
+  "photoFlipH": "Yatay çevir",
+  "photoFlipV": "Dikey çevir",
+  "photoTiltReset": "Eğimi sıfırla"
 }

@@ -5257,6 +5257,36 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Resmi düzenle: köşelerinden düzelt, kırp, ayarla, karart, işaretle'**
   String get viewEditPicture;
+
+  /// No description provided for @photoTilt.
+  ///
+  /// In tr, this message translates to:
+  /// **'Eğim'**
+  String get photoTilt;
+
+  /// No description provided for @photoTurn.
+  ///
+  /// In tr, this message translates to:
+  /// **'90° döndür'**
+  String get photoTurn;
+
+  /// No description provided for @photoFlipH.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yatay çevir'**
+  String get photoFlipH;
+
+  /// No description provided for @photoFlipV.
+  ///
+  /// In tr, this message translates to:
+  /// **'Dikey çevir'**
+  String get photoFlipV;
+
+  /// No description provided for @photoTiltReset.
+  ///
+  /// In tr, this message translates to:
+  /// **'Eğimi sıfırla'**
+  String get photoTiltReset;
 }
 
 class _AppLocalizationsDelegate
