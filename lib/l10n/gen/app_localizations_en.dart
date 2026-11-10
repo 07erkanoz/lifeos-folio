@@ -2904,7 +2904,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pdfBuildHint =>
-      'Add pictures and PDFs and put them in order. Each picture becomes a page; to take only some pages of a PDF, type their numbers.';
+      'Add pictures, scans (TIFF) and PDFs and put them in order. Each picture becomes a page; to take only some pages of a PDF or a scan, type their numbers.';
 
   @override
   String get pdfBuildAdd => 'Add files';

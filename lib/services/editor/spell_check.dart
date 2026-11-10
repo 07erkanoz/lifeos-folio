@@ -1,5 +1,9 @@
 import 'package:flutter/foundation.dart';
+
 import 'package:flutter/services.dart';
+
+import '../platform/app_edition.dart';
+import '../platform/app_language.dart';
 
 /// A stretch of text the checker did not recognise.
 @immutable
@@ -53,18 +57,57 @@ class SpellCheck {
   /// The one the app uses. Replaced in tests.
   static SpellCheck instance = SpellCheck();
 
-  /// Written as Windows names it.
-  static const language = 'tr-TR';
+  /// The language checked, written as Windows names it: Turkish in Folio;
+  /// in LifeOS Ofis the language Ofis speaks (the system's, or the one
+  /// chosen in its menu), so an English letter is not underlined whole.
+  static String get language {
+    if (!AppEdition.isOfis) return 'tr-TR';
+    final locale =
+        AppLanguage.instance.locale ??
+        AppLanguage.resolve(
+          PlatformDispatcher.instance.locale,
+          AppLanguage.supported,
+        );
+    return tagOf(locale.languageCode);
+  }
+
+  /// A language as the checkers name it, with the country its dictionary
+  /// is most often installed for.
+  @visibleForTesting
+  static String tagOf(String code) => switch (code) {
+    'tr' => 'tr-TR',
+    'en' => 'en-US',
+    'de' => 'de-DE',
+    'ru' => 'ru-RU',
+    'az' => 'az-AZ',
+    'fr' => 'fr-FR',
+    'es' => 'es-ES',
+    'it' => 'it-IT',
+    'nl' => 'nl-NL',
+    'pt' => 'pt-PT',
+    'pl' => 'pl-PL',
+    'ro' => 'ro-RO',
+    'bg' => 'bg-BG',
+    'el' => 'el-GR',
+    'uk' => 'uk-UA',
+    _ => code,
+  };
+
   static const _maxCheckChunk = 20000;
 
+  /// Whether the language can be checked, and which language that was
+  /// asked of: asked again when Ofis's language changes.
   bool? _available;
+  String? _availableFor;
 
   /// Whether this machine can check Turkish at all.
   ///
   /// Asked once and remembered, including the no: where the bridge is not
   /// built the channel throws on the first call and is never called again.
   Future<bool> get available async {
-    if (_available != null) return _available!;
+    final language = SpellCheck.language;
+    if (_available != null && _availableFor == language) return _available!;
+    _availableFor = language;
     try {
       final answer = await _channel.invokeMethod<bool>('available', {
         'language': language,

@@ -5,6 +5,7 @@
 
 #include <cstring>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,10 @@ namespace {
 struct Enchant {
   void* library = nullptr;
   void* broker = nullptr;
+  // The dictionary of the language now asked for, and each one opened so
+  // far by its language; null for a language this machine cannot check.
   void* dict = nullptr;
+  std::map<std::string, void*> dicts;
   bool tried = false;
 
   void* (*broker_init)() = nullptr;
@@ -40,12 +44,34 @@ bool Bind(void* library, const char* name, T* slot) {
   return *slot != nullptr;
 }
 
-// Distributions disagree on the tag, and on which one they ship.
-const char* const kTags[] = {"tr_TR", "tr", "tr-TR"};
+// The tags a language may be installed under: distributions disagree on
+// the form, and on which one they ship. "tr-TR" is tried as tr_TR, tr and
+// tr-TR; English also as the other English a machine may have instead.
+std::vector<std::string> TagsOf(const std::string& language) {
+  std::string lang = language, region;
+  const size_t dash = language.find_first_of("-_");
+  if (dash != std::string::npos) {
+    lang = language.substr(0, dash);
+    region = language.substr(dash + 1);
+  }
+  std::vector<std::string> tags;
+  if (!region.empty()) tags.push_back(lang + "_" + region);
+  tags.push_back(lang);
+  if (!region.empty()) tags.push_back(lang + "-" + region);
+  if (lang == "en") {
+    tags.push_back("en_US");
+    tags.push_back("en_GB");
+  }
+  if (lang == "pt") {
+    tags.push_back("pt_PT");
+    tags.push_back("pt_BR");
+  }
+  return tags;
+}
 
-bool Ready() {
+bool Loaded() {
   Enchant& e = Bridge();
-  if (e.dict != nullptr) return true;
+  if (e.broker != nullptr) return true;
   if (e.tried) return false;
   e.tried = true;
 
@@ -69,13 +95,29 @@ bool Ready() {
   }
 
   e.broker = e.broker_init();
-  if (e.broker == nullptr) return false;
-  for (const char* tag : kTags) {
-    if (e.dict_exists(e.broker, tag) == 0) continue;
-    e.dict = e.request_dict(e.broker, tag);
-    if (e.dict != nullptr) return true;
+  return e.broker != nullptr;
+}
+
+// Whether [language] can be checked here; its dictionary is the one used
+// from now on. Turkish when none is named (Folio's).
+bool Ready(const std::string& asked) {
+  const std::string language = asked.empty() ? "tr-TR" : asked;
+  if (!Loaded()) return false;
+  Enchant& e = Bridge();
+  const auto known = e.dicts.find(language);
+  if (known != e.dicts.end()) {
+    e.dict = known->second;
+    return e.dict != nullptr;
   }
-  return false;
+  void* dict = nullptr;
+  for (const std::string& tag : TagsOf(language)) {
+    if (e.dict_exists(e.broker, tag.c_str()) == 0) continue;
+    dict = e.request_dict(e.broker, tag.c_str());
+    if (dict != nullptr) break;
+  }
+  e.dicts[language] = dict;
+  e.dict = dict;
+  return dict != nullptr;
 }
 
 // A word, and where it sits counted the way Dart counts: in UTF-16 code
@@ -202,12 +244,14 @@ void Handle(FlMethodChannel*, FlMethodCall* call, gpointer) {
   const gchar* name = fl_method_call_get_name(call);
   FlValue* args = fl_method_call_get_args(call);
 
+  g_autofree gchar* asked = StringArgument(args, "language");
+  const std::string language = asked == nullptr ? "" : asked;
   if (g_strcmp0(name, "available") == 0) {
-    g_autoptr(FlValue) value = fl_value_new_bool(Ready());
+    g_autoptr(FlValue) value = fl_value_new_bool(Ready(language));
     Respond(call, value);
     return;
   }
-  if (!Ready()) {
+  if (!Ready(language)) {
     // Not an error: a machine without Turkish spelling underlines nothing.
     g_autoptr(FlValue) value = fl_value_new_null();
     Respond(call, value);

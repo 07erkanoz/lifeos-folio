@@ -126,6 +126,8 @@ class RtfWriter {
         body.write('\\ri${(block.rightIndent * _twip).round()}');
       }
       if (first != 0) body.write('\\fi${(first * _twip).round()}');
+      // The paragraph starts a page.
+      if (block.pageBreakBefore) body.write('\\pagebb');
       if (block.spacingBefore != 0) {
         body.write('\\sb${(block.spacingBefore * _twip).round()}');
       }

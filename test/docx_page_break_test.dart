@@ -4,7 +4,11 @@ import 'dart:io';
 import 'package:evrak_convert/models/document_model.dart';
 import 'package:evrak_convert/services/docx/docx_bridge.dart';
 import 'package:evrak_convert/services/editor/doc_delta_map.dart';
+import 'package:evrak_convert/services/html/html_reader.dart';
+import 'package:evrak_convert/services/html/html_writer.dart';
 import 'package:evrak_convert/services/pdf/pdf_service.dart';
+import 'package:evrak_convert/services/rtf/rtf_reader.dart';
+import 'package:evrak_convert/services/rtf/rtf_writer.dart';
 import 'package:evrak_convert/ui/widgets/editor_pages.dart';
 import 'package:evrak_convert/models/evrak_file.dart';
 import 'package:evrak_convert/services/editor/document_history.dart';
@@ -103,6 +107,37 @@ void main() {
       1,
     );
   });
+  test('a page break is written to RTF and HTML and read back; a break '
+      'inside an RTF paragraph starts the page with the next one', () {
+    final model = DocModel(
+      blocks: [
+        DocBlock(plainText: 'Birinci sayfa'),
+        DocBlock(plainText: 'İkinci sayfa', pageBreakBefore: true),
+        DocBlock(plainText: 'Yine ikinci'),
+      ],
+    );
+    final rtf = RtfWriter.write(model);
+    expect(rtf, contains(r'\pagebb'));
+    expect(
+      RtfReader.readBytes(utf8.encode(rtf))!.blocks
+          .map((b) => b.pageBreakBefore),
+      [false, true, false],
+    );
+    final broken = RtfReader.readBytes(
+      latin1.encode(r'{\rtf1\ansi Bir\page\par Iki\par\page Uc\par}'),
+    )!;
+    expect(broken.blocks.map((b) => b.plainText), ['Bir', 'Iki', 'Uc']);
+    expect(broken.blocks.map((b) => b.pageBreakBefore), [false, true, true]);
+
+    final html = HtmlWriter.document(model);
+    expect(html, contains('page-break-before:always'));
+    expect(HtmlReader.read(html).blocks.map((b) => b.pageBreakBefore), [
+      false,
+      true,
+      false,
+    ]);
+  });
+
   testWidgets('in the editor the paragraph that starts a page is at the top '
       'of the next one', (tester) async {
     const page = DocPageProperties();

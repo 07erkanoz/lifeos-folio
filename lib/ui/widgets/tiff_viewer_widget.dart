@@ -11,6 +11,8 @@ import '../../services/ocr/preview_ocr.dart';
 import '../../services/search/library_controller.dart';
 import 'ocr_text_panel.dart';
 import 'page_jump.dart';
+import 'pdf_tools_dialogs.dart';
+import '../../services/platform/editor_window.dart';
 import 'viewer_bar.dart';
 import 'viewer_shortcuts.dart';
 import '../../services/platform/app_language.dart';
@@ -521,6 +523,25 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
+                ),
+              if (EditorWindow.available)
+                ViewerPill(
+                  children: [
+                    ViewerButton(
+                      key: const ValueKey('tiff-to-pdf'),
+                      tooltip: context.l.pdfBuildTool,
+                      icon: Icons.library_add_outlined,
+                      onPressed: () async {
+                        final saved = await PdfBuilderDialog.show(
+                          context,
+                          initial: [widget.filePath],
+                        );
+                        if (saved != null && context.mounted) {
+                          pdfMade(context, saved);
+                        }
+                      },
+                    ),
+                  ],
                 ),
               OcrTextButton(
                 ocr: _ocr,

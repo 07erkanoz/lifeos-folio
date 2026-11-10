@@ -146,6 +146,7 @@ abstract final class HtmlWriter {
     final stops = _tabStops(b, word: wordTabs);
     return {
       'tab-stops': ?stops,
+      if (b.pageBreakBefore) 'page-break-before': 'always',
       'margin-top': _pt(b.spacingBefore),
       'margin-bottom': _pt(b.spacingAfter),
       if (left != 0) 'margin-left': _pt(left),

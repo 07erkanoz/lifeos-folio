@@ -4985,7 +4985,7 @@ abstract class AppLocalizations {
   /// No description provided for @pdfBuildHint.
   ///
   /// In tr, this message translates to:
-  /// **'Resimleri ve PDF\'leri ekleyip sıralayın. Her resim bir sayfa olur; bir PDF\'in yalnız bazı sayfalarını almak için numaralarını yazın.'**
+  /// **'Resimleri, taramaları (TIFF) ve PDF\'leri ekleyip sıralayın. Her resim bir sayfa olur; bir PDF\'in ya da taramanın yalnız bazı sayfalarını almak için numaralarını yazın.'**
   String get pdfBuildHint;
 
   /// No description provided for @pdfBuildAdd.

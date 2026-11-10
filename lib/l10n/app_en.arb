@@ -814,7 +814,7 @@
   "pdfOpen": "Open",
   "pdfFailed": "The PDF could not be made",
   "pdfBuildTitle": "Make a PDF",
-  "pdfBuildHint": "Add pictures and PDFs and put them in order. Each picture becomes a page; to take only some pages of a PDF, type their numbers.",
+  "pdfBuildHint": "Add pictures, scans (TIFF) and PDFs and put them in order. Each picture becomes a page; to take only some pages of a PDF or a scan, type their numbers.",
   "pdfBuildAdd": "Add files",
   "pdfBuildAllPages": "All",
   "pdfBuildPagesLabel": "Pages",

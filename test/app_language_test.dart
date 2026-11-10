@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:evrak_convert/services/editor/spell_check.dart';
 import 'package:evrak_convert/services/platform/app_edition.dart';
 import 'package:evrak_convert/services/platform/app_language.dart';
 import 'package:flutter/widgets.dart';
@@ -68,5 +69,20 @@ void main() {
     for (final MapEntry(:key, :value) in words.entries) {
       expect(turkish.difference(value), isEmpty, reason: key);
     }
+  });
+  test('spelling is checked in Ofis\'s language, in Turkish in Folio', () {
+    addTearDown(() {
+      AppEdition.current = AppEdition.folio;
+      AppLanguage.instance.chosen = null;
+    });
+    AppEdition.current = AppEdition.folio;
+    AppLanguage.instance.chosen = const Locale('en');
+    expect(SpellCheck.language, 'tr-TR');
+    AppEdition.current = AppEdition.ofis;
+    expect(SpellCheck.language, 'en-US');
+    AppLanguage.instance.chosen = const Locale('tr');
+    expect(SpellCheck.language, 'tr-TR');
+    expect(SpellCheck.tagOf('de'), 'de-DE');
+    expect(SpellCheck.tagOf('uk'), 'uk-UA');
   });
 }

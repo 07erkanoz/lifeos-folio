@@ -128,6 +128,19 @@ void main() {
       PdfPart(file.path),
     ]);
     expect(await texts(mixed), ['', 'İkinci', 'Birinci', 'İkinci', 'Üçüncü']);
+
+    // A scan of several pages joins too, its pages chosen like a PDF's.
+    final scan = PdfPart('test/fixtures/ocr_cok_sayfali.tif');
+    expect(scan.paged, isTrue);
+    expect(PdfPart.supports(scan.path), isTrue);
+    final whole = await sizes(await PdfTools.build([scan]));
+    expect(whole.length, greaterThan(1));
+    final withScan = await PdfTools.build([
+      PdfPart(scan.path, pages: const [2]),
+      PdfPart(file.path, pages: const [1]),
+    ]);
+    expect(await sizes(withScan), hasLength(2));
+    expect((await texts(withScan)).last, 'Birinci');
   });
   testWidgets('the PDF builder: pictures listed as pages, one taken out, '
       'more added', (tester) async {

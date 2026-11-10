@@ -1544,7 +1544,7 @@
   "pdfOpen": "Aç",
   "pdfFailed": "PDF oluşturulamadı",
   "pdfBuildTitle": "PDF oluştur",
-  "pdfBuildHint": "Resimleri ve PDF'leri ekleyip sıralayın. Her resim bir sayfa olur; bir PDF'in yalnız bazı sayfalarını almak için numaralarını yazın.",
+  "pdfBuildHint": "Resimleri, taramaları (TIFF) ve PDF'leri ekleyip sıralayın. Her resim bir sayfa olur; bir PDF'in ya da taramanın yalnız bazı sayfalarını almak için numaralarını yazın.",
   "pdfBuildAdd": "Dosya ekle",
   "pdfBuildAllPages": "Tümü",
   "pdfBuildPagesLabel": "Sayfalar",

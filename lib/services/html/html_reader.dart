@@ -246,6 +246,7 @@ class _Block {
     this.list,
     this.explicit = false,
     this.cellOf,
+    this.pageBefore = false,
   });
 
   factory _Block.root(_Style style) => _Block(style: style, left: 0, right: 0);
@@ -258,6 +259,16 @@ class _Block {
   /// An element that is a paragraph even when empty: `<p></p>` is a line.
   final bool explicit;
   final Object? cellOf;
+
+  /// `page-break-before: always`: its first paragraph starts a page.
+  final bool pageBefore;
+  bool _pageTaken = false;
+
+  /// Whether the paragraph now made of it starts a page: the first, once.
+  bool takePage() {
+    if (!pageBefore || _pageTaken) return false;
+    return _pageTaken = true;
+  }
 }
 
 class _ListItem {
@@ -509,6 +520,9 @@ class _Reader {
           ? length('margin-bottom')
           : vertical,
       heading: heading == null ? null : int.parse(heading.group(1)!),
+      pageBefore:
+          declared['page-break-before'] == 'always' ||
+          declared['break-before'] == 'page',
       list: _listOf(element, style, parent),
       explicit: tag != 'div' && tag != 'body' && tag != 'ul' && tag != 'ol',
       cellOf: parent.cellOf,
@@ -824,6 +838,7 @@ class _Reader {
         hanging: hanging,
         spacingBefore: block.before < 0 ? 0 : block.before,
         spacingAfter: block.after < 0 ? 0 : block.after,
+        pageBreakBefore: block.cellOf == null && block.takePage(),
         lineSpacing: _lineSpacing(style),
         tabSet: _tabStops(style['tab-stops']),
       ),

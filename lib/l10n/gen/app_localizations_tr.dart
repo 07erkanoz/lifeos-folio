@@ -2734,7 +2734,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get pdfBuildHint =>
-      'Resimleri ve PDF\'leri ekleyip sıralayın. Her resim bir sayfa olur; bir PDF\'in yalnız bazı sayfalarını almak için numaralarını yazın.';
+      'Resimleri, taramaları (TIFF) ve PDF\'leri ekleyip sıralayın. Her resim bir sayfa olur; bir PDF\'in ya da taramanın yalnız bazı sayfalarını almak için numaralarını yazın.';
 
   @override
   String get pdfBuildAdd => 'Dosya ekle';

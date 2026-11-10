@@ -107,6 +107,9 @@ class _Paragraph {
   DocAlignment alignment = DocAlignment.left;
   double left = 0, right = 0, first = 0, before = 0, after = 0;
 
+  /// `\pagebb`: the paragraph starts a page.
+  bool pageBefore = false;
+
   /// `\sl` as written, and whether `\slmult1` makes it a multiple of lines.
   int spacing = 0;
   bool multiple = false;
@@ -125,6 +128,7 @@ class _Paragraph {
     ..first = first
     ..before = before
     ..after = after
+    ..pageBefore = pageBefore
     ..spacing = spacing
     ..multiple = multiple
     ..list = list
@@ -562,6 +566,17 @@ class _Parser {
         paragraph.right = (value ?? 0) * RtfReader._twip;
       case 'fi':
         paragraph.first = (value ?? 0) * RtfReader._twip;
+      case 'pagebb':
+        paragraph.pageBefore = value != 0;
+      case 'page':
+        // What follows starts a page: this paragraph when nothing of it is
+        // written yet, else the one after it.
+        _flushRun();
+        if (buffer.isEmpty) {
+          pageHere = true;
+        } else {
+          pageNext = true;
+        }
       case 'sb':
         paragraph.before = (value ?? 0) * RtfReader._twip;
       case 'sa':
@@ -884,9 +899,15 @@ class _Parser {
     tableBordered = false;
   }
 
+  /// A `\page` met: before this paragraph's text, or within it.
+  bool pageHere = false, pageNext = false;
+
   void _closeParagraph() {
     _flushRun();
     final text = buffer.toString();
+    final startsPage = (paragraph.pageBefore || pageHere) && !inCell;
+    pageHere = pageNext;
+    pageNext = false;
     if (text.isEmpty && spans.isEmpty && blocks.isEmpty && !inCell) {
       // Leading empty paragraphs before any content are noise.
       buffer.clear();
@@ -916,6 +937,7 @@ class _Parser {
         hanging: hanging,
         spacingBefore: paragraph.before,
         spacingAfter: paragraph.after,
+        pageBreakBefore: startsPage && blocks.isNotEmpty,
         lineSpacing: _lineSpacing(),
         tabSet: paragraph.tabs.isEmpty ? null : paragraph.tabs.join(','),
       ),

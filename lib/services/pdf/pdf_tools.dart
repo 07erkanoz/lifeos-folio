@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../tiff/image_pdf_writer.dart';
+import '../tiff/tiff_service.dart';
 
 /// What a PDF is put together from: a picture, as a page of its own, or
 /// pages of a PDF ([pages] from 1, in the order wanted; all of them when
@@ -19,11 +20,19 @@ class PdfPart {
 
   bool get isPdf => p.extension(path).toLowerCase() == '.pdf';
 
+  /// A scan of several pages: a TIFF, taken as the PDF made of it.
+  bool get isTiff => scans.contains(p.extension(path).toLowerCase());
+
+  /// Whether it has pages to choose from: a PDF or a TIFF.
+  bool get paged => isPdf || isTiff;
+
+  static const scans = {'.tif', '.tiff'};
+
   static const pictures = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'};
 
   static bool supports(String path) {
     final ext = p.extension(path).toLowerCase();
-    return ext == '.pdf' || pictures.contains(ext);
+    return ext == '.pdf' || scans.contains(ext) || pictures.contains(ext);
   }
 }
 
@@ -61,7 +70,7 @@ abstract final class PdfTools {
   /// One PDF of [parts], in their order.
   static Future<Uint8List> build(List<PdfPart> parts, {String? title}) async {
     // Pictures alone: written directly, nothing opened.
-    if (parts.every((part) => !part.isPdf)) {
+    if (parts.every((part) => !part.paged)) {
       return fromImages([for (final part in parts) part.path], title: title);
     }
     await pdfrxFlutterInitialize();
@@ -72,6 +81,9 @@ abstract final class PdfTools {
       for (final part in parts) {
         final bytes = part.isPdf
             ? await File(part.path).readAsBytes()
+            : part.isTiff
+            // Each page with its own pixels, a bilevel scan still one bit.
+            ? await TiffService.tiffToPdf(await File(part.path).readAsBytes())
             : await fromImages([part.path]);
         final document = await PdfDocument.openData(bytes);
         opened.add(document);

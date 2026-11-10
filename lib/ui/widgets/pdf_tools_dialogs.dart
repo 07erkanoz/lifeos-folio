@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../services/pdf/pdf_tools.dart';
+import '../../services/tiff/tiff_service.dart';
 import '../../services/platform/app_language.dart';
 import '../../services/platform/editor_window.dart';
 import 'notice.dart';
@@ -395,7 +396,8 @@ class _Part {
   int? count;
   bool bad = false;
 
-  bool get isPdf => p.extension(path).toLowerCase() == '.pdf';
+  /// Whether it has pages to choose from: a PDF, or a TIFF's scan.
+  bool get isPdf => PdfPart(path).paged;
 
   /// What goes into the PDF made, or null when its pages cannot be read.
   PdfPart? get part {
@@ -465,10 +467,17 @@ class _PdfBuilderDialogState extends State<PdfBuilderDialog> {
 
   Future<void> _count(_Part part) async {
     try {
-      await pdfrxFlutterInitialize();
-      final document = await PdfDocument.openFile(part.path);
-      final count = document.pages.length;
-      await document.dispose();
+      final int count;
+      if (PdfPart(part.path).isTiff) {
+        count = await TiffService.pageCount(
+          await File(part.path).readAsBytes(),
+        );
+      } else {
+        await pdfrxFlutterInitialize();
+        final document = await PdfDocument.openFile(part.path);
+        count = document.pages.length;
+        await document.dispose();
+      }
       if (mounted) setState(() => part.count = count);
     } catch (_) {
       if (mounted) setState(() => part.count = 0);
@@ -485,7 +494,7 @@ class _PdfBuilderDialogState extends State<PdfBuilderDialog> {
         allowMultiple: true,
         type: FileType.custom,
         allowedExtensions: const [
-          'pdf', 'jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', //
+          'pdf', 'tif', 'tiff', 'jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', //
         ],
       );
       paths = [
