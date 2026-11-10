@@ -37,21 +37,77 @@ abstract final class DocxSplice {
       if (read == null) return null;
       final origin = DocxOrigin.of(original, read);
       if (origin == null) return null;
-      // The page, its header and footer are in parts of their own, written
-      // only by the full writer.
-      if (_pagePrint(model) != _pagePrint(read)) return null;
-      final body = await _body(origin, model);
+      final plan = _plan(origin, model);
+      final sheet = _sheetPrint(model) != _sheetPrint(read);
+      final regions = [
+        for (final kind in const ['header', 'footer'])
+          if (_regionPrint(model, kind) != _regionPrint(read, kind)) kind,
+      ];
+      final package = _Package(origin._archive);
+      var head = origin.head, tail = origin.tail;
+      var fresh = const <String>[];
+      _Import? import;
+      if (plan.anew.isNotEmpty || sheet || regions.isNotEmpty) {
+        // What is new or changed, written by the full writer into a
+        // package of its own, and taken from there with all it needs.
+        final written = ZipDecoder().decodeBytes(
+          await DocxBridge.writeBytes(
+            DocModel(
+              blocks: plan.anew.isEmpty
+                  ? [DocBlock(plainText: '')]
+                  : [for (final i in plan.anew) model.blocks[i]],
+              metadata: model.metadata,
+              pageProperties: model.pageProperties,
+              pageRegions: model.pageRegions,
+              styles: model.styles,
+            ),
+          ),
+        );
+        final part = written.findFile('word/document.xml');
+        if (part == null) return null;
+        final scanned = DocxOrigin.scan(utf8.decode(part.content as List<int>));
+        if (scanned == null) return null;
+        if (plan.anew.isNotEmpty) {
+          final units = [
+            for (final unit in scanned.units)
+              if (unit.paragraph || unit.table) unit.xml,
+          ];
+          if (units.length != plan.anew.length) return null;
+          fresh = units;
+          import = _Import(written, package, 'word/document.xml');
+        }
+        if (sheet) tail = _withSheet(tail, scanned.tail);
+        for (final kind in regions) {
+          final next = _withRegion(tail, kind, written, scanned.tail, package);
+          if (next == null) return null;
+          tail = next;
+          head = _withNamespaces(head, tail);
+        }
+      }
+      // Only what is written of each is taken in with what it needs: a
+      // paragraph that keeps its own properties brings its runs alone.
+      final body = _write(origin, plan, fresh, import?.take ?? (xml) => xml);
       if (body == null) return null;
+      head = _withNamespaces(head, body);
       // What is written is read back and held against what was to be
       // written: a file that does not say the same is not kept. Read
-      // without its pictures, which say nothing and take the longest.
+      // without the body's pictures, which say nothing and take longest,
+      // unless a header's own may be among them.
+      final document = '$head$body$tail';
       final back = await DocxBridge.readBytes(
-        origin.repack(body, pictures: false),
+        origin._repack(document, package, pictures: regions.isNotEmpty),
       );
-      if (back == null || _letters(back.blocks) != _letters(model.blocks)) {
+      if (back == null ||
+          _letters(back.blocks) != _letters(model.blocks) ||
+          _sheetPrint(back) != _sheetPrint(model)) {
         return null;
       }
-      return origin.repack(body);
+      for (final kind in regions) {
+        if (_regionLetters(back, kind) != _regionLetters(model, kind)) {
+          return null;
+        }
+      }
+      return origin._repack(document, package);
     } catch (e) {
       debugPrint('DocxSplice.save: $e');
       return null;
@@ -77,7 +133,8 @@ abstract final class DocxSplice {
     );
   }
 
-  static String _pagePrint(DocModel model) {
+  /// The sheet: its size, which way it lies, its margins.
+  static String _sheetPrint(DocModel model) {
     final p = model.pageProperties;
     return jsonEncode([
       p.marginLeft.round(),
@@ -89,17 +146,22 @@ abstract final class DocxSplice {
       p.paperHeight.round(),
       p.headerOffset.round(),
       p.footerOffset.round(),
-      for (final key in model.pageRegions.keys.toList()..sort()) ...[
-        key,
-        for (final block in model.pageRegions[key]!) print(block),
-      ],
-      // None and an empty one are the same: the editor gives an empty one.
-      switch (model.metadata['pageRegionAttrs']) {
-        final Map attrs when attrs.isNotEmpty => jsonEncode(attrs),
-        _ => '',
-      },
     ]);
   }
+
+  /// A header or a footer: what it holds, and where its page number is.
+  static String _regionPrint(DocModel model, String kind) => jsonEncode([
+    for (final block in model.pageRegions[kind] ?? const <DocBlock>[])
+      print(block),
+    // None and an empty one are the same: the editor gives an empty one.
+    switch (model.metadata['pageRegionAttrs']) {
+      final Map attrs when attrs[kind] != null => jsonEncode(attrs[kind]),
+      _ => '',
+    },
+  ]);
+
+  static String _regionLetters(DocModel model, String kind) =>
+      _letters(model.pageRegions[kind] ?? const []);
 
   static String _letters(List<DocBlock> blocks) {
     final out = StringBuffer();
@@ -140,9 +202,10 @@ abstract final class DocxSplice {
     b.pageBreakBefore,
   ]);
 
-  /// The body as it is written: untouched units as they were, the rest
-  /// anew. Null when a block cannot be written here.
-  static Future<String?> _body(DocxOrigin origin, DocModel model) async {
+  /// What is written where: each unit kept as it was, each block written
+  /// anew and whose properties it takes, and the section breaks of what
+  /// was taken out handed to what is beside them.
+  static _Plan _plan(DocxOrigin origin, DocModel model) {
     final saved = [for (final block in model.blocks) print(block)];
     final match = _match(origin.prints, saved);
     // For each saved block, the original block it is, or -1.
@@ -150,14 +213,35 @@ abstract final class DocxSplice {
     for (final (o, s) in match.indexed) {
       if (s >= 0) from[s] = o;
     }
-    final out = StringBuffer();
-    final anew = <int>[]; // saved blocks written by the full writer
-    final plan = <Object>[]; // String (as it was) or _Anew
-    var written = 0; // units written so far, passive ones with them
-    void passive(int until) {
+    final pieces = <_Piece>[];
+    final anew = <int>[];
+    var written = 0;
+
+    // A section's break outlives the paragraph it was written in: the
+    // paragraph before takes it, or one made for it alone.
+    void carry(String section) {
+      final last = pieces.lastOrNull;
+      if (last != null && last.paragraph) {
+        if (last.xml != null && !last.xml!.contains('<w:sectPr')) {
+          last.xml = _withSection(last.xml!, section);
+          return;
+        }
+        if (last.fresh != null && last.section == null && !last.ownHead) {
+          last.section = section;
+          return;
+        }
+      }
+      pieces.add(_Piece.kept('<w:p><w:pPr>$section</w:pPr></w:p>', null, true));
+    }
+
+    void advance(int until) {
       for (; written < until; written++) {
         final unit = origin.units[written];
-        if (unit.blocks == 0) plan.add(unit.xml);
+        if (unit.blocks == 0) {
+          pieces.add(_Piece.kept(unit.xml, null, false));
+        } else if (_sectionOf(unit.xml) case final section?) {
+          carry(section);
+        }
       }
     }
 
@@ -166,104 +250,102 @@ abstract final class DocxSplice {
       final o = from[s];
       final unit = o < 0 ? null : origin.unitOf[o];
       // A unit all of whose blocks follow one another as they were.
-      if (unit != null && origin.units[unit].first == o) {
+      if (unit != null && unit >= written && origin.units[unit].first == o) {
         final u = origin.units[unit];
         var whole = s + u.blocks <= saved.length;
         for (var k = 0; whole && k < u.blocks; k++) {
           whole = from[s + k] == o + k;
         }
-        if (whole && unit >= written) {
-          passive(unit);
-          plan.add(u.xml);
+        if (whole) {
+          advance(unit);
+          pieces.add(_Piece.kept(u.xml, unit, u.paragraph));
           written = unit + 1;
           s += u.blocks;
           continue;
         }
       }
-      // Touched, or new. Its own unit, when it is the next one not yet
-      // written and holds this one block: a paragraph whose words changed.
+      // Touched, or new. Its own unit, when that is the next one not yet
+      // written, holds this one block and none of it was kept: a
+      // paragraph whose words or shape changed.
       final block = model.blocks[s];
-      if (block.type == DocBlockType.table ||
-          block.type == DocBlockType.image ||
-          block.spans.any((span) => span.link != null)) {
-        return null;
-      }
+      final writable =
+          block.type == DocBlockType.paragraph ||
+          block.type == DocBlockType.listItem;
       int? own;
-      for (var u = written; u < origin.units.length; u++) {
-        final unit = origin.units[u];
-        if (unit.blocks == 0) continue;
-        // The next unit with blocks, if none of them was kept.
-        final kept = [
-          for (var k = 0; k < unit.blocks; k++) match[unit.first + k],
-        ].any((m) => m >= 0);
-        if (!kept &&
-            unit.blocks == 1 &&
-            unit.paragraph &&
-            _shape(origin.blocks[unit.first]) == _shape(block)) {
+      for (var u = written; writable && u < origin.units.length; u++) {
+        final candidate = origin.units[u];
+        if (candidate.blocks == 0) continue;
+        if (candidate.blocks == 1 &&
+            candidate.paragraph &&
+            match[candidate.first] < 0) {
           own = u;
         }
         break;
       }
-      if (own == null && block.listType != DocListType.none) return null;
-      if (own != null) passive(own);
-      plan.add(_Anew(anew.length, own));
+      final piece = _Piece.anew(anew.length);
+      if (own != null) {
+        advance(own);
+        final unit = origin.units[own];
+        piece
+          ..unit = own
+          ..ownHead = _shape(origin.blocks[unit.first]) == _shape(block);
+        // Its shape changed: its properties are written anew, the
+        // section it ends kept with it.
+        if (!piece.ownHead) piece.section = _sectionOf(unit.xml);
+        written = own + 1;
+      } else if (block.listType != DocListType.none) {
+        // An item put into a list goes on with that list's numbering:
+        // the item before it lends its properties.
+        final before = pieces.lastOrNull?.unit;
+        if (before != null && origin.units[before].blocks == 1) {
+          final was = origin.blocks[origin.units[before].first];
+          if (was.listType == block.listType &&
+              was.listLevel == block.listLevel) {
+            piece.borrow = before;
+          }
+        }
+      }
+      pieces.add(piece);
       anew.add(s);
-      if (own != null) written = own + 1;
       s++;
     }
-    // Units left: dropped by the lawyer, but for what has no block.
-    for (; written < origin.units.length; written++) {
-      final unit = origin.units[written];
-      if (unit.blocks == 0) {
-        plan.add(unit.xml);
-      } else if (unit.xml.contains('<w:sectPr')) {
-        // A section ends in it: its page and columns go with it.
-        return null;
-      }
-    }
+    advance(origin.units.length);
+    return _Plan(pieces, anew);
+  }
 
-    var fresh = const <String>[];
-    if (anew.isNotEmpty) {
-      final bytes = await DocxBridge.writeBytes(
-        DocModel(
-          blocks: [for (final i in anew) model.blocks[i]],
-          metadata: model.metadata,
-          pageProperties: model.pageProperties,
-        ),
-      );
-      final written = DocxOrigin.scan(
-        utf8.decode(
-          ZipDecoder().decodeBytes(bytes).findFile('word/document.xml')!.content
-              as List<int>,
-        ),
-      );
-      if (written == null) return null;
-      fresh = [
-        for (final unit in written.units)
-          if (unit.paragraph) unit.xml,
-      ];
-      if (fresh.length != anew.length) return null;
-    }
-    for (final piece in plan) {
-      if (piece is String) {
-        out.write(piece);
+  /// The body as it is written from [plan], [fresh] holding what was
+  /// written anew; null when a piece cannot be put together.
+  static String? _write(
+    DocxOrigin origin,
+    _Plan plan,
+    List<String> fresh,
+    String Function(String xml) take,
+  ) {
+    final out = StringBuffer();
+    for (final piece in plan.pieces) {
+      if (piece.xml case final kept?) {
+        out.write(kept);
         continue;
       }
-      final one = piece as _Anew;
-      final xml = fresh[one.index];
-      if (one.own == null) {
-        out.write(xml);
-        continue;
+      var xml = fresh[piece.fresh!];
+      final lender = piece.ownHead ? piece.unit : piece.borrow;
+      if (lender != null) {
+        // The paragraph's own opening and properties (or the list item's
+        // before it), the new runs in them.
+        var head = _paragraphHead(origin.units[lender].xml);
+        final runs = _paragraphRuns(xml);
+        if (head == null || runs == null) return null;
+        if (!piece.ownHead) {
+          head = '<w:p>${_properties(head)}'
+              .replaceAll(_sectionPattern, '')
+              .replaceAll(_breakBefore, '');
+        }
+        xml = '$head${take(runs)}</w:p>';
+      } else {
+        xml = take(xml);
       }
-      // The paragraph's own opening and properties, the new runs in them.
-      final was = origin.units[one.own!].xml;
-      final head = _paragraphHead(was);
-      final runs = _paragraphRuns(xml);
-      if (head == null || runs == null) return null;
-      out
-        ..write(head)
-        ..write(runs)
-        ..write('</w:p>');
+      if (piece.section case final section?) xml = _withSection(xml, section);
+      out.write(xml);
     }
     return out.toString();
   }
@@ -283,6 +365,12 @@ abstract final class DocxSplice {
     return xml.substring(0, end);
   }
 
+  /// The properties alone of a paragraph's [head].
+  static String _properties(String head) {
+    final at = head.indexOf('<w:pPr');
+    return at < 0 ? '' : head.substring(at);
+  }
+
   /// What a paragraph written anew holds after its properties.
   static String? _paragraphRuns(String xml) {
     final head = _paragraphHead(xml);
@@ -290,7 +378,203 @@ abstract final class DocxSplice {
     return xml.substring(head.length, xml.length - '</w:p>'.length);
   }
 
+  /// The section a paragraph ends, written in its properties; null when
+  /// it ends none.
+  static String? _sectionOf(String xml) {
+    final head = _paragraphHead(xml);
+    if (head == null) return null;
+    return _sectionPattern.firstMatch(head)?.group(0);
+  }
+
+  /// [paragraph] ending [section].
+  static String _withSection(String paragraph, String section) {
+    final open = _open.matchAsPrefix(paragraph);
+    if (open == null) return paragraph;
+    if (open.group(0)!.endsWith('/>')) {
+      final tag = open.group(0)!;
+      return '${tag.substring(0, tag.length - 2)}>'
+          '<w:pPr>$section</w:pPr></w:p>';
+    }
+    final end = open.end;
+    if (paragraph.startsWith('<w:pPr/>', end)) {
+      return '${paragraph.substring(0, end)}<w:pPr>$section</w:pPr>'
+          '${paragraph.substring(end + '<w:pPr/>'.length)}';
+    }
+    if (paragraph.startsWith('<w:pPr>', end)) {
+      final close = paragraph.indexOf('</w:pPr>', end);
+      if (close < 0) return paragraph;
+      // A paragraph's properties end with the run properties of its mark
+      // and its section; the section last.
+      return '${paragraph.substring(0, close)}$section'
+          '${paragraph.substring(close)}';
+    }
+    return '${paragraph.substring(0, end)}<w:pPr>$section</w:pPr>'
+        '${paragraph.substring(end)}';
+  }
+
   static final _open = RegExp(r'<w:p(?: [^>]*)?>');
+  static final _sectionPattern = RegExp(
+    r'<w:sectPr(?: [^>]*)?/>|<w:sectPr(?: [^>]*)?>.*?</w:sectPr>',
+    dotAll: true,
+  );
+  static final _breakBefore = RegExp(r'<w:pageBreakBefore(?: [^>]*)?/>');
+
+  /// The document's opening with the names what is put in is written in
+  /// (`r:` for a picture's and a link's ties, `wp:` for a picture), when
+  /// it does not have them.
+  static String _withNamespaces(String head, String put) {
+    const names = {
+      'r':
+          'http://schemas.openxmlformats.org/officeDocument/2006/'
+          'relationships',
+      'wp':
+          'http://schemas.openxmlformats.org/drawingml/2006/'
+          'wordprocessingDrawing',
+    };
+    final open = RegExp(r'<w:document\b[^>]*>').firstMatch(head);
+    if (open == null) return head;
+    var tag = open.group(0)!;
+    for (final MapEntry(key: name, value: uri) in names.entries) {
+      if (put.contains('<$name:') || put.contains(' $name:')) {
+        if (!tag.contains('xmlns:$name=')) {
+          tag = '${tag.substring(0, tag.length - 1)} xmlns:$name="$uri">';
+        }
+      }
+    }
+    return head.replaceRange(open.start, open.end, tag);
+  }
+
+  static final _lastSection = RegExp(
+    r'<w:sectPr(?: [^>]*)?>.*?</w:sectPr>|<w:sectPr(?: [^>]*)?/>',
+    dotAll: true,
+  );
+
+  /// The last section of [tail] as an element that can hold more.
+  static (String tail, int start, int end)? _section(String tail) {
+    final found = _lastSection.firstMatch(tail);
+    if (found == null) {
+      // No section written: one is, for what is to be said of the page.
+      final at = tail.indexOf('</w:body>');
+      if (at < 0) return null;
+      const empty = '<w:sectPr></w:sectPr>';
+      return (
+        '${tail.substring(0, at)}$empty${tail.substring(at)}',
+        at,
+        at + empty.length,
+      );
+    }
+    var section = found.group(0)!;
+    if (section.endsWith('/>')) {
+      section = '${section.substring(0, section.length - 2)}></w:sectPr>';
+      return (
+        tail.replaceRange(found.start, found.end, section),
+        found.start,
+        found.start + section.length,
+      );
+    }
+    return (tail, found.start, found.end);
+  }
+
+  /// [tail] with the sheet's size and margins as [written]'s section has
+  /// them, the rest of its own section as it was.
+  static String _withSheet(String tail, String written) {
+    final at = _section(tail);
+    if (at == null) return tail;
+    var (text, start, end) = at;
+    var section = text.substring(start, end);
+    for (final name in const ['w:pgSz', 'w:pgMar']) {
+      final element = RegExp('<$name\\b[^>]*/>');
+      final now = element.firstMatch(written)?.group(0);
+      if (now == null) continue;
+      if (element.hasMatch(section)) {
+        section = section.replaceFirst(element, now);
+      } else {
+        // After the header's and footer's ties, which come first.
+        final ties = RegExp(r'<w:(?:header|footer)Reference\b[^>]*/>')
+            .allMatches(section)
+            .lastOrNull;
+        final open = ties?.end ?? section.indexOf('>') + 1;
+        section = section.replaceRange(open, open, now);
+      }
+    }
+    return text.replaceRange(start, end, section);
+  }
+
+  /// [tail] with the header or footer of [kind] as [written] has it: its
+  /// part put into [package] in the place of the one the section showed,
+  /// or as a new part tied to it; taken off when [written] has none.
+  static String? _withRegion(
+    String tail,
+    String kind,
+    Archive written,
+    String writtenTail,
+    _Package package,
+  ) {
+    final at = _section(tail);
+    if (at == null) return null;
+    var (text, start, end) = at;
+    var section = text.substring(start, end);
+    RegExp tie(String type) =>
+        RegExp('<w:${kind}Reference\\b(?=[^>]*w:type="$type")[^>]*/>');
+    final type =
+        'http://schemas.openxmlformats.org/officeDocument/2006/'
+        'relationships/$kind';
+    final now = tie('default').firstMatch(writtenTail)?.group(0);
+    final was = tie('default').firstMatch(section)?.group(0);
+    if (now == null) {
+      // None now: the section shows none.
+      if (was != null) section = section.replaceFirst(was, '');
+      return text.replaceRange(start, end, section);
+    }
+    final id = _attribute(now, 'r:id');
+    final source = id == null
+        ? null
+        : _Rels.of(written, 'word/document.xml').target(id);
+    final part = source == null ? null : written.findFile('word/$source');
+    if (part == null) return null;
+    // The part the section showed, written over; or a new one.
+    String? name;
+    if (was != null) {
+      final old = _attribute(was, 'r:id');
+      final target = old == null
+          ? null
+          : package.rels('word/document.xml').target(old);
+      if (target != null) name = 'word/$target';
+    }
+    if (name == null) {
+      name = package.free(
+        'word/folio${kind == 'header' ? 'Header' : 'Footer'}',
+        'xml',
+      );
+      final tied = package
+          .rels('word/document.xml')
+          .add(type, name.substring('word/'.length));
+      package.contentType(
+        '/$name',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.'
+            '$kind+xml',
+      );
+      final reference = '<w:${kind}Reference w:type="default" r:id="$tied"/>';
+      section = was != null
+          ? section.replaceFirst(was, reference)
+          : section.replaceRange(
+              section.indexOf('>') + 1,
+              section.indexOf('>') + 1,
+              reference,
+            );
+    }
+    // Its own ties (a picture in a letterhead) come with it.
+    package.dropRels(name);
+    final import = _Import(written, package, name, from: 'word/$source');
+    package.put(
+      name,
+      utf8.encode(import.take(utf8.decode(part.content as List<int>))),
+    );
+    return text.replaceRange(start, end, section);
+  }
+
+  static String? _attribute(String element, String name) =>
+      RegExp('\\b$name="([^"]*)"').firstMatch(element)?.group(1);
 
   /// For each of [was], the index in [now] of the same print, in order
   /// (the longest run of them), or -1.
@@ -338,13 +622,379 @@ abstract final class DocxSplice {
   }
 }
 
-class _Anew {
-  const _Anew(this.index, this.own);
+class _Plan {
+  const _Plan(this.pieces, this.anew);
 
-  /// Which of the blocks written anew, and the unit whose properties it
-  /// keeps, if it is that unit's paragraph with other words.
-  final int index;
-  final int? own;
+  final List<_Piece> pieces;
+
+  /// The saved blocks written anew, in the order they are written.
+  final List<int> anew;
+}
+
+/// One thing written into the body: a unit as it was, or a block written
+/// anew.
+class _Piece {
+  _Piece.kept(this.xml, this.unit, this.paragraph) : fresh = null;
+  _Piece.anew(this.fresh) : paragraph = true;
+
+  /// As it was (and as it is written, a section handed to it added).
+  String? xml;
+
+  /// Which of the blocks written anew.
+  final int? fresh;
+
+  /// The unit it was, or whose paragraph it is with other words.
+  int? unit;
+  final bool paragraph;
+
+  /// Whether it keeps its own unit's properties as Word wrote them.
+  bool ownHead = false;
+
+  /// A list item before it whose properties it takes, to go on with that
+  /// list's numbering.
+  int? borrow;
+
+  /// A section it ends, handed to it.
+  String? section;
+}
+
+/// A part's ties to other parts and to addresses outside the file.
+class _Rels {
+  _Rels(this.xml);
+
+  static const _empty =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/'
+      '2006/relationships"></Relationships>';
+
+  static String nameOf(String part) {
+    final slash = part.lastIndexOf('/');
+    return '${part.substring(0, slash)}/_rels/'
+        '${part.substring(slash + 1)}.rels';
+  }
+
+  static _Rels of(Archive archive, String part) {
+    final file = archive.findFile(nameOf(part));
+    return _Rels(
+      file == null ? _empty : utf8.decode(file.content as List<int>),
+    );
+  }
+
+  String xml;
+  var _made = 0;
+
+  static final _one = RegExp(r'<Relationship\b[^>]*/>');
+
+  String? _find(String id) {
+    for (final m in _one.allMatches(xml)) {
+      if (DocxSplice._attribute(m.group(0)!, 'Id') == id) return m.group(0);
+    }
+    return null;
+  }
+
+  String? target(String id) {
+    final found = _find(id);
+    return found == null ? null : DocxSplice._attribute(found, 'Target');
+  }
+
+  String? type(String id) {
+    final found = _find(id);
+    return found == null ? null : DocxSplice._attribute(found, 'Type');
+  }
+
+  bool external(String id) =>
+      DocxSplice._attribute(_find(id) ?? '', 'TargetMode') == 'External';
+
+  /// A new tie, by an id no other has.
+  String add(String type, String target, {bool external = false}) {
+    String id;
+    do {
+      id = 'rIdFolio${++_made}';
+    } while (xml.contains('Id="$id"'));
+    final one =
+        '<Relationship Id="$id" Type="$type" Target="$target"'
+        '${external ? ' TargetMode="External"' : ''}/>';
+    final at = xml.lastIndexOf('</Relationships>');
+    xml = at < 0
+        ? xml.replaceFirst(
+            RegExp(r'<Relationships\b([^>]*)/>'),
+            '<Relationships\$1>$one</Relationships>',
+          )
+        : xml.replaceRange(at, at, one);
+    return id;
+  }
+}
+
+/// The original package with what is put into it: parts changed, parts
+/// added, every other part as it was.
+class _Package {
+  _Package(this.archive);
+
+  final Archive archive;
+  final parts = <String, List<int>>{};
+  final _rels = <String, _Rels>{};
+  final _dropped = <String>{};
+
+  bool has(String name) =>
+      parts.containsKey(name) || archive.findFile(name) != null;
+
+  String? text(String name) {
+    if (parts[name] case final bytes?) return utf8.decode(bytes);
+    final file = archive.findFile(name);
+    return file == null ? null : utf8.decode(file.content as List<int>);
+  }
+
+  void put(String name, List<int> bytes) => parts[name] = bytes;
+
+  /// A name no part has: [stem], or [stem] with a number, and [extension].
+  String free(String stem, String extension) {
+    for (var i = 1; ; i++) {
+      final name = '$stem${i == 1 ? '' : i}.$extension';
+      if (!has(name)) return name;
+    }
+  }
+
+  _Rels rels(String part) => _rels.putIfAbsent(
+    part,
+    () =>
+        _dropped.contains(part) ? _Rels(_Rels._empty) : _Rels.of(archive, part),
+  );
+
+  /// [part]'s ties forgotten: it is written over with a part of other
+  /// ties.
+  void dropRels(String part) {
+    _dropped.add(part);
+    _rels[part] = _Rels(_Rels._empty);
+  }
+
+  /// The kind of [part] (`/word/x.xml`) said in the package's list, when
+  /// it is not said there yet.
+  void contentType(String part, String type) {
+    const name = '[Content_Types].xml';
+    final xml = text(name);
+    if (xml == null || xml.contains('PartName="$part"')) return;
+    final at = xml.lastIndexOf('</Types>');
+    if (at < 0) return;
+    put(
+      name,
+      utf8.encode(
+        xml.replaceRange(
+          at,
+          at,
+          '<Override PartName="$part" ContentType="$type"/>',
+        ),
+      ),
+    );
+  }
+
+  /// The kind of every file ending in [extension], when it is not said.
+  void defaultType(String extension, String type) {
+    const name = '[Content_Types].xml';
+    final xml = text(name);
+    if (xml == null ||
+        RegExp('Extension="$extension"', caseSensitive: false).hasMatch(xml)) {
+      return;
+    }
+    final at = xml.indexOf('>', xml.indexOf('<Types')) + 1;
+    if (at <= 0) return;
+    put(
+      name,
+      utf8.encode(
+        xml.replaceRange(
+          at,
+          at,
+          '<Default Extension="$extension" ContentType="$type"/>',
+        ),
+      ),
+    );
+  }
+
+  /// The parts to write: those changed and added, and the ties changed.
+  Map<String, List<int>> get written => {
+    ...parts,
+    for (final MapEntry(key: part, value: rels) in _rels.entries)
+      if (rels.xml != _Rels._empty || _dropped.contains(part))
+        if (rels.xml != (text(_Rels.nameOf(part)) ?? ''))
+          _Rels.nameOf(part): utf8.encode(rels.xml),
+  };
+}
+
+/// What was written anew taken into the original package with what it
+/// needs: a picture's file and its tie, a link's address, a list's
+/// numbering, a style the original does not have.
+class _Import {
+  _Import(this.written, this.package, this.part, {String? from})
+    : _from = _Rels.of(written, from ?? 'word/document.xml');
+
+  final Archive written;
+  final _Package package;
+
+  /// The part of the original what is taken goes into.
+  final String part;
+  final _Rels _from;
+  final _ids = <String, String>{};
+  final _nums = <String, String>{};
+  final _abstracts = <String, String>{};
+
+  static final _tie = RegExp(r'\br:(embed|id|link|pict)="([^"]+)"');
+  static final _num = RegExp(r'<w:numId w:val="(\d+)"/>');
+  static final _style = RegExp(
+    r'<w:(?:pStyle|rStyle|tblStyle) w:val="([^"]+)"',
+  );
+
+  static const _mime = {
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'bmp': 'image/bmp',
+    'webp': 'image/webp',
+  };
+
+  String take(String xml) {
+    xml = xml.replaceAllMapped(_tie, (m) {
+      final id = _tied(m.group(2)!);
+      return id == null ? m.group(0)! : 'r:${m.group(1)}="$id"';
+    });
+    xml = xml.replaceAllMapped(_num, (m) {
+      final id = _numbered(m.group(1)!);
+      return '<w:numId w:val="${id ?? m.group(1)}"/>';
+    });
+    for (final m in _style.allMatches(xml)) {
+      _styled(m.group(1)!);
+    }
+    return xml;
+  }
+
+  /// The id in the original of what [id] ties in what was written.
+  String? _tied(String id) {
+    if (_ids[id] case final known?) return known;
+    final type = _from.type(id), target = _from.target(id);
+    if (type == null || target == null) return null;
+    final rels = package.rels(part);
+    if (_from.external(id)) {
+      return _ids[id] = rels.add(type, target, external: true);
+    }
+    final source = written.findFile('word/$target');
+    if (source == null) return null;
+    final extension = target.contains('.')
+        ? target.substring(target.lastIndexOf('.') + 1).toLowerCase()
+        : 'bin';
+    final name = package.free('word/media/folio', extension);
+    package.put(name, source.content as List<int>);
+    if (_mime[extension] case final mime?) {
+      package.defaultType(extension, mime);
+    }
+    return _ids[id] = rels.add(type, name.substring('word/'.length));
+  }
+
+  static const _numbering = 'word/numbering.xml';
+
+  /// The number in the original of the list [id] is in what was written,
+  /// its definition taken with it.
+  String? _numbered(String id) {
+    if (_nums[id] case final known?) return known;
+    final source = written.findFile(_numbering);
+    if (source == null) return null;
+    final from = utf8.decode(source.content as List<int>);
+    final num = RegExp(
+      '<w:num w:numId="$id"(?: [^>]*)?>.*?</w:num>',
+      dotAll: true,
+    ).firstMatch(from)?.group(0);
+    if (num == null) return null;
+    final abstractId = RegExp(r'<w:abstractNumId w:val="(\d+)"/>')
+        .firstMatch(num)
+        ?.group(1);
+    if (abstractId == null) return null;
+    var into = package.text(_numbering);
+    if (into == null) {
+      // The original numbers nothing: a part for what does now.
+      final root = RegExp(r'<w:numbering\b[^>]*>').firstMatch(from)?.group(0);
+      if (root == null) return null;
+      into =
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '$root</w:numbering>';
+      package
+          .rels('word/document.xml')
+          .add(
+            'http://schemas.openxmlformats.org/officeDocument/2006/'
+                'relationships/numbering',
+            'numbering.xml',
+          );
+      package.contentType(
+        '/$_numbering',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.'
+            'numbering+xml',
+      );
+    }
+    // A numbering part that holds nothing may be written closed.
+    if (!into.contains('</w:numbering>')) {
+      final closed = RegExp(r'<w:numbering\b([^>]*)/>').firstMatch(into);
+      if (closed == null) return null;
+      into = into.replaceRange(
+        closed.start,
+        closed.end,
+        '<w:numbering${closed.group(1)}></w:numbering>',
+      );
+    }
+    int next(String pattern) =>
+        RegExp(pattern)
+            .allMatches(into!)
+            .map((m) => int.parse(m.group(1)!))
+            .fold(0, (a, b) => a > b ? a : b) +
+        1;
+    var abstract = _abstracts[abstractId];
+    if (abstract == null) {
+      final definition = RegExp(
+        '<w:abstractNum w:abstractNumId="$abstractId"(?: [^>]*)?>.*?'
+        '</w:abstractNum>',
+        dotAll: true,
+      ).firstMatch(from)?.group(0);
+      if (definition == null) return null;
+      abstract = '${next(r'<w:abstractNum w:abstractNumId="(\d+)"')}';
+      _abstracts[abstractId] = abstract;
+      // Definitions come before the lists that use them.
+      final first = into.indexOf('<w:num ');
+      final at = first >= 0 ? first : into.lastIndexOf('</w:numbering>');
+      into = into.replaceRange(
+        at,
+        at,
+        definition.replaceFirst(
+          'w:abstractNumId="$abstractId"',
+          'w:abstractNumId="$abstract"',
+        ),
+      );
+    }
+    final made = '${next(r'<w:num w:numId="(\d+)"')}';
+    final at = into.lastIndexOf('</w:numbering>');
+    into = into.replaceRange(
+      at,
+      at,
+      num.replaceFirst('w:numId="$id"', 'w:numId="$made"').replaceFirst(
+        '<w:abstractNumId w:val="$abstractId"/>',
+        '<w:abstractNumId w:val="$abstract"/>',
+      ),
+    );
+    package.put(_numbering, utf8.encode(into));
+    return _nums[id] = made;
+  }
+
+  /// The style [id] taken into the original's styles when it has none by
+  /// that name.
+  void _styled(String id) {
+    const name = 'word/styles.xml';
+    final into = package.text(name);
+    if (into == null || into.contains('w:styleId="$id"')) return;
+    final source = written.findFile(name);
+    if (source == null) return;
+    final style = RegExp(
+      '<w:style\\b(?=[^>]*w:styleId="$id")[^>]*>.*?</w:style>',
+      dotAll: true,
+    ).firstMatch(utf8.decode(source.content as List<int>))?.group(0);
+    final at = into.lastIndexOf('</w:styles>');
+    if (style == null || at < 0) return;
+    package.put(name, utf8.encode(into.replaceRange(at, at, style)));
+  }
 }
 
 /// One thing of a Word file's body, as it is written there: a paragraph, a
@@ -595,24 +1245,32 @@ class DocxOrigin {
   static final _text = RegExp(r'<w:t(?: [^>]*)?>([^<]*)</w:t>');
   static final _space = RegExp(r'\s+');
 
-  /// The package with [body] as the document's body, every other part as
-  /// it was.
-  Uint8List repack(String body, {bool pictures = true}) {
+  /// The package with [document] as its document part, what [package]
+  /// holds changed or added, and every other part as it was.
+  Uint8List _repack(String document, _Package package, {bool pictures = true}) {
     final out = Archive();
+    final written = package.written;
     for (final file in _archive) {
       if (!file.isFile) continue;
       if (!pictures && file.name.startsWith('word/media/')) continue;
       if (file.name == 'word/document.xml') {
         final content = [
           if (_marked) ...const [0xEF, 0xBB, 0xBF],
-          ...utf8.encode('$head$body$tail'),
+          ...utf8.encode(document),
         ];
+        out.addFile(ArchiveFile(file.name, content.length, content));
+      } else if (written[file.name] case final content?) {
         out.addFile(ArchiveFile(file.name, content.length, content));
       } else {
         // As it is in the file, still compressed: a picture of megabytes
         // is not opened and pressed again at every save.
         out.addFile(file);
       }
+    }
+    for (final MapEntry(key: name, value: content) in written.entries) {
+      if (_archive.findFile(name) != null) continue;
+      if (!pictures && name.startsWith('word/media/')) continue;
+      out.addFile(ArchiveFile(name, content.length, content));
     }
     return Uint8List.fromList(ZipEncoder().encode(out));
   }
