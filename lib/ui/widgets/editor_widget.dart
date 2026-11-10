@@ -1496,6 +1496,20 @@ class _EditorWidgetState extends State<EditorWidget>
   final _fileMenu = MenuController();
   String? _savedPath;
   EvrakFormat? _savedFormat;
+
+  /// The Word file this document was opened from or last saved as, as it
+  /// is on disk now; null when it is not a Word file's.
+  Future<Uint8List?> _wordOrigin() async {
+    final path = _documentPath;
+    final format = _savedFormat ?? widget.initialFormat;
+    if (path == null || format != EvrakFormat.docx) return null;
+    try {
+      return await File(path).readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
   String _baselineDelta = '';
   DocPageProperties _baselinePage = const DocPageProperties();
   String _deltaSnapshot() =>
@@ -5424,7 +5438,12 @@ class _EditorWidgetState extends State<EditorWidget>
       if (!mounted) return false;
       Future<List<int>> encode(EvrakFormat format) async => switch (format) {
         EvrakFormat.udf => UdfWriter.writeBytes(model),
-        EvrakFormat.docx => await DocxBridge.writeBytes(model),
+        // Into the Word file it was opened from: what was not touched
+        // keeps what the editor cannot show.
+        EvrakFormat.docx => await DocxBridge.writeBytes(
+          model,
+          original: await _wordOrigin(),
+        ),
         EvrakFormat.rtf => RtfWriter.writeBytes(model),
         EvrakFormat.pdf => await PdfService.modelToPdfBytes(
           model,

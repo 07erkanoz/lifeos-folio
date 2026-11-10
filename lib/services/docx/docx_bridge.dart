@@ -14,6 +14,7 @@ import '../../models/document_model.dart';
 import '../editor/tab_stops.dart';
 import '../layout/page_numbers.dart';
 import 'docx_regions.dart';
+import 'docx_splice.dart';
 
 class DocxBridge {
   static Future<DocModel?> readFile(String filePath) async {
@@ -145,7 +146,6 @@ class DocxBridge {
     return false;
   }
 
-  @visibleForTesting
   static List<int> openContentControls(List<int> content) {
     try {
       return String.fromCharCodes(content)
@@ -257,7 +257,6 @@ class DocxBridge {
   /// editor has no boxes; left in theirs, what they say was lost whole (a
   /// real objection petition lost 1.400 letters of its 22.000). Word keeps
   /// each box twice, for old readers; the second copy is dropped.
-  @visibleForTesting
   static List<int> textBoxesAsParagraphs(List<int> content) {
     try {
       var xml = String.fromCharCodes(content);
@@ -322,7 +321,6 @@ class DocxBridge {
   /// one thing of a run — the tab or the line break when there is one, else
   /// the first text — and the rest was lost: measured on 551 real
   /// documents, 399 lost text, some nine tenths of it.
-  @visibleForTesting
   static List<int> splitMixedRuns(List<int> content) {
     try {
       final xml = String.fromCharCodes(content);
@@ -422,7 +420,17 @@ class DocxBridge {
     }
   }
 
-  static Future<Uint8List> writeBytes(DocModel model) async {
+  /// [model] as a Word file. With [original], the Word file the document
+  /// was opened from, what was not touched keeps the bytes it had there
+  /// ([DocxSplice]); written anew when that cannot be done, or with none.
+  static Future<Uint8List> writeBytes(
+    DocModel model, {
+    Uint8List? original,
+  }) async {
+    if (original != null) {
+      final kept = await DocxSplice.save(original, model);
+      if (kept != null) return kept;
+    }
     // A Word document's stops are counted from the margin; UYAP's from the
     // paragraph's left indent (see TabStops).
     _wordTabs = model.metadata['tabRules'] == 'word';
