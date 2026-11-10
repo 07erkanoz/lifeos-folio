@@ -171,6 +171,10 @@ class DocBlock {
   final double? endFontSize;
   final String? endFontFamily;
 
+  /// Whether the paragraph starts a new page: Word's page break, its
+  /// "page break before" and a section that begins on a new page.
+  final bool pageBreakBefore;
+
   DocBlock({
     this.type = DocBlockType.paragraph,
     this.alignment = DocAlignment.left,
@@ -197,6 +201,7 @@ class DocBlock {
     this.numberType,
     this.endFontSize,
     this.endFontFamily,
+    this.pageBreakBefore = false,
   });
 }
 

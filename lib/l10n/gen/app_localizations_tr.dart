@@ -1924,6 +1924,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get tbPicture => 'Görsel';
 
   @override
+  String get tbPageBreakMenu => 'Sayfa sonu (Ctrl+Enter)';
+
+  @override
   String get tbPointSize => 'Punto';
 
   @override

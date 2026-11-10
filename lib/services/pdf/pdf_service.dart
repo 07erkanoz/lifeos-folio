@@ -856,8 +856,11 @@ class PdfService {
             else if (b.type == DocBlockType.table ||
                 b.type == DocBlockType.image)
               _trace == null ? render(b) : _Traced(render(b), i)
-            else
+            else ...[
+              // A paragraph that starts a page; the first is on one already.
+              if (b.pageBreakBefore && i > 0) pw.NewPage(),
               ...paragraphRows(b, width, block: i),
+            ],
         ],
       ),
     );

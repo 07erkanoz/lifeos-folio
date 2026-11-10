@@ -573,6 +573,7 @@
   "tbPdfSaved": "PDF saved",
   "tbPickSize": "Choose a size",
   "tbPicture": "Picture",
+  "tbPageBreakMenu": "Page break (Ctrl+Enter)",
   "tbPointSize": "Size (pt)",
   "tbPointSizeHelp": "Between 1 and 200, for example 10.5",
   "tbPreviewFailed": "Could not open the preview: {error}",

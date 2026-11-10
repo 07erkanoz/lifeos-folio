@@ -1090,6 +1090,7 @@
   "tbPdfSaved": "PDF kaydedildi",
   "tbPickSize": "Boyut seçin",
   "tbPicture": "Görsel",
+  "tbPageBreakMenu": "Sayfa sonu (Ctrl+Enter)",
   "tbPointSize": "Punto",
   "tbPointSizeHelp": "1–200 arasında, örneğin 10,5",
   "tbPreviewFailed": "Önizleme açılamadı: {error}",

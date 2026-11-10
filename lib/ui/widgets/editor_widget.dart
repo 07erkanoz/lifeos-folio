@@ -1782,6 +1782,7 @@ class _EditorWidgetState extends State<EditorWidget>
       (LogicalKeyboardKey.keyF, false): 'find',
       (LogicalKeyboardKey.keyF, true): 'format',
       (LogicalKeyboardKey.keyH, false): 'replace',
+      (LogicalKeyboardKey.enter, false): 'pageBreak',
       (LogicalKeyboardKey.keyB, false): 'bold',
       (LogicalKeyboardKey.keyI, false): 'italic',
       (LogicalKeyboardKey.keyU, false): 'underline',
@@ -1860,6 +1861,8 @@ class _EditorWidgetState extends State<EditorWidget>
         _formatPetition();
       case 'replace':
         _find(replace: true);
+      case 'pageBreak':
+        _pageBreak();
       case 'bold':
         _toggle(Attribute.bold);
       case 'italic':
@@ -3220,6 +3223,61 @@ class _EditorWidgetState extends State<EditorWidget>
     EditorEmbeds.insertOnOwnLine(
       _quillController,
       Embeddable(DocDeltaMap.kTableEmbed, index),
+    );
+    setState(() {});
+  }
+
+  /// A page break where the cursor is, Ctrl+Enter: what follows it starts
+  /// a new page as a paragraph of its own. At the start of a paragraph that
+  /// starts a page already, the break is taken off.
+  void _pageBreak() {
+    final controller = _active;
+    final selection = controller.selection;
+    if (!selection.isValid) return;
+    var at = selection.start;
+    Line? lineAt(int offset) {
+      var from = 0;
+      for (final line in _lines(controller.document.root)) {
+        if (offset < from + line.length) {
+          return offset == from || offset > from ? line : null;
+        }
+        from += line.length;
+      }
+      return null;
+    }
+
+    int startOf(Line line) => line.documentOffset;
+    var line = lineAt(at);
+    if (line == null) return;
+    // Not in a table's cell: its rows break the pages.
+    if (!identical(controller, _quillController)) return;
+    final atStart = at == startOf(line);
+    bool broken(Line l) {
+      final layout = l.style.attributes['doc-layout']?.value;
+      return layout is Map && layout['break'] == true;
+    }
+
+    final off = atStart && broken(line);
+    if (!atStart) {
+      controller.replaceText(
+        at,
+        selection.end - at,
+        '\n',
+        TextSelection.collapsed(offset: at + 1),
+      );
+      at += 1;
+      line = lineAt(at);
+      if (line == null) return;
+    }
+    final had = line.style.attributes['doc-layout']?.value;
+    final map = <String, dynamic>{
+      ...(had is Map ? had.cast<String, dynamic>() : const {}),
+      'break': off ? null : true,
+    }..removeWhere((key, value) => key == 'break' && value == null);
+    controller.formatText(
+      at,
+      0,
+      Attribute('doc-layout', AttributeScope.block, map),
     );
     setState(() {});
   }
@@ -5800,6 +5858,7 @@ class _EditorWidgetState extends State<EditorWidget>
                                 onReplace: () => _find(replace: true),
                                 onPrint: _print,
                                 onInsertImage: _insertImage,
+                                onPageBreak: _pageBreak,
                                 onInsertTable: _insertTable,
                                 hasHeader: _regions.containsKey('header'),
                                 hasFooter: _regions.containsKey('footer'),

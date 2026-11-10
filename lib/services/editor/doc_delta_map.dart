@@ -158,6 +158,7 @@ class DocDeltaMap {
           'hanging': b.hanging,
           'before': b.spacingBefore,
           'after': b.spacingAfter,
+          if (b.pageBreakBefore) 'break': true,
           'line': b.lineSpacing,
           'tabs': b.tabSet,
           // A Word document's tabs follow Word's rules and its own default
@@ -313,6 +314,7 @@ class DocDeltaMap {
           hanging: value('hanging'),
           spacingBefore: value('before'),
           spacingAfter: value('after'),
+          pageBreakBefore: layout['break'] == true,
           lineSpacing:
               (a?['line-height'] as num?)?.toDouble() ??
               (layout['line'] as num?)?.toDouble(),

@@ -2043,6 +2043,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tbPicture => 'Picture';
 
   @override
+  String get tbPageBreakMenu => 'Page break (Ctrl+Enter)';
+
+  @override
   String get tbPointSize => 'Size (pt)';
 
   @override

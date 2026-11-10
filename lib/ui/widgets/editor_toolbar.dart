@@ -29,7 +29,7 @@ class EditorToolbar extends StatelessWidget {
   /// Reading the page aloud and writing down what is said.
   final VoidCallback? onReadAloud, onDictate;
 
-  final VoidCallback? onInsertImage;
+  final VoidCallback? onInsertImage, onPageBreak;
   final void Function(String key)? onToggleRegion;
   final void Function(int rows, int columns)? onInsertTable;
   final bool hasHeader, hasFooter;
@@ -64,6 +64,7 @@ class EditorToolbar extends StatelessWidget {
     this.onReadAloud,
     this.onDictate,
     this.onInsertImage,
+    this.onPageBreak,
     this.onToggleRegion,
     this.onInsertTable,
     this.hasHeader = false,
@@ -499,7 +500,8 @@ class EditorToolbar extends StatelessWidget {
         tooltip: context.l.tbHeaderFooter,
         padding: EdgeInsets.zero,
         position: PopupMenuPosition.under,
-        onSelected: (key) => onToggleRegion!(key),
+        onSelected: (key) =>
+            key == 'page-break' ? onPageBreak!() : onToggleRegion!(key),
         itemBuilder: (_) => [
           CheckedPopupMenuItem(
             value: 'header',
@@ -520,6 +522,15 @@ class EditorToolbar extends StatelessWidget {
             value: 'letterheads',
             child: Text(context.l.tbLetterheadMenu),
           ),
+          // Here, not a button of its own: the toolbar is full at 1400.
+          if (onPageBreak != null) ...[
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              key: const ValueKey('toolbar-page-break'),
+              value: 'page-break',
+              child: Text(context.l.tbPageBreakMenu),
+            ),
+          ],
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

@@ -74,6 +74,9 @@ class DocxBridge {
             file.name == 'word/endnotes.xml') {
           content = splitMixedRuns(content);
         }
+        if (file.name == 'word/document.xml') {
+          content = pageBreaksAsMarks(content);
+        }
         // Only the header and footer Folio keeps, for the reader to take
         // those rather than the first and the last it meets.
         if (file.name == 'word/document.xml' && regions != null) {
@@ -149,6 +152,99 @@ class DocxBridge {
           .replaceAll(_sdtProperties, '')
           .replaceAll(_sdtTags, '')
           .codeUnits;
+    } catch (_) {
+      return content;
+    }
+  }
+
+  /// A letter of the private use area, put first in a paragraph that starts
+  /// a page: the reader keeps nothing of a page break, and a paragraph's
+  /// own "page break before" is not read either.
+  static const _pageMark = '';
+  static const _pageMarkRun = '<w:r><w:t>î\u0080\u0080</w:t></w:r>';
+  static final _paragraphOpen = RegExp(r'<w:p(?: [^>]*)?>');
+  static final _pageBreakRun = RegExp(
+    r'<w:r(?: [^>]*)?>(?:<w:rPr>(?:(?!</w:rPr>).)*</w:rPr>|<w:rPr/>)?'
+    r'<w:br [^>]*w:type="page"[^>]*/></w:r>',
+    dotAll: true,
+  );
+  static final _breakBefore = RegExp(
+    r'<w:pageBreakBefore(?: w:val="(?:1|true|on)")?\s*/>',
+  );
+
+  /// Where Word starts a new page, said by a mark at the start of the
+  /// paragraph that starts it: a page break (the paragraph after it, or the
+  /// one it is in when it comes before its text), a paragraph's "page break
+  /// before", and a section that does not go on on the same page. Runs are
+  /// of one thing each by now ([splitMixedRuns]) and no paragraph is inside
+  /// another ([textBoxesAsParagraphs]).
+  @visibleForTesting
+  static List<int> pageBreaksAsMarks(List<int> content) {
+    try {
+      var xml = String.fromCharCodes(content);
+      if (!xml.contains('w:type="page"') &&
+          !xml.contains('<w:pageBreakBefore') &&
+          '<w:sectPr'.allMatches(xml).length < 2) {
+        return content;
+      }
+      final starts = _paragraphOpen.allMatches(xml).toList();
+      final own = List.filled(starts.length, false);
+      final next = List.filled(starts.length, false);
+      final headEnd = List.filled(starts.length, 0);
+      final ends = List.filled(starts.length, 0);
+      for (final (i, m) in starts.indexed) {
+        if (m.group(0)!.endsWith('/>')) {
+          headEnd[i] = ends[i] = -1;
+          continue;
+        }
+        final close = xml.indexOf('</w:p>', m.end);
+        if (close < 0) return content;
+        ends[i] = close;
+        var head = m.end;
+        if (xml.startsWith('<w:pPr>', head)) {
+          final end = xml.indexOf('</w:pPr>', head);
+          if (end > 0 && end < close) head = end + '</w:pPr>'.length;
+        }
+        headEnd[i] = head;
+        final properties = xml.substring(m.end, head);
+        if (_breakBefore.hasMatch(properties)) own[i] = true;
+        if (properties.contains('<w:sectPr')) {
+          // The section after this one says how it starts.
+          final after = xml.indexOf('<w:sectPr', head);
+          final until = after < 0 ? -1 : xml.indexOf('</w:sectPr>', after);
+          final section = after < 0
+              ? ''
+              : xml.substring(after, until < 0 ? after + 10 : until);
+          if (after >= 0 && !section.contains('w:val="continuous"')) {
+            next[i] = true;
+          }
+        }
+        final body = xml.substring(head, close);
+        final broken = _pageBreakRun.firstMatch(body);
+        if (broken != null) {
+          final before = body.substring(0, broken.start).contains('<w:t');
+          final after = body.substring(broken.end).contains('<w:t');
+          if (!before && after) {
+            own[i] = true;
+          } else {
+            next[i] = true;
+          }
+        }
+      }
+      // An empty paragraph cannot carry the mark; the one after it does.
+      for (var i = 1; i < starts.length - 1; i++) {
+        if (headEnd[i] < 0 && next[i - 1]) next[i] = true;
+      }
+      for (var i = starts.length - 1; i >= 0; i--) {
+        if (headEnd[i] < 0) continue;
+        final marked = own[i] || (i > 0 && next[i - 1]);
+        xml =
+            xml.substring(0, headEnd[i]) +
+            (marked ? _pageMarkRun : '') +
+            xml.substring(headEnd[i], ends[i]).replaceAll(_pageBreakRun, '') +
+            xml.substring(ends[i]);
+      }
+      return xml.codeUnits;
     } catch (_) {
       return content;
     }
@@ -803,7 +899,7 @@ class DocxBridge {
             final cellBlocks = <DocBlock>[];
             for (final child in cell.children) {
               if (child is DocxParagraph) {
-                cellBlocks.add(_paragraphToBlock(child));
+                cellBlocks.add(_paragraphToBlock(child, cell: true));
                 for (final image
                     in child.children.whereType<DocxInlineImage>()) {
                   cellBlocks.add(_imageToBlock(image));
@@ -874,6 +970,12 @@ class DocxBridge {
     final spans = <DocSpan>[];
 
     for (final child in children) {
+      // The page mark is no text of the paragraph's: only its first letter
+      // says so, and one anywhere else is dropped.
+      if (child is DocxText && child.content == _pageMark) {
+        if (buffer.isEmpty) buffer.write(_pageMark);
+        continue;
+      }
       if (child is DocxLineBreak) buffer.write('\n');
       if (child is DocxTab) buffer.write('\t');
       if (child is DocxText) {
@@ -923,8 +1025,39 @@ class DocxBridge {
     return (buffer.toString(), spans);
   }
 
-  static DocBlock _paragraphToBlock(DocxParagraph para) {
-    final (text, spans) = _inlines(para.children);
+  /// A paragraph's text and formatting without its page mark, and whether
+  /// it had one: a page starts with it.
+  static (String, List<DocSpan>, bool) _unmarked(
+    (String, List<DocSpan>) inlines,
+  ) {
+    final (marked, spans) = inlines;
+    if (!marked.startsWith(_pageMark)) return (marked, spans, false);
+    return (
+      marked.substring(_pageMark.length),
+      [
+        for (final s in spans)
+          DocSpan(
+            startOffset: math.max(0, s.startOffset - _pageMark.length),
+            length: s.length,
+            bold: s.bold,
+            italic: s.italic,
+            underline: s.underline,
+            strikethrough: s.strikethrough,
+            fontFamily: s.fontFamily,
+            fontSize: s.fontSize,
+            color: s.color,
+            background: s.background,
+            superscript: s.superscript,
+            subscript: s.subscript,
+            link: s.link,
+          ),
+      ],
+      true,
+    );
+  }
+
+  static DocBlock _paragraphToBlock(DocxParagraph para, {bool cell = false}) {
+    final (text, spans, broke) = _unmarked(_inlines(para.children));
 
     DocAlignment alignment = DocAlignment.left;
     switch (para.align) {
@@ -966,11 +1099,12 @@ class DocxBridge {
       spacingBefore: twipsToPt(para.spacingBefore),
       spacingAfter: twipsToPt(para.spacingAfter),
       lineSpacing: resolveLineSpacing(para.lineSpacing, para.lineRule),
+      pageBreakBefore: broke && !cell,
     );
   }
 
   static DocBlock _listItemToBlock(DocxListItem item, DocxList list) {
-    final (text, spans) = _inlines(item.children);
+    final (text, spans, _) = _unmarked(_inlines(item.children));
     // Numbered or bulleted by the item's own level where it has one, else
     // by the list's first level. Not by comparing the style with Word's
     // named ones: the reader makes a style of its own for each list, which
@@ -1048,6 +1182,7 @@ class DocxBridge {
         out.add(
           DocxParagraph(
             children: [?_tabsMark(block), ..._buildDocxChildren(block)],
+            pageBreakBefore: block.pageBreakBefore,
             align: _toDocxAlign(block.alignment),
             // Word's own way round: the rows after the first set in, and the
             // first pulled back out by the hanging indent.

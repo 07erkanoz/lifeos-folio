@@ -3536,6 +3536,12 @@ abstract class AppLocalizations {
   /// **'Görsel'**
   String get tbPicture;
 
+  /// No description provided for @tbPageBreakMenu.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sayfa sonu (Ctrl+Enter)'**
+  String get tbPageBreakMenu;
+
   /// No description provided for @tbPointSize.
   ///
   /// In tr, this message translates to:
