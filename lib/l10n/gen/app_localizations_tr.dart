@@ -2795,4 +2795,91 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get ofisMakePdfDetail =>
       'Resimleri ve PDF\'leri tek bir PDF\'te birleştirin.';
+
+  @override
+  String photoOpenFailed(String error) {
+    return 'Resim açılamadı: $error';
+  }
+
+  @override
+  String photoSaveFailed(String error) {
+    return 'Kaydedilemedi: $error';
+  }
+
+  @override
+  String get photoTitle => 'Resmi düzenle';
+
+  @override
+  String get photoUndo => 'Geri al';
+
+  @override
+  String get photoSaveCopy => 'Kopya kaydet';
+
+  @override
+  String get photoNote => 'Not';
+
+  @override
+  String get photoNoteHint => 'Yazın';
+
+  @override
+  String get photoAdd => 'Ekle';
+
+  @override
+  String get photoBrightness => 'Parlaklık';
+
+  @override
+  String get photoContrast => 'Kontrast';
+
+  @override
+  String get photoSharpness => 'Netlik';
+
+  @override
+  String get photoPen => 'Kalem';
+
+  @override
+  String get photoText => 'Metin';
+
+  @override
+  String get photoRedactHint =>
+      'Kapatmak istediğiniz yerin üzerine sürükleyin. Kayıtta resmin içine işlenir, kaldırılamaz.';
+
+  @override
+  String get photoTextHint => 'Notun yerine tıklayın.';
+
+  @override
+  String get photoDrawHint => 'Sürükleyerek çizin.';
+
+  @override
+  String get photoLookOriginal => 'Orijinal';
+
+  @override
+  String get photoLookDocument => 'Belge';
+
+  @override
+  String get photoLookGray => 'Gri';
+
+  @override
+  String get photoLookColorDocument => 'Renkli belge';
+
+  @override
+  String get photoToolCorners => 'Belge düzelt';
+
+  @override
+  String get photoToolCrop => 'Kırp';
+
+  @override
+  String get photoToolRotate => 'Döndür';
+
+  @override
+  String get photoToolAdjust => 'Ayarla';
+
+  @override
+  String get photoToolRedact => 'Karart';
+
+  @override
+  String get photoToolDraw => 'İşaretle';
+
+  @override
+  String get viewEditPicture =>
+      'Resmi düzenle: köşelerinden düzelt, kırp, ayarla, karart, işaretle';
 }

@@ -5095,6 +5095,168 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Resimleri ve PDF\'leri tek bir PDF\'te birleştirin.'**
   String get ofisMakePdfDetail;
+
+  /// No description provided for @photoOpenFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Resim açılamadı: {error}'**
+  String photoOpenFailed(String error);
+
+  /// No description provided for @photoSaveFailed.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kaydedilemedi: {error}'**
+  String photoSaveFailed(String error);
+
+  /// No description provided for @photoTitle.
+  ///
+  /// In tr, this message translates to:
+  /// **'Resmi düzenle'**
+  String get photoTitle;
+
+  /// No description provided for @photoUndo.
+  ///
+  /// In tr, this message translates to:
+  /// **'Geri al'**
+  String get photoUndo;
+
+  /// No description provided for @photoSaveCopy.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kopya kaydet'**
+  String get photoSaveCopy;
+
+  /// No description provided for @photoNote.
+  ///
+  /// In tr, this message translates to:
+  /// **'Not'**
+  String get photoNote;
+
+  /// No description provided for @photoNoteHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Yazın'**
+  String get photoNoteHint;
+
+  /// No description provided for @photoAdd.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ekle'**
+  String get photoAdd;
+
+  /// No description provided for @photoBrightness.
+  ///
+  /// In tr, this message translates to:
+  /// **'Parlaklık'**
+  String get photoBrightness;
+
+  /// No description provided for @photoContrast.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kontrast'**
+  String get photoContrast;
+
+  /// No description provided for @photoSharpness.
+  ///
+  /// In tr, this message translates to:
+  /// **'Netlik'**
+  String get photoSharpness;
+
+  /// No description provided for @photoPen.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kalem'**
+  String get photoPen;
+
+  /// No description provided for @photoText.
+  ///
+  /// In tr, this message translates to:
+  /// **'Metin'**
+  String get photoText;
+
+  /// No description provided for @photoRedactHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kapatmak istediğiniz yerin üzerine sürükleyin. Kayıtta resmin içine işlenir, kaldırılamaz.'**
+  String get photoRedactHint;
+
+  /// No description provided for @photoTextHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Notun yerine tıklayın.'**
+  String get photoTextHint;
+
+  /// No description provided for @photoDrawHint.
+  ///
+  /// In tr, this message translates to:
+  /// **'Sürükleyerek çizin.'**
+  String get photoDrawHint;
+
+  /// No description provided for @photoLookOriginal.
+  ///
+  /// In tr, this message translates to:
+  /// **'Orijinal'**
+  String get photoLookOriginal;
+
+  /// No description provided for @photoLookDocument.
+  ///
+  /// In tr, this message translates to:
+  /// **'Belge'**
+  String get photoLookDocument;
+
+  /// No description provided for @photoLookGray.
+  ///
+  /// In tr, this message translates to:
+  /// **'Gri'**
+  String get photoLookGray;
+
+  /// No description provided for @photoLookColorDocument.
+  ///
+  /// In tr, this message translates to:
+  /// **'Renkli belge'**
+  String get photoLookColorDocument;
+
+  /// No description provided for @photoToolCorners.
+  ///
+  /// In tr, this message translates to:
+  /// **'Belge düzelt'**
+  String get photoToolCorners;
+
+  /// No description provided for @photoToolCrop.
+  ///
+  /// In tr, this message translates to:
+  /// **'Kırp'**
+  String get photoToolCrop;
+
+  /// No description provided for @photoToolRotate.
+  ///
+  /// In tr, this message translates to:
+  /// **'Döndür'**
+  String get photoToolRotate;
+
+  /// No description provided for @photoToolAdjust.
+  ///
+  /// In tr, this message translates to:
+  /// **'Ayarla'**
+  String get photoToolAdjust;
+
+  /// No description provided for @photoToolRedact.
+  ///
+  /// In tr, this message translates to:
+  /// **'Karart'**
+  String get photoToolRedact;
+
+  /// No description provided for @photoToolDraw.
+  ///
+  /// In tr, this message translates to:
+  /// **'İşaretle'**
+  String get photoToolDraw;
+
+  /// No description provided for @viewEditPicture.
+  ///
+  /// In tr, this message translates to:
+  /// **'Resmi düzenle: köşelerinden düzelt, kırp, ayarla, karart, işaretle'**
+  String get viewEditPicture;
 }
 
 class _AppLocalizationsDelegate

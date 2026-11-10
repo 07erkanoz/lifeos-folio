@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../services/platform/app_directories.dart';
+import '../../services/platform/app_language.dart';
 import '../../services/platform/heif_images.dart';
 import '../../services/preview/photo_edit.dart';
 
@@ -91,7 +92,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
       _edit = const PhotoEdit(corners: _defaultCorners);
       await _render();
     } catch (e) {
-      if (mounted) setState(() => _error = 'Resim açılamadı: $e');
+      if (mounted) setState(() => _error = AppLanguage.t.photoOpenFailed('$e'));
     }
   }
 
@@ -164,7 +165,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Kaydedilemedi: $e';
+          _error = AppLanguage.t.photoSaveFailed('$e');
         });
       }
     }
@@ -201,13 +202,13 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
               child: Row(
                 children: [
                   IconButton(
-                    tooltip: 'Vazgeç',
+                    tooltip: context.l.tbCancel,
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close_rounded, color: Colors.white),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Düzenle',
+                      context.l.photoTitle,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
@@ -217,7 +218,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
                   ),
                   IconButton(
                     key: const ValueKey('photo-undo'),
-                    tooltip: 'Geri al',
+                    tooltip: context.l.photoUndo,
                     onPressed: _history.isEmpty ? null : _undo,
                     icon: const Icon(Icons.undo_rounded),
                     color: Colors.white,
@@ -243,7 +244,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text('Kopya kaydet'),
+                          : Text(context.l.photoSaveCopy),
                     ),
                   ),
                 ],
@@ -379,21 +380,21 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     final text = await showDialog<String>(
       context: context,
       builder: (dialog) => AlertDialog(
-        title: const Text('Not'),
+        title: Text(context.l.photoNote),
         content: TextFormField(
           onChanged: (v) => typed = v,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Yazın'),
+          decoration: InputDecoration(hintText: context.l.photoNoteHint),
           onFieldSubmitted: (v) => Navigator.pop(dialog, v),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialog),
-            child: const Text('Vazgeç'),
+            child: Text(context.l.tbCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialog, typed),
-            child: const Text('Ekle'),
+            child: Text(context.l.photoAdd),
           ),
         ],
       ),
@@ -547,19 +548,19 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             slider(
-              'Parlaklık',
+              context.l.photoBrightness,
               _edit.brightness,
               -1,
               (v) => _edit.copyWith(brightness: v),
             ),
             slider(
-              'Kontrast',
+              context.l.photoContrast,
               _edit.contrast,
               -1,
               (v) => _edit.copyWith(contrast: v),
             ),
             slider(
-              'Netlik',
+              context.l.photoSharpness,
               _edit.sharpness,
               0,
               (v) => _edit.copyWith(sharpness: v),
@@ -581,16 +582,16 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
                   foregroundColor: WidgetStatePropertyAll(Colors.white),
                   visualDensity: VisualDensity.compact,
                 ),
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: false,
                     icon: Icon(Icons.edit_rounded, size: 16),
-                    label: Text('Kalem'),
+                    label: Text(context.l.photoPen),
                   ),
                   ButtonSegment(
                     value: true,
                     icon: Icon(Icons.text_fields_rounded, size: 16),
-                    label: Text('Metin'),
+                    label: Text(context.l.photoText),
                   ),
                 ],
                 selected: {_drawText},
@@ -599,11 +600,10 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
             const SizedBox(height: 6),
             Text(
               _tool == _Tool.redact
-                  ? 'Kapatmak istediğiniz yeri parmağınızla çizin. Kayıtta '
-                        'resmin içine işlenir, kaldırılamaz.'
+                  ? context.l.photoRedactHint
                   : _drawText
-                  ? 'Notun yerine dokunun.'
-                  : 'Parmağınızla çizin.',
+                  ? context.l.photoTextHint
+                  : context.l.photoDrawHint,
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white60, fontSize: 12),
             ),
@@ -655,7 +655,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
         children: [
           look(
             PhotoFilter.original,
-            'Orijinal',
+            context.l.photoLookOriginal,
             const BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFFE8DCC7), Color(0xFFB79E74)],
@@ -664,17 +664,17 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
           ),
           look(
             PhotoFilter.document,
-            'Belge',
+            context.l.photoLookDocument,
             const BoxDecoration(color: Colors.white),
           ),
           look(
             PhotoFilter.gray,
-            'Gri',
+            context.l.photoLookGray,
             const BoxDecoration(color: Color(0xFFD9D9D9)),
           ),
           look(
             PhotoFilter.colorDocument,
-            'Renkli belge',
+            context.l.photoLookColorDocument,
             const BoxDecoration(color: Color(0xFFFFF6E2)),
           ),
         ],
@@ -719,12 +719,24 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
       padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
       child: Row(
         children: [
-          tool(_Tool.corners, Icons.crop_free_rounded, 'Belge düzelt'),
-          tool(_Tool.crop, Icons.crop_rounded, 'Kırp'),
-          tool(_Tool.rotate, Icons.rotate_right_rounded, 'Döndür'),
-          tool(_Tool.adjust, Icons.tonality_rounded, 'Ayarla'),
-          tool(_Tool.redact, Icons.rectangle_rounded, 'Karart'),
-          tool(_Tool.draw, Icons.draw_outlined, 'İşaretle'),
+          tool(
+            _Tool.corners,
+            Icons.crop_free_rounded,
+            context.l.photoToolCorners,
+          ),
+          tool(_Tool.crop, Icons.crop_rounded, context.l.photoToolCrop),
+          tool(
+            _Tool.rotate,
+            Icons.rotate_right_rounded,
+            context.l.photoToolRotate,
+          ),
+          tool(_Tool.adjust, Icons.tonality_rounded, context.l.photoToolAdjust),
+          tool(
+            _Tool.redact,
+            Icons.rectangle_rounded,
+            context.l.photoToolRedact,
+          ),
+          tool(_Tool.draw, Icons.draw_outlined, context.l.photoToolDraw),
         ],
       ),
     );

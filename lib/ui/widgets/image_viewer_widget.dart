@@ -18,6 +18,7 @@ import 'image_crop_overlay.dart';
 import 'notice.dart';
 import 'ocr_text_panel.dart';
 import 'swipe_pages.dart';
+import '../mobile/photo_editor.dart';
 import 'pdf_tools_dialogs.dart';
 import '../../services/pdf/pdf_tools.dart';
 import '../../services/platform/editor_window.dart';
@@ -389,6 +390,13 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
                 icon: Icons.crop_rounded,
                 onPressed: _intrinsic == null ? null : _toggleCrop,
               ),
+            if (_svg == null)
+              ViewerButton(
+                key: const ValueKey('image-edit'),
+                tooltip: context.l.viewEditPicture,
+                icon: Icons.tune_rounded,
+                onPressed: _cropping ? null : _editPicture,
+              ),
             if (widget.onFullScreen != null)
               ViewerButton(
                 key: const ValueKey('image-fullscreen'),
@@ -427,6 +435,18 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
       ),
     ],
   );
+
+  /// The picture straightened, adjusted, redacted or marked up, and kept
+  /// as a copy beside it: the picture itself is never written over.
+  Future<void> _editPicture() async {
+    final saved = await PhotoEditorPage.open(context, widget.filePath);
+    if (saved == null || !mounted) return;
+    if (widget.onCropped case final told?) {
+      told(saved);
+    } else {
+      pdfMade(context, saved);
+    }
+  }
 
   /// The picture's size in pixels, its kind and the file's size.
   Widget _status() {

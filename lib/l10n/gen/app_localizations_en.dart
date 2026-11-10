@@ -2963,4 +2963,91 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ofisMakePdfDetail => 'Join pictures and PDFs into one PDF.';
+
+  @override
+  String photoOpenFailed(String error) {
+    return 'The picture could not be opened: $error';
+  }
+
+  @override
+  String photoSaveFailed(String error) {
+    return 'Could not be saved: $error';
+  }
+
+  @override
+  String get photoTitle => 'Edit picture';
+
+  @override
+  String get photoUndo => 'Undo';
+
+  @override
+  String get photoSaveCopy => 'Save a copy';
+
+  @override
+  String get photoNote => 'Note';
+
+  @override
+  String get photoNoteHint => 'Type here';
+
+  @override
+  String get photoAdd => 'Add';
+
+  @override
+  String get photoBrightness => 'Brightness';
+
+  @override
+  String get photoContrast => 'Contrast';
+
+  @override
+  String get photoSharpness => 'Sharpness';
+
+  @override
+  String get photoPen => 'Pen';
+
+  @override
+  String get photoText => 'Text';
+
+  @override
+  String get photoRedactHint =>
+      'Drag over what you want covered. It is burnt into the saved picture and cannot be taken off.';
+
+  @override
+  String get photoTextHint => 'Click where the note goes.';
+
+  @override
+  String get photoDrawHint => 'Drag to draw.';
+
+  @override
+  String get photoLookOriginal => 'Original';
+
+  @override
+  String get photoLookDocument => 'Document';
+
+  @override
+  String get photoLookGray => 'Grey';
+
+  @override
+  String get photoLookColorDocument => 'Colour document';
+
+  @override
+  String get photoToolCorners => 'Straighten';
+
+  @override
+  String get photoToolCrop => 'Crop';
+
+  @override
+  String get photoToolRotate => 'Rotate';
+
+  @override
+  String get photoToolAdjust => 'Adjust';
+
+  @override
+  String get photoToolRedact => 'Redact';
+
+  @override
+  String get photoToolDraw => 'Mark up';
+
+  @override
+  String get viewEditPicture =>
+      'Edit picture: straighten by its corners, crop, adjust, redact, mark up';
 }
