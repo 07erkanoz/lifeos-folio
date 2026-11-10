@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../services/preview/svg_source.dart';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../services/search/library_controller.dart';
 import '../../models/evrak_file.dart';
@@ -17,6 +18,7 @@ import 'image_crop_overlay.dart';
 import 'notice.dart';
 import 'ocr_text_panel.dart';
 import 'swipe_pages.dart';
+import 'viewer_bar.dart';
 import 'viewer_shortcuts.dart';
 import '../../services/platform/app_language.dart';
 
@@ -328,69 +330,97 @@ class _ImageViewerWidgetState extends State<ImageViewerWidget> {
             ),
           ),
         ),
+      if (widget.chrome) _status(),
     ],
   );
 
-  Widget _tools() => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      children: [
-        IconButton(
-          tooltip: context.l.viewRotateLeft,
-          icon: const Icon(Icons.rotate_left_rounded),
-          onPressed: _cropping
-              ? null
-              : () => setState(() => _turns = (_turns + 3) % 4),
-        ),
-        IconButton(
-          tooltip: context.l.viewRotateRightKey,
-          icon: const Icon(Icons.rotate_right_rounded),
-          onPressed: _cropping
-              ? null
-              : () => setState(() => _turns = (_turns + 1) % 4),
-        ),
-        IconButton(
-          tooltip: context.l.viewZoomOutKey,
-          icon: const Icon(Icons.zoom_out_rounded),
-          onPressed: _cropping ? null : () => _zoom(.8),
-        ),
-        IconButton(
-          tooltip: context.l.viewZoomInKey,
-          icon: const Icon(Icons.zoom_in_rounded),
-          onPressed: _cropping ? null : () => _zoom(1.25),
-        ),
-        IconButton(
-          tooltip: context.l.viewFitKey,
-          icon: const Icon(Icons.fit_screen_rounded),
-          onPressed: _cropping ? null : _fit,
-        ),
-        if (_svg == null)
-          IconButton(
-            key: const ValueKey('image-crop'),
-            tooltip: _intrinsic == null
-                ? context.l.viewCropUnmeasured
-                : context.l.viewCrop,
-            isSelected: _cropping,
-            icon: const Icon(Icons.crop_rounded),
-            onPressed: _intrinsic == null ? null : _toggleCrop,
+  Widget _tools() => ViewerToolbar(
+    children: [
+      ViewerPill(
+        children: [
+          ViewerButton(
+            tooltip: context.l.viewRotateLeft,
+            icon: Icons.rotate_left_rounded,
+            onPressed: _cropping
+                ? null
+                : () => setState(() => _turns = (_turns + 3) % 4),
           ),
-        if (widget.onFullScreen != null)
-          IconButton(
-            key: const ValueKey('image-fullscreen'),
-            tooltip: context.l.viewFullScreenKey,
-            icon: const Icon(Icons.fullscreen_rounded),
-            onPressed: widget.onFullScreen,
+          ViewerButton(
+            tooltip: context.l.viewRotateRightKey,
+            icon: Icons.rotate_right_rounded,
+            onPressed: _cropping
+                ? null
+                : () => setState(() => _turns = (_turns + 1) % 4),
           ),
-        const VerticalDivider(width: 16, indent: 10, endIndent: 10),
-        OcrTextButton(
-          ocr: _ocr,
-          format: _format,
-          showing: _showText,
-          onToggle: (v) => setState(() => _showText = v),
+        ],
+      ),
+      ViewerPill(
+        children: [
+          ViewerButton(
+            tooltip: context.l.viewZoomOutKey,
+            icon: Icons.remove_rounded,
+            onPressed: _cropping ? null : () => _zoom(.8),
+          ),
+          ViewerButton(
+            tooltip: context.l.viewZoomInKey,
+            icon: Icons.add_rounded,
+            onPressed: _cropping ? null : () => _zoom(1.25),
+          ),
+          ViewerButton(
+            tooltip: context.l.viewFitKey,
+            icon: Icons.fit_screen_rounded,
+            onPressed: _cropping ? null : _fit,
+          ),
+        ],
+      ),
+      if (_svg == null || widget.onFullScreen != null)
+        ViewerPill(
+          children: [
+            if (_svg == null)
+              ViewerButton(
+                key: const ValueKey('image-crop'),
+                tooltip: _intrinsic == null
+                    ? context.l.viewCropUnmeasured
+                    : context.l.viewCrop,
+                selected: _cropping,
+                icon: Icons.crop_rounded,
+                onPressed: _intrinsic == null ? null : _toggleCrop,
+              ),
+            if (widget.onFullScreen != null)
+              ViewerButton(
+                key: const ValueKey('image-fullscreen'),
+                tooltip: context.l.viewFullScreenKey,
+                icon: Icons.fullscreen_rounded,
+                onPressed: widget.onFullScreen,
+              ),
+          ],
         ),
-      ],
-    ),
+      OcrTextButton(
+        ocr: _ocr,
+        format: _format,
+        showing: _showText,
+        onToggle: (v) => setState(() => _showText = v),
+      ),
+    ],
   );
+
+  /// The picture's size in pixels, its kind and the file's size.
+  Widget _status() {
+    final size = _intrinsic;
+    String? weight;
+    try {
+      weight = viewerFileSize(File(widget.filePath).lengthSync());
+    } catch (_) {}
+    final kind = p.extension(widget.filePath).replaceFirst('.', '');
+    return ViewerStatusBar(
+      items: [
+        if (size != null)
+          context.l.viewPixels(size.width.round(), size.height.round()),
+        kind.toUpperCase(),
+        weight,
+      ],
+    );
+  }
 
   Widget _arrow({required bool forward}) => Positioned(
     left: forward ? null : 10,

@@ -4148,6 +4148,18 @@ abstract class AppLocalizations {
   /// **'Belgede bul'**
   String get viewFindInDocument;
 
+  /// No description provided for @viewFindKey.
+  ///
+  /// In tr, this message translates to:
+  /// **'Belgede bul (Ctrl+F)'**
+  String get viewFindKey;
+
+  /// No description provided for @viewPixels.
+  ///
+  /// In tr, this message translates to:
+  /// **'{width} × {height} piksel'**
+  String viewPixels(int width, int height);
+
   /// No description provided for @viewSearching.
   ///
   /// In tr, this message translates to:

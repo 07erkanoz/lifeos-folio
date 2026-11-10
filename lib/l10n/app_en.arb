@@ -675,6 +675,8 @@
   "viewChangeColor": "Change the color",
   "viewDeleteHighlight": "Delete highlight",
   "viewFindInDocument": "Find in document",
+  "viewFindKey": "Find in document (Ctrl+F)",
+  "viewPixels": "{width} × {height} px",
   "viewSearching": "searching…",
   "viewNotFound": "not found",
   "viewPreviousMatch": "Previous · Shift+Enter",

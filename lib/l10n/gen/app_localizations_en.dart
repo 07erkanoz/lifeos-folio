@@ -2399,6 +2399,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get viewFindInDocument => 'Find in document';
 
   @override
+  String get viewFindKey => 'Find in document (Ctrl+F)';
+
+  @override
+  String viewPixels(int width, int height) {
+    return '$width × $height px';
+  }
+
+  @override
   String get viewSearching => 'searching…';
 
   @override

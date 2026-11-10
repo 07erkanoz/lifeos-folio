@@ -2257,6 +2257,14 @@ class AppLocalizationsTr extends AppLocalizations {
   String get viewFindInDocument => 'Belgede bul';
 
   @override
+  String get viewFindKey => 'Belgede bul (Ctrl+F)';
+
+  @override
+  String viewPixels(int width, int height) {
+    return '$width × $height piksel';
+  }
+
+  @override
   String get viewSearching => 'aranıyor…';
 
   @override

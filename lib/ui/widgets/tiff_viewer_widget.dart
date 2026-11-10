@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import '../../services/ocr/preview_ocr.dart';
 import '../../services/search/library_controller.dart';
 import 'ocr_text_panel.dart';
 import 'page_jump.dart';
+import 'viewer_bar.dart';
 import 'viewer_shortcuts.dart';
 import '../../services/platform/app_language.dart';
 
@@ -285,108 +287,96 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
       onFit: () => _setScale(1),
       child: Column(
         children: [
-          // Kontrol Çubuğu
-          Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-              border: Border(
-                bottom: BorderSide(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                ),
-              ),
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+          ViewerToolbar(
+            children: [
+              ViewerPill(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.first_page_rounded, size: 20),
+                  ViewerButton(
+                    icon: Icons.first_page_rounded,
                     tooltip: context.l.viewFirstPage,
                     onPressed: _currentPage > 0 ? () => _loadPage(0) : null,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                  ViewerButton(
+                    icon: Icons.chevron_left_rounded,
                     tooltip: context.l.viewPreviousPage,
                     onPressed: _currentPage > 0
                         ? () => _loadPage(_currentPage - 1)
                         : null,
                   ),
-                  const SizedBox(width: 8),
                   PageJump(
-                    label: context.l.viewPageOf(_currentPage + 1, _pageCount),
+                    label: '${_currentPage + 1} / $_pageCount',
                     current: _currentPage + 1,
                     count: _pageCount,
-                    width: 108,
-                    fontSize: 13,
                     onGo: (page) => _loadPage(page - 1),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                  ViewerButton(
+                    icon: Icons.chevron_right_rounded,
                     tooltip: context.l.viewNextPage,
                     onPressed: _currentPage < _pageCount - 1
                         ? () => _loadPage(_currentPage + 1)
                         : null,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.last_page_rounded, size: 20),
+                  ViewerButton(
+                    icon: Icons.last_page_rounded,
                     tooltip: context.l.viewLastPage,
                     onPressed: _currentPage < _pageCount - 1
                         ? () => _loadPage(_pageCount - 1)
                         : null,
                   ),
-                  const SizedBox(width: 16),
-                  if (widget.onConvertToPdfRequested != null) ...[
-                    FilledButton.tonalIcon(
-                      onPressed: widget.onConvertToPdfRequested,
-                      icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-                      label: Text(context.l.viewTifToPdf),
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  IconButton(
-                    tooltip: context.l.viewRotateLeft,
-                    icon: const Icon(Icons.rotate_left_rounded),
-                    onPressed: () =>
-                        setState(() => _quarterTurns = (_quarterTurns + 3) % 4),
-                  ),
-                  IconButton(
-                    tooltip: context.l.viewRotateRight,
-                    icon: const Icon(Icons.rotate_right_rounded),
-                    onPressed: () =>
-                        setState(() => _quarterTurns = (_quarterTurns + 1) % 4),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.zoom_out_rounded, size: 20),
+                ],
+              ),
+              ViewerPill(
+                children: [
+                  ViewerButton(
+                    icon: Icons.remove_rounded,
                     tooltip: context.l.viewZoomOut,
                     onPressed: () => _setScale(_scale - 0.25),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.zoom_in_rounded, size: 20),
+                  ViewerButton(
+                    icon: Icons.add_rounded,
                     tooltip: context.l.viewZoomIn,
                     onPressed: () => _setScale(_scale + 0.25),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.fit_screen_rounded, size: 20),
+                  ViewerButton(
+                    icon: Icons.fit_screen_rounded,
                     tooltip: context.l.viewFit,
                     onPressed: () => _setScale(1.0),
                   ),
-                  const VerticalDivider(width: 16, indent: 10, endIndent: 10),
-                  OcrTextButton(
-                    ocr: _ocr,
-                    format: EvrakFormat.tif,
-                    showing: _showText,
-                    onToggle: (v) => setState(() => _showText = v),
+                ],
+              ),
+              ViewerPill(
+                children: [
+                  ViewerButton(
+                    tooltip: context.l.viewRotateLeft,
+                    icon: Icons.rotate_left_rounded,
+                    onPressed: () =>
+                        setState(() => _quarterTurns = (_quarterTurns + 3) % 4),
+                  ),
+                  ViewerButton(
+                    tooltip: context.l.viewRotateRight,
+                    icon: Icons.rotate_right_rounded,
+                    onPressed: () =>
+                        setState(() => _quarterTurns = (_quarterTurns + 1) % 4),
                   ),
                 ],
               ),
-            ),
+              if (widget.onConvertToPdfRequested != null)
+                FilledButton.tonalIcon(
+                  onPressed: widget.onConvertToPdfRequested,
+                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                  label: Text(context.l.viewTifToPdf),
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              OcrTextButton(
+                ocr: _ocr,
+                format: EvrakFormat.tif,
+                showing: _showText,
+                onToggle: (v) => setState(() => _showText = v),
+              ),
+            ],
           ),
           if (_showText && _ocr.text != null)
             Expanded(child: OcrTextPanel(text: _ocr.text!))
@@ -445,8 +435,26 @@ class _TiffViewerWidgetState extends State<TiffViewerWidget> {
                       ),
               ),
             ),
+          ViewerStatusBar(
+            items: [
+              context.l.viewPageOf(_currentPage + 1, _pageCount),
+              if (_activePage case final page?)
+                context.l.viewPixels(page.width, page.height),
+              'TIFF',
+              _weight,
+            ],
+            trailing: '%${(_scale * 100).round()}',
+          ),
         ],
       ),
     );
+  }
+
+  String? get _weight {
+    try {
+      return viewerFileSize(File(widget.filePath).lengthSync());
+    } catch (_) {
+      return null;
+    }
   }
 }

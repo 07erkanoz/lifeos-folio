@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:evrak_convert/services/preview/image_crop.dart';
 import 'package:evrak_convert/ui/widgets/image_crop_overlay.dart';
 import 'package:evrak_convert/ui/widgets/image_viewer_widget.dart';
+import 'package:evrak_convert/ui/widgets/viewer_bar.dart';
 
 import 'support/temp_directory.dart';
 
@@ -144,11 +145,11 @@ void main() {
       );
       await tester.pump();
       if (button.evaluate().isNotEmpty &&
-          tester.widget<IconButton>(button).onPressed != null) {
+          tester.widget<ViewerButton>(button).onPressed != null) {
         break;
       }
     }
-    expect(tester.widget<IconButton>(button).onPressed, isNotNull);
+    expect(tester.widget<ViewerButton>(button).onPressed, isNotNull);
 
     await tester.tap(button);
     await tester.pump();

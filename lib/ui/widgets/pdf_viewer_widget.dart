@@ -24,6 +24,7 @@ import 'ocr_text_panel.dart';
 import 'swipe_pages.dart';
 import 'page_jump.dart';
 import 'page_zoom.dart';
+import 'viewer_bar.dart';
 import 'viewer_shortcuts.dart';
 import 'pdf_context_menu.dart';
 import 'article_panel.dart';
@@ -689,25 +690,52 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
     );
   }
 
-  /// Buttons that belong together, on a grey pill of their own.
-  Widget _pill(List<Widget> children) => Container(
-    height: 34,
-    padding: const EdgeInsets.symmetric(horizontal: 2),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: children),
+  Widget _pill(List<Widget> children) => ViewerPill(children: children);
+
+  Widget _button(
+    String tooltip,
+    IconData icon,
+    VoidCallback? action, {
+    bool selected = false,
+    Key? key,
+  }) => ViewerButton(
+    key: key,
+    tooltip: tooltip,
+    icon: icon,
+    onPressed: action,
+    selected: selected,
   );
 
-  Widget _button(String tooltip, IconData icon, VoidCallback? action) =>
-      IconButton(
-        tooltip: tooltip,
-        icon: Icon(icon, size: 19),
-        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-        padding: EdgeInsets.zero,
-        onPressed: action,
+  /// The page read, the sheet's size and the file's, and how large it is
+  /// shown.
+  Widget _status() => ListenableBuilder(
+    listenable: _controller,
+    builder: (context, _) {
+      String? sheet, weight, zoom;
+      if (_controller.isReady) {
+        final pages = _controller.document.pages;
+        if (_currentPage >= 1 && _currentPage <= pages.length) {
+          final page = pages[_currentPage - 1];
+          sheet = viewerSheetSize(page.width, page.height);
+        }
+        zoom = '%${(_controller.currentZoom * 100).round()}';
+      }
+      final path = widget.filePath;
+      if (path != null) {
+        try {
+          weight = viewerFileSize(File(path).lengthSync());
+        } catch (_) {}
+      }
+      return ViewerStatusBar(
+        items: [
+          if (_pageCount > 0) context.l.viewPageOf(_currentPage, _pageCount),
+          sheet,
+          weight,
+        ],
+        trailing: zoom,
       );
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -839,6 +867,16 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
                       context.l.viewRotateRight,
                       Icons.rotate_right_rounded,
                       ready ? () => _rotate(true) : null,
+                    ),
+                  ]),
+                  const SizedBox(width: 10),
+                  _pill([
+                    _button(
+                      context.l.viewFindKey,
+                      Icons.search_rounded,
+                      ready ? (_searching ? _closeSearch : _openSearch) : null,
+                      selected: _searching,
+                      key: const ValueKey('pdf-find'),
                     ),
                   ]),
                   const SizedBox(width: 8),
@@ -1097,6 +1135,7 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
               onClose: () => setState(() => _citationListOpen = false),
             ),
           ),
+        if (widget.chrome) _status(),
       ],
     );
   }
