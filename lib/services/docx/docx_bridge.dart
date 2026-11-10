@@ -66,6 +66,13 @@ class DocxBridge {
         if (isPatchableXml) {
           content = _stripFalseToggleElements(content);
         }
+        if (file.name == 'word/document.xml' ||
+            file.name.startsWith('word/header') ||
+            file.name.startsWith('word/footer') ||
+            file.name == 'word/footnotes.xml' ||
+            file.name == 'word/endnotes.xml') {
+          content = splitMixedRuns(content);
+        }
         // Only the header and footer Folio keeps, for the reader to take
         // those rather than the first and the last it meets.
         if (file.name == 'word/document.xml' && regions != null) {
@@ -81,6 +88,61 @@ class DocxBridge {
       return rawBytes;
     }
   }
+
+  /// A run that holds more than one thing split into runs of one thing
+  /// each. Word writes `ADRESİ<tab>: Side Mah.` as one run; the reader takes
+  /// one thing of a run — the tab or the line break when there is one, else
+  /// the first text — and the rest was lost: measured on 551 real
+  /// documents, 399 lost text, some nine tenths of it.
+  @visibleForTesting
+  static List<int> splitMixedRuns(List<int> content) {
+    try {
+      final xml = String.fromCharCodes(content);
+      final out = xml.replaceAllMapped(_run, (m) {
+        final body = m.group(2)!;
+        // A drawing or a text box holds runs of its own; left as it is.
+        if (body.contains('<w:r>') || body.contains('<w:r ')) {
+          return m.group(0)!;
+        }
+        final properties = _runProperties.firstMatch(body)?.group(0) ?? '';
+        final rest = body.substring(properties.length);
+        final parts = _runPart.allMatches(rest).toList();
+        // Anything else in it (a field, a footnote's mark, a drawing):
+        // not this run's kind.
+        if (rest.replaceAll(_runPart, '').trim().isNotEmpty) {
+          return m.group(0)!;
+        }
+        final kept = [
+          for (final p in parts)
+            switch (p.group(1) ?? p.group(2)) {
+              // What Word last laid out, and a hyphen it may break at:
+              // nothing to keep.
+              'lastRenderedPageBreak' || 'softHyphen' => null,
+              // U+2011 in UTF-8: the text here is the file's bytes.
+              'noBreakHyphen' => '<w:t>\u00e2\u0080\u0091</w:t>',
+              'cr' => '<w:br/>',
+              _ => p.group(0)!,
+            },
+        ].nonNulls.toList();
+        if (kept.length < 2 && kept.length == parts.length) return m.group(0)!;
+        final open = m.group(1)!;
+        return [for (final k in kept) '$open$properties$k</w:r>'].join();
+      });
+      return out.codeUnits;
+    } catch (_) {
+      return content;
+    }
+  }
+
+  static final _run = RegExp(r'(<w:r(?: [^>]*)?>)(.*?)</w:r>', dotAll: true);
+  static final _runProperties = RegExp(
+    r'^\s*(?:<w:rPr>.*?</w:rPr>|<w:rPr/>)',
+    dotAll: true,
+  );
+  static final _runPart = RegExp(
+    r'<w:(t)(?: [^>]*)?>[^<]*</w:t>|<w:t(?: [^>]*)?/>|'
+    r'<w:(tab|br|cr|lastRenderedPageBreak|softHyphen|noBreakHyphen)(?: [^>]*)?/>',
+  );
 
   static List<int> _stripFalseToggleElements(List<int> content) {
     try {
