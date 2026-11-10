@@ -718,7 +718,9 @@ class _PdfViewerWidgetState extends State<PdfViewerWidget> {
           final page = pages[_currentPage - 1];
           sheet = viewerSheetSize(page.width, page.height);
         }
-        zoom = '%${(_controller.currentZoom * 100).round()}';
+        // %100 is the sheet as it prints, at 96 dots an inch; the viewer
+        // counts in the PDF's points, 72 an inch.
+        zoom = '%${(_controller.currentZoom * 72 / 96 * 100).round()}';
       }
       final path = widget.filePath;
       if (path != null) {

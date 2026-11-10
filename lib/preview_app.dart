@@ -120,11 +120,15 @@ class _PreviewAppState extends State<PreviewApp> {
           // Opened from the file manager to be read; written in Folio itself
           // with one press, as the file manager's "Folio ile düzenle" does.
           floatingActionButton: path != null && _editable(path)
-              ? FloatingActionButton.extended(
-                  key: const ValueKey('preview-window-edit'),
-                  onPressed: () => unawaited(_edit(path)),
-                  icon: const Icon(Icons.edit_note_rounded),
-                  label: const Text('Düzenle'),
+              // Above the viewer's status line, not over it.
+              ? Padding(
+                  padding: const EdgeInsets.only(bottom: 22),
+                  child: FloatingActionButton.extended(
+                    key: const ValueKey('preview-window-edit'),
+                    onPressed: () => unawaited(_edit(path)),
+                    icon: const Icon(Icons.edit_note_rounded),
+                    label: const Text('Düzenle'),
+                  ),
                 )
               : null,
         ),
