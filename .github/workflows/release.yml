@@ -31,8 +31,12 @@ jobs:
         name: Etiket, pubspec ve sürüm notları uyuşuyor mu
         run: |
           version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+[[:space:]]*$/\1/p' pubspec.yaml)"
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Etiket $GITHUB_REF_NAME, pubspec.yaml ise $version diyor."
+          # A fix raises the build number alone (1.8.3+30 → 1.8.3+31), and a
+          # version once published is never written over: such a release is
+          # tagged with its build too (v1.8.3.31).
+          build="$(sed -nE 's/^version:[[:space:]]*[0-9.]+\+([0-9]+)[[:space:]]*$/\1/p' pubspec.yaml)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ] && [ "v$version.$build" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Etiket $GITHUB_REF_NAME, pubspec.yaml ise $version+$build diyor."
             exit 1
           fi
           notes="packaging/release/notes/$version.json"
