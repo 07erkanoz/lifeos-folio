@@ -36,7 +36,8 @@ class AiLogin extends ChangeNotifier {
   static List<String> arguments(AiProvider provider) => switch (provider) {
     AiProvider.claude => ['auth', 'login', '--claudeai'],
     AiProvider.codex => ['login', '--device-auth'],
-    AiProvider.antigravity => throw StateError('no sign-in from Folio'),
+    AiProvider.antigravity ||
+    AiProvider.groq => throw StateError('no sign-in from Folio'),
   };
 
   static final _address = RegExp(r'https://[^\s"<>]+');

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_groq.dart';
 import '../mobile/settings_parts.dart';
 import 'ai_dialogs.dart';
 
@@ -68,6 +69,9 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     final chosen = (_settings.provider ?? _firstUsable) == s.provider;
     final String subtitle;
     final Widget trailing;
+    if (s.provider.viaApi) {
+      return _groq(s, chosen);
+    }
     if (!s.installed) {
       subtitle = 'Kurulu değil';
       trailing = OutlinedButton(
@@ -116,6 +120,133 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
       status: s.usable ? const Color(0xFF157A52) : Colors.grey,
       trailing: trailing,
     );
+  }
+
+  /// Groq: no program, the lawyer's own API key, kept in the system's
+  /// keyring.
+  Widget _groq(AiStatus s, bool chosen) => SettingsRow(
+    key: ValueKey('ai-provider-${s.provider.name}'),
+    icon: Icons.key_outlined,
+    title: s.provider.label,
+    subtitle: s.installed
+        ? 'Anahtar girildi · Folio Groq’a kendisi sorar, araçları ve '
+              'denetimiyle'
+        : 'Groq hesabınızdan aldığınız API anahtarıyla. Program kurmak '
+              'gerekmez.',
+    status: s.usable ? const Color(0xFF157A52) : Colors.grey,
+    trailing: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (s.installed && chosen)
+          const Chip(label: Text('Kullanılıyor'))
+        else if (s.installed)
+          TextButton(
+            onPressed: () => _save(_settings.copyWith(provider: s.provider)),
+            child: const Text('Bunu kullan'),
+          ),
+        TextButton(
+          key: const ValueKey('ai-groq-key'),
+          onPressed: () async {
+            if (s.installed) {
+              await GroqChat.removeKey();
+            } else if (!await _askGroqKey()) {
+              return;
+            }
+            await _load();
+          },
+          child: Text(s.installed ? 'Anahtarı kaldır' : 'Anahtar gir'),
+        ),
+      ],
+    ),
+  );
+
+  /// The key asked of the lawyer, checked with Groq, then kept.
+  Future<bool> _askGroqKey() async {
+    final field = TextEditingController();
+    String? said;
+    var checking = false;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('Groq API anahtarı'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Anahtarı Groq hesabınızın API Keys sayfasından alın. '
+                  'Folio anahtarı bu bilgisayarın anahtar deposunda saklar; '
+                  'sorular bu bilgisayardan doğrudan Groq’a gider. Ücretsiz '
+                  'katmanın dakikalık sınırı tek bir hukuk sorusuna yetmez; '
+                  'ücretli katman gerekir.',
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => unawaited(
+                    launchUrl(
+                      Uri.parse(GroqChat.keysPage),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                  ),
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Anahtar sayfasını aç'),
+                ),
+                TextField(
+                  key: const ValueKey('ai-groq-key-field'),
+                  controller: field,
+                  obscureText: true,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'API anahtarı',
+                    hintText: 'gsk_…',
+                    errorText: said,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: checking
+                  ? null
+                  : () async {
+                      final key = field.text.trim();
+                      if (key.isEmpty) return;
+                      setDialog(() {
+                        checking = true;
+                        said = null;
+                      });
+                      var wrong = await GroqChat.checkKey(key);
+                      if (wrong == null && !await GroqChat.saveKey(key)) {
+                        wrong =
+                            'Bu bilgisayarda anahtar deposu yok; anahtar '
+                            'güvenle saklanamadı.';
+                      }
+                      if (!context.mounted) return;
+                      if (wrong == null) {
+                        Navigator.pop(context, true);
+                        return;
+                      }
+                      setDialog(() {
+                        checking = false;
+                        said = wrong;
+                      });
+                    },
+              child: Text(checking ? 'Denetleniyor…' : 'Kaydet'),
+            ),
+          ],
+        ),
+      ),
+    );
+    field.dispose();
+    return saved == true;
   }
 
   /// Folio's tools on Antigravity's own list, put there or taken off at the
@@ -223,8 +354,9 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
       child: Text(
-        'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile, kendi '
-        'aboneliğinizle soru sorarsınız: kenar çubuğundaki Yapay zekâ '
+        'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile kendi '
+        'aboneliğinizle, ya da kendi API anahtarınızla Groq’la soru '
+        'sorarsınız: kenar çubuğundaki Yapay zekâ '
         'sayfasından, belge önizlemesinden ve dosyaların Yapay zekâ '
         'sekmesinden. İstekler bu bilgisayardaki programdan doğrudan gider; '
         'Folio araya sunucu koymaz. Telefonunuzdan sorduğunuz soruları da bu '

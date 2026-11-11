@@ -16,6 +16,7 @@ import '../editor/lawyer_profile.dart';
 import 'ai_attachment.dart';
 import 'ai_events.dart';
 import 'ai_case.dart';
+import 'ai_groq.dart';
 import 'ai_prompts.dart';
 import 'folio_mcp.dart';
 
@@ -44,9 +45,21 @@ enum AiProvider {
     'Google Antigravity',
     'Google',
     'https://antigravity.google',
-  );
+  ),
+
+  /// Not a program: Groq's API, asked by Folio itself with the lawyer's
+  /// own key (GroqChat). "Installed" is a key given.
+  groq('', 'Groq (GPT OSS)', 'Groq', GroqChat.keysPage);
 
   const AiProvider(this.command, this.label, this.company, this.installPage);
+
+  /// Whether this is a service Folio asks itself, with a key, rather than
+  /// a program it runs.
+  bool get viaApi => this == AiProvider.groq;
+
+  /// Whether it is given pages and pictures as they are.
+  bool get seesPictures =>
+      this == AiProvider.claude || this == AiProvider.codex;
 
   /// The program's name on the PATH.
   final String command;
@@ -61,13 +74,15 @@ enum AiProvider {
 
   /// Whether Folio can sign the lawyer in itself; Antigravity asks only in
   /// its own screen, the first time it is run.
-  bool get signsInFromFolio => this != AiProvider.antigravity;
+  bool get signsInFromFolio =>
+      this == AiProvider.claude || this == AiProvider.codex;
 
   /// Its page in LifeOS Mağaza (`lifeos-magaza --uygulama …`).
   String get storeId => switch (this) {
     AiProvider.claude => 'lifeos:claude-code',
     AiProvider.codex => 'lifeos:codex-cli',
     AiProvider.antigravity => 'lifeos:antigravity-cli',
+    AiProvider.groq => '',
   };
 
   /// The model each tier runs, unless the lawyer chose another.
@@ -78,6 +93,8 @@ enum AiProvider {
     (AiProvider.codex, AiTier.strong) => 'gpt-6.1-sol',
     (AiProvider.antigravity, AiTier.normal) => 'gemini-3.8-flash-medium',
     (AiProvider.antigravity, AiTier.strong) => 'gemini-3.8-flash-high',
+    // The strong tier thinks harder (reasoning_effort high).
+    (AiProvider.groq, _) => GroqChat.models.first,
   };
 }
 
@@ -194,6 +211,11 @@ abstract final class AiAssistant {
 
   /// What each program says of itself.
   static Future<AiStatus> status(AiProvider provider) async {
+    if (provider.viaApi) {
+      return await GroqChat.key() == null
+          ? AiStatus(provider)
+          : AiStatus(provider, path: GroqChat.endpoint, signedIn: true);
+    }
     final path = find(provider.command);
     if (path == null) return AiStatus(provider);
     try {
@@ -225,6 +247,7 @@ abstract final class AiAssistant {
                 said.contains('logged in') && !said.contains('not logged'),
           );
         case AiProvider.antigravity:
+        case AiProvider.groq:
           return AiStatus(provider, path: path);
       }
     } catch (_) {
@@ -400,6 +423,8 @@ abstract final class AiAssistant {
       // for the prompt.
       '--print=',
     ],
+    // Asked by Folio itself (GroqChat), no program run.
+    AiProvider.groq => const [],
   };
 
   /// What Folio's MCP server needs of its surroundings: a display for the
@@ -615,6 +640,8 @@ abstract final class AiAssistant {
           }
         }
         throw const AiFailure('Antigravity yanıt vermedi.');
+      case AiProvider.groq:
+        return stdout.trim();
     }
   }
 
@@ -654,6 +681,18 @@ abstract final class AiAssistant {
     Future<void>? cancel,
     AiThread? thread,
   }) async {
+    if (provider.viaApi) {
+      return GroqChat.ask(
+        prompt,
+        model: model,
+        tier: tier,
+        tools: tools,
+        caseSession: caseSession,
+        onEvent: onEvent,
+        cancel: cancel,
+        thread: thread,
+      );
+    }
     final path = find(provider.command);
     if (path == null) {
       throw AiFailure('${provider.label} bu bilgisayarda kurulu değil.');
@@ -727,6 +766,7 @@ abstract final class AiAssistant {
         AiProvider.claude => AiEvents.claude,
         AiProvider.codex => AiEvents.codex,
         AiProvider.antigravity => AiEvents.antigravity,
+        AiProvider.groq => (String _) => const <AiEvent>[],
       };
       var heard = DateTime.now();
       final began = heard;
@@ -852,6 +892,10 @@ abstract final class AiAssistant {
   /// dropped, so that the question carries what was said.
   static Future<bool> goesOn(AiProvider provider, AiThread thread) async {
     if (provider == AiProvider.antigravity && !await antigravityResumes()) {
+      thread.ids.remove(provider);
+    }
+    // Groq's conversation is held while Folio is open.
+    if (provider.viaApi && !GroqChat.has(thread.ids[provider] ?? '')) {
       thread.ids.remove(provider);
     }
     return thread.ids.containsKey(provider);
@@ -984,6 +1028,8 @@ abstract final class AiAssistant {
             for (final line in '${r.stdout}'.split('\n'))
               if (line.contains('\t')) line.split('\t').first.trim(),
           ];
+        case AiProvider.groq:
+          return GroqChat.models;
       }
     } catch (_) {
       return const [];
@@ -1042,7 +1088,7 @@ class AiSettings {
 
   /// The consent text's version; one given to an older text no longer
   /// counts.
-  static const currentConsent = 1;
+  static const currentConsent = 2;
 
   /// Whether the lawyer turned the AI features on. Off, Folio shows none of
   /// them and its tools answer no AI program.
@@ -1160,7 +1206,8 @@ class AiSettings {
 const aiConsentPoints = [
   'Yapay zekâ özelliklerinde, seçtiğiniz belgenin metni sizin '
       'bilgisayarınızdan, sizin hesabınızla kullandığınız sağlayıcıya '
-      '(Anthropic, OpenAI ya da Google) doğrudan gönderilir. Belge bir '
+      '(Anthropic, OpenAI ya da Google) ya da kendi API anahtarınızla Groq’a '
+      'doğrudan gönderilir. Belge bir '
       'dosyaya aitse yapay zekânın okuduğu dosya bilgileri ve evrak da '
       'gönderilir.',
   'LifeOS bu metni görmez, saklamaz ve kimseye aktarmaz. Sağlayıcıyla ilişki '

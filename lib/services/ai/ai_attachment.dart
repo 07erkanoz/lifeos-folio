@@ -115,7 +115,7 @@ class AiAttachment {
     final ext = p.extension(path).toLowerCase();
     final format = EvrakFormat.fromExtension(ext);
     String masked(String t) => mask ? AiAssistant.maskIdentityNumbers(t) : t;
-    final pictures = provider != AiProvider.antigravity;
+    final pictures = provider.seesPictures;
     if (format == EvrakFormat.pdf) {
       final text = (await AiAssistant.documentText(path, ocr: false)).trim();
       final pages = await _pageCount(path);

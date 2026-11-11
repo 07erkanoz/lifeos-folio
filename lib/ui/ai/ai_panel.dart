@@ -388,6 +388,7 @@ class _AiPanelState extends State<AiPanel> {
     AiProvider.claude => 'Anthropic’e',
     AiProvider.codex => 'OpenAI’a',
     AiProvider.antigravity => 'Google’a',
+    AiProvider.groq => 'Groq’a',
   };
 
   Future<void> _ask(AiTask task, [String question = '', AiTier? at]) async {
@@ -2704,7 +2705,8 @@ class _AiPanelState extends State<AiPanel> {
                     child: Text(
                       'Bu bilgisayarda oturumu açık bir yapay zekâ programı '
                       'bulunamadı. Ayarlar › Yapay zekâ’dan Claude, Codex ya da '
-                      'Antigravity’yi kurabilir ve oturum açabilirsiniz.',
+                      'Antigravity’yi kurabilir ve oturum açabilir ya da '
+                      'Groq anahtarınızı girebilirsiniz.',
                       key: const ValueKey('ai-none'),
                       style: TextStyle(
                         color: scheme.onSurfaceVariant,

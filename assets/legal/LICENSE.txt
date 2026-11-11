@@ -14,7 +14,7 @@ Folio'nun yazılımı, adı, simgesi ve arayüzü üzerindeki bütün haklar Lif
 Folio, avukatın işini kolaylaştıran bir araçtır ve hukuki görüş vermez. Uygulamanın hesapladığı süreler, gösterdiği kanun maddeleri ve kararlar ile kamu sistemlerinden alınan bilgiler yardımcı niteliktedir. Sürelerin, dilekçelerin ve gönderilen evrakın doğruluğunu denetlemek avukatın sorumluluğundadır.
 
 5. Yapay zekâ özellikleri
-Folio'nun yapay zekâ özellikleri isteğe bağlıdır ve varsayılan olarak kapalıdır. Bu özellikler, bilgisayarınızda kurulu ve sizin kendi hesabınızla oturum açtığınız üçüncü taraf programlarla (Claude, Codex, Antigravity) çalışır. Bu programlar ve arkalarındaki hizmetler LifeOS'a ait değildir; onların kullanım koşullarına uymak ve ücretleri size aittir.
+Folio'nun yapay zekâ özellikleri isteğe bağlıdır ve varsayılan olarak kapalıdır. Bu özellikler, bilgisayarınızda kurulu ve sizin kendi hesabınızla oturum açtığınız üçüncü taraf programlarla (Claude, Codex, Antigravity) ya da sizin API anahtarınızla kullandığınız Groq hizmetiyle çalışır. Bu programlar ve arkalarındaki hizmetler LifeOS'a ait değildir; onların kullanım koşullarına uymak ve ücretleri size aittir.
 Bir belgeyi ya da dosya evrakını bu programlara göndermek sizin kararınızdır. Gönderimin KVKK'ya, avukatlık sırrına ve meslek kurallarına uygunluğundan siz sorumlusunuz.
 Yapay zekânın yanıtları yanlış ya da eksik olabilir. Folio, yanıttaki kanun maddesi ve karar atıflarını resmî kaynaklarda denetler; bu denetim her hatayı yakalamaz. Yanıtları denetlemek ve kullanmak avukatın sorumluluğundadır. Yürürlükteki mevzuatın izin verdiği ölçüde LifeOS, yapay zekâ yanıtlarından ve bu programlara gönderilen verilerden doğan zararlardan sorumlu değildir.
 
