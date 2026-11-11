@@ -5,6 +5,7 @@ import '../portal/observed.dart' show caseKey;
 import '../portal/portal_database.dart';
 import '../uyap/uyap_case_store.dart';
 import 'ai_assistant.dart';
+import 'ai_guide.dart';
 import 'ai_case.dart';
 import 'ai_memory.dart';
 import 'ai_refresh.dart';
@@ -182,6 +183,9 @@ class AiRelay {
     // answers are then not sent again.
     final thread = AiThread.of(id, chat['oturumlar']);
     final who = await AiAssistant.who();
+    final guide = (await LegalGuide.load()).blockFor(
+      '${question['soru'] ?? ''}',
+    );
     String prompt({required bool full}) => AiAssistant.prompt(
       task: AiTask.question,
       question: '${question['soru'] ?? ''}',
@@ -198,6 +202,7 @@ class AiRelay {
                 'ajanda, tebligatlar ve uyap_bildirimleri araçları var.'
           : null,
       who: who,
+      guide: tools ? guide : null,
       history: [
         if (full)
           for (final t in turns.take(turns.length - 1))

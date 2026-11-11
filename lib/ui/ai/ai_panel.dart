@@ -10,8 +10,10 @@ import 'package:file_picker/file_picker.dart';
 import '../../models/evrak_file.dart';
 import '../../services/ai/ai_assistant.dart';
 import '../../services/ai/ai_attachment.dart';
+import '../../services/ai/ai_audit.dart';
 import '../../services/ai/ai_case.dart';
 import '../../services/ai/ai_draft.dart';
+import '../../services/ai/ai_guide.dart';
 import '../../services/ai/ai_memory.dart';
 import '../../services/ai/ai_refresh.dart';
 import 'ai_markdown.dart';
@@ -127,6 +129,9 @@ class _Turn {
 
   /// Whether what was selected in the document went with the question.
   bool usedSelection = false;
+
+  /// Folio checking the answer before it is shown (AnswerAudit).
+  bool auditing = false;
 
   /// What Folio did for it on the way (UYAP asked for fresh).
   final notes = <String>[];
@@ -500,6 +505,11 @@ class _AiPanelState extends State<AiPanel> {
               '${[for (final d in must) '- ${d.title} (anahtar: ${d.key})'].join('\n')}',
       ].nonNulls.toList();
       turn.usedSelection = picked != null && picked.isNotEmpty;
+      // The guide's topic the question names, added by Folio: the model
+      // finds the governing articles there rather than guessing them.
+      final guide = tools && task == AiTask.question
+          ? (await LegalGuide.load()).blockFor(question)
+          : null;
       String prompt({required bool full}) => AiAssistant.prompt(
         task: task,
         name: path != null
@@ -512,6 +522,7 @@ class _AiPanelState extends State<AiPanel> {
         question: question,
         caseName: withCase ? '${record.court} ${record.number}' : null,
         note: notes.isEmpty ? null : notes.join('\n\n'),
+        guide: guide,
         attached: AiAttachment.block([
           for (final a in attachments)
             if (full || !_given.contains('${provider.name}|${a.name}')) a,
@@ -561,6 +572,36 @@ class _AiPanelState extends State<AiPanel> {
           }
         } else {
           answer = await asking(full: true);
+        }
+        // Folio's own check before the lawyer sees it (AnswerAudit): what
+        // it finds is said to the program, which writes the answer again.
+        if (tools && !cancel.isCompleted) {
+          var rounds = 0, read = 0;
+          for (var round = 0; round < 2; round++) {
+            if (mounted) setState(() => turn.auditing = true);
+            final feedback = await AnswerAudit(_mcp)
+                .feedback(answer, turn.steps.values, said: (_) => read++);
+            if (feedback == null || cancel.isCompleted) break;
+            if (!await AiAssistant.goesOn(provider, thread)) break;
+            if (mounted) setState(() => turn.auditing = false);
+            turn.live.clear();
+            final again = await AiAssistant.ask(
+              provider,
+              feedback,
+              model: model,
+              tier: tier,
+              caseSession: session,
+              onEvent: (e) => _heard(turn, e),
+              cancel: cancel.future,
+              thread: thread,
+            );
+            if (again.trim().isNotEmpty) answer = again;
+            rounds++;
+          }
+          turn.auditing = false;
+          if (rounds > 0 || read > 0) {
+            turn.notes.add(AnswerAudit.summary(rounds, read));
+          }
         }
         for (final a in attachments) {
           _given.add('${provider.name}|${a.name}');
@@ -1797,7 +1838,9 @@ class _AiPanelState extends State<AiPanel> {
   Widget _status(_Turn t, ColorScheme scheme) {
     final open = t.steps.values.where((s) => !s.done).lastOrNull;
     final fetching = t.requests.where((r) => r.working).lastOrNull;
-    final label = fetching != null
+    final label = t.auditing
+        ? 'Folio cevabı denetliyor'
+        : fetching != null
         ? 'Evrak UYAP’tan indiriliyor · ${fetching.title}'
         : open != null
         ? _labelOf(open)

@@ -10,6 +10,7 @@ import '../legal/decision.dart';
 import '../legal/legislation.dart';
 import 'ai_assistant.dart';
 import 'ai_case.dart';
+import 'ai_guide.dart';
 import 'ai_office.dart';
 
 /// `lifeos_folio --mcp`: Folio's own tools for the lawyer's AI program, over
@@ -71,7 +72,9 @@ class FolioMcp {
 
   /// What the program reads before it uses the tools.
   static const instructions =
-      'Folio\'nun hukuk araçları. Kanun maddesi, karar künyesi ya da karar '
+      'Folio\'nun hukuk araçları. Hukuki bir değerlendirmeye başlarken '
+      'ilgili konuyu hukuk_rehber ile oku: hangi maddelerin ve sürelerin '
+      'geçerli olduğu oradadır. Kanun maddesi, karar künyesi ya da karar '
       'metni yazacaksan önce bu araçlardan oku ve yalnız onların döndürdüğü '
       'metni ve "atif" alanını kullan. Araç "yok" ya da "ulasilamadi" '
       'dönerse bunu söyle; madde ya da karar uydurma, numara tahmin etme. '
@@ -97,7 +100,12 @@ class FolioMcp {
       ...FolioOfficeTools.tools,
     ])
       '${t['name']}',
+    guideTool,
   ];
+
+  /// The legal guide's tool (LegalGuide), its description made from the
+  /// guide's own list of topics.
+  static const guideTool = 'hukuk_rehber';
 
   static const _readOnly = {
     'readOnlyHint': true,
@@ -296,6 +304,7 @@ class FolioMcp {
         return result({
           'tools': [
             ...tools,
+            (await LegalGuide.load()).tool,
             if (caseTools != null) ...FolioCaseTools.tools,
             if (officeTools != null) ...FolioOfficeTools.tools,
           ],
@@ -308,7 +317,8 @@ class FolioMcp {
         final arguments = args is Map
             ? args.cast<String, Object?>()
             : const <String, Object?>{};
-        if (!tools.any((t) => t['name'] == name) &&
+        if (name != guideTool &&
+            !tools.any((t) => t['name'] == name) &&
             !(caseTools != null && FolioCaseTools.owns(name)) &&
             !(officeTools != null && FolioOfficeTools.owns(name))) {
           return error(-32602, 'Bilinmeyen araç: $name');
@@ -367,6 +377,8 @@ class FolioMcp {
         );
       case 'atif_dogrula':
         return _check(text('metin'));
+      case guideTool:
+        return (await LegalGuide.load()).read(text('konu'));
     }
     throw StateError('Bilinmeyen araç: $name');
   }
@@ -487,19 +499,37 @@ class FolioMcp {
       return {'durum': 'yok', ..._lawJson(law)};
     }
     final nodes = await _bank.tree(bank.id);
+    // Many laws' articles come with no side heading of their own (the
+    // Code of Obligations': "344" alone): each article is given the part
+    // above it, said once where it begins, for the program to find the
+    // article by its subject rather than guess its number.
+    final articles = <Map<String, Object?>>[];
+    String? part;
+    var said = false;
+    for (final n in nodes) {
+      if (!n.isArticle) {
+        if (n.heading.trim().isNotEmpty) {
+          part = n.heading.trim();
+          said = false;
+        }
+        continue;
+      }
+      articles.add({
+        'madde': n.number,
+        if (n.sideHeading.isNotEmpty) 'baslik': n.sideHeading,
+        if (part != null && !said) 'bolum': part,
+      });
+      said = true;
+    }
     return {
       'durum': 'bulundu',
       ..._lawJson(law),
       'resmi_ad': bank.name,
       'kaynak_adres': bank.url,
-      'maddeler': [
-        for (final n in nodes)
-          if (n.isArticle)
-            {
-              'madde': n.number,
-              if (n.sideHeading.isNotEmpty) 'baslik': n.sideHeading,
-            },
-      ],
+      'not':
+          'Başlığı olmayan maddelerin konusu, üstlerindeki "bolum" ile '
+          'başlar; konunun maddesini bulamazsan hukuk_rehber\'e bak.',
+      'maddeler': articles,
     };
   }
 

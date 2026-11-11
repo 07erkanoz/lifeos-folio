@@ -830,23 +830,21 @@ abstract final class AiAssistant {
   /// Whether this computer's Antigravity goes on with a conversation it is
   /// given (`--conversation`): seen to from 1.4.12; an older one is sent
   /// what was said instead.
-  static Future<bool> antigravityResumes() async =>
-      _agyResumes ??= () async {
-        final path = find(AiProvider.antigravity.command);
-        if (path == null) return false;
-        try {
-          final r = await Process.run(path, [
-            '--version',
-          ], environment: environment()).timeout(const Duration(seconds: 15));
-          final m = RegExp(r'(\d+)\.(\d+)\.(\d+)').firstMatch('${r.stdout}');
-          if (m == null) return false;
-          final v = [for (var i = 1; i <= 3; i++) int.parse(m.group(i)!)];
-          return v[0] > 1 ||
-              (v[0] == 1 && (v[1] > 4 || (v[1] == 4 && v[2] >= 12)));
-        } catch (_) {
-          return false;
-        }
-      }();
+  static Future<bool> antigravityResumes() async => _agyResumes ??= () async {
+    final path = find(AiProvider.antigravity.command);
+    if (path == null) return false;
+    try {
+      final r = await Process.run(path, [
+        '--version',
+      ], environment: environment()).timeout(const Duration(seconds: 15));
+      final m = RegExp(r'(\d+)\.(\d+)\.(\d+)').firstMatch('${r.stdout}');
+      if (m == null) return false;
+      final v = [for (var i = 1; i <= 3; i++) int.parse(m.group(i)!)];
+      return v[0] > 1 || (v[0] == 1 && (v[1] > 4 || (v[1] == 4 && v[2] >= 12)));
+    } catch (_) {
+      return false;
+    }
+  }();
 
   static Future<bool>? _agyResumes;
 
@@ -900,6 +898,7 @@ abstract final class AiAssistant {
     String? note,
     String? attached,
     String? who,
+    String? guide,
     List<({String question, String answer})> history = const [],
   }) {
     final cut = text != null && text.length > maxCharacters;
@@ -928,6 +927,8 @@ abstract final class AiAssistant {
       if (note != null) ...['', note],
       // The documents the lawyer added to the conversation.
       if (attached != null && attached.isNotEmpty) ...['', attached],
+      // The legal guide's topics the question names (LegalGuide).
+      if (guide != null && guide.isNotEmpty) ...['', guide],
       '',
       AiPrompts.task(task, question: question),
     ].join('\n');

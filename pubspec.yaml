@@ -99,6 +99,7 @@ flutter:
     - assets/mevzuat/courts.json
     - assets/mevzuat/karar_kaliplari.json
     - assets/mevzuat/faiz.json
+    - assets/mevzuat/rehber.json
     - assets/sozluk/terms.json
     - assets/ses/okuma.json
     - assets/buro/gorev_sablonlari.json
