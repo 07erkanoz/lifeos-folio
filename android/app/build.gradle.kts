@@ -18,6 +18,12 @@ val releaseKey = Properties().apply {
     if (file.exists()) FileInputStream(file).use { load(it) }
 }
 
+// LifeOS Ofis: the same app under its own name, icon and identity, built
+// with LIFEOS_OFIS=true in the environment and
+// `flutter build apk --dart-define=LIFEOS_OFIS=true` (which tells the Dart
+// side; AppEdition.packagedAsOfis). It installs beside Folio.
+val ofis = System.getenv("LIFEOS_OFIS") == "true"
+
 android {
     namespace = "com.erkanoz.evrak_convert"
     compileSdk = flutter.compileSdkVersion
@@ -33,7 +39,10 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.erkanoz.evrak_convert"
+        applicationId = if (ofis) "com.erkanoz.lifeos_ofis" else "com.erkanoz.evrak_convert"
+        manifestPlaceholders["appLabel"] = if (ofis) "LifeOS Ofis" else "LifeOS Folio"
+        manifestPlaceholders["appIcon"] =
+            if (ofis) "@mipmap/ic_launcher_ofis" else "@mipmap/ic_launcher"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

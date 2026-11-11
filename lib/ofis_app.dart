@@ -23,6 +23,7 @@ import 'ui/live/live_hub.dart';
 import 'ui/live/ofis_live.dart';
 import 'services/platform/app_edition.dart';
 import 'services/platform/app_language.dart';
+import 'services/platform/document_intents.dart';
 import 'services/platform/document_launch.dart';
 import 'services/preview/pdf_fonts.dart';
 import 'services/signing/imz_file.dart';
@@ -155,6 +156,9 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
 
   bool get _home => _path == null && !_editing;
 
+  final _intents = DocumentIntents();
+  StreamSubscription<List<String>>? _opened;
+
   /// Live documents: shared from the editor, joined with a code.
   late final _live = OfisLive(() => _context);
 
@@ -203,6 +207,16 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     unawaited(AppLanguage.instance.load());
     if (widget.desktopChrome) windowManager.addListener(this);
     MacQuit.handle(_approveQuit);
+    // A document another app or Finder opens in Ofis: on a phone and a Mac
+    // it comes by the system's own way, not as an argument.
+    if (!Platform.environment.containsKey('FLUTTER_TEST') &&
+        (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+      _opened = _intents.paths.listen((paths) {
+        final path = paths.where(_previewable).firstOrNull;
+        if (path != null) unawaited(_openPath(path));
+      }, onError: (Object _) {});
+      unawaited(_intents.start().catchError((Object _) {}));
+    }
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       // On the network for live documents, if no other window of Ofis is:
       // invited by a device nearby, and sharing from the editor.
@@ -222,6 +236,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
   void dispose() {
     if (widget.desktopChrome) windowManager.removeListener(this);
     _live.dispose();
+    unawaited(_opened?.cancel());
     _appearance.dispose();
     super.dispose();
   }

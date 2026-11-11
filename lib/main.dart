@@ -33,6 +33,7 @@ import 'package:window_manager/window_manager.dart';
 import 'editor_app.dart';
 import 'preview_app.dart';
 import 'ofis_app.dart';
+import 'services/platform/app_edition.dart';
 import 'services/platform/editor_window.dart' show ofisFlag, previewFlag;
 import 'ui/home_page.dart';
 import 'ui/widgets/desktop_frame.dart';
@@ -55,6 +56,10 @@ import 'ui/theme/folio_palette.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // LifeOS Ofis, said before anything asks where its records are kept:
+  // they are its own, never Folio's.
+  final asOfis = arguments.contains(ofisFlag) || AppEdition.packagedAsOfis;
+  if (asOfis) AppEdition.current = AppEdition.ofis;
   // `--ajanda-yaz` (LifeOS's timer): the agenda file written and LifeOS's
   // requests kept, with no window (none is shown before a first frame),
   // beside an open Folio or without one; and nothing else of a start.
@@ -72,7 +77,7 @@ void main(List<String> arguments) async {
   // LifeOS Editör: the editor alone, in a window of its own, without the
   // archive, the tray or the single-instance lock.
   // LifeOS Ofis: the documents and the editor for anyone (lib/ofis_app.dart).
-  if (arguments.contains(ofisFlag)) {
+  if (asOfis) {
     unawaited(SystemFontCatalog.load().then((_) {}, onError: (_) {}));
     unawaited(LegalSettings.instance.load());
     unawaited(EditorSettings.instance.load());

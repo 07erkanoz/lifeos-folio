@@ -12,7 +12,11 @@ import 'store_package.dart';
 /// when the visible brand changes, including the index, theme and signing setup.
 Future<Directory> folioSupportDirectory() async {
   final current = await getApplicationSupportDirectory();
-  if (Platform.isMacOS) return macDataFolder(current);
+  // LifeOS Ofis keeps a folder of its own on every system: never Folio's,
+  // whose records and identity on the network it must not share.
+  if (Platform.isMacOS) {
+    return AppEdition.isOfis ? current : macDataFolder(current);
+  }
   if (!Platform.isWindows) return current;
   // LifeOS Ofis is a program of its own, named so in its executable: the
   // folder Windows gives it is its own, never Folio's (whose identity on

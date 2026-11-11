@@ -127,6 +127,63 @@ jobs:
             codesign --force --timestamp --sign "$SIGN_IDENTITY" "LifeOS-Folio-$version-macOS.dmg"
           fi
           echo "DMG=LifeOS-Folio-$version-macOS.dmg" >> "$GITHUB_ENV"
+      - name: LifeOS Ofis'i paketle
+        # The same build under its own name and identity (com.lifeos.ofis):
+        # a mark in its Resources tells the app it is Ofis
+        # (AppEdition.packagedAsOfis), its Info.plist names it, and it is
+        # signed again as itself. Folio's link scheme, Finder services and
+        # e-Devlet window are Folio's alone and are left out.
+        run: |
+          version="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+.*/\1/p' pubspec.yaml)"
+          folio="build/macos/Build/Products/Release/LifeOS Folio.app"
+          mkdir -p ofis
+          app="ofis/LifeOS Ofis.app"
+          cp -R "$folio" "$app"
+          rm -f "$app/Contents/MacOS/folio-edevlet"
+          rm -rf "$app/Contents/_CodeSignature"
+          touch "$app/Contents/Resources/lifeos-ofis"
+          # Its own icon, from the picture the app shows of itself.
+          set="$RUNNER_TEMP/ofis.iconset"
+          mkdir -p "$set"
+          for size in 16 32 128 256 512; do
+            sips -z "$size" "$size" assets/branding/lifeos_ofis.png --out "$set/icon_${size}x${size}.png" > /dev/null
+            sips -z "$((size * 2))" "$((size * 2))" assets/branding/lifeos_ofis.png --out "$set/icon_${size}x${size}@2x.png" > /dev/null
+          done
+          iconutil -c icns "$set" -o "$app/Contents/Resources/LifeOSOfis.icns"
+          plist="$app/Contents/Info.plist"
+          buddy() { /usr/libexec/PlistBuddy -c "$1" "$plist"; }
+          buddy "Set :CFBundleIdentifier com.lifeos.ofis"
+          buddy "Set :CFBundleName LifeOS Ofis"
+          buddy "Set :CFBundleDisplayName LifeOS Ofis"
+          buddy "Set :CFBundleIconFile LifeOSOfis"
+          buddy "Delete :CFBundleIconName" 2>/dev/null || true
+          buddy "Delete :CFBundleURLTypes" 2>/dev/null || true
+          buddy "Delete :NSServices" 2>/dev/null || true
+          plutil -lint "$plist"
+          if [ -n "${SIGN_IDENTITY:-}" ]; then
+            sign() { codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$@"; }
+            find "$app/Contents" -type f \( -name '*.dylib' -o -perm -u+x \) \
+              ! -path '*/MacOS/LifeOS Folio' 2>/dev/null \
+              | while read -r f; do
+                  if file "$f" | grep -q 'Mach-O'; then sign "$f"; fi
+                done
+            find "$app/Contents/Frameworks" -maxdepth 1 -name '*.framework' 2>/dev/null \
+              | while read -r f; do sign "$f"; done
+            sign --entitlements macos/Runner/Release.entitlements "$app"
+          else
+            find "$app/Contents/Resources/tools/bin" "$app/Contents/MacOS" -type f -perm -u+x 2>/dev/null \
+              | while read -r tool; do codesign --force --sign - "$tool"; done
+            codesign --force --deep --sign - "$app"
+          fi
+          codesign --verify --deep --strict "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = com.lifeos.ofis
+          mkdir -p dmg-ofis && cp -R "$app" dmg-ofis/ && ln -s /Applications dmg-ofis/Applications
+          hdiutil create -volname "LifeOS Ofis" -srcfolder dmg-ofis -ov -format UDZO \
+            "LifeOS-Ofis-$version-macOS.dmg"
+          if [ -n "${SIGN_IDENTITY:-}" ]; then
+            codesign --force --timestamp --sign "$SIGN_IDENTITY" "LifeOS-Ofis-$version-macOS.dmg"
+          fi
+          echo "OFIS_DMG=LifeOS-Ofis-$version-macOS.dmg" >> "$GITHUB_ENV"
       - name: Apple onayı (notarization)
         # Apple looks the package over and gives it its ticket, stapled to it
         # so that it opens on a Mac with no network as well.
@@ -142,11 +199,20 @@ jobs:
           fi
           key="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           echo "$ASC_KEY_P8" | base64 --decode > "$key"
-          xcrun notarytool submit "$DMG" --key "$key" --key-id "$ASC_KEY_ID" \
-            --issuer "$ASC_ISSUER_ID" --wait --timeout 3h
-          xcrun stapler staple "$DMG"
-          xcrun stapler validate "$DMG"
-          spctl --assess --type open --context context:primary-signature -v "$DMG"
+          # Both packages are sent before either is waited for: Apple looks
+          # at them side by side, not one after the other.
+          for dmg in "$DMG" "$OFIS_DMG"; do
+            xcrun notarytool submit "$dmg" --key "$key" --key-id "$ASC_KEY_ID" \
+              --issuer "$ASC_ISSUER_ID" --no-wait --output-format json > "$RUNNER_TEMP/$dmg.json"
+          done
+          for dmg in "$DMG" "$OFIS_DMG"; do
+            id="$(jq -r .id "$RUNNER_TEMP/$dmg.json")"
+            xcrun notarytool wait "$id" --key "$key" --key-id "$ASC_KEY_ID" \
+              --issuer "$ASC_ISSUER_ID" --timeout 3h
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+            spctl --assess --type open --context context:primary-signature -v "$dmg"
+          done
           rm "$key"
       - name: Açılıyor mu
         # Started the way a tester starts it, left a few seconds, then closed:
@@ -163,13 +229,29 @@ jobs:
           fi
           kill "$pid"
           tail -n 40 "$RUNNER_TEMP/start.log"
+          # LifeOS Ofis the same way: it must start as itself and stay up.
+          ofis="ofis/LifeOS Ofis.app"
+          "$ofis/Contents/MacOS/LifeOS Folio" > "$RUNNER_TEMP/ofis-start.log" 2>&1 &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            cat "$RUNNER_TEMP/ofis-start.log"
+            echo "::error::LifeOS Ofis açıldıktan sonra kapandı."
+            exit 1
+          fi
+          # Its records are in its own folder, not Folio's.
+          ls -d "$HOME/Library/Application Support/com.lifeos.ofis" || {
+            echo "::error::LifeOS Ofis kendi veri klasörünü açmadı; Folio'nunkini kullanıyor olabilir."
+            kill "$pid"; exit 1; }
+          kill "$pid"
+          tail -n 40 "$RUNNER_TEMP/ofis-start.log"
       - name: Deneme sürümü olarak yayımla
         if: inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="mac-deneme-${GITHUB_RUN_ID}"
-          gh release create "$tag" "$DMG" --target "$GITHUB_SHA" --prerelease --latest=false \
+          gh release create "$tag" "$DMG" "$OFIS_DMG" --target "$GITHUB_SHA" --prerelease --latest=false \
             --title "LifeOS Folio · Mac deneme · ${GITHUB_RUN_ID}" \
             --notes "$(if [ -n "${SIGN_IDENTITY:-}" ]; then echo 'Mac için deneme paketi; Apple Developer ID ile imzalı ve Apple onaylı.'; else echo 'Mac için deneme paketi. Apple tarafından imzalı değildir: ilk açılışta Sistem Ayarları → Gizlilik ve Güvenlik'"'"'ten "Yine de Aç" seçilmelidir.'; fi)"
       - name: Sürüme ekle
@@ -183,10 +265,13 @@ jobs:
             exit 1
           fi
           cp "$DMG" LifeOS-Folio-macOS.dmg
-          gh release upload "$TAG" LifeOS-Folio-macOS.dmg --clobber
+          cp "$OFIS_DMG" LifeOS-Ofis-macOS.dmg
+          gh release upload "$TAG" LifeOS-Folio-macOS.dmg LifeOS-Ofis-macOS.dmg --clobber
       - uses: actions/upload-artifact@v4
         if: ${{ !inputs.publish && inputs.release_tag == '' }}
         with:
           name: LifeOS-Folio-macOS
-          path: ${{ env.DMG }}
+          path: |
+            ${{ env.DMG }}
+            ${{ env.OFIS_DMG }}
           retention-days: 7
