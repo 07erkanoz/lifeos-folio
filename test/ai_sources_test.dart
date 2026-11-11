@@ -1,3 +1,4 @@
+import 'package:evrak_convert/services/ai/ai_assistant.dart';
 import 'package:evrak_convert/ui/ai/ai_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,16 @@ import 'package:flutter_test/flutter_test.dart';
 // it cites in its text itself, each once, to be opened in full.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // No AI program is looked for on the machine the test runs on: where
+  // none is installed the panel showed no conversation at all, and the
+  // test failed on the build server alone.
+  setUp(() {
+    AiAssistant.statusesForTest = const [
+      AiStatus(AiProvider.claude, path: '/bin/claude', signedIn: true),
+    ];
+  });
+  tearDown(() => AiAssistant.statusesForTest = null);
 
   testWidgets('a kept answer shows its articles and decisions', (tester) async {
     await tester.runAsync(() async {
