@@ -21,6 +21,23 @@ List<Uri> whatsAppLinks(String text, {String digits = ''}) {
 /// Opens the first of [links] this device takes: a program's own link
 /// only where a program is there for it, the last whatever is there.
 Future<bool> openFirst(List<Uri> links) async {
+  // LifeOS WhatsApp takes a `whatsapp:` link only with a number in it: a
+  // message with none (an invitation, whose sender picks who it goes to)
+  // was dropped without a word (11 Kasım 2026). Given WhatsApp Web's own
+  // address, it opens the message whoever it is for.
+  if (Platform.isLinux &&
+      !Platform.environment.containsKey('FLUTTER_TEST') &&
+      links.length > 1 &&
+      links.first.scheme == 'whatsapp') {
+    if (lifeosWhatsApp() case final program?) {
+      try {
+        await Process.start(program, [
+          links.last.toString(),
+        ], mode: ProcessStartMode.detached);
+        return true;
+      } catch (_) {}
+    }
+  }
   for (final (i, uri) in links.indexed) {
     try {
       if (i < links.length - 1 && !await canLaunchUrl(uri)) continue;
@@ -35,3 +52,14 @@ Future<bool> openFirst(List<Uri> links) async {
 /// [text] opened in WhatsApp, for the sender to pick who it goes to.
 Future<bool> openWhatsApp(String text, {String digits = ''}) =>
     openFirst(whatsAppLinks(text, digits: digits));
+
+/// LifeOS's own WhatsApp, where it is installed (LifeOS Linux).
+String? lifeosWhatsApp([Map<String, String>? environment]) {
+  final path = (environment ?? Platform.environment)['PATH'] ?? '';
+  for (final dir in path.split(':')) {
+    if (dir.isEmpty) continue;
+    final file = File('$dir/lifeos-whatsapp');
+    if (file.existsSync()) return file.path;
+  }
+  return null;
+}

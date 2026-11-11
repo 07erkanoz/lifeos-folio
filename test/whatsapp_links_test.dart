@@ -24,4 +24,15 @@ void main() {
     final links = whatsAppLinks('Davet');
     expect(links.first.queryParameters.containsKey('phone'), isFalse);
   });
+
+  test('LifeOS WhatsApp is found on the path where it is installed', () async {
+    final dir = await Directory.systemTemp.createTemp('wa');
+    addTearDown(() => dir.delete(recursive: true));
+    expect(lifeosWhatsApp({'PATH': '/yok:${dir.path}'}), isNull);
+    File('${dir.path}/lifeos-whatsapp').writeAsStringSync('#!/bin/sh\n');
+    expect(
+      lifeosWhatsApp({'PATH': '/yok:${dir.path}'}),
+      '${dir.path}/lifeos-whatsapp',
+    );
+  });
 }
