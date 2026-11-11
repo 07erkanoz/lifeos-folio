@@ -3006,6 +3006,27 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                                               FontWeight.w700,
                                                                         ),
                                                                       ),
+                                                                      // The editor's ribbon tabs, after the name: the
+                                                                      // editor is told they are here (hostTabs).
+                                                                      if (MediaQuery.sizeOf(
+                                                                                context,
+                                                                              ).width >=
+                                                                              700 &&
+                                                                          _newRecovery?.format !=
+                                                                              'spreadsheet-draft' &&
+                                                                          _newRecovery?.format !=
+                                                                              'xlsx' &&
+                                                                          _newRecovery?.format !=
+                                                                              'text-draft') ...[
+                                                                        const SizedBox(
+                                                                          width:
+                                                                              18,
+                                                                        ),
+                                                                        const EditorRibbonTabs(
+                                                                          height:
+                                                                              36,
+                                                                        ),
+                                                                      ],
                                                                       const Spacer(),
                                                                       if (!mobile)
                                                                         _editorPanelButton(),
