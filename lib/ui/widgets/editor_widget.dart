@@ -130,6 +130,8 @@ import '../../services/live/live_share.dart';
 import '../../services/live/live_remote.dart';
 import '../../services/platform/app_edition.dart';
 import '../live/live_chat_panel.dart';
+import '../ai/ai_panel.dart';
+import '../../services/ai/ai_assistant.dart';
 import '../live/live_share_dialog.dart';
 import '../../services/portal/observed.dart';
 import '../../services/portal/portal_database.dart';
@@ -1091,6 +1093,11 @@ class _EditorWidgetState extends State<EditorWidget>
   /// many of the others' lines were there when it was last looked at.
   bool _chatOpen = false;
   double _chatWidth = 330;
+
+  /// The lawyer's AI program beside the page: asked about the document as
+  /// it is written, what it gives written into it.
+  bool _aiOpen = false;
+  double _aiWidth = 400;
   int _chatSeen = 0;
 
   /// The others' lines in the talk, and those not yet seen.
@@ -1121,6 +1128,8 @@ class _EditorWidgetState extends State<EditorWidget>
         _uyapOpen = !_uyapOpen;
       } else if (side == _Side.chat) {
         _chatOpen = !_chatOpen;
+      } else if (side == _Side.ai) {
+        _aiOpen = !_aiOpen;
       } else {
         _caseLawOpen = !_caseLawOpen;
       }
@@ -1172,6 +1181,27 @@ class _EditorWidgetState extends State<EditorWidget>
     _Side side, {
     required VoidCallback onClose,
   }) {
+    if (side == _Side.ai) {
+      return Material(
+        color: Theme.of(context).colorScheme.surface,
+        child: AiPanel(
+          key: const ValueKey('editor-ai-panel'),
+          path: _documentPath,
+          embedded: true,
+          document: () => _active.document.toPlainText(),
+          documentName: _documentPath == null
+              ? _currentTitle
+              : p.basename(_documentPath!),
+          selection: _selectedText,
+          onInsert: (text) => unawaited(_writeFromAi(text)),
+          onClose: onClose,
+          onOpen: (path) => setState(() {
+            _evrakPath = path;
+            _evrakTitle = p.basename(path);
+          }),
+        ),
+      );
+    }
     if (side == _Side.chat) {
       final live = _live;
       if (live == null) return const SizedBox();
@@ -2962,6 +2992,50 @@ class _EditorWidgetState extends State<EditorWidget>
     setState(() {});
   }
 
+  /// A text the AI program gave, written into the document: at the caret,
+  /// or, with a part of the document selected, where the lawyer says (in
+  /// its place, or after it, so that nothing is written over unasked).
+  Future<void> _writeFromAi(String text) async {
+    final controller = _active;
+    final selection = controller.selection;
+    if (selection.isValid && !selection.isCollapsed) {
+      final replace = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Metin nereye eklensin?'),
+          content: const Text(
+            'Belgede seçili bir metin var. Yeni metin onun yerine '
+            'yazılabilir ya da hemen sonrasına eklenebilir.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Vazgeç'),
+            ),
+            TextButton(
+              key: const ValueKey('ai-insert-after'),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Sonrasına ekle'),
+            ),
+            FilledButton(
+              key: const ValueKey('ai-insert-replace'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yerine yaz'),
+            ),
+          ],
+        ),
+      );
+      if (replace == null || !mounted) return;
+      if (!replace) {
+        controller.updateSelection(
+          TextSelection.collapsed(offset: selection.end),
+          ChangeSource.local,
+        );
+      }
+    }
+    _writeHeard(text);
+  }
+
   void _writeHeard(String text) {
     if (!mounted) return;
     final controller = _active;
@@ -4365,6 +4439,18 @@ class _EditorWidgetState extends State<EditorWidget>
             selected: _caseLawOpen,
             key: const ValueKey('legal-case-law'),
           ),
+          if (AiAssistant.shown)
+            ribbonButton(
+              context,
+              Icons.auto_awesome_outlined,
+              'Yapay zekâ',
+              () => _toggleSide(_Side.ai),
+              selected: _aiOpen,
+              tooltip:
+                  'Yazdığınız belgeyi yapay zekâya sorun; verdiği metni '
+                  'tek tıkla belgeye ekleyin',
+              key: const ValueKey('legal-ai'),
+            ),
           ribbonButton(
             context,
             Icons.bolt_outlined,
@@ -5065,6 +5151,15 @@ class _EditorWidgetState extends State<EditorWidget>
     super.initState();
     // A decision previewed is written into this petition.
     DecisionInsert.target = _insertDecision;
+    // An editor window is a program of its own: whether the lawyer turned
+    // the AI features on is read here too.
+    if (!AppEdition.isOfis) {
+      unawaited(
+        AiSettings.load().then((_) {
+          if (mounted) setState(() {});
+        }),
+      );
+    }
     unawaited(
       SnippetStore.shared().then((store) {
         if (mounted) _snippetStore = store;
@@ -6371,6 +6466,31 @@ class _EditorWidgetState extends State<EditorWidget>
                       ),
                     ),
                   ],
+                  // The AI program, right of the page.
+                  if (_aiOpen &&
+                      AiAssistant.shown &&
+                      MediaQuery.sizeOf(context).width >= 760) ...[
+                    ResizeHandle(
+                      onDrag: (dx) => setState(
+                        () => _aiWidth = (_aiWidth - dx).clamp(340.0, 640.0),
+                      ),
+                    ),
+                    Container(
+                      width: _aiWidth,
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                      ),
+                      child: _sidePanel(
+                        context,
+                        _Side.ai,
+                        onClose: () => setState(() => _aiOpen = false),
+                      ),
+                    ),
+                  ],
                   // The case-law search on its own, right of the page.
                   if (_caseLawOpen &&
                       MediaQuery.sizeOf(context).width >= 760) ...[
@@ -6443,7 +6563,7 @@ class _DocumentController extends QuillController with EditorClipboard {
 }
 
 /// What the panel left of the page shows.
-enum _Side { uyap, caseLaw, chat }
+enum _Side { uyap, caseLaw, chat, ai }
 
 /// The kinds the editor saves in, as Farklı kaydet offers them.
 const saveFormats = [

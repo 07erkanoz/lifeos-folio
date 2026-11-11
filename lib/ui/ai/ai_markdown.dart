@@ -1,17 +1,101 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
 /// An AI program's answer as it wrote it, Markdown drawn: headings,
 /// paragraphs, bold and italic, lists, tables, quotes and code. Selectable
-/// as one text. Links are shown, not followed.
-class AiMarkdown extends StatelessWidget {
-  const AiMarkdown(this.text, {super.key, this.size = 13.5});
+/// as one text. Links are shown, not followed. What is named in [links]
+/// (a citation as it is written) is drawn as a link wherever it stands and
+/// tells where it was pressed; a fenced block whose language [block] takes
+/// (```belge) is drawn by it.
+class AiMarkdown extends StatefulWidget {
+  const AiMarkdown(
+    this.text, {
+    super.key,
+    this.size = 13.5,
+    this.links = const {},
+    this.block,
+  });
 
   final String text;
   final double size;
+  final Map<String, void Function(Offset at)> links;
+  final Widget? Function(String language, String text)? block;
+
+  @override
+  State<AiMarkdown> createState() => _AiMarkdownState();
+}
+
+class _AiMarkdownState extends State<AiMarkdown> {
+  final _taps = <TapGestureRecognizer>[];
+
+  String get text => widget.text;
+  double get size => widget.size;
+
+  void _forget() {
+    for (final t in _taps) {
+      t.dispose();
+    }
+    _taps.clear();
+  }
+
+  @override
+  void dispose() {
+    _forget();
+    super.dispose();
+  }
+
+  /// [text] with what [AiMarkdown.links] names made links.
+  InlineSpan _linked(String text, TextStyle style) {
+    final links = widget.links;
+    if (links.isEmpty || text.length < 3) return TextSpan(text: text);
+    final found = <(int, String)>[];
+    for (final key in links.keys) {
+      if (key.length < 3) continue;
+      var from = 0;
+      while (true) {
+        final at = text.indexOf(key, from);
+        if (at < 0) break;
+        found.add((at, key));
+        from = at + key.length;
+      }
+    }
+    if (found.isEmpty) return TextSpan(text: text);
+    // The earliest first, the longest of those that begin together.
+    found.sort((a, b) {
+      final c = a.$1.compareTo(b.$1);
+      return c != 0 ? c : b.$2.length.compareTo(a.$2.length);
+    });
+    final color = Theme.of(context).colorScheme.primary;
+    final spans = <InlineSpan>[];
+    var done = 0;
+    for (final (at, key) in found) {
+      if (at < done) continue;
+      if (at > done) spans.add(TextSpan(text: text.substring(done, at)));
+      final tap = TapGestureRecognizer()
+        ..onTapUp = (d) => links[key]?.call(d.globalPosition);
+      _taps.add(tap);
+      spans.add(
+        TextSpan(
+          text: key,
+          recognizer: tap,
+          mouseCursor: SystemMouseCursors.click,
+          style: TextStyle(
+            color: color,
+            decoration: TextDecoration.underline,
+            decorationColor: color.withValues(alpha: .45),
+          ),
+        ),
+      );
+      done = at + key.length;
+    }
+    if (done < text.length) spans.add(TextSpan(text: text.substring(done)));
+    return TextSpan(children: spans);
+  }
 
   @override
   Widget build(BuildContext context) {
+    _forget();
     final nodes = md.Document(
       extensionSet: md.ExtensionSet.gitHubFlavored,
       encodeHtml: false,
@@ -108,6 +192,15 @@ class AiMarkdown extends StatelessWidget {
           ),
         ];
       case 'pre':
+        final code = e.children?.whereType<md.Element>().firstOrNull;
+        final language = (code?.attributes['class'] ?? '').replaceFirst(
+          'language-',
+          '',
+        );
+        if (widget.block?.call(language, _unescape(e.textContent).trimRight())
+            case final drawn?) {
+          return [drawn];
+        }
         return [
           Container(
             margin: const EdgeInsets.symmetric(vertical: 4),
@@ -255,7 +348,7 @@ class AiMarkdown extends StatelessWidget {
   );
 
   InlineSpan _span(md.Node node, TextStyle style) {
-    if (node is md.Text) return TextSpan(text: _unescape(node.text));
+    if (node is md.Text) return _linked(_unescape(node.text), style);
     if (node is! md.Element) return const TextSpan();
     final e = node;
     switch (e.tag) {

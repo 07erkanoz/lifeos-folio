@@ -21,7 +21,9 @@ import '../../services/legal/decision.dart';
 import '../widgets/article_panel.dart';
 import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_database.dart';
+import '../../services/uyap/uyap_case_data.dart';
 import '../../services/uyap/uyap_case_store.dart';
+import '../widgets/uyap_case_picker.dart';
 import 'ai_dialogs.dart';
 
 /// Beside a document's preview: the document summarised or asked about by
@@ -41,6 +43,11 @@ class AiPanel extends StatefulWidget {
     this.onKept,
     this.embedded = false,
     this.showCase = false,
+    this.document,
+    this.documentName,
+    this.selection,
+    this.onInsert,
+    this.database = PortalDatabase.shared,
   });
 
   final String? path;
@@ -62,13 +69,39 @@ class AiPanel extends StatefulWidget {
   /// the same, with a way to take it off when the program chose wrong.
   final bool showCase;
 
+  /// Beside the editor: the document as it is written now, asked for with
+  /// every question ([path] names a file, which may be older or none yet),
+  /// and the name it is known by.
+  final String Function()? document;
+  final String? documentName;
+
+  /// What is selected in the document, sent with the question when the
+  /// lawyer leaves it ticked.
+  final String? Function()? selection;
+
+  /// Writes a text the program gave into the document, where the caret is.
+  final void Function(String text)? onInsert;
+
+  /// Folio's records, counted for what today holds.
+  final Future<PortalDatabase> Function() database;
+
   @override
   State<AiPanel> createState() => _AiPanelState();
 }
 
 class _Turn {
-  _Turn(this.question, this.by);
+  _Turn(
+    this.question,
+    this.by, {
+    this.task = AiTask.question,
+    this.tier = AiTier.strong,
+  });
   final String question;
+  final AiTask task;
+  final AiTier tier;
+
+  /// How long the answer took, once it came.
+  int? seconds;
 
   /// Who answers: the program and the tier, as the lawyer sees them.
   final String by;
@@ -91,6 +124,9 @@ class _Turn {
 
   /// The documents the question went with, by name.
   List<String> attached = const [];
+
+  /// Whether what was selected in the document went with the question.
+  bool usedSelection = false;
 
   /// What Folio did for it on the way (UYAP asked for fresh).
   final notes = <String>[];
@@ -189,6 +225,31 @@ class _AiPanelState extends State<AiPanel> {
 
   bool get _busy => _cancel != null;
 
+  /// Of a document: one previewed ([AiPanel.path]) or one being written
+  /// ([AiPanel.document]).
+  bool get _ofDocument => widget.path != null || widget.document != null;
+
+  /// The tier questions are asked at, as the lawyer chose under the box.
+  AiTier _tier = AiTier.strong;
+
+  /// Questions written while an answer was still coming: asked in turn.
+  final _queue = <String>[];
+
+  /// The allowance used, as the program last said.
+  AiQuota? _quota;
+
+  /// Whether what is selected in the document goes with the question.
+  bool _withSelection = true;
+
+  /// The case's documents the lawyer wants read before the next answer,
+  /// by key.
+  final _must = <String>{};
+
+  /// What today holds, on the page of no case: said over the box.
+  ({int today, int week, int deadlines, int notices})? _today;
+
+  final _focus = FocusNode();
+
   /// The documents the lawyer added to the conversation: sent with every
   /// question until taken off. Each made ready once a program.
   final _attached = <String>[];
@@ -239,8 +300,15 @@ class _AiPanelState extends State<AiPanel> {
           DateTime.tryParse('${chat['basladi'] ?? ''}') ?? DateTime.now();
       for (final t in AiMemory.turnsOf(chat)) {
         _turns.add(
-          _Turn('${t['soru'] ?? ''}', '${t['yazan'] ?? ''}')
+          _Turn(
+              '${t['soru'] ?? ''}',
+              '${t['yazan'] ?? ''}',
+              tier: '${t['yazan'] ?? ''}'.endsWith(AiTier.normal.label)
+                  ? AiTier.normal
+                  : AiTier.strong,
+            )
             ..answer = '${t['cevap'] ?? ''}'
+            ..seconds = (t['sure'] as num?)?.toInt()
             ..recorded = [
               for (final a in t['adimlar'] as List? ?? const []) '$a',
             ],
@@ -254,7 +322,9 @@ class _AiPanelState extends State<AiPanel> {
   @override
   void didUpdateWidget(AiPanel old) {
     super.didUpdateWidget(old);
-    if (old.path != widget.path) {
+    // A document being written keeps its conversation when it is saved
+    // under a name.
+    if (old.path != widget.path && widget.document == null) {
       _cancel?.complete();
       _cancel = null;
       _turns.clear();
@@ -287,12 +357,14 @@ class _AiPanelState extends State<AiPanel> {
     _cancel?.complete();
     _question.dispose();
     _scroll.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
     unawaited(_findCase());
     unawaited(_loadDocuments());
+    if (!_ofDocument && widget.caseRecord == null) unawaited(_loadToday());
     final settings = await AiSettings.load();
     final found = await AiAssistant.statuses();
     if (!mounted) return;
@@ -313,15 +385,18 @@ class _AiPanelState extends State<AiPanel> {
     AiProvider.antigravity => 'Google’a',
   };
 
-  Future<void> _ask(AiTask task, [String question = '']) async {
+  Future<void> _ask(AiTask task, [String question = '', AiTier? at]) async {
     final provider = _provider;
     if (provider == null || _busy) return;
     if (!await askAiConsent(context)) return;
     final settings = await AiSettings.load();
-    final model = settings.modelFor(provider, task.tier);
+    final tier = at ?? (task == AiTask.summary ? task.tier : _tier);
+    final model = settings.modelFor(provider, tier);
     final turn = _Turn(
       task == AiTask.summary ? 'Belgeyi özetle' : question.trim(),
-      '${provider.label} · ${task.tier.label}',
+      '${provider.label} · ${tier.label}',
+      task: task,
+      tier: tier,
     );
     final cancel = Completer<void>();
     setState(() {
@@ -336,9 +411,12 @@ class _AiPanelState extends State<AiPanel> {
     });
     try {
       final path = widget.path;
+      final live = widget.document;
       String? text;
-      if (path != null) {
-        text = _text ??= await AiAssistant.documentText(path);
+      if (live != null || path != null) {
+        text = live != null
+            ? live()
+            : _text ??= await AiAssistant.documentText(path!);
         if (text.trim().isEmpty) {
           throw const AiFailure(
             'Bu belgede okunabilir metin bulunamadı; gönderilecek bir şey '
@@ -374,7 +452,7 @@ class _AiPanelState extends State<AiPanel> {
           await AiAssistant.antigravityFolio() != null;
       final withCase = record != null && tools;
       // Asked of no document and no case: the program finds the case.
-      final open = path == null && record == null && tools;
+      final open = !_ofDocument && record == null && tools;
       final db = withCase || open ? await PortalDatabase.shared() : null;
       if (db != null) _chatId ??= AiMemory.id();
       // The program goes on with the conversation it had: the document,
@@ -382,22 +460,58 @@ class _AiPanelState extends State<AiPanel> {
       // again.
       final thread = _thread ??= AiThread(_chatId ?? AiMemory.id());
       final who = await AiAssistant.who();
+      // What is selected in the document, and the documents to be read.
+      var picked = _withSelection ? widget.selection?.call()?.trim() : null;
+      if (picked != null && picked.length > 8000) {
+        picked = '${picked.substring(0, 8000)}…';
+      }
+      if (picked != null && settings.mask) {
+        picked = AiAssistant.maskIdentityNumbers(picked);
+      }
+      final must = record == null
+          ? const <UyapCaseDocument>[]
+          : [
+              for (final d in _allDocuments(record))
+                if (_must.contains(d.key)) d,
+            ];
+      final notes = [
+        if (withCase)
+          // The case's memory, for the program to read first.
+          AiMemory.hint(db!.aiCounts(caseKey(record.number, record.court)))
+        else if (open)
+          'Soru avukatın bir dosyasıyla ilgiliyse dosya_ara ile dosyayı '
+              'bul; tek dosya açıkça uyuyorsa dosya_sec ile seç, birden '
+              'fazla uyuyorsa hangisi olduğunu avukata sor. Ajanda, '
+              'süre, tebligat ve bildirim soruları için Folio\'nun '
+              'ajanda, tebligatlar ve uyap_bildirimleri araçları var.',
+        if (live != null)
+          'Avukat bu belgeyi şu anda Folio editöründe yazıyor. Belgeye '
+              'girecek metni (yeni paragraf, düzeltilmiş hâl, talep sonucu) '
+              '```belge ile başlayan bir kod bloğunun içinde, düz metin '
+              'olarak ver; açıklamanı bloğun dışında yaz. Avukat bloğu tek '
+              'tıkla belgeye ekler. Belgenin tamamını yeniden yazma; yalnız '
+              'isteneni ver.',
+        if (picked != null && picked.isNotEmpty)
+          'Avukatın belgede seçtiği metin (soru öncelikle bununla ilgili):\n'
+              '<secili_metin>\n$picked\n</secili_metin>',
+        if (withCase && must.isNotEmpty)
+          'Avukat şu evrakın mutlaka okunmasını istiyor; cevaptan önce '
+              'her birini evrak_oku ile oku:\n'
+              '${[for (final d in must) '- ${d.title} (anahtar: ${d.key})'].join('\n')}',
+      ].nonNulls.toList();
+      turn.usedSelection = picked != null && picked.isNotEmpty;
       String prompt({required bool full}) => AiAssistant.prompt(
         task: task,
-        name: path == null ? null : p.basename(path),
-        text: full ? text : null,
+        name: path != null
+            ? p.basename(path)
+            : live != null
+            ? (widget.documentName ?? 'belge')
+            : null,
+        // A document being written is sent as it is now, every time.
+        text: full || live != null ? text : null,
         question: question,
         caseName: withCase ? '${record.court} ${record.number}' : null,
-        note: withCase
-            // The case's memory, for the program to read first.
-            ? AiMemory.hint(db!.aiCounts(caseKey(record.number, record.court)))
-            : open
-            ? 'Soru avukatın bir dosyasıyla ilgiliyse dosya_ara ile dosyayı '
-                  'bul; tek dosya açıkça uyuyorsa dosya_sec ile seç, birden '
-                  'fazla uyuyorsa hangisi olduğunu avukata sor. Ajanda, '
-                  'süre, tebligat ve bildirim soruları için Folio\'nun '
-                  'ajanda, tebligatlar ve uyap_bildirimleri araçları var.'
-            : null,
+        note: notes.isEmpty ? null : notes.join('\n\n'),
         attached: AiAttachment.block([
           for (final a in attachments)
             if (full || !_given.contains('${provider.name}|${a.name}')) a,
@@ -422,7 +536,7 @@ class _AiPanelState extends State<AiPanel> {
           provider,
           prompt(full: full),
           model: model,
-          tier: task.tier,
+          tier: tier,
           caseSession: session,
           attachments: [
             for (final a in attachments)
@@ -452,6 +566,8 @@ class _AiPanelState extends State<AiPanel> {
           _given.add('${provider.name}|${a.name}');
         }
         turn.answer = answer;
+        turn.seconds = DateTime.now().difference(turn.started).inSeconds;
+        if (withCase) _must.clear();
         unawaited(_read(turn));
         unawaited(_check(turn, answer));
         if (db != null) {
@@ -480,8 +596,144 @@ class _AiPanelState extends State<AiPanel> {
           if (identical(_cancel, cancel)) _cancel = null;
         });
         _toEnd();
+        // What was written meanwhile, asked next.
+        if (!cancel.isCompleted && !_busy && _queue.isNotEmpty) {
+          final next = _queue.removeAt(0);
+          unawaited(_ask(AiTask.question, next));
+        }
       }
     }
+  }
+
+  /// Stops the answer coming; what waited to be asked goes back to the
+  /// box rather than being asked of a conversation the lawyer broke off.
+  void _stop() {
+    _cancel?.complete();
+    if (_queue.isEmpty) return;
+    setState(() {
+      _question.text = [
+        ..._queue,
+        if (_question.text.trim().isNotEmpty) _question.text.trim(),
+      ].join('\n');
+      _queue.clear();
+    });
+  }
+
+  static List<UyapCaseDocument> _allDocuments(UyapCaseRecord record) => [
+    for (final d in record.documents) ...[d, ...d.attachments],
+  ];
+
+  /// What today and the week hold, counted from Folio's own records.
+  Future<void> _loadToday() async {
+    try {
+      final db = await widget.database();
+      final now = DateTime.now();
+      final day = DateTime(now.year, now.month, now.day);
+      final week = day.add(const Duration(days: 7));
+      String iso(DateTime d) => d.toIso8601String().substring(0, 10);
+      final found = (
+        today: db
+            .hearings(from: day, to: day.add(const Duration(days: 1)))
+            .length,
+        week: db.hearings(from: day, to: week).length,
+        deadlines: [
+          for (final d in db.deadlines())
+            if (d.record.dueDay case final due?
+                when due.compareTo(iso(day)) >= 0 &&
+                    due.compareTo(iso(week)) <= 0)
+              d,
+        ].length,
+        notices: db.notices().where((n) => !n.seen).length,
+      );
+      if (mounted) setState(() => _today = found);
+    } catch (_) {}
+  }
+
+  /// A case chosen for a conversation of none.
+  Future<void> _pickCase() async {
+    final chosen = await UyapCasePicker.show(context, offerKept: true);
+    if (chosen == null || !mounted) return;
+    final link = chosen.$1;
+    final record =
+        await UyapCaseStore.instance.load(link.court, link.number) ??
+        UyapCaseRecord(
+          court: link.court,
+          number: link.number,
+          fetchedAt: DateTime.now(),
+        );
+    if (mounted) setState(() => _case = record);
+  }
+
+  /// The case's documents, for the lawyer to tick those that must be read.
+  Future<void> _pickMust() async {
+    final record = _case;
+    if (record == null) return;
+    final all = _allDocuments(record);
+    final chosen = {..._must};
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, set) => AlertDialog(
+          title: const Text('Mutlaka okunacak evrak'),
+          contentPadding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+          content: SizedBox(
+            width: 460,
+            height: 420,
+            child: all.isEmpty
+                ? const Center(child: Text('Bu dosyada evrak yok.'))
+                : ListView(
+                    children: [
+                      for (final d in all)
+                        CheckboxListTile(
+                          key: ValueKey('ai-must-${d.key}'),
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value: chosen.contains(d.key),
+                          onChanged: (v) => set(
+                            () => v == true
+                                ? chosen.add(d.key)
+                                : chosen.remove(d.key),
+                          ),
+                          title: Text(
+                            d.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            [
+                              if (d.date case final at?)
+                                '${at.day.toString().padLeft(2, '0')}.'
+                                    '${at.month.toString().padLeft(2, '0')}.'
+                                    '${at.year}',
+                              if (d.sender.isNotEmpty) d.sender,
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              key: const ValueKey('ai-must-ok'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Tamam'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(
+      () => _must
+        ..clear()
+        ..addAll(chosen),
+    );
   }
 
   /// The case the program chose in [session] (dosya_sec), taken as the
@@ -521,8 +773,11 @@ class _AiPanelState extends State<AiPanel> {
             if (t.steps.isNotEmpty)
               'adimlar': [
                 for (final s in t.steps.values)
-                  AiStep(s.id, s.tool, args: s.args, done: true).label,
-              ],
+                  _labelOf(AiStep(s.id, s.tool, args: s.args, done: true)),
+              ]
+            else if (t.recorded.isNotEmpty)
+              'adimlar': t.recorded,
+            'sure': ?t.seconds,
             'zaman': DateTime.now().toIso8601String(),
           },
     ];
@@ -537,7 +792,9 @@ class _AiPanelState extends State<AiPanel> {
         AiMemory.chatRecord(
           // A name the lawyer gave it stays.
           title: '${db.aiRecord(id)?['baslik'] ?? _turns.first.question}',
-          document: widget.path == null ? '' : p.basename(widget.path!),
+          document: widget.path == null
+              ? (widget.documentName ?? '')
+              : p.basename(widget.path!),
           started: _chatStarted,
           turns: turns,
           court: kase?.court,
@@ -839,62 +1096,507 @@ class _AiPanelState extends State<AiPanel> {
     );
   }
 
-  /// What an empty conversation shows: what may be asked, and a few
-  /// questions to start with.
+  /// What an empty conversation shows: what may be done, as cards (one
+  /// press asks, or writes the start of a question for the lawyer to end),
+  /// and on the page of no case what today holds.
   Widget _empty(ColorScheme scheme) {
-    final home = widget.path == null && _case == null;
-    final ideas = widget.path != null
+    final home = !_ofDocument && _case == null;
+    final List<_Idea> ideas = widget.document != null
+        ? _editorIdeas
+        : widget.path != null
         ? const [
-            'Bu belgeyi özetle',
-            'Bu belgede süre doğuran bir şey var mı?',
-            'Bu belgeye karşı ne yapmalıyım?',
+            _Idea(
+              Icons.subject_rounded,
+              'Belgeyi özetle',
+              'Türü, özeti, önemli noktaları ve yapılacaklar',
+              'Bu belgeyi özetle',
+            ),
+            _Idea(
+              Icons.hourglass_bottom_rounded,
+              'Süre doğuruyor mu?',
+              'Belgede yazan süreler ve başlangıçları',
+              'Bu belgede süre doğuran bir şey var mı?',
+            ),
+            _Idea(
+              Icons.reply_rounded,
+              'Buna karşı ne yapmalıyım?',
+              'Yapılabilecek başvurular ve dayanakları',
+              'Bu belgeye karşı ne yapmalıyım?',
+            ),
+            _Idea(
+              Icons.fact_check_outlined,
+              'Atıfları denetle',
+              'Dayanılan madde ve kararlar yerinde mi?',
+              'Bu belgede dayanılan kanun maddeleri ve kararlar doğru mu? '
+                  'Yanlış ya da yürürlükte olmayanı göster.',
+            ),
           ]
         : home
         ? const [
-            'Bu hafta duruşmalarım neler?',
-            'Yeni tebligat var mı, süreleri ne?',
-            'Son günü yaklaşan süreler',
-            'UYAP’ta yeni bildirim var mı?',
+            _Idea(
+              Icons.event_outlined,
+              'Bu haftaki duruşmalar',
+              'Tarihleri ve dosyalarıyla sıralar',
+              'Bu hafta duruşmalarım neler?',
+            ),
+            _Idea(
+              Icons.mark_email_unread_outlined,
+              'Yeni tebligatlar',
+              'Gelenler ve başlattıkları süreler',
+              'Yeni tebligat var mı, süreleri ne?',
+            ),
+            _Idea(
+              Icons.hourglass_bottom_rounded,
+              'Yaklaşan süreler',
+              'Son günü yaklaşan işler',
+              'Son günü yaklaşan süreler',
+            ),
+            _Idea(
+              Icons.notifications_none_rounded,
+              'UYAP bildirimleri',
+              'Dosyalardaki yeni hareketler',
+              'UYAP’ta yeni bildirim var mı?',
+            ),
+            _Idea(
+              Icons.folder_open_outlined,
+              'Bir dosyayı sor',
+              'Esas numarasını ya da tarafın adını yazın',
+              'Şu dosyanın durumu ne: ',
+              fill: true,
+            ),
+            _Idea(
+              Icons.edit_note_rounded,
+              'Dilekçe yazdır',
+              'Dosyayı ve dilekçenin türünü yazın',
+              'Şu dosya için dilekçe yaz: ',
+              fill: true,
+            ),
+            _Idea(
+              Icons.balance_outlined,
+              'Emsal karar ara',
+              'Konuyu yazın, kararları künyesiyle bulur',
+              'Şu konuda Yargıtay kararı bul: ',
+              fill: true,
+            ),
           ]
         : const [
-            'Dosyanın durumu ne?',
-            'Son gelen evrakı özetle',
-            'Dosyada eksik ne var, ne yapmalıyım?',
+            _Idea(
+              Icons.dashboard_outlined,
+              'Dosyanın durumu',
+              'Safahat, son işlemler ve bekleyen işler',
+              'Dosyanın durumu ne?',
+            ),
+            _Idea(
+              Icons.mark_email_unread_outlined,
+              'Son gelen evrak',
+              'En yeni evrakın özeti ve doğurduğu iş',
+              'Son gelen evrakı özetle',
+            ),
+            _Idea(
+              Icons.checklist_rounded,
+              'Eksikler ve yapılacaklar',
+              'Dosyada eksik kalan ve sıradaki adımlar',
+              'Dosyada eksik ne var, ne yapmalıyım?',
+            ),
+            _Idea(
+              Icons.groups_2_outlined,
+              'Karşı tarafın iddiaları',
+              'Dayandığı deliller ve zayıf noktaları',
+              'Karşı tarafın iddiaları ve dayandığı deliller neler? Zayıf '
+                  'noktalarını göster.',
+            ),
+            _Idea(
+              Icons.event_outlined,
+              'Duruşmaya hazırlık',
+              'Bir sonraki duruşma için yapılacaklar',
+              'Bir sonraki duruşma için ne hazırlamalıyım?',
+            ),
+            _Idea(
+              Icons.balance_outlined,
+              'Emsal karar bul',
+              'Uyuşmazlığa uygun Yargıtay kararları',
+              'Bu dosyadaki uyuşmazlığa uygun Yargıtay kararları bul.',
+            ),
+            _Idea(
+              Icons.edit_note_rounded,
+              'Dilekçe yazdır',
+              'Dilekçenin türünü yazın',
+              'Bu dosya için şu dilekçeyi yaz: ',
+              fill: true,
+            ),
           ];
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Text(
-          home
-              ? 'Sorunuzu aşağıya yazın. Bir dosyayla ilgiliyse dosyayı esas '
-                    'numarasıyla, mahkemesiyle ya da bir tarafın adıyla anmanız '
-                    'yeter; yapay zekâ dosyayı kendisi bulur. Ajandanızı, '
-                    'tebligatlarınızı ve dosyalarınızı da bilir.'
-              : widget.path == null
-              ? 'Dosyayla ilgili sorunuzu aşağıya yazın. Yapay zekâ dosyanın '
-                    'bilgilerine, evrakına ve hafızasına Folio’nun araçlarıyla '
-                    'bakar.'
-              : 'Belgeyi özetletebilir ya da aşağıya belgeyle ilgili bir soru '
-                    'yazabilirsiniz. Bir şey göndermeden önce size sorulur.',
-          style: TextStyle(color: scheme.onSurfaceVariant, height: 1.45),
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final idea in ideas)
-              ActionChip(
-                key: ValueKey('ai-idea-$idea'),
-                label: Text(idea),
-                onPressed: _provider == null || _busy
-                    ? null
-                    : () => unawaited(_ask(AiTask.question, idea)),
-              ),
-          ],
-        ),
+    final today = _today;
+    final rows = <(IconData, String, String)>[
+      if (today != null && home) ...[
+        if (today.today > 0)
+          (
+            Icons.gavel_rounded,
+            'Bugün ${today.today} duruşmanız var',
+            'Bugünkü duruşmalarım neler, her biri için ne hazırlamalıyım?',
+          )
+        else if (today.week > 0)
+          (
+            Icons.event_outlined,
+            'Bu hafta ${today.week} duruşmanız var',
+            'Bu hafta duruşmalarım neler?',
+          ),
+        if (today.deadlines > 0)
+          (
+            Icons.hourglass_bottom_rounded,
+            '7 gün içinde son günü gelen ${today.deadlines} süre var',
+            'Önümüzdeki 7 günde son günü gelen süreler hangileri?',
+          ),
+        if (today.notices > 0)
+          (
+            Icons.mark_email_unread_outlined,
+            'Okunmamış ${today.notices} tebligat var',
+            'Okunmamış tebligatlarım neler, hangi süreleri başlatıyor?',
+          ),
       ],
+    ];
+    final can = _provider != null && !_busy;
+    return LayoutBuilder(
+      builder: (context, box) {
+        final columns = box.maxWidth >= 860
+            ? 3
+            : box.maxWidth >= 520
+            ? 2
+            : 1;
+        final wide = columns > 1;
+        final room = (box.maxWidth - 32).clamp(0.0, 900.0);
+        final width = wide
+            ? ((room - (columns - 1) * 10) / columns).floorToDouble()
+            : box.maxWidth - 28;
+        return ListView(
+          padding: EdgeInsets.fromLTRB(
+            wide ? 16 : 14,
+            wide ? 22 : 14,
+            wide ? 16 : 14,
+            12,
+          ),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 900),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.document != null
+                          ? 'Yazdığınız belgeyle ilgili ne yapalım?'
+                          : widget.path != null
+                          ? 'Bu belgeyle ilgili ne yapalım?'
+                          : home
+                          ? 'Bugün ne yapalım?'
+                          : 'Bu dosyada ne yapalım?',
+                      key: const ValueKey('ai-empty-title'),
+                      style: TextStyle(
+                        fontSize: wide ? 20 : 15.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.document != null
+                          ? 'Bir metni seçip sorarsanız cevap o metinle ilgili '
+                                'olur. Belgeye girecek metin ayrı bir kutuda '
+                                'gelir ve tek tıkla imlecin olduğu yere eklenir.'
+                          : widget.path != null
+                          ? 'Belgenin metni, siz bir şey sorduğunuzda '
+                                'gönderilir.'
+                          : home
+                          ? 'Dosyayı esas numarasıyla, mahkemesiyle ya da bir '
+                                'tarafın adıyla anmanız yeter; yapay zekâ '
+                                'dosyayı kendisi bulur. Ajandanızı ve '
+                                'tebligatlarınızı da bilir.'
+                          : 'Yapay zekâ dosyanın bilgilerine, evrakına ve '
+                                'hafızasına Folio’nun araçlarıyla bakar.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: scheme.onSurfaceVariant,
+                        height: 1.45,
+                      ),
+                    ),
+                    if (rows.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        key: const ValueKey('ai-today'),
+                        decoration: BoxDecoration(
+                          color: scheme.primary.withValues(alpha: .06),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(
+                          children: [
+                            for (final (icon, said, ask) in rows)
+                              InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: can
+                                    ? () =>
+                                          unawaited(_ask(AiTask.question, ask))
+                                    : null,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        icon,
+                                        size: 17,
+                                        color: scheme.primary,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          said,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        'Sor',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: scheme.primary,
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        size: 18,
+                                        color: scheme.primary,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: wide ? 10 : 6,
+                      children: [
+                        for (final idea in ideas)
+                          SizedBox(
+                            width: width,
+                            child: _ideaCard(idea, scheme, can, wide),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
+  }
+
+  static const _editorIdeas = [
+    _Idea(
+      Icons.fact_check_outlined,
+      'Bu doğru mu?',
+      'Dayanakları ve anlatımı denetler',
+      'Seçili metindeki (seçim yoksa belgedeki) hukuki dayanaklar ve '
+          'anlatım doğru mu? Yanlış ya da eksik olanı göster.',
+    ),
+    _Idea(
+      Icons.balance_outlined,
+      'Karar bul',
+      'İddiayı destekleyen Yargıtay kararı',
+      'Seçili metindeki (seçim yoksa belgedeki) iddiayı destekleyen '
+          'Yargıtay kararı bul; künyesini ve ilgili kısmını ver.',
+    ),
+    _Idea(
+      Icons.gavel_outlined,
+      'Kanun maddesi',
+      'Dayanılması gereken maddeler',
+      'Burada dayanılması gereken kanun maddelerini bul ve metinlerini '
+          'göster.',
+    ),
+    _Idea(
+      Icons.checklist_rounded,
+      'Eksik ne var?',
+      'Eksik talep, olgu, delil ya da dayanak',
+      'Bu belgede eksik kalan talep, olgu, delil ya da dayanak var mı?',
+    ),
+    _Idea(
+      Icons.auto_fix_high_outlined,
+      'Daha iyi yaz',
+      'Seçili metni açık ve resmî dille yeniden yazar',
+      'Seçili metni anlamını değiştirmeden daha açık ve resmî bir dille '
+          'yeniden yaz.',
+    ),
+    _Idea(
+      Icons.short_text_rounded,
+      'Devamını yaz',
+      'Belgenin sıradaki paragrafını önerir',
+      'Belgenin geldiği yerden devam eden bir sonraki paragrafı yaz.',
+    ),
+  ];
+
+  /// [idea] asked at once, or written into the box for the lawyer to end.
+  void _take(_Idea idea) {
+    if (idea.fill) {
+      _question.value = TextEditingValue(
+        text: idea.ask,
+        selection: TextSelection.collapsed(offset: idea.ask.length),
+      );
+      _focus.requestFocus();
+      return;
+    }
+    unawaited(
+      _ask(
+        idea.ask == 'Bu belgeyi özetle' ? AiTask.summary : AiTask.question,
+        idea.ask,
+      ),
+    );
+  }
+
+  Widget _ideaCard(_Idea idea, ColorScheme scheme, bool can, bool wide) =>
+      Material(
+        color: scheme.surface,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          key: ValueKey('ai-idea-${idea.ask}'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: can || idea.fill ? () => _take(idea) : null,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, wide ? 12 : 8, 10, wide ? 12 : 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: .09),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(idea.icon, size: 17, color: scheme.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        idea.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        idea.detail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (idea.fill)
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 14,
+                    color: scheme.onSurfaceVariant,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  /// The step as the lawyer reads it; a document read named by its title.
+  String _labelOf(AiStep s) {
+    if (s.tool == 'evrak_oku') {
+      final key = '${s.args['anahtar'] ?? ''}';
+      final title = _case == null
+          ? null
+          : _allDocuments(_case!).where((d) => d.key == key).firstOrNull?.title;
+      if (title != null) {
+        return '${s.done ? 'Evrak okundu' : 'Evrak okunuyor'} · $title';
+      }
+    }
+    return s.label;
+  }
+
+  /// What [steps] looked at, counted by kind: "3 mevzuat · 2 karar".
+  static String _counted(Iterable<AiStep> steps) {
+    final counts = <String, int>{};
+    for (final s in steps) {
+      final kind = s is _Told
+          ? switch (s.said) {
+              final l when l.startsWith('Kanun') => 'mevzuat',
+              final l when l.startsWith('Karar') => 'karar',
+              final l when l.startsWith('Evrak okun') => 'evrak',
+              _ => '',
+            }
+          : s.kind;
+      if (kind.isEmpty || kind == 'dosya' || kind == 'ajanda') continue;
+      counts[kind] = (counts[kind] ?? 0) + 1;
+    }
+    return [
+      for (final k in const ['evrak', 'mevzuat', 'karar'])
+        if (counts[k] case final n?) '$n $k',
+    ].join(' · ');
+  }
+
+  /// Whether what [s] read can be opened by pressing it.
+  bool _opens(AiStep s) {
+    final label = _labelOf(s);
+    if (!label.contains(' · ')) return false;
+    if (s is _Told) {
+      return label.startsWith('Kanun maddesi oku') ||
+          label.startsWith('Kararın metni oku');
+    }
+    return s.tool == 'mevzuat_madde' ||
+        s.tool == 'karar_getir' ||
+        (s.tool == 'evrak_oku' && widget.onOpen != null);
+  }
+
+  /// What [s] read, opened: the article or decision over the page as the
+  /// editor shows it, a document of the case in Folio.
+  Future<void> _openStep(AiStep s, Offset at) async {
+    if (s.tool == 'evrak_oku') {
+      final record = _case;
+      final file = record == null
+          ? null
+          : UyapCaseStore.instance.fileOf(record, '${s.args['anahtar']}');
+      if (file == null) {
+        _say('Bu evrak bu bilgisayarda bulunamadı.');
+      } else {
+        widget.onOpen?.call(file.path);
+      }
+      return;
+    }
+    final label = _labelOf(s);
+    final what = label.substring(label.indexOf(' · ') + 3);
+    try {
+      final (articles, decisions) = await _mcp.citationsIn(what);
+      if (!mounted) return;
+      if (articles.firstOrNull ?? decisions.firstOrNull case final found?) {
+        _openSource(found, at);
+        return;
+      }
+    } catch (_) {}
+    _say('Bu adımın okuduğu metin buradan açılamadı.');
   }
 
   /// One question and its answer, with what the program did on the way.
@@ -925,9 +1627,33 @@ class _AiPanelState extends State<AiPanel> {
             child: Text('Ekler: ${t.attached.join(', ')}', style: muted),
           ),
         ),
+      if (t.usedSelection)
+        Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text('Seçili metinle soruldu', style: muted),
+          ),
+        ),
       Padding(
         padding: const EdgeInsets.only(top: 6, bottom: 2),
-        child: Text(t.by, style: muted),
+        child: Text(
+          [
+            t.by,
+            // What the answer took, said once it came.
+            if (t.answer != null) ...[
+              if (t.steps.length + t.recorded.length case final n when n > 0)
+                '$n adım',
+              if (t.requests.where((r) => r.outcome == 'İndirildi').length
+                  case final n when n > 0)
+                '$n evrak indirildi',
+              if (t.seconds case final s? when s > 0)
+                s >= 60 ? '${s ~/ 60} dk ${s % 60} sn' : '$s sn',
+            ],
+          ].join(' · '),
+          key: ValueKey('ai-by-${identityHashCode(t)}'),
+          style: muted,
+        ),
       ),
       for (final n in t.notes)
         Padding(
@@ -954,21 +1680,82 @@ class _AiPanelState extends State<AiPanel> {
           t.requests.isNotEmpty)
         _trace(t, scheme),
       if (t.answer case final a?) ...[
-        AiMarkdown(a),
-        Row(
-          children: [
-            TextButton.icon(
-              key: ValueKey('ai-copy-${identityHashCode(t)}'),
-              onPressed: () {
-                unawaited(Clipboard.setData(ClipboardData(text: a)));
-                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                  const SnackBar(content: Text('Yanıt kopyalandı.')),
-                );
-              },
-              icon: const Icon(Icons.copy_rounded, size: 15),
-              label: const Text('Kopyala'),
-            ),
-          ],
+        AiMarkdown(
+          a,
+          links: {
+            for (final source in t.sources)
+              if (_writtenOf(a, source) case final w when w.isNotEmpty)
+                w: (at) => _openSource(source, at),
+          },
+          block: (language, text) => _belge(language, text, scheme),
+        ),
+        TextButtonTheme(
+          data: _quiet,
+          child: Wrap(
+            spacing: 2,
+            children: [
+              TextButton.icon(
+                key: ValueKey('ai-copy-${identityHashCode(t)}'),
+                onPressed: () {
+                  unawaited(Clipboard.setData(ClipboardData(text: a)));
+                  _say('Yanıt kopyalandı.');
+                },
+                icon: const Icon(Icons.copy_rounded, size: 15),
+                label: const Text('Kopyala'),
+              ),
+              // An answer with a text for the document has its button
+              // on that text; the whole answer is not offered beside it.
+              if (widget.onInsert case final insert?
+                  when !a.contains('```belge'))
+                TextButton.icon(
+                  key: ValueKey('ai-insert-${identityHashCode(t)}'),
+                  onPressed: () => insert(AiAssistant.plain(a).trim()),
+                  icon: const Icon(Icons.playlist_add_rounded, size: 16),
+                  label: const Text('Belgeye ekle'),
+                )
+              else if (widget.onInsert == null &&
+                  widget.onOpen != null &&
+                  a.length > 400)
+                TextButton.icon(
+                  key: ValueKey('ai-make-${identityHashCode(t)}'),
+                  onPressed: () {
+                    final title = t.question.length > 60
+                        ? '${t.question.substring(0, 60)}…'
+                        : t.question;
+                    setState(
+                      () => _wrote(t, {
+                        'baslik': title,
+                        'metin': AiAssistant.plain(a).trim(),
+                      }),
+                    );
+                    unawaited(_openDoc(t.documents.last));
+                  },
+                  icon: const Icon(Icons.note_add_outlined, size: 16),
+                  label: const Text('Belge olarak aç'),
+                ),
+              if (t == _turns.last) ...[
+                TextButton.icon(
+                  key: ValueKey('ai-again-${identityHashCode(t)}'),
+                  onPressed: _busy
+                      ? null
+                      : () => unawaited(_ask(t.task, t.question, t.tier)),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Yeniden sor'),
+                ),
+                if (t.tier == AiTier.normal)
+                  TextButton.icon(
+                    key: ValueKey('ai-stronger-${identityHashCode(t)}'),
+                    onPressed: _busy
+                        ? null
+                        : () => unawaited(
+                            _ask(t.task, t.question, AiTier.strong),
+                          ),
+                    icon: const Icon(Icons.bolt_rounded, size: 16),
+                    label: const Text('Güçlü modelle tekrarla'),
+                  ),
+              ],
+            ],
+          ),
         ),
         _sourcesOf(t, scheme),
       ] else if (t.error case final e?)
@@ -979,7 +1766,11 @@ class _AiPanelState extends State<AiPanel> {
         )
       else if (running) ...[
         _status(t, scheme),
-        if (t.live.isNotEmpty) AiMarkdown(t.live.toString()),
+        if (t.live.isNotEmpty)
+          AiMarkdown(
+            t.live.toString(),
+            block: (language, text) => _belge(language, text, scheme),
+          ),
       ],
       for (final o in t.offers) _offer(t, o, scheme),
       // In the narrow panel beside a document, with the answer; on the
@@ -1009,7 +1800,7 @@ class _AiPanelState extends State<AiPanel> {
     final label = fetching != null
         ? 'Evrak UYAP’tan indiriliyor · ${fetching.title}'
         : open != null
-        ? open.label
+        ? _labelOf(open)
         : t.live.isNotEmpty
         ? 'Yazıyor'
         : t.steps.isEmpty
@@ -1041,7 +1832,8 @@ class _AiPanelState extends State<AiPanel> {
   /// among it: folded, one line, unless the lawyer opens it; the line
   /// under it says what it is doing now.
   Widget _trace(_Turn t, ColorScheme scheme) {
-    final open = t.traceOpen ?? false;
+    // Open while it works, folded once the answer came.
+    final open = t.traceOpen ?? (t.answer == null && t.error == null);
     final downloaded = t.requests.where((r) => r.outcome == 'İndirildi').length;
     final steps = t.steps.isNotEmpty
         ? t.steps.values.toList()
@@ -1077,6 +1869,7 @@ class _AiPanelState extends State<AiPanel> {
                         steps.isEmpty
                             ? 'Düşünme'
                             : 'Yapılan incelemeler (${steps.length})',
+                        if (_counted(steps) case final c when c.isNotEmpty) c,
                         if (downloaded > 0)
                           '$downloaded evrak UYAP’tan indirildi',
                       ].join(' · '),
@@ -1112,7 +1905,29 @@ class _AiPanelState extends State<AiPanel> {
                                   ),
                                 ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(s.label, style: small)),
+                          Expanded(
+                            child: _opens(s)
+                                ? Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: InkWell(
+                                      key: ValueKey('ai-step-${s.id}'),
+                                      onTapUp: (d) => unawaited(
+                                        _openStep(s, d.globalPosition),
+                                      ),
+                                      onTap: () {},
+                                      child: Text(
+                                        _labelOf(s),
+                                        style: small.copyWith(
+                                          color: scheme.primary,
+                                          decoration: TextDecoration.underline,
+                                          decorationColor: scheme.primary
+                                              .withValues(alpha: .4),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : Text(_labelOf(s), style: small),
+                          ),
                         ],
                       ),
                     ),
@@ -1152,6 +1967,8 @@ class _AiPanelState extends State<AiPanel> {
         );
       case AiThought(:final text):
         turn.thought.write(text);
+      case AiQuota():
+        _quota = e;
       case AiWriting(:final text, :final restart):
         if (restart) {
           // What it said before calling a tool was a remark on the way.
@@ -1456,6 +2273,94 @@ class _AiPanelState extends State<AiPanel> {
       ? text.substring(start, start + length)
       : '';
 
+  static String _writtenOf(String answer, Object source) => switch (source) {
+    final Citation c => _written(answer, c.start, c.length),
+    final DecisionCitation c => _written(answer, c.start, c.length),
+    _ => '',
+  };
+
+  /// A text the program wrote for the document (a ```belge block): in a
+  /// card of its own, written into the document with one press.
+  Widget? _belge(String language, String text, ColorScheme scheme) {
+    if (language != 'belge') return null;
+    return Container(
+      key: ValueKey('ai-belge-${text.hashCode}'),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: .04),
+        border: Border.all(color: scheme.primary.withValues(alpha: .35)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.description_outlined,
+                  size: 15,
+                  color: scheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Belge için metin',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13, height: 1.5),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 2),
+            child: TextButtonTheme(
+              data: _quiet,
+              child: Row(
+                children: [
+                  if (widget.onInsert case final insert?)
+                    TextButton.icon(
+                      key: ValueKey('ai-belge-insert-${text.hashCode}'),
+                      onPressed: () => insert(text),
+                      icon: const Icon(Icons.playlist_add_rounded, size: 16),
+                      label: const Text('Belgeye ekle'),
+                    ),
+                  TextButton.icon(
+                    onPressed: () {
+                      unawaited(Clipboard.setData(ClipboardData(text: text)));
+                      _say('Metin kopyalandı.');
+                    },
+                    icon: const Icon(Icons.copy_rounded, size: 15),
+                    label: const Text('Kopyala'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What may be done with an answer: said small, under it.
+  static final _quiet = TextButtonThemeData(
+    style: TextButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+    ),
+  );
+
   /// What the answer rests on, under it: each article and decision it
   /// cites, opened in full from the official source as in the editor;
   /// marked as Folio found it there once it has looked.
@@ -1610,6 +2515,12 @@ class _AiPanelState extends State<AiPanel> {
   void _send() {
     final q = _question.text.trim();
     if (q.isEmpty) return;
+    if (_busy) {
+      // Asked when the answer coming is done.
+      setState(() => _queue.add(q));
+      _question.clear();
+      return;
+    }
     unawaited(_ask(AiTask.question, q));
   }
 
@@ -1639,6 +2550,7 @@ class _AiPanelState extends State<AiPanel> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (!widget.embedded ||
+                  widget.onClose != null ||
                   usable.length > 1 ||
                   (!_documentsOpen &&
                       (_documents.isNotEmpty || _attached.isNotEmpty)))
@@ -1647,7 +2559,7 @@ class _AiPanelState extends State<AiPanel> {
                   child: Row(
                     children: [
                       // On the Yapay zekâ page the page says it already.
-                      if (widget.embedded)
+                      if (widget.embedded && widget.document == null)
                         const Spacer()
                       else ...[
                         Icon(
@@ -1726,7 +2638,7 @@ class _AiPanelState extends State<AiPanel> {
                       ),
                       // Of no document: the case was chosen, and may be
                       // taken off; the conversation goes on of none.
-                      if (widget.path == null && widget.showCase)
+                      if (!_ofDocument && widget.showCase)
                         TextButton(
                           key: const ValueKey('ai-case-off'),
                           onPressed: _busy
@@ -1759,19 +2671,6 @@ class _AiPanelState extends State<AiPanel> {
                   ),
                 )
               else ...[
-                if (widget.path != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: FilledButton.icon(
-                        key: const ValueKey('ai-summary'),
-                        onPressed: _busy ? null : () => _ask(AiTask.summary),
-                        icon: const Icon(Icons.subject_rounded, size: 18),
-                        label: const Text('Özetle'),
-                      ),
-                    ),
-                  ),
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1781,18 +2680,26 @@ class _AiPanelState extends State<AiPanel> {
                             ? _empty(scheme)
                             : NotificationListener<ScrollNotification>(
                                 onNotification: _onScroll,
-                                child: ListView(
-                                  controller: _scroll,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    14,
-                                    8,
-                                    14,
-                                    8,
-                                  ),
-                                  children: [
-                                    for (final t in _turns)
-                                      ..._turnView(t, scheme),
-                                  ],
+                                child: LayoutBuilder(
+                                  // The lines kept to a width read with
+                                  // ease on a wide page.
+                                  builder: (context, room) {
+                                    final side = ((room.maxWidth - 900) / 2)
+                                        .clamp(14.0, double.infinity);
+                                    return ListView(
+                                      controller: _scroll,
+                                      padding: EdgeInsets.fromLTRB(
+                                        side,
+                                        8,
+                                        side,
+                                        8,
+                                      ),
+                                      children: [
+                                        for (final t in _turns)
+                                          ..._turnView(t, scheme),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
                       ),
@@ -1807,7 +2714,7 @@ class _AiPanelState extends State<AiPanel> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
                     child: Text(
-                      '${widget.path == null
+                      '${!_ofDocument
                           ? 'Sorunuz ve yapay zekânın okuduğu dosya bilgileri'
                           : _case == null
                           ? 'Bu belgenin metni'
@@ -1821,19 +2728,112 @@ class _AiPanelState extends State<AiPanel> {
                       ),
                     ),
                   ),
-                if (_attached.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                _composer(scheme),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Under the conversation: what goes with the question (documents added,
+  /// what is selected, the documents to be read), the questions waiting,
+  /// the box itself, and under it what is added, the tier and sending.
+  Widget _composer(ColorScheme scheme) {
+    final small = TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant);
+    final record = _case;
+    final canPickCase =
+        !_ofDocument && record == null && widget.caseRecord == null;
+    final canMust = record != null && record.documents.isNotEmpty;
+    final quota = _quota;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Beside the editor: the questions asked most, one press.
+              if (widget.document != null && _turns.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                        Wrap(
+                        for (final idea in _editorIdeas)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ActionChip(
+                              key: ValueKey('ai-quick-${idea.title}'),
+                              visualDensity: VisualDensity.compact,
+                              label: Text(
+                                idea.title,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              onPressed: _provider == null || _busy
+                                  ? null
+                                  : () => _take(idea),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              for (final (i, q) in _queue.indexed)
+                Padding(
+                  key: ValueKey('ai-queued-$i'),
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 14,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Sırada: $q',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: small,
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () => setState(() => _queue.removeAt(i)),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 15,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Container(
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_attached.isNotEmpty || _must.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
+                        child: Wrap(
                           spacing: 6,
                           runSpacing: 6,
                           children: [
                             for (final path in _attached)
                               InputChip(
                                 key: ValueKey('ai-attached-$path'),
+                                visualDensity: VisualDensity.compact,
                                 avatar: const Icon(
                                   Icons.description_outlined,
                                   size: 16,
@@ -1848,94 +2848,301 @@ class _AiPanelState extends State<AiPanel> {
                                         () => _attached.remove(path),
                                       ),
                               ),
+                            if (_must.isNotEmpty)
+                              InputChip(
+                                key: const ValueKey('ai-must'),
+                                visualDensity: VisualDensity.compact,
+                                avatar: Icon(
+                                  Icons.star_rounded,
+                                  size: 16,
+                                  color: scheme.primary,
+                                ),
+                                label: Text(
+                                  '${_must.length} evrak mutlaka okunacak',
+                                ),
+                                onPressed: () => unawaited(_pickMust()),
+                                onDeleted: () => setState(_must.clear),
+                              ),
                           ],
                         ),
-                        if (_sendsPictures)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              'Taranmış belge ve resimler görüntü olarak gider; '
-                              'içlerindeki kimlik numaraları gizlenemez.',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                color: scheme.onSurfaceVariant,
+                      ),
+                    if (_sendsPictures)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                        child: Text(
+                          'Taranmış belge ve resimler görüntü olarak gider; '
+                          'içlerindeki kimlik numaraları gizlenemez.',
+                          style: small,
+                        ),
+                      ),
+                    if (widget.selection != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
+                          child: Tooltip(
+                            message:
+                                'Belgede seçtiğiniz metin soruyla birlikte '
+                                'gider; cevap o metinle ilgili olur.',
+                            child: InkWell(
+                              key: const ValueKey('ai-selection'),
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => setState(
+                                () => _withSelection = !_withSelection,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _withSelection
+                                          ? Icons.check_box_rounded
+                                          : Icons
+                                                .check_box_outline_blank_rounded,
+                                      size: 16,
+                                      color: _withSelection
+                                          ? scheme.primary
+                                          : scheme.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        'Belgede seçili metni soruya ekle',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: small,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 0, 8, 12),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        key: const ValueKey('ai-attach'),
-                        tooltip: 'Belge ekle',
-                        onPressed: _busy ? null : () => unawaited(_attach()),
-                        icon: const Icon(Icons.attach_file_rounded, size: 20),
+                        ),
                       ),
-                      Expanded(
-                        // Enter sends, Shift+Enter starts a new line.
-                        child: Focus(
-                          onKeyEvent: (_, event) {
-                            if (event is KeyDownEvent &&
-                                (event.logicalKey == LogicalKeyboardKey.enter ||
-                                    event.logicalKey ==
-                                        LogicalKeyboardKey.numpadEnter) &&
-                                !HardwareKeyboard.instance.isShiftPressed) {
-                              _send();
-                              return KeyEventResult.handled;
-                            }
-                            return KeyEventResult.ignored;
-                          },
-                          child: TextField(
-                            key: const ValueKey('ai-question'),
-                            controller: _question,
-                            enabled: !_busy,
-                            minLines: 1,
-                            maxLines: 6,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            decoration: InputDecoration(
-                              hintText: widget.path != null
-                                  ? 'Belgeye sorun…'
-                                  : _case != null
-                                  ? 'Dosyaya sorun…'
-                                  : 'Sorun…',
-                              isDense: true,
+                    // Enter sends, Shift+Enter starts a new line.
+                    Focus(
+                      onKeyEvent: (_, event) {
+                        if (event is KeyDownEvent &&
+                            (event.logicalKey == LogicalKeyboardKey.enter ||
+                                event.logicalKey ==
+                                    LogicalKeyboardKey.numpadEnter) &&
+                            !HardwareKeyboard.instance.isShiftPressed) {
+                          _send();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: TextField(
+                        key: const ValueKey('ai-question'),
+                        controller: _question,
+                        focusNode: _focus,
+                        minLines: widget.embedded && _roomy ? 2 : 1,
+                        maxLines: 8,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: _busy
+                              ? 'Sıradaki sorunuzu yazabilirsiniz…'
+                              : _ofDocument
+                              ? 'Belgeye sorun…'
+                              : _case != null
+                              ? 'Dosyaya sorun…'
+                              : 'Sorun…',
+                          isDense: true,
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            10,
+                            8,
+                            10,
+                            6,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        if (canPickCase || canMust)
+                          PopupMenuButton<String>(
+                            key: const ValueKey('ai-plus'),
+                            tooltip: 'Ekle',
+                            icon: const Icon(Icons.add_rounded, size: 21),
+                            onSelected: (v) => unawaited(switch (v) {
+                              'belge' => _attach(),
+                              'dosya' => _pickCase(),
+                              _ => _pickMust(),
+                            }),
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                key: ValueKey('ai-attach'),
+                                value: 'belge',
+                                child: ListTile(
+                                  dense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.attach_file_rounded),
+                                  title: Text('Belge ekle'),
+                                ),
+                              ),
+                              if (canPickCase)
+                                const PopupMenuItem(
+                                  key: ValueKey('ai-pick-case'),
+                                  value: 'dosya',
+                                  child: ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: Icon(Icons.folder_outlined),
+                                    title: Text('Dosya bağla'),
+                                  ),
+                                ),
+                              if (canMust)
+                                const PopupMenuItem(
+                                  key: ValueKey('ai-pick-must'),
+                                  value: 'oku',
+                                  child: ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: Icon(Icons.star_outline_rounded),
+                                    title: Text('Mutlaka okunacak evrak'),
+                                  ),
+                                ),
+                            ],
+                          )
+                        else
+                          IconButton(
+                            key: const ValueKey('ai-attach'),
+                            tooltip: 'Belge ekle',
+                            onPressed: _busy
+                                ? null
+                                : () => unawaited(_attach()),
+                            icon: const Icon(
+                              Icons.attach_file_rounded,
+                              size: 20,
                             ),
                           ),
-                        ),
-                      ),
-                      if (_busy)
-                        IconButton(
-                          key: const ValueKey('ai-stop'),
-                          tooltip: 'Durdur',
-                          onPressed: () => _cancel?.complete(),
-                          icon: Icon(
-                            Icons.stop_circle_rounded,
-                            size: 24,
-                            color: scheme.primary,
+                        _tierChoice(scheme),
+                        const Spacer(),
+                        if (quota?.label case final said?)
+                          Tooltip(
+                            message:
+                                'Yapay zekâ hesabınızın kullanımı: '
+                                '${[for (final w in quota!.used.entries) '${switch (w.key) {
+                                    'five_hour' => '5 saatlik',
+                                    'seven_day' => 'haftalık',
+                                    _ => w.key,
+                                  }} %${(w.value * 100).round()}'].join(', ')}',
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Text(
+                                said,
+                                key: const ValueKey('ai-quota'),
+                                style: small.copyWith(
+                                  color: quota.most >= .9
+                                      ? scheme.error
+                                      : scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
                           ),
-                        )
-                      else
-                        IconButton(
-                          key: const ValueKey('ai-send'),
-                          tooltip: 'Sor',
-                          onPressed: _send,
-                          icon: const Icon(Icons.send_rounded, size: 20),
-                        ),
-                    ],
-                  ),
+                        if (_busy)
+                          IconButton(
+                            key: const ValueKey('ai-stop'),
+                            tooltip: 'Durdur',
+                            onPressed: _stop,
+                            icon: Icon(
+                              Icons.stop_circle_rounded,
+                              size: 26,
+                              color: scheme.primary,
+                            ),
+                          )
+                        else
+                          IconButton.filled(
+                            key: const ValueKey('ai-send'),
+                            tooltip: 'Sor',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: _send,
+                            icon: const Icon(
+                              Icons.arrow_upward_rounded,
+                              size: 19,
+                            ),
+                          ),
+                        const SizedBox(width: 2),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
+
+  /// The tier the next question is asked at: two words, as the lawyer
+  /// knows them.
+  Widget _tierChoice(ColorScheme scheme) => Container(
+    padding: const EdgeInsets.all(2),
+    decoration: BoxDecoration(
+      color: scheme.surfaceContainerHighest.withValues(alpha: .6),
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final tier in const [AiTier.strong, AiTier.normal])
+          Tooltip(
+            message: tier.detail,
+            child: InkWell(
+              key: ValueKey('ai-tier-${tier.name}'),
+              borderRadius: BorderRadius.circular(7),
+              onTap: () => setState(() => _tier = tier),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _tier == tier ? scheme.surface : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                  border: _tier == tier
+                      ? Border.all(color: scheme.outlineVariant)
+                      : null,
+                ),
+                child: Text(
+                  tier.label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: _tier == tier
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                    color: _tier == tier
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+/// What an empty conversation offers: asked as it is, or ([fill]) written
+/// into the box for the lawyer to end.
+class _Idea {
+  const _Idea(
+    this.icon,
+    this.title,
+    this.detail,
+    this.ask, {
+    this.fill = false,
+  });
+  final IconData icon;
+  final String title, detail, ask;
+  final bool fill;
 }
 
 /// A step of an answer kept: its words as they were told.

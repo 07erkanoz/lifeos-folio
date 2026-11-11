@@ -232,8 +232,13 @@ abstract final class AiAssistant {
     }
   }
 
-  static Future<List<AiStatus>> statuses() =>
-      Future.wait([for (final p in AiProvider.values) status(p)]);
+  static Future<List<AiStatus>> statuses() => statusesForTest != null
+      ? Future.value(statusesForTest)
+      : Future.wait([for (final p in AiProvider.values) status(p)]);
+
+  /// The programs a test says are here, in place of looking for them.
+  @visibleForTesting
+  static List<AiStatus>? statusesForTest;
 
   /// The arguments that run [provider] once, read-only and with every tool
   /// it has turned off; the question comes on its standard input.

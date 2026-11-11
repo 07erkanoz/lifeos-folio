@@ -34,6 +34,22 @@ class AiStep extends AiEvent {
     ].join(' · ');
   }
 
+  /// What the step looked at, as the lawyer counts them under an answer:
+  /// "mevzuat", "karar", "evrak", "dosya", "ajanda"; empty for the rest.
+  String get kind => switch (tool) {
+    'mevzuat_madde' || 'mevzuat_icindekiler' || 'mevzuat_ara' => 'mevzuat',
+    'karar_ara' || 'karar_getir' => 'karar',
+    'evrak_oku' => 'evrak',
+    'dosya_bilgisi' ||
+    'dosya_evraklari' ||
+    'dosya_hafizasi' ||
+    'dosya_ara' ||
+    'dosya_sec' ||
+    'dosyalar' => 'dosya',
+    'ajanda' || 'tebligatlar' || 'uyap_bildirimleri' => 'ajanda',
+    _ => '',
+  };
+
   static const _labels = {
     'mevzuat_madde': ('Kanun maddesi okunuyor', 'Kanun maddesi okundu'),
     'mevzuat_icindekiler': (
@@ -84,6 +100,30 @@ class AiWriting extends AiEvent {
   final bool restart;
 }
 
+/// How much of the lawyer's allowance with the program is used, as the
+/// program itself says on the way: by window ("five_hour", "seven_day"),
+/// each from 0 to 1.
+class AiQuota extends AiEvent {
+  const AiQuota(this.used);
+  final Map<String, double> used;
+
+  /// The fullest window, as the lawyer reads it: "Haftalık %42".
+  String? get label {
+    if (used.isEmpty) return null;
+    final most = used.entries.reduce((a, b) => b.value > a.value ? b : a);
+    final name = switch (most.key) {
+      'five_hour' => '5 saatlik',
+      'seven_day' => 'Haftalık',
+      _ => 'Kullanım',
+    };
+    return '$name %${(most.value * 100).round()}';
+  }
+
+  /// The fullest window's share, from 0 to 1.
+  double get most =>
+      used.values.fold<double>(0, (a, b) => b > a ? b : a).clamp(0.0, 1.0);
+}
+
 /// One line of a program's output read for its events.
 abstract final class AiEvents {
   static const _prefix = 'mcp__folio__';
@@ -99,6 +139,14 @@ abstract final class AiEvents {
     final e = _decode(line);
     if (e == null) return const [];
     switch (e['type']) {
+      case 'rate_limit_event':
+        final windows = _map(_map(e['rate_limit_info'])['unifiedWindows']);
+        final used = {
+          for (final w in windows.entries)
+            if (_map(w.value)['utilization'] case final num u)
+              w.key: u.toDouble(),
+        };
+        return used.isEmpty ? const [] : [AiQuota(used)];
       case 'stream_event':
         final ev = _map(e['event']);
         switch (ev['type']) {
