@@ -1,10 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:evrak_convert/services/ai/ai_case.dart';
 import 'package:evrak_convert/services/ai/folio_mcp.dart';
-import 'package:evrak_convert/services/uyap/uyap_case_data.dart';
 import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:flutter_test/flutter_test.dart';
