@@ -2147,7 +2147,7 @@ abstract class AppLocalizations {
   /// No description provided for @liveSendCode.
   ///
   /// In tr, this message translates to:
-  /// **'Kodu diğer büroya gönderin. Katılmak isteyen olunca size sorulur.'**
+  /// **'Kodu karşı tarafa gönderin. Katılmak isteyen olunca size sorulur.'**
   String get liveSendCode;
 
   /// No description provided for @liveSendWhatsApp.
@@ -2345,13 +2345,13 @@ abstract class AppLocalizations {
   /// No description provided for @liveRemoteHint.
   ///
   /// In tr, this message translates to:
-  /// **'Kodu alan kişi bağlantıya dokunur ya da Folio’da Canlı belge’ye basıp kodu yazar; siz onaylayınca belge onda açılır. Belge sizde kalır, paylaşım bitince onda kalmaz.'**
+  /// **'Kodu alan kişi bağlantıya dokunur ya da LifeOS Folio’da veya LifeOS Ofis’te Canlı belge’ye basıp kodu yazar; siz onaylayınca belge onda açılır. Belge sizde kalır, paylaşım bitince onda kalmaz.'**
   String get liveRemoteHint;
 
   /// No description provided for @liveNearbyHint.
   ///
   /// In tr, this message translates to:
-  /// **'Davet ettiğiniz kişinin Folio’sunda bir pencere açılır; Katıl’a basınca belge onda açılır. Belge sizde kalır, paylaşım bitince onlarda kalmaz. \"Sırayla düzenleyebilir\" olanlara kalemi verince yazdıkları belgenize işlenir.'**
+  /// **'Davet ettiğiniz kişinin ekranında bir pencere açılır; Katıl’a basınca belge onda açılır. Belge sizde kalır, paylaşım bitince onlarda kalmaz. \"Sırayla düzenleyebilir\" olanlara kalemi verince yazdıkları belgenize işlenir.'**
   String get liveNearbyHint;
 
   /// No description provided for @liveStopSharing.
@@ -2369,7 +2369,7 @@ abstract class AppLocalizations {
   /// No description provided for @liveNoDevices.
   ///
   /// In tr, this message translates to:
-  /// **'Aynı ağda davet edilebilecek bir cihaz görünmüyor. Karşı tarafta Folio açık ve aynı Wi-Fi’ye bağlı olmalı.'**
+  /// **'Aynı ağda davet edilebilecek bir cihaz görünmüyor. Karşı tarafta LifeOS Folio ya da LifeOS Ofis açık ve aynı Wi-Fi’ye bağlı olmalı.'**
   String get liveNoDevices;
 
   /// No description provided for @liveSearching.
@@ -2597,7 +2597,7 @@ abstract class AppLocalizations {
   /// No description provided for @liveHubPickPrompt.
   ///
   /// In tr, this message translates to:
-  /// **'Paylaşacağınız belgeyi seçin. Belge açılır ve diğer büroya göndereceğiniz kod hemen çıkar.'**
+  /// **'Paylaşacağınız belgeyi seçin. Belge açılır ve karşı tarafa göndereceğiniz kod hemen çıkar.'**
   String get liveHubPickPrompt;
 
   /// No description provided for @liveHubPickOther.
@@ -5095,6 +5095,18 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Resimleri ve PDF\'leri tek bir PDF\'te birleştirin.'**
   String get ofisMakePdfDetail;
+
+  /// No description provided for @ofisLive.
+  ///
+  /// In tr, this message translates to:
+  /// **'Canlı belge'**
+  String get ofisLive;
+
+  /// No description provided for @ofisLiveDetail.
+  ///
+  /// In tr, this message translates to:
+  /// **'Bir belgeyi canlı paylaşın ya da size gönderilen kodla katılın.'**
+  String get ofisLiveDetail;
 
   /// No description provided for @photoOpenFailed.
   ///

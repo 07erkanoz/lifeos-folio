@@ -2965,6 +2965,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ofisMakePdfDetail => 'Join pictures and PDFs into one PDF.';
 
   @override
+  String get ofisLive => 'Live document';
+
+  @override
+  String get ofisLiveDetail =>
+      'Share a document live, or join with the code you were sent.';
+
+  @override
   String photoOpenFailed(String error) {
     return 'The picture could not be opened: $error';
   }

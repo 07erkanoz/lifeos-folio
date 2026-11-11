@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/clients/client.dart';
 import '../../services/clients/client_accounts.dart';
@@ -12,6 +11,7 @@ import '../../services/clients/client_statement_pdf.dart';
 import '../../services/clients/fee_reminders.dart';
 import '../../services/platform/app_directories.dart';
 import '../../services/platform/file_actions.dart';
+import '../../services/platform/whatsapp.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_hearing.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
@@ -260,16 +260,7 @@ class _ClientMessageDialogState extends State<ClientMessageDialog> {
       subject: _subject,
       text: _text.text,
     );
-    for (final (i, uri) in links.indexed) {
-      try {
-        // The computer's own WhatsApp only where one takes the link.
-        if (i < links.length - 1 && !await canLaunchUrl(uri)) continue;
-        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-          return true;
-        }
-      } catch (_) {}
-    }
-    return false;
+    return openFirst(links);
   }
 
   /// The client's statement written out, and given to the system's share

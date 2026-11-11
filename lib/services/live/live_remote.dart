@@ -10,6 +10,7 @@ import '../office/office_channel.dart';
 import '../office/office_known.dart';
 import '../office/office_link.dart';
 import '../office/office_peer.dart';
+import '../platform/app_edition.dart';
 import 'live_share.dart';
 
 /// A live document shared with another office, over the relay (approved
@@ -105,8 +106,9 @@ abstract final class RemoteCode {
 
   /// What goes to the other office: the link, and the code to type.
   static String message(String code, String title) =>
-      'LifeOS Folio’da “$title” belgesini sizinle canlı paylaşıyorum. '
-      'Katılmak için bağlantıya dokunun ya da Folio’nun ana sayfasında '
+      '${AppEdition.isOfis ? 'LifeOS Ofis’te' : 'LifeOS Folio’da'} “$title” '
+      'belgesini sizinle canlı paylaşıyorum. Katılmak için bağlantıya '
+      'dokunun ya da LifeOS Folio’nun veya LifeOS Ofis’in ana sayfasında '
       'Canlı belge’ye basıp şu kodu yazın: ${shown(code)}\n'
       '${link(code)}\n'
       'Kod 15 dakika geçerlidir.';

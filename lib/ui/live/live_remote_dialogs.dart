@@ -8,6 +8,7 @@ import '../../services/editor/lawyer_profile.dart';
 import '../../services/live/live_remote.dart';
 import '../../services/live/live_share.dart';
 import '../../services/platform/app_language.dart';
+import '../../services/platform/whatsapp.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/notice.dart';
 
@@ -106,12 +107,16 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
 
   Future<void> _send(String code, {required bool mail}) async {
     final text = RemoteCode.message(code, _host.title);
-    final uri = mail
-        ? Uri.parse(
-            'mailto:?subject=${Uri.encodeComponent(context.l.liveInviteMailSubject)}'
-            '&body=${Uri.encodeComponent(text)}',
-          )
-        : Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
+    if (!mail) {
+      // The computer's own WhatsApp where there is one, else its page.
+      if (await openWhatsApp(text)) return;
+      await _copy(code);
+      return;
+    }
+    final uri = Uri.parse(
+      'mailto:?subject=${Uri.encodeComponent(context.l.liveInviteMailSubject)}'
+      '&body=${Uri.encodeComponent(text)}',
+    );
     try {
       if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
     } catch (_) {}
@@ -240,7 +245,20 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                       runSpacing: 8,
                       alignment: WrapAlignment.center,
                       children: [
+                        // The invitation goes by WhatsApp first: the
+                        // computer's own program, else its page.
                         FilledButton.icon(
+                          key: const ValueKey('remote-whatsapp'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF25A244),
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () =>
+                              unawaited(_send(invite.code, mail: false)),
+                          icon: const Icon(Icons.chat_rounded, size: 17),
+                          label: Text(context.l.liveSendWhatsApp),
+                        ),
+                        OutlinedButton.icon(
                           key: const ValueKey('remote-copy'),
                           onPressed: () => unawaited(_copy(invite.code)),
                           icon: const Icon(
@@ -248,13 +266,6 @@ class _RemoteInvitePaneState extends State<RemoteInvitePane> {
                             size: 17,
                           ),
                           label: Text(context.l.liveCopyInvite),
-                        ),
-                        OutlinedButton.icon(
-                          key: const ValueKey('remote-whatsapp'),
-                          onPressed: () =>
-                              unawaited(_send(invite.code, mail: false)),
-                          icon: const Icon(Icons.chat_outlined, size: 17),
-                          label: const Text('WhatsApp'),
                         ),
                         OutlinedButton.icon(
                           key: const ValueKey('remote-mail'),

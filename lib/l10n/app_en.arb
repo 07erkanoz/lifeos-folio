@@ -835,6 +835,8 @@
   "viewCopySaved": "Copy saved.",
   "ofisMakePdf": "Make a PDF",
   "ofisMakePdfDetail": "Join pictures and PDFs into one PDF.",
+  "ofisLive": "Live document",
+  "ofisLiveDetail": "Share a document live, or join with the code you were sent.",
   "photoOpenFailed": "The picture could not be opened: {error}",
   "photoSaveFailed": "Could not be saved: {error}",
   "photoTitle": "Edit picture",

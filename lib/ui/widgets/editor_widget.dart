@@ -130,6 +130,7 @@ import '../../services/live/live_share.dart';
 import '../../services/live/live_remote.dart';
 import '../../services/platform/app_edition.dart';
 import '../live/live_chat_panel.dart';
+import '../../services/live/live_owner.dart';
 import '../ai/ai_panel.dart';
 import '../../services/ai/ai_assistant.dart';
 import '../live/live_share_dialog.dart';
@@ -436,6 +437,23 @@ class _EditorWidgetState extends State<EditorWidget>
     if (handOver != null && !LiveShare.instance.listening) {
       await _shareInFolio(handOver);
       return;
+    }
+    // LifeOS Ofis is on the network once a document is shared or joined,
+    // and in one of its windows alone.
+    if (!LiveShare.instance.listening && startLiveHere != null) {
+      if (!await startLiveHere!()) {
+        if (mounted) {
+          showNotice(
+            context,
+            'Canlı paylaşım başka bir pencerede açık',
+            detail:
+                'Aynı anda yalnız bir pencere paylaşabilir. Diğer pencereyi '
+                'kapatıp yeniden deneyin.',
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
     }
     final path = _documentPath;
     // A sharing closed is not taken up again: a new one is made.
@@ -4237,6 +4255,9 @@ class _EditorWidgetState extends State<EditorWidget>
     final liveLabel = watching > 0 ? 'Canlı ($watching)' : 'Canlı paylaş';
     final liveTip = watching > 0
         ? '$watching kişi izliyor · paylaşımı yönet'
+        : AppEdition.isOfis
+        ? 'Belgeyi yakındaki bir cihazda ya da bir kodla uzaktaki birinde '
+              'canlı gösterin'
         : 'Belgeyi cihazlarınızda, büronuzda ya da yakındaki bir Folio’da '
               'canlı gösterin';
     final canSign = _canSignNew && !_isSaving && !_signingNew;
@@ -4299,23 +4320,22 @@ class _EditorWidgetState extends State<EditorWidget>
                 child: const Text('Mobil imzayla'),
               ),
           ]),
-          if (!ofis) ...[
+          if (!ofis)
             ribbonButton(
               context,
               Icons.event_available_outlined,
               'Süre',
               () => unawaited(_addDeadline()),
             ),
-            ribbonButton(
-              context,
-              watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
-              liveLabel,
-              live,
-              selected: watching > 0,
-              tooltip: liveTip,
-              key: const ValueKey('legal-live'),
-            ),
-          ],
+          ribbonButton(
+            context,
+            watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
+            liveLabel,
+            live,
+            selected: watching > 0,
+            tooltip: liveTip,
+            key: const ValueKey('legal-live'),
+          ),
           ribbonDivider(context),
           ribbonButton(
             context,
@@ -4556,20 +4576,19 @@ class _EditorWidgetState extends State<EditorWidget>
           ],
         ],
       ),
-      if (!ofis)
-        ribbonGroup(context, 'Paylaşım', [
-          [
-            ribbonBigButton(
-              context,
-              watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
-              watching > 0 ? 'Canlı\n$watching izliyor' : 'Canlı\npaylaş',
-              live,
-              primary: watching > 0,
-              tooltip: liveTip,
-              key: const ValueKey('legal-live'),
-            ),
-          ],
-        ]),
+      ribbonGroup(context, 'Paylaşım', last: ofis, [
+        [
+          ribbonBigButton(
+            context,
+            watching > 0 ? Icons.cast_connected_rounded : Icons.cast_outlined,
+            watching > 0 ? 'Canlı\n$watching izliyor' : 'Canlı\npaylaş',
+            live,
+            primary: watching > 0,
+            tooltip: liveTip,
+            key: const ValueKey('legal-live'),
+          ),
+        ],
+      ]),
       if (!ofis)
         ribbonGroup(context, 'Ajanda', last: true, [
           [
@@ -5934,10 +5953,7 @@ class _EditorWidgetState extends State<EditorWidget>
                         onSaveAs: () =>
                             unawaited(_saveAs(_ownFormat, chooseFormat: true)),
                         onSaveIn: (format) => unawaited(_saveAs(format)),
-                        // Ofis has no live sharing yet.
-                        onLiveShare: AppEdition.isOfis
-                            ? null
-                            : () => unawaited(_openLive()),
+                        onLiveShare: () => unawaited(_openLive()),
                         onShare: () => unawaited(_share()),
                         onPrint: () => unawaited(_print()),
                         onHistory: () => unawaited(_history()),

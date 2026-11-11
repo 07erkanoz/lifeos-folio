@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'client.dart';
+import '../platform/whatsapp.dart';
 import 'client_accounts.dart';
 
 /// How a client is written to: each opens the lawyer's own program with
@@ -133,19 +134,7 @@ List<Uri> messageLinks(
   final digits = phoneDigits(phone);
   String enc(String s) => Uri.encodeComponent(s);
   return switch (channel) {
-    MessageChannel.whatsapp =>
-      Platform.isAndroid || Platform.isIOS
-          ? [Uri.parse('https://wa.me/$digits?text=${enc(text)}')]
-          : [
-              Uri.parse(
-                'whatsapp://send?${digits.isEmpty ? '' : 'phone=$digits&'}'
-                'text=${enc(text)}',
-              ),
-              Uri.parse(
-                'https://web.whatsapp.com/send?'
-                '${digits.isEmpty ? '' : 'phone=$digits&'}text=${enc(text)}',
-              ),
-            ],
+    MessageChannel.whatsapp => whatsAppLinks(text, digits: digits),
     MessageChannel.sms => [
       Uri.parse(
         'sms:${digits.isEmpty ? '' : '+$digits'}'

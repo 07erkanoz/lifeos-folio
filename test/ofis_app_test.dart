@@ -41,11 +41,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('ofis-home-open')));
     await tester.tap(find.byKey(const ValueKey('ofis-home-new-docx')));
     await tester.tap(find.text('Kira sözleşmesi'));
-    expect(done, [
-      'open',
-      'new:docx',
-      'file:/belgeler/Kira sözleşmesi.docx',
-    ]);
+    expect(done, ['open', 'new:docx', 'file:/belgeler/Kira sözleşmesi.docx']);
     // UDF is UYAP's: opened, not offered as a new document.
     expect(find.byKey(const ValueKey('ofis-home-new-udf')), findsNothing);
     // Pictures and PDFs joined into one, from the home page too.
@@ -54,8 +50,8 @@ void main() {
   });
 
   testWidgets('in Ofis the editor\'s research tab keeps case law, signing '
-      'by card and the history; no petitions, UYAP, mobile signature, '
-      'agenda or live sharing', (tester) async {
+      'by card, the history and live sharing; no petitions, UYAP, mobile '
+      'signature or agenda', (tester) async {
     AppEdition.current = AppEdition.ofis;
     // Ofis follows the system's language; these read its Turkish.
     AppLanguage.instance.chosen = const Locale('tr');
@@ -97,20 +93,20 @@ void main() {
       'legal-sign-mobile',
       'legal-uyap-case',
       'legal-deadline',
-      'legal-live',
     ]) {
       expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
     }
-    for (final group in ['Dilekçe', 'Ajanda', 'Paylaşım']) {
+    // Live sharing is Ofis's too.
+    expect(find.byKey(const ValueKey('legal-live')), findsOneWidget);
+    expect(find.text('Paylaşım'), findsOneWidget);
+    for (final group in ['Dilekçe', 'Ajanda']) {
       expect(find.text(group), findsNothing, reason: group);
     }
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('Ofis\'s About names Ofis, not Folio\'s lawyers', (
-    tester,
-  ) async {
+  testWidgets('Ofis\'s About names Ofis, not Folio\'s lawyers', (tester) async {
     AppEdition.current = AppEdition.ofis;
     // Ofis follows the system's language; these read its Turkish.
     AppLanguage.instance.chosen = const Locale('tr');

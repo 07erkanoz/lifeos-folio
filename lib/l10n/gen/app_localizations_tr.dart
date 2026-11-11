@@ -1183,7 +1183,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get liveSendCode =>
-      'Kodu diğer büroya gönderin. Katılmak isteyen olunca size sorulur.';
+      'Kodu karşı tarafa gönderin. Katılmak isteyen olunca size sorulur.';
 
   @override
   String get liveSendWhatsApp => 'WhatsApp ile gönder';
@@ -1291,11 +1291,11 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get liveRemoteHint =>
-      'Kodu alan kişi bağlantıya dokunur ya da Folio’da Canlı belge’ye basıp kodu yazar; siz onaylayınca belge onda açılır. Belge sizde kalır, paylaşım bitince onda kalmaz.';
+      'Kodu alan kişi bağlantıya dokunur ya da LifeOS Folio’da veya LifeOS Ofis’te Canlı belge’ye basıp kodu yazar; siz onaylayınca belge onda açılır. Belge sizde kalır, paylaşım bitince onda kalmaz.';
 
   @override
   String get liveNearbyHint =>
-      'Davet ettiğiniz kişinin Folio’sunda bir pencere açılır; Katıl’a basınca belge onda açılır. Belge sizde kalır, paylaşım bitince onlarda kalmaz. \"Sırayla düzenleyebilir\" olanlara kalemi verince yazdıkları belgenize işlenir.';
+      'Davet ettiğiniz kişinin ekranında bir pencere açılır; Katıl’a basınca belge onda açılır. Belge sizde kalır, paylaşım bitince onlarda kalmaz. \"Sırayla düzenleyebilir\" olanlara kalemi verince yazdıkları belgenize işlenir.';
 
   @override
   String get liveStopSharing => 'Paylaşımı bitir';
@@ -1305,7 +1305,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get liveNoDevices =>
-      'Aynı ağda davet edilebilecek bir cihaz görünmüyor. Karşı tarafta Folio açık ve aynı Wi-Fi’ye bağlı olmalı.';
+      'Aynı ağda davet edilebilecek bir cihaz görünmüyor. Karşı tarafta LifeOS Folio ya da LifeOS Ofis açık ve aynı Wi-Fi’ye bağlı olmalı.';
 
   @override
   String get liveSearching => 'Aynı ağdaki cihazlar aranıyor…';
@@ -1430,7 +1430,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get liveHubPickPrompt =>
-      'Paylaşacağınız belgeyi seçin. Belge açılır ve diğer büroya göndereceğiniz kod hemen çıkar.';
+      'Paylaşacağınız belgeyi seçin. Belge açılır ve karşı tarafa göndereceğiniz kod hemen çıkar.';
 
   @override
   String get liveHubPickOther => 'Başka belge seç…';
@@ -2795,6 +2795,13 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get ofisMakePdfDetail =>
       'Resimleri ve PDF\'leri tek bir PDF\'te birleştirin.';
+
+  @override
+  String get ofisLive => 'Canlı belge';
+
+  @override
+  String get ofisLiveDetail =>
+      'Bir belgeyi canlı paylaşın ya da size gönderilen kodla katılın.';
 
   @override
   String photoOpenFailed(String error) {

@@ -15,7 +15,12 @@ import 'models/evrak_file.dart';
 import 'services/editor/document_history.dart';
 import 'services/editor/editor_drafts.dart';
 import 'services/editor/suggestions/phrase_memory.dart';
+import 'services/editor/text_anchor.dart';
 import 'services/library/recent_documents.dart';
+import 'services/live/live_links.dart';
+import 'services/live/live_owner.dart';
+import 'ui/live/live_hub.dart';
+import 'ui/live/ofis_live.dart';
 import 'services/platform/app_edition.dart';
 import 'services/platform/app_language.dart';
 import 'services/platform/document_launch.dart';
@@ -49,6 +54,8 @@ import 'ui/widgets/notice.dart';
 Future<void> runOfisApp(List<String> arguments) async {
   AppEdition.current = AppEdition.ofis;
   final launch = DocumentLaunch.parse(arguments);
+  // An invitation's link Ofis was opened with: joined once it shows.
+  if (launch.link case final link?) LiveLinks.take(link);
   final path = launch.paths
       .where(FileSystemEntity.isFileSync)
       .where(_previewable)
@@ -148,6 +155,47 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
 
   bool get _home => _path == null && !_editing;
 
+  /// Live documents: shared from the editor, joined with a code.
+  late final _live = OfisLive(() => _context);
+
+  /// How many times the document shown was asked to be shared live as it
+  /// opens (EditorWidget.liveAsk).
+  int _liveAsk = 0;
+
+  /// Canlı belge: a code to join with, or a document to share.
+  Future<void> _liveHub() async {
+    final context = _context;
+    if (context == null) return;
+    await LiveHub.show(
+      context,
+      recent: _recent.files,
+      onJoin: (code) => unawaited(_live.join(code: code, start: true)),
+      onShare: (file) => unawaited(_shareLive(file.path)),
+      onPick: () => unawaited(_pickToShareLive()),
+    );
+  }
+
+  Future<void> _shareLive(String path) async {
+    if (!LiveHub.shareable(EvrakFormat.fromExtension(p.extension(path)))) {
+      return;
+    }
+    await _show(path, edit: true);
+    if (mounted && _path == path && _editing) setState(() => _liveAsk++);
+  }
+
+  Future<void> _pickToShareLive() async {
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: AppLanguage.t.ofisLive,
+      type: FileType.custom,
+      allowedExtensions: [
+        for (final f in EvrakFormat.values)
+          if (LiveHub.shareable(f)) f.defaultExtension,
+      ],
+    );
+    final path = picked?.files.single.path;
+    if (path != null && mounted) await _shareLive(path);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -155,6 +203,12 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     unawaited(AppLanguage.instance.load());
     if (widget.desktopChrome) windowManager.addListener(this);
     MacQuit.handle(_approveQuit);
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      // On the network for live documents, if no other window of Ofis is:
+      // invited by a device nearby, and sharing from the editor.
+      startLiveHere = _live.start;
+      unawaited(_live.start());
+    }
     unawaited(
       _recent.load().then((_) async {
         final path = widget.path;
@@ -167,6 +221,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
   @override
   void dispose() {
     if (widget.desktopChrome) windowManager.removeListener(this);
+    _live.dispose();
     _appearance.dispose();
     super.dispose();
   }
@@ -214,6 +269,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     String? path, {
     bool edit = false,
     DocumentRevision? recovery,
+    TextAnchor? at,
   }) async {
     final context = _context;
     if (context == null) return;
@@ -221,6 +277,8 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     if (!mounted) return;
     setState(() {
       _generation++;
+      _liveAsk = 0;
+      _reveal = at;
       _path = path;
       _editing = edit;
       _recovery = recovery;
@@ -277,11 +335,21 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
     await _show(null, edit: true);
   }
 
-  Future<void> _edit() async {
+  /// Where the preview was double-clicked, for the editor to open at.
+  TextAnchor? _reveal;
+
+  Future<void> _edit({TextAnchor? at}) async {
     final path = _path;
     if (path == null || !_editable(path)) return;
-    await _show(path, edit: true);
+    await _show(path, edit: true, at: at);
   }
+
+  /// A double-click on a text document's page writes in it there, as in
+  /// Folio; not a PDF, whose text is another document's.
+  bool _editsOnDoubleClick(String path) =>
+      (Platform.isWindows || Platform.isLinux || Platform.isMacOS) &&
+      _editable(path) &&
+      EvrakFormat.fromExtension(p.extension(path)) != EvrakFormat.pdf;
 
   Future<void> _openRecovery() async {
     final context = _context;
@@ -316,6 +384,7 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
         onOpen: () => unawaited(_open()),
         onNew: (format) => unawaited(_new(format)),
         onOpenFile: (path) => unawaited(_openPath(path)),
+        onLive: () => unawaited(_liveHub()),
       );
     }
     final path = _path;
@@ -330,7 +399,26 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
         key: ValueKey('ofis-preview-$_generation'),
         body: Stack(
           children: [
-            Positioned.fill(child: FilePreview(path: path)),
+            Positioned.fill(
+              child: FilePreview(
+                path: path,
+                onEditAt: _editsOnDoubleClick(path)
+                    ? (anchor) => unawaited(_edit(at: anchor))
+                    : null,
+                onCropped: (saved) {
+                  final context = _context;
+                  if (context == null) return;
+                  showNotice(
+                    context,
+                    p.basename(saved),
+                    kind: NoticeKind.success,
+                    actionLabel: context.l.ofisOpen,
+                    onAction: () => unawaited(_openPath(saved)),
+                    duration: const Duration(seconds: 6),
+                  );
+                },
+              ),
+            ),
             // At the right end of the viewer's row of tools: print, keep
             // a copy, keep as a PDF, show in its folder.
             Positioned(
@@ -372,6 +460,8 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
             ? (_recovery == null ? _newFormat : null)
             : EvrakFormat.fromExtension(p.extension(path)),
         recovery: _recovery,
+        reveal: _reveal,
+        liveAsk: _liveAsk,
         fileHost: EditorFileHost(
           onNew: () => unawaited(_new()),
           onOpen: () => unawaited(_open()),
@@ -450,6 +540,13 @@ class _OfisAppState extends State<OfisApp> with WindowListener {
                   tooltip: context.l.ofisOpenTooltip,
                   onPressed: () => unawaited(_open()),
                 ),
+                FrameButton(
+                  key: const ValueKey('ofis-live'),
+                  icon: Icons.cast_outlined,
+                  label: context.l.ofisLive,
+                  tooltip: context.l.ofisLiveDetail,
+                  onPressed: () => unawaited(_liveHub()),
+                ),
               ],
               onAbout: () {
                 final context = _context;
@@ -488,7 +585,11 @@ class OfisHome extends StatefulWidget {
     required this.onOpen,
     required this.onNew,
     required this.onOpenFile,
+    this.onLive,
   });
+
+  /// Canlı belge: shares a document or joins one with a code.
+  final VoidCallback? onLive;
 
   final List<EvrakFile> recent;
   final VoidCallback onOpen;
@@ -663,6 +764,14 @@ class _OfisHomeState extends State<OfisHome> {
                     if (saved != null) widget.onOpenFile(saved);
                   },
                 ),
+                if (widget.onLive case final live?)
+                  _action(
+                    key: const ValueKey('ofis-home-live'),
+                    icon: Icons.cast_outlined,
+                    title: context.l.ofisLive,
+                    detail: context.l.ofisLiveDetail,
+                    onTap: live,
+                  ),
               ],
             ),
             const SizedBox(height: 14),
