@@ -34,7 +34,8 @@ import urllib.parse
 
 PLATFORMS = ('windows-x64', 'linux-x64', 'android', 'macos-universal',
              # LifeOS Ofis, from the same code, sent with Folio's Linux package.
-             'ofis-linux-x64')
+             'ofis-linux-x64', 'ofis-windows-x64', 'ofis-macos-universal',
+             'ofis-android')
 # Same key as UpdateManifest.publicKey in the app.
 PUBLIC_KEY = base64.b64decode('uo8uTbTSKeMNBtitM6hL25KFShLiMnlZKA6gbTPcxgY=')
 HOST = 'lifeos.com.tr'

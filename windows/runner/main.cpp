@@ -44,6 +44,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::SetCurrentProcessExplicitAppUserModelID(L"com.erkanoz.lifeos.editor");
   }
   const wchar_t* title = L"LifeOS Edit\u00f6r";
+#elif defined(FOLIO_OFIS)
+  // LifeOS Ofis: the documents and the editor for anyone, a program of its
+  // own with its own taskbar identity (lib/ofis_app.dart).
+  command_line_arguments.insert(command_line_arguments.begin(), "--ofis");
+  ::SetCurrentProcessExplicitAppUserModelID(L"com.erkanoz.lifeos.ofis");
+  const wchar_t* title = L"LifeOS Ofis";
 #else
   const wchar_t* title = L"LifeOS Folio";
 #endif

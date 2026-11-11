@@ -43,6 +43,8 @@ foreach ($variant in @(@{ Name = 'Store'; Publisher = $storePublisher })) {
     if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
     New-Item -ItemType Directory -Path $stage | Out-Null
     Copy-Item -Path (Join-Path $bundle '*') -Destination $stage -Recurse -Force
+    # LifeOS Ofis is installed by its own setup, not by Folio's package.
+    Remove-Item -LiteralPath (Join-Path $stage 'lifeos_ofis.exe') -Force -ErrorAction SilentlyContinue
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'msix/Assets') -Destination (Join-Path $stage 'Assets') -Recurse -Force
     $manifest = $template.Replace('{VERSION}', $packageVersion).Replace('{PUBLISHER}', $variant.Publisher)
     if ($manifest -match '\{[A-Z]+\}') { throw 'A placeholder is left in the manifest.' }

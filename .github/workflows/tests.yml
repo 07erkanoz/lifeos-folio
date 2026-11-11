@@ -49,6 +49,17 @@ jobs:
           flutter build windows --release -v > build-windows.log 2>&1 && exit 0
           grep -n -i -B3 -A25 'hook\|native asset\|error' build-windows.log | tail -n 300
           exit 1
+      - name: LifeOS Ofis programı da derlendi mi
+        shell: bash
+        run: test -f build/windows/x64/runner/Release/lifeos_ofis.exe
+      # The setups are built and tried here too: a broken one was otherwise
+      # found on the day of a release.
+      - name: Kurulum paketlerini oluştur
+        shell: pwsh
+        run: ./packaging/windows/build-installer.ps1
+      - name: LifeOS Ofis kurulumunu doğrula
+        shell: pwsh
+        run: ./packaging/windows/test-ofis-installer.ps1
   test:
     # Not ubuntu-latest: on 26.04 its newer appindicator marks the call
     # tray_manager makes deprecated, and -Werror stops the Linux build. The

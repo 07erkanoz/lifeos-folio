@@ -69,7 +69,8 @@ Name: "editordesktop"; Description: "{cm:EditorShortcut}"
 Name: "editoropenwith"; Description: "{cm:EditorOpenWith}"
 
 [Files]
-Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; LifeOS Ofis is built beside Folio and installed by its own setup.
+Source: "{#BundleDir}\*"; DestDir: "{app}"; Excludes: "lifeos_ofis.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\LifeOS Folio"; Filename: "{app}\lifeos_folio.exe"; WorkingDir: "{app}"

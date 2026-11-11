@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'app_edition.dart';
 import 'store_package.dart';
 
 /// Windows path_provider uses ProductName. Keep the established data location
@@ -13,6 +14,13 @@ Future<Directory> folioSupportDirectory() async {
   final current = await getApplicationSupportDirectory();
   if (Platform.isMacOS) return macDataFolder(current);
   if (!Platform.isWindows) return current;
+  // LifeOS Ofis is a program of its own, named so in its executable: the
+  // folder Windows gives it is its own, never Folio's (whose identity on
+  // the network and whose records it must not share).
+  if (AppEdition.isOfis) {
+    await current.create(recursive: true);
+    return current;
+  }
   if (runsFromStorePackage) {
     final store = Directory(storeDataFolder(_userProfile()));
     await store.create(recursive: true);

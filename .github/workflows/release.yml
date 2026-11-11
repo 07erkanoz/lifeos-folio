@@ -89,11 +89,17 @@ jobs:
       - name: Kurulum ve kaldırmayı doğrula
         shell: pwsh
         run: ./packaging/windows/test-installer.ps1
+      - name: LifeOS Ofis kurulumunu doğrula
+        shell: pwsh
+        run: ./packaging/windows/test-ofis-installer.ps1
       - name: Taslak sürüme yükle
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" "build/windows/installer/LifeOS-Folio-${{ needs.version.outputs.version }}-Windows-x64-Setup.exe" --clobber
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            "build/windows/installer/LifeOS-Folio-${{ needs.version.outputs.version }}-Windows-x64-Setup.exe" \
+            "build/windows/installer-ofis/LifeOS-Ofis-${{ needs.version.outputs.version }}-Windows-x64-Setup.exe" --clobber
 
   linux:
     needs: version
@@ -311,6 +317,7 @@ jobs:
             jq '.ofis = {tr: "LifeOS Ofis \(env.VERSION): hata düzeltmeleri ve iyileştirmeler.", en: "LifeOS Ofis \(env.VERSION): fixes and improvements."}' \
               "$notes" > "$RUNNER_TEMP/notes.json" && notes="$RUNNER_TEMP/notes.json"
           sign ofis-linux-x64 "$(cd packages && ls LifeOS-Ofis-"$VERSION".*-Linux-x64.tar.gz)" .ofis
+          sign ofis-windows-x64 "LifeOS-Ofis-$VERSION-Windows-x64-Setup.exe" .ofis
           (cd packages && sha256sum LifeOS-Folio-* LifeOS-Ofis-* > ../release/SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
       - name: İmzalı sürüm bilgilerini taslağa ekle
@@ -326,7 +333,7 @@ jobs:
         run: |
           mkdir -p outgoing
           cp packages/LifeOS-Folio-* packages/LifeOS-Ofis-* release/*.json outgoing/
-          bash tool/release/send_to_site.sh outgoing "$VERSION" windows-x64 linux-x64 android ofis-linux-x64
+          bash tool/release/send_to_site.sh outgoing "$VERSION" windows-x64 linux-x64 android ofis-linux-x64 ofis-windows-x64
       - name: Sürümü yayımla
         env:
           GH_TOKEN: ${{ github.token }}

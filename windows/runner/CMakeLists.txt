@@ -52,3 +52,7 @@ endfunction()
 folio_runner(${BINARY_NAME})
 folio_runner(lifeos_editor)
 target_compile_definitions(lifeos_editor PRIVATE "FOLIO_EDITOR")
+# LifeOS Ofis: the same app told to be Ofis (lib/ofis_app.dart), installed
+# by a setup of its own and keeping a data folder of its own.
+folio_runner(lifeos_ofis)
+target_compile_definitions(lifeos_ofis PRIVATE "FOLIO_OFIS")

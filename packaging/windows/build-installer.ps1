@@ -41,3 +41,16 @@ if (!(Test-Path -LiteralPath $setup)) { throw 'Installer output was not produced
 $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText("$setup.sha256", "$hash  $([IO.Path]::GetFileName($setup))`n")
 Write-Host "Installer ready: $setup"
+
+# LifeOS Ofis: a setup of its own from the same bundle, in a folder of its
+# own (test-installer.ps1 expects Folio's alone in $output).
+if (!(Test-Path -LiteralPath (Join-Path $bundle 'lifeos_ofis.exe'))) { throw 'Missing release component: lifeos_ofis.exe' }
+$ofisOutput = "$output-ofis"
+New-Item -ItemType Directory -Path $ofisOutput -Force | Out-Null
+& $iscc "/DAppVersion=$version" "/DBundleDir=$bundle" "/DInstallerOutput=$ofisOutput" (Join-Path $PSScriptRoot 'ofis.iss')
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed for LifeOS Ofis: $LASTEXITCODE" }
+$ofisSetup = Join-Path $ofisOutput "LifeOS-Ofis-$version-Windows-x64-Setup.exe"
+if (!(Test-Path -LiteralPath $ofisSetup)) { throw 'LifeOS Ofis installer output was not produced.' }
+$ofisHash = (Get-FileHash -LiteralPath $ofisSetup -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText("$ofisSetup.sha256", "$ofisHash  $([IO.Path]::GetFileName($ofisSetup))`n")
+Write-Host "Installer ready: $ofisSetup"

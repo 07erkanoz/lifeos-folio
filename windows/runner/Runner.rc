@@ -52,8 +52,10 @@ END
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
-#ifdef FOLIO_EDITOR
+#if defined(FOLIO_EDITOR)
 IDI_APP_ICON            ICON                    "resources\\editor_icon.ico"
+#elif defined(FOLIO_OFIS)
+IDI_APP_ICON            ICON                    "resources\\ofis_icon.ico"
 #else
 IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
 #endif
@@ -94,24 +96,34 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "LifeOS" "\0"
-#ifdef FOLIO_EDITOR
+#if defined(FOLIO_EDITOR)
             VALUE "FileDescription", "LifeOS Edit\xf6r" "\0"
+#elif defined(FOLIO_OFIS)
+            VALUE "FileDescription", "LifeOS Ofis" "\0"
 #else
             VALUE "FileDescription", "LifeOS Folio" "\0"
 #endif
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-#ifdef FOLIO_EDITOR
+#if defined(FOLIO_EDITOR)
             VALUE "InternalName", "lifeos_editor" "\0"
+#elif defined(FOLIO_OFIS)
+            VALUE "InternalName", "lifeos_ofis" "\0"
 #else
             VALUE "InternalName", "lifeos_folio" "\0"
 #endif
             VALUE "LegalCopyright", "Copyright (C) 2026 LifeOS. All rights reserved." "\0"
-#ifdef FOLIO_EDITOR
+#if defined(FOLIO_EDITOR)
             VALUE "OriginalFilename", "lifeos_editor.exe" "\0"
+#elif defined(FOLIO_OFIS)
+            VALUE "OriginalFilename", "lifeos_ofis.exe" "\0"
 #else
             VALUE "OriginalFilename", "lifeos_folio.exe" "\0"
 #endif
+#ifdef FOLIO_OFIS
+            VALUE "ProductName", "LifeOS Ofis" "\0"
+#else
             VALUE "ProductName", "LifeOS Folio" "\0"
+#endif
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

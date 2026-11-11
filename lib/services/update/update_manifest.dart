@@ -45,6 +45,9 @@ class UpdateManifest {
     // LifeOS Ofis, built with Folio from the same code and published
     // beside it; LifeOS Arch installs and updates it from this.
     'ofis-linux-x64',
+    'ofis-windows-x64',
+    'ofis-macos-universal',
+    'ofis-android',
   };
 
   /// Whose package a platform's manifest names: LifeOS Ofis for the
