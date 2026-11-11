@@ -313,9 +313,14 @@ jobs:
           sign android "LifeOS-Folio-$VERSION-Android.apk" ''
           # Ofis's notes are the file's "ofis" ones, or a line of its own
           # when there are none: Folio's are about lawyers' work.
-          jq -e .ofis "$notes" >/dev/null ||
+          # (As `a || b && c` the last ran whenever the file had its own
+          # notes too, and they were read from a file never written: 1.8.3
+          # went out with Ofis's notes empty.)
+          if ! jq -e .ofis "$notes" >/dev/null; then
             jq '.ofis = {tr: "LifeOS Ofis \(env.VERSION): hata düzeltmeleri ve iyileştirmeler.", en: "LifeOS Ofis \(env.VERSION): fixes and improvements."}' \
-              "$notes" > "$RUNNER_TEMP/notes.json" && notes="$RUNNER_TEMP/notes.json"
+              "$notes" > "$RUNNER_TEMP/notes.json"
+            notes="$RUNNER_TEMP/notes.json"
+          fi
           sign ofis-linux-x64 "$(cd packages && ls LifeOS-Ofis-"$VERSION".*-Linux-x64.tar.gz)" .ofis
           sign ofis-windows-x64 "LifeOS-Ofis-$VERSION-Windows-x64-Setup.exe" .ofis
           (cd packages && sha256sum LifeOS-Folio-* LifeOS-Ofis-* > ../release/SHA256SUMS.txt)
