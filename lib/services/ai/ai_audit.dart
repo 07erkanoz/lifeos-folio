@@ -58,6 +58,8 @@ class AnswerAudit {
         );
       }
     }
+    // How a decision was given, as the answer says it and as its text does.
+    problems.addAll(await _votes(answer));
     // Rested on, never read: read by Folio.
     final read = <String>{};
     for (final s in steps) {
@@ -104,6 +106,44 @@ class AnswerAudit {
           '(hukuk_rehber, mevzuat_icindekiler, mevzuat_madde). Okumadığın '
           'bir maddeye dayanma. Bu notu cevabında anma.',
     ].join('\n\n');
+  }
+
+  /// The decisions the answer says were given unanimously or by majority,
+  /// set against their own text; the most [mostRead].
+  Future<List<String>> _votes(String answer) async {
+    final out = <String>[];
+    final (_, decisions) = await mcp.citationsIn(answer);
+    var asked = 0;
+    for (final d in decisions) {
+      if (asked >= mostRead) break;
+      final end = (d.start + d.length + 160).clamp(0, answer.length);
+      final near = answer
+          .substring((d.start - 160).clamp(0, answer.length), end)
+          .toLowerCase();
+      final saysMajority = RegExp(r'oy\s*[çc]oklu[ğg]u').hasMatch(near);
+      final saysUnanimous = RegExp(r'oy\s*birli[ğg]i').hasMatch(near);
+      if (saysMajority == saysUnanimous) continue;
+      asked++;
+      try {
+        final got = await mcp.decision(d);
+        final text = got.decision?.text ?? '';
+        if (text.isEmpty) continue;
+        final vote = FolioMcp.outcomeOf(text)['oy'];
+        final written = answer.substring(d.start, d.start + d.length);
+        if (saysUnanimous && vote == 'oy çokluğu') {
+          out.add(
+            '- "$written" oybirliğiyle değil, oy çokluğuyla verilmiş (kararın '
+            'kendi metni). Düzelt.',
+          );
+        } else if (saysMajority && vote == 'oybirliği') {
+          out.add(
+            '- "$written" oy çokluğuyla değil, oybirliğiyle verilmiş (kararın '
+            'kendi metni). Düzelt.',
+          );
+        }
+      } catch (_) {}
+    }
+    return out;
   }
 
   static String _key(Citation c) =>

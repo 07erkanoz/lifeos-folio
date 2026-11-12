@@ -1090,11 +1090,60 @@ class FolioMcp {
       'karar': found.karar,
       'tarih': found.date,
       if (differs) 'daire_farkli': true,
+      // How it ended, on every part: measured, a program that read only the
+      // first of three parts wrote "oybirliği" for a decision by majority.
+      'sonuc': outcomeOf(text),
       'parca': at,
       'toplam_parca': parts,
+      if (parts > 1)
+        'not':
+            'Kararın sonucu ve oy durumu "sonuc" alanında. Gerekçeye '
+            'dayanacaksan ilgili parçayı oku; okumadığın kısım için '
+            'tahminde bulunma.',
       'metin': text.substring(start, (start + partSize).clamp(0, text.length)),
       'kaynak': found.source.name,
       if (found.url.isNotEmpty) 'kaynak_adres': found.url,
+    };
+  }
+
+  /// How a decision ended, from its own text: whether it was given
+  /// unanimously or by majority, whether a dissent is printed, and the
+  /// sentence it was given in ("… oy çokluğuyla kesin olarak karar
+  /// verildi.").
+  static Map<String, Object?> outcomeOf(String text) {
+    final tail = text.length > 8000 ? text.substring(text.length - 8000) : text;
+    final majority = RegExp(r'[Oo][Yy]\s*([çc]oklu[ğg]u|ÇOKLU[ĞG]U)');
+    final unanimous = RegExp(r'[Oo][Yy]\s*([bB]irli[ğg]i|BİRLİ[ĞG]İ)');
+    // Written out: Dart's case folding does not know "Ş" and "I".
+    final dissent = RegExp(
+      r'KARŞI\s*OY|[Kk]arşı\s*[Oo]y|MUHALEFET\s*ŞERH|[Mm]uhalefet\s*şerh',
+    ).hasMatch(tail);
+    // The sentences that give it; the one that says how wins, the last of
+    // them (a dissent printed after it says neither).
+    final given = [
+      for (final m in RegExp(
+        r'[^.]{0,500}(karar\s+veril(di|miştir)|hükmolundu)[^.]*\.',
+        caseSensitive: false,
+      ).allMatches(tail))
+        m[0]!.replaceAll(RegExp(r'\s+'), ' ').trim(),
+    ];
+    String? vote;
+    String sentence = given.isEmpty ? '' : given.last;
+    for (final g in given.reversed) {
+      if (majority.hasMatch(g)) {
+        vote = 'oy çokluğu';
+      } else if (unanimous.hasMatch(g)) {
+        vote = 'oybirliği';
+      }
+      if (vote != null) {
+        sentence = g;
+        break;
+      }
+    }
+    return {
+      'oy': vote ?? 'metinde yazmıyor',
+      'karsi_oy': dissent,
+      if (sentence.isNotEmpty) 'hukum_cumlesi': sentence,
     };
   }
 
