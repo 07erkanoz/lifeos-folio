@@ -136,12 +136,49 @@ RegExp openingOf(Citation citation) {
     }
   }
   final body = page.sublist(start, end);
-  // Headings at the foot belong to the article after this one.
-  while (body.length > 1 && _isHeading(body.last)) {
-    body.removeLast();
-  }
+  _dropNextHeadings(body);
   return (body: body, before: trailingHeadings(page.sublist(0, start)));
 }
+
+/// Headings at the foot belong to the article after this one, and so do
+/// the footnotes their marks point to. İYUK m. 36's node ends "Vergi
+/// uyuşmazlıklarında yetki:[28]" and then note 28, which tells how m. 37
+/// came by its (b): neither is anything of 36. A note none of those
+/// headings points to is this article's, and stays.
+void _dropNextHeadings(List<RichParagraph> body) {
+  while (body.length > 1) {
+    if (_isHeading(body.last)) {
+      body.removeLast();
+      continue;
+    }
+    // The notes at the foot, and the headings just above them.
+    var notes = body.length;
+    while (notes > 1 && _note.hasMatch(body[notes - 1].text.trim())) {
+      notes--;
+    }
+    if (notes == body.length) return;
+    var headings = notes;
+    while (headings > 1 && _isHeading(body[headings - 1])) {
+      headings--;
+    }
+    if (headings == notes) return;
+    final theirs = {
+      for (final h in body.sublist(headings, notes))
+        for (final m in _noteMark.allMatches(h.text))
+          m[0]!.replaceAll(RegExp(r'[^\d]'), ''),
+    };
+    final kept = [
+      for (final n in body.sublist(notes))
+        if (!theirs.contains(_note.firstMatch(n.text.trim())![1])) n,
+    ];
+    body
+      ..removeRange(headings, body.length)
+      ..addAll(kept);
+  }
+}
+
+/// A footnote's own paragraph: "[28] 10/6/1994 tarihli ve 4001 sayılı…".
+final _note = RegExp(r'^\[(\d{1,3})\]');
 
 /// The headings a page ends with: the bank files the headings of an article
 /// at the foot of the article before it.
