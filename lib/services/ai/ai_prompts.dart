@@ -15,16 +15,26 @@ enum AiTask {
 
 /// Two tiers of model, named as the lawyer sees them, not by brand.
 enum AiTier {
-  normal(
-    'Normal',
-    'Özet, tebligat ve zabıttan süre ve iş çıkarma gibi '
-        'hızlı işler',
-  ),
+  normal('Normal', 'Özet ve kısa değerlendirme gibi hızlı işler'),
   strong(
     'Güçlü',
     'Analiz, inceleme, dilekçe ve rapor değerlendirme gibi '
         'derin işler',
+  ),
+
+  /// The cheapest model: a notice's or the agenda's times and tasks drawn
+  /// out, the last day reckoned by Folio's engine. Not offered in the chat.
+  light(
+    'Hafif',
+    'Tebligattan ve ajandadan süre ve yapılacak iş çıkarma gibi kısa işler',
   );
+
+  /// The reasoning effort a program is given for this tier.
+  String get effort => switch (this) {
+    AiTier.strong => 'high',
+    AiTier.normal => 'medium',
+    AiTier.light => 'low',
+  };
 
   const AiTier(this.label, this.detail);
   final String label, detail;

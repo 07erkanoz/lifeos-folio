@@ -93,6 +93,9 @@ enum AiProvider {
     (AiProvider.codex, AiTier.strong) => 'gpt-6.1-sol',
     (AiProvider.antigravity, AiTier.normal) => 'gemini-3.8-flash-medium',
     (AiProvider.antigravity, AiTier.strong) => 'gemini-3.8-flash-high',
+    (AiProvider.claude, AiTier.light) => 'haiku',
+    (AiProvider.codex, AiTier.light) => 'gpt-6.1-terra',
+    (AiProvider.antigravity, AiTier.light) => 'gemini-3.8-flash-low',
     // The strong tier thinks harder (reasoning_effort high).
     (AiProvider.groq, _) => GroqChat.models.first,
   };
@@ -285,10 +288,7 @@ abstract final class AiAssistant {
       AiPrompts.core,
       if (model != null && model.isNotEmpty) ...['--model', model],
       // The strong tier thinks harder.
-      if (tier != null) ...[
-        '--effort',
-        tier == AiTier.strong ? 'high' : 'medium',
-      ],
+      if (tier != null) ...['--effort', tier.effort],
       // Folio's own tools, and no others.
       if (folio != null) ...[
         '--mcp-config',
@@ -367,10 +367,7 @@ abstract final class AiAssistant {
       '-c',
       'model_instructions_file="${p.join(folder, 'talimat.md')}"',
       if (model != null && model.isNotEmpty) ...['-m', model],
-      if (tier != null) ...[
-        '-c',
-        'model_reasoning_effort="${tier == AiTier.strong ? 'high' : 'medium'}"',
-      ],
+      if (tier != null) ...['-c', 'model_reasoning_effort="${tier.effort}"'],
       // Folio's own tools. Codex gives a tool's program none of its own
       // surroundings: the display and Folio's folders are passed on.
       if (folio != null) ...[
@@ -413,10 +410,7 @@ abstract final class AiAssistant {
       }),
       '--print-timeout',
       '${longest.inSeconds}s',
-      if (tier != null) ...[
-        '--effort',
-        tier == AiTier.strong ? 'high' : 'medium',
-      ],
+      if (tier != null) ...['--effort', tier.effort],
       if (model != null && model.isNotEmpty) ...['--model', model],
       if (resume != null) ...['--conversation', resume],
       // Written with its (empty) value: apart, agy takes the next flag

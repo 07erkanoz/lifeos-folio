@@ -190,7 +190,7 @@ abstract final class GroqChat {
           'messages': last && functions.isNotEmpty
               ? writingOnly(messages)
               : messages,
-          'reasoning_effort': tier == AiTier.strong ? 'high' : 'medium',
+          'reasoning_effort': (tier ?? AiTier.normal).effort,
           'temperature': 1,
           'max_completion_tokens': 16000,
           if (!last) ...{'tools': functions, 'disable_tool_validation': true},

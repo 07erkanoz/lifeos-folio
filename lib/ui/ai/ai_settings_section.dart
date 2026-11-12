@@ -307,9 +307,11 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     final choices = {current, ...?_offered[provider]}.toList();
     return SettingsRow(
       key: ValueKey('ai-model-${provider.name}-${tier.name}'),
-      icon: tier == AiTier.strong
-          ? Icons.workspace_premium_outlined
-          : Icons.bolt_outlined,
+      icon: switch (tier) {
+        AiTier.strong => Icons.workspace_premium_outlined,
+        AiTier.normal => Icons.bolt_outlined,
+        AiTier.light => Icons.speed_outlined,
+      },
       title: '${provider.label} · ${tier.label}',
       subtitle: tier.detail,
       trailing: DropdownButton<String>(
