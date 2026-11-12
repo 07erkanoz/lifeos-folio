@@ -1,4 +1,5 @@
 import '../../services/portal/agenda_ics.dart';
+import 'ai_deadline_dialog.dart';
 import 'calendar_export.dart';
 
 import 'dart:async';
@@ -15,6 +16,8 @@ import 'package:path/path.dart' as p;
 import '../../services/legal/deadlines/belge_turu.dart';
 import '../../services/legal/deadlines/deadline_service.dart';
 import '../../services/legal/deadlines/mahkeme_kategori.dart';
+import '../../services/legal/deadlines/turkish_legal_calendar.dart';
+import '../../services/ai/ai_assistant.dart';
 import '../../services/legal/deadlines/sure_katalogu.dart' show SureGuveni;
 import '../../services/office/office_network.dart';
 import '../../services/platform/app_directories.dart';
@@ -1398,12 +1401,82 @@ class _AgendaPageState extends State<AgendaPage> {
             ),
           ),
           actions: [
+            // The record's times and tasks, drawn out by the lawyer's AI
+            // program when asked; none kept until the lawyer approves.
+            if (AiAssistant.shown && '${i.title} ${i.body}'.trim().length >= 20)
+              TextButton.icon(
+                key: const ValueKey('agenda-ai-deadlines'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  unawaited(_aiFromItem(i));
+                },
+                icon: const Icon(Icons.auto_awesome, size: 16),
+                label: const Text('Süre ve iş çıkar'),
+              ),
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Kapat'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// [i]'s times and tasks as the lawyer's AI program reads them: a time
+  /// kept as a deadline on the day Folio's engine reckons from the
+  /// record's day, a task as a task; only those the lawyer ticks.
+  Future<void> _aiFromItem(AgendaItem i) async {
+    final db = _db;
+    if (db == null) return;
+    final kase = i.caseKey == null ? null : db.caseOf(i.caseKey!);
+    final court =
+        TurkishLegalCalendar.kategoriFromMahkemeAdi(kase?.court) ??
+        MahkemeKategorisi.bilinmeyen;
+    final day = i.at ?? DateTime.now();
+    final approved = await askAiDeadlines(
+      context,
+      text: [i.title, i.body].where((t) => t.trim().isNotEmpty).join('\n'),
+      served: day,
+      court: court,
+      unit: kase == null ? '' : '${kase.court} ${kase.number}',
+      side: i.caseKey == null
+          ? ''
+          : [
+              for (final p in db.representation(i.caseKey!))
+                '${p.ad} (${p.rol})',
+            ].join(', '),
+      agenda: true,
+    );
+    if (approved == null || !mounted) return;
+    final now = DateTime.now();
+    for (final s in approved.chosen) {
+      final last = s.lastDay(day, court);
+      db.saveAgenda(
+        AgendaItem(
+          id: AgendaItem.newId(),
+          kind: last == null ? 'task' : 'deadline',
+          title: s.what,
+          body: [
+            if (last != null)
+              '${s.rule.sureMetni} · ${s.rule.kanunMaddesi} · son günü '
+                  'Folio’nun süre motoru hesapladı.',
+            'Ajanda kaydından yapay zekâ çıkardı (${approved.model}), siz '
+                'onayladınız.',
+            if (s.quote.isNotEmpty) '“${s.quote}”',
+          ].join('\n'),
+          at: last?.etkiliSonGun ?? s.until,
+          allDay: last != null || s.until != null,
+          caseKey: i.caseKey,
+          updated: now,
+        ),
+      );
+    }
+    _reload();
+    widget.onChanged?.call();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text('${approved.chosen.length} kayıt ajandaya eklendi.'),
       ),
     );
   }

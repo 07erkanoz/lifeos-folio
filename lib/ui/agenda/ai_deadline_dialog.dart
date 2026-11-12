@@ -29,6 +29,7 @@ Future<AiDeadlinesApproved?> askAiDeadlines(
   String side = '',
   List<String> known = const [],
   Set<String> knownRules = const {},
+  bool agenda = false,
 }) async {
   if (!await askAiConsent(context)) return null;
   final settings = await AiSettings.load();
@@ -64,6 +65,7 @@ Future<AiDeadlinesApproved?> askAiDeadlines(
       side: side,
       known: known,
       knownRules: knownRules,
+      agenda: agenda,
     ),
   );
 }
@@ -80,12 +82,14 @@ class _AiDeadlinesDialog extends StatefulWidget {
     required this.side,
     required this.known,
     required this.knownRules,
+    required this.agenda,
   });
 
   final AiProvider provider;
   final String model, text, unit, subject, side;
   final List<String> known;
   final Set<String> knownRules;
+  final bool agenda;
   final DateTime served;
   final MahkemeKategorisi court;
 
@@ -125,6 +129,7 @@ class _AiDeadlinesDialogState extends State<_AiDeadlinesDialog> {
         side: widget.side,
         known: widget.known,
         knownRules: widget.knownRules,
+        agenda: widget.agenda,
         court: widget.court,
         cancel: _cancel.future,
         onEvent: (e) {
@@ -210,7 +215,7 @@ class _AiDeadlinesDialogState extends State<_AiDeadlinesDialog> {
     return AlertDialog(
       title: Text(
         found == null
-            ? 'Yapay zekâ tebligatı okuyor'
+            ? 'Yapay zekâ ${widget.agenda ? 'kaydı' : 'tebligatı'} okuyor'
             : 'Yapay zekânın önerdikleri · ${widget.model}'
                   '${_seconds == null ? '' : ' · $_seconds sn'}',
         style: const TextStyle(fontSize: 16),
@@ -237,15 +242,18 @@ class _AiDeadlinesDialogState extends State<_AiDeadlinesDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Tebligatın metni ve ekleri ${widget.provider.company} '
+                      '${widget.agenda ? 'Kaydın metni' : 'Tebligatın metni ve ekleri'} '
+                      '${widget.provider.company} '
                       'şirketine gönderildi. Seçmediğiniz hiçbir öneri ajandaya '
                       'girmez.',
                       style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                     ),
                     const SizedBox(height: 8),
                     if (found.isEmpty)
-                      const Text(
-                        'Yapay zekâ bu tebligatta süre ya da iş bulmadı.',
+                      Text(
+                        'Yapay zekâ bu '
+                        '${widget.agenda ? 'kayıtta' : 'tebligatta'} süre ya '
+                        'da iş bulmadı.',
                       )
                     else
                       for (final (i, s) in found.indexed) _suggestion(i, s),

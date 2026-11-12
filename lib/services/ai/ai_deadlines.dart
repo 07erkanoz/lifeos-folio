@@ -146,13 +146,22 @@ abstract final class AiDeadlines {
     String subject = '',
     String side = '',
     List<String> known = const [],
+    bool agenda = false,
   }) {
     String day(DateTime d) =>
         '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
     return [
-      'Görev: Aşağıdaki UETS tebligatından avukatın yapması gereken işleri '
-          've süreleri çıkar.',
-      'Tebliğ tarihi (Folio hesapladı): ${day(served)}.',
+      if (agenda) ...[
+        'Görev: Avukatın aşağıdaki ajanda kaydından (kendi notu, duruşma '
+            'zaptından aktardığı ya da yazdığı) yapması gereken işleri ve '
+            'süreleri çıkar.',
+        'Kaydın günü: ${day(served)}; başka bir başlangıç yazmıyorsa süreler '
+            'bu günden işler (baslangic: tefhim).',
+      ] else ...[
+        'Görev: Aşağıdaki UETS tebligatından avukatın yapması gereken '
+            'işleri ve süreleri çıkar.',
+        'Tebliğ tarihi (Folio hesapladı): ${day(served)}.',
+      ],
       if (unit.isNotEmpty) 'Gönderen birim: $unit.',
       if (subject.isNotEmpty) 'Konu: $subject.',
       if (side.isNotEmpty)
@@ -160,7 +169,9 @@ abstract final class AiDeadlines {
       else
         'Avukatın bu dosyada hangi tarafı temsil ettiği bilinmiyor; taraf '
             'varsayma.',
-      if (known.isNotEmpty) ...[
+      if (agenda)
+        ''
+      else if (known.isNotEmpty) ...[
         '',
         'Folio\'nun kural motoru bu tebligatta şu süreleri buldu:',
         for (final k in known) '- $k',
@@ -171,9 +182,9 @@ abstract final class AiDeadlines {
         'Folio\'nun kural motoru bu tebligatta süre bulamadı.',
       ],
       '',
-      '<tebligat>',
+      agenda ? '<kayit>' : '<tebligat>',
       text,
-      '</tebligat>',
+      agenda ? '</kayit>' : '</tebligat>',
       '',
       'Kurallar:',
       '- Yalnız tebligatta gerçekten yazan ya da tebliğ edilen belgenin '
@@ -379,6 +390,7 @@ abstract final class AiDeadlines {
     List<String> known = const [],
     Set<String> knownRules = const {},
     MahkemeKategorisi? court,
+    bool agenda = false,
     void Function(AiEvent event)? onEvent,
     Future<void>? cancel,
   }) async {
@@ -394,6 +406,7 @@ abstract final class AiDeadlines {
         subject: subject,
         side: side,
         known: known,
+        agenda: agenda,
       ),
       model: settings.modelFor(provider, AiTier.light),
       tier: AiTier.light,
