@@ -469,14 +469,14 @@ class FolioMcp {
           failed = true;
           answer = {'durum': 'ulasilamadi', 'aciklama': '$e'};
         }
+        final said = const JsonEncoder.withIndent('  ').convert(answer);
         return result({
           'content': [
-            {
-              'type': 'text',
-              'text': const JsonEncoder.withIndent('  ').convert(answer),
-            },
+            {'type': 'text', 'text': said},
           ],
-          'structuredContent': answer,
+          // Not twice for a long answer: a program counts both against the
+          // most it hands its model.
+          if (said.length < 20000) 'structuredContent': answer,
           'isError': failed,
         });
       default:
@@ -525,7 +525,10 @@ class FolioMcp {
       case 'sure_hesapla':
         return deadline(args);
       case guideTool:
-        return (await LegalGuide.load()).read(text('konu'));
+        return (await LegalGuide.load()).read(
+          text('konu'),
+          parts: text('bolum'),
+        );
     }
     throw StateError('Bilinmeyen araç: $name');
   }

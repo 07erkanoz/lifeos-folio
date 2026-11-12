@@ -65,9 +65,83 @@ class LegalGuide {
     return _aliases[k] ?? _aliases[k.replaceAll('-', ' ')];
   }
 
+  /// The large topics, read part by part: the parts always given with any
+  /// ([core]), whether a part is known by its own letter ("A.", "E2.", "C4
+  /// —") or by its place, whether only `##` headings divide it, and whether
+  /// a bare call gives the core and the list rather than the whole. The
+  /// rest are read whole: a method's guide is meant to be read through, and
+  /// the criminal guide's amendments change rules in its other parts.
+  static const sectioned =
+      <String, ({List<String> core, bool letters, bool h2, bool listFirst})>{
+        'el-atma': (
+          core: ['A', 'B'],
+          letters: true,
+          h2: false,
+          listFirst: false,
+        ),
+        'usul': (core: [], letters: false, h2: false, listFirst: false),
+        'fon-tasfiyesi': (
+          core: ['B', 'G'],
+          letters: true,
+          h2: true,
+          listFirst: true,
+        ),
+      };
+
+  /// The most one call gives, in characters: about 40 KB as the tool's
+  /// answer. Claude's program does not hand the model a tool's answer much
+  /// above 45 KB (measured: one of 63.5 KB came as a file and a 2 KB
+  /// preview).
+  static const mostOutput = 36000;
+
+  /// [key]'s text before its first part, and its parts.
+  ({String intro, List<({String id, String title, String text})> parts})
+  partsOf(String key) {
+    final text = topics[key] ?? '';
+    final how = sectioned[key];
+    final heads = RegExp(
+      (how?.h2 ?? false) ? r'^## (.+)$' : r'^#{2,3} (.+)$',
+      multiLine: true,
+    ).allMatches(text).toList();
+    if (heads.isEmpty) return (intro: text, parts: const []);
+    final out = <({String id, String title, String text})>[];
+    for (var i = 0; i < heads.length; i++) {
+      final end = i + 1 < heads.length ? heads[i + 1].start : text.length;
+      var title = heads[i][1]!.trim();
+      var id = '${i + 1}';
+      if (how?.letters ?? false) {
+        id = RegExp(r'^([A-Z]\d*)\b').firstMatch(title)?[1] ?? title;
+        title = title.replaceFirst(RegExp(r'^[A-Z]\d*\s*[.—-]\s*'), '');
+      }
+      out.add((
+        id: id,
+        title: title,
+        text: text.substring(heads[i].start, end),
+      ));
+    }
+    return (intro: text.substring(0, heads.first.start), parts: out);
+  }
+
+  /// A part with a body of its own: not a bare heading over its sub-parts
+  /// (el-atma's "C. ÖZEL DURUMLAR").
+  static bool _hasBody(String text) => '\n'.allMatches(text).length > 2;
+
+  /// The parts of the large topics, as the tool's description lists them.
+  String get index => [
+    for (final MapEntry(key: key, value: how) in sectioned.entries)
+      if (topics.containsKey(key))
+        '$key'
+            '${how.core.isEmpty ? '' : ' (her zaman gelir: ${how.core.join(', ')})'}: '
+            '${[for (final p in partsOf(key).parts)
+              if (!how.core.contains(p.id) && _hasBody(p.text)) '${p.id} ${p.title.split(' — ').first.replaceAll(RegExp(r'\s*\([^)]*\)'), '')}'].join('; ')}',
+  ].join(' | ');
+
   /// A topic's text for the tool, or the list of topics when [name] names
-  /// none.
-  Map<String, Object?> read(String name) {
+  /// none. A large topic ([sectioned]) is given by the [parts] asked for
+  /// ("C1, C4", "tam" for all of it) with its core, never more than
+  /// [mostOutput]; fon-tasfiyesi asked for nothing gives its core and the
+  /// list of the rest.
+  Map<String, Object?> read(String name, {String parts = ''}) {
     final key = topicOf(name);
     if (key == null) {
       return {
@@ -76,7 +150,92 @@ class LegalGuide {
         'konular': topics.keys.toList(),
       };
     }
-    return {'durum': 'bulundu', 'konu': key, 'metin': topics[key]};
+    final text = topics[key]!;
+    final how = sectioned[key];
+    final asked = [
+      for (final p in parts.split(','))
+        if (p.trim().isNotEmpty) p.trim(),
+    ];
+    final whole = asked.any(
+      (p) => const {'tam', 'hepsi', 'tümü', 'tumu', '*'}.contains(_fold(p)),
+    );
+    final plain = how == null || (asked.isEmpty && !how.listFirst) || whole;
+    if (plain && text.length <= mostOutput) {
+      return {'durum': 'bulundu', 'konu': key, 'metin': text};
+    }
+    final (:intro, parts: all) = partsOf(key);
+    final chosen = <String>{...?how?.core};
+    final unknown = <String>[];
+    if (plain) {
+      chosen.addAll([for (final x in all) x.id]);
+    } else {
+      for (final p in asked) {
+        final hit = [
+          for (final x in all)
+            if (_fold(x.id) == _fold(p)) x.id,
+        ];
+        final byTitle = hit.isNotEmpty
+            ? const <String>[]
+            : [
+                for (final x in all)
+                  if (_fold(x.title).contains(_fold(p))) x.id,
+              ];
+        if (hit.isEmpty && byTitle.isEmpty) unknown.add(p);
+        chosen
+          ..addAll(hit)
+          ..addAll(byTitle);
+      }
+    }
+    // A part brings its own: el-atma's "C" its C1…C11; usul's appeals as
+    // they were and as Law 7589 made them.
+    if (key == 'el-atma') {
+      for (final id in [...chosen]) {
+        if (id.length == 1) {
+          chosen.addAll([
+            for (final x in all)
+              if (x.id.startsWith(id)) x.id,
+          ]);
+        }
+      }
+    }
+    if (key == 'usul' &&
+        all.any(
+          (x) => chosen.contains(x.id) && x.title.startsWith('Kanun yolları'),
+        )) {
+      chosen.addAll([
+        for (final x in all)
+          if (x.title.startsWith('Kanun yolları')) x.id,
+      ]);
+    }
+    final out = StringBuffer(intro.trimRight());
+    final left = <String>[];
+    for (final x in all) {
+      if (!chosen.contains(x.id)) continue;
+      final core = how?.core.contains(x.id) ?? false;
+      if (!core && out.length + x.text.length > mostOutput) {
+        left.add(x.id);
+        continue;
+      }
+      out.write('\n\n${x.text.trimRight()}');
+    }
+    final others = [
+      for (final x in all)
+        if (!chosen.contains(x.id) && _hasBody(x.text)) '${x.id} ${x.title}',
+    ];
+    return {
+      'durum': 'bulundu',
+      'konu': key,
+      'metin': out.toString(),
+      if (others.isNotEmpty) 'diger_bolumler': others,
+      if (left.isNotEmpty)
+        'aciklama':
+            'Sığmayan bölümler: ${left.join(', ')}. Bunları ayrıca iste.',
+      if (unknown.isNotEmpty) 'bilinmeyen_bolum': unknown,
+      if (others.isNotEmpty || left.isNotEmpty)
+        'not':
+            'Gereken bölümü hukuk_rehber(konu, bolum) ile iste; birden '
+            'çoğunu virgülle.',
+    };
   }
 
   /// The kinds of case [text] names, the most named first: by the topics'
@@ -114,8 +273,20 @@ class LegalGuide {
   String? blockFor(String text, {int most = 2}) {
     final found = topicsIn(text).take(most).toList();
     if (found.isEmpty) return null;
+    String block(String k) {
+      final got = read(k);
+      final others = got['diger_bolumler'] as List?;
+      return [
+        '<rehber konu="$k">\n${got['metin']}',
+        if (others != null)
+          'Bu konunun diğer bölümleri (hukuk_rehber("$k", bolum) ile oku): '
+              '${others.join('; ')}',
+        '</rehber>',
+      ].join('\n');
+    }
+
     return [
-      for (final k in found) '<rehber konu="$k">\n${topics[k]}\n</rehber>',
+      for (final k in found) block(k),
       'Folio bu konunun rehberini ekledi. Hangi maddeye dayanacağını önce '
           'rehberden bul, sonra o maddeyi mevzuat_madde ile oku. Rehberde '
           'olmayan bir maddeye dayanmadan önce onu da oku.',
@@ -137,6 +308,13 @@ class LegalGuide {
         'konu': {
           'type': 'string',
           'description': 'Konu: ${topics.keys.join(', ')}',
+        },
+        'bolum': {
+          'type': 'string',
+          'description':
+              'Büyük konularda yalnız gereken bölümler, virgülle: "E, E4". '
+              'Boş bırakırsan konu tam gelir; fon-tasfiyesi boşsa çekirdek '
+              've bölüm listesi gelir, tamamı için "tam". Bölümler: $index',
         },
       },
       'required': ['konu'],

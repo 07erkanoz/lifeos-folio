@@ -83,6 +83,63 @@ void main() {
     expect(guide.topicsIn('Kira bedelinin artırılma oranı'), ['kira']);
   });
 
+  group('a large topic, part by part', () {
+    test('fon-tasfiyesi asked for nothing: its core and the list', () {
+      final got = guide.read('fon-tasfiyesi');
+      final text = got['metin']! as String;
+      expect(text.length, lessThan(LegalGuide.mostOutput));
+      expect(text, contains('## B.'));
+      expect(text, contains('## G.'));
+      expect(text, isNot(contains('## E4.')));
+      expect(
+        (got['diger_bolumler']! as List).join(' '),
+        allOf(contains('E4'), contains('E3')),
+      );
+    });
+
+    test('the parts asked for come with the core, never over the limit', () {
+      final e4 = guide.read('fon-tasfiyesi', parts: 'E4')['metin']! as String;
+      expect(e4, contains('## E4.'));
+      expect(e4, contains('## B.'));
+      // Two large parts: the one that does not fit is named, to be asked.
+      final two = guide.read('fon-tasfiyesi', parts: 'E, E4');
+      expect(
+        (two['metin']! as String).length,
+        lessThan(LegalGuide.mostOutput + 12000),
+      );
+      expect(two['aciklama'], contains('E4'));
+      final all = guide.read('fon', parts: 'tam');
+      expect(
+        (all['metin']! as String).length,
+        lessThan(LegalGuide.mostOutput + 12000),
+      );
+      expect(all['aciklama'], contains('Sığmayan'));
+    });
+
+    test('el-atma: a letter brings its sub-parts; usul: both appeals', () {
+      final c = guide.read('el-atma', parts: 'C')['metin']! as String;
+      expect(c, contains('C10'));
+      final usul =
+          guide.read('usul', parts: 'Kanun yolları')['metin']! as String;
+      expect(usul, contains('7589 s.K. ile YENİ'));
+    });
+
+    test(
+      'a question about the fund crisis is given the core, not the whole',
+      () {
+        final block = guide.blockFor('PBLK fonunun tasfiyesinde zarar hesabı')!;
+        expect(block.length, lessThan(LegalGuide.mostOutput + 3000));
+        expect(block, contains('diğer bölümleri'));
+      },
+    );
+
+    test('the tool lists the parts', () {
+      final schema = guide.tool['inputSchema']! as Map;
+      final bolum = (schema['properties']! as Map)['bolum']! as Map;
+      expect(bolum['description'], contains('E4'));
+    });
+  });
+
   test('who must prove what: each kind of case has its part on it', () {
     for (final k in const [
       'icra',
