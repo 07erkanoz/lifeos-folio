@@ -11,12 +11,18 @@ import 'bedesten_legislation.dart';
 import 'citation.dart';
 import 'html_text.dart';
 import 'rich_text.dart';
+import 'verified_articles.dart';
 import '../../models/json_shape.dart';
 
 /// Where an article's text came from, named so a reader can weigh it.
 enum ArticleSource {
   bedesten('UYAP/Bedesten · resmî metin'),
-  mevzuatGov('mevzuat.gov.tr · resmî metin');
+  mevzuatGov('mevzuat.gov.tr · resmî metin'),
+
+  /// Cut from the official text where Bedesten is behind it
+  /// (VerifiedArticles).
+  verified('mevzuat.gov.tr · resmî metinden kesim'),
+  verifiedCopy('Resmî metnin kopyasından kesim');
 
   const ArticleSource(this.label);
 
@@ -208,6 +214,32 @@ class Legislation {
 
   /// The article a citation points at, and if there is none, why.
   Future<ArticleLookup> lookup(Citation citation) async {
+    // An article Bedesten is known to have behind the law: from the
+    // official text, and never from Bedesten instead.
+    final key = keyOf(citation);
+    if (VerifiedArticles.isTarget(citation.law.number, key)) {
+      final verified = await VerifiedArticles.load();
+      final one = verified?.of(citation.law.number, key);
+      final url = one?.url.isNotEmpty == true ? one!.url : pageOf(citation.law);
+      if (one == null) {
+        return ArticleLookup(ArticleOutcome.unreachable, url: url);
+      }
+      return ArticleLookup(
+        ArticleOutcome.found,
+        article: Article(
+          law: citation.law,
+          number: citation.article,
+          text: one.text,
+          place: citation.place,
+          headings: [if (one.heading.isNotEmpty) one.heading],
+          source: one.official
+              ? ArticleSource.verified
+              : ArticleSource.verifiedCopy,
+          url: url,
+        ),
+        url: url,
+      );
+    }
     var reached = false;
     final bank = _bedesten;
     if (bank != null) {
