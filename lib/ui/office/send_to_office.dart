@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/office/office_network.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
+import '../widgets/notice.dart';
 
 /// "Gönder" beside a document: the office's people and this person's own
 /// devices, one tap each. Not there at all while there is no one to send to.
@@ -38,6 +39,54 @@ class SendToOfficeButton extends StatelessWidget {
             ),
     );
   }
+}
+
+/// Just after a scan: when one of the person's own devices is on the
+/// network now, one tap sends the scan to it; when there are others to
+/// send to, one tap opens the list. Nothing is offered when there is no
+/// one: a device not on Folio's network, or not known as the person's own,
+/// is never sent to.
+void offerSendAfterScan(
+  BuildContext context,
+  String path, {
+  OfficeNetwork? network,
+}) {
+  final net = network ?? OfficeNetwork.instance;
+  final targets = net.sendTargets;
+  if (targets.isEmpty) return;
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final own = [
+    for (final t in targets)
+      if (!t.member && t.online) t,
+  ];
+  if (own.length == 1) {
+    final to = own.single;
+    showNotice(
+      context,
+      'Tarama kaydedildi',
+      detail: '${to.detail} ağda; tek dokunuşla ona gönderebilirsiniz.',
+      actionLabel: 'Gönder',
+      duration: const Duration(seconds: 12),
+      onAction: () async {
+        final error = await net.sendTo(to, [path]);
+        messenger?.showSnackBar(
+          SnackBar(content: Text(error ?? 'Gönderildi · ${to.detail}')),
+        );
+      },
+    );
+    return;
+  }
+  showNotice(
+    context,
+    'Tarama kaydedildi',
+    actionLabel: 'Gönder',
+    duration: const Duration(seconds: 12),
+    onAction: () {
+      if (context.mounted) {
+        unawaited(showSendToOffice(context, [path], network: net));
+      }
+    },
+  );
 }
 
 Future<void> showSendToOffice(

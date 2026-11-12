@@ -219,12 +219,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _addFiles([file.path], index: false, external: true, edit: edit);
   }
 
-  /// Camera to PDF: the saved scan opens at once, and joins Son açılanlar.
+  /// Camera to PDF: the saved scan opens at once, and joins Son açılanlar;
+  /// then it is offered to the person's computer ([offerSendAfterScan]).
   Future<void> _scanToPdf() async {
     try {
       final path = await DocumentScan.toPdf();
       if (path == null || !mounted) return;
       await _addFiles([path], index: false, external: true);
+      // Straight on to the computer, when it is on Folio's network.
+      if (mounted) offerSendAfterScan(context, path);
     } catch (e) {
       if (mounted) {
         showNotice(
