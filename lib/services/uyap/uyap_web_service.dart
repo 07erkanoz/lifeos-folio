@@ -318,9 +318,8 @@ class UyapWebService {
       if (Platform.isLinux) {
         onProgress?.call('Kart ve sertifika okunuyor');
         try {
-          certificate = await _trayCertificate(
-            cancel,
-          ).timeout(const Duration(seconds: 12));
+          certificate = await _trayCertificate(cancel)
+              .timeout(const Duration(seconds: 12));
         } on Object {
           if (cancel.isCompleted) rethrow;
           certificate = null;

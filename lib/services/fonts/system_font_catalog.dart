@@ -22,7 +22,10 @@ class SystemFontCatalog {
     String? kept;
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       try {
-        kept = p.join((await folioSupportDirectory()).path, 'font_catalog.json');
+        kept = p.join(
+          (await folioSupportDirectory()).path,
+          'font_catalog.json',
+        );
       } catch (_) {
         /* No data folder: scanned each time, as before. */
       }

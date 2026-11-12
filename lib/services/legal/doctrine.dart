@@ -12,10 +12,9 @@ class Doctrine {
   Doctrine({
     @visibleForTesting Future<Object?> Function(Uri uri)? getJson,
     @visibleForTesting Future<List<int>> Function(Uri uri)? getBytes,
-    Future<String> Function(String path)? pdfText,
+    this.pdfText,
   }) : _getJson = getJson ?? _httpJson,
-       _getBytes = getBytes ?? _httpBytes,
-       _pdfText = pdfText;
+       _getBytes = getBytes ?? _httpBytes;
 
   static const host = 'search.trdizin.gov.tr';
   static const _pdfHost = 'pdf.trdizin.gov.tr';
@@ -27,7 +26,10 @@ class Doctrine {
 
   final Future<Object?> Function(Uri uri) _getJson;
   final Future<List<int>> Function(Uri uri) _getBytes;
-  final Future<String> Function(String path)? _pdfText;
+
+  /// A PDF's text (Folio's own reader); none, and only the record is
+  /// given.
+  final Future<String> Function(String path)? pdfText;
 
   /// Publications read in this session, by their number.
   final _read = <String, Map<String, Object?>>{};
@@ -143,8 +145,9 @@ class Doctrine {
       throw const HttpException('TR Dizin izinli olmayan bir PDF adresi verdi');
     }
     final bytes = await _getBytes(url);
-    if (bytes.length > mostBytes)
+    if (bytes.length > mostBytes) {
       throw const HttpException('PDF 30 MB’ı aşıyor');
+    }
     if (bytes.length < 4 ||
         utf8.decode(bytes.take(4).toList(), allowMalformed: true) != '%PDF') {
       throw const HttpException('Dosya geçerli bir PDF değil');
@@ -153,7 +156,7 @@ class Doctrine {
     try {
       final file = File(p.join(dir.path, 'yayin.pdf'));
       await file.writeAsBytes(bytes);
-      return await (_pdfText ?? _noText)(file.path);
+      return await (pdfText ?? _noText)(file.path);
     } finally {
       await dir.delete(recursive: true);
     }
@@ -179,11 +182,11 @@ class Doctrine {
         : (abstracts.isNotEmpty && abstracts.first is Map
               ? abstracts.first as Map
               : const {});
-    final authors = <String>[
+    final authors = <String>{
       for (final a in source['authors'] as List? ?? const [])
         if (a is Map && clean(a['name'] ?? a['inPublicationName']).isNotEmpty)
           clean(a['name'] ?? a['inPublicationName']),
-    ].toSet().toList();
+    }.toList();
     final journal = source['journal'] as Map? ?? const {};
     final issue = source['issue'] as Map? ?? const {};
     final id = clean(source['id'] ?? hit['_id']);

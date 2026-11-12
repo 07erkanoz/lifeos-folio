@@ -1127,10 +1127,7 @@ class UyapCasePanelController extends ChangeNotifier {
     // seconds after the download before it.
     Uint8List bytes;
     try {
-      bytes = await web.caseDocumentBytes(
-        live,
-        caseId: (await _liveCase()).id,
-      );
+      bytes = await web.caseDocumentBytes(live, caseId: (await _liveCase()).id);
     } on UyapStaleDocument {
       // The ids UYAP gave no longer answer: the case and its list looked
       // up again, once, as the lawyer's own Yenile would.

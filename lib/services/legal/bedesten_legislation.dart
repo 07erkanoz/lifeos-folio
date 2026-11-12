@@ -362,9 +362,10 @@ class BedestenLegislation {
     final q = query.trim();
     final no = (number ?? '').trim().isNotEmpty
         ? number!.trim()
-        : RegExp(r'\b(\d{2,6})\s*say[ıi]l[ıi]\b', caseSensitive: false)
-                  .firstMatch(q)
-                  ?.group(1) ??
+        : RegExp(
+                r'\b(\d{2,6})\s*say[ıi]l[ıi]\b',
+                caseSensitive: false,
+              ).firstMatch(q)?.group(1) ??
               '';
     final out = <BedestenDocument>[];
     if (no.isNotEmpty) out.addAll(await ask({'mevzuatNo': no}));
@@ -391,7 +392,9 @@ class BedestenLegislation {
         : '';
     final kind = data['mevzuatTur'];
     return (
-      name: '${data['mevzuatAdi'] ?? ''}'.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      name: '${data['mevzuatAdi'] ?? ''}'
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim(),
       kind: kind is Map ? '${kind['name'] ?? ''}' : '${kind ?? ''}',
       text: html.isEmpty ? '' : plainTextOf(html).trim(),
     );

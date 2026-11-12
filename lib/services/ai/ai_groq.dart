@@ -836,6 +836,7 @@ class McpClient implements FolioToolHost {
   }
 
   /// The tool's answer as text, as the model reads it.
+  @override
   Future<String> call(String name, Map<String, Object?> args) async {
     try {
       final got = await _ask('tools/call', {'name': name, 'arguments': args});
@@ -853,6 +854,7 @@ class McpClient implements FolioToolHost {
     }
   }
 
+  @override
   Future<void> close() async {
     try {
       await _process.stdin.close();
