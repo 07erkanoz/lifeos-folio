@@ -12,6 +12,7 @@ import '../legal/deadlines/mahkeme_kategori.dart';
 import '../legal/deadlines/sure_katalogu.dart';
 import '../legal/doctrine.dart';
 import '../legal/legislation.dart';
+import '../legal/uyap_emsal.dart';
 import 'ai_assistant.dart';
 import 'ai_case.dart';
 import 'ai_guide.dart';
@@ -301,6 +302,67 @@ class FolioMcp {
       'annotations': _readOnly,
     },
     {
+      'name': 'emsal_ara',
+      'title': 'Bölge adliye ve ilk derece kararı ara',
+      'description':
+          'UYAP Emsal\'de bölge adliye mahkemesi (istinaf) ve ilk derece '
+          'kararlarını arar: kelimeyle ya da esas ve karar numarasıyla '
+          '("2024/1642"). Sonuçta dairesi, künyesi ve kesinleşip '
+          'kesinleşmediği gelir. Yargıtay ve Danıştay kararları burada '
+          'yoktur, onlar için karar_ara.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'sorgu': {'type': 'string'},
+          'esas': {'type': 'string', 'description': 'YYYY/NNNN'},
+          'karar': {'type': 'string', 'description': 'YYYY/NNNN'},
+          'sayfa': {'type': 'integer', 'minimum': 1},
+        },
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'emsal_getir',
+      'title': 'UYAP Emsal kararını oku',
+      'description':
+          'emsal_ara\'nın verdiği kimlikle kararın tam metnini parça parça '
+          'getirir; sonucu ve oy durumu "sonuc" alanındadır.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'kimlik': {'type': 'string'},
+          'parca': {'type': 'integer', 'minimum': 1},
+        },
+        'required': ['kimlik'],
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'kunye_dogrula',
+      'title': 'Künyeyi iki kaynakta doğrula',
+      'description':
+          'Bir kararın esas ve karar numarasını iki resmî kaynakta birden '
+          'arar: Bedesten (Yargıtay, Danıştay, bölge adliye) ve UYAP Emsal '
+          '(bölge adliye ve ilk derece). Bulunan her kaydın dairesini, '
+          'tarihini ve yazdığın daireyle uyup uymadığını söyler. Bir künyeye '
+          'dayanmadan önce ya da avukat "bu karar gerçek mi" dediğinde kullan. '
+          'İki kaynakta da bulunmaması kararın olmadığını kanıtlamaz; açık '
+          'kaynakta doğrulanamadığını söyle.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'esas': {'type': 'string', 'description': 'YYYY/NNNN'},
+          'karar': {'type': 'string', 'description': 'YYYY/NNNN'},
+          'daire': {
+            'type': 'string',
+            'description': 'Yazılan mahkeme ve daire, varsa',
+          },
+        },
+        'required': ['esas', 'karar'],
+      },
+      'annotations': _readOnly,
+    },
+    {
       'name': 'doktrin_ara',
       'title': 'Doktrin ara',
       'description':
@@ -564,6 +626,35 @@ class FolioMcp {
         return _document(text('kimlik'), part is num ? part.toInt() : 1);
       case 'sure_hesapla':
         return deadline(args);
+      case 'emsal_ara':
+        final page = args['sayfa'];
+        if (text('sorgu').isEmpty &&
+            (UyapEmsal.numbers(text('esas')) == null ||
+                UyapEmsal.numbers(text('karar')) == null)) {
+          return {
+            'durum': 'yok',
+            'aciklama': 'sorgu ya da esas ve karar (YYYY/NNNN) gerekli.',
+          };
+        }
+        final got = await _emsal.search(
+          words: text('sorgu'),
+          esas: text('esas'),
+          karar: text('karar'),
+          page: page is num ? page.toInt() : 1,
+        );
+        for (final r in got.rows) {
+          _emsalNames['${r['kimlik']}'] = r;
+        }
+        return {
+          'durum': got.rows.isEmpty ? 'yok' : 'bulundu',
+          'toplam': got.total,
+          'sonuclar': got.rows,
+        };
+      case 'emsal_getir':
+        final part = args['parca'];
+        return _emsalDecision(text('kimlik'), part is num ? part.toInt() : 1);
+      case 'kunye_dogrula':
+        return _verify(text('esas'), text('karar'), text('daire'));
       case 'doktrin_ara':
         final count = args['adet'];
         return _doctrine.search(
@@ -800,6 +891,169 @@ class FolioMcp {
   /// The names the search gave, by the bank's id: the document's own page
   /// does not carry it.
   final _documentNames = <String, String>{};
+
+  final _emsal = UyapEmsal();
+  final _emsalNames = <String, Map<String, Object?>>{};
+  final _emsalTexts = <String, String>{};
+
+  Future<Map<String, Object?>> _emsalDecision(String id, int part) async {
+    final key = id.startsWith('emsal:') ? id : 'emsal:$id';
+    final text = _emsalTexts[key] ??= await _emsal.text(key);
+    if (text.isEmpty) {
+      _emsalTexts.remove(key);
+      return {'durum': 'yok', 'aciklama': 'Bu kararın metni alınamadı.'};
+    }
+    final parts = (text.length / partSize).ceil();
+    final at = part.clamp(1, parts);
+    return {
+      'durum': 'bulundu',
+      ...?_emsalNames[key],
+      'sonuc': outcomeOf(text),
+      'parca': at,
+      'toplam_parca': parts,
+      'metin': text.substring(
+        (at - 1) * partSize,
+        (at * partSize).clamp(0, text.length),
+      ),
+      'kaynak': 'UYAP Emsal',
+    };
+  }
+
+  /// A decision's numbers asked of both banks: what each holds under them,
+  /// and whether the court written is one of those.
+  Future<Map<String, Object?>> _verify(
+    String esas,
+    String karar,
+    String written,
+  ) async {
+    final e = UyapEmsal.numbers(esas), k = UyapEmsal.numbers(karar);
+    if (e == null || k == null) {
+      return {
+        'durum': 'kunye_bozuk',
+        'aciklama': 'esas ve karar YYYY/NNNN biçiminde olmalı ("2024/1642").',
+      };
+    }
+    final found = <Map<String, Object?>>[];
+    final unreached = <String>[];
+    try {
+      final got = await _emsal.search(esas: esas, karar: karar);
+      for (final r in got.rows) {
+        if (UyapEmsal.numbers('${r['esas']}') == e &&
+            UyapEmsal.numbers('${r['karar']}') == k) {
+          found.add({...r, 'kaynak': 'UYAP Emsal'});
+        }
+      }
+    } catch (_) {
+      unreached.add('UYAP Emsal');
+    }
+    try {
+      for (final kind in const [
+        CourtKind.yargitay,
+        CourtKind.danistay,
+        CourtKind.istinaf,
+      ]) {
+        final got = await _caseLaw.search(
+          CaseLawQuery(
+            kinds: {kind},
+            esasYear: e.$1,
+            esasNumber: e.$2,
+            kararYear: k.$1,
+            kararNumber: k.$2,
+          ),
+        );
+        for (final hit in got.hits) {
+          if (UyapEmsal.numbers(hit.esas) == e &&
+              UyapEmsal.numbers(hit.karar) == k) {
+            found.add({
+              'kimlik': _keep(hit),
+              'mahkeme': _referenceOf(hit)
+                  .split(RegExp(r',| E\.| \d{4}/'))
+                  .first
+                  .trim(),
+              'esas': hit.esas,
+              'karar': hit.karar,
+              'tarih': hit.date,
+              'kaynak': 'Bedesten',
+            });
+          }
+        }
+      }
+    } catch (_) {
+      unreached.add('Bedesten');
+    }
+    bool matches(Map r) => courtMatches(written, '${r['mahkeme']}');
+
+    return {
+      'durum': found.isNotEmpty
+          ? 'bulundu'
+          : unreached.length == 2
+          ? 'ulasilamadi'
+          : 'bulunamadi',
+      'kunye': 'E.$esas K.$karar',
+      'kayitlar': [
+        for (final r in found)
+          {...r, if (written.isNotEmpty) 'daire_uyuyor': matches(r)},
+      ],
+      if (unreached.isNotEmpty) 'ulasilamayan': unreached,
+      'aciklama': found.isNotEmpty
+          ? (written.isNotEmpty && !found.any(matches)
+                ? 'Bu numaralarla kayıt var ama yazılan daireyle uyuşmuyor; '
+                      'doğru daireyi yaz.'
+                : 'Künye resmî kaynakta bulundu.')
+          : unreached.isNotEmpty
+          ? '${unreached.join(' ve ')} yanıt vermedi; doğrulama tam yapılamadı. '
+                'Bu, kararın olmadığı anlamına gelmez.'
+          : 'İki kaynakta da bu numaralarla kayıt yok. Bu yokluk kanıtı '
+                'değildir: açık yayın her kararı taşımaz; "açık kaynakta '
+                'doğrulanamadı" de.',
+    };
+  }
+
+  /// Whether the court [written] ("Yargıtay 3. HD", "İstanbul BAM 54. HD")
+  /// is [court] as the bank names it: its kind of chamber and its number
+  /// the same.
+  static bool courtMatches(String written, String court) {
+    String norm(String v) {
+      var t = ' ${v.toLowerCase().replaceAll('i̇', 'i')} '.replaceAll(
+        RegExp(r'[.,]'),
+        ' ',
+      );
+      for (final (a, b) in const [
+        ('hgk', 'hukuk genel kurulu'),
+        ('cgk', 'ceza genel kurulu'),
+        ('hd', 'hukuk daire'),
+        ('cd', 'ceza daire'),
+        ('bam', 'bölge adliye mahkemesi'),
+        ('bim', 'bölge idare mahkemesi'),
+        ('iddk', 'idari dava daireleri kurulu'),
+        ('vddk', 'vergi dava daireleri kurulu'),
+        ('d', 'daire'),
+        ('dairesi', 'daire'),
+      ]) {
+        t = t.replaceAll(' $a ', ' $b ');
+      }
+      return t.replaceAll(RegExp(r'\s+'), ' ').trim();
+    }
+
+    final w = norm(written), c = norm(court);
+    if (w.isEmpty) return false;
+    final number = RegExp(r'(?:^| )(\d{1,3})(?= |$)');
+    if (number.firstMatch(w)?[1] != number.firstMatch(c)?[1]) return false;
+    for (final kind in const [
+      'hukuk',
+      'ceza',
+      'genel kurul',
+      'idari',
+      'vergi',
+      'bölge',
+    ]) {
+      if (w.contains(kind) && !c.contains(kind)) return false;
+    }
+    for (final top in const ['yargıtay', 'danıştay']) {
+      if (w.contains(top) && !c.contains(top)) return false;
+    }
+    return true;
+  }
 
   final _doctrine = Doctrine(
     pdfText: (path) => AiAssistant.documentText(path, ocr: false),

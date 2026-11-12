@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'html_text.dart';
+
 /// One decision as UYAP Emsal lists it.
 @immutable
 class EmsalRecord {
@@ -97,6 +99,75 @@ class UyapEmsal {
         for (final row in rows)
           if (row is Map) ?EmsalRecord.fromJson(row.cast<String, Object?>()),
     ];
+  }
+
+  /// "2024/1642" as its year and number; null when it is not one.
+  static (int, int)? numbers(String v) {
+    final m = RegExp(r'^\s*(\d{4})\s*/\s*0*(\d+)\s*$').firstMatch(v);
+    return m == null ? null : (int.parse(m[1]!), int.parse(m[2]!));
+  }
+
+  /// Decisions with [words], or under the case [esas] and decision [karar]
+  /// numbers ("2024/1642"), the newest first; for the AI's tools, as they
+  /// give them.
+  Future<({int total, List<Map<String, Object?>> rows})> search({
+    String words = '',
+    String esas = '',
+    String karar = '',
+    int page = 1,
+  }) async {
+    final e = numbers(esas), k = numbers(karar);
+    final body = jsonEncode({
+      'data': {
+        'arananKelime': words.trim(),
+        if (e != null) ...{
+          'esasYil': '${e.$1}',
+          'esasIlkSiraNo': '${e.$2}',
+          'esasSonSiraNo': '${e.$2}',
+        },
+        if (k != null) ...{
+          'kararYil': '${k.$1}',
+          'kararIlkSiraNo': '${k.$2}',
+          'kararSonSiraNo': '${k.$2}',
+        },
+        'siralama': '1',
+        'siralamaDirection': 'desc',
+        'pageSize': 10,
+        'pageNumber': page < 1 ? 1 : page,
+      },
+    });
+    final json = jsonDecode(await (_send ?? _http)('/aramadetaylist', body));
+    final data = json is Map ? json['data'] : null;
+    if (data is! Map) {
+      throw const FormatException('UYAP Emsal cevabı okunamadı');
+    }
+    final rows = [
+      for (final row in data['data'] as List? ?? const [])
+        if (row is Map) ?EmsalRecord.fromJson(row.cast<String, Object?>()),
+    ];
+    final total = data['recordsTotal'];
+    return (
+      total: total is num ? total.toInt() : rows.length,
+      rows: [
+        for (final r in rows)
+          {
+            'kimlik': 'emsal:${r.id}',
+            'mahkeme': r.court,
+            'esas': r.esas,
+            'karar': r.karar,
+            'tarih': r.date,
+            if (r.state.isNotEmpty) 'kesinlesme': r.state,
+          },
+      ],
+    );
+  }
+
+  /// A decision's text, as plain text; empty when the bank gives none.
+  Future<String> text(String id) async {
+    final n = id.replaceFirst('emsal:', '').trim();
+    if (!RegExp(r'^\d+$').hasMatch(n)) return '';
+    final html = await page(n);
+    return html == null ? '' : plainTextOf(html).trim();
   }
 
   /// The decision's page, as HTML.

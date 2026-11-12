@@ -26,6 +26,7 @@ class AiStep extends AiEvent {
       'mevzuat_belge_ara' ||
       'doktrin_ara' => '${args['sorgu'] ?? ''}',
       'karar_getir' => '${args['kunye'] ?? ''}',
+      'kunye_dogrula' => 'E.${args['esas'] ?? ''} K.${args['karar'] ?? ''}',
       'mevzuat_toplu' => [
         for (final m in args['maddeler'] as List? ?? const [])
           m is Map ? '${m['kanun'] ?? ''} m.${m['madde'] ?? ''}' : '$m',
@@ -58,7 +59,11 @@ class AiStep extends AiEvent {
     'mevzuat_toplu' ||
     'mevzuat_belge_ara' ||
     'mevzuat_belge_getir' => 'mevzuat',
-    'karar_ara' || 'karar_getir' => 'karar',
+    'karar_ara' ||
+    'karar_getir' ||
+    'emsal_ara' ||
+    'emsal_getir' ||
+    'kunye_dogrula' => 'karar',
     'doktrin_ara' || 'doktrin_getir' => 'doktrin',
     'evrak_oku' => 'evrak',
     'dosya_bilgisi' ||
@@ -84,6 +89,9 @@ class AiStep extends AiEvent {
     ),
     'sure_hesapla': ('Son gün hesaplanıyor', 'Son gün hesaplandı'),
     'doktrin_ara': ('Doktrin aranıyor', 'Doktrin arandı'),
+    'emsal_ara': ('UYAP Emsal’de aranıyor', 'UYAP Emsal’de arandı'),
+    'emsal_getir': ('Kararın metni okunuyor', 'Kararın metni okundu'),
+    'kunye_dogrula': ('Künye iki kaynakta denetleniyor', 'Künye denetlendi'),
     'doktrin_getir': ('Doktrin okunuyor', 'Doktrin okundu'),
     'mevzuat_icindekiler': (
       'Kanunun içindekiler okunuyor',
