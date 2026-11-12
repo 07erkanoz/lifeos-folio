@@ -28,6 +28,7 @@ class AiStep extends AiEvent {
       'kurul_karar_ara' => '${args['sorgu'] ?? ''}',
       'karar_getir' => '${args['kunye'] ?? ''}',
       'kunye_dogrula' => 'E.${args['esas'] ?? ''} K.${args['karar'] ?? ''}',
+      'ceza_hesapla' => '${args['suc'] ?? ''}',
       'mevzuat_toplu' => [
         for (final m in args['maddeler'] as List? ?? const [])
           m is Map ? '${m['kanun'] ?? ''} m.${m['madde'] ?? ''}' : '$m',
@@ -91,6 +92,7 @@ class AiStep extends AiEvent {
       'Yönetmelik ya da tebliğ okundu',
     ),
     'sure_hesapla': ('Son gün hesaplanıyor', 'Son gün hesaplandı'),
+    'ceza_hesapla': ('Ceza hesaplanıyor', 'Ceza hesaplandı'),
     'doktrin_ara': ('Doktrin aranıyor', 'Doktrin arandı'),
     'kurul_karar_ara': ('Kurul kararı aranıyor', 'Kurul kararı arandı'),
     'kurul_karar_getir': ('Kurul kararı okunuyor', 'Kurul kararı okundu'),

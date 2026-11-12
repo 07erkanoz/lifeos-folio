@@ -7,6 +7,7 @@ import '../legal/board_decisions.dart';
 import '../legal/case_law.dart';
 import '../legal/case_law_search.dart';
 import '../legal/citation.dart';
+import '../legal/criminal_calculator.dart';
 import '../legal/decision.dart';
 import '../legal/deadlines/deadline_service.dart';
 import '../legal/deadlines/mahkeme_kategori.dart';
@@ -90,7 +91,9 @@ class FolioMcp {
       'oku. Parasal sınır, harç, tarife, oran gibi her yıl değişen değerleri '
       'kanun metninden ya da ezberden verme; güncel tebliğden oku. Sürenin '
       'son gününü kendin hesaplama: dayandığı maddeyi okuduktan sonra '
-      'sure_hesapla ile Folio\'nun süre motoruna hesaplat. Davaya hangi '
+      'sure_hesapla ile Folio\'nun süre motoruna hesaplat. Ceza aralığını, HAGB, '
+      'erteleme, zamanaşımı ve uzlaştırmayı kafandan hesaplama: '
+      'ceza_hesapla\'yı çağır. Davaya hangi '
       'yargı kolunun bakacağı tartışmalıysa Uyuşmazlık Mahkemesi '
       'kararlarına, rekabet hukukunda Rekabet Kurulu kararlarına '
       'kurul_karar_ara ile bak. Doktrine '
@@ -119,7 +122,81 @@ class FolioMcp {
     ])
       '${t['name']}',
     guideTool,
+    crimeTool,
   ];
+
+  /// The criminal sentence calculator (CriminalCalculator), its crimes
+  /// listed from its own table.
+  static const crimeTool = 'ceza_hesapla';
+
+  static Future<Map<String, Object?>> crimeToolDefinition() async {
+    final calc = await CriminalCalculator.load();
+    return {
+      'name': crimeTool,
+      'title': 'Ceza hesapla',
+      'description':
+          'Ceza hesabını Folio\'nun deterministik motoruyla yapar; kafadan '
+          'hesaplama. TCK 61 sırasıyla (temel ceza, nitelikli hâller, teşebbüs, '
+          'iştirak, zincirleme, haksız tahrik, yaş, etkin pişmanlık, takdiri '
+          'indirim) en az ve en çok cezayı adımlarıyla verir; lehe kanun için '
+          'olay tarihindeki ve sonraki metinleri ayrı hesaplayıp lehe olanı '
+          'işaretler. HAGB (CMK 231/5), erteleme (TCK 51), seçenek yaptırım '
+          '(TCK 50), dava zamanaşımı (TCK 66-67, bitiş tarihleriyle), şikâyet, '
+          'uzlaştırma (CMK 253), önödeme (TCK 75), görevli mahkeme, tutuklama '
+          'yasağı (CMK 100/4) ve zorunlu müdafi (CMK 150/3) sonuçlarını verir. '
+          'Ceza aralığı, HAGB, erteleme, zamanaşımı ya da uzlaştırma hakkında '
+          'bir şey yazacaksan önce bunu çağır. Nitelendirme ve oranın takdiri '
+          'senin hukuki değerlendirmendir; araç aralığı verir. Tabloda olmayan '
+          'suçta hata döner: o zaman aralığı mevzuat_madde ile suç tarihindeki '
+          'metinden kur ve doğrulanmamış olduğunu söyle.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'olay_tarihi': {'type': 'string', 'description': 'GG.AA.YYYY'},
+          'suc': {
+            'type': 'string',
+            'description':
+                'Temel suç fıkrası, tablodakilerden biri: '
+                '${calc.crimeCodes.join(', ')}. Bent "TCK 158/1-f" biçiminde '
+                'yazılabilir.',
+          },
+          'bent': {'type': 'string'},
+          'nitelikli': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description':
+                'Nitelikli hâller: ${calc.circumstanceCodes.join(', ')}',
+          },
+          'kadina_karsi': {'type': 'boolean'},
+          'tesebbus': {'type': 'boolean'},
+          'yardim_eden': {'type': 'boolean'},
+          'zincirleme': {'type': 'boolean'},
+          'haksiz_tahrik': {'type': 'boolean'},
+          'takdiri_indirim': {'type': 'boolean'},
+          'etkin_pismanlik': {
+            'type': 'string',
+            'description':
+                'sorusturma_oncesi | kovusturma_oncesi | kovusturmada',
+          },
+          'fail_yas_grubu': {
+            'type': 'string',
+            'enum': ['12-15', '15-18', '65+'],
+          },
+          'karar_tarihi': {'type': 'string', 'description': 'GG.AA.YYYY'},
+          'ayni_magdura_diger_suclar': {
+            'type': 'array',
+            'items': {'type': 'string'},
+          },
+        },
+        'required': ['olay_tarihi', 'suc'],
+      },
+      'annotations': const {
+        'readOnlyHint': true,
+        'idempotentHint': true,
+        'openWorldHint': false,
+      },
+    };
+  }
 
   /// The legal guide's tool (LegalGuide), its description made from the
   /// guide's own list of topics.
@@ -587,6 +664,7 @@ class FolioMcp {
           'tools': [
             ...tools,
             (await LegalGuide.load()).tool,
+            await crimeToolDefinition(),
             if (caseTools != null) ...FolioCaseTools.tools,
             if (officeTools != null) ...FolioOfficeTools.tools,
           ],
@@ -600,6 +678,7 @@ class FolioMcp {
             ? args.cast<String, Object?>()
             : const <String, Object?>{};
         if (name != guideTool &&
+            name != crimeTool &&
             !tools.any((t) => t['name'] == name) &&
             !(caseTools != null && FolioCaseTools.owns(name)) &&
             !(officeTools != null && FolioOfficeTools.owns(name))) {
@@ -725,6 +804,17 @@ class FolioMcp {
           text('kimlik'),
           part: part is num ? part.toInt() : 1,
         );
+      case crimeTool:
+        final calc = await CriminalCalculator.load();
+        final got = calc.compute(args);
+        if (got['hata'] != null) {
+          return {'durum': 'yok', 'aciklama': got['hata']};
+        }
+        return {
+          'durum': 'hesaplandi',
+          // The engine's text names banaozel's tool; Folio's is this one.
+          'metin': calc.text(args).replaceAll('mevzuat_getir', 'mevzuat_madde'),
+        };
       case guideTool:
         return (await LegalGuide.load()).read(
           text('konu'),
