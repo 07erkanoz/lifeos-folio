@@ -29,12 +29,16 @@ void main() {
       await req.response.close();
     });
     final url = 'http://127.0.0.1:${server.port}/v1';
+    GroqChat.folderForTest = Directory.systemTemp.createTempSync(
+      'folio-api-sohbet-',
+    );
     GroqChat.keyForTest = 'anahtar';
     GroqChat.endpointForTest = '$url/chat/completions';
     ClaudeApiChat.endpointForTest = '$url/messages';
   });
   tearDown(() async {
     GroqChat.keyForTest = null;
+    GroqChat.folderForTest = null;
     GroqChat.endpointForTest = null;
     ClaudeApiChat.endpointForTest = null;
     await server.close(force: true);
@@ -201,6 +205,45 @@ void main() {
       expect((m.single['content'] as List), hasLength(2));
     });
   });
+
+  test(
+    'a chat goes on after Folio was closed; removed, it is forgotten',
+    () async {
+      replies.add((200, said('Birinci.')));
+      final thread = AiThread('sohbet-9');
+      await AiAssistant.ask(AiProvider.gemini, 'Soru 1', thread: thread);
+      final file = File('${GroqChat.folderForTest!.path}/gemini-sohbet-9.json');
+      expect(file.existsSync(), isTrue);
+      // As read again from disk by a Folio opened anew.
+      GroqChat.dropMemoryForTest();
+      expect(await AiAssistant.goesOn(AiProvider.gemini, thread), isTrue);
+      replies.add((200, said('İkinci.')));
+      await AiAssistant.ask(AiProvider.gemini, 'Soru 2', thread: thread);
+      expect((bodies.last['messages']! as List).length, 4);
+      await GroqChat.forget('sohbet-9');
+      expect(file.existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'Claude caches the prefix; ChatGPT is given the chat\'s cache key',
+    () async {
+      replies.add((
+        200,
+        {
+          'content': [
+            {'type': 'text', 'text': 'A'},
+          ],
+          'stop_reason': 'end_turn',
+        },
+      ));
+      await AiAssistant.ask(AiProvider.anthropic, 'Soru');
+      expect(bodies.last['cache_control'], {'type': 'ephemeral'});
+      replies.add((200, said('B')));
+      await AiAssistant.ask(AiProvider.openai, 'Soru', thread: AiThread('s1'));
+      expect(bodies.last['prompt_cache_key'], 'folio-s1');
+    },
+  );
 
   test(
     'Folio\'s tools run in Folio itself where no server is started',

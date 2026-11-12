@@ -48,7 +48,7 @@ abstract final class ClaudeApiChat {
         : model;
     final id = thread?.ids[AiProvider.anthropic];
     final messages = <Map<String, Object?>>[
-      ...?GroqChat.heldOf(id),
+      ...?await GroqChat.load(id),
       {
         'role': 'user',
         'content': [
@@ -111,6 +111,10 @@ abstract final class ClaudeApiChat {
           // last steps none may be called.
           if (last && declared.isNotEmpty) 'tool_choice': {'type': 'none'},
           if (_fallsBack(name)) 'fallbacks': 'default',
+          // The rules, the tools and what was said are the same prefix every
+          // step and every question of the chat: cached, read again at a
+          // tenth of the price.
+          'cache_control': {'type': 'ephemeral'},
         };
         final reply = await _request(http, key, body, () => stopped, name);
         if (reply['stop_reason'] == 'refusal') {
@@ -138,7 +142,12 @@ abstract final class ClaudeApiChat {
           }
           messages.add({'role': 'assistant', 'content': content});
           onEvent?.call(AiWriting(text, restart: true));
-          final kept = GroqChat.hold(id, messages);
+          final kept = await GroqChat.hold(
+            id,
+            messages,
+            place: thread?.place,
+            service: ApiService.anthropic,
+          );
           if (thread != null) thread.ids[AiProvider.anthropic] = kept;
           if (text.trim().isEmpty) {
             throw const AiFailure('Claude yanıt vermedi.');

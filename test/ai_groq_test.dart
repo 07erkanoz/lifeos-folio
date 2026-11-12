@@ -82,12 +82,16 @@ void main() {
           ..write(jsonEncode(body));
         await req.response.close();
       });
+      GroqChat.folderForTest = Directory.systemTemp.createTempSync(
+        'folio-api-sohbet-',
+      );
       GroqChat.keyForTest = 'gsk_test';
       GroqChat.endpointForTest =
           'http://127.0.0.1:${server.port}/openai/v1/chat/completions';
     });
     tearDown(() async {
       GroqChat.keyForTest = null;
+      GroqChat.folderForTest = null;
       GroqChat.endpointForTest = null;
       await server.close(force: true);
     });

@@ -5,6 +5,10 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import 'package:path/path.dart' as p;
+
+import '../platform/app_directories.dart';
+import '../platform/atomic_file.dart';
 import '../security/secret_store.dart';
 import 'ai_assistant.dart';
 import 'ai_case.dart';
@@ -237,23 +241,115 @@ abstract final class GroqChat {
     }
   }
 
-  // Conversations, by the id kept in the chat's [AiThread]: in memory only,
-  // for as long as Folio is open. One whose id is not here is asked anew
-  // with all that was said ([has] false).
+  // Conversations, by the id kept in the chat's [AiThread]: kept on this
+  // computer, in Folio's folder (yapay-zeka/api-sohbet), so that a chat goes
+  // on after Folio was closed without the service reading it all again as
+  // text; as the programs keep their own records in theirs. A chat removed
+  // takes its records with it ([forget]); one untouched for [keepFor] goes.
 
   static final _held = <String, List<Map<String, Object?>>>{};
 
-  /// The conversation kept under [id], for another loop of this file.
-  static List<Map<String, Object?>>? heldOf(String? id) =>
-      id == null ? null : _held[id];
+  static const keepFor = Duration(days: 60);
 
-  static String hold(String? id, List<Map<String, Object?>> messages) {
-    final next = id ?? _newId();
+  /// Where the conversations are kept; a test's own folder.
+  @visibleForTesting
+  static Directory? folderForTest;
+
+  static Future<Directory> _folder() async {
+    final dir =
+        folderForTest ??
+        Directory(
+          p.join(
+            (await folioSupportDirectory()).path,
+            'yapay-zeka',
+            'api-sohbet',
+          ),
+        );
+    if (!_pruned) {
+      _pruned = true;
+      try {
+        final old = DateTime.now().subtract(keepFor);
+        await for (final f in dir.list()) {
+          if (f is File && (await f.lastModified()).isBefore(old)) {
+            await f.delete();
+          }
+        }
+      } catch (_) {}
+    }
+    return dir;
+  }
+
+  static var _pruned = false;
+
+  /// As a Folio opened anew: nothing held in memory.
+  @visibleForTesting
+  static void dropMemoryForTest() => _held.clear();
+
+  static String _safe(String id) => id.replaceAll(RegExp(r'[^\w.-]'), '_');
+
+  /// The conversation kept under [id]: in memory, else from its file.
+  static Future<List<Map<String, Object?>>?> load(String? id) async {
+    if (id == null) return null;
+    if (_held[id] case final got?) return got;
+    try {
+      final file = File(p.join((await _folder()).path, '${_safe(id)}.json'));
+      if (!await file.exists()) return null;
+      final json = jsonDecode(await file.readAsString());
+      final list = [
+        for (final m in (json as Map)['mesajlar'] as List? ?? const [])
+          if (m is Map) m.cast<String, Object?>(),
+      ];
+      return list.isEmpty ? null : _held[id] = list;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// [messages] kept under [id] (a new one when null, or the chat's own
+  /// [place] for [service]); the id they are kept under.
+  static Future<String> hold(
+    String? id,
+    List<Map<String, Object?>> messages, {
+    String? place,
+    ApiService service = ApiService.groq,
+  }) async {
+    final next = id ?? (place == null ? _newId() : '${service.name}-$place');
     _held[next] = messages;
+    // A single question (a notice read, a summary) is not a chat to go on.
+    if (place == null) return next;
+    try {
+      final dir = await _folder();
+      await dir.create(recursive: true);
+      await replaceFileIfChanged(
+        File(p.join(dir.path, '${_safe(next)}.json')),
+        utf8.encode(
+          jsonEncode({
+            'hizmet': service.name,
+            'sohbet': ?place,
+            'guncel': DateTime.now().toIso8601String(),
+            'mesajlar': messages,
+          }),
+        ),
+      );
+    } catch (_) {}
     return next;
   }
 
-  static bool has(String id) => _held.containsKey(id);
+  /// Whether the conversation [id] is kept, here or on disk.
+  static Future<bool> has(String id) async => await load(id) != null;
+
+  /// A chat's records with every service, when the chat is removed.
+  static Future<void> forget(String place) async {
+    _held.removeWhere((k, _) => k.endsWith('-$place'));
+    try {
+      for (final s in ApiService.values) {
+        final f = File(
+          p.join((await _folder()).path, '${_safe('${s.name}-$place')}.json'),
+        );
+        if (await f.exists()) await f.delete();
+      }
+    } catch (_) {}
+  }
 
   static String _newId() {
     final r = Random.secure();
@@ -293,7 +389,7 @@ abstract final class GroqChat {
       );
     }
     final id = thread?.ids[service.provider];
-    final kept = id != null ? _held[id] : null;
+    final kept = await load(id);
     final messages = <Map<String, Object?>>[
       if (kept != null)
         ...kept
@@ -358,6 +454,11 @@ abstract final class GroqChat {
           'reasoning_effort': (tier ?? AiTier.normal).effort,
           // OpenAI's reasoning models take no temperature but their own.
           if (service != ApiService.openai) 'temperature': 1,
+          // The same chat's requests share a prefix (rules, tools, what was
+          // said): OpenAI routes them to its cache by this key. Gemini and
+          // Groq cache a repeated prefix of themselves.
+          if (service == ApiService.openai && thread != null)
+            'prompt_cache_key': 'folio-${thread.place}',
           if (service == ApiService.gemini)
             'max_tokens': 16000
           else
@@ -386,8 +487,12 @@ abstract final class GroqChat {
           }
           messages.add({'role': 'assistant', 'content': content});
           onEvent?.call(AiWriting(content, restart: true));
-          final nextId = id ?? _newId();
-          _held[nextId] = messages;
+          final nextId = await hold(
+            id,
+            messages,
+            place: thread?.place,
+            service: service,
+          );
           if (thread != null) thread.ids[service.provider] = nextId;
           if (content.trim().isEmpty) {
             throw AiFailure('$who yanıt vermedi.');

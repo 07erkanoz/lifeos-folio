@@ -934,7 +934,7 @@ abstract final class AiAssistant {
       thread.ids.remove(provider);
     }
     // Groq's conversation is held while Folio is open.
-    if (provider.viaApi && !GroqChat.has(thread.ids[provider] ?? '')) {
+    if (provider.viaApi && !await GroqChat.has(thread.ids[provider] ?? '')) {
       thread.ids.remove(provider);
     }
     return thread.ids.containsKey(provider);

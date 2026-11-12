@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_groq.dart';
 import '../../services/ai/ai_memory.dart';
 import '../../services/portal/observed.dart' show caseKey;
 import '../../services/portal/portal_database.dart';
@@ -206,6 +207,8 @@ class _CaseAiTabState extends State<CaseAiTab> {
     );
     if (sure != true) return;
     (await widget.database()).removeAiRecord('${chat['id']}');
+    // What the API services were told in it, kept on this computer.
+    await GroqChat.forget('${chat['id']}');
     await _load();
   }
 
