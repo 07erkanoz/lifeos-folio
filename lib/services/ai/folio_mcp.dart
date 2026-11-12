@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../legal/bedesten_legislation.dart';
+import '../legal/board_decisions.dart';
 import '../legal/case_law.dart';
 import '../legal/case_law_search.dart';
 import '../legal/citation.dart';
@@ -89,7 +90,10 @@ class FolioMcp {
       'oku. Parasal sınır, harç, tarife, oran gibi her yıl değişen değerleri '
       'kanun metninden ya da ezberden verme; güncel tebliğden oku. Sürenin '
       'son gününü kendin hesaplama: dayandığı maddeyi okuduktan sonra '
-      'sure_hesapla ile Folio\'nun süre motoruna hesaplat. Doktrine '
+      'sure_hesapla ile Folio\'nun süre motoruna hesaplat. Davaya hangi '
+      'yargı kolunun bakacağı tartışmalıysa Uyuşmazlık Mahkemesi '
+      'kararlarına, rekabet hukukunda Rekabet Kurulu kararlarına '
+      'kurul_karar_ara ile bak. Doktrine '
       'ancak mevzuat ve içtihat yetmezse ya da avukat isterse bak '
       '(doktrin_ara, doktrin_getir); dayandığın yazarı okuyup künyesiyle an. '
       'Madde numarasından emin değilsen önce mevzuat_icindekiler, karardan '
@@ -359,6 +363,44 @@ class FolioMcp {
           },
         },
         'required': ['esas', 'karar'],
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'kurul_karar_ara',
+      'title': 'Uyuşmazlık Mahkemesi ve kurul kararı ara',
+      'description':
+          'Mahkeme dışı merci kararlarını kendi resmî sitesinden arar: '
+          'uyusmazlik (Uyuşmazlık Mahkemesi: davaya adli mi idari yargının '
+          'mı bakacağı, görev uyuşmazlığı) ya da rekabet (Rekabet Kurulu: '
+          'birleşme-devralma, rekabet ihlali, muafiyet). Sonuçta künye, tarih '
+          've (Rekabet\'te) tür ve konu gelir; en yeniler önce.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'kurum': {
+            'type': 'string',
+            'enum': ['uyusmazlik', 'rekabet'],
+          },
+          'sorgu': {'type': 'string'},
+        },
+        'required': ['kurum', 'sorgu'],
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'kurul_karar_getir',
+      'title': 'Kurul kararını oku',
+      'description':
+          'kurul_karar_ara\'nın verdiği kimlikle kararın tam metnini (PDF\'ten) '
+          'parça parça getirir.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'kimlik': {'type': 'string'},
+          'parca': {'type': 'integer', 'minimum': 1},
+        },
+        'required': ['kimlik'],
       },
       'annotations': _readOnly,
     },
@@ -655,6 +697,21 @@ class FolioMcp {
         return _emsalDecision(text('kimlik'), part is num ? part.toInt() : 1);
       case 'kunye_dogrula':
         return _verify(text('esas'), text('karar'), text('daire'));
+      case 'kurul_karar_ara':
+        final board = Board.values.asNameMap()[text('kurum')];
+        if (board == null) {
+          return {
+            'durum': 'yok',
+            'aciklama': 'kurum: uyusmazlik ya da rekabet',
+          };
+        }
+        return _boards.search(board, text('sorgu'));
+      case 'kurul_karar_getir':
+        final part = args['parca'];
+        return _boards.read(
+          text('kimlik'),
+          part: part is num ? part.toInt() : 1,
+        );
       case 'doktrin_ara':
         final count = args['adet'];
         return _doctrine.search(
@@ -1054,6 +1111,10 @@ class FolioMcp {
     }
     return true;
   }
+
+  final _boards = BoardDecisions(
+    pdfText: (path) => AiAssistant.documentText(path, ocr: false),
+  );
 
   final _doctrine = Doctrine(
     pdfText: (path) => AiAssistant.documentText(path, ocr: false),

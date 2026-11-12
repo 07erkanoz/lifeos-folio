@@ -24,7 +24,8 @@ class AiStep extends AiEvent {
       'mevzuat_ara' => '${args['kanun'] ?? args['ifade'] ?? ''}',
       'karar_ara' ||
       'mevzuat_belge_ara' ||
-      'doktrin_ara' => '${args['sorgu'] ?? ''}',
+      'doktrin_ara' ||
+      'kurul_karar_ara' => '${args['sorgu'] ?? ''}',
       'karar_getir' => '${args['kunye'] ?? ''}',
       'kunye_dogrula' => 'E.${args['esas'] ?? ''} K.${args['karar'] ?? ''}',
       'mevzuat_toplu' => [
@@ -63,7 +64,9 @@ class AiStep extends AiEvent {
     'karar_getir' ||
     'emsal_ara' ||
     'emsal_getir' ||
-    'kunye_dogrula' => 'karar',
+    'kunye_dogrula' ||
+    'kurul_karar_ara' ||
+    'kurul_karar_getir' => 'karar',
     'doktrin_ara' || 'doktrin_getir' => 'doktrin',
     'evrak_oku' => 'evrak',
     'dosya_bilgisi' ||
@@ -89,6 +92,8 @@ class AiStep extends AiEvent {
     ),
     'sure_hesapla': ('Son gün hesaplanıyor', 'Son gün hesaplandı'),
     'doktrin_ara': ('Doktrin aranıyor', 'Doktrin arandı'),
+    'kurul_karar_ara': ('Kurul kararı aranıyor', 'Kurul kararı arandı'),
+    'kurul_karar_getir': ('Kurul kararı okunuyor', 'Kurul kararı okundu'),
     'emsal_ara': ('UYAP Emsal’de aranıyor', 'UYAP Emsal’de arandı'),
     'emsal_getir': ('Kararın metni okunuyor', 'Kararın metni okundu'),
     'kunye_dogrula': ('Künye iki kaynakta denetleniyor', 'Künye denetlendi'),
