@@ -325,7 +325,7 @@ abstract final class GroqChat {
         utf8.encode(
           jsonEncode({
             'hizmet': service.name,
-            'sohbet': ?place,
+            'sohbet': place,
             'guncel': DateTime.now().toIso8601String(),
             'mesajlar': messages,
           }),

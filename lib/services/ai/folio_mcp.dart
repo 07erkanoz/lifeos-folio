@@ -10,6 +10,7 @@ import '../legal/decision.dart';
 import '../legal/deadlines/deadline_service.dart';
 import '../legal/deadlines/mahkeme_kategori.dart';
 import '../legal/deadlines/sure_katalogu.dart';
+import '../legal/doctrine.dart';
 import '../legal/legislation.dart';
 import 'ai_assistant.dart';
 import 'ai_case.dart';
@@ -87,7 +88,9 @@ class FolioMcp {
       'oku. Parasal sınır, harç, tarife, oran gibi her yıl değişen değerleri '
       'kanun metninden ya da ezberden verme; güncel tebliğden oku. Sürenin '
       'son gününü kendin hesaplama: dayandığı maddeyi okuduktan sonra '
-      'sure_hesapla ile Folio\'nun süre motoruna hesaplat. '
+      'sure_hesapla ile Folio\'nun süre motoruna hesaplat. Doktrine '
+      'ancak mevzuat ve içtihat yetmezse ya da avukat isterse bak '
+      '(doktrin_ara, doktrin_getir); dayandığın yazarı okuyup künyesiyle an. '
       'Madde numarasından emin değilsen önce mevzuat_icindekiler, karardan '
       'emin değilsen önce karar_ara çağır. Taslak yazdıysan bitirmeden '
       'atif_dogrula ile denetle. Duruşma, süre, görev, tebligat, UYAP '
@@ -294,6 +297,43 @@ class FolioMcp {
           },
         },
         'required': ['baslangic', 'miktar', 'birim', 'yargi', 'madde'],
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'doktrin_ara',
+      'title': 'Doktrin ara',
+      'description':
+          'Hukuk alanındaki akademik yayınları (makale, inceleme) TR Dizin\'de '
+          'arar: başlık, yazar, dergi, yıl, özet. Doktrin ikna edicidir, '
+          'bağlayıcı değildir; yalnız mevzuat ve içtihat yetmediğinde ya da '
+          'avukat görüş istediğinde ara. en_yeni=true en yeniden sıralar.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'sorgu': {'type': 'string'},
+          'adet': {'type': 'integer', 'minimum': 1, 'maximum': 12},
+          'en_yeni': {'type': 'boolean'},
+        },
+        'required': ['sorgu'],
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'doktrin_getir',
+      'title': 'Doktrini oku',
+      'description':
+          'doktrin_ara\'nın verdiği kimlikle yayının künyesini ve dergi PDF '
+          'verdiyse tam metnini parça parça getirir. Bir yazara dayanacaksan '
+          'önce oku; yazar, yıl, dergi, cilt, sayı ve sayfayla an. Metni '
+          'okunamadıysa yalnız özete dayan ve bunu söyle.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'kimlik': {'type': 'string'},
+          'parca': {'type': 'integer', 'minimum': 1},
+        },
+        'required': ['kimlik'],
       },
       'annotations': _readOnly,
     },
@@ -524,6 +564,19 @@ class FolioMcp {
         return _document(text('kimlik'), part is num ? part.toInt() : 1);
       case 'sure_hesapla':
         return deadline(args);
+      case 'doktrin_ara':
+        final count = args['adet'];
+        return _doctrine.search(
+          text('sorgu'),
+          count: count is num ? count.toInt() : 8,
+          newest: args['en_yeni'] == true,
+        );
+      case 'doktrin_getir':
+        final part = args['parca'];
+        return _doctrine.read(
+          text('kimlik'),
+          part: part is num ? part.toInt() : 1,
+        );
       case guideTool:
         return (await LegalGuide.load()).read(
           text('konu'),
@@ -747,6 +800,10 @@ class FolioMcp {
   /// The names the search gave, by the bank's id: the document's own page
   /// does not carry it.
   final _documentNames = <String, String>{};
+
+  final _doctrine = Doctrine(
+    pdfText: (path) => AiAssistant.documentText(path, ocr: false),
+  );
 
   /// Documents read in this session, by the bank's id.
   final _documents =

@@ -22,7 +22,9 @@ class AiStep extends AiEvent {
       'mevzuat_madde' => '${args['kanun'] ?? ''} m.${args['madde'] ?? ''}',
       'mevzuat_icindekiler' ||
       'mevzuat_ara' => '${args['kanun'] ?? args['ifade'] ?? ''}',
-      'karar_ara' || 'mevzuat_belge_ara' => '${args['sorgu'] ?? ''}',
+      'karar_ara' ||
+      'mevzuat_belge_ara' ||
+      'doktrin_ara' => '${args['sorgu'] ?? ''}',
       'karar_getir' => '${args['kunye'] ?? ''}',
       'mevzuat_toplu' => [
         for (final m in args['maddeler'] as List? ?? const [])
@@ -57,6 +59,7 @@ class AiStep extends AiEvent {
     'mevzuat_belge_ara' ||
     'mevzuat_belge_getir' => 'mevzuat',
     'karar_ara' || 'karar_getir' => 'karar',
+    'doktrin_ara' || 'doktrin_getir' => 'doktrin',
     'evrak_oku' => 'evrak',
     'dosya_bilgisi' ||
     'dosya_evraklari' ||
@@ -80,6 +83,8 @@ class AiStep extends AiEvent {
       'Yönetmelik ya da tebliğ okundu',
     ),
     'sure_hesapla': ('Son gün hesaplanıyor', 'Son gün hesaplandı'),
+    'doktrin_ara': ('Doktrin aranıyor', 'Doktrin arandı'),
+    'doktrin_getir': ('Doktrin okunuyor', 'Doktrin okundu'),
     'mevzuat_icindekiler': (
       'Kanunun içindekiler okunuyor',
       'Kanunun içindekiler okundu',
