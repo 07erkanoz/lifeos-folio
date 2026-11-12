@@ -280,7 +280,8 @@ class LegalGuide {
   /// null when it names none. At most [most] topics.
   String? blockFor(String text, {int most = 2}) {
     final found = topicsIn(text).take(most).toList();
-    if (found.isEmpty) return null;
+    final crime = asksCrime(text);
+    if (found.isEmpty && !crime) return null;
     String block(String k) {
       final got = read(k);
       final others = got['diger_bolumler'] as List?;
@@ -295,10 +296,38 @@ class LegalGuide {
 
     return [
       for (final k in found) block(k),
-      'Folio bu konunun rehberini ekledi. Hangi maddeye dayanacağını önce '
-          'rehberden bul, sonra o maddeyi mevzuat_madde ile oku. Rehberde '
-          'olmayan bir maddeye dayanmadan önce onu da oku.',
+      if (found.isNotEmpty)
+        'Folio bu konunun rehberini ekledi. Hangi maddeye dayanacağını önce '
+            'rehberden bul, sonra o maddeyi mevzuat_madde ile oku. Rehberde '
+            'olmayan bir maddeye dayanmadan önce onu da oku.',
+      if (crime) crimeNote,
     ].join('\n\n');
+  }
+
+  /// Said to the model when the question is about a sentence: the range,
+  /// HAGB, suspension, limitation and mediation come from Folio's engine.
+  static const crimeNote =
+      'Bu soru bir cezanın hesabını içeriyor. Ceza aralığını, HAGB\'yi, '
+      'ertelemeyi, seçenek yaptırımı, dava zamanaşımını, uzlaştırmayı ve '
+      'önödemeyi kafandan ya da madde metninden hesaplama: önce ceza_hesapla '
+      'aracını çağır (suç kodunu ve olay tarihini ver), sonucunu kullan. Suç '
+      'tabloda yoksa aralığı mevzuat_madde ile olay tarihindeki metinden oku. '
+      'Madde metnini aktaracaksan mevzuat_madde ile okuduğun metinden aynen al.';
+
+  /// Whether [text] asks for a sentence's reckoning.
+  static bool asksCrime(String text) {
+    final t = text
+        .replaceAll('İ', 'i')
+        .replaceAll('I', 'ı')
+        .toLowerCase();
+    return RegExp(
+      r'hagb|hükmün açıklanmasının geri|hukmun aciklanmasinin geri|'
+      r'cezanın ertelen|cezanin ertelen|erteleme|seçenek yaptırım|'
+      r'secenek yaptirim|adli para cezasına çevr|uzlaştırma|uzlastirma|'
+      r'önödeme|onodeme|dava zamanaşımı|dava zamanasimi|ceza aralığı|'
+      r'ceza araligi|kaç yıl ceza|kac yil ceza|ne kadar ceza|hapis cezası|'
+      r'hapis cezasi|tck\s*m?\.?\s*\d|5237',
+    ).hasMatch(t);
   }
 
   /// The tool, as `tools/list` gives it.

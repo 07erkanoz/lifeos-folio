@@ -4,6 +4,17 @@ import 'package:evrak_convert/services/ai/folio_mcp.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('a document search drops the years a model adds', () {
+    expect(
+      FolioMcp.bareDocumentQuery('Avukatlık Asgari Ücret Tarifesi 2025-2026'),
+      'Avukatlık Asgari Ücret Tarifesi',
+    );
+    expect(
+      FolioMcp.bareDocumentQuery('2026 YILI güncel harç tarifesi'),
+      'harç tarifesi',
+    );
+  });
+
   test('the program is told of the new tools', () {
     for (final n in [
       'mevzuat_toplu',

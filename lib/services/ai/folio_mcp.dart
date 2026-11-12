@@ -969,12 +969,30 @@ class FolioMcp {
       return {'durum': 'yok', 'aciklama': 'sorgu ya da no gerekli'};
     }
     final kind = '${args['tur'] ?? ''}'.trim().toUpperCase();
-    final found = await _bank.documents(
+    final inTitle = args['basliktaAra'] == true;
+    var found = await _bank.documents(
       query: query,
       kind: kind.isEmpty ? null : kind,
-      inTitle: args['basliktaAra'] == true,
+      inTitle: inTitle,
       number: number,
     );
+    // Nothing: the same words in the title, then without the years and
+    // numbers a model adds ("… Tarifesi 2025-2026") and without the kind.
+    final bare = bareDocumentQuery(query);
+    if (found.isEmpty && query.isNotEmpty && !inTitle) {
+      found = await _bank.documents(
+        query: query,
+        kind: kind.isEmpty ? null : kind,
+        inTitle: true,
+      );
+    }
+    if (found.isEmpty && bare.length >= 3 && bare != query) {
+      found = await _bank.documents(query: bare, inTitle: true);
+      if (found.isEmpty) found = await _bank.documents(query: bare);
+    }
+    if (found.isEmpty && kind.isNotEmpty && query.isNotEmpty) {
+      found = await _bank.documents(query: bare.length >= 3 ? bare : query);
+    }
     if (found.isEmpty) {
       return {
         'durum': 'yok',
@@ -1003,6 +1021,25 @@ class FolioMcp {
           'Sonuçlar en yeniden eskiye. Dayanmadan önce mevzuat_belge_getir ile '
           'oku. Arama ayrı dosyadaki ekleri taramaz.',
     };
+  }
+
+  /// [query] without years, numbers and the words a title never has: the
+  /// name of the document as the bank writes it.
+  static String bareDocumentQuery(String query) {
+    const noise = {
+      'yılı', 'yili', 'yıl', 'yil', 'güncel', 'guncel', 'son', 'yeni',
+      'tablosu', 'tablo', 'tutarı', 'tutari', 'tutarları', 'tutarlari',
+      'metni', 've',
+    };
+    return query
+        .split(RegExp(r'[\s,;:()–—‑-]+'))
+        .where(
+          (w) =>
+              w.isNotEmpty &&
+              !RegExp(r'\d').hasMatch(w) &&
+              !noise.contains(w.toLowerCase()),
+        )
+        .join(' ');
   }
 
   /// A document's text, in parts of [partSize] characters.

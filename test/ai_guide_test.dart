@@ -186,6 +186,15 @@ void main() {
     expect(guide.blockFor('Merhaba'), isNull);
   });
 
+  test('a question about a sentence is sent to ceza_hesapla', () {
+    final block = guide.blockFor(
+      'Kasten yaralamada (TCK 86/1) HAGB verilebilir mi, zamanaşımı ne?',
+    )!;
+    expect(block, contains('ceza_hesapla'));
+    expect(LegalGuide.asksCrime('HÜKMÜN AÇIKLANMASININ GERİ BIRAKILMASI'), isTrue);
+    expect(LegalGuide.asksCrime('Kira artışı ne kadar olur?'), isFalse);
+  });
+
   test('the program is given the tool', () async {
     final listed = await FolioMcp().handle({
       'jsonrpc': '2.0',
