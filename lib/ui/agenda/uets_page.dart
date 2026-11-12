@@ -1740,6 +1740,23 @@ class _UetsPageState extends State<UetsPage> {
       court: court,
       unit: unit?.unitName ?? subject?.unit ?? '',
       subject: n.message.subject,
+      // What the rules found: not said again, only what they missed.
+      known: [
+        for (final d in db.deadlines(noticeId: id))
+          if (d.record.state != 'eski')
+            '${d.record.title} (${d.record.law})'
+                '${d.record.dueDay == null ? '' : ', son gün ${d.record.dueDay}'}',
+      ],
+      knownRules: {
+        for (final d in db.deadlines(noticeId: id))
+          if (d.record.state != 'eski') d.record.ruleId,
+      },
+      side: n.caseKey == null
+          ? ''
+          : [
+              for (final p in db.representation(n.caseKey!))
+                '${p.ad} (${p.rol})',
+            ].join(', '),
     );
     if (approved == null || !mounted) return;
     final now = DateTime.now();
@@ -1752,6 +1769,8 @@ class _UetsPageState extends State<UetsPage> {
             id: AgendaItem.newId(),
             kind: 'task',
             title: s.what,
+            at: s.until,
+            allDay: s.until != null,
             body: [
               'Tebligattan yapay zekâ çıkardı (${approved.model}), siz onayladınız.',
               if (s.quote.isNotEmpty) '“${s.quote}”',

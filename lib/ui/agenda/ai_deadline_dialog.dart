@@ -26,6 +26,9 @@ Future<AiDeadlinesApproved?> askAiDeadlines(
   required MahkemeKategorisi court,
   String unit = '',
   String subject = '',
+  String side = '',
+  List<String> known = const [],
+  Set<String> knownRules = const {},
 }) async {
   if (!await askAiConsent(context)) return null;
   final settings = await AiSettings.load();
@@ -58,6 +61,9 @@ Future<AiDeadlinesApproved?> askAiDeadlines(
       court: court,
       unit: unit,
       subject: subject,
+      side: side,
+      known: known,
+      knownRules: knownRules,
     ),
   );
 }
@@ -71,10 +77,15 @@ class _AiDeadlinesDialog extends StatefulWidget {
     required this.court,
     required this.unit,
     required this.subject,
+    required this.side,
+    required this.known,
+    required this.knownRules,
   });
 
   final AiProvider provider;
-  final String model, text, unit, subject;
+  final String model, text, unit, subject, side;
+  final List<String> known;
+  final Set<String> knownRules;
   final DateTime served;
   final MahkemeKategorisi court;
 
@@ -111,6 +122,10 @@ class _AiDeadlinesDialogState extends State<_AiDeadlinesDialog> {
         served: widget.served,
         unit: widget.unit,
         subject: widget.subject,
+        side: widget.side,
+        known: widget.known,
+        knownRules: widget.knownRules,
+        court: widget.court,
         cancel: _cancel.future,
         onEvent: (e) {
           if (e is AiStep && mounted) setState(() => _step = e.label);
@@ -164,6 +179,25 @@ class _AiDeadlinesDialogState extends State<_AiDeadlinesDialog> {
               '${day.tatilBelirsiz ? ' · adli tatile denk geliyor, denetleyin' : ''}',
               style: muted,
             ),
+          if (s.until != null)
+            Text(
+              'Son gün ${_day(s.until!)} (tebligatta yazan tarih)',
+              style: muted,
+            ),
+          if (s.warning.isNotEmpty)
+            Text(
+              s.warning,
+              style: muted.copyWith(color: const Color(0xFFB45309)),
+            ),
+          if (s.others)
+            Text(
+              s.whose == 'karsi'
+                  ? 'Karşı tarafın işi; müvekkilinizi ilgilendirmiyorsa eklemeyin.'
+                  : 'Mahkemenin işi.',
+              style: muted,
+            )
+          else if (s.whose == 'belirsiz')
+            Text('Kimin işi olduğu belli değil; denetleyin.', style: muted),
           if (s.isTask) Text('Ajandaya görev olarak eklenir.', style: muted),
         ],
       ),

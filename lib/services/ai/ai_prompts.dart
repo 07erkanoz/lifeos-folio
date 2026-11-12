@@ -33,7 +33,9 @@ enum AiTier {
   String get effort => switch (this) {
     AiTier.strong => 'high',
     AiTier.normal => 'medium',
-    AiTier.light => 'low',
+    // Measured on 30 real notices (13.11.2026): at low it missed times,
+    // gave wrong articles and turned "until the hearing" into days.
+    AiTier.light => 'medium',
   };
 
   const AiTier(this.label, this.detail);
