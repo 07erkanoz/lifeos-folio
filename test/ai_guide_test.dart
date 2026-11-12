@@ -100,14 +100,18 @@ void main() {
     test('the parts asked for come with the core, never over the limit', () {
       final e4 = guide.read('fon-tasfiyesi', parts: 'E4')['metin']! as String;
       expect(e4, contains('## E4.'));
-      expect(e4, contains('## B.'));
-      // Two large parts: the one that does not fit is named, to be asked.
-      final two = guide.read('fon-tasfiyesi', parts: 'E, E4');
+      // The core came with the bare call: not again, unless named.
+      expect(e4, isNot(contains('## B.')));
+      expect(e4, contains('TMV'));
       expect(
-        (two['metin']! as String).length,
-        lessThan(LegalGuide.mostOutput + 12000),
+        guide.read('fon-tasfiyesi', parts: 'B, E4')['metin'],
+        contains('## B.'),
       );
-      expect(two['aciklama'], contains('E4'));
+      // Two large parts, with no core sent again: both fit.
+      final two =
+          guide.read('fon-tasfiyesi', parts: 'E, E4')['metin']! as String;
+      expect(two, allOf(contains('## E. '), contains('## E4.')));
+      expect(two.length, lessThanOrEqualTo(LegalGuide.mostOutput));
       final all = guide.read('fon', parts: 'tam');
       expect(
         (all['metin']! as String).length,

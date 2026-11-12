@@ -207,6 +207,14 @@ class LegalGuide {
           if (x.title.startsWith('Kanun yolları')) x.id,
       ]);
     }
+    // A topic listed first gave its core at the bare call: asked for parts,
+    // it is not sent again unless asked for by name.
+    if ((how?.listFirst ?? false) && asked.isNotEmpty && !whole) {
+      chosen.removeWhere(
+        (id) =>
+            how!.core.contains(id) && !asked.any((p) => _fold(p) == _fold(id)),
+      );
+    }
     final out = StringBuffer(intro.trimRight());
     final left = <String>[];
     for (final x in all) {
