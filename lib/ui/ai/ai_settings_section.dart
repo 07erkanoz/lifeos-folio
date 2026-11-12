@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -70,7 +71,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     final String subtitle;
     final Widget trailing;
     if (s.provider.viaApi) {
-      return _groq(s, chosen);
+      return _api(s, chosen);
     }
     if (!s.installed) {
       subtitle = 'Kurulu değil';
@@ -122,17 +123,44 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     );
   }
 
-  /// Groq: no program, the lawyer's own API key, kept in the system's
-  /// keyring.
-  Widget _groq(AiStatus s, bool chosen) => SettingsRow(
+  /// What the lawyer reads before giving a service's key: where to get
+  /// one, and what the service does with what is sent.
+  static String _note(ApiService a) => switch (a) {
+    ApiService.groq =>
+      'Anahtarı Groq hesabınızın API Keys sayfasından alın. Ücretsiz '
+          'katmanın dakikalık sınırı tek bir hukuk sorusuna yetmez; ücretli '
+          'katman gerekir.',
+    ApiService.gemini =>
+      'Anahtarı Google AI Studio’dan alın (Get API key). Varsayılan model '
+          'Gemini 3.8 Flash; Normal düzeyde orta, Güçlü düzeyde yüksek '
+          'düşünmeyle çalışır. Faturalandırması açık (ücretli) bir hesapta '
+          'Google, gönderdiğiniz metni ve cevapları ürünlerini ya da '
+          'modellerini geliştirmek için kullanmaz; yalnız kötüye kullanımı '
+          'denetlemek için kısa süre kayıt tutar. Ücretsiz katmanda ise '
+          'veriler model geliştirmede kullanılabilir ve insanlar tarafından '
+          'okunabilir: müvekkil evrakı için ücretli katmanı kullanın.',
+    ApiService.openai =>
+      'Anahtarı OpenAI hesabınızın API keys sayfasından alın. API ile '
+          'gönderilen veriler, siz izin vermedikçe OpenAI’ın modellerini '
+          'eğitmek için kullanılmaz.',
+    ApiService.anthropic =>
+      'Anahtarı Claude Console’dan (API Keys) alın. Güçlü düzeyde Claude '
+          'Opus 5.5, Normal’de Sonnet 5.5, Hafif’te Haiku 5.5 çalışır. API '
+          'ile gönderilen veriler, siz izin vermedikçe Anthropic’in '
+          'modellerini eğitmek için kullanılmaz.',
+  };
+
+  /// A service's API: no program, the lawyer's own key, kept in the
+  /// system's keyring.
+  Widget _api(AiStatus s, bool chosen) => SettingsRow(
     key: ValueKey('ai-provider-${s.provider.name}'),
     icon: Icons.key_outlined,
     title: s.provider.label,
     subtitle: s.installed
-        ? 'Anahtar girildi · Folio Groq’a kendisi sorar, araçları ve '
-              'denetimiyle'
-        : 'Groq hesabınızdan aldığınız API anahtarıyla. Program kurmak '
-              'gerekmez.',
+        ? 'Anahtar girildi · Folio ${ApiService.of(s.provider)!.label}’a '
+              'kendisi sorar, araçları ve denetimiyle'
+        : '${s.provider.company} hesabınızdan aldığınız API anahtarıyla. '
+              'Program kurmak gerekmez.',
     status: s.usable ? const Color(0xFF157A52) : Colors.grey,
     trailing: Row(
       mainAxisSize: MainAxisSize.min,
@@ -145,11 +173,12 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
             child: const Text('Bunu kullan'),
           ),
         TextButton(
-          key: const ValueKey('ai-groq-key'),
+          key: ValueKey('ai-${s.provider.name}-key'),
           onPressed: () async {
+            final api = ApiService.of(s.provider)!;
             if (s.installed) {
-              await GroqChat.removeKey();
-            } else if (!await _askGroqKey()) {
+              await GroqChat.removeKey(api);
+            } else if (!await _askKey(api)) {
               return;
             }
             await _load();
@@ -160,8 +189,8 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     ),
   );
 
-  /// The key asked of the lawyer, checked with Groq, then kept.
-  Future<bool> _askGroqKey() async {
+  /// The key asked of the lawyer, checked with the service, then kept.
+  Future<bool> _askKey(ApiService api) async {
     final field = TextEditingController();
     String? said;
     var checking = false;
@@ -169,25 +198,23 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialog) => AlertDialog(
-          title: const Text('Groq API anahtarı'),
+          title: Text('${api.label} API anahtarı'),
           content: SizedBox(
             width: 460,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Anahtarı Groq hesabınızın API Keys sayfasından alın. '
-                  'Folio anahtarı bu bilgisayarın anahtar deposunda saklar; '
-                  'sorular bu bilgisayardan doğrudan Groq’a gider. Ücretsiz '
-                  'katmanın dakikalık sınırı tek bir hukuk sorusuna yetmez; '
-                  'ücretli katman gerekir.',
+                Text(
+                  '${_note(api)} Folio anahtarı bu bilgisayarın anahtar '
+                  'deposunda saklar; sorular bu bilgisayardan doğrudan '
+                  '${api.label}’a gider.',
                 ),
                 const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () => unawaited(
                     launchUrl(
-                      Uri.parse(GroqChat.keysPage),
+                      Uri.parse(api.keysPage),
                       mode: LaunchMode.externalApplication,
                     ),
                   ),
@@ -195,13 +222,18 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
                   label: const Text('Anahtar sayfasını aç'),
                 ),
                 TextField(
-                  key: const ValueKey('ai-groq-key-field'),
+                  key: ValueKey('ai-${api.name}-key-field'),
                   controller: field,
                   obscureText: true,
                   autofocus: true,
                   decoration: InputDecoration(
                     labelText: 'API anahtarı',
-                    hintText: 'gsk_…',
+                    hintText: switch (api) {
+                      ApiService.groq => 'gsk_…',
+                      ApiService.gemini => 'AIza…',
+                      ApiService.openai => 'sk-…',
+                      ApiService.anthropic => 'sk-ant-…',
+                    },
                     errorText: said,
                   ),
                 ),
@@ -223,8 +255,8 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
                         checking = true;
                         said = null;
                       });
-                      var wrong = await GroqChat.checkKey(key);
-                      if (wrong == null && !await GroqChat.saveKey(key)) {
+                      var wrong = await GroqChat.checkKey(key, api);
+                      if (wrong == null && !await GroqChat.saveKey(key, api)) {
                         wrong =
                             'Bu bilgisayarda anahtar deposu yok; anahtar '
                             'güvenle saklanamadı.';
@@ -356,13 +388,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
       child: Text(
-        'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile kendi '
-        'aboneliğinizle, ya da kendi API anahtarınızla Groq’la soru '
-        'sorarsınız: kenar çubuğundaki Yapay zekâ '
-        'sayfasından, belge önizlemesinden ve dosyaların Yapay zekâ '
-        'sekmesinden. İstekler bu bilgisayardaki programdan doğrudan gider; '
-        'Folio araya sunucu koymaz. Telefonunuzdan sorduğunuz soruları da bu '
-        'bilgisayar cevaplar.',
+        aiIntroText(),
         style: TextStyle(
           fontSize: 13,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -427,3 +453,21 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     ),
   ];
 }
+
+/// What the AI settings say first: the programs where they run (Linux),
+/// the services' APIs everywhere.
+String aiIntroText({bool programs = false}) => [
+  if (programs || Platform.isLinux)
+    'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile kendi '
+        'aboneliğinizle, ya da kendi API anahtarınızla Gemini, ChatGPT, '
+        'Claude ya da Groq’la soru sorarsınız.'
+  else
+    'Kendi API anahtarınızla Gemini, ChatGPT, Claude ya da Groq’la soru '
+        'sorarsınız; program kurmanız gerekmez.',
+  'Kenar çubuğundaki Yapay zekâ sayfasından, belge önizlemesinden, '
+      'dosyaların Yapay zekâ sekmesinden ve UETS tebligatlarından süre ile '
+      'yapılacak iş çıkarırken kullanılır. İstekler bu bilgisayardan '
+      'doğrudan sağlayıcıya gider; Folio araya sunucu koymaz.',
+  if (programs || Platform.isLinux)
+    'Telefonunuzdan sorduğunuz soruları da bu bilgisayar cevaplar.',
+].join(' ');

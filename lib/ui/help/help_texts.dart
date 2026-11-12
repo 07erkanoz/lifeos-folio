@@ -171,9 +171,10 @@ abstract final class Help {
 
   static const ai = HelpTopic(
     'Yapay zekâ',
-    'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile kendi '
-        'aboneliğinizle, ya da kendi API anahtarınızla Groq’la soru '
-        'sorarsınız. Folio araya sunucu koymaz; kanun '
+    'Kendi API anahtarınızla Gemini, ChatGPT, Claude ya da Groq’la; '
+        'Linux’ta ayrıca bilgisayarınızda kurulu Claude, Codex ya da '
+        'Antigravity ile kendi aboneliğinizle soru sorarsınız. Folio araya '
+        'sunucu koymaz; kanun '
         'maddesini ve kararı resmî kaynaklardan okutur, yanıttaki atıfları '
         'denetler.',
     [

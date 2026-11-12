@@ -8,7 +8,86 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../security/secret_store.dart';
 import 'ai_assistant.dart';
 import 'ai_case.dart';
+import 'ai_office.dart';
+import 'ai_claude_api.dart';
 import 'folio_mcp.dart';
+
+/// The services Folio asks itself over their OpenAI-like API, with the
+/// lawyer's own key: no program to install, so on every computer.
+enum ApiService {
+  groq(
+    'Groq',
+    'groq',
+    'https://api.groq.com/openai/v1/chat/completions',
+    'https://api.groq.com/openai/v1/models',
+    'https://console.groq.com/keys',
+    ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'],
+  ),
+
+  /// Gemini 3.8 Flash takes reasoning_effort low, medium or high (not
+  /// minimal); thinking is on by itself.
+  gemini(
+    'Gemini',
+    'gemini',
+    'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    'https://generativelanguage.googleapis.com/v1beta/openai/models',
+    'https://aistudio.google.com/apikey',
+    ['gemini-3.8-flash'],
+  ),
+  openai(
+    'OpenAI',
+    'openai',
+    'https://api.openai.com/v1/chat/completions',
+    'https://api.openai.com/v1/models',
+    'https://platform.openai.com/api-keys',
+    ['gpt-6.1-sol', 'gpt-6-luna', 'gpt-6.1-terra'],
+  ),
+
+  /// Anthropic's own Messages API, not an OpenAI-like one: thinking is
+  /// adaptive on the current models and its depth is the effort.
+  anthropic(
+    'Claude',
+    'anthropic',
+    'https://api.anthropic.com/v1/messages',
+    'https://api.anthropic.com/v1/models',
+    'https://platform.claude.com/settings/keys',
+    ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
+  );
+
+  const ApiService(
+    this.label,
+    this.secret,
+    this.endpoint,
+    this.modelsUrl,
+    this.keysPage,
+    this.models,
+  );
+
+  final String label, secret, endpoint, modelsUrl, keysPage;
+
+  /// The models offered; the first is the default.
+  final List<String> models;
+
+  AiProvider get provider => switch (this) {
+    ApiService.groq => AiProvider.groq,
+    ApiService.gemini => AiProvider.gemini,
+    ApiService.openai => AiProvider.openai,
+    ApiService.anthropic => AiProvider.anthropic,
+  };
+
+  static ApiService? of(AiProvider provider) => switch (provider) {
+    AiProvider.groq => ApiService.groq,
+    AiProvider.gemini => ApiService.gemini,
+    AiProvider.openai => ApiService.openai,
+    AiProvider.anthropic => ApiService.anthropic,
+    _ => null,
+  };
+
+  /// The headers a request to it carries the key in.
+  Map<String, String> headers(String key) => this == ApiService.anthropic
+      ? {'x-api-key': key, 'anthropic-version': '2023-06-01'}
+      : {'authorization': 'Bearer $key'};
+}
 
 /// A model on Groq (GPT OSS), asked by Folio itself over Groq's API with
 /// the lawyer's own key: no program between. Folio's rules are its
@@ -18,11 +97,11 @@ import 'folio_mcp.dart';
 /// for again, a search done twice is not done again, and near the end of
 /// its steps it is given no more tools and must write.
 abstract final class GroqChat {
-  static const endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-  static const keysPage = 'https://console.groq.com/keys';
+  static final endpoint = ApiService.groq.endpoint;
+  static final keysPage = ApiService.groq.keysPage;
 
-  /// The models offered; the first is the default.
-  static const models = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
+  /// Groq's models; the first is the default.
+  static final models = ApiService.groq.models;
 
   /// The most requests one answer makes: tool rounds and the writing.
   static const mostSteps = 16;
@@ -39,18 +118,16 @@ abstract final class GroqChat {
 
   // The key, in the system's keyring (SecretStore), never in a file.
 
-  static const _secret = 'groq';
-  static String? _key;
-  static bool _keyRead = false;
+  static final _keys = <ApiService, String?>{};
 
-  static Future<String?> key() async {
-    if (!_keyRead) {
-      final kept = await SecretStore().read(_secret);
-      _key = '${kept?['anahtar'] ?? ''}'.trim();
-      if (_key!.isEmpty) _key = null;
-      _keyRead = true;
+  static Future<String?> key([ApiService service = ApiService.groq]) async {
+    if (keyForTest != null) return keyForTest;
+    if (!_keys.containsKey(service)) {
+      final kept = await SecretStore().read(service.secret);
+      final k = '${kept?['anahtar'] ?? ''}'.trim();
+      _keys[service] = k.isEmpty ? null : k;
     }
-    return keyForTest ?? _key;
+    return _keys[service];
   }
 
   @visibleForTesting
@@ -60,43 +137,101 @@ abstract final class GroqChat {
   @visibleForTesting
   static String? folioForTest;
 
+  /// The Folio whose `--mcp` server the tools are; null where there is none
+  /// to start.
+  static String? get toolsProgram => folioForTest ?? AiAssistant.folioProgram;
+
+  /// Whether the tools are started as a server rather than run here.
+  static bool get toolsAsServer =>
+      toolsProgram != null && (Platform.isLinux || folioForTest != null);
+
   /// A test's own server in place of Groq's.
   @visibleForTesting
   static String? endpointForTest;
 
   /// Keeps [value]; false when this computer cannot keep it safely.
-  static Future<bool> saveKey(String value) async {
-    final ok = await SecretStore().write(_secret, {'anahtar': value.trim()});
-    _keyRead = false;
+  static Future<bool> saveKey(
+    String value, [
+    ApiService service = ApiService.groq,
+  ]) async {
+    final ok = await SecretStore().write(service.secret, {
+      'anahtar': value.trim(),
+    });
+    _keys.remove(service);
     return ok;
   }
 
-  static Future<void> removeKey() async {
-    await SecretStore().remove(_secret);
-    _key = null;
-    _keyRead = true;
+  static Future<void> removeKey([ApiService service = ApiService.groq]) async {
+    await SecretStore().remove(service.secret);
+    _keys[service] = null;
   }
 
-  /// Whether [value] is taken by Groq: a request that lists the models.
-  static Future<String?> checkKey(String value) async {
+  /// Whether [value] is taken by [service]: a request that lists the
+  /// models.
+  static Future<String?> checkKey(
+    String value, [
+    ApiService service = ApiService.groq,
+  ]) async {
+    final who = service.label;
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15);
     try {
-      final req = await client.getUrl(
-        Uri.parse('https://api.groq.com/openai/v1/models'),
-      );
-      req.headers
-        ..set(HttpHeaders.authorizationHeader, 'Bearer ${value.trim()}')
-        ..set(HttpHeaders.userAgentHeader, 'LifeOS-Folio');
+      final req = await client.getUrl(Uri.parse(service.modelsUrl));
+      service.headers(value.trim()).forEach(req.headers.set);
+      req.headers.set(HttpHeaders.userAgentHeader, 'LifeOS-Folio');
       final res = await req.close().timeout(const Duration(seconds: 20));
       await res.drain<void>();
       if (res.statusCode == 200) return null;
       if (res.statusCode == 401 || res.statusCode == 403) {
-        return 'Groq bu anahtarı kabul etmedi.';
+        return '$who bu anahtarı kabul etmedi.';
       }
-      return 'Groq yanıt vermedi (${res.statusCode}).';
+      return '$who yanıt vermedi (${res.statusCode}).';
     } catch (_) {
-      return 'Groq’a ulaşılamadı. İnternet bağlantısını denetleyin.';
+      return '$who’a ulaşılamadı. İnternet bağlantısını denetleyin.';
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static final _listed = <ApiService, List<String>>{};
+
+  /// The models [service] offers this key, for the lawyer to choose from;
+  /// its defaults when it cannot be asked.
+  static Future<List<String>> listModels(ApiService service) async {
+    if (_listed[service] case final got?) return got;
+    final key = await GroqChat.key(service);
+    if (key == null) return service.models;
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
+    try {
+      final req = await client.getUrl(Uri.parse(service.modelsUrl));
+      service.headers(key).forEach(req.headers.set);
+      final res = await req.close().timeout(const Duration(seconds: 20));
+      final text = await res.transform(utf8.decoder).join();
+      if (res.statusCode != 200) return service.models;
+      final ids = [
+        for (final m in (jsonDecode(text) as Map)['data'] as List? ?? const [])
+          if (m is Map && m['id'] is String)
+            '${m['id']}'.replaceFirst('models/', ''),
+      ];
+      // Chat models only, the defaults first.
+      final chat = ids.where(
+        (id) => switch (service) {
+          ApiService.gemini =>
+            id.startsWith('gemini-') &&
+                !id.contains('tts') &&
+                !id.contains('embedding') &&
+                !id.contains('image'),
+          ApiService.openai => id.startsWith('gpt-') || id.startsWith('o'),
+          _ => true,
+        },
+      );
+      return _listed[service] = {
+        ...service.models.where(ids.contains),
+        ...chat,
+      }.toList();
+    } catch (_) {
+      return service.models;
     } finally {
       client.close(force: true);
     }
@@ -107,6 +242,16 @@ abstract final class GroqChat {
   // with all that was said ([has] false).
 
   static final _held = <String, List<Map<String, Object?>>>{};
+
+  /// The conversation kept under [id], for another loop of this file.
+  static List<Map<String, Object?>>? heldOf(String? id) =>
+      id == null ? null : _held[id];
+
+  static String hold(String? id, List<Map<String, Object?>> messages) {
+    final next = id ?? _newId();
+    _held[next] = messages;
+    return next;
+  }
 
   static bool has(String id) => _held.containsKey(id);
 
@@ -125,14 +270,29 @@ abstract final class GroqChat {
     void Function(AiEvent event)? onEvent,
     Future<void>? cancel,
     AiThread? thread,
+    ApiService service = ApiService.groq,
   }) async {
-    final key = await GroqChat.key();
+    final who = service.label;
+    final key = await GroqChat.key(service);
     if (key == null) {
-      throw const AiFailure(
-        'Groq anahtarı girilmemiş. Ayarlar › Yapay zekâ’dan anahtarınızı girin.',
+      throw AiFailure(
+        '$who anahtarı girilmemiş. Ayarlar › Yapay zekâ’dan anahtarınızı girin.',
       );
     }
-    final id = thread?.ids[AiProvider.groq];
+    if (service == ApiService.anthropic) {
+      return ClaudeApiChat.ask(
+        prompt,
+        key: key,
+        model: model,
+        tier: tier,
+        tools: tools,
+        caseSession: caseSession,
+        onEvent: onEvent,
+        cancel: cancel,
+        thread: thread,
+      );
+    }
+    final id = thread?.ids[service.provider];
     final kept = id != null ? _held[id] : null;
     final messages = <Map<String, Object?>>[
       if (kept != null)
@@ -141,10 +301,13 @@ abstract final class GroqChat {
         {'role': 'system', 'content': AiPrompts.core},
       {'role': 'user', 'content': prompt},
     ];
-    final folio = tools ? folioForTest ?? AiAssistant.folioProgram : null;
-    final mcp = folio == null
+    // Folio's tools: on Linux the same `--mcp` server the programs run;
+    // elsewhere, where there is no such server, run here.
+    final FolioToolHost? mcp = !tools
         ? null
-        : await McpClient.start(folio, caseSession);
+        : toolsAsServer
+        ? await McpClient.start(toolsProgram!, caseSession)
+        : FolioToolsHere(caseSession);
     final http = HttpClient()..connectionTimeout = const Duration(seconds: 20);
     var stopped = false;
     unawaited(
@@ -186,16 +349,27 @@ abstract final class GroqChat {
           });
         }
         final body = {
-          'model': (model == null || model.isEmpty) ? models.first : model,
+          'model': (model == null || model.isEmpty)
+              ? service.provider.defaultModel(tier ?? AiTier.normal)
+              : model,
           'messages': last && functions.isNotEmpty
               ? writingOnly(messages)
               : messages,
           'reasoning_effort': (tier ?? AiTier.normal).effort,
-          'temperature': 1,
-          'max_completion_tokens': 16000,
-          if (!last) ...{'tools': functions, 'disable_tool_validation': true},
+          // OpenAI's reasoning models take no temperature but their own.
+          if (service != ApiService.openai) 'temperature': 1,
+          if (service == ApiService.gemini)
+            'max_tokens': 16000
+          else
+            'max_completion_tokens': 16000,
+          if (!last) ...{
+            'tools': functions,
+            // Groq's own: a tool's name the model writes wrongly is let
+            // through, and Folio puts it right.
+            if (service == ApiService.groq) 'disable_tool_validation': true,
+          },
         };
-        final reply = await _request(http, key, body, () => stopped);
+        final reply = await _request(http, key, body, () => stopped, service);
         final message = Map<String, Object?>.from(
           ((reply['choices'] as List).first as Map)['message'] as Map,
         );
@@ -214,9 +388,9 @@ abstract final class GroqChat {
           onEvent?.call(AiWriting(content, restart: true));
           final nextId = id ?? _newId();
           _held[nextId] = messages;
-          if (thread != null) thread.ids[AiProvider.groq] = nextId;
+          if (thread != null) thread.ids[service.provider] = nextId;
           if (content.trim().isEmpty) {
-            throw const AiFailure('Groq yanıt vermedi.');
+            throw AiFailure('$who yanıt vermedi.');
           }
           return content.trim();
         }
@@ -266,12 +440,12 @@ abstract final class GroqChat {
           });
         }
       }
-      throw const AiFailure('Groq adım sınırında cevabını bitiremedi.');
+      throw AiFailure('$who adım sınırında cevabını bitiremedi.');
     } on AiFailure {
       rethrow;
     } catch (e) {
       if (stopped) throw const AiFailure('Durduruldu.');
-      throw AiFailure('Groq’a ulaşılamadı: $e');
+      throw AiFailure('$who’a ulaşılamadı: $e');
     } finally {
       http.close(force: true);
       await mcp?.close();
@@ -285,11 +459,14 @@ abstract final class GroqChat {
     String key,
     Map<String, Object?> body,
     bool Function() stopped,
+    ApiService service,
   ) async {
     for (var attempt = 0; ; attempt++) {
-      final req = await http.postUrl(Uri.parse(endpointForTest ?? endpoint));
+      final req = await http.postUrl(
+        Uri.parse(endpointForTest ?? service.endpoint),
+      );
+      service.headers(key).forEach(req.headers.set);
       req.headers
-        ..set(HttpHeaders.authorizationHeader, 'Bearer $key')
         ..set(HttpHeaders.userAgentHeader, 'LifeOS-Folio')
         ..contentType = ContentType.json;
       req.add(utf8.encode(jsonEncode(body)));
@@ -308,34 +485,45 @@ abstract final class GroqChat {
           attempt < 3) {
         continue;
       }
-      throw AiFailure(failure(res.statusCode, text));
+      throw AiFailure(failure(res.statusCode, text, service));
     }
   }
 
-  /// Groq's refusal, said in Turkish.
-  @visibleForTesting
-  static String failure(int status, String text) {
+  /// The service's refusal, said in Turkish. Gemini answers in a list
+  /// ([{"error": …}]) and says a wrong key with 400.
+  static String failure(
+    int status,
+    String text, [
+    ApiService service = ApiService.groq,
+  ]) {
+    final who = service.label;
     String said = '';
     try {
-      said = '${((jsonDecode(text) as Map)['error'] as Map)['message'] ?? ''}';
+      var json = jsonDecode(text);
+      if (json is List && json.isNotEmpty) json = json.first;
+      said = '${((json as Map)['error'] as Map)['message'] ?? ''}';
     } catch (_) {}
+    final badKey =
+        status == 401 ||
+        status == 403 ||
+        said.contains('API key not valid') ||
+        said.contains('API_KEY_INVALID');
     return switch (status) {
-      401 ||
-      403 => 'Groq anahtarı geçersiz. Ayarlar › Yapay zekâ’dan yeniden girin.',
-      429 => 'Groq kullanım sınırınız doldu. Biraz sonra yeniden deneyin.',
-      413 => 'Soru Groq için çok uzun. Daha az evrakla sorun.',
+      _ when badKey =>
+        '$who anahtarı geçersiz. Ayarlar › Yapay zekâ’dan yeniden girin.',
+      429 => '$who kullanım sınırınız doldu. Biraz sonra yeniden deneyin.',
+      413 => 'Soru $who için çok uzun. Daha az evrakla sorun.',
       _ when said.contains('context_length') || said.contains('too long') =>
-        'Soru Groq için çok uzun. Daha az evrakla sorun.',
+        'Soru $who için çok uzun. Daha az evrakla sorun.',
       _ =>
         said.isEmpty
-            ? 'Groq yanıt veremedi ($status).'
-            : 'Groq yanıt veremedi: $said',
+            ? '$who yanıt veremedi ($status).'
+            : '$who yanıt veremedi: $said',
     };
   }
 
   /// A tool's name as the model meant it: "functions/karar_ara",
   /// "functions.karar_ara" → karar_ara; "ara" → the one tool it names.
-  @visibleForTesting
   static String toolName(String name, Set<String> known) {
     if (known.contains(name)) return name;
     final short = name
@@ -394,7 +582,73 @@ abstract final class GroqChat {
 
 /// Folio's tools as a program reaches them: this Folio run with
 /// [FolioMcp.flag], spoken to over its standard input and output.
-class McpClient {
+/// Where an API service's model calls Folio's tools.
+abstract class FolioToolHost {
+  Future<List<Map<String, Object?>>> tools();
+
+  /// The tool's answer as text, as the model reads it.
+  Future<String> call(String name, Map<String, Object?> args);
+  Future<void> close();
+}
+
+/// Folio's tools run in Folio itself: where no `--mcp` server can be
+/// started for them (Windows, macOS). The case's and the office's tools
+/// are those of [caseSession], as the server would have them.
+class FolioToolsHere implements FolioToolHost {
+  FolioToolsHere(AiCaseSession? caseSession)
+    : _mcp = FolioMcp(
+        caseTools: caseSession == null
+            ? null
+            : FolioCaseTools.fromEnvironment({
+                AiCaseSession.variable: caseSession.folder.path,
+              }),
+        officeTools: caseSession == null
+            ? null
+            : FolioOfficeTools.fromEnvironment({
+                AiCaseSession.variable: caseSession.folder.path,
+              }),
+      );
+
+  final FolioMcp _mcp;
+  var _next = 0;
+
+  Future<Map<String, Object?>> _ask(
+    String method,
+    Map<String, Object?> p,
+  ) async =>
+      await _mcp.handle({
+        'jsonrpc': '2.0',
+        'id': ++_next,
+        'method': method,
+        'params': p,
+      }) ??
+      const {};
+
+  @override
+  Future<List<Map<String, Object?>>> tools() async {
+    final got = await _ask('tools/list', {});
+    return [
+      for (final t in (got['result'] as Map?)?['tools'] as List? ?? const [])
+        if (t is Map) t.cast<String, Object?>(),
+    ];
+  }
+
+  @override
+  Future<String> call(String name, Map<String, Object?> args) async {
+    final got = await _ask('tools/call', {'name': name, 'arguments': args});
+    final result = got['result'];
+    if (result is! Map) return jsonEncode({'hata': got['error']});
+    return [
+      for (final c in result['content'] as List? ?? const [])
+        if (c is Map) '${c['text'] ?? ''}',
+    ].join();
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+class McpClient implements FolioToolHost {
   McpClient._(this._process) {
     _process.stdout
         .transform(utf8.decoder)
@@ -467,6 +721,7 @@ class McpClient {
     return answer.future.timeout(const Duration(minutes: 4));
   }
 
+  @override
   Future<List<Map<String, Object?>>> tools() async {
     final got = await _ask('tools/list', {});
     return [
