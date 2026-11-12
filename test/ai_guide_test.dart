@@ -61,6 +61,21 @@ void main() {
     expect(guide.topics['kira'], contains('(m.344)'));
   });
 
+  test('the fund crisis has its own topic', () {
+    expect(
+      guide.topicsIn('PBLK fonunun tasfiyesinde TEFAS talimatım gerçekleşmedi'),
+      contains('fon-tasfiyesi'),
+    );
+    expect(
+      guide.topicsIn('Tasfiye edilen yatırım fonu için 7596 sayılı Kanun'),
+      contains('fon-tasfiyesi'),
+    );
+    expect(guide.topicOf('fon'), 'fon-tasfiyesi');
+    expect(guide.topics['fon-tasfiyesi'], contains('7596'));
+    // Kept out of an unrelated question.
+    expect(guide.topicsIn('Kira bedelinin artırılma oranı'), ['kira']);
+  });
+
   test('who must prove what: each kind of case has its part on it', () {
     for (final k in const [
       'icra',

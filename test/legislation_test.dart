@@ -253,4 +253,45 @@ void main() {
       expect(got!.title, '6698 s. Kişisel Verilerin Korunması Kanunu m. 3');
     });
   });
+
+  group('a law the table does not carry', () {
+    String page(int number) =>
+        '<p>BAZI YATIRIM FONLARI HAKKINDA KANUN</p>'
+        '<p>Kanun Numarası : $number</p>'
+        '<p>MADDE 1- (1) Bu Kanunun amacı fonların tasfiyesidir.</p>'
+        '<p>MADDE 2- (1) Tanımlar.</p>';
+    Citation of(int law, int article) =>
+        Citation(law: Law.numbered(law), article: article, start: 0, length: 1);
+
+    test('is found in the Düstur\'s fifth, its page saying it is', () async {
+      final asked = <int>[];
+      final legislation = Legislation(
+        cache: Directory.systemTemp.createTempSync('folio-yeni-kanun-'),
+        download: (law) async {
+          asked.add(law.tertip);
+          if (law.tertip == 5) return page(7596);
+          throw const HttpException('yok');
+        },
+      );
+      final got = await legislation.lookup(of(7596, 1));
+      expect(got.outcome, ArticleOutcome.found);
+      expect(got.article!.text, contains('fonların tasfiyesidir'));
+      expect(asked, [5]);
+    });
+
+    test('a page that is another law\'s is not taken for it', () async {
+      final legislation = Legislation(
+        cache: Directory.systemTemp.createTempSync('folio-yeni-kanun-'),
+        download: (law) async => page(law.tertip == 5 ? 7595 : 7596),
+      );
+      final got = await legislation.lookup(of(7596, 2));
+      // The fifth's page is another law's; the third's is this one.
+      expect(got.article!.text, contains('Tanımlar'));
+    });
+
+    test('the number must be whole', () {
+      expect(Legislation.saysItIs('Kanun Numarası : 75961', 7596), isFalse);
+      expect(Legislation.saysItIs('Kanun Numarası: 7596', 7596), isTrue);
+    });
+  });
 }

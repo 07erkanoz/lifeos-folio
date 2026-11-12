@@ -448,10 +448,6 @@ class Legislation {
   Future<Map<String, String>?> _articles(Law law) async {
     final held = _inMemory[law.number];
     if (held != null) return held;
-    // A law the table does not carry has no known place in the Düstur, so
-    // its page cannot be asked for.
-    if (!law.isKnown) return null;
-
     final kept = await _read(law);
     if (kept != null) {
       _inMemory[law.number] = kept;
@@ -460,7 +456,9 @@ class Legislation {
 
     final String raw;
     try {
-      raw = await (_download ?? _fetch)(law);
+      raw = law.isKnown
+          ? await (_download ?? _fetch)(law)
+          : await _unknownPage(law);
     } on Object {
       // No network, a refused connection, a certificate that has run out:
       // none of it is something the reader should be stopped by. An older
@@ -473,6 +471,32 @@ class Legislation {
     await _write(law, split);
     return split;
   }
+
+  /// The page of a law the table does not carry: its place in the Düstur
+  /// is not known, so the fifth (the laws since 1981, every new one among
+  /// them) is asked first, then the older ones. A page is taken only when
+  /// it says it is this law's ("Kanun Numarası : 7596"): the older laws'
+  /// numbers ran up to 7500 too, so a number alone may name two laws.
+  Future<String> _unknownPage(Law law) async {
+    Object? failed;
+    for (final tertip in const [5, 3, 4]) {
+      final placed = Law(number: law.number, tertip: tertip, name: law.name);
+      try {
+        final raw = await (_download ?? _fetch)(placed);
+        if (saysItIs(plainTextOf(raw), law.number)) return raw;
+      } on Object catch (e) {
+        failed = e;
+      }
+    }
+    throw failed ?? StateError('${law.number} mevzuat.gov.tr’de bulunamadı');
+  }
+
+  /// Whether a law's page [text] says it is law [number].
+  @visibleForTesting
+  static bool saysItIs(String text, int number) => RegExp(
+    'Kanun\\s+Numarası\\s*:\\s*$number(?!\\d)',
+    caseSensitive: false,
+  ).hasMatch(text);
 
   static Future<SecurityContext> _context() async {
     // mevzuat.gov.tr does not send its intermediate certificate, and Dart,
