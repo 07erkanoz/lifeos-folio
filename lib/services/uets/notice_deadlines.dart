@@ -867,21 +867,39 @@ List<DeadlineRecord> noticeDeadlines(
         id: c.deadlineId,
         ruleId: c.ruleId,
         tur: kinds.isEmpty ? BelgeTuru.diger : kinds.first.tur,
-        evidence: {'kaynak': 'avukat', 'secim': c.id, 'yerine': ?c.replaces},
+        evidence: {
+          'kaynak': c.source,
+          'secim': c.id,
+          'yerine': ?c.replaces,
+          if (c.byAi) 'model': c.model,
+        },
         sign: (
           sinyal: AidiyetSinyali.olasiBizim,
-          neden: 'Bu süreyi siz eklediniz.',
+          neden: c.byAi
+              ? 'Bu süreyi yapay zekâ önerdi, siz onayladınız.'
+              : 'Bu süreyi siz eklediniz.',
         ),
         startAt: day == null && c.startEvent == 'teblig'
             ? null
             : (event: c.startEvent, day: LegalDay.of(day ?? sent)),
         lead: [
-          DeadlineReason(
-            'avukatSecti',
-            c.replaces == null
-                ? 'Bu süreyi siz seçtiniz.'
-                : 'Bu süreyi Folio’nun önerdiği sürenin yerine siz seçtiniz.',
-          ),
+          if (c.byAi)
+            DeadlineReason(
+              'yapayZekaOnerdi',
+              [
+                'Yapay zekâ tebligattan çıkardı'
+                    '${c.model.isEmpty ? '' : ' (${c.model})'}, siz onayladınız.',
+                if (c.quote.isNotEmpty) 'Dayandığı cümle: “${c.quote}”',
+                'Son günü Folio’nun süre motoru hesapladı.',
+              ].join(' '),
+            )
+          else
+            DeadlineReason(
+              'avukatSecti',
+              c.replaces == null
+                  ? 'Bu süreyi siz seçtiniz.'
+                  : 'Bu süreyi Folio’nun önerdiği sürenin yerine siz seçtiniz.',
+            ),
         ],
       ),
     );

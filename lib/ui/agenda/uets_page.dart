@@ -10,6 +10,8 @@ import '../../services/portal/portal_channel.dart';
 import '../../services/legal/deadlines/aidiyet.dart';
 import '../../services/legal/deadlines/belge_turu.dart';
 import '../../services/legal/deadlines/turkish_legal_calendar.dart';
+import '../../services/ai/ai_assistant.dart';
+import '../../services/legal/deadlines/mahkeme_kategori.dart';
 import '../../services/portal/portal_database.dart';
 import '../../services/portal/portal_deadline.dart';
 import '../../services/portal/portal_sync.dart';
@@ -21,6 +23,7 @@ import '../../services/uets/notice_packages.dart';
 import '../../services/uets/uets_api.dart';
 import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_web_service.dart' show UyapParty;
+import 'ai_deadline_dialog.dart';
 import 'agenda_page.dart' show AgendaColors;
 import '../help/help_button.dart';
 import '../mobile/scroll_chrome.dart';
@@ -1370,11 +1373,34 @@ class _UetsPageState extends State<UetsPage> {
                   ),
               ],
               const SizedBox(height: 6),
-              TextButton.icon(
-                key: const ValueKey('uets-add-deadline'),
-                onPressed: () => unawaited(_addDeadline(n)),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Süre ekle'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  TextButton.icon(
+                    key: const ValueKey('uets-add-deadline'),
+                    onPressed: () => unawaited(_addDeadline(n)),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Süre ekle'),
+                  ),
+                  // The lawyer's AI program, when asked: what the rules
+                  // could not settle comes first.
+                  if (AiAssistant.shown)
+                    deadlines.isEmpty ||
+                            deadlines.any((d) => d.record.state == 'aday')
+                        ? FilledButton.tonalIcon(
+                            key: const ValueKey('uets-ai-deadlines'),
+                            onPressed: () => unawaited(_aiDeadlines(n)),
+                            icon: const Icon(Icons.auto_awesome, size: 16),
+                            label: const Text('Yapay zekâyla çıkar'),
+                          )
+                        : TextButton.icon(
+                            key: const ValueKey('uets-ai-deadlines'),
+                            onPressed: () => unawaited(_aiDeadlines(n)),
+                            icon: const Icon(Icons.auto_awesome, size: 16),
+                            label: const Text('Yapay zekâyla çıkar'),
+                          ),
+                ],
               ),
             ],
           ),
@@ -1674,6 +1700,100 @@ class _UetsPageState extends State<UetsPage> {
   /// The lawyer's own deadline for the notice, or one in place of a
   /// deadline Folio made ([replacing]): kept as the notice's record, and
   /// confirmed, choosing it being the lawyer's word.
+  /// The notice's times and tasks drawn out by the lawyer's AI program,
+  /// kept only as the lawyer approves them: a time as the notice's
+  /// deadline (its last day Folio's engine reckons), a task without one in
+  /// the agenda.
+  Future<void> _aiDeadlines(KeptNotice n) async {
+    final db = _db;
+    if (db == null) return;
+    final id = n.message.id;
+    final docs = db.noticeDocuments(id);
+    final unit = docs
+        .map((d) => d.caseFile)
+        .whereType<NoticeCaseFile>()
+        .firstOrNull;
+    final subject = NoticeSubject.parse(n.message.subject);
+    final text = [
+      _envelopes[id]?.envelopeText ?? '',
+      for (final d in docs)
+        if (d.hasText) '<belge ad="${d.name}">\n${d.text}\n</belge>',
+    ].where((t) => t.trim().isNotEmpty).join('\n\n');
+    if (text.trim().isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Bu tebligatın okunmuş bir metni yok; önce ekler alınmalı.',
+          ),
+        ),
+      );
+      return;
+    }
+    final court =
+        TurkishLegalCalendar.kategoriFromMahkemeAdi(unit?.unitName) ??
+        TurkishLegalCalendar.kategoriFromMahkemeAdi(subject?.unit) ??
+        MahkemeKategorisi.bilinmeyen;
+    final approved = await askAiDeadlines(
+      context,
+      text: text,
+      served: n.message.served ?? DateTime.now(),
+      court: court,
+      unit: unit?.unitName ?? subject?.unit ?? '',
+      subject: n.message.subject,
+    );
+    if (approved == null || !mounted) return;
+    final now = DateTime.now();
+    final made = <String>[];
+    var tasks = 0;
+    for (final s in approved.chosen) {
+      if (s.isTask) {
+        db.saveAgenda(
+          AgendaItem(
+            id: AgendaItem.newId(),
+            kind: 'task',
+            title: s.what,
+            body: [
+              'Tebligattan yapay zekâ çıkardı (${approved.model}), siz onayladınız.',
+              if (s.quote.isNotEmpty) '“${s.quote}”',
+            ].join('\n'),
+            caseKey: n.caseKey,
+            updated: now,
+          ),
+        );
+        tasks++;
+        continue;
+      }
+      final choice = s.choice(
+        id: AgendaItem.newId(),
+        noticeId: id,
+        model: approved.model,
+        now: now,
+      );
+      db.saveDeadlineChoice(choice);
+      made.add(choice.deadlineId);
+    }
+    if (made.isNotEmpty) {
+      refreshNoticeDeadlines(
+        db,
+        parties: NoticeDeadlineContext.parties,
+        lawyer: NoticeDeadlineContext.lawyer,
+        only: {id},
+      );
+      for (final d in made) {
+        db.confirmDeadline(d);
+      }
+    }
+    _reload();
+    widget.onChanged?.call();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          '${[if (made.isNotEmpty) '${made.length} süre', if (tasks > 0) '$tasks görev'].join(' ve ')} ajandaya eklendi.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _addDeadline(KeptNotice n, {KeptDeadline? replacing}) async {
     final db = _db;
     if (db == null) return;

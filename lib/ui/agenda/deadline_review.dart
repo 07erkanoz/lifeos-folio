@@ -9,6 +9,7 @@ import '../theme/folio_palette.dart';
 /// notice has (the service day not yet checked against the evidence) is
 /// left to the details.
 const _order = [
+  'yapayZekaOnerdi',
   'onaySonrasiDegisti',
   'sayiCelisiyor',
   'olayBekleniyor',

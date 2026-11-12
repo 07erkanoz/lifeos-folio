@@ -1,5 +1,6 @@
 import '../legal/deadlines/kural_bilgisi.dart';
 import '../legal/deadlines/mahkeme_kategori.dart';
+import '../legal/deadlines/sure_katalogu.dart';
 import '../legal/deadlines/yasal_sure.dart';
 
 /// A deadline the lawyer chose for a notice: a rule of the catalogue, or a
@@ -30,6 +31,21 @@ class DeadlineChoice {
   final String? replaces;
   final DateTime created;
 
+  /// For 'ozel': the article it rests on ("HMK m.127") and whether the law
+  /// set it ('kanuni'), the judge ('hakim') or substantive law ('maddi');
+  /// a time of the lawyer's own is the judge's as far as Folio knows.
+  final String article;
+  final String nature;
+
+  /// Who chose it: 'avukat', or 'yapay_zeka' for one an AI program drew out
+  /// of the notice and the lawyer approved; then the sentence it rests on,
+  /// and the program and model ("Claude · haiku").
+  final String source;
+  final String quote;
+  final String model;
+
+  bool get byAi => source == 'yapay_zeka';
+
   const DeadlineChoice({
     required this.id,
     required this.noticeId,
@@ -41,6 +57,11 @@ class DeadlineChoice {
     this.startDay,
     this.replaces,
     required this.created,
+    this.article = '',
+    this.nature = 'hakim',
+    this.source = 'avukat',
+    this.quote = '',
+    this.model = '',
   });
 
   /// The record a choice makes is known by this id.
@@ -54,10 +75,12 @@ class DeadlineChoice {
         ad: purpose.trim().isEmpty ? 'Sizin süreniz' : purpose.trim(),
         miktar: amount,
         birim: unit,
-        kanunMaddesi: 'Sizin girdiğiniz süre',
+        kanunMaddesi: article.trim().isEmpty
+            ? 'Sizin girdiğiniz süre'
+            : article.trim(),
         // Not a time the law sets, as far as Folio knows: the recess does
         // not extend it as of course; the day is shown before it is kept.
-        nitelik: SureNiteligi.hakim,
+        nitelik: SureNiteligi.values.asNameMap()[nature] ?? SureNiteligi.hakim,
       );
     }
     for (final r in choosableRules.expand((g) => g.rules)) {
@@ -77,6 +100,11 @@ class DeadlineChoice {
     'baslangicGunu': startDay,
     'yerine': replaces,
     'eklendi': created.toIso8601String(),
+    if (article.isNotEmpty) 'dayanak': article,
+    if (nature != 'hakim') 'nitelik': nature,
+    if (source != 'avukat') 'kaynak': source,
+    if (quote.isNotEmpty) 'alinti': quote,
+    if (model.isNotEmpty) 'model': model,
   };
 
   static DeadlineChoice fromJson(Map json) => DeadlineChoice(
@@ -90,6 +118,11 @@ class DeadlineChoice {
     startDay: json['baslangicGunu'] as String?,
     replaces: json['yerine'] as String?,
     created: DateTime.parse('${json['eklendi']}'),
+    article: '${json['dayanak'] ?? ''}',
+    nature: '${json['nitelik'] ?? 'hakim'}',
+    source: '${json['kaynak'] ?? 'avukat'}',
+    quote: '${json['alinti'] ?? ''}',
+    model: '${json['model'] ?? ''}',
   );
 }
 
