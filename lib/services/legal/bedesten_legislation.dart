@@ -5,10 +5,39 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'citation.dart';
+import 'html_text.dart';
 import 'rich_text.dart';
 
 /// A law as the Ministry's legislation bank files it.
 @immutable
+/// A document the bank keeps that is not one article: a regulation, a
+/// communiqué, a decree.
+class BedestenDocument {
+  const BedestenDocument({
+    required this.id,
+    required this.name,
+    required this.kind,
+    this.number = '',
+    this.gazette = '',
+    this.url = '',
+  });
+
+  factory BedestenDocument.of(Map<String, Object?> row) {
+    final kind = row['mevzuatTur'];
+    String plain(Object? v) => v == null || '$v' == 'null' ? '' : '$v'.trim();
+    return BedestenDocument(
+      id: plain(row['mevzuatId']),
+      name: plain(row['mevzuatAdi']).replaceAll(RegExp(r'\s+'), ' '),
+      kind: kind is Map ? plain(kind['name']) : plain(kind),
+      number: plain(row['mevzuatNo']),
+      gazette: plain(row['resmiGazeteTarihi']).split('T').first,
+      url: plain(row['url']),
+    );
+  }
+
+  final String id, name, kind, number, gazette, url;
+}
+
 class BedestenLaw {
   const BedestenLaw({
     required this.id,
@@ -281,6 +310,90 @@ class BedestenLegislation {
       name: '${row['mevzuatAdi'] ?? ''}'.trim(),
       tertip: int.tryParse('${row['mevzuatTertip']}') ?? 0,
       url: '${row['url'] ?? ''}'.trim(),
+    );
+  }
+
+  /// The kinds of document the bank keeps, by its own names: what is not a
+  /// law is found here (a regulation, a communiqué, a decree, a repealed
+  /// text), and a figure that changes every year is in one of them.
+  static const documentKinds = {
+    'KANUN': 'Kanun',
+    'KHK': 'Kanun Hükmünde Kararname',
+    'TUZUK': 'Tüzük',
+    'YONETMELIK': 'Bakanlar Kurulu Yönetmeliği',
+    'KKY': 'Kurum ve Kuruluş Yönetmeliği',
+    'UY': 'Üniversite Yönetmeliği',
+    'CB_KARARNAME': 'Cumhurbaşkanlığı Kararnamesi',
+    'CB_YONETMELIK': 'Cumhurbaşkanlığı Yönetmeliği',
+    'CB_KARAR': 'Cumhurbaşkanı Kararı',
+    'CB_GENELGE': 'Cumhurbaşkanlığı Genelgesi',
+    'TEBLIGLER': 'Tebliğ',
+    'MULGA': 'Mülga mevzuat',
+  };
+
+  /// Documents of every kind (or of [kind]) whose text holds [query], or
+  /// whose name does when [inTitle]; by [number] when it is known, which a
+  /// search of the text misses ("1548 sayılı Cumhurbaşkanı Kararı"). The
+  /// newest first. The bank's index is of the main text alone: an annex
+  /// filed apart is not searched.
+  Future<List<BedestenDocument>> documents({
+    String query = '',
+    String? kind,
+    bool inTitle = false,
+    String? number,
+    int count = 10,
+  }) async {
+    Future<List<BedestenDocument>> ask(Map<String, Object?> filter) async {
+      final data = await _post('/mevzuat/searchDocuments', {
+        'pageSize': count.clamp(1, 30),
+        'pageNumber': 1,
+        'sortFields': ['RESMI_GAZETE_TARIHI'],
+        'sortDirection': 'desc',
+        ...filter,
+        if (kind != null && documentKinds.containsKey(kind))
+          'mevzuatTurList': [kind],
+      }, paging: true);
+      return [
+        for (final row in data['mevzuatList'] as List? ?? const [])
+          if (row is Map) BedestenDocument.of(row.cast<String, Object?>()),
+      ];
+    }
+
+    final q = query.trim();
+    final no = (number ?? '').trim().isNotEmpty
+        ? number!.trim()
+        : RegExp(r'\b(\d{2,6})\s*say[ıi]l[ıi]\b', caseSensitive: false)
+                  .firstMatch(q)
+                  ?.group(1) ??
+              '';
+    final out = <BedestenDocument>[];
+    if (no.isNotEmpty) out.addAll(await ask({'mevzuatNo': no}));
+    if (q.isNotEmpty) {
+      final seen = {for (final d in out) d.id};
+      for (final d in await ask(
+        inTitle ? {'mevzuatAdi': q} : {'phrase': q, 'basliktaAra': false},
+      )) {
+        if (seen.add(d.id)) out.add(d);
+      }
+    }
+    return out.take(count).toList();
+  }
+
+  /// A document's whole text, as plain text; empty when the bank gives none.
+  Future<({String name, String kind, String text})> document(String id) async {
+    final data = await _post('/mevzuat/getDocumentContent', {
+      'documentType': 'MEVZUAT',
+      'id': id,
+    });
+    final encoded = data['content'];
+    final html = encoded is String && encoded.isNotEmpty
+        ? utf8.decode(base64.decode(encoded), allowMalformed: true)
+        : '';
+    final kind = data['mevzuatTur'];
+    return (
+      name: '${data['mevzuatAdi'] ?? ''}'.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      kind: kind is Map ? '${kind['name'] ?? ''}' : '${kind ?? ''}',
+      text: html.isEmpty ? '' : plainTextOf(html).trim(),
     );
   }
 

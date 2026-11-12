@@ -22,8 +22,21 @@ class AiStep extends AiEvent {
       'mevzuat_madde' => '${args['kanun'] ?? ''} m.${args['madde'] ?? ''}',
       'mevzuat_icindekiler' ||
       'mevzuat_ara' => '${args['kanun'] ?? args['ifade'] ?? ''}',
-      'karar_ara' => '${args['sorgu'] ?? ''}',
+      'karar_ara' || 'mevzuat_belge_ara' => '${args['sorgu'] ?? ''}',
       'karar_getir' => '${args['kunye'] ?? ''}',
+      'mevzuat_toplu' => [
+        for (final m in args['maddeler'] as List? ?? const [])
+          m is Map ? '${m['kanun'] ?? ''} m.${m['madde'] ?? ''}' : '$m',
+      ].join(', '),
+      'sure_hesapla' =>
+        '${args['madde'] ?? ''} · ${args['miktar'] ?? ''} ${switch (args['birim']) {
+          'gun' => 'gün',
+          'is_gunu' => 'iş günü',
+          'hafta' => 'hafta',
+          'ay' => 'ay',
+          'yil' => 'yıl',
+          _ => '',
+        }}',
       'dosya_ara' || 'dosyalar' => '${args['ifade'] ?? ''}',
       'uyap_guncelle' => '${args['kapsam'] ?? ''}',
       _ => '',
@@ -37,7 +50,12 @@ class AiStep extends AiEvent {
   /// What the step looked at, as the lawyer counts them under an answer:
   /// "mevzuat", "karar", "evrak", "dosya", "ajanda"; empty for the rest.
   String get kind => switch (tool) {
-    'mevzuat_madde' || 'mevzuat_icindekiler' || 'mevzuat_ara' => 'mevzuat',
+    'mevzuat_madde' ||
+    'mevzuat_icindekiler' ||
+    'mevzuat_ara' ||
+    'mevzuat_toplu' ||
+    'mevzuat_belge_ara' ||
+    'mevzuat_belge_getir' => 'mevzuat',
     'karar_ara' || 'karar_getir' => 'karar',
     'evrak_oku' => 'evrak',
     'dosya_bilgisi' ||
@@ -52,6 +70,16 @@ class AiStep extends AiEvent {
 
   static const _labels = {
     'mevzuat_madde': ('Kanun maddesi okunuyor', 'Kanun maddesi okundu'),
+    'mevzuat_toplu': ('Kanun maddeleri okunuyor', 'Kanun maddeleri okundu'),
+    'mevzuat_belge_ara': (
+      'Yönetmelik ve tebliğ aranıyor',
+      'Yönetmelik ve tebliğ arandı',
+    ),
+    'mevzuat_belge_getir': (
+      'Yönetmelik ya da tebliğ okunuyor',
+      'Yönetmelik ya da tebliğ okundu',
+    ),
+    'sure_hesapla': ('Son gün hesaplanıyor', 'Son gün hesaplandı'),
     'mevzuat_icindekiler': (
       'Kanunun içindekiler okunuyor',
       'Kanunun içindekiler okundu',

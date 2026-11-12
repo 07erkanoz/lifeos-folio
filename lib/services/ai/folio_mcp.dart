@@ -7,6 +7,9 @@ import '../legal/case_law.dart';
 import '../legal/case_law_search.dart';
 import '../legal/citation.dart';
 import '../legal/decision.dart';
+import '../legal/deadlines/deadline_service.dart';
+import '../legal/deadlines/mahkeme_kategori.dart';
+import '../legal/deadlines/sure_katalogu.dart';
 import '../legal/legislation.dart';
 import 'ai_assistant.dart';
 import 'ai_case.dart';
@@ -78,6 +81,13 @@ class FolioMcp {
       'metni yazacaksan önce bu araçlardan oku ve yalnız onların döndürdüğü '
       'metni ve "atif" alanını kullan. Araç "yok" ya da "ulasilamadi" '
       'dönerse bunu söyle; madde ya da karar uydurma, numara tahmin etme. '
+      'Birkaç maddeye dayanacaksan mevzuat_toplu ile tek çağrıda oku. '
+      'Yönetmelik, tebliğ, tüzük, Cumhurbaşkanlığı kararnamesi ve kararı '
+      'kanun değildir: mevzuat_belge_ara ile bul, mevzuat_belge_getir ile '
+      'oku. Parasal sınır, harç, tarife, oran gibi her yıl değişen değerleri '
+      'kanun metninden ya da ezberden verme; güncel tebliğden oku. Sürenin '
+      'son gününü kendin hesaplama: dayandığı maddeyi okuduktan sonra '
+      'sure_hesapla ile Folio\'nun süre motoruna hesaplat. '
       'Madde numarasından emin değilsen önce mevzuat_icindekiler, karardan '
       'emin değilsen önce karar_ara çağır. Taslak yazdıysan bitirmeden '
       'atif_dogrula ile denetle. Duruşma, süre, görev, tebligat, UYAP '
@@ -157,6 +167,133 @@ class FolioMcp {
           },
         },
         'required': ['kanun'],
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'mevzuat_toplu',
+      'title': 'Birden çok maddeyi getir',
+      'description':
+          'Birden çok kanun maddesini tek çağrıda, mevzuat_madde ile aynı '
+          'resmî kaynaktan getirir (en çok 10). Aynı soruda birkaç maddeye '
+          'dayanacaksan tek tek çağırmak yerine bunu kullan.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'maddeler': {
+            'type': 'array',
+            'maxItems': 10,
+            'items': {
+              'type': 'object',
+              'properties': {
+                'kanun': {'type': 'string'},
+                'madde': {'type': 'string'},
+              },
+              'required': ['kanun', 'madde'],
+            },
+          },
+        },
+        'required': ['maddeler'],
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'mevzuat_belge_ara',
+      'title': 'Yönetmelik, tebliğ, kararname ara',
+      'description':
+          'Kanun dışındaki mevzuatı arar: yönetmelik, tebliğ, tüzük, KHK, '
+          'Cumhurbaşkanlığı kararnamesi, yönetmeliği, kararı ve genelgesi, '
+          'mülga mevzuat (Bedesten). Parasal sınır, tarife, oran ve ücret gibi '
+          'her yıl değişen değerler kanunda değil tebliğde ya da tarifede '
+          'yayımlanır; kanun metnindeki rakam eskidir. Belgenin adını '
+          'biliyorsan basliktaAra=true ile ada göre ara; numarası biliniyorsa '
+          '"no" ver (metin araması numarayı kaçırır). Sorguyu Türkçe '
+          'harflerle yaz. Arama yalnız belgenin ana metnini tarar, ayrı '
+          'dosyadaki ekleri taramaz. Sonuç en yeniden eskiye gelir; dayanmadan '
+          'önce mevzuat_belge_getir ile oku.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'sorgu': {'type': 'string', 'description': 'Aranacak sözcükler'},
+          'basliktaAra': {
+            'type': 'boolean',
+            'description': 'true: yalnız belge adında ara',
+          },
+          'no': {'type': 'string', 'description': 'Belgenin numarası'},
+          'tur': {
+            'type': 'string',
+            'description':
+                'Bilmiyorsan boş bırak. Türler: KANUN, KHK, TUZUK, '
+                'YONETMELIK, KKY (kurum yönetmeliği), UY (üniversite), '
+                'CB_KARARNAME, CB_YONETMELIK, CB_KARAR, CB_GENELGE, '
+                'TEBLIGLER, MULGA',
+          },
+        },
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'mevzuat_belge_getir',
+      'title': 'Yönetmelik ya da tebliği oku',
+      'description':
+          'mevzuat_belge_ara\'nın verdiği kimlikle belgenin tam metnini '
+          'getirir; uzunsa parça parça ("parca"). Bir yönetmeliğe ya da '
+          'tebliğe dayanmadan önce oku; dayandığın hükmü metinden alıntıla.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'kimlik': {
+            'type': 'string',
+            'description': 'mevzuat_belge_ara kimliği',
+          },
+          'parca': {'type': 'integer', 'minimum': 1},
+        },
+        'required': ['kimlik'],
+      },
+      'annotations': _readOnly,
+    },
+    {
+      'name': 'sure_hesapla',
+      'title': 'Sürenin son gününü hesapla',
+      'description':
+          'Bir sürenin son gününü Folio\'nun süre motoruyla hesaplar: '
+          'adli tatil (HMK m.103-104, CMK m.331, İYUK m.61), hafta sonu, '
+          'resmî ve dinî bayramlar. Süreyi ve dayandığı maddeyi sen verirsin '
+          '(maddeyi önce oku); takvim hesabını kendin yapma, bunu kullan. '
+          'baslangic, sürenin başladığı olayın tarihidir (tebliğ, tefhim, '
+          'öğrenme); süre ertesi günden işler.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'baslangic': {'type': 'string', 'description': 'YYYY-AA-GG'},
+          'miktar': {'type': 'integer', 'minimum': 1},
+          'birim': {
+            'type': 'string',
+            'enum': ['gun', 'is_gunu', 'hafta', 'ay', 'yil'],
+          },
+          'yargi': {
+            'type': 'string',
+            'enum': ['hukuk', 'icra', 'ceza', 'idare', 'vergi'],
+          },
+          'madde': {
+            'type': 'string',
+            'description': 'Sürenin dayanağı: "İİK m.62"',
+          },
+          'nitelik': {
+            'type': 'string',
+            'enum': ['kanuni', 'hakim', 'maddi'],
+            'description':
+                'kanuni: kanunun usul süresi; hakim: hâkimin verdiği süre; '
+                'maddi: hak düşürücü ya da zamanaşımı gibi, adli tatilden '
+                'etkilenmeyen süre',
+          },
+          'adli_tatile_tabi': {
+            'type': 'boolean',
+            'description':
+                'Dava ya da iş adli tatile tabi mi; bilmiyorsan verme',
+          },
+        },
+        'required': ['baslangic', 'miktar', 'birim', 'yargi', 'madde'],
       },
       'annotations': _readOnly,
     },
@@ -378,6 +515,15 @@ class FolioMcp {
         );
       case 'atif_dogrula':
         return _check(text('metin'));
+      case 'mevzuat_toplu':
+        return _articles(args['maddeler']);
+      case 'mevzuat_belge_ara':
+        return _findDocuments(args);
+      case 'mevzuat_belge_getir':
+        final part = args['parca'];
+        return _document(text('kimlik'), part is num ? part.toInt() : 1);
+      case 'sure_hesapla':
+        return deadline(args);
       case guideTool:
         return (await LegalGuide.load()).read(text('konu'));
     }
@@ -487,6 +633,202 @@ class FolioMcp {
       'mulga_notu': ?article.repealNotice,
       'kaynak': article.source.label,
       if (article.url.isNotEmpty) 'kaynak_adres': article.url,
+    };
+  }
+
+  /// Up to ten articles, each as mevzuat_madde gives it.
+  Future<Map<String, Object?>> _articles(Object? asked) async {
+    if (asked is! List || asked.isEmpty) {
+      return {'durum': 'yok', 'aciklama': 'maddeler listesi gerekli'};
+    }
+    final out = <Map<String, Object?>>[];
+    for (final one in asked.take(10)) {
+      // "TBK m.344" as well as {kanun, madde}.
+      if (one is String) {
+        final m = RegExp(r'^(.+?)\s+m(?:adde)?\.?\s*(.+)$')
+            .firstMatch(one.trim());
+        out.add(
+          m == null
+              ? {'durum': 'yok', 'aciklama': '"$one" okunamadı'}
+              : await _article(m[1]!.trim(), m[2]!.trim()),
+        );
+      } else if (one is Map) {
+        out.add(
+          await _article(
+            '${one['kanun'] ?? ''}'.trim(),
+            '${one['madde'] ?? ''}'.trim(),
+          ),
+        );
+      }
+    }
+    return {
+      'maddeler': out,
+      if (asked.length > 10) 'aciklama': 'İlk 10 madde getirildi.',
+    };
+  }
+
+  /// Documents other than laws, as the bank finds them.
+  Future<Map<String, Object?>> _findDocuments(Map<String, Object?> args) async {
+    final query = '${args['sorgu'] ?? ''}'.trim();
+    final number = '${args['no'] ?? ''}'.trim();
+    if (query.isEmpty && number.isEmpty) {
+      return {'durum': 'yok', 'aciklama': 'sorgu ya da no gerekli'};
+    }
+    final kind = '${args['tur'] ?? ''}'.trim().toUpperCase();
+    final found = await _bank.documents(
+      query: query,
+      kind: kind.isEmpty ? null : kind,
+      inTitle: args['basliktaAra'] == true,
+      number: number,
+    );
+    if (found.isEmpty) {
+      return {
+        'durum': 'yok',
+        'aciklama':
+            'Eşleşen belge bulunamadı. basliktaAra\'yı değiştir, türü boş '
+            'bırak ya da Türkçe harflerle yeniden ara. Bulunamaması belgenin '
+            'olmadığını göstermez.',
+      };
+    }
+    for (final d in found) {
+      _documentNames[d.id] = d.name;
+    }
+    return {
+      'durum': 'bulundu',
+      'belgeler': [
+        for (final d in found)
+          {
+            'kimlik': 'mevzuat-belge:${d.id}',
+            'ad': d.name,
+            'tur': BedestenLegislation.documentKinds[d.kind] ?? d.kind,
+            if (d.number.isNotEmpty) 'no': d.number,
+            if (d.gazette.isNotEmpty) 'resmi_gazete': d.gazette,
+          },
+      ],
+      'not':
+          'Sonuçlar en yeniden eskiye. Dayanmadan önce mevzuat_belge_getir ile '
+          'oku. Arama ayrı dosyadaki ekleri taramaz.',
+    };
+  }
+
+  /// A document's text, in parts of [partSize] characters.
+  Future<Map<String, Object?>> _document(String id, int part) async {
+    final bare = id.replaceFirst('mevzuat-belge:', '').trim();
+    if (bare.isEmpty || !RegExp(r'^[\w.-]+$').hasMatch(bare)) {
+      return {'durum': 'yok', 'aciklama': 'mevzuat_belge_ara kimliği gerekli'};
+    }
+    final got = await (_documents[bare] ??= _bank.document(bare));
+    if (got.text.isEmpty) {
+      _documents.remove(bare);
+      return {'durum': 'yok', 'aciklama': 'Bu belgenin metni alınamadı.'};
+    }
+    final parts = (got.text.length / partSize).ceil();
+    final at = part.clamp(1, parts);
+    return {
+      'durum': 'bulundu',
+      'ad': got.name.isNotEmpty ? got.name : _documentNames[bare] ?? '',
+      'tur': BedestenLegislation.documentKinds[got.kind] ?? got.kind,
+      'parca': at,
+      'toplam_parca': parts,
+      'metin': got.text.substring(
+        (at - 1) * partSize,
+        (at * partSize).clamp(0, got.text.length),
+      ),
+      if (at < parts)
+        'not':
+            'Devamı için parca=${at + 1}. Dayandığın hüküm başka parçada olabilir.',
+      'kaynak': 'UYAP/Bedesten · resmî metin',
+    };
+  }
+
+  /// The names the search gave, by the bank's id: the document's own page
+  /// does not carry it.
+  final _documentNames = <String, String>{};
+
+  /// Documents read in this session, by the bank's id.
+  final _documents =
+      <String, Future<({String name, String kind, String text})>>{};
+
+  /// A time's last day, by Folio's own engine: the time and its article
+  /// given by the program, the calendar reckoned here.
+  static Map<String, Object?> deadline(
+    Map<String, Object?> args, {
+    DateTime? now,
+  }) {
+    final start = DateTime.tryParse('${args['baslangic'] ?? ''}'.trim());
+    final amount = args['miktar'] is num
+        ? (args['miktar'] as num).toInt()
+        : int.tryParse('${args['miktar'] ?? ''}');
+    final unit = switch ('${args['birim'] ?? ''}') {
+      'gun' => SureBirimi.gun,
+      'is_gunu' => SureBirimi.isGunu,
+      'hafta' => SureBirimi.hafta,
+      'ay' => SureBirimi.ay,
+      'yil' => SureBirimi.yil,
+      _ => null,
+    };
+    final court = switch ('${args['yargi'] ?? ''}') {
+      'hukuk' => MahkemeKategorisi.hukuk,
+      'icra' => MahkemeKategorisi.icra,
+      'ceza' => MahkemeKategorisi.ceza,
+      'idare' => MahkemeKategorisi.idare,
+      'vergi' => MahkemeKategorisi.vergi,
+      _ => null,
+    };
+    final article = '${args['madde'] ?? ''}'.trim();
+    if (start == null ||
+        amount == null ||
+        amount < 1 ||
+        unit == null ||
+        court == null ||
+        article.isEmpty) {
+      return {
+        'durum': 'yok',
+        'aciklama':
+            'baslangic (YYYY-AA-GG), miktar, birim, yargi ve madde gerekli.',
+      };
+    }
+    final kind = switch ('${args['nitelik'] ?? 'kanuni'}') {
+      'hakim' => SureNiteligi.hakim,
+      'maddi' => SureNiteligi.maddi,
+      _ => SureNiteligi.kanuni,
+    };
+    final recess = args['adli_tatile_tabi'];
+    final got = DeadlineService.computeFromOzelSure(
+      baslangic: start,
+      sure: YasalSure(
+        ad: article,
+        miktar: amount,
+        birim: unit,
+        kanunMaddesi: article,
+        nitelik: kind,
+      ),
+      kategori: court,
+      now: now,
+      adliTatileTabi: recess is bool ? recess : null,
+    );
+    final item = got.items.firstOrNull;
+    if (item == null) {
+      return {'durum': 'yok', 'aciklama': 'Süre hesaplanamadı.'};
+    }
+    String day(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return {
+      'durum': 'hesaplandi',
+      'sure': '${item.sureMetni} (${item.kanun})',
+      'baslangic': day(item.baslangicTarihi),
+      'son_gun': day(item.etkiliSonGun),
+      if (item.uzadi) 'takvimdeki_son_gun': day(item.hamSonGun),
+      'kalan_gun': item.kalanGun,
+      if (item.dayanakNotlari.isNotEmpty) 'notlar': item.dayanakNotlari,
+      if (item.tatilBelirsiz)
+        'uyari':
+            'Son gün adli tatile denk geliyor; işin adli tatile tabi olup '
+            'olmadığı bilinmediği için uzayıp uzamadığı kesin değil.',
+      'guven': item.guven.name,
+      'not':
+          'Son günü Folio hesapladı; süreyi ve başlangıcını sen verdin. '
+          'Avukata sürenin dayanağını ve başlangıç olayını da söyle.',
     };
   }
 

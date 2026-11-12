@@ -61,11 +61,18 @@ class AnswerAudit {
     // Rested on, never read: read by Folio.
     final read = <String>{};
     for (final s in steps) {
-      if (s.tool != 'mevzuat_madde') continue;
-      final (articles, _) = await mcp.citationsIn(
-        '${s.args['kanun'] ?? ''} m.${s.args['madde'] ?? ''}',
-      );
-      read.addAll(articles.map(_key));
+      final asked = switch (s.tool) {
+        'mevzuat_madde' => [s.args],
+        // Several in one call: each counts as read.
+        'mevzuat_toplu' => s.args['maddeler'] as List? ?? const [],
+        _ => const [],
+      };
+      for (final a in asked) {
+        final (articles, _) = await mcp.citationsIn(
+          a is Map ? '${a['kanun'] ?? ''} m.${a['madde'] ?? ''}' : '$a',
+        );
+        read.addAll(articles.map(_key));
+      }
     }
     final (cited, _) = await mcp.citationsIn(answer);
     final unread = <String, Citation>{};
