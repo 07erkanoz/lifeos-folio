@@ -61,6 +61,41 @@ void main() {
     expect(guide.topics['kira'], contains('(m.344)'));
   });
 
+  test('who must prove what: each kind of case has its part on it', () {
+    for (final k in const [
+      'icra',
+      'kira',
+      'ceza',
+      'tazminat',
+      'aile',
+      'is',
+      'ticaret',
+      'tapu',
+      'miras',
+      'tuketici',
+      'idari',
+      'sigorta',
+      'usul',
+      'dilekce',
+    ]) {
+      expect(
+        RegExp(r'^## İspat', multiLine: true).hasMatch(guide.topics[k]!),
+        isTrue,
+        reason: k,
+      );
+    }
+    // The articles the parts rest on, as checked against the official text.
+    expect(guide.topics['tuketici'], contains('TKHK m.10'));
+    expect(guide.topics['kira'], contains('HMK m.201'));
+    expect(guide.topics['metodoloji'], contains('TBK m.112'));
+    // Folio's tools, none of another program's.
+    for (final t in guide.topics.values) {
+      expect(t, isNot(contains('mevzuat_getir')));
+      expect(t, isNot(contains('arsiv_ara')));
+      expect(t, isNot(contains('search_')));
+    }
+  });
+
   test('only the named topics go with a question', () {
     final block = guide.blockFor('Ödeme emrine itiraz kaç gün?')!;
     expect(block, contains('<rehber konu="icra">'));
