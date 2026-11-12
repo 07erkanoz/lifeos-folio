@@ -130,6 +130,27 @@ void main() {
     expect(empty['atiflar'], isEmpty);
   });
 
+  test('a decision with no court, or another court, beside it is said to '
+      'be so', () async {
+    final got = await server().call('atif_dogrula', {
+      'metin':
+          'Yargıtay HGK, davayı asliye ticarete gönderen direnme kararını '
+          'onadı (E.2017/2348 K.2019/82, 07.02.2019).',
+    });
+    // The nearest court named is where the case was sent: said, so that
+    // the program can name the right one.
+    final one = (got['atiflar'] as List).single as Map;
+    expect(one['durum'], 'yayimlanmamis');
+    expect(one['mahkeme'], 'asliye ticaret');
+    final bare = await server().call('atif_dogrula', {
+      'metin': 'Bkz. (E.2017/2348 K.2019/82).',
+    });
+    expect(
+      ((bare['atiflar'] as List).single as Map)['durum'],
+      'mahkeme_belirsiz',
+    );
+  });
+
   test('Claude and Codex are given Folio\'s tools and no others; '
       'Antigravity is not given them', () {
     final claude = AiAssistant.arguments(
@@ -175,8 +196,8 @@ void main() {
     );
     final bare = AiAssistant.arguments(AiProvider.antigravity, '/tmp/x');
     expect(
-      (jsonDecode(bare[bare.indexOf('--settings') + 1]) as Map)['permissions']
-          ['allow'],
+      (jsonDecode(bare[bare.indexOf('--settings') + 1])
+          as Map)['permissions']['allow'],
       isEmpty,
     );
     // Without Folio's program (a test), none.

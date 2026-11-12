@@ -246,7 +246,8 @@ class FolioMcp {
       'title': 'Atıfları denetle',
       'description':
           'Bir metindeki kanun maddesi ve karar atıflarını bulur ve her birini '
-          'resmî kaynakta denetler: bulundu, yok, mülga, ulaşılamadı. '
+          'resmî kaynakta denetler: bulundu, yok, mülga, ulaşılamadı; '
+          'künyesinde mahkeme yazılmamış karar mahkeme_belirsiz döner. '
           'Dilekçe ya da görüş yazdıysan bitirmeden bununla denetle.',
       'inputSchema': {
         'type': 'object',
@@ -725,6 +726,19 @@ class FolioMcp {
     }
     for (final c in decisions.take(checkAtMost)) {
       final written = metin.substring(c.start, c.start + c.length);
+      // Numbers with no court beside them: not a court no bank publishes,
+      // only one not named. "Yargıtay HGK, … onadı (E.2017/2348 K.2019/82)".
+      if (c.court == null) {
+        out.add({
+          'tur': 'karar',
+          'yazilan': written,
+          'durum': 'mahkeme_belirsiz',
+          'aciklama':
+              'Künyenin yanında mahkeme yazılmadığı için denetlenemedi; '
+              'mahkemeyi ve daireyi numarayla birlikte yaz.',
+        });
+        continue;
+      }
       try {
         final got = await _caseLaw.lookup(c);
         out.add({
@@ -738,6 +752,11 @@ class FolioMcp {
           },
           if (got.decision case final d?) 'dogru_atif': d.reference,
           if (got.chamberDiffers) 'daire_farkli': true,
+          // Which court Folio took the numbers to be of: the nearest one
+          // named, which may be a court the case went to, not the one that
+          // decided it ("davayı asliye ticarete gönderen … (E.…)").
+          if (got.outcome == LookupOutcome.unpublished)
+            'mahkeme': c.courtWritten,
         });
       } catch (_) {
         out.add({'tur': 'karar', 'yazilan': written, 'durum': 'ulasilamadi'});

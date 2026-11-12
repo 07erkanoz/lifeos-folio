@@ -39,10 +39,22 @@ class AnswerAudit {
         );
       } else if (state == 'mulga') {
         problems.add('- "$written" mülga. Buna dayanma.');
-      } else if (state == 'yayimlanmamis') {
+      } else if (state == 'mahkeme_belirsiz') {
         problems.add(
-          '- "$written" yayımlanmamış bir karar; tam metni okunamaz. '
-          'Dayanacaksan bunu açıkça söyle.',
+          '- "$written" kararının künyesinde mahkeme yok; Folio denetleyemedi. '
+          'Mahkemeyi ve daireyi numarayla birlikte yaz '
+          '(ör. "Yargıtay Hukuk Genel Kurulu, 2017/2348 E., 2019/82 K.").',
+        );
+      } else if (state == 'yayimlanmamis') {
+        final court = '${one['mahkeme'] ?? ''}'.trim();
+        problems.add(
+          court.isEmpty
+              ? '- "$written" yayımlanmamış bir karar; tam metni okunamaz. '
+                    'Dayanacaksan bunu açıkça söyle.'
+              : '- Folio "$written" künyesini "$court" kararı olarak okudu; '
+                    'bu mahkemenin kararları yayımlanmaz. Kararı başka bir '
+                    'mahkeme verdiyse mahkemeyi ve daireyi künyenin hemen '
+                    'önüne yaz; vermediyse tam metni okunamadığını açıkça söyle.',
         );
       }
     }

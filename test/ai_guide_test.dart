@@ -72,6 +72,13 @@ void main() {
     );
     expect(guide.topicOf('fon'), 'fon-tasfiyesi');
     expect(guide.topics['fon-tasfiyesi'], contains('7596'));
+    // As corrected against the official texts (12.11.2026).
+    final fon = guide.topics['fon-tasfiyesi']!;
+    expect(fon, contains('1.661.000'));
+    expect(fon, contains('BİR YIL'));
+    expect(fon, isNot(contains('500.000 TL')));
+    expect(fon, isNot(contains('tazminat istenmedikçe faiz işlemez')));
+    expect(fon, isNot(contains('m.36/a')));
     // Kept out of an unrelated question.
     expect(guide.topicsIn('Kira bedelinin artırılma oranı'), ['kira']);
   });
