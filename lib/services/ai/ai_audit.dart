@@ -14,6 +14,12 @@ class AnswerAudit {
 
   final FolioMcp mcp;
 
+  /// Whether the last [feedback] found something wrong in the answer
+  /// itself (a citation that does not exist or is repealed, a vote said
+  /// wrong, a sentence reckoned without Folio's engine), not only articles
+  /// it rested on unread. Only such a finding is worth a second round.
+  bool serious = false;
+
   /// The most articles Folio reads for one answer.
   static const mostRead = 4;
 
@@ -27,6 +33,7 @@ class AnswerAudit {
     String? question,
   }) async {
     final problems = <String>[];
+    serious = false;
     // A sentence reckoned without Folio's engine.
     if (question != null &&
         LegalGuide.asksCrime(question) &&
@@ -108,6 +115,7 @@ class AnswerAudit {
         'okudu, resmî metni:\n${text.length > 6000 ? '${text.substring(0, 6000)}…' : text}',
       );
     }
+    serious = problems.isNotEmpty;
     if (problems.isEmpty && texts.isEmpty) return null;
     return [
       'Folio cevabını avukata göstermeden denetledi.',

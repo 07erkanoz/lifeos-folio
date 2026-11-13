@@ -133,6 +133,9 @@ class _Turn {
   /// Folio checking the answer before it is shown (AnswerAudit).
   bool auditing = false;
 
+  /// The answer shown while Folio checks it and it is written again.
+  String? held;
+
   /// What Folio did for it on the way (UYAP asked for fresh).
   final notes = <String>[];
 
@@ -581,17 +584,27 @@ class _AiPanelState extends State<AiPanel> {
         // it finds is said to the program, which writes the answer again.
         if (tools && !cancel.isCompleted) {
           var rounds = 0, read = 0;
+          final audit = AnswerAudit(_mcp);
           for (var round = 0; round < 2; round++) {
-            if (mounted) setState(() => turn.auditing = true);
-            final feedback = await AnswerAudit(_mcp).feedback(
+            // The answer stays on the screen while Folio checks it and the
+            // program writes it again; the new one takes its place when
+            // done, not word by word over a cleared one.
+            if (mounted) {
+              setState(() {
+                turn.auditing = true;
+                turn.held = answer;
+              });
+            }
+            final feedback = await audit.feedback(
               answer,
               turn.steps.values,
               said: (_) => read++,
               question: task == AiTask.question ? question : null,
             );
             if (feedback == null || cancel.isCompleted) break;
+            // A second round only for a fault in the answer itself.
+            if (round > 0 && !audit.serious) break;
             if (!await AiAssistant.goesOn(provider, thread)) break;
-            if (mounted) setState(() => turn.auditing = false);
             turn.live.clear();
             final again = await AiAssistant.ask(
               provider,
@@ -607,6 +620,7 @@ class _AiPanelState extends State<AiPanel> {
             rounds++;
           }
           turn.auditing = false;
+          turn.held = null;
           if (rounds > 0 || read > 0) {
             turn.notes.add(AnswerAudit.summary(rounds, read));
           }
@@ -1731,6 +1745,7 @@ class _AiPanelState extends State<AiPanel> {
       if (t.answer case final a?) ...[
         AiMarkdown(
           a,
+          size: _textSize,
           links: {
             for (final source in t.sources)
               if (_writtenOf(a, source) case final w when w.isNotEmpty)
@@ -1815,9 +1830,16 @@ class _AiPanelState extends State<AiPanel> {
         )
       else if (running) ...[
         _status(t, scheme),
-        if (t.live.isNotEmpty)
+        if (t.held case final held?)
+          AiMarkdown(
+            held,
+            size: _textSize,
+            block: (language, text) => _belge(language, text, scheme),
+          )
+        else if (t.live.isNotEmpty)
           AiMarkdown(
             t.live.toString(),
+            size: _textSize,
             block: (language, text) => _belge(language, text, scheme),
           ),
       ],
@@ -2040,6 +2062,13 @@ class _AiPanelState extends State<AiPanel> {
   }
 
   bool _drawing = false;
+
+  /// The answers' type: larger on a wide page, where a line is long.
+  double _textSize = 13.5;
+
+  /// How wide the conversation's lines run in [room]: the whole page, a
+  /// narrow margin either side.
+  static double readWidth(double room) => room < 1000 ? room : room - 48;
 
   /// The documents the program wrote in this conversation, the newest
   /// first; kept with the case's drafts when it is of one.
@@ -2755,8 +2784,16 @@ class _AiPanelState extends State<AiPanel> {
                                   // The lines kept to a width read with
                                   // ease on a wide page.
                                   builder: (context, room) {
-                                    final side = ((room.maxWidth - 900) / 2)
-                                        .clamp(14.0, double.infinity);
+                                    _textSize = room.maxWidth >= 1900
+                                        ? 16
+                                        : room.maxWidth >= 1250
+                                        ? 15
+                                        : 13.5;
+                                    final side =
+                                        ((room.maxWidth -
+                                                    readWidth(room.maxWidth)) /
+                                                2)
+                                            .clamp(14.0, double.infinity);
                                     return ListView(
                                       controller: _scroll,
                                       padding: EdgeInsets.fromLTRB(
@@ -2818,11 +2855,13 @@ class _AiPanelState extends State<AiPanel> {
         !_ofDocument && record == null && widget.caseRecord == null;
     final canMust = record != null && record.documents.isNotEmpty;
     final quota = _quota;
+    // As wide as the conversation above it: its margin, no more.
+    final side = MediaQuery.sizeOf(context).width >= 1000 ? 24.0 : 12.0;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      padding: EdgeInsets.fromLTRB(side, 0, side, 10),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
+          constraints: const BoxConstraints(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
