@@ -261,7 +261,28 @@ class OcrService {
     var page = OcrPageRead.fromTsv(
       await _run(language, imagePath: path, options: tsv),
     );
-    if (page.unsure) {
+    if (page.sideways) {
+      final decoded = await _gray(path);
+      if (decoded != null) {
+        final (luma, width, height) = decoded;
+        for (final clockwise in const [true, false]) {
+          final (turned, w, h) = turn(
+            luma,
+            width,
+            height,
+            clockwise: clockwise,
+          );
+          final second = OcrPageRead.fromTsv(
+            await _run(language, input: grayTiff(turned, w, h), options: tsv),
+          );
+          if (second.betterThan(page)) {
+            page = second;
+            break;
+          }
+        }
+      }
+    }
+    if (page.unsure && !page.sideways) {
       final enlarged = await _scaledGray(path, page.enlargement(0.5, 2.5));
       if (enlarged != null) {
         final second = OcrPageRead.fromTsv(
@@ -291,6 +312,18 @@ class OcrService {
 
   /// [path] in grey, scaled by [scale], as an uncompressed TIFF; null when
   /// the picture cannot be decoded here.
+  /// The picture at [path] in grey: its pixels, width and height.
+  static Future<(Uint8List, int, int)?> _gray(String path) async {
+    final decoded = img.decodeImage(await File(path).readAsBytes());
+    if (decoded == null) return null;
+    final luma = Uint8List(decoded.width * decoded.height);
+    var i = 0;
+    for (final pixel in decoded) {
+      luma[i++] = (pixel.luminanceNormalized * 255).round().clamp(0, 255);
+    }
+    return (luma, decoded.width, decoded.height);
+  }
+
   static Future<Uint8List?> _scaledGray(String path, double scale) async {
     final decoded = img.decodeImage(await File(path).readAsBytes());
     if (decoded == null) return null;
@@ -347,6 +380,37 @@ class OcrService {
 
         var page = await read(renderDpi, const []);
         if (page == null) continue;
+        // A page scanned on its side reads as nonsense; see
+        // [OcrPageRead.sideways].
+        if (page.sideways) {
+          final width = (pageWidth * renderDpi / 72).round();
+          final height = (pageHeight * renderDpi / 72).round();
+          final rendered = await document.render(i, width, height);
+          if (rendered != null) {
+            final luma = grayLuma(rendered.bgra);
+            for (final clockwise in const [true, false]) {
+              final (turned, w, h) = turn(
+                luma,
+                rendered.width,
+                rendered.height,
+                clockwise: clockwise,
+              );
+              final second = OcrPageRead.fromTsv(
+                await _run(
+                  language,
+                  input: grayTiff(turned, w, h),
+                  options: ['--dpi', '$renderDpi', ...tsv],
+                ),
+              );
+              if (second.betterThan(page!)) {
+                page = second;
+                break;
+              }
+            }
+          }
+          if (page!.text.isNotEmpty) buffer.writeln(page.text);
+          continue;
+        }
         // A page read badly is read once more the way Tesseract's own
         // guidance asks for: drawn so its capitals are about 30 px tall, and
         // binarised by Sauvola, which copes with the uneven background the
@@ -385,15 +449,40 @@ class OcrService {
   /// PDFium hands back BGRA, not RGBA: reading it the other way round swaps the
   /// red and blue weights and shifts the luminance of anything coloured, such
   /// as a notary's blue stamp over black text.
-  static Uint8List toGrayTiff(Uint8List bgra, int width, int height) {
-    final luma = Uint8List(width * height);
+  static Uint8List toGrayTiff(Uint8List bgra, int width, int height) =>
+      grayTiff(grayLuma(bgra), width, height);
+
+  /// BGRA pixels as one grey byte each.
+  static Uint8List grayLuma(Uint8List bgra) {
+    final luma = Uint8List(bgra.length ~/ 4);
     var w = 0;
     for (var i = 0; i + 3 < bgra.length && w < luma.length; i += 4) {
       // Rec. 601 luma, integer arithmetic: keeps antialiased glyph edges that a
       // plain channel average would smear.
       luma[w++] = (bgra[i + 2] * 77 + bgra[i + 1] * 150 + bgra[i] * 29) >> 8;
     }
-    return grayTiff(luma, width, height);
+    return luma;
+  }
+
+  /// [luma], [width] by [height], turned a quarter [clockwise] or back:
+  /// its pixels, its new width and height.
+  static (Uint8List, int, int) turn(
+    Uint8List luma,
+    int width,
+    int height, {
+    required bool clockwise,
+  }) {
+    final out = Uint8List(luma.length);
+    // The new picture is [height] wide and [width] tall.
+    for (var y = 0; y < height; y++) {
+      final row = y * width;
+      for (var x = 0; x < width; x++) {
+        final nx = clockwise ? height - 1 - y : y;
+        final ny = clockwise ? x : width - 1 - x;
+        out[ny * height + nx] = luma[row + x];
+      }
+    }
+    return (out, height, width);
   }
 
   /// [luma], one byte a pixel, as an uncompressed 8-bit grey TIFF.
@@ -545,6 +634,21 @@ class OcrPageRead {
     // small-print page above read best at 300.
     return (dpi * enlargement(0, double.infinity)).round().clamp(150, 400);
   }
+
+  /// Whether the page reads as if scanned on its side: hardly a word read
+  /// with confidence among many. Measured on 257 scanned pages without a
+  /// text layer (13 November 2026): 13 such, 7 of them on their side — a
+  /// land registry's table, an invoice — whose confident words went from 0–3
+  /// to 67–352 turned a quarter. Tesseract's own orientation guess was no
+  /// help: it called 13 upright pages upside down, and turned, each read
+  /// worse. A page upside down Tesseract reads as it is.
+  bool get sideways => words >= 30 && good < words * 0.15;
+
+  /// Whether this reading is so much better than [other] that it is the
+  /// right way round: on the six pages that were not on their side, a
+  /// turned reading came within a few words.
+  bool betterThan(OcrPageRead other) =>
+      good >= other.good * 2 && good >= other.good + 10;
 
   /// Whether the page is worth a second reading: read with little confidence,
   /// or in small print. A page with no words at all is blank, not badly read.
