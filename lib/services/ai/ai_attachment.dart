@@ -222,10 +222,17 @@ class AiAttachment {
           ? (pages < maxOcrPages ? pages : maxOcrPages)
           : null,
     );
+    // A phone has no OCR: a scan too long to go as pictures is said so.
+    final none = (text ?? '').trim().isEmpty;
     return AiAttachment(
       path: path,
-      text: masked(text ?? ''),
-      ocr: true,
+      text: none
+          ? '[Bu taranmış belgenin metni bu cihazda okunamadı'
+                '${pages > maxPages ? ' ($pages sayfa; görsel olarak en çok $maxPages sayfa gönderilebilir)' : ''}. '
+                'İçeriğini tahmin etme; avukata belgeyi bölerek ya da '
+                'bilgisayardan göndermesini söyle.]'
+          : masked(text!),
+      ocr: !none,
       note: note,
       pagesLeft: pages > maxOcrPages ? pages - maxOcrPages : 0,
     );

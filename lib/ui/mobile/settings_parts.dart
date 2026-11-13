@@ -96,7 +96,12 @@ class SettingsRow extends StatelessWidget {
     this.tint,
     this.trailing,
     this.onTap,
+    this.stackOnNarrow = false,
   });
+
+  /// On a phone's width, [trailing] goes under the words, which are shown
+  /// whole: buttons beside them left a title and its subtitle no room.
+  final bool stackOnNarrow;
 
   final IconData icon;
   final String title;
@@ -113,77 +118,102 @@ class SettingsRow extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => InkWell(
+  Widget build(BuildContext context) => stackOnNarrow && trailing != null
+      ? LayoutBuilder(
+          builder: (context, box) => box.maxWidth >= 480
+              ? _row(context, narrow: false)
+              : _row(context, narrow: true),
+        )
+      : _row(context, narrow: false);
+
+  Widget _row(BuildContext context, {required bool narrow}) => InkWell(
     onTap: onTap,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: fill ?? AgendaColors.hearingFill,
-              borderRadius: BorderRadius.circular(9),
+      child: _under(
+        narrow,
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: fill ?? AgendaColors.hearingFill,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(icon, size: 17, color: tint ?? AgendaColors.hearing),
             ),
-            child: Icon(icon, size: 17, color: tint ?? AgendaColors.hearing),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 1),
-                  Row(
-                    children: [
-                      if (status != null) ...[
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: status,
-                            shape: BoxShape.circle,
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 1),
+                    Row(
+                      children: [
+                        if (status != null) ...[
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: status,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Expanded(
+                          child: Text(
+                            subtitle!,
+                            maxLines: narrow ? 4 : 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AgendaColors.muted,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 6),
                       ],
-                      Expanded(
-                        child: Text(
-                          subtitle!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AgendaColors.muted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          trailing ??
-              (onTap == null
-                  ? const SizedBox.shrink()
-                  : Icon(
-                      Icons.chevron_right,
-                      color: tone(const Color(0xFF9AA2B1)),
-                    )),
-        ],
+            if (!narrow) ...[
+              const SizedBox(width: 8),
+              trailing ??
+                  (onTap == null
+                      ? const SizedBox.shrink()
+                      : Icon(
+                          Icons.chevron_right,
+                          color: tone(const Color(0xFF9AA2B1)),
+                        )),
+            ],
+          ],
+        ),
       ),
     ),
   );
+
+  /// [row], and on a narrow screen [trailing] under it, to the right.
+  Widget _under(bool narrow, Widget row) => !narrow
+      ? row
+      : Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            row,
+            const SizedBox(height: 4),
+            Align(alignment: Alignment.centerRight, child: trailing),
+          ],
+        );
 }
 
 /// A switch in a row, the app's own colour.

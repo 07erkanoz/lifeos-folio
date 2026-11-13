@@ -71,10 +71,15 @@ enum AiProvider {
   /// starts).
   bool get isProgram => !viaApi;
 
-  /// The providers this computer can offer.
+  /// The providers this device can offer: the programs on Linux, the
+  /// services' APIs everywhere — on a phone not Groq, kept for trying
+  /// models on a computer.
   static List<AiProvider> get offered => [
     for (final p in values)
-      if (p.viaApi || Platform.isLinux) p,
+      if (AiAssistant.phone
+          ? p.viaApi && p != AiProvider.groq
+          : p.viaApi || Platform.isLinux)
+        p,
   ];
 
   /// Whether it is given pages and pictures as they are. A scan read by
@@ -187,11 +192,48 @@ abstract final class AiAssistant {
   static bool get available =>
       availableForTest ??
       (!AppEdition.isOfis &&
-          (Platform.isLinux || Platform.isWindows || Platform.isMacOS) &&
+          (phone
+              ? phoneKey.value
+              : Platform.isLinux || Platform.isWindows || Platform.isMacOS) &&
           !Platform.environment.containsKey('FLUTTER_TEST'));
 
   @visibleForTesting
   static bool? availableForTest;
+
+  /// A phone or a tablet: Android, iOS.
+  static bool get phone =>
+      phoneForTest ?? (Platform.isAndroid || Platform.isIOS);
+
+  @visibleForTesting
+  static bool? phoneForTest;
+
+  /// On a phone: whether it has a key of its own (Gemini, ChatGPT, Claude).
+  /// With one it asks the service itself; without, what it asks waits for
+  /// the lawyer's computer (AiRelay).
+  static final phoneKey = ValueNotifier<bool>(false);
+
+  /// [phoneKey] looked at again: at the start, and when a key is kept or
+  /// taken off.
+  static Future<void> lookForPhoneKey() async {
+    if (!phone) return;
+    var any = false;
+    for (final p in AiProvider.offered) {
+      if (ApiService.of(p) case final api?
+          when await GroqChat.key(api) != null) {
+        any = true;
+        break;
+      }
+    }
+    phoneKey.value = any;
+  }
+
+  /// Whether the AI settings are shown: where the features run, and on a
+  /// phone, for its key to be given.
+  static bool get configurable =>
+      available ||
+      (!AppEdition.isOfis &&
+          phone &&
+          !Platform.environment.containsKey('FLUTTER_TEST'));
 
   /// Whether the AI features are shown: [available], and turned on by the
   /// lawyer ([AiSettings.enabled]).
@@ -1144,7 +1186,7 @@ class AiSettings {
 
   /// The consent text's version; one given to an older text no longer
   /// counts.
-  static const currentConsent = 3;
+  static const currentConsent = 4;
 
   /// Whether the lawyer turned the AI features on. Off, Folio shows none of
   /// them and its tools answer no AI program.
@@ -1261,7 +1303,8 @@ class AiSettings {
 /// lawyer is asked again then only.
 const aiConsentPoints = [
   'Yapay zekâ özelliklerinde, seçtiğiniz belgenin metni sizin '
-      'bilgisayarınızdan, sizin hesabınızla kullandığınız sağlayıcıya '
+      'cihazınızdan (bilgisayarınız ya da telefonunuz), sizin hesabınızla '
+      'kullandığınız sağlayıcıya '
       '(Anthropic, OpenAI ya da Google) ya da kendi API anahtarınızla '
       'kullandığınız hizmete (Google Gemini, OpenAI, Anthropic Claude ya da '
       'Groq) doğrudan gönderilir. Belge bir '
@@ -1270,9 +1313,10 @@ const aiConsentPoints = [
   'LifeOS bu metni görmez, saklamaz ve kimseye aktarmaz. Sağlayıcıyla ilişki '
       'sizinle o şirket arasındadır.',
   'Yapay zekâyla yaptığınız sohbetler, kaydettiğiniz bulgular ve taslaklar '
-      'ilgili dosyanın kaydında tutulur: bu bilgisayarda ve Senkron açıksa '
-      'yalnız kendi cihazlarınızda. Telefonunuzdan sorduğunuz soru da '
-      'bilgisayarınızdaki programla gönderilir.',
+      'ilgili dosyanın kaydında tutulur: bu cihazda ve Senkron açıksa '
+      'yalnız kendi cihazlarınızda. Telefonunuza API anahtarı girdiyseniz '
+      'telefondan sorduğunuz soru oradan doğrudan sağlayıcıya gider; '
+      'girmediyseniz bilgisayarınızdaki Folio ile gönderilir.',
   'Belgelerdeki kişisel verilerin veri sorumlusu sizsiniz. Gönderimin '
       'KVKK’ya, avukatlık sırrına ve meslek kurallarına uygunluğundan siz '
       'sorumlusunuz.',

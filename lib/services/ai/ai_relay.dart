@@ -94,7 +94,8 @@ class AiRelay {
   Future<bool> poke() async {
     // Only a computer that runs an AI program answers: a phone never
     // takes a question.
-    if (_working || !AiAssistant.available) return false;
+    // A phone asks for itself or waits for the computer; it answers none.
+    if (_working || !AiAssistant.available || AiAssistant.phone) return false;
     _working = true;
     try {
       final settings = await AiSettings.load();

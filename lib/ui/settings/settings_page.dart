@@ -1275,8 +1275,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
-      // The lawyer's own AI programs, Linux only for now.
-      if (AiAssistant.available)
+      // The lawyer's own AI programs and keys; on a phone its keys.
+      if (AiAssistant.configurable)
         const _Section('ai', 'Yapay zekâ', Icons.auto_awesome_outlined, [
           _Entry(
             'yapay zeka claude codex chatgpt antigravity gemini özet kvkk onay',

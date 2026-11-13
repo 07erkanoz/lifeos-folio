@@ -163,12 +163,14 @@ abstract final class GroqChat {
       'anahtar': value.trim(),
     });
     _keys.remove(service);
+    unawaited(AiAssistant.lookForPhoneKey());
     return ok;
   }
 
   static Future<void> removeKey([ApiService service = ApiService.groq]) async {
     await SecretStore().remove(service.secret);
     _keys[service] = null;
+    unawaited(AiAssistant.lookForPhoneKey());
   }
 
   /// Whether [value] is taken by [service]: a request that lists the

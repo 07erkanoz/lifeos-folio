@@ -36,6 +36,30 @@ void main() {
     expect(AiAssistant.shown, isFalse);
   });
 
+  test('a phone offers the services but Groq, and asks them with a key '
+      'of its own', () {
+    addTearDown(() {
+      AiAssistant.phoneForTest = null;
+      AiAssistant.phoneKey.value = false;
+    });
+    AiAssistant.phoneForTest = true;
+    expect(AiProvider.offered, [
+      AiProvider.gemini,
+      AiProvider.openai,
+      AiProvider.anthropic,
+    ]);
+    AiAssistant.phoneForTest = false;
+    expect(AiProvider.offered, contains(AiProvider.groq));
+    // The pages of a scan go as they are to every service a phone has.
+    for (final p in [
+      AiProvider.gemini,
+      AiProvider.openai,
+      AiProvider.anthropic,
+    ]) {
+      expect(p.seesPictures, isTrue);
+    }
+  });
+
   group('the programs, run safe', () {
     test('Claude: print mode, no tools, no settings, nothing kept', () {
       final args = AiAssistant.arguments(AiProvider.claude, '/tmp/x');

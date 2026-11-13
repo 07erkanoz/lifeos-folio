@@ -989,8 +989,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     AiSettings.on.addListener(_aiSwitched);
+    AiAssistant.phoneKey.addListener(_aiSwitched);
     // A phone reads the switch too: the cases' AI tab follows it.
-    if (!AppEdition.isOfis) unawaited(AiSettings.load());
+    if (!AppEdition.isOfis) {
+      unawaited(AiSettings.load());
+      unawaited(AiAssistant.lookForPhoneKey());
+    }
     UpdateCheck.instance.available.addListener(_updateAvailable);
     UpdateCheck.instance.start();
     _recentDocuments.load().then((_) {
@@ -1418,6 +1422,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     AiSettings.on.removeListener(_aiSwitched);
+    AiAssistant.phoneKey.removeListener(_aiSwitched);
     PortalSync.newCaseNotice.removeListener(_newCaseTold);
     PortalSync.setupOffer.removeListener(_offerSetup);
     _keptSearch?.dispose();

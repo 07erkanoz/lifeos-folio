@@ -68,9 +68,14 @@ void main() {
         return 'Tebliğden itibaren iki hafta.';
       },
     );
-    // A phone never takes a question.
+    // A phone never takes a question: not without AI, nor with its own key.
     AiAssistant.availableForTest = false;
     expect(await relay.poke(), isFalse);
+    AiAssistant.availableForTest = true;
+    AiAssistant.phoneForTest = true;
+    addTearDown(() => AiAssistant.phoneForTest = null);
+    expect(await relay.poke(), isFalse);
+    AiAssistant.phoneForTest = null;
 
     AiAssistant.availableForTest = true;
     expect(await relay.poke(), isTrue);

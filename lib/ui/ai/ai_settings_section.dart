@@ -154,6 +154,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
   /// system's keyring.
   Widget _api(AiStatus s, bool chosen) => SettingsRow(
     key: ValueKey('ai-provider-${s.provider.name}'),
+    stackOnNarrow: true,
     icon: Icons.key_outlined,
     title: s.provider.label,
     subtitle: s.installed
@@ -206,8 +207,10 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${_note(api)} Folio anahtarı bu bilgisayarın anahtar '
-                  'deposunda saklar; sorular bu bilgisayardan doğrudan '
+                  '${_note(api)} Folio anahtarı bu '
+                  '${AiAssistant.phone ? 'cihazın' : 'bilgisayarın'} anahtar '
+                  'deposunda saklar; sorular bu '
+                  '${AiAssistant.phone ? 'cihazdan' : 'bilgisayardan'} doğrudan '
                   '${api.label}’a gider.',
                 ),
                 const SizedBox(height: 8),
@@ -319,7 +322,10 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     icon: Icons.auto_awesome_outlined,
     title: 'Yapay zekâ özelliklerini kullan',
     subtitle: _settings.enabled
-        ? 'Açık. Belge önizlemesinde yapay zekâ düğmesi görünür.'
+        ? AiAssistant.phone
+              ? 'Açık. Yapay zekâ sayfası ve dosyaların Yapay zekâ sekmesi '
+                    'görünür.'
+              : 'Açık. Belge önizlemesinde yapay zekâ düğmesi görünür.'
         : 'Kapalı. Folio’da yapay zekâyla ilgili hiçbir düğme ya da '
               'pencere görünmez.',
     trailing: settingsSwitch(_settings.enabled, (v) async {
@@ -424,6 +430,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     ),
     SettingsRow(
       key: const ValueKey('ai-consent-row'),
+      stackOnNarrow: true,
       icon: Icons.verified_user_outlined,
       title: _settings.consented
           ? 'Kullanım onayı verildi'
@@ -456,18 +463,28 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
 
 /// What the AI settings say first: the programs where they run (Linux),
 /// the services' APIs everywhere.
-String aiIntroText({bool programs = false}) => [
-  if (programs || Platform.isLinux)
-    'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile kendi '
-        'aboneliğinizle, ya da kendi API anahtarınızla Gemini, ChatGPT, '
-        'Claude ya da Groq’la soru sorarsınız.'
-  else
-    'Kendi API anahtarınızla Gemini, ChatGPT, Claude ya da Groq’la soru '
-        'sorarsınız; program kurmanız gerekmez.',
-  'Kenar çubuğundaki Yapay zekâ sayfasından, belge önizlemesinden, '
-      'dosyaların Yapay zekâ sekmesinden ve UETS tebligatlarından süre ile '
-      'yapılacak iş çıkarırken kullanılır. İstekler bu bilgisayardan '
-      'doğrudan sağlayıcıya gider; Folio araya sunucu koymaz.',
-  if (programs || Platform.isLinux)
-    'Telefonunuzdan sorduğunuz soruları da bu bilgisayar cevaplar.',
-].join(' ');
+String aiIntroText({bool programs = false}) => AiAssistant.phone
+    ? [
+        'Kendi API anahtarınızla Gemini, ChatGPT ya da Claude’la bu '
+            'telefondan doğrudan soru sorarsınız.',
+        'Yapay zekâ sayfasından ve dosyaların Yapay zekâ sekmesinden '
+            'kullanılır. İstekler telefondan doğrudan sağlayıcıya gider; '
+            'Folio araya sunucu koymaz.',
+        'Anahtar girmezseniz sorularınızı bilgisayarınızdaki Folio, '
+            'açıldığında cevaplar.',
+      ].join(' ')
+    : [
+        if (programs || Platform.isLinux)
+          'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile kendi '
+              'aboneliğinizle, ya da kendi API anahtarınızla Gemini, ChatGPT, '
+              'Claude ya da Groq’la soru sorarsınız.'
+        else
+          'Kendi API anahtarınızla Gemini, ChatGPT, Claude ya da Groq’la soru '
+              'sorarsınız; program kurmanız gerekmez.',
+        'Kenar çubuğundaki Yapay zekâ sayfasından, belge önizlemesinden, '
+            'dosyaların Yapay zekâ sekmesinden ve UETS tebligatlarından süre ile '
+            'yapılacak iş çıkarırken kullanılır. İstekler bu bilgisayardan '
+            'doğrudan sağlayıcıya gider; Folio araya sunucu koymaz.',
+        if (programs || Platform.isLinux)
+          'Telefonunuzdan sorduğunuz soruları da bu bilgisayar cevaplar.',
+      ].join(' ');
