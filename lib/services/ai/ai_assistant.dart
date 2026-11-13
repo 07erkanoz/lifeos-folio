@@ -17,6 +17,7 @@ import 'ai_attachment.dart';
 import 'ai_events.dart';
 import 'ai_case.dart';
 import 'ai_groq.dart';
+import 'ai_usage.dart';
 import 'ai_prompts.dart';
 import 'folio_mcp.dart';
 
@@ -780,6 +781,7 @@ abstract final class AiAssistant {
     AiThread? thread,
   }) async {
     if (provider.viaApi) {
+      await AiUsage.checkLimit();
       return GroqChat.ask(
         prompt,
         model: model,
@@ -1190,7 +1192,12 @@ class AiSettings {
     this.mask = true,
     this.provider,
     this.models = const {},
+    this.monthlyTokens,
   });
+
+  /// The most tokens the services' API keys may use a month, on every own
+  /// device together; none when null.
+  final int? monthlyTokens;
 
   /// The consent text's version; one given to an older text no longer
   /// counts.
@@ -1230,6 +1237,8 @@ class AiSettings {
     bool? mask,
     AiProvider? provider,
     Map<String, String>? models,
+    int? monthlyTokens,
+    bool noLimit = false,
     bool revoke = false,
   }) => AiSettings(
     enabled: enabled ?? this.enabled,
@@ -1239,6 +1248,7 @@ class AiSettings {
     mask: mask ?? this.mask,
     provider: provider ?? this.provider,
     models: models ?? this.models,
+    monthlyTokens: noLimit ? null : monthlyTokens ?? this.monthlyTokens,
   );
 
   Map<String, Object?> toJson() => {
@@ -1249,6 +1259,7 @@ class AiSettings {
     'tcGizle': mask,
     if (provider != null) 'saglayici': provider!.name,
     if (models.isNotEmpty) 'modeller': models,
+    if (monthlyTokens != null) 'aylikTokenSiniri': monthlyTokens,
   };
 
   static AiSettings fromJson(Object? json) {
@@ -1261,6 +1272,7 @@ class AiSettings {
       consentBy: json['onaylayan'] as String?,
       mask: json['tcGizle'] != false,
       provider: AiProvider.values.asNameMap()['${json['saglayici']}'],
+      monthlyTokens: (json['aylikTokenSiniri'] as num?)?.toInt(),
       models: {
         if (json['modeller'] case final Map m)
           for (final e in m.entries)

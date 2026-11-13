@@ -18,6 +18,7 @@ import '../office/task_package.dart';
 import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
+import '../ai/ai_keys_sync.dart';
 import '../ai/ai_relay.dart';
 import '../uets/notice_deadlines.dart';
 import '../uyap/uyap_case_store.dart';
@@ -96,6 +97,10 @@ class OwnSync extends ChangeNotifier {
   /// findings kept and the drafts; between their own devices alone, never
   /// to the office.
   static const aiPart = 'yapay-zeka';
+
+  /// The API keys of the AI services (Gemini, ChatGPT, Claude): given on
+  /// one own device, there on all; never to the office.
+  static const apiKeysPart = 'api-anahtarlari';
   static const _optIn = {officeClients};
   final _on = <String>{};
 
@@ -451,6 +456,14 @@ class OwnSync extends ChangeNotifier {
       );
     } else {
       _net.ownParts.remove(aiPart);
+    }
+    if (isOn(apiKeysPart)) {
+      _net.ownParts[apiKeysPart] = OwnPart(
+        export: ApiKeysSync.export,
+        merge: ApiKeysSync.merge,
+      );
+    } else {
+      _net.ownParts.remove(apiKeysPart);
     }
     if (isOn(agenda)) {
       final db = await _database();

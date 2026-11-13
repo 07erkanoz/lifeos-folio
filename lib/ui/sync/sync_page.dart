@@ -361,6 +361,7 @@ class _SyncPageState extends State<SyncPage> {
       OwnSync.ownProposals: 'Öneriler',
       OwnSync.ownShares: 'Dosya paylaşımları',
       OwnSync.aiPart: 'Yapay zekâ kayıtları',
+      OwnSync.apiKeysPart: 'Yapay zekâ API anahtarları',
     };
     final what = [for (final p in parts.keys) names[p] ?? p];
     return '${what.join(', ')} bu cihazla eşitlenmiyor. Bu cihazdaki Folio '
@@ -487,6 +488,24 @@ class _SyncPageState extends State<SyncPage> {
             ),
             value: _sync.isOn(OwnSync.aiPart),
             onChanged: (on) => unawaited(_sync.turn(OwnSync.aiPart, on)),
+          ),
+        if (AiSettings.on.value)
+          SwitchListTile(
+            key: const ValueKey('sync-api-keys'),
+            secondary: const Icon(Icons.key_outlined),
+            title: const Text(
+              'Yapay zekâ API anahtarları',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: const Text(
+              'Bir cihazınıza girdiğiniz Gemini, ChatGPT ya da Claude '
+              'anahtarı öbür cihazlarınızda da kullanılır; kaldırdığınız '
+              'hepsinden kalkar. Şifreli olarak yalnız kendi cihazlarınıza '
+              'gider, büroya gitmez.',
+              style: TextStyle(fontSize: 12),
+            ),
+            value: _sync.isOn(OwnSync.apiKeysPart),
+            onChanged: (on) => unawaited(_sync.turn(OwnSync.apiKeysPart, on)),
           ),
         SwitchListTile(
           key: const ValueKey('sync-uyap'),

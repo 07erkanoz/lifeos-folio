@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_usage.dart';
 import '../../services/ai/ai_groq.dart';
 import '../mobile/settings_parts.dart';
 import 'ai_dialogs.dart';
@@ -44,8 +45,10 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
       for (final s in found)
         if (s.installed) s.provider: await AiAssistant.models(s.provider),
     };
+    final used = await AiUsage.of();
     if (!mounted) return;
     setState(() {
+      _used = used.total;
       _settings = settings;
       _found = found;
       _store = store;
@@ -390,6 +393,40 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     );
   }
 
+  /// This month's tokens on every own device, and the month's limit.
+  int _used = 0;
+
+  static const _limits = [1000000, 5000000, 20000000, 100000000];
+
+  Widget _usage() => SettingsRow(
+    key: const ValueKey('ai-usage'),
+    icon: Icons.data_usage_rounded,
+    title: 'Bu ayki kullanım: ${AiUsage.shown(_used)} token',
+    subtitle: _settings.monthlyTokens == null
+        ? 'API anahtarlarınızla bütün cihazlarınızda. Sınır yok.'
+        : 'API anahtarlarınızla bütün cihazlarınızda. Sınıra ulaşınca bu ay '
+              'soru gönderilmez.',
+    stackOnNarrow: true,
+    trailing: DropdownButton<int>(
+      key: const ValueKey('ai-usage-limit'),
+      value: _settings.monthlyTokens ?? 0,
+      underline: const SizedBox.shrink(),
+      items: [
+        const DropdownMenuItem(value: 0, child: Text('Sınır yok')),
+        for (final l in {..._limits, ?_settings.monthlyTokens})
+          if (l > 0)
+            DropdownMenuItem(value: l, child: Text('Ayda ${AiUsage.shown(l)}')),
+      ],
+      onChanged: (v) => unawaited(
+        _save(
+          v == null || v == 0
+              ? _settings.copyWith(noLimit: true)
+              : _settings.copyWith(monthlyTokens: v),
+        ),
+      ),
+    ),
+  );
+
   List<Widget> _features(List<AiStatus>? found) => [
     Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
@@ -416,6 +453,8 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
       for (final s in found)
         if (s.installed)
           for (final tier in AiTier.values) _model(s.provider, tier),
+    if (found != null && found.any((s) => s.provider.viaApi && s.installed))
+      _usage(),
     SettingsRow(
       key: const ValueKey('ai-mask'),
       icon: Icons.shield_outlined,

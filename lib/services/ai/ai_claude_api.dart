@@ -8,6 +8,7 @@ import 'ai_assistant.dart';
 import 'ai_attachment.dart';
 import 'ai_case.dart';
 import 'ai_groq.dart';
+import 'ai_usage.dart';
 
 /// Claude asked by Folio itself over Anthropic's Messages API with the
 /// lawyer's own key (raw HTTP: there is no Anthropic SDK for Dart). The same
@@ -114,6 +115,19 @@ abstract final class ClaudeApiChat {
           'cache_control': {'type': 'ephemeral'},
         };
         final reply = await _request(http, key, body, () => stopped, name);
+        if (reply['usage'] case final Map usage) {
+          int n(Object? v) => v is num ? v.toInt() : 0;
+          unawaited(
+            AiUsage.add(
+              ApiService.anthropic,
+              input:
+                  n(usage['input_tokens']) +
+                  n(usage['cache_read_input_tokens']) +
+                  n(usage['cache_creation_input_tokens']),
+              output: n(usage['output_tokens']),
+            ),
+          );
+        }
         if (reply['stop_reason'] == 'refusal') {
           throw const AiFailure(
             'Claude bu soruyu güvenlik denetimi yüzünden yanıtlamadı. '

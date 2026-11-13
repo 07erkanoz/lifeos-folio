@@ -221,10 +221,10 @@ abstract final class Help {
       HelpPart('Telefondan sormak', [
         'Telefonda Yapay zekâ sayfasında ya da bir dosyanın Yapay zekâ '
             'sekmesinde sorunuzu yazın.',
-        'Telefona Ayarlar › Yapay zekâ’dan Gemini, ChatGPT ya da Claude '
-            'API anahtarı girdiyseniz soru telefondan doğrudan o hizmete '
-            'gider. Anahtar her cihazda ayrı girilir; cihazlar arasında '
-            'eşitlenmez.',
+        'Telefonda Gemini, ChatGPT ya da Claude API anahtarı varsa soru '
+            'telefondan doğrudan o hizmete gider. Bilgisayara girdiğiniz '
+            'anahtar Senkron ile telefonunuza da gelir; yeniden girmeniz '
+            'gerekmez.',
         'Anahtar girmediyseniz soru Senkron ile bilgisayarınıza gider; '
             'bilgisayarınızdaki Folio cevaplar. Bilgisayar kapalıysa '
             'açılınca cevaplanır. Bu yolda gereken evrak bilgisayarınızdaki '
@@ -548,8 +548,9 @@ abstract final class Help {
         'Bağlantılar: UYAP, UETS ve UYAP’ın kendiliğinden okunması.',
         'Arşiv klasörleri: Folio’nun arayacağı klasörler.',
         'Yapay zekâ: özellikleri açıp kapatırsınız, programı ve modelleri '
-            'seçersiniz, API anahtarlarınızı girersiniz; kullanım onayınız '
-            'burada görünür. Telefonda da aynı bölümden anahtar girilir.',
+            'seçersiniz, API anahtarlarınızı girersiniz; bu ayki kullanımı '
+            'görür, isterseniz aylık sınır koyarsınız. Kullanım onayınız da '
+            'burada görünür.',
         'Tüm verileri temizle: Folio’yu ilk kurulduğu hâline döndürür. '
             'Kendi klasörlerinizdeki belgeler silinmez.',
       ], numbered: false),

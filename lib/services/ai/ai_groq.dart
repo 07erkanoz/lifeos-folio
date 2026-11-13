@@ -14,6 +14,7 @@ import 'ai_assistant.dart';
 import 'ai_attachment.dart';
 import 'ai_case.dart';
 import 'ai_office.dart';
+import 'ai_usage.dart';
 import 'ai_claude_api.dart';
 import 'folio_mcp.dart';
 
@@ -161,6 +162,8 @@ abstract final class GroqChat {
   ]) async {
     final ok = await SecretStore().write(service.secret, {
       'anahtar': value.trim(),
+      // When it was given: Senkron takes the latest of the own devices'.
+      'zaman': DateTime.now().toUtc().toIso8601String(),
     });
     _keys.remove(service);
     unawaited(AiAssistant.lookForPhoneKey());
@@ -168,10 +171,18 @@ abstract final class GroqChat {
   }
 
   static Future<void> removeKey([ApiService service = ApiService.groq]) async {
-    await SecretStore().remove(service.secret);
+    // Kept as taken off, with when: Senkron takes it off the other own
+    // devices too, not back from them.
+    await SecretStore().write(service.secret, {
+      'anahtar': '',
+      'zaman': DateTime.now().toUtc().toIso8601String(),
+    });
     _keys[service] = null;
     unawaited(AiAssistant.lookForPhoneKey());
   }
+
+  /// [service]'s key read again: another own device's came (Senkron).
+  static void forgetKey(ApiService service) => _keys.remove(service);
 
   /// Whether [value] is taken by [service]: a request that lists the
   /// models.
@@ -500,6 +511,15 @@ abstract final class GroqChat {
           },
         };
         final reply = await _request(http, key, body, () => stopped, service);
+        if (reply['usage'] case final Map usage) {
+          unawaited(
+            AiUsage.add(
+              service,
+              input: (usage['prompt_tokens'] as num?)?.toInt() ?? 0,
+              output: (usage['completion_tokens'] as num?)?.toInt() ?? 0,
+            ),
+          );
+        }
         final message = Map<String, Object?>.from(
           ((reply['choices'] as List).first as Map)['message'] as Map,
         );
