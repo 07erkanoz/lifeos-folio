@@ -1,14 +1,14 @@
-import '../legal/citation.dart';
 import 'ai_events.dart';
 import 'ai_guide.dart';
 import 'folio_mcp.dart';
 
 /// Folio's own look at an answer before the lawyer sees it. Every article
 /// and decision the answer cites is looked up: one that does not exist, or
-/// is repealed, must go; an article the answer rests on but the program
-/// never read in this answer is read by Folio and handed back with its
-/// official text. What it finds is said to the program, which writes its
-/// answer again. A rule in its instructions is a request; this is a check.
+/// is repealed, must go; a vote said wrong is put right; a sentence
+/// reckoned without Folio's engine is reckoned with it. What it finds is
+/// said to the program, which writes its answer again. An article cited
+/// without being read is not sent back for that alone: the rule to read
+/// first is the program's.
 class AnswerAudit {
   AnswerAudit(this.mcp);
 
@@ -45,7 +45,6 @@ class AnswerAudit {
         'tarihiyle) ve cevabını onun sonucuna göre düzelt.',
       );
     }
-    final texts = <String>[];
     // Not existing, repealed, unpublished.
     final checked = await mcp.call('atif_dogrula', {'metin': answer});
     for (final one in checked['atiflar'] as List? ?? const []) {
@@ -80,47 +79,15 @@ class AnswerAudit {
     }
     // How a decision was given, as the answer says it and as its text does.
     problems.addAll(await _votes(answer));
-    // Rested on, never read: read by Folio.
-    final read = <String>{};
-    for (final s in steps) {
-      final asked = switch (s.tool) {
-        'mevzuat_madde' => [s.args],
-        // Several in one call: each counts as read.
-        'mevzuat_toplu' => s.args['maddeler'] as List? ?? const [],
-        _ => const [],
-      };
-      for (final a in asked) {
-        final (articles, _) = await mcp.citationsIn(
-          a is Map ? '${a['kanun'] ?? ''} m.${a['madde'] ?? ''}' : '$a',
-        );
-        read.addAll(articles.map(_key));
-      }
-    }
-    final (cited, _) = await mcp.citationsIn(answer);
-    final unread = <String, Citation>{};
-    for (final c in cited) {
-      final key = _key(c);
-      if (!read.contains(key)) unread.putIfAbsent(key, () => c);
-    }
-    for (final c in unread.values.take(mostRead)) {
-      final got = await mcp.call('mevzuat_madde', {
-        'kanun': '${c.law.number}',
-        'madde': '${c.article}${c.letter ?? ''}',
-      });
-      final text = '${got['metin'] ?? ''}'.trim();
-      if (got['durum'] != 'bulundu' || text.isEmpty) continue;
-      said?.call('Folio okudu: ${c.written}');
-      texts.add(
-        '"${c.written}" maddesine dayandın ama bu cevapta okumadın. Folio '
-        'okudu, resmî metni:\n${text.length > 6000 ? '${text.substring(0, 6000)}…' : text}',
-      );
-    }
+    // An article cited unread is not sent back: the program is told to
+    // read before it rests on one, and a rewrite for it alone cost the
+    // lawyer a second and third answer to a simple question
+    // (13.11.2026). What does not exist or is repealed is still sent back.
     serious = problems.isNotEmpty;
-    if (problems.isEmpty && texts.isEmpty) return null;
+    if (problems.isEmpty) return null;
     return [
       'Folio cevabını avukata göstermeden denetledi.',
       ...problems,
-      ...texts,
       'Cevabını baştan, tam olarak yeniden yaz. Dayandığın her madde '
           'söylediğin şeyi gerçekten söylüyor mu, metne bakarak denetle; '
           'söylemiyorsa o atfı çıkar ve doğru maddeyi araçla bul '
@@ -166,9 +133,6 @@ class AnswerAudit {
     }
     return out;
   }
-
-  static String _key(Citation c) =>
-      '${c.law.number}|${c.article}${c.letter ?? ''}';
 
   /// Whether [answer] says itself that [written] does not exist: it is
   /// right, and not sent back for it.
