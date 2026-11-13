@@ -4805,7 +4805,7 @@ abstract class AppLocalizations {
   /// No description provided for @viewAboutDescFolio.
   ///
   /// In tr, this message translates to:
-  /// **'Folio ile UDF dilekçenizi yazar, e-imza ya da mobil imzayla imzalar ve dava dosyanıza gönderirsiniz. Müvekkillerinizi, duruşma ve süre takviminizi, büronuzun kasasını ve ekibinizi aynı uygulamadan yönetirsiniz.'**
+  /// **'Folio ile UDF dilekçenizi yazar, e-imza ya da mobil imzayla imzalar ve dava dosyanıza gönderirsiniz. Dava dosyalarınızı, e-Tebligat ile gelen tebligatlarınızı ve kanuna göre hesaplanan sürelerinizi izlersiniz. Müvekkillerinizi, duruşma ve süre takviminizi, büronuzun kasasını ve ekibinizi aynı uygulamadan yönetirsiniz.'**
   String get viewAboutDescFolio;
 
   /// No description provided for @viewAboutDataOfis.
@@ -4817,7 +4817,7 @@ abstract class AppLocalizations {
   /// No description provided for @viewAboutDataFolio.
   ///
   /// In tr, this message translates to:
-  /// **'Verileriniz yalnız sizin cihazlarınızda tutulur. Folio’nun verilerinizi tutan bir sunucusu yoktur. Yapay zekâ özellikleri isteğe bağlıdır ve siz açmadıkça kapalıdır. Başka bir büroyla uzaktan canlı paylaşımda belge ve yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu içeriği göremez ve hiçbir şey saklamaz.'**
+  /// **'Verileriniz yalnız sizin cihazlarınızda tutulur. Folio’nun verilerinizi tutan bir sunucusu yoktur. Yapay zekâ özellikleri isteğe bağlıdır ve siz açmadıkça kapalıdır; açarsanız seçtiğiniz belge yalnız sizin seçtiğiniz sağlayıcıya, sizin hesabınız ya da API anahtarınızla gider. Başka bir büroyla uzaktan canlı paylaşımda belge ve yazışma şifreli olarak aktarma sunucumuzdan geçer; sunucu içeriği göremez ve hiçbir şey saklamaz.'**
   String get viewAboutDataFolio;
 
   /// No description provided for @viewAgreements.

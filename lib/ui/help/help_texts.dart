@@ -171,12 +171,12 @@ abstract final class Help {
 
   static const ai = HelpTopic(
     'Yapay zekâ',
-    'Kendi API anahtarınızla Gemini, ChatGPT, Claude ya da Groq’la; '
-        'Linux’ta ayrıca bilgisayarınızda kurulu Claude, Codex ya da '
-        'Antigravity ile kendi aboneliğinizle soru sorarsınız. Folio araya '
-        'sunucu koymaz; kanun '
-        'maddesini ve kararı resmî kaynaklardan okutur, yanıttaki atıfları '
-        'denetler.',
+    'Kendi API anahtarınızla Gemini, ChatGPT ya da Claude’la soru '
+        'sorarsınız; bilgisayarda Groq da seçilebilir. Linux’ta ayrıca '
+        'bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile kendi '
+        'aboneliğinizle çalışırsınız. Folio araya sunucu koymaz; kanun '
+        'maddesini, yönetmeliği ve kararı resmî kaynaklardan okutur, '
+        'yanıttaki atıfları denetler.',
     [
       HelpPart('Soru sormak', [
         'Yeni sohbet’e basın ve sorunuzu yazın.',
@@ -189,6 +189,17 @@ abstract final class Help {
             'sekmesinde de görünür. Bir dahaki sohbette yapay zekâ dosyada '
             'daha önce yapılanları hatırlar.',
       ]),
+      HelpPart('Belge eklemek', [
+        'Soru kutusunun yanındaki artı düğmesiyle belge ekleyin: UDF, Word, '
+            'PDF, TIFF ya da resim.',
+        'Metni olan belgeler metniyle gider. Taranmış belge ve resim, Gemini, '
+            'ChatGPT ve Claude’a sayfa görüntüsü olarak gider; tablo, kaşe ve '
+            'silik yazıyı yapay zekâ kendisi okur.',
+        'Groq ve Antigravity görüntü almaz; onlara taramanın Folio’nun '
+            'okuduğu metni gider. Yan taranmış sayfaları Folio döndürüp okur.',
+        'Göndermeden önce geçerli TC kimlik numaraları gizlenir. Sayfa '
+            'görüntüsündeki numaralar gizlenemez.',
+      ]),
       HelpPart('Bulgular, taslaklar ve evrak', [
         'Yapay zekâ bir tespiti dosyaya kaydetmeyi önerirse yanıtın altında '
             'bir kart çıkar. Kaydet’e basarsanız dosyanın bulgularına girer.',
@@ -197,14 +208,26 @@ abstract final class Help {
         'İnmemiş bir evrakı okuması gerekirse Folio UYAP’a bağlıysa '
             'evrakı kendiliğinden indirir. İnmiş evrak yeniden '
             'indirilmez.',
+        'Yönetmelik ve tebliğlerin ayrı ek dosyaları da okunur; örneğin '
+            'Avukatlık Asgari Ücret Tarifesi’nin tutar tabloları.',
+      ]),
+      HelpPart('Programı seçmek', [
+        'Sohbetin üstündeki listeden programı seçin. Seçiminiz kaydedilir; '
+            'tebligattan süre çıkarmak gibi diğer işler de aynı programla '
+            'yapılır.',
+        'Programı ve her düzeyin modelini Ayarlar › Yapay zekâ’dan da '
+            'değiştirebilirsiniz.',
       ]),
       HelpPart('Telefondan sormak', [
         'Telefonda Yapay zekâ sayfasında ya da bir dosyanın Yapay zekâ '
             'sekmesinde sorunuzu yazın.',
-        'Soru Senkron ile bilgisayarınıza gider; bilgisayarınızdaki Folio '
-            'kendi yapay zekâ programıyla cevaplar. Bilgisayar kapalıysa '
-            'açılınca cevaplanır.',
-        'Telefondan sorulan soruda da gereken evrak bilgisayarınızdaki '
+        'Telefona Ayarlar › Yapay zekâ’dan Gemini, ChatGPT ya da Claude '
+            'API anahtarı girdiyseniz soru telefondan doğrudan o hizmete '
+            'gider. Anahtar her cihazda ayrı girilir; cihazlar arasında '
+            'eşitlenmez.',
+        'Anahtar girmediyseniz soru Senkron ile bilgisayarınıza gider; '
+            'bilgisayarınızdaki Folio cevaplar. Bilgisayar kapalıysa '
+            'açılınca cevaplanır. Bu yolda gereken evrak bilgisayarınızdaki '
             'UYAP bağlantısıyla indirilir.',
       ]),
     ],
@@ -237,12 +260,29 @@ abstract final class Help {
     [
       HelpPart('Kullanmak', [
         'UETS’ye bağlan’a basın ve kendi girişinizle girin.',
-        'Tebligata dokunun; içeriğini okursunuz ve Folio süreyi gösterir.',
+        'Tebligata dokunun; içindeki belgeleri okursunuz ve Folio süreyi '
+            'kanuna göre hesaplayıp gösterir.',
         'Süreyi onaylarsanız ajandaya yazılır ve yaklaşınca hatırlatılır.',
       ]),
+      HelpPart('Kimi temsil ettiğiniz', [
+        'Sürenin size mi karşı tarafa mı ait olduğunu Folio, dosyada kimin '
+            'vekili olduğunuza göre belirler.',
+        'Bunu UYAP’taki taraf listesinden ya da tebligattaki belgenin '
+            'başlığından (“DAVALILAR … VEKİLİ: Av. …”) kendisi okur. '
+            'Okuyamazsa bir kez sorar; cevabınız o dosyanın bütün '
+            'tebligatlarında geçerlidir. Değiştir ile düzeltebilirsiniz.',
+      ]),
+      HelpPart('Yapay zekâyla çıkar', [
+        'Yapay zekâ özellikleri açıksa tebligatın altındaki Yapay zekâyla '
+            'çıkar düğmesi, belgedeki süreleri ve yapılacak işleri '
+            'dayanak maddesiyle ve belgedeki cümlesiyle önerir.',
+        'Son günü yapay zekâ değil, Folio’nun süre motoru hesaplar. '
+            'Önerilen hiçbir şey siz onaylamadan ajandaya girmez.',
+      ]),
     ],
-    'Folio süreyi önerir; son kararı siz verirsiniz. Ajandaya ancak sizin '
-        'onayınızla yazılır.',
+    'Folio süreyi önerir; son kararı siz verirsiniz. Kesin olduğu yazılan '
+        'bir karar için kanun yolu süresi önerilmez; bölge adliye '
+        'mahkemesinin kararı için istinaf süresi gösterilmez.',
   );
 
   static const agenda = HelpTopic(
@@ -254,6 +294,9 @@ abstract final class Help {
             'ağından kendiliğinden gelir.',
         'Yeni ile kendiniz de duruşma, süre ya da hatırlatma ekleyebilirsiniz.',
         'Bir kayda dokununca ayrıntısı ve dosyası açılır.',
+        'Yapay zekâ özellikleri açıksa bir kayda uzun basıp Süre ve iş '
+            'çıkar’ı seçin: kaydın metnindeki süreler ve yapılacak işler '
+            'önerilir, onayladıklarınız ajandaya eklenir.',
       ]),
     ],
     'Ajandanız kendi telefonunuz ve bilgisayarınız arasında Senkron ile '
@@ -505,7 +548,8 @@ abstract final class Help {
         'Bağlantılar: UYAP, UETS ve UYAP’ın kendiliğinden okunması.',
         'Arşiv klasörleri: Folio’nun arayacağı klasörler.',
         'Yapay zekâ: özellikleri açıp kapatırsınız, programı ve modelleri '
-            'seçersiniz; kullanım onayınız burada görünür.',
+            'seçersiniz, API anahtarlarınızı girersiniz; kullanım onayınız '
+            'burada görünür. Telefonda da aynı bölümden anahtar girilir.',
         'Tüm verileri temizle: Folio’yu ilk kurulduğu hâline döndürür. '
             'Kendi klasörlerinizdeki belgeler silinmez.',
       ], numbered: false),

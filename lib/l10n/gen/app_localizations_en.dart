@@ -2804,7 +2804,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get viewAboutDescFolio =>
-      'With Folio you write your UDF petition, sign it with an e-signature or mobile signature and send it to your case file. You manage your clients, your hearing and deadline calendar, your office’s accounts and your team from the same app.';
+      'With Folio you write your UDF petition, sign it with an e-signature or mobile signature and send it to your case file. You follow your cases, the notices that come by e-Tebligat and the deadlines reckoned by law. You manage your clients, your hearing and deadline calendar, your office’s accounts and your team from the same app.';
 
   @override
   String get viewAboutDataOfis =>
@@ -2812,7 +2812,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get viewAboutDataFolio =>
-      'Your data is kept only on your own devices. Folio has no server that holds your data. AI features are optional and stay off unless you turn them on. When you share live with another office remotely, documents and messages pass encrypted through our relay server; the server cannot see the content and stores nothing.';
+      'Your data is kept only on your own devices. Folio has no server that holds your data. AI features are optional and stay off unless you turn them on; when on, a document you choose goes only to the provider you choose, with your own account or API key. When you share live with another office remotely, documents and messages pass encrypted through our relay server; the server cannot see the content and stores nothing.';
 
   @override
   String get viewAgreements => 'AGREEMENTS';
