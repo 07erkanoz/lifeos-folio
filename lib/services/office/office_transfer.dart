@@ -111,9 +111,10 @@ class OfficeTransfer extends ChangeNotifier {
   static Future<OfficeTransfer> send({
     required OfficeIdentity identity,
     required KnownDevice peer,
-    required String host,
-    required int port,
+    String host = '',
+    int port = 0,
     required List<String> paths,
+    Future<OfficeChannel> Function()? connect,
     String note = '',
     String? id,
     Map<String, Object?> meta = const {},
@@ -136,18 +137,25 @@ class OfficeTransfer extends ChangeNotifier {
       meta: meta,
     ).._onEnd = onEnd;
     t._paths.addAll(paths);
-    unawaited(t._offer(identity, host, port));
+    unawaited(
+      t._offer(
+        connect ??
+            () => OfficeChannel.open(
+              identity: identity,
+              peer: peer,
+              host: host,
+              port: port,
+            ),
+      ),
+    );
     return t;
   }
 
-  Future<void> _offer(OfficeIdentity identity, String host, int port) async {
+  /// Offers the files over the channel [connect] opens: on the network,
+  /// or over the relay to one of the person's own devices.
+  Future<void> _offer(Future<OfficeChannel> Function() connect) async {
     try {
-      final ch = await OfficeChannel.open(
-        identity: identity,
-        peer: peer,
-        host: host,
-        port: port,
-      );
+      final ch = await connect();
       _channel = ch;
       final answer = Completer<Map<String, Object?>>();
       _listen = ch.messages.listen((m) {

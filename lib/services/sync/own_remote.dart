@@ -15,9 +15,11 @@ import '../office/office_network.dart';
 /// own devices hold: no one else can find the room to block it, nor spend
 /// the person's quota. On one network the relay is never used.
 ///
-/// Of two devices, the one whose id sorts first waits in their room; the
-/// other comes now and then. A device seen on the network, or kept alike
-/// a little while ago, is not met on the relay.
+/// Each device waits, for each of its own devices elsewhere, in a room of
+/// its own for that one: any of them may come to it there, to keep alike,
+/// to ask, to send a document. Of two, the one whose id sorts last comes
+/// now and then to keep alike; the other only answers. A device seen on
+/// the network is not met on the relay.
 class OwnRemote extends ChangeNotifier {
   OwnRemote({OfficeNetwork? network, this.every = const Duration(minutes: 2)})
     : _net = network ?? OfficeNetwork.instance;
@@ -37,6 +39,13 @@ class OwnRemote extends ChangeNotifier {
   /// Each start a new one: what an earlier run left going stops itself.
   int _run = 0;
   final _waiting = <String, RelayWire>{};
+
+  /// Devices a room is being opened for, before it is: one at a time.
+  final _opening = <String>{};
+
+  /// How long to wait before a room is opened again after one that did
+  /// not last, by device: longer each time, back to none once one did.
+  final _backoff = <String, Duration>{};
   final _open = <RelayWire>{};
   final _coming = <String>{};
 
@@ -51,6 +60,8 @@ class OwnRemote extends ChangeNotifier {
   void start() {
     if (_timer != null) return;
     final run = ++_run;
+    // The network reaches an own device elsewhere through its room here.
+    _net.ownRelay = (id) => reach(id);
     _timer = Timer.periodic(every, (_) => unawaited(tick(run)));
     unawaited(tick(run));
   }
@@ -58,6 +69,7 @@ class OwnRemote extends ChangeNotifier {
   /// Stops, every room left and every talk going on cut.
   Future<void> stop() async {
     _run++;
+    _net.ownRelay = null;
     _timer?.cancel();
     _timer = null;
     _waiting.clear();
@@ -103,19 +115,58 @@ class OwnRemote extends ChangeNotifier {
         unawaited(_waiting.remove(id)?.close());
         continue;
       }
+      // Its room here, waited in whatever else is done.
+      final mine = await _net.ownTag('oda|$me|$id');
+      if (mine == null) continue;
+      await _wait(current, id, mine, person);
+      // Kept alike now and then, by the one whose id sorts last.
       final last = [_net.synced[id], metAt[id]]
           .whereType<DateTime>()
           .fold<DateTime?>(null, (a, b) => a == null || b.isAfter(a) ? b : a);
       if (last != null && DateTime.now().difference(last) < rest) continue;
-      final pair = [me, id]..sort();
-      final room = await _net.ownTag('oda|${pair[0]}|${pair[1]}');
-      if (room == null) continue;
-      if (me.compareTo(id) < 0) {
-        await _wait(current, id, room, person);
-      } else {
-        await _come(current, id, room, person);
+      if (me.compareTo(id) > 0) {
+        final theirs = await _net.ownTag('oda|$id|$me');
+        if (theirs != null) await _come(current, id, theirs, person);
       }
     }
+  }
+
+  /// [id]'s room for this device, reached: null when [id] is not waiting
+  /// there now (not open, or the quota used).
+  Future<RelayWire?> reach(String id) async {
+    final run = _run;
+    bool live() =>
+        run == _run &&
+        _timer != null &&
+        (stoppedUntil == null || DateTime.now().isAfter(stoppedUntil!));
+    if (!live()) return null;
+    final me = _net.self?.deviceId;
+    final person = await _net.ownTag('kota');
+    final room = await _net.ownTag('oda|$id|$me');
+    if (me == null || person == null || room == null) return null;
+    // Twice: a talk that just ended leaves its room a moment (4410), and
+    // the room is waited in again a second after (OwnRemote._wait).
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (!live()) return null;
+      try {
+        final wire = await _connect(run, room, 'katilan', person);
+        if (wire == null) return null;
+        // No room (4404) or one in use (4410): the relay says so at once.
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        if (!live()) {
+          await wire.close();
+          return null;
+        }
+        if (!wire.closed) return wire;
+        _quota(wire.closeCode);
+        if (wire.closeCode == 4429) return null;
+      } catch (e) {
+        _refused(e);
+        return null;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+    }
+    return null;
   }
 
   /// Waits in the room for [id]; answered as on the network when it comes,
@@ -123,20 +174,28 @@ class OwnRemote extends ChangeNotifier {
   Future<void> _wait(int run, String id, String room, String person) async {
     final open = _waiting[id];
     if (open != null && !open.closed) return;
+    // Reserved before the relay is reached: two at once would open two.
+    if (!_opening.add(id)) return;
     final RelayWire wire;
+    final opened = DateTime.now();
     try {
       final got = await _connect(run, room, 'paylasan', person);
       if (got == null) return;
       wire = got;
+      _waiting[id] = wire;
     } catch (e) {
       _refused(e);
       return;
+    } finally {
+      _opening.remove(id);
     }
-    _waiting[id] = wire;
+    // Someone came: a talk, however short, not a room the relay refused.
+    var met = false;
     unawaited(() async {
       try {
         // The relay keeps a room 15 minutes: a new one at a later look.
         final came = await wire.next(const Duration(minutes: 15));
+        met = came != null && came['t'] == 'katilan';
         if (came == null || came['t'] != 'katilan' || run != _run) {
           _quota(wire.closeCode);
           await wire.close();
@@ -150,6 +209,33 @@ class OwnRemote extends ChangeNotifier {
       } finally {
         if (identical(_waiting[id], wire)) _waiting.remove(id);
         await wire.close();
+        // Waited in again: at once after a room that lasted (the next to
+        // come finds it), later and later after one the relay shut at
+        // once (4409, its quota, its door).
+        final lasted =
+            met ||
+            DateTime.now().difference(opened) > const Duration(seconds: 5);
+        final Duration pause;
+        if (lasted) {
+          _backoff.remove(id);
+          pause = const Duration(seconds: 1);
+        } else {
+          pause = _backoff[id] = Duration(
+            seconds: ((_backoff[id]?.inSeconds ?? 2) * 2).clamp(4, 600),
+          );
+        }
+        unawaited(
+          Future<void>.delayed(pause).then((_) async {
+            if (run == _run &&
+                _timer != null &&
+                _net.ownKnown.any((d) => d.deviceId == id) &&
+                !_net.ownOnline.any((p) => p.deviceId == id) &&
+                (stoppedUntil == null ||
+                    DateTime.now().isAfter(stoppedUntil!))) {
+              await _wait(run, id, room, person);
+            }
+          }),
+        );
       }
     }());
   }

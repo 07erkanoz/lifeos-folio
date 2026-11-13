@@ -465,8 +465,8 @@ abstract final class Help {
     'Senkron',
     'Senkron, sizin kendi cihazlarınızı, örneğin büro bilgisayarınızı, ev '
         'bilgisayarınızı ve telefonunuzu, birbirine bağlar. Bilgileriniz '
-        'hepsinde aynı olur. Yalnız aynı ağdaki kendi cihazlarınız arasında, '
-        'şifreli çalışır; başka kimse sizin cihazınızı göremez. Büro kurmanız '
+        'hepsinde aynı olur. Yalnız kendi cihazlarınız arasında, şifreli '
+        'çalışır; başka kimse sizin cihazınızı göremez. Büro kurmanız '
         'gerekmez.',
     [
       HelpPart('Cihaz eklemek', [
@@ -489,6 +489,18 @@ abstract final class Help {
             'Senkron çöpünde durur.',
         'Oturumlar: UYAP ve UETS girişinizi öbür cihazınıza geçirip orada '
             'yeniden e-imza atmadan devam edersiniz.',
+      ], numbered: false),
+      HelpPart('Cihazlar farklı ağdayken', [
+        'Uzaktan eşitleme açıksa (Senkron sayfası) telefonunuz mobil '
+            'verideyken de büro bilgisayarınızla eşitlenir. İki cihazda da '
+            'Folio açık olmalı.',
+        'Ajanda, kayıtlar, ayarlar, oturumlar ve müvekkil dosyaları gider. '
+            'Bir belgeyi “Kendi cihazıma gönder” ile 10 MB’a kadar '
+            'gönderebilirsiniz.',
+        'UYAP evrakının tamamı ve eşitlenen klasörler uzaktan gitmez; '
+            'cihazlar aynı ağa gelince tamamlanır.',
+        'Günde 50 MB, ayda 500 MB uzaktan aktarılabilir. Veri şifrelidir; '
+            'aktarma sunucusu içeriği göremez ve saklamaz.',
       ], numbered: false),
     ],
     'UYAP Web aynı anda tek işlem kabul eder; iki cihazdan birlikte '

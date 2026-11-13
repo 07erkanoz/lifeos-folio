@@ -13,6 +13,7 @@ import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/task_package.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
+import 'package:evrak_convert/services/sync/own_remote.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../tool/canli_relay/relay.dart';
@@ -95,10 +96,11 @@ void main() {
     return (pc, phone);
   }
 
-  Future<String> roomOf(OfficeNetwork a, OfficeNetwork b) async {
-    final pair = [a.self!.deviceId, b.self!.deviceId]..sort();
-    return (await a.ownTag('oda|${pair[0]}|${pair[1]}'))!;
-  }
+  /// The room [waiter] waits in for [comer]: named by either alike.
+  Future<String> roomOf(OfficeNetwork waiter, OfficeNetwork comer) async =>
+      (await comer.ownTag(
+        'oda|${waiter.self!.deviceId}|${comer.self!.deviceId}',
+      ))!;
 
   Future<RelayWire> meet(
     OfficeNetwork waiter,
@@ -143,7 +145,10 @@ void main() {
     final person = (await pc.ownTag('kota'))!;
     expect(person, await phone.ownTag('kota'));
     expect(person, hasLength(43));
-    expect(await roomOf(pc, phone), await roomOf(phone, pc));
+    expect(
+      await pc.ownTag('oda|${pc.self!.deviceId}|${phone.self!.deviceId}'),
+      await roomOf(pc, phone),
+    );
     final stranger = await folio('yabanci');
     expect(await stranger.ownTag('kota'), isNot(person));
     final answered = Completer<bool>();
@@ -274,5 +279,135 @@ void main() {
     final again = await RelayWire.connect('f' * 43, 'paylasan', person: tag(3));
     expect(again.closed, isFalse);
     await again.close();
+  });
+
+  test('a document sent to an own device elsewhere goes over the relay, '
+      'ten megabytes at most; a light question is answered, a bulky one '
+      'is not', () async {
+    relay = await RelayServer.start();
+    LiveRelay.server = Uri.parse('ws://127.0.0.1:${relay.port}');
+    final (pc, phone) = await ownPair();
+    final inbox = Directory('${dir.path}/gelen')..createSync();
+    pc.inbox = () async => inbox;
+    pc.ownAnswers['oturum-ver'] = (asked) async => ({'oturum': 'var'}, null);
+    pc.ownAnswers['uyap-evrak'] = (asked) async => ({'evrak': 'cok'}, null);
+    for (final net in [pc, phone]) {
+      net.ownParts['ajanda'] = OwnPart(
+        export: () async => const {},
+        merge: (_) async => false,
+      );
+    }
+    final person = (await phone.ownTag('kota'))!;
+    // The pc waits for the phone; the phone reaches it through its hook.
+    Future<RelayWire> waitOnce() async {
+      final w = await RelayWire.connect(
+        await roomOf(pc, phone),
+        'paylasan',
+        person: person,
+      );
+      unawaited(() async {
+        await w.next(const Duration(seconds: 10));
+        await pc.answerOwnOver(w, phone.self!.deviceId);
+      }());
+      return w;
+    }
+
+    phone.ownRelay = (id) async {
+      await waitOnce();
+      return RelayWire.connect(
+        await roomOf(pc, phone),
+        'katilan',
+        person: person,
+      );
+    };
+    // Not on one network: the phone's network does not see the pc.
+    phone.lostForTesting(pc.self!.deviceId);
+    final paper = File('${dir.path}/dilekce.udf')
+      ..writeAsBytesSync(List.filled(2048, 7));
+    expect(await phone.sendOwnRemote(pc.self!.deviceId, [paper.path]), isNull);
+    await until(() => File('${inbox.path}/dilekce.udf').existsSync());
+    await until(() => File('${inbox.path}/dilekce.udf').lengthSync() == 2048);
+    final big = File('${dir.path}/arsiv.pdf')
+      ..writeAsBytesSync(List.filled(11 * 1024 * 1024, 1));
+    expect(
+      await phone.sendOwnRemote(pc.self!.deviceId, [big.path]),
+      contains('10 MB'),
+    );
+    // The document's talk over: its room let go of.
+    await until(() => relay.rooms == 0);
+    expect(
+      (await phone.askOwn(pc.self!.deviceId, 'oturum-ver'))?['oturum'],
+      'var',
+    );
+    // UYAP's documents in bulk wait for one network.
+    expect(await phone.askOwn(pc.self!.deviceId, 'uyap-evrak'), isNull);
+  });
+
+  test('through OwnRemote itself: each waits for the other, a document of '
+      'many pieces comes whole, and the room is waited in again', () async {
+    relay = await RelayServer.start();
+    LiveRelay.server = Uri.parse('ws://127.0.0.1:${relay.port}');
+    final (pc, phone) = await ownPair();
+    final inbox = Directory('${dir.path}/gelen2')..createSync();
+    pc.inbox = () async => inbox;
+    for (final net in [pc, phone]) {
+      net.ownParts['ajanda'] = OwnPart(
+        export: () async => const {},
+        merge: (_) async => false,
+      );
+    }
+    // On different networks.
+    pc.lostForTesting(phone.self!.deviceId);
+    phone.lostForTesting(pc.self!.deviceId);
+    final pcRemote = OwnRemote(network: pc, every: const Duration(hours: 1));
+    final phoneRemote = OwnRemote(
+      network: phone,
+      every: const Duration(hours: 1),
+    );
+    addTearDown(pcRemote.stop);
+    addTearDown(phoneRemote.stop);
+    pcRemote.start();
+    phoneRemote.start();
+    // Both rooms open (each waits for the other), and the first keeping
+    // alike done by the one whose id sorts last.
+    await until(() => relay.rooms >= 1);
+    final bytes = List.generate(300 * 1024, (i) => i % 251);
+    final paper = File('${dir.path}/tarama.pdf')..writeAsBytesSync(bytes);
+    expect(await phone.sendOwnRemote(pc.self!.deviceId, [paper.path]), isNull);
+    final came = File('${inbox.path}/tarama.pdf');
+    await until(() => came.existsSync() && came.lengthSync() == bytes.length);
+    expect(came.readAsBytesSync(), bytes);
+    // The pc's room for the phone waited in again at once: a second
+    // document, right after, comes too.
+    final second = File('${dir.path}/ek.udf')..writeAsBytesSync([1, 2, 3]);
+    expect(await phone.sendOwnRemote(pc.self!.deviceId, [second.path]), isNull);
+    final came2 = File('${inbox.path}/ek.udf');
+    await until(() => came2.existsSync() && came2.lengthSync() == 3);
+  });
+
+  test('ten megabytes counted without wrapping round', () {
+    Map<String, Object?> offer(List<Object?> sizes) => {
+      't': 'offer',
+      'files': [
+        for (final s in sizes) {'n': 'a.pdf', 's': s, 'h': 'x'},
+      ],
+    };
+    expect(OfficeNetwork.lightOffer(offer([1024, 2048])), isTrue);
+    expect(OfficeNetwork.lightOffer(offer([11 * 1024 * 1024])), isFalse);
+    // Two of the largest would add to -2.
+    expect(
+      OfficeNetwork.lightOffer(
+        offer([9223372036854775807, 9223372036854775807]),
+      ),
+      isFalse,
+    );
+    expect(OfficeNetwork.lightOffer(offer([1.5])), isFalse);
+    expect(
+      OfficeNetwork.lightOffer({
+        ...offer([10]),
+        'meta': {'senkron': 'klasor'},
+      }),
+      isFalse,
+    );
   });
 }

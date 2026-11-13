@@ -393,11 +393,12 @@ class RelayLimits {
     this.personDay = 50 * 1024 * 1024,
     this.personMonth = 500 * 1024 * 1024,
     this.addressDay = 100 * 1024 * 1024,
-    this.personSockets = 6,
+    this.personSockets = 10,
   });
 
   /// One person's own devices: bytes a day and a month, and sockets open
-  /// at once (three devices, each waiting for the other two at most); and
+  /// at once (three devices each waiting for the other two, and those
+  /// coming); and
   /// the bytes a day from one address. Low: the relay carries a lawyer's
   /// agenda and records, and a few documents, not archives.
   final int personDay, personMonth, addressDay, personSockets;

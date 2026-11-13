@@ -142,7 +142,9 @@ Future<void> showSendToOffice(
         error ??
             (to.online
                 ? 'Gönderildi · Alıcı: ${to.name}'
-                : 'Sıraya alındı · Alıcı: ${to.name}. Ağa gelince gider.'),
+                : to.member
+                ? 'Sıraya alındı · Alıcı: ${to.name}. Ağa gelince gider.'
+                : 'Uzaktan gönderiliyor · ${to.detail}'),
       ),
     ),
   );
@@ -202,12 +204,16 @@ class _Targets extends StatelessWidget {
                     [
                       if (t.detail.isNotEmpty) t.detail,
                       if (!t.online)
-                        t.member ? 'ağda değil, gelince gider' : 'ağda değil',
+                        t.member
+                            ? 'ağda değil, gelince gider'
+                            : t.remote
+                            ? 'ağda değil · uzaktan, 10 MB’a kadar'
+                            : 'ağda değil',
                     ].join(' · '),
                     style: TextStyle(fontSize: 12, color: AgendaColors.muted),
                   ),
-                  // An own device away cannot take it now.
-                  enabled: t.member || t.online,
+                  // An own device away: over the relay, when it may be.
+                  enabled: t.reachable,
                   onTap: () => onPick(t),
                 ),
             ],

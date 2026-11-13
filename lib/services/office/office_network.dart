@@ -140,6 +140,7 @@ class OfficeNetwork extends ChangeNotifier {
           detail: e.value,
           member: false,
           online: _peers[e.key]?.online ?? false,
+          remote: ownRelay != null,
         ),
       );
     }
@@ -161,10 +162,98 @@ class OfficeNetwork extends ChangeNotifier {
     }
     final peer = _peers[to.deviceId];
     if (peer == null || !peer.online) {
+      // One of the person's own devices elsewhere: over the relay.
+      if (ownRelay != null && ownKnown.any((d) => d.deviceId == to.deviceId)) {
+        return sendOwnRemote(to.deviceId, paths, note: text);
+      }
       return 'Bu cihaz şu an ağda değil. Açık olduğunda yeniden deneyin.';
     }
     final t = await send(peer, paths, note: text);
     return t == null ? 'Cihaza ulaşılamadı.' : null;
+  }
+
+  /// The relay's room where [deviceId], one of the person's own devices,
+  /// waits for this one (OwnRemote); null when it cannot be reached.
+  Future<OfficeWire?> Function(String deviceId)? ownRelay;
+
+  /// What may go to the person's own devices over the relay at once: a
+  /// document or a few, not an archive (the relay's quota is low).
+  static const relayMostBytes = 10 * 1024 * 1024;
+
+  /// The questions one own device may ask another over the relay: the
+  /// sessions, the cases' lists, the clients' files. Not UYAP's documents
+  /// in bulk, nor a folder's files: those wait for one network.
+  static const relayKinds = {
+    'oturum-ver',
+    'oturum-al',
+    'jeton-tazele',
+    'uyap-is',
+    'uyap-al',
+    'muvekkil-ek',
+  };
+
+  /// A channel to [deviceId], one of the person's own devices, over the
+  /// relay; null when it is not there or not the person's.
+  Future<OfficeChannel?> _ownRelayChannel(String deviceId) async {
+    final identity = _identity, relay = ownRelay;
+    if (identity == null || relay == null) return null;
+    final trusted = await _trusted(deviceId);
+    if (trusted == null || trusted.userId != identity.userId) return null;
+    final wire = await relay(deviceId);
+    if (wire == null) return null;
+    try {
+      final ch = await OfficeChannel.openOver(
+        link: wire,
+        identity: identity,
+        peer: trusted,
+      );
+      if (!ch.vouched) {
+        await ch.close();
+        return null;
+      }
+      return ch;
+    } catch (_) {
+      await wire.close();
+      return null;
+    }
+  }
+
+  /// [paths] to [deviceId], one of the person's own devices elsewhere,
+  /// over the relay: [relayMostBytes] at most. Why not, when it cannot.
+  Future<String?> sendOwnRemote(
+    String deviceId,
+    List<String> paths, {
+    String note = '',
+  }) async {
+    final identity = _identity;
+    final known = await _trusted(deviceId);
+    if (identity == null || known == null) return 'Cihaza ulaşılamadı.';
+    var size = 0;
+    for (final path in paths) {
+      size += await File(path).length();
+    }
+    if (size > relayMostBytes) {
+      return 'Cihazınız başka bir ağda; uzaktan en çok 10 MB gönderilebilir. '
+          'Aynı ağdayken yeniden deneyin.';
+    }
+    final t = await OfficeTransfer.send(
+      identity: identity,
+      peer: known,
+      paths: paths,
+      note: note,
+      onEnd: _ended,
+      connect: () async {
+        final ch = await _ownRelayChannel(deviceId);
+        if (ch == null) {
+          throw const OfficeChannelException(
+            'Cihazınıza uzaktan ulaşılamadı; Folio açık olmayabilir.',
+          );
+        }
+        return ch;
+      },
+    );
+    _added(t);
+    return null;
   }
 
   /// Sends [paths] to a known device on the network; null when it is not
@@ -828,18 +917,40 @@ class OfficeNetwork extends ChangeNotifier {
   }) async {
     final identity = _identity, peer = _peers[deviceId];
     final host = peer?.host;
-    if (identity == null || peer == null || host == null || !peer.online) {
-      return null;
+    if (identity == null) return null;
+    if (peer == null || host == null || !peer.online) {
+      // Elsewhere: over the relay, the light questions only.
+      if (!relayKinds.contains(kind)) return null;
+      final ch = await _ownRelayChannel(deviceId);
+      if (ch == null) return null;
+      return _askOver(ch, kind, body, then);
     }
     final trusted = await _trustedFor(peer);
     if (trusted == null) return null;
     try {
-      final ch = await OfficeChannel.open(
-        identity: identity,
-        peer: trusted,
-        host: host,
-        port: peer.port,
+      return await _askOver(
+        await OfficeChannel.open(
+          identity: identity,
+          peer: trusted,
+          host: host,
+          port: peer.port,
+        ),
+        kind,
+        body,
+        then,
       );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, Object?>?> _askOver(
+    OfficeChannel ch,
+    String kind,
+    Map<String, Object?> body,
+    Future<Map<String, Object?>?> Function(Map<String, Object?> answer)? then,
+  ) async {
+    try {
       try {
         if (!ch.vouched) return null;
         final reply = ch.messages.first.timeout(const Duration(seconds: 30))
@@ -1272,6 +1383,140 @@ class OfficeNetwork extends ChangeNotifier {
     }
   }
 
+  /// A question only one of the person's own devices may ask (m['tur']),
+  /// answered on [ch], closed after; [kinds], when given, the only ones
+  /// answered (over the relay: not the bulky ones).
+  Future<void> _answerOwnAsk(
+    OfficeChannel ch,
+    Map<String, Object?> m, {
+    Set<String>? kinds,
+  }) async {
+    // A question only one of the person's own devices may ask.
+    final answer = m['tur'] == 'buro-katil'
+        ? _consent
+        : ownAnswers['${m['tur']}'];
+    if (!ch.vouched ||
+        answer == null ||
+        (kinds != null && !kinds.contains('${m['tur']}'))) {
+      await ch.send({'t': 'kendi', 'yok': true});
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await ch.close();
+      return;
+    }
+    final (said, after) = await answer(m);
+    final next = after == null
+        ? null
+        : ch.messages.first
+              .timeout(const Duration(seconds: 40))
+              .then<Map<String, Object?>?>((w) => w)
+              .catchError((Object _) => null);
+    await ch.send({...said, 't': 'kendi'});
+    if (after != null) await after(await next);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await ch.close();
+  }
+
+  /// Files offered on [ch] ([m], 't' "offer"): taken unasked from one of
+  /// the person's own devices, a member's message or task; asked of the
+  /// lawyer otherwise.
+  /// The transfer, once offered; null when there is none.
+  Future<OfficeTransfer?> _takeOffer(
+    OfficeChannel ch,
+    Map<String, Object?> m,
+  ) async {
+    final meta = m['meta'] is Map ? m['meta'] as Map : const {};
+    final forChat = meta['sohbet'] is String;
+    // A folder's files from another own device (see FolderSync): only by
+    // the person's key's proof, put aside until they are put in place.
+    final forSync = meta['senkron'] is String;
+    if (forSync && !ch.vouched) {
+      await ch.close();
+      return null;
+    }
+    final forTask = meta['gorev'] is String && meta['dosya'] is String;
+    final folder = await inbox();
+    final taskFolder = forTask
+        // Each case to a folder of its own.
+        ? p.join(
+            folder.path,
+            'Görevler',
+            // Only letters and digits: the sender's words name no
+            // folder outside the inbox.
+            '${'${meta['gorev']}'.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}-'
+                '${'${meta['dosya']}'.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}',
+          )
+        : null;
+    final t = m['t'] == 'offer'
+        ? OfficeTransfer.receive(
+            channel: ch,
+            offer: m,
+            folder: forSync
+                ? (await Directory(p.join(folder.path, '.folio-senkron'))
+                      .create(recursive: true))
+                : forChat
+                ? (await Directory(p.join(folder.path, 'Mesajlar'))
+                      .create(recursive: true))
+                : taskFolder != null
+                ? await Directory(taskFolder).create(recursive: true)
+                : folder,
+            onEnd: _ended,
+          )
+        : null;
+    if (t == null) {
+      await ch.close();
+      return null;
+    }
+    transfers.removeWhere((old) => old.id == t.id && old.finished);
+    _added(t);
+    final chat = chats.of('${t.meta['sohbet'] ?? ''}');
+    final writer = ch.peer.deviceId;
+    if (chat != null &&
+        _mayHear(chat, writer) &&
+        (chat.kind != ChatKind.broadcast || ledger.isManager(writer))) {
+      // A member's file with a message: taken unasked.
+      await t.accept();
+      return t;
+    }
+    final task = tasks.of('${t.meta['gorev'] ?? ''}');
+    if (task != null &&
+        task.by == ledger.personOf(ch.peer.deviceId) &&
+        ledger.member(ch.peer.deviceId) != null) {
+      // A case of a task given to this device, from its giver.
+      await t.accept();
+      return t;
+    }
+    if (ch.vouched || forSync) {
+      // From one of this person's own devices, by its key's proof:
+      // theirs already.
+      await t.accept();
+      return t;
+    }
+    if (_accepted.contains(t.id)) {
+      await t.accept();
+    } else {
+      incomingOffer.value = t;
+    }
+    return t;
+  }
+
+  /// Whether files offered over the relay ([m]) are a few documents sent
+  /// by the lawyer: [relayMostBytes] at most, none of a folder's or of
+  /// UYAP's in bulk (those wait for one network).
+  @visibleForTesting
+  static bool lightOffer(Map<String, Object?> m) {
+    final meta = m['meta'];
+    if (meta is Map && meta['senkron'] != null) return false;
+    var size = 0;
+    for (final f in m['files'] as List? ?? const []) {
+      final n = f is Map ? f['s'] : null;
+      // Whole numbers only, compared before they are added: two of the
+      // largest would wrap round to a small sum.
+      if (n is! int || n < 0 || n > relayMostBytes - size) return false;
+      size += n;
+    }
+    return true;
+  }
+
   /// The other end of [syncOwnOver]: [deviceId], one of the person's own
   /// devices, come to this one's room on the relay. Only it is let in, by
   /// its key and the person's; only Senkron is answered, nothing else the
@@ -1310,11 +1555,37 @@ class OfficeNetwork extends ChangeNotifier {
       }
       unawaited(_metOwn(ch));
       final m = await ch.messages.first.timeout(const Duration(seconds: 20));
-      if (m['t'] != 'senkron') {
-        await ch.close();
-        return false;
+      switch (m['t']) {
+        case 'senkron':
+          return await _answerOwnSync(ch, m);
+        case 'kendi':
+          // The light questions only (relayKinds).
+          await _answerOwnAsk(ch, m, kinds: relayKinds);
+          return false;
+        case 'offer' when lightOffer(m):
+          // The room held until the files came whole, failed or were
+          // turned down: the relay's talk is theirs till then.
+          final t = await _takeOffer(ch, m);
+          if (t != null && !t.finished) {
+            final done = Completer<void>();
+            void watch() {
+              if (t.finished && !done.isCompleted) done.complete();
+            }
+
+            t.addListener(watch);
+            try {
+              await done.future.timeout(const Duration(minutes: 10));
+            } on TimeoutException {
+              await ch.close();
+            } finally {
+              t.removeListener(watch);
+            }
+          }
+          return false;
+        default:
+          await ch.close();
+          return false;
       }
-      return await _answerOwnSync(ch, m);
     } catch (_) {
       await link.close();
       return false;
@@ -1544,27 +1815,7 @@ class OfficeNetwork extends ChangeNotifier {
         return;
       }
       if (m['t'] == 'kendi') {
-        // A question only one of the person's own devices may ask.
-        final answer = m['tur'] == 'buro-katil'
-            ? _consent
-            : ownAnswers['${m['tur']}'];
-        if (!ch.vouched || answer == null) {
-          await ch.send({'t': 'kendi', 'yok': true});
-          await Future<void>.delayed(const Duration(milliseconds: 200));
-          await ch.close();
-          return;
-        }
-        final (said, after) = await answer(m);
-        final next = after == null
-            ? null
-            : ch.messages.first
-                  .timeout(const Duration(seconds: 40))
-                  .then<Map<String, Object?>?>((w) => w)
-                  .catchError((Object _) => null);
-        await ch.send({...said, 't': 'kendi'});
-        if (after != null) await after(await next);
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-        await ch.close();
+        await _answerOwnAsk(ch, m);
         return;
       }
       if (m['t'] == 'akis') {
@@ -1602,78 +1853,7 @@ class OfficeNetwork extends ChangeNotifier {
         await ch.close();
         return;
       }
-      final meta = m['meta'] is Map ? m['meta'] as Map : const {};
-      final forChat = meta['sohbet'] is String;
-      // A folder's files from another own device (see FolderSync): only by
-      // the person's key's proof, put aside until they are put in place.
-      final forSync = meta['senkron'] is String;
-      if (forSync && !ch.vouched) {
-        await ch.close();
-        return;
-      }
-      final forTask = meta['gorev'] is String && meta['dosya'] is String;
-      final folder = await inbox();
-      final taskFolder = forTask
-          // Each case to a folder of its own.
-          ? p.join(
-              folder.path,
-              'Görevler',
-              // Only letters and digits: the sender's words name no
-              // folder outside the inbox.
-              '${'${meta['gorev']}'.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}-'
-                  '${'${meta['dosya']}'.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}',
-            )
-          : null;
-      final t = m['t'] == 'offer'
-          ? OfficeTransfer.receive(
-              channel: ch,
-              offer: m,
-              folder: forSync
-                  ? (await Directory(p.join(folder.path, '.folio-senkron'))
-                        .create(recursive: true))
-                  : forChat
-                  ? (await Directory(p.join(folder.path, 'Mesajlar'))
-                        .create(recursive: true))
-                  : taskFolder != null
-                  ? await Directory(taskFolder).create(recursive: true)
-                  : folder,
-              onEnd: _ended,
-            )
-          : null;
-      if (t == null) {
-        await ch.close();
-        return;
-      }
-      transfers.removeWhere((old) => old.id == t.id && old.finished);
-      _added(t);
-      final chat = chats.of('${t.meta['sohbet'] ?? ''}');
-      final writer = ch.peer.deviceId;
-      if (chat != null &&
-          _mayHear(chat, writer) &&
-          (chat.kind != ChatKind.broadcast || ledger.isManager(writer))) {
-        // A member's file with a message: taken unasked.
-        await t.accept();
-        return;
-      }
-      final task = tasks.of('${t.meta['gorev'] ?? ''}');
-      if (task != null &&
-          task.by == ledger.personOf(ch.peer.deviceId) &&
-          ledger.member(ch.peer.deviceId) != null) {
-        // A case of a task given to this device, from its giver.
-        await t.accept();
-        return;
-      }
-      if (ch.vouched || forSync) {
-        // From one of this person's own devices, by its key's proof:
-        // theirs already.
-        await t.accept();
-        return;
-      }
-      if (_accepted.contains(t.id)) {
-        await t.accept();
-      } else {
-        incomingOffer.value = t;
-      }
+      await _takeOffer(ch, m);
     });
   }
 
@@ -3696,12 +3876,20 @@ class SendTarget {
     required this.detail,
     required this.member,
     required this.online,
+    this.remote = false,
   });
   final String deviceId, name, detail;
 
   /// A member of the office, whose files wait for them; else an own device.
   final bool member;
   final bool online;
+
+  /// An own device reached over the relay when it is not on the network
+  /// (a document or a few, 10 MB at most).
+  final bool remote;
+
+  /// Whether it can be sent to now.
+  bool get reachable => member || online || remote;
 }
 
 /// One thing a person's own devices keep alike: what this device has of
