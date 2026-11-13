@@ -2638,7 +2638,19 @@ class _AiPanelState extends State<AiPanel> {
                           ],
                           onChanged: _busy
                               ? null
-                              : (v) => setState(() => _provider = v),
+                              : (v) {
+                                  setState(() => _provider = v);
+                                  // The lawyer's choice for every AI
+                                  // feature: the notices read by the same.
+                                  if (v != null) {
+                                    unawaited(() async {
+                                      final s = await AiSettings.load();
+                                      if (s.provider != v) {
+                                        await s.copyWith(provider: v).save();
+                                      }
+                                    }());
+                                  }
+                                },
                         ),
                       if (widget.embedded &&
                           !_documentsOpen &&

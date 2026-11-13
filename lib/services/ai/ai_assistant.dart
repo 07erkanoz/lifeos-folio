@@ -136,7 +136,9 @@ enum AiProvider {
     (AiProvider.antigravity, AiTier.strong) => 'gemini-3.8-flash-high',
     (AiProvider.claude, AiTier.light) => 'haiku',
     (AiProvider.codex, AiTier.light) => 'gpt-6.1-terra',
-    (AiProvider.antigravity, AiTier.light) => 'gemini-3.8-flash-low',
+    // Medium, as the light tier's effort: at low it missed the notices'
+    // times (measured 13.11.2026).
+    (AiProvider.antigravity, AiTier.light) => 'gemini-3.8-flash-medium',
     // The strong tier thinks harder (reasoning_effort high).
     (AiProvider.groq || AiProvider.gemini, _) => ApiService.of(
       this,
@@ -500,7 +502,13 @@ abstract final class AiAssistant {
       }),
       '--print-timeout',
       '${longest.inSeconds}s',
-      if (tier != null) ...['--effort', tier.effort],
+      // A model named with its effort ("gemini-3.8-flash-low") is given
+      // none beside it: agy refuses the two when they differ.
+      if (tier != null &&
+          !RegExp(r'-(low|medium|high)$').hasMatch(model ?? '')) ...[
+        '--effort',
+        tier.effort,
+      ],
       if (model != null && model.isNotEmpty) ...['--model', model],
       if (resume != null) ...['--conversation', resume],
       // Written with its (empty) value: apart, agy takes the next flag

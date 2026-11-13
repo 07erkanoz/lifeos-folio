@@ -1468,23 +1468,39 @@ class _UetsPageState extends State<UetsPage> {
     // package's own list of them; UYAP's record, once read, in their place.
     final kept = _db?.caseParties(caseKey: key)[key] ?? const <UyapParty>[];
     if (kept.isNotEmpty) {
-      _partiesOf[key] = [
+      final rows = [
         for (final t in kept)
           if (t.name.trim().isNotEmpty)
             (ad: t.name, rol: t.role, vekil: t.lawyer),
       ];
+      // Kept from a package with no lawyers: the notice's documents name
+      // them.
+      _partiesOf[key] = rows.any((t) => t.vekil.trim().isNotEmpty)
+          ? rows
+          : vekilleriTamamla(rows, [
+              for (final d in _db?.noticeDocuments(n.message.id) ?? const [])
+                if (d.hasText) ...belgedekiTaraflar(d.text),
+            ]);
       return;
     }
-    final file = (_db?.noticeDocuments(n.message.id) ?? const [])
+    final documents = _db?.noticeDocuments(n.message.id) ?? const [];
+    final file = documents
         .map((d) => d.caseFile)
         .whereType<NoticeCaseFile>()
         .firstOrNull;
-    _partiesOf[key] = [
-      for (final t
-          in file?.parties ??
-              const <({String name, String role, bool institution})>[])
-        if (t.name.trim().isNotEmpty) (ad: t.name, rol: t.role, vekil: ''),
-    ];
+    // The package's names, with the lawyers its court documents name.
+    _partiesOf[key] = vekilleriTamamla(
+      [
+        for (final t
+            in file?.parties ??
+                const <({String name, String role, bool institution})>[])
+          if (t.name.trim().isNotEmpty) (ad: t.name, rol: t.role, vekil: ''),
+      ],
+      [
+        for (final d in documents)
+          if (d.hasText) ...belgedekiTaraflar(d.text),
+      ],
+    );
     final kase = _cases[key];
     if (kase == null) return;
     () async {

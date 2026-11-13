@@ -60,6 +60,22 @@ void main() {
     }
   });
 
+  test('Antigravity: a model named with its effort is given none beside '
+      'it (agy refuses the two when they differ)', () {
+    final light = AiAssistant.arguments(
+      AiProvider.antigravity,
+      '/tmp/x',
+      model: 'gemini-3.8-flash-low',
+      tier: AiTier.light,
+    );
+    expect(light, isNot(contains('--effort')));
+    expect(light, containsAllInOrder(['--model', 'gemini-3.8-flash-low']));
+    expect(
+      AiProvider.antigravity.defaultModel(AiTier.light),
+      'gemini-3.8-flash-medium',
+    );
+  });
+
   group('the programs, run safe', () {
     test('Claude: print mode, no tools, no settings, nothing kept', () {
       final args = AiAssistant.arguments(AiProvider.claude, '/tmp/x');

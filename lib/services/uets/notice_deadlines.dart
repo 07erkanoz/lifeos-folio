@@ -221,6 +221,7 @@ List<DeadlineRecord> noticeDeadlines(
   final fromParts = <({BelgeTuru tur, String ad})>[];
   // The court's documents read, with their kinds, for their directives.
   final courtDocuments = <(NoticeDocument, BelgeTuru)>[];
+  final finalDecisions = <String>{};
   final docs = [
     for (final d in documents)
       if (d.state != 'ustveri') d,
@@ -271,14 +272,24 @@ List<DeadlineRecord> noticeDeadlines(
     final BelgeTuru tur;
     final String source;
     if (byName.isNotEmpty) {
-      tur = byName.single.tur;
+      // A decision named only "KararIlami": its heading tells whose it is.
+      tur = doc != null && doc.hasText
+          ? BelgeTuruTespit.inceltilmis(byName.single.tur, doc.text)
+          : byName.single.tur;
       source = 'ek';
-      fromParts.add(byName.single);
+      fromParts.add((tur: tur, ad: byName.single.ad));
     } else if (byText != null && !BelgeTuruTespit.belirsiz(byText)) {
       tur = byText;
       source = 'ekIcerik';
     } else {
       continue;
+    }
+    // A decision final in its own words: no way against it, no time.
+    if (_remedyKinds.contains(tur) &&
+        doc != null &&
+        doc.hasText &&
+        BelgeTuruTespit.kesinKarar(doc.text)) {
+      finalDecisions.add(part.id);
     }
     seenKinds.add(tur);
     kinds.add((
@@ -581,6 +592,7 @@ List<DeadlineRecord> noticeDeadlines(
   final made = <String, int>{};
   final alsoFor = <int, List<String>>{};
   for (final k in kinds) {
+    if (finalDecisions.contains('${k.evidence['parca']}')) continue;
     for (final rule in surelerForBelgeTuru(k.tur, kategori)) {
       // A tensip of the enforcement office is its decision, complained of
       // (İİK m.16); an enforcement court's is not (the audit's finding 23).
@@ -936,6 +948,14 @@ class _DirectiveSource {
 /// times the catalogue holds and whose text repeats the law (measured on
 /// the box's 116 documents, 8 October 2026: read, those gave a second,
 /// noisier copy of the catalogue's own deadline).
+/// The decisions a way lies against, unless they say they are final.
+const _remedyKinds = {
+  BelgeTuru.gerekceliKarar,
+  BelgeTuru.kararIlami,
+  BelgeTuru.istinafKarari,
+  BelgeTuru.temyizKarari,
+};
+
 const _courtKinds = {
   BelgeTuru.tensipZapti,
   BelgeTuru.araKarar,

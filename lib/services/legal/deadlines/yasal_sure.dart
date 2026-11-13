@@ -91,7 +91,11 @@ extension YasalSureTakvim on YasalSure {
 ///   10 — 2026-10-09 (Folio): an enforcement office's decision complained
 ///       of in seven days (İİK m.16); an auction set aside in seven days
 ///       from it (İİK m.134/7), its day told by the lawyer.
-const sureHesapSurumu = 10;
+///   11 — 2026-11-13 (Folio): a decision named "KararIlami" is a regional
+///       court's or the Court of Cassation's when its heading says so (no
+///       istinaf against a decision of istinaf); a decision final in its
+///       own words ("kesin olarak … karar verildi") brings no time.
+const sureHesapSurumu = 11;
 
 /// Kategori bazlı yasal süreler (belge türü kanun yolu kararıysa kullanılır).
 /// Değerler kanonik olgulardan (sure_katalogu.dart) gelir — TEK kaynak.

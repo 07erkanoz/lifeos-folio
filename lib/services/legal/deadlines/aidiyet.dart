@@ -198,3 +198,154 @@ List<String> _kelimeler(String s) {
   x = x.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
   return x.isEmpty ? <String>[] : x.split(' ');
 }
+
+/// The parties a court's document names in its heading, each with the
+/// lawyers named under it: "DAVALILAR : 1- AYLA TAŞ-… 2- RECEP ALTIN-…"
+/// then "VEKİLİ : Av. ERKAN ÖZ". A tensip, a decision, a regional court's
+/// decision write them so; a notice's package lists names and roles only,
+/// the lawyers apart, and whose lawyer the lawyer is is told only here.
+List<({String ad, String rol, String vekil})> belgedekiTaraflar(String metin) {
+  final bas = metin.length > 4000 ? metin.substring(0, 4000) : metin;
+  final out = <({String ad, String rol, String vekil})>[];
+  // Labels are found in the line folded (Turkish letters, case), the
+  // names taken from the line as written.
+  final rol = RegExp(
+    r'^\s*((?:karsi\s+)?davaci(?:lar)?|(?:karsi\s+)?davali(?:lar)?|'
+    r'alacakli(?:lar)?|borclu(?:lar)?|basvuran(?:lar)?|talep\s+eden(?:ler)?|'
+    r'karsi\s+taraf(?:lar)?|ihbar\s+olunan(?:lar)?|'
+    r'sikayetci(?:ler)?|musteki(?:ler)?|katilan(?:lar)?|sanik(?:lar)?)'
+    r'\s*:',
+  );
+  final vekil = RegExp(r'^\s*vekil(?:i|leri)?\s*:');
+  // Any other label ends a party's block: "DAVA :", "HAKİM :", "ESAS NO".
+  final baska = RegExp(r'^\s*[a-z .]{2,30}\s*:');
+  String sonrasi(String satir) => satir.substring(satir.indexOf(':') + 1);
+  String? suanki;
+  var adlar = <String>[];
+  var vekiller = <String>[];
+  var vekilde = false;
+  void bitir() {
+    if (suanki != null) {
+      for (final a in adlar) {
+        out.add((ad: a, rol: suanki!, vekil: vekiller.join(', ')));
+      }
+    }
+    suanki = null;
+    adlar = [];
+    vekiller = [];
+    vekilde = false;
+  }
+
+  void adlarEkle(String satir) {
+    for (final parca in satir.split(RegExp(r'(?:^|\s)\d{1,2}\s*[-.)]\s+'))) {
+      // The name: before an identity number, a parenthesis, an address.
+      final ad = parca
+          .split(RegExp(r'\s*-\s*\d|\s*\(|\s+-\s+|,|\s*-\s*$'))
+          .first
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (_kelimeler(ad).length >= 2) adlar.add(ad);
+    }
+  }
+
+  for (final satir in bas.split('\n')) {
+    final k = _katla(satir);
+    if (rol.firstMatch(k) case final m?) {
+      bitir();
+      final r = m[1]!.replaceAll(RegExp(r'\s+'), ' ');
+      suanki = _rolAdi(r.replaceFirst(RegExp(r'(lar|ler)$'), ''));
+      adlarEkle(sonrasi(satir));
+    } else if (vekil.hasMatch(k) && suanki != null) {
+      vekilde = true;
+      vekiller.add(sonrasi(satir).trim());
+    } else if (baska.hasMatch(k)) {
+      bitir();
+    } else if (suanki != null && satir.trim().isNotEmpty) {
+      // A line under a label: more lawyers, or the next party ("2- …").
+      if (vekilde) {
+        vekiller.add(satir.trim());
+      } else if (RegExp(r'^\s*\d{1,2}\s*[-.)]\s').hasMatch(satir)) {
+        adlarEkle(satir);
+      }
+    }
+  }
+  bitir();
+  return out;
+}
+
+/// [s] with Turkish letters folded and in lower case, one character for
+/// one, so that a label is found whatever its case.
+String _katla(String s) {
+  const m = {
+    'İ': 'i',
+    'I': 'i',
+    'ı': 'i',
+    'Ş': 's',
+    'ş': 's',
+    'Ğ': 'g',
+    'ğ': 'g',
+    'Ü': 'u',
+    'ü': 'u',
+    'Ö': 'o',
+    'ö': 'o',
+    'Ç': 'c',
+    'ç': 'c',
+    '\t': ' ',
+  };
+  return s.split('').map((c) => m[c] ?? c.toLowerCase()).join();
+}
+
+/// A folded role as the lawyer reads it.
+String _rolAdi(String r) => switch (r) {
+  'davaci' => 'DAVACI',
+  'davali' => 'DAVALI',
+  'karsi davaci' => 'KARŞI DAVACI',
+  'karsi davali' => 'KARŞI DAVALI',
+  'alacakli' => 'ALACAKLI',
+  'borclu' => 'BORÇLU',
+  'basvuran' => 'BAŞVURAN',
+  'talep eden' => 'TALEP EDEN',
+  'karsi taraf' => 'KARŞI TARAF',
+  'ihbar olunan' => 'İHBAR OLUNAN',
+  'sikayetci' => 'ŞİKAYETÇİ',
+  'musteki' => 'MÜŞTEKİ',
+  'katilan' => 'KATILAN',
+  'sanik' => 'SANIK',
+  _ => r.toUpperCase(),
+};
+
+/// [liste] (a notice's package: names and roles) with the lawyers the
+/// court's documents name for each ([belgeden], [belgedekiTaraflar]), and
+/// the parties the package leaves out added: the package of a remanded
+/// case named one defendant of two, and no lawyer.
+List<({String ad, String rol, String vekil})> vekilleriTamamla(
+  List<({String ad, String rol, String vekil})> liste,
+  List<({String ad, String rol, String vekil})> belgeden,
+) {
+  if (belgeden.isEmpty) return liste;
+  Set<String> ad(String s) => _kelimeler(s).toSet();
+  bool ayni(String a, String b) {
+    final x = ad(a), y = ad(b);
+    return x.length >= 2 &&
+        y.length >= 2 &&
+        (x.containsAll(y) || y.containsAll(x));
+  }
+
+  final out = [
+    for (final t in liste)
+      if (t.vekil.trim().isEmpty)
+        switch ([
+          for (final b in belgeden)
+            if (ayni(t.ad, b.ad) && b.vekil.trim().isNotEmpty) b,
+        ]) {
+          [final b, ...] => (ad: t.ad, rol: t.rol, vekil: b.vekil),
+          _ => t,
+        }
+      else
+        t,
+  ];
+  for (final b in belgeden) {
+    if (!out.any((t) => ayni(t.ad, b.ad))) out.add(b);
+  }
+  return out;
+}

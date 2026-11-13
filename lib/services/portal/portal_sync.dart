@@ -1561,6 +1561,37 @@ class PortalSync extends ChangeNotifier {
         if (kept.containsKey(e.key)) continue;
         db.saveCaseParties(e.key, e.value, source: 'uyap');
       }
+      // Kept from a package, no lawyer named: the case's parties asked of
+      // UYAP Mobil once (one request, as a case's page does); else read
+      // from its notices' documents ("DAVALILAR … VEKİLİ : Av. …").
+      final cases = db.cases();
+      var asked = 0;
+      for (final e in kept.entries) {
+        if (fetched.containsKey(e.key) ||
+            e.value.any((t) => t.lawyer.trim().isNotEmpty) ||
+            !_lawyersLookedFor.add(e.key)) {
+          continue;
+        }
+        final id = cases[e.key]?.ids[PortalChannel.uyapMobile];
+        if (id != null && _mobile.connected && asked < 5) {
+          asked++;
+          try {
+            final type =
+                '${cases[e.key]?.details?.value['dosyaTurKod'] ?? ''}';
+            final got = [
+              for (final p in await _mobile.parties(id, caseType: type))
+                UyapParty.fromMap(p),
+            ];
+            if (got.isNotEmpty) {
+              db.saveCaseParties(e.key, got, source: 'uyap_mobil');
+              continue;
+            }
+          } catch (_) {}
+        }
+        for (final n in db.notices(caseKey: e.key)) {
+          _keepPackageParties(db, n.message.id);
+        }
+      }
       for (final e in db.caseParties().entries) {
         parties.putIfAbsent(
           e.key,
@@ -1571,6 +1602,10 @@ class PortalSync extends ChangeNotifier {
     NoticeDeadlineContext.parties = parties;
     NoticeDeadlineContext.lawyer = lawyer.isEmpty ? null : lawyer;
   }
+
+  /// The cases whose package parties' lawyers were looked for in their
+  /// documents this run: once, not at every sync.
+  final _lawyersLookedFor = <String>{};
 
   /// The parties a notice's package lists (dosyaBilgileri), kept for its
   /// case where UYAP gave none: names and roles, without lawyers.
@@ -1583,9 +1618,22 @@ class PortalSync extends ChangeNotifier {
         .whereType<NoticeCaseFile>()
         .firstOrNull;
     if (file == null || file.parties.isEmpty) return;
+    // The package names no lawyers; the court's documents in it do
+    // ("DAVALILAR … VEKİLİ : Av. …"), and whose lawyer the lawyer is is
+    // known from them.
+    final kinds = {
+      for (final t in file.parties) t.name: t.institution ? 'Kurum' : 'Kişi',
+    };
+    final named = vekilleriTamamla(
+      [for (final t in file.parties) (ad: t.name, rol: t.role, vekil: '')],
+      [
+        for (final d in db.noticeDocuments(id))
+          if (d.hasText) ...belgedekiTaraflar(d.text),
+      ],
+    );
     db.saveCaseParties(key, [
-      for (final t in file.parties)
-        UyapParty(t.name, t.role, '', t.institution ? 'Kurum' : 'Kişi'),
+      for (final t in named)
+        UyapParty(t.ad, t.rol, t.vekil, kinds[t.ad] ?? 'Kişi'),
     ], source: 'paket');
   }
 

@@ -394,6 +394,47 @@ class BelgeTuruTespit {
       if (_tekil(ad, null) case final t when !belirsiz(t)) (tur: t, ad: ad),
   ];
 
+  /// A decision named only "karar" or "ilam" (UETS's "KararIlami"): what
+  /// its heading says it is. A regional court of appeal's decision is not
+  /// a first-instance one: it is not appealed (istinaf) but, where it is
+  /// not final, taken to the Court of Cassation (temyiz).
+  static BelgeTuru inceltilmis(BelgeTuru adaGoreTur, String metin) {
+    if (adaGoreTur != BelgeTuru.kararIlami &&
+        adaGoreTur != BelgeTuru.gerekceliKarar) {
+      return adaGoreTur;
+    }
+    final n = _norm(metin);
+    final bas = n.length > 800 ? n.substring(0, 800) : n;
+    if (bas.contains('istinaf karari') ||
+        bas.contains('bolge adliye mahkemesi') ||
+        bas.contains('bolge idare mahkemesi')) {
+      return BelgeTuru.istinafKarari;
+    }
+    if (bas.contains('yargitay') || bas.contains('danistay')) {
+      return BelgeTuru.temyizKarari;
+    }
+    return adaGoreTur;
+  }
+
+  /// Whether a decision says in its last words that it is final ("HMK'nun
+  /// 362. maddesi uyarınca kesin olarak oybirliği ile karar verildi"): no
+  /// way lies against it, and no time runs for one.
+  static bool kesinKarar(String metin) {
+    final n = _norm(metin);
+    final son = n.length > 2000 ? n.substring(n.length - 2000) : n;
+    final kesin = RegExp(r'kesin olarak|kesin olmak uzere').hasMatch(son);
+    final hukum = RegExp(
+      r'karar verildi|karar verilmistir|oybirligi|oy birligi|oycoklugu|oy coklugu',
+    ).hasMatch(son);
+    // "Kanun yoluna başvurulabilir" beside it: the "kesin" was of
+    // something else.
+    final yolAcik = RegExp(
+      r'(istinaf|temyiz) yolu (acik|acilmak)|(istinaf|temyiz) kanun yolu acik|'
+      r'(istinaf|temyiz) (yoluna|kanun yoluna) basvurul',
+    ).hasMatch(son);
+    return kesin && hukum && !yolAcik;
+  }
+
   /// Sunucudan gelen enum ADINI BelgeTuru'ne cevirir. Taninmayan ad -> null
   /// (uydurma yok; cagiran kural sonucunu korur).
   static BelgeTuru? adaGore(String ad) {
