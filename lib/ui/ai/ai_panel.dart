@@ -200,7 +200,26 @@ class _AiPanelState extends State<AiPanel> {
   /// while the lawyer is at the end; not once they scroll up to read.
   bool _follow = true;
 
+  /// Whether the box to ask in shows: at the conversation's end; while the
+  /// lawyer scrolls up to read it goes, and a button brings them back.
+  bool _composerShown = true;
+
+  /// The box as one thin line: a conversation going on, nothing typed,
+  /// not being written in.
+  bool get _compact =>
+      _turns.isNotEmpty &&
+      !_focus.hasFocus &&
+      _question.text.isEmpty &&
+      _attached.isEmpty &&
+      _must.isEmpty;
+
   bool _onScroll(ScrollNotification n) {
+    if (n is ScrollUpdateNotification || n is ScrollEndNotification) {
+      final shown =
+          n.metrics.maxScrollExtent - n.metrics.pixels < 120 ||
+          n.metrics.maxScrollExtent <= 0;
+      if (shown != _composerShown) setState(() => _composerShown = shown);
+    }
     if (n is UserScrollNotification || n is ScrollUpdateNotification) {
       if (n is ScrollUpdateNotification && n.dragDetails == null) {
         return false;
@@ -301,6 +320,10 @@ class _AiPanelState extends State<AiPanel> {
   @override
   void initState() {
     super.initState();
+    // The send button and the box's size follow what is typed and where
+    // the cursor is.
+    _focus.addListener(_redraw);
+    _question.addListener(_redraw);
     if (widget.chat case final chat?) {
       _chatId = chat['id'] as String?;
       if (_chatId case final id?) _thread = AiThread.of(id, chat['oturumlar']);
@@ -358,6 +381,10 @@ class _AiPanelState extends State<AiPanel> {
       record = await AiCaseSession.ofDocument(path, UyapCaseStore.instance);
     } catch (_) {}
     if (mounted && widget.path == path) setState(() => _case = record);
+  }
+
+  void _redraw() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -1670,15 +1697,19 @@ class _AiPanelState extends State<AiPanel> {
       Align(
         alignment: Alignment.centerRight,
         child: Container(
-          margin: const EdgeInsets.only(top: 10, left: 60),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          margin: const EdgeInsets.only(top: 18, left: 80, bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: scheme.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(18),
           ),
           child: SelectableText(
             t.question,
-            style: TextStyle(color: scheme.onPrimaryContainer),
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: _textSize,
+              height: 1.5,
+            ),
           ),
         ),
       ),
@@ -2493,7 +2524,7 @@ class _AiPanelState extends State<AiPanel> {
     final check = checked[written];
     final state = check?['durum'];
     final wrong = state != null && state != 'bulundu' && state != 'ulasilamadi';
-    final color = wrong ? scheme.error : scheme.primary;
+    final color = wrong ? scheme.error : scheme.onSurfaceVariant;
     final note = switch (state) {
       'bulundu' => 'Resmî kaynakta var',
       'mulga' => 'Mülga',
@@ -2508,24 +2539,23 @@ class _AiPanelState extends State<AiPanel> {
         if (check?['daire_farkli'] == true) 'dairesi farklı',
       ].join(' · '),
       child: Material(
-        color: color.withValues(alpha: 0.07),
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: color.withValues(alpha: 0.35)),
-          borderRadius: BorderRadius.circular(8),
-        ),
+        color: wrong
+            ? scheme.error.withValues(alpha: 0.08)
+            : scheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         child: InkWell(
           key: ValueKey('ai-source-$written'),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           onTapUp: (d) => _openSource(source, d.globalPosition),
           onTap: () {},
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  decision ? Icons.balance_outlined : Icons.gavel_outlined,
-                  size: 14,
+                  decision ? Icons.balance_outlined : Icons.menu_book_outlined,
+                  size: 13,
                   color: color,
                 ),
                 const SizedBox(width: 5),
@@ -2535,7 +2565,11 @@ class _AiPanelState extends State<AiPanel> {
                     written.replaceAll(RegExp(r'\s+'), ' '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: color),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: color,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
                 if (state == 'bulundu') ...[
@@ -2818,7 +2852,7 @@ class _AiPanelState extends State<AiPanel> {
                     ],
                   ),
                 ),
-                if (_sentTo case final to?)
+                if (_sentTo case final to? when _composerShown && !_compact)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
                     child: Text(
@@ -2836,7 +2870,38 @@ class _AiPanelState extends State<AiPanel> {
                       ),
                     ),
                   ),
-                _composer(scheme),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: _composerShown || _turns.isEmpty
+                      ? KeyedSubtree(
+                          key: const ValueKey('ai-composer'),
+                          child: _composer(scheme),
+                        )
+                      : Padding(
+                          key: const ValueKey('ai-to-end'),
+                          padding: const EdgeInsets.only(bottom: 12, top: 4),
+                          child: Center(
+                            child: IconButton.filledTonal(
+                              tooltip: 'En alta in',
+                              onPressed: () {
+                                setState(() => _composerShown = true);
+                                if (_scroll.hasClients) {
+                                  unawaited(
+                                    _scroll.animateTo(
+                                      _scroll.position.maxScrollExtent,
+                                      duration: const Duration(
+                                        milliseconds: 250,
+                                      ),
+                                      curve: Curves.easeOut,
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.arrow_downward_rounded),
+                            ),
+                          ),
+                        ),
+                ),
               ],
             ],
           ),
@@ -2923,13 +2988,25 @@ class _AiPanelState extends State<AiPanel> {
                     ],
                   ),
                 ),
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
                 decoration: BoxDecoration(
                   color: scheme.surface,
-                  border: Border.all(color: scheme.outlineVariant),
-                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: .7),
+                  ),
+                  borderRadius: BorderRadius.circular(_compact ? 26 : 20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .06),
+                      blurRadius: 14,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
+                padding: _compact
+                    ? const EdgeInsets.fromLTRB(10, 4, 6, 4)
+                    : const EdgeInsets.fromLTRB(8, 6, 8, 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -3032,157 +3109,152 @@ class _AiPanelState extends State<AiPanel> {
                         ),
                       ),
                     // Enter sends, Shift+Enter starts a new line.
-                    Focus(
-                      onKeyEvent: (_, event) {
-                        if (event is KeyDownEvent &&
-                            (event.logicalKey == LogicalKeyboardKey.enter ||
-                                event.logicalKey ==
-                                    LogicalKeyboardKey.numpadEnter) &&
-                            !HardwareKeyboard.instance.isShiftPressed) {
-                          _send();
-                          return KeyEventResult.handled;
-                        }
-                        return KeyEventResult.ignored;
-                      },
-                      child: TextField(
-                        key: const ValueKey('ai-question'),
-                        controller: _question,
-                        focusNode: _focus,
-                        minLines: widget.embedded && _roomy ? 2 : 1,
-                        maxLines: 8,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        style: const TextStyle(fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: _busy
-                              ? 'Sıradaki sorunuzu yazabilirsiniz…'
-                              : _ofDocument
-                              ? 'Belgeye sorun…'
-                              : _case != null
-                              ? 'Dosyaya sorun…'
-                              : 'Sorun…',
-                          isDense: true,
-                          filled: false,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            10,
-                            8,
-                            10,
-                            6,
+                    Row(
+                      crossAxisAlignment: _compact
+                          ? CrossAxisAlignment.center
+                          : CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Focus(
+                            onKeyEvent: (_, event) {
+                              if (event is KeyDownEvent &&
+                                  (event.logicalKey ==
+                                          LogicalKeyboardKey.enter ||
+                                      event.logicalKey ==
+                                          LogicalKeyboardKey.numpadEnter) &&
+                                  !HardwareKeyboard.instance.isShiftPressed) {
+                                _send();
+                                return KeyEventResult.handled;
+                              }
+                              return KeyEventResult.ignored;
+                            },
+                            child: TextField(
+                              key: const ValueKey('ai-question'),
+                              controller: _question,
+                              focusNode: _focus,
+                              minLines: !_compact && widget.embedded && _roomy
+                                  ? 2
+                                  : 1,
+                              maxLines: _compact ? 1 : 10,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
+                              style: TextStyle(
+                                fontSize: _textSize,
+                                height: 1.45,
+                              ),
+                              decoration: InputDecoration(
+                                hintText: _busy
+                                    ? 'Sıradaki sorunuzu yazabilirsiniz…'
+                                    : _ofDocument
+                                    ? 'Belgeye sorun…'
+                                    : _case != null
+                                    ? 'Dosyaya sorun…'
+                                    : 'Sorun…',
+                                isDense: true,
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: _compact
+                                    ? const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 8,
+                                      )
+                                    : const EdgeInsets.fromLTRB(8, 10, 8, 8),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        if (canPickCase || canMust)
-                          PopupMenuButton<String>(
-                            key: const ValueKey('ai-plus'),
-                            tooltip: 'Ekle',
-                            icon: const Icon(Icons.add_rounded, size: 21),
-                            onSelected: (v) => unawaited(switch (v) {
-                              'belge' => _attach(),
-                              'dosya' => _pickCase(),
-                              _ => _pickMust(),
-                            }),
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                key: ValueKey('ai-attach'),
-                                value: 'belge',
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: Icon(Icons.attach_file_rounded),
-                                  title: Text('Belge ekle'),
-                                ),
-                              ),
-                              if (canPickCase)
-                                const PopupMenuItem(
-                                  key: ValueKey('ai-pick-case'),
-                                  value: 'dosya',
-                                  child: ListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: Icon(Icons.folder_outlined),
-                                    title: Text('Dosya bağla'),
-                                  ),
-                                ),
-                              if (canMust)
-                                const PopupMenuItem(
-                                  key: ValueKey('ai-pick-must'),
-                                  value: 'oku',
-                                  child: ListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: Icon(Icons.star_outline_rounded),
-                                    title: Text('Mutlaka okunacak evrak'),
-                                  ),
-                                ),
-                            ],
-                          )
-                        else
-                          IconButton(
-                            key: const ValueKey('ai-attach'),
-                            tooltip: 'Belge ekle',
-                            onPressed: _busy
-                                ? null
-                                : () => unawaited(_attach()),
-                            icon: const Icon(
-                              Icons.attach_file_rounded,
-                              size: 20,
-                            ),
-                          ),
-                        _tierChoice(scheme),
-                        const Spacer(),
-                        if (quota?.label case final said?)
-                          Tooltip(
-                            message:
-                                'Yapay zekâ hesabınızın kullanımı: '
-                                '${[for (final w in quota!.used.entries) '${switch (w.key) {
-                                    'five_hour' => '5 saatlik',
-                                    'seven_day' => 'haftalık',
-                                    _ => w.key,
-                                  }} %${(w.value * 100).round()}'].join(', ')}',
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Text(
-                                said,
-                                key: const ValueKey('ai-quota'),
-                                style: small.copyWith(
-                                  color: quota.most >= .9
-                                      ? scheme.error
-                                      : scheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (_busy)
-                          IconButton(
-                            key: const ValueKey('ai-stop'),
-                            tooltip: 'Durdur',
-                            onPressed: _stop,
-                            icon: Icon(
-                              Icons.stop_circle_rounded,
-                              size: 26,
-                              color: scheme.primary,
-                            ),
-                          )
-                        else
-                          IconButton.filled(
-                            key: const ValueKey('ai-send'),
-                            tooltip: 'Sor',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: _send,
-                            icon: const Icon(
-                              Icons.arrow_upward_rounded,
-                              size: 19,
-                            ),
-                          ),
-                        const SizedBox(width: 2),
+                        if (_compact) _sendButton(scheme),
                       ],
                     ),
+                    if (!_compact)
+                      Row(
+                        children: [
+                          if (canPickCase || canMust)
+                            PopupMenuButton<String>(
+                              key: const ValueKey('ai-plus'),
+                              tooltip: 'Ekle',
+                              icon: const Icon(Icons.add_rounded, size: 21),
+                              onSelected: (v) => unawaited(switch (v) {
+                                'belge' => _attach(),
+                                'dosya' => _pickCase(),
+                                _ => _pickMust(),
+                              }),
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  key: ValueKey('ai-attach'),
+                                  value: 'belge',
+                                  child: ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: Icon(Icons.attach_file_rounded),
+                                    title: Text('Belge ekle'),
+                                  ),
+                                ),
+                                if (canPickCase)
+                                  const PopupMenuItem(
+                                    key: ValueKey('ai-pick-case'),
+                                    value: 'dosya',
+                                    child: ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: Icon(Icons.folder_outlined),
+                                      title: Text('Dosya bağla'),
+                                    ),
+                                  ),
+                                if (canMust)
+                                  const PopupMenuItem(
+                                    key: ValueKey('ai-pick-must'),
+                                    value: 'oku',
+                                    child: ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: Icon(Icons.star_outline_rounded),
+                                      title: Text('Mutlaka okunacak evrak'),
+                                    ),
+                                  ),
+                              ],
+                            )
+                          else
+                            IconButton(
+                              key: const ValueKey('ai-attach'),
+                              tooltip: 'Belge ekle',
+                              onPressed: _busy
+                                  ? null
+                                  : () => unawaited(_attach()),
+                              icon: const Icon(
+                                Icons.attach_file_rounded,
+                                size: 20,
+                              ),
+                            ),
+                          _tierChoice(scheme),
+                          const Spacer(),
+                          if (quota?.label case final said?)
+                            Tooltip(
+                              message:
+                                  'Yapay zekâ hesabınızın kullanımı: '
+                                  '${[for (final w in quota!.used.entries) '${switch (w.key) {
+                                      'five_hour' => '5 saatlik',
+                                      'seven_day' => 'haftalık',
+                                      _ => w.key,
+                                    }} %${(w.value * 100).round()}'].join(', ')}',
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: Text(
+                                  said,
+                                  key: const ValueKey('ai-quota'),
+                                  style: small.copyWith(
+                                    color: quota.most >= .9
+                                        ? scheme.error
+                                        : scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          _sendButton(scheme),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -3190,6 +3262,45 @@ class _AiPanelState extends State<AiPanel> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Send, round, full when there is something to send; stop while it
+  /// works.
+  Widget _sendButton(ColorScheme scheme) {
+    final has = _question.text.trim().isNotEmpty || _attached.isNotEmpty;
+    ButtonStyle style(Color fill, Color ink) => IconButton.styleFrom(
+      backgroundColor: fill,
+      foregroundColor: ink,
+      fixedSize: const Size(36, 36),
+      minimumSize: const Size(36, 36),
+      padding: EdgeInsets.zero,
+      shape: const CircleBorder(),
+    );
+    return Padding(
+      padding: EdgeInsets.only(left: 4, bottom: _compact ? 0 : 2),
+      child: _busy
+          ? IconButton(
+              key: const ValueKey('ai-stop'),
+              tooltip: 'Durdur',
+              onPressed: _stop,
+              style: style(scheme.onSurface, scheme.surface),
+              icon: Icon(Icons.stop_rounded, size: 18, color: scheme.surface),
+            )
+          : IconButton(
+              key: const ValueKey('ai-send'),
+              tooltip: 'Sor',
+              onPressed: _send,
+              style: style(
+                has ? scheme.primary : scheme.surfaceContainerHighest,
+                has ? scheme.onPrimary : scheme.onSurfaceVariant,
+              ),
+              icon: Icon(
+                Icons.arrow_upward_rounded,
+                size: 20,
+                color: has ? scheme.onPrimary : scheme.onSurfaceVariant,
+              ),
+            ),
     );
   }
 

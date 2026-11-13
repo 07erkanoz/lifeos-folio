@@ -103,7 +103,7 @@ class _AiMarkdownState extends State<AiMarkdown> {
     final scheme = Theme.of(context).colorScheme;
     final base = TextStyle(
       fontSize: size,
-      height: 1.5,
+      height: 1.65,
       color: scheme.onSurface,
     );
     return SelectionArea(
@@ -127,16 +127,17 @@ class _AiMarkdownState extends State<AiMarkdown> {
     final e = node;
     switch (e.tag) {
       case 'h1' || 'h2' || 'h3' || 'h4' || 'h5' || 'h6':
-        final step = {'h1': 4.0, 'h2': 3.0, 'h3': 2.0}[e.tag] ?? 1.0;
+        final step = {'h1': 6.0, 'h2': 4.0, 'h3': 2.0}[e.tag] ?? 1.0;
         return [
           Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            padding: const EdgeInsets.only(top: 16, bottom: 6),
             child: Text.rich(
               _inline(
                 e.children,
                 base.copyWith(
                   fontSize: size + step,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
+                  height: 1.35,
                 ),
               ),
             ),
@@ -225,7 +226,7 @@ class _AiMarkdownState extends State<AiMarkdown> {
   }
 
   Widget _para(Widget child) =>
-      Padding(padding: const EdgeInsets.only(bottom: 8), child: child);
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: child);
 
   Widget _item(
     String mark,
