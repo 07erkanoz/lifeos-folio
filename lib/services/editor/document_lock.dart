@@ -84,6 +84,34 @@ class DocumentLock {
     }
   }
 
+  /// The window that holds the document at [path] asked to come forward:
+  /// a request left beside the locks, which that window looks for.
+  static Future<void> askToShow(String path) async {
+    final dir = await folder();
+    await dir.create(recursive: true);
+    await File(
+      p.join(dir.path, 'goster-belge-${DocumentHistory.documentKey(path)}'),
+    ).writeAsString(DateTime.now().toUtc().toIso8601String());
+  }
+
+  /// Whether another window asked this one, which holds the document at
+  /// [path], to come forward; the request taken.
+  static Future<bool> askedToShow(String path) async {
+    final file = File(
+      p.join(
+        (await folder()).path,
+        'goster-belge-${DocumentHistory.documentKey(path)}',
+      ),
+    );
+    if (!await file.exists()) return false;
+    try {
+      await file.delete();
+    } on FileSystemException {
+      return false;
+    }
+    return true;
+  }
+
   /// Whether [name] is held by another process.
   static Future<bool> heldElsewhere(String name) async {
     if (_held.containsKey(name)) return false;

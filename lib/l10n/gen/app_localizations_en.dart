@@ -438,10 +438,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editorHeldElsewhereBanner =>
-      'This document is being edited in another window. Here it can only be read; make your changes in that window.';
+      'This document is being edited in another window. Here it can only be read; once that window closes it becomes editable here by itself.';
 
   @override
   String get editorRetry => 'Try again';
+
+  @override
+  String get editorShowOther => 'Go to that window';
+
+  @override
+  String get editorNowEditable => 'The document can now be edited here.';
 
   @override
   String get editorDictationFailed => 'Dictation did not start';

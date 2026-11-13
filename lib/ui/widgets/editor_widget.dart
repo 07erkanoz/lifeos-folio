@@ -87,6 +87,7 @@ import 'editor_page_viewport.dart';
 
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../../services/editor/petition_format.dart';
 import '../../services/editor/tab_stops.dart';
@@ -2540,10 +2541,56 @@ class _EditorWidgetState extends State<EditorWidget>
     }
     _pathLock = lock;
     if (held != _heldElsewhere) {
+      final freed = _heldElsewhere && !held;
       setState(() => _heldElsewhere = held);
       _quillController.readOnly = held || _penAway;
+      if (freed && mounted) {
+        showNotice(
+          context,
+          context.l.editorNowEditable,
+          kind: NoticeKind.success,
+        );
+      }
+      // Opened here while another window edits it: that window is asked
+      // to come forward, where the lawyer can write.
+      if (held && path != null && !_askedOther) {
+        _askedOther = true;
+        unawaited(DocumentLock.askToShow(path).catchError((Object _) {}));
+      }
     }
+    _watchLock();
   }
+
+  /// Whether this editor asked the window holding its document to come
+  /// forward, once.
+  bool _askedOther = false;
+
+  Timer? _lockWatch;
+
+  /// Every two seconds: a document held elsewhere is tried again, and is
+  /// written in here as soon as that window lets it go; one held here
+  /// comes forward when another window asks for it.
+  void _watchLock() {
+    _lockWatch ??= Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!mounted) return;
+      final path = _documentPath;
+      if (path == null) return;
+      if (_heldElsewhere) {
+        _lockedPath = null;
+        await _holdDocument();
+      } else if (_pathLock != null && _desktopWindow) {
+        try {
+          if (await DocumentLock.askedToShow(path)) {
+            await windowManager.show();
+            await windowManager.focus();
+          }
+        } catch (_) {}
+      }
+    });
+  }
+
+  static bool get _desktopWindow =>
+      !kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS);
 
   /// Whether another window edits the document at [path]. A lock that
   /// cannot be looked at does not stand in the way of saving.
@@ -2656,6 +2703,13 @@ class _EditorWidgetState extends State<EditorWidget>
                 style: TextStyle(color: scheme.onTertiaryContainer),
               ),
             ),
+            if (_documentPath case final path?)
+              TextButton(
+                onPressed: () => unawaited(
+                  DocumentLock.askToShow(path).catchError((Object _) {}),
+                ),
+                child: Text(context.l.editorShowOther),
+              ),
             TextButton(
               onPressed: () {
                 _lockedPath = null;
@@ -5294,6 +5348,7 @@ class _EditorWidgetState extends State<EditorWidget>
     _loadGeneration++;
     _editedCheck?.cancel();
     _regionMeasure?.cancel();
+    _lockWatch?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _documentChanges?.cancel();
     _hideSuggestions();

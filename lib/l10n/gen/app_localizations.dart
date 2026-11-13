@@ -779,7 +779,7 @@ abstract class AppLocalizations {
   /// No description provided for @editorHeldElsewhereBanner.
   ///
   /// In tr, this message translates to:
-  /// **'Bu belge başka bir Folio penceresinde düzenleniyor. Burada yalnız okunabilir; değişiklikleri o pencerede yapın.'**
+  /// **'Bu belge başka bir pencerede düzenleniyor. Burada yalnız okunabilir; o pencere kapanınca burada kendiliğinden düzenlenebilir olur.'**
   String get editorHeldElsewhereBanner;
 
   /// No description provided for @editorRetry.
@@ -787,6 +787,18 @@ abstract class AppLocalizations {
   /// In tr, this message translates to:
   /// **'Yeniden dene'**
   String get editorRetry;
+
+  /// No description provided for @editorShowOther.
+  ///
+  /// In tr, this message translates to:
+  /// **'O pencereye geç'**
+  String get editorShowOther;
+
+  /// No description provided for @editorNowEditable.
+  ///
+  /// In tr, this message translates to:
+  /// **'Belge artık burada düzenlenebilir.'**
+  String get editorNowEditable;
 
   /// No description provided for @editorDictationFailed.
   ///

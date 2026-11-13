@@ -167,14 +167,11 @@ bool _editable(String path) {
   }
 }
 
-/// [path] handed to Folio to be edited (the open Folio takes it if there is
-/// one), and this window closed.
+/// [path] in an editor window of its own (LifeOS Editör), and this window
+/// closed. Handed to Folio's main window it showed Folio's home first and
+/// the editor only after it (13.11.2026); the editor is what was asked for.
 Future<void> _edit(String path) async {
-  await Process.start(Platform.resolvedExecutable, [
-    '--edit',
-    '--',
-    path,
-  ], mode: ProcessStartMode.detached);
+  await EditorWindow.open(path);
   try {
     await windowManager.close();
   } catch (_) {}

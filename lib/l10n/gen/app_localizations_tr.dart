@@ -400,10 +400,16 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get editorHeldElsewhereBanner =>
-      'Bu belge başka bir Folio penceresinde düzenleniyor. Burada yalnız okunabilir; değişiklikleri o pencerede yapın.';
+      'Bu belge başka bir pencerede düzenleniyor. Burada yalnız okunabilir; o pencere kapanınca burada kendiliğinden düzenlenebilir olur.';
 
   @override
   String get editorRetry => 'Yeniden dene';
+
+  @override
+  String get editorShowOther => 'O pencereye geç';
+
+  @override
+  String get editorNowEditable => 'Belge artık burada düzenlenebilir.';
 
   @override
   String get editorDictationFailed => 'Sesli yazma başlamadı';
