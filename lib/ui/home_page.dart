@@ -8,6 +8,7 @@ import '../services/office/office_inbox.dart';
 import '../services/editor/profile_autofill.dart' show profileTc;
 import '../services/security/app_lock.dart';
 import '../services/sync/folder_sync.dart';
+import '../services/sync/own_remote.dart';
 import '../services/sync/own_sync.dart';
 import '../services/office/office_network.dart';
 import '../services/office/office_notices.dart';
@@ -1043,7 +1044,14 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       PortalSync.instance.noticesVersion.addListener(_portalSynced);
       // The agenda and the sessions kept alike with the person's own
       // devices, once the portals' sessions are started.
-      unawaited(OwnSync.instance.start());
+      unawaited(
+        OwnSync.instance.start().then((_) {
+          // On different networks, over the relay (canli.lifeos.com.tr).
+          if (OwnSync.instance.isOn(OwnSync.remote)) {
+            OwnRemote.instance.start();
+          }
+        }),
+      );
       FolderSync.instance.onAdded = (path) =>
           unawaited(_library.addPaths([path]));
       unawaited(FolderSync.instance.start());

@@ -388,6 +388,25 @@ class OfficeNetwork extends ChangeNotifier {
   /// This device, as the others see it; null before it has joined.
   OfficePeer? get self => _self;
 
+  /// The person's key's short name on this device; null before the keys
+  /// are read.
+  String? get myUserId => _identity?.userId;
+
+  /// A name for [label] only the person's own devices can make: keyed by
+  /// the person's private key, which only their own devices hold. The
+  /// relay's rooms and quota are named so, that no one else may find a
+  /// room to block, nor spend another's quota. Null before the keys are
+  /// read.
+  Future<String?> ownTag(String label) async {
+    final identity = _identity;
+    if (identity == null) return null;
+    final key = await identity.userSeed();
+    final mac = Hmac(sha256, [...utf8.encode('folio-kendi-uzak-1'), ...key]);
+    return base64Url
+        .encode(mac.convert(utf8.encode(label)).bytes)
+        .substring(0, 43);
+  }
+
   /// Whether the keys outlive this run (see [OfficeIdentity.kept]).
   bool get kept => _identity?.kept ?? true;
 
@@ -1092,64 +1111,214 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: peer.port,
       );
-      // Two steps (docs/senkron-plan.md R0, R10): what needs nothing of
-      // the other goes first, with what this Folio can do; what needs
-      // something goes only after the other has said, in this exchange,
-      // that it has it, and with it what was too large for the first
-      // message (not to be split before the other says it can join). A
-      // Folio from before capabilities says nothing and is sent no second
-      // step. Kept alike only when every step came.
-      var whole = false;
-      var changed = false;
-      try {
-        unawaited(_metOwn(ch));
-        if (!ch.vouched) return;
-        final old = actsOldForTesting;
-        final plain = await _ownParts(
-          peer.deviceId,
-          SyncCaps.nothing,
-          plain: true,
-        );
-        final first = await _sendPacked(
-          ch,
-          {'t': 'senkron', ..._said},
-          'parcalar',
-          _pack(plain),
-          canSplit: false,
-        );
-        final m = await first.then.within(const Duration(seconds: 20));
-        if (m == null || m['t'] != 'senkron') return;
-        final said = _heard(peer.deviceId, m);
-        final theirs = await _receivePacked(ch, m, 'parcalar');
-        if (theirs == null) return;
-        changed = await _ownCame(_unpack(theirs), peer.deviceId, said);
-        whole = first.sent;
-        if (!old && said.protocol >= SyncCaps.protocol) {
-          final more = await _ownParts(peer.deviceId, said, plain: false);
-          // What did not fit the first message goes now.
-          if (!first.sent) more.addAll(plain);
-          final second = await _sendPacked(
-            ch,
-            {'t': 'senkron-ek'},
-            'parcalar',
-            _pack(more),
-            canSplit: _splits(said),
-          );
-          final ack = await second.then.within(const Duration(seconds: 40));
-          whole =
-              second.sent &&
-              ack != null &&
-              ack['t'] == 'senkron-ek' &&
-              ack['tamam'] == true;
-        }
-      } finally {
-        await ch.close();
-      }
-      _cameChanged(changed);
-      if (!whole) return;
-      synced[peer.deviceId] = DateTime.now();
-      notifyListeners();
+      await _syncOwnOver(ch, peer.deviceId);
     } catch (_) {}
+  }
+
+  /// One Senkron exchange with one of the person's own devices over [ch],
+  /// whichever way it was reached (the network, or the relay); [ch] closed
+  /// after it. True when every part came and went.
+  Future<bool> _syncOwnOver(OfficeChannel ch, String deviceId) async {
+    final peer = (deviceId: deviceId);
+    // Two steps (docs/senkron-plan.md R0, R10): what needs nothing of
+    // the other goes first, with what this Folio can do; what needs
+    // something goes only after the other has said, in this exchange,
+    // that it has it, and with it what was too large for the first
+    // message (not to be split before the other says it can join). A
+    // Folio from before capabilities says nothing and is sent no second
+    // step. Kept alike only when every step came.
+    var whole = false;
+    var changed = false;
+    try {
+      unawaited(_metOwn(ch));
+      if (!ch.vouched) return false;
+      final old = actsOldForTesting;
+      final plain = await _ownParts(
+        peer.deviceId,
+        SyncCaps.nothing,
+        plain: true,
+      );
+      final first = await _sendPacked(
+        ch,
+        {'t': 'senkron', ..._said},
+        'parcalar',
+        _pack(plain),
+        canSplit: false,
+      );
+      final m = await first.then.within(const Duration(seconds: 20));
+      if (m == null || m['t'] != 'senkron') return false;
+      final said = _heard(peer.deviceId, m);
+      final theirs = await _receivePacked(ch, m, 'parcalar');
+      if (theirs == null) return false;
+      changed = await _ownCame(_unpack(theirs), peer.deviceId, said);
+      whole = first.sent;
+      if (!old && said.protocol >= SyncCaps.protocol) {
+        final more = await _ownParts(peer.deviceId, said, plain: false);
+        // What did not fit the first message goes now.
+        if (!first.sent) more.addAll(plain);
+        final second = await _sendPacked(
+          ch,
+          {'t': 'senkron-ek'},
+          'parcalar',
+          _pack(more),
+          canSplit: _splits(said),
+        );
+        final ack = await second.then.within(const Duration(seconds: 40));
+        whole =
+            second.sent &&
+            ack != null &&
+            ack['t'] == 'senkron-ek' &&
+            ack['tamam'] == true;
+      }
+    } finally {
+      await ch.close();
+    }
+    _cameChanged(changed);
+    if (!whole) return false;
+    synced[peer.deviceId] = DateTime.now();
+    notifyListeners();
+    return true;
+  }
+
+  /// One own device's Senkron, its first message [m] come on [ch]: what
+  /// it brought taken, what is here given, [ch] closed after. True when
+  /// every part came and went.
+  Future<bool> _answerOwnSync(OfficeChannel ch, Map<String, Object?> m) async {
+    // Only to one of this person's own devices, by its key's proof.
+    if (!ch.vouched) {
+      await ch.close();
+      return false;
+    }
+    final from = ch.peer.deviceId;
+    final said = _heard(from, m);
+    final old = actsOldForTesting;
+    var changed = false;
+    var whole = false;
+    _Next? next;
+    try {
+      final theirs = await _receivePacked(ch, m, 'parcalar');
+      if (theirs == null) return false;
+      changed = await _ownCame(_unpack(theirs), from, said);
+      // What it said it can do is known now: all that may go, in
+      // pieces when it said it can join them. The second step comes
+      // when both said what they can do; it follows the answer, and is
+      // listened for before the answer's last piece goes.
+      final answer = await _sendPacked(
+        ch,
+        {'t': 'senkron', ..._said},
+        'parcalar',
+        _pack(await _ownParts(from, said)),
+        canSplit: _splits(said),
+      );
+      whole = answer.sent;
+      if (!old && said.protocol >= SyncCaps.protocol) {
+        next = answer.then;
+        final more = await answer.then.within(const Duration(seconds: 40));
+        final packed = more != null && more['t'] == 'senkron-ek'
+            ? await _receivePacked(ch, more, 'parcalar')
+            : null;
+        if (packed == null) {
+          whole = false;
+        } else {
+          if (await _ownCame(_unpack(packed), from, said)) changed = true;
+          await ch.send({'t': 'senkron-ek', 'tamam': true});
+          // Shut while the last word went: not said, not done.
+          if (ch.closed) whole = false;
+        }
+      } else {
+        answer.then.cancel();
+      }
+      if (whole) {
+        synced[from] = DateTime.now();
+        notifyListeners();
+      }
+    } catch (_) {
+      // Not kept alike this time; the channel is shut all the same.
+      whole = false;
+    } finally {
+      next?.cancel();
+      _cameChanged(changed);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await ch.close();
+    }
+    return whole;
+  }
+
+  /// Senkron with one of the person's own devices reached over the relay
+  /// ([link]): the same proof of who it is, the same exchange. False when
+  /// it could not be done.
+  Future<bool> syncOwnOver(OfficeWire link, String deviceId) async {
+    final identity = _identity;
+    if (identity == null || ownParts.isEmpty) {
+      await link.close();
+      return false;
+    }
+    final trusted = await _trusted(deviceId);
+    if (trusted == null) {
+      await link.close();
+      return false;
+    }
+    try {
+      return await _syncOwnOver(
+        await OfficeChannel.openOver(
+          link: link,
+          identity: identity,
+          peer: trusted,
+        ),
+        deviceId,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The other end of [syncOwnOver]: [deviceId], one of the person's own
+  /// devices, come to this one's room on the relay. Only it is let in, by
+  /// its key and the person's; only Senkron is answered, nothing else the
+  /// network answers (an office's ledger, a task, a message). True when
+  /// every part came and went.
+  Future<bool> answerOwnOver(OfficeWire link, String deviceId) async {
+    final identity = _identity;
+    if (identity == null || ownParts.isEmpty) {
+      await link.close();
+      return false;
+    }
+    try {
+      final hello = await link.messages.first.timeout(
+        const Duration(seconds: 20),
+      );
+      if (hello['t'] != 'hello' || hello['id'] != deviceId) {
+        await link.close();
+        return false;
+      }
+      final ch = await OfficeChannel.accept(
+        link: link,
+        hello: hello,
+        identity: identity,
+        known: (id) async {
+          if (id != deviceId) return null;
+          final trusted = await _trusted(id);
+          return trusted != null && trusted.userId == identity.userId
+              ? trusted
+              : null;
+        },
+      );
+      if (ch == null) return false;
+      if (!ch.vouched || ch.peer.deviceId != deviceId) {
+        await ch.close();
+        return false;
+      }
+      unawaited(_metOwn(ch));
+      final m = await ch.messages.first.timeout(const Duration(seconds: 20));
+      if (m['t'] != 'senkron') {
+        await ch.close();
+        return false;
+      }
+      return await _answerOwnSync(ch, m);
+    } catch (_) {
+      await link.close();
+      return false;
+    }
   }
 
   /// Starts knowing [peer] by a code; null while another is being known.
@@ -1182,7 +1351,7 @@ class OfficeNetwork extends ChangeNotifier {
 
   /// A known device's encrypted talk: an offer of files, for now.
   Future<void> _talk(
-    OfficeLink link,
+    OfficeWire link,
     Map<String, Object?> hello,
     OfficeIdentity identity,
   ) async {
@@ -1418,59 +1587,7 @@ class OfficeNetwork extends ChangeNotifier {
         return;
       }
       if (m['t'] == 'senkron') {
-        // Only to one of this person's own devices, by its key's proof.
-        if (!ch.vouched) {
-          await ch.close();
-          return;
-        }
-        final from = ch.peer.deviceId;
-        final said = _heard(from, m);
-        final old = actsOldForTesting;
-        var changed = false;
-        _Next? next;
-        try {
-          final theirs = await _receivePacked(ch, m, 'parcalar');
-          if (theirs == null) return;
-          changed = await _ownCame(_unpack(theirs), from, said);
-          // What it said it can do is known now: all that may go, in
-          // pieces when it said it can join them. The second step comes
-          // when both said what they can do; it follows the answer, and is
-          // listened for before the answer's last piece goes.
-          final answer = await _sendPacked(
-            ch,
-            {'t': 'senkron', ..._said},
-            'parcalar',
-            _pack(await _ownParts(from, said)),
-            canSplit: _splits(said),
-          );
-          var whole = answer.sent;
-          if (!old && said.protocol >= SyncCaps.protocol) {
-            next = answer.then;
-            final more = await answer.then.within(const Duration(seconds: 40));
-            final packed = more != null && more['t'] == 'senkron-ek'
-                ? await _receivePacked(ch, more, 'parcalar')
-                : null;
-            if (packed == null) {
-              whole = false;
-            } else {
-              if (await _ownCame(_unpack(packed), from, said)) changed = true;
-              await ch.send({'t': 'senkron-ek', 'tamam': true});
-            }
-          } else {
-            answer.then.cancel();
-          }
-          if (whole) {
-            synced[from] = DateTime.now();
-            notifyListeners();
-          }
-        } catch (_) {
-          // Not kept alike this time; the channel is shut all the same.
-        } finally {
-          next?.cancel();
-          _cameChanged(changed);
-          await Future<void>.delayed(const Duration(milliseconds: 200));
-          await ch.close();
-        }
+        await _answerOwnSync(ch, m);
         return;
       }
       if (m['t'] == 'defter') {

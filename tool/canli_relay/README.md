@@ -29,5 +29,14 @@ scp build/canli_relay/folio-canli root@avukathesap.com:/home/erkanoz/projeler/fo
 ssh root@avukathesap.com 'cd /home/erkanoz/projeler/folio-canli && mv folio-canli.yeni folio-canli && chown erkanoz:erkanoz folio-canli && systemctl restart lifeos-folio-canli'
 ```
 
+Kendi cihazların uzaktan Senkron'u da bu servisten geçer (`kisi=` ile açılan
+odalar, `lib/services/sync/own_remote.dart`). Kotalar: kişi günde 50 MB, ayda
+500 MB; IP adresi günde 100 MB (bütün odalar); kişi başına 6 soket; bir adres
+günde en çok 10 yeni kişi etiketi. Kota sayaçları (özet, adres, bayt; içerik
+yok) `/var/lib/folio-canli/sayac.json` dosyasında tutulur
+(`/etc/systemd/system/lifeos-folio-canli.service.d/sayac.conf`:
+`StateDirectory=folio-canli`, `--sayac`). Bir önceki program
+`folio-canli.onceki` olarak durur.
+
 Yeniden başlatma, o an süren uzaktan paylaşımları keser. Denetim:
 `curl https://canli.lifeos.com.tr/saglik` → `ok`.

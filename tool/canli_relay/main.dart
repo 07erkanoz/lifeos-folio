@@ -16,6 +16,9 @@ Future<void> main(List<String> args) async {
     address: value('--adres') ?? '127.0.0.1',
     port: int.parse(value('--port') ?? '3021'),
     report: const Duration(hours: 1),
+    // The quotas' counts (digests, addresses and bytes only) kept between
+    // runs; always, beside the program when not named.
+    counts: File(value('--sayac') ?? 'folio-canli-sayac.json'),
   );
   stdout.writeln('folio-canli dinliyor: ${relay.port}');
   final stop = Completer<void>();

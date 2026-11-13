@@ -101,6 +101,10 @@ class OwnSync extends ChangeNotifier {
   /// The API keys of the AI services (Gemini, ChatGPT, Claude): given on
   /// one own device, there on all; never to the office.
   static const apiKeysPart = 'api-anahtarlari';
+
+  /// Not a part: whether the own devices on different networks are kept
+  /// alike over the relay (OwnRemote).
+  static const remote = 'uzak';
   static const _optIn = {officeClients};
   final _on = <String>{};
 

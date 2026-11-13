@@ -12,6 +12,14 @@ import 'dart:io';
 /// joining (`rol=katilan`), once: one invitation, one person. The sharer
 /// is told `{"t":"katilan"}` when someone comes; everything else is the
 /// two Folios' own. Either leaving ends it for both.
+///
+/// The same rooms put one person's own devices in touch when they are on
+/// different networks (Senkron, `kisi=` named): then what a room carries
+/// is counted, for a day and a month, against that `kisi` (a digest of the
+/// person's key, which tells the relay no one's name) and against the
+/// address it came from, and stopped past [RelayLimits]'s quotas. Nothing
+/// carried is ever written anywhere: it goes from one socket to the other
+/// in memory; only the counts are kept.
 class RelayServer {
   RelayServer._(this._server, this.limits);
 
@@ -19,6 +27,15 @@ class RelayServer {
   final RelayLimits limits;
   final _rooms = <String, _Room>{};
   final _perAddress = <String, int>{};
+
+  /// Own devices' bytes carried: by person and by address, this day and
+  /// this month; and the sockets a person has open.
+  final _quota = _Quota();
+  final _personSockets = <String, int>{};
+
+  /// Where the counts are kept between runs; none in a test.
+  File? _counts;
+  Timer? _keep;
   int _sockets = 0;
   Timer? _report;
 
@@ -34,10 +51,25 @@ class RelayServer {
     int port = 0,
     RelayLimits limits = const RelayLimits(),
     Duration? report,
+    File? counts,
   }) async {
     final server = await HttpServer.bind(address, port);
     server.idleTimeout = const Duration(seconds: 30);
     final relay = RelayServer._(server, limits);
+    if (counts != null) {
+      relay._counts = counts;
+      if (await counts.exists()) {
+        try {
+          relay._quota.load(jsonDecode(await counts.readAsString()));
+        } catch (e) {
+          stderr.writeln('sayac okunamadi, sifirdan: $e');
+        }
+      }
+      relay._keep = Timer.periodic(
+        const Duration(minutes: 5),
+        (_) => unawaited(relay._save()),
+      );
+    }
     server.listen(relay._request, onError: (Object _) {});
     if (report != null) {
       relay._report = Timer.periodic(report, (_) => relay._tell());
@@ -54,8 +86,33 @@ class RelayServer {
     _joined = 0;
   }
 
+  /// The counts kept, one write after another (the timer's and the
+  /// close's never at once): written beside, then put in place, so that a
+  /// stop halfway leaves the last whole one.
+  Future<void> _saving = Future.value();
+  Future<void> _save() => _saving = _saving.then((_) => _write());
+
+  Future<void> _write() async {
+    final file = _counts;
+    if (file == null) return;
+    try {
+      final next = File('${file.path}.yeni');
+      await next.writeAsString(jsonEncode(_quota.toJson()), flush: true);
+      await next.rename(file.path);
+    } catch (e) {
+      stderr.writeln('sayac yazilamadi: $e');
+    }
+  }
+
+  /// Whether [person] (and [address]) may carry [size] bytes more, counted
+  /// when so.
+  bool _spend(String? person, String address, int size) =>
+      _quota.spend(person, address, size, limits);
+
   Future<void> close() async {
     _report?.cancel();
+    _keep?.cancel();
+    await _save();
     for (final room in _rooms.values.toList()) {
       room.end(1001);
     }
@@ -119,43 +176,73 @@ class RelayServer {
 
   Future<void> _socket(HttpRequest request, String name) async {
     final role = request.uri.queryParameters['rol'];
+    final person = request.uri.queryParameters['kisi'];
     final address = _address(request);
     if (!_roomName.hasMatch(name) ||
-        (role != 'paylasan' && role != 'katilan')) {
+        (role != 'paylasan' && role != 'katilan') ||
+        (person != null && !_roomName.hasMatch(person))) {
       request.response.statusCode = HttpStatus.badRequest;
       await request.response.close();
       return;
     }
-    if (_sockets >= limits.sockets ||
-        (_perAddress[address] ?? 0) >= limits.perAddress) {
+    // A quota used: 429, the person's own devices wait for tomorrow. The
+    // relay full: 503, tried again in a while.
+    if (!_quota.mayStart(person, address, limits)) {
       request.response.statusCode = HttpStatus.tooManyRequests;
       await request.response.close();
       return;
     }
-    final ws = await WebSocketTransformer.upgrade(request);
-    ws.pingInterval = limits.ping;
+    if (_sockets >= limits.sockets ||
+        (_perAddress[address] ?? 0) >= limits.perAddress ||
+        (person != null &&
+            (_personSockets[person] ?? 0) >= limits.personSockets)) {
+      request.response.statusCode = HttpStatus.serviceUnavailable;
+      await request.response.close();
+      return;
+    }
+    // The places taken before the socket is made: two at once must not
+    // both find the last one free.
     _sockets++;
     _perAddress[address] = (_perAddress[address] ?? 0) + 1;
-    unawaited(
-      ws.done.whenComplete(() {
-        _sockets--;
-        final n = (_perAddress[address] ?? 1) - 1;
+    if (person != null) {
+      _personSockets[person] = (_personSockets[person] ?? 0) + 1;
+    }
+    void giveBack() {
+      if (person != null) {
+        final n = (_personSockets[person] ?? 1) - 1;
         if (n <= 0) {
-          _perAddress.remove(address);
+          _personSockets.remove(person);
         } else {
-          _perAddress[address] = n;
+          _personSockets[person] = n;
         }
-      }),
-    );
+      }
+      _sockets--;
+      final n = (_perAddress[address] ?? 1) - 1;
+      if (n <= 0) {
+        _perAddress.remove(address);
+      } else {
+        _perAddress[address] = n;
+      }
+    }
+
+    final WebSocket ws;
+    try {
+      ws = await WebSocketTransformer.upgrade(request);
+    } catch (_) {
+      giveBack();
+      return;
+    }
+    ws.pingInterval = limits.ping;
+    unawaited(ws.done.whenComplete(giveBack));
     if (role == 'paylasan') {
       if (_rooms.containsKey(name) || _rooms.length >= limits.rooms) {
         await ws.close(4409, 'oda var');
         return;
       }
-      final room = _Room(this, name, ws);
+      final room = _Room(this, name, ws, person: person);
       _rooms[name] = room;
       _opened++;
-      room.listen(ws, sharer: true);
+      room.listen(ws, sharer: true, address: address);
       return;
     }
     final room = _rooms[name];
@@ -163,16 +250,131 @@ class RelayServer {
       await ws.close(4404, 'oda yok');
       return;
     }
-    if (room.used) {
+    if (room.used || room.person != person) {
       await ws.close(4410, 'oda dolu');
       return;
     }
-    room.join(ws);
+    room.join(ws, address);
     _joined++;
   }
 
   void _gone(_Room room) {
     if (identical(_rooms[room.name], room)) _rooms.remove(room.name);
+  }
+}
+
+/// Bytes carried, by day and month: by address for every room, by person
+/// for the person's own devices; counts against digests and addresses
+/// only, never what was carried.
+///
+/// A person's tag is the client's word: no one's tag can be proved without
+/// accounts, and a proof would not stop one making new keys. So the
+/// address's day is what holds the relay; the person's quota keeps a
+/// person to a fair share. An address may bring [newPerAddress] new tags a
+/// day; the tables are kept to [most] entries, the oldest let go of when
+/// full, so that a flood of tags neither grows the relay's memory nor
+/// shuts out anyone else.
+class _Quota {
+  static const most = 50000, newPerAddress = 10;
+  String _day = '', _month = '';
+  final _personDay = <String, int>{};
+  final _personMonth = <String, int>{};
+  final _addressDay = <String, int>{};
+  final _addressNew = <String, int>{};
+
+  static void _keep(Map<String, int> table, String key, int value) {
+    if (!table.containsKey(key) && table.length >= most) {
+      table.remove(table.keys.first);
+    }
+    table[key] = value;
+  }
+
+  void _roll() {
+    final now = DateTime.now().toUtc();
+    final day = now.toIso8601String().substring(0, 10);
+    final month = day.substring(0, 7);
+    if (day != _day) {
+      _day = day;
+      _personDay.clear();
+      _addressDay.clear();
+      _addressNew.clear();
+    }
+    if (month != _month) {
+      _month = month;
+      _personMonth.clear();
+    }
+  }
+
+  /// Whether a socket may open: no quota of its used, and, for a tag not
+  /// seen this month, the address not past its new tags of the day.
+  bool mayStart(String? person, String address, RelayLimits l) {
+    _roll();
+    if ((_addressDay[address] ?? 0) >= l.addressDay) return false;
+    if (person == null) return true;
+    if ((_personDay[person] ?? 0) >= l.personDay ||
+        (_personMonth[person] ?? 0) >= l.personMonth) {
+      return false;
+    }
+    if (_personMonth.containsKey(person)) return true;
+    final brought = _addressNew[address] ?? 0;
+    if (brought >= newPerAddress) return false;
+    _keep(_addressNew, address, brought + 1);
+    _keep(_personMonth, person, 0);
+    return true;
+  }
+
+  bool spend(String? person, String address, int size, RelayLimits l) {
+    _roll();
+    final from = (_addressDay[address] ?? 0) + size;
+    final day = person == null ? 0 : (_personDay[person] ?? 0) + size;
+    final month = person == null ? 0 : (_personMonth[person] ?? 0) + size;
+    final over =
+        from > l.addressDay ||
+        (person != null && (day > l.personDay || month > l.personMonth));
+    if (over) {
+      // Used: whatever is asked of it after this is turned away too.
+      if (from > l.addressDay) _keep(_addressDay, address, l.addressDay);
+      if (person != null) {
+        if (day > l.personDay) _keep(_personDay, person, l.personDay);
+        if (month > l.personMonth) _keep(_personMonth, person, l.personMonth);
+      }
+      return false;
+    }
+    _keep(_addressDay, address, from);
+    if (person != null) {
+      _keep(_personDay, person, day);
+      _keep(_personMonth, person, month);
+    }
+    return true;
+  }
+
+  Map<String, Object?> toJson() {
+    _roll();
+    return {
+      'gun': _day,
+      'ay': _month,
+      'kisiGun': _personDay,
+      'kisiAy': _personMonth,
+      'adresGun': _addressDay,
+    };
+  }
+
+  void load(Object? json) {
+    if (json is! Map) return;
+    _roll();
+    void fill(Map<String, int> into, Object? from) {
+      if (from is! Map) return;
+      for (final e in from.entries) {
+        if (into.length >= most) return;
+        if (e.key is String && e.value is int) into[e.key as String] = e.value;
+      }
+    }
+
+    if (json['gun'] == _day) {
+      fill(_personDay, json['kisiGun']);
+      fill(_addressDay, json['adresGun']);
+    }
+    if (json['ay'] == _month) fill(_personMonth, json['kisiAy']);
   }
 }
 
@@ -188,7 +390,17 @@ class RelayLimits {
     this.idle = const Duration(minutes: 5),
     this.lifetime = const Duration(hours: 12),
     this.ping = const Duration(seconds: 20),
+    this.personDay = 50 * 1024 * 1024,
+    this.personMonth = 500 * 1024 * 1024,
+    this.addressDay = 100 * 1024 * 1024,
+    this.personSockets = 6,
   });
+
+  /// One person's own devices: bytes a day and a month, and sockets open
+  /// at once (three devices, each waiting for the other two at most); and
+  /// the bytes a day from one address. Low: the relay carries a lawyer's
+  /// agenda and records, and a few documents, not archives.
+  final int personDay, personMonth, addressDay, personSockets;
 
   /// Rooms open at once, sockets at once, and from one address.
   final int rooms, sockets, perAddress;
@@ -209,7 +421,7 @@ class RelayLimits {
 }
 
 class _Room {
-  _Room(this.relay, this.name, this.sharer) {
+  _Room(this.relay, this.name, this.sharer, {this.person}) {
     _waiting = Timer(relay.limits.waiting, () {
       if (joiner == null) end(4408);
     });
@@ -219,6 +431,10 @@ class _Room {
   final RelayServer relay;
   final String name;
   final WebSocket sharer;
+
+  /// The person whose own devices meet here, counted against; none for a
+  /// live document's invitation.
+  final String? person;
   WebSocket? joiner;
   bool used = false, _ended = false;
   int _carried = 0;
@@ -231,16 +447,18 @@ class _Room {
     _idle = Timer(relay.limits.idle, () => end(4408));
   }
 
-  void join(WebSocket ws) {
+  void join(WebSocket ws, String address) {
     used = true;
     joiner = ws;
     _waiting?.cancel();
-    listen(ws, sharer: false);
+    listen(ws, sharer: false, address: address);
     _touch();
     sharer.add(jsonEncode({'t': 'katilan'}));
   }
 
-  void listen(WebSocket ws, {required bool sharer}) {
+  /// What [ws] says, from [address]: counted against that address, the
+  /// sender's, and the room's person.
+  void listen(WebSocket ws, {required bool sharer, required String address}) {
     ws.listen(
       (data) {
         final size = data is String
@@ -251,6 +469,9 @@ class _Room {
         if (size > relay.limits.message) return end(1009);
         _carried += size;
         if (_carried > relay.limits.bytes) return end(4413);
+        // Past the address's quota (any room), or the person's (own
+        // devices'): stopped.
+        if (!relay._spend(person, address, size)) return end(4429);
         _touch();
         final to = sharer ? joiner : this.sharer;
         // The sharer has no one to say anything to before someone comes.

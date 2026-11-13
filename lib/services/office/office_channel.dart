@@ -63,8 +63,21 @@ class OfficeChannel {
     required KnownDevice peer,
     required String host,
     required int port,
+  }) async => openOver(
+    link: await OfficeLink.connect(host, port),
+    identity: identity,
+    peer: peer,
+  );
+
+  /// The same talk over [link], already reached some other way: the
+  /// relay, for the person's own devices on different networks. The
+  /// devices prove themselves to each other alike; the relay sees only
+  /// sealed words.
+  static Future<OfficeChannel> openOver({
+    required OfficeWire link,
+    required OfficeIdentity identity,
+    required KnownDevice peer,
   }) async {
-    final link = await OfficeLink.connect(host, port);
     try {
       final mine = await X25519().newKeyPair();
       final minePublic = (await mine.extractPublicKey()).bytes;
@@ -129,7 +142,7 @@ class OfficeChannel {
 
   /// Answers a talk a device opened with [hello], if it is a known one.
   static Future<OfficeChannel?> accept({
-    required OfficeLink link,
+    required OfficeWire link,
     required Map<String, Object?> hello,
     required OfficeIdentity identity,
     required Future<KnownDevice?> Function(String deviceId) known,

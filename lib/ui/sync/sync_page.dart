@@ -10,6 +10,7 @@ import '../../services/office/office_known.dart';
 import '../../services/office/office_network.dart';
 import '../../services/office/office_peer.dart';
 import '../../services/sync/folder_sync.dart';
+import '../../services/sync/own_remote.dart';
 import '../../services/sync/own_sync.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../help/help_button.dart';
@@ -423,10 +424,51 @@ class _SyncPageState extends State<SyncPage> {
     ),
   );
 
+  /// The relay's word on the own devices on other networks.
+  String _remoteSaid() {
+    final remote = OwnRemote.instance;
+    final until = remote.stoppedUntil;
+    if (until != null && DateTime.now().isBefore(until)) {
+      return 'Bugünkü uzak eşitleme kotası doldu (günde 50 MB). Aynı ağda '
+          'eşitleme sürer; yarın kendiliğinden devam eder.';
+    }
+    final last = remote.metAt.values.fold<DateTime?>(
+      null,
+      (a, b) => a == null || b.isAfter(a) ? b : a,
+    );
+    final base =
+        'Cihazlarınız farklı ağlardayken (telefon mobil veride, bilgisayar '
+        'büroda) LifeOS aktarma sunucusu üzerinden eşitlenir. Veri cihaz '
+        'anahtarlarınızla şifrelidir; sunucu içeriği göremez ve saklamaz. '
+        'Günde en çok 50 MB, ayda 500 MB.';
+    if (last == null) return base;
+    final t = TimeOfDay.fromDateTime(last).format(context);
+    return '$base Son uzak eşitleme: $t.';
+  }
+
   Widget _parts(BuildContext context) => _card(
     context,
     child: Column(
       children: [
+        SwitchListTile(
+          key: const ValueKey('sync-remote'),
+          secondary: const Icon(Icons.cloud_sync_outlined),
+          title: const Text(
+            'Uzaktan eşitleme',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(_remoteSaid(), style: const TextStyle(fontSize: 12)),
+          value: _sync.isOn(OwnSync.remote),
+          onChanged: (on) async {
+            await _sync.turn(OwnSync.remote, on);
+            if (on) {
+              OwnRemote.instance.start();
+            } else {
+              await OwnRemote.instance.stop();
+            }
+            if (mounted) setState(() {});
+          },
+        ),
         SwitchListTile(
           key: const ValueKey('sync-profile'),
           secondary: const Icon(Icons.badge_outlined),

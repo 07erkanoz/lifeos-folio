@@ -193,8 +193,9 @@ class _Keys {
 /// The relay's socket as a talk's wire: JSON objects, the first few taken
 /// one by one while the two make their keys, the rest handed whole to the
 /// sealed channel. Nothing said meanwhile is lost.
-class _RelayWire implements OfficeWire {
-  _RelayWire(this._ws) {
+/// A room on the relay, as a wire a sealed channel talks over.
+class RelayWire implements OfficeWire {
+  RelayWire(this._ws) {
     _ws.listen(
       (data) {
         if (data is! String || data.length > _max) return unawaited(close());
@@ -205,13 +206,12 @@ class _RelayWire implements OfficeWire {
         if (m is! Map<String, Object?>) return unawaited(close());
         final rest = _rest;
         final waiter = _waiter;
-        if (rest != null) {
-          rest.add(m);
-        } else if (waiter != null) {
+        if (rest == null && waiter != null) {
           _waiter = null;
           waiter.complete(m);
         } else {
           _held.add(m);
+          if (rest != null) _pump(rest);
         }
       },
       onDone: () => unawaited(close()),
@@ -220,18 +220,24 @@ class _RelayWire implements OfficeWire {
     );
   }
 
-  static Future<_RelayWire> connect(String room, String role) async {
+  /// [room] reached as [role]; [person] (a digest) names whose own
+  /// devices meet there, counted against their quota.
+  static Future<RelayWire> connect(
+    String room,
+    String role, {
+    String? person,
+  }) async {
     final base = LiveRelay.server;
     final uri = base.replace(
       path: '${base.path.replaceAll(RegExp(r'/$'), '')}/v1/oda/$room',
-      queryParameters: {'rol': role},
+      queryParameters: {'rol': role, 'kisi': ?person},
     );
     final ws = await WebSocket.connect(
       uri.toString(),
       customClient: LiveRelay.client,
     ).timeout(const Duration(seconds: 12));
     ws.pingInterval = const Duration(seconds: 20);
-    return _RelayWire(ws);
+    return RelayWire(ws);
   }
 
   static const _max = 2 * 1024 * 1024;
@@ -243,6 +249,9 @@ class _RelayWire implements OfficeWire {
 
   /// Why the relay closed it, once it has.
   int? get closeCode => _ws.closeCode;
+
+  /// Done when it is closed, either side.
+  Future<void> get done => _ws.done.then((_) {}, onError: (Object _) {});
 
   /// The next thing said; null once it is closed.
   Future<Map<String, Object?>?> next(Duration within) {
@@ -258,15 +267,45 @@ class _RelayWire implements OfficeWire {
     );
   }
 
+  /// What is said, to whoever listens now. Listened to more than once (a
+  /// channel's handshake takes the first word, its talk the rest), each
+  /// word is given only once the one before was taken: one who stops after
+  /// the first leaves the next to whoever listens next.
   @override
   Stream<Map<String, Object?>> get messages {
-    final rest = _rest ??= StreamController<Map<String, Object?>>();
-    for (final m in _held) {
-      rest.add(m);
-    }
-    _held.clear();
-    if (_closed) unawaited(rest.close());
-    return rest.stream;
+    late final StreamController<Map<String, Object?>> c;
+    c = StreamController<Map<String, Object?>>(
+      onListen: () {
+        _rest = c;
+        _pump(c);
+      },
+      onCancel: () {
+        if (identical(_rest, c)) _rest = null;
+      },
+    );
+    return c.stream;
+  }
+
+  /// The listeners a word is on its way to, each one at a time.
+  final _pumping = <StreamController<Map<String, Object?>>>{};
+
+  /// Closed and the socket let go of: the stream ends only then, after
+  /// the last word was given (as before, the socket's close waited for).
+  bool _finished = false;
+
+  /// The next held word to [c], once the last was taken.
+  void _pump(StreamController<Map<String, Object?>> c) {
+    if (!_pumping.add(c)) return;
+    scheduleMicrotask(() {
+      _pumping.remove(c);
+      if (!identical(_rest, c) || !c.hasListener || c.isClosed) return;
+      if (_held.isNotEmpty) {
+        c.add(_held.removeAt(0));
+        _pump(c);
+      } else if (_finished) {
+        unawaited(c.close());
+      }
+    });
   }
 
   @override
@@ -295,8 +334,9 @@ class _RelayWire implements OfficeWire {
     try {
       await _ws.close().timeout(const Duration(seconds: 3));
     } catch (_) {}
+    _finished = true;
     final rest = _rest;
-    if (rest != null && !rest.isClosed) await rest.close();
+    if (rest != null) _pump(rest);
   }
 }
 
@@ -352,7 +392,7 @@ class RemoteInvite extends ChangeNotifier {
   /// Why it failed, in the lawyer's words.
   String? error;
 
-  _RelayWire? _wire;
+  RelayWire? _wire;
   OfficeChannel? _channel;
 
   /// The one who came's device id on the sharer's list.
@@ -381,7 +421,7 @@ class RemoteInvite extends ChangeNotifier {
     try {
       final secret = await _Secret.of(code);
       if (!open) return;
-      final wire = _wire = await _RelayWire.connect(secret.room, 'paylasan');
+      final wire = _wire = await RelayWire.connect(secret.room, 'paylasan');
       if (!open) return unawaited(wire.close());
       expires = DateTime.now().add(LiveRelay.within);
       _set(RemoteInviteState.waiting);
@@ -548,7 +588,7 @@ class RemoteJoin extends ChangeNotifier {
 
   /// The document, once shown.
   LiveSession? session;
-  _RelayWire? _wire;
+  RelayWire? _wire;
   OfficeChannel? _channel;
   bool _cancelled = false;
 
@@ -570,7 +610,7 @@ class RemoteJoin extends ChangeNotifier {
     try {
       final secret = await _Secret.of(code);
       if (_cancelled) return;
-      final wire = _wire = await _RelayWire.connect(secret.room, 'katilan');
+      final wire = _wire = await RelayWire.connect(secret.room, 'katilan');
       if (_cancelled) return unawaited(wire.close());
       final mine = await X25519().newKeyPair();
       final minePublic = (await mine.extractPublicKey()).bytes;
