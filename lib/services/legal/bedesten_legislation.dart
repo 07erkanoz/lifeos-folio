@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'citation.dart';
 import 'html_text.dart';
+import 'legislation_annexes.dart';
 import 'rich_text.dart';
 
 /// A law as the Ministry's legislation bank files it.
@@ -20,6 +21,7 @@ class BedestenDocument {
     this.number = '',
     this.gazette = '',
     this.url = '',
+    this.annexes = const [],
   });
 
   factory BedestenDocument.of(Map<String, Object?> row) {
@@ -32,10 +34,18 @@ class BedestenDocument {
       number: plain(row['mevzuatNo']),
       gazette: plain(row['resmiGazeteTarihi']).split('T').first,
       url: plain(row['url']),
+      annexes: [
+        for (final u in row['ekler'] as List? ?? const [])
+          if (plain(u).isNotEmpty) plain(u),
+      ],
     );
   }
 
   final String id, name, kind, number, gazette, url;
+
+  /// Its annexes filed apart, as the bank lists them: a tariff's tables, a
+  /// regulation's forms (mevzuat.gov.tr's .doc, .docx, .pdf).
+  final List<String> annexes;
 }
 
 class BedestenLaw {
@@ -381,7 +391,8 @@ class BedestenLegislation {
   }
 
   /// A document's whole text, as plain text; empty when the bank gives none.
-  Future<({String name, String kind, String text})> document(String id) async {
+  Future<({String name, String kind, String text, List<String> links})>
+  document(String id) async {
     final data = await _post('/mevzuat/getDocumentContent', {
       'documentType': 'MEVZUAT',
       'id': id,
@@ -397,6 +408,8 @@ class BedestenLegislation {
           .trim(),
       kind: kind is Map ? '${kind['name'] ?? ''}' : '${kind ?? ''}',
       text: html.isEmpty ? '' : plainTextOf(html).trim(),
+      // The annexes the text links to ("Eki için tıklayınız").
+      links: [for (final u in LegislationAnnexes.linksIn(html)) '$u'],
     );
   }
 

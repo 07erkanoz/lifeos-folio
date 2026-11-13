@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'ai_assistant.dart';
+import 'ai_attachment.dart';
 import 'ai_case.dart';
 import 'ai_groq.dart';
 
@@ -42,6 +43,7 @@ abstract final class ClaudeApiChat {
     void Function(AiEvent event)? onEvent,
     Future<void>? cancel,
     AiThread? thread,
+    List<AiAttachment> attachments = const [],
   }) async {
     final name = (model == null || model.isEmpty)
         ? AiProvider.anthropic.defaultModel(tier ?? AiTier.normal)
@@ -49,12 +51,7 @@ abstract final class ClaudeApiChat {
     final id = thread?.ids[AiProvider.anthropic];
     final messages = <Map<String, Object?>>[
       ...?await GroqChat.load(id),
-      {
-        'role': 'user',
-        'content': [
-          {'type': 'text', 'text': prompt},
-        ],
-      },
+      {'role': 'user', 'content': userContent(prompt, attachments)},
     ];
     final FolioToolHost? host = !tools
         ? null
@@ -206,6 +203,37 @@ abstract final class ClaudeApiChat {
       await host?.close();
     }
   }
+
+  /// The question with the documents before it: a PDF whole, a picture
+  /// as it is.
+  @visibleForTesting
+  static List<Map<String, Object?>> userContent(
+    String prompt,
+    List<AiAttachment> attachments,
+  ) => [
+    for (final a in attachments) ...[
+      if (a.pdf case final pdf?)
+        {
+          'type': 'document',
+          'title': a.name,
+          'source': {
+            'type': 'base64',
+            'media_type': 'application/pdf',
+            'data': base64Encode(pdf),
+          },
+        },
+      for (final i in a.images)
+        {
+          'type': 'image',
+          'source': {
+            'type': 'base64',
+            'media_type': i.mime,
+            'data': base64Encode(i.bytes),
+          },
+        },
+    ],
+    {'type': 'text', 'text': prompt},
+  ];
 
   /// [messages] with two user turns in a row made one: the budget note
   /// after the tools' results, a question after a kept answer's results.

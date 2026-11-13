@@ -11,6 +11,7 @@ import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
 import '../security/secret_store.dart';
 import 'ai_assistant.dart';
+import 'ai_attachment.dart';
 import 'ai_case.dart';
 import 'ai_office.dart';
 import 'ai_claude_api.dart';
@@ -357,6 +358,30 @@ abstract final class GroqChat {
   }
 
   /// [prompt] answered; [thread] goes on with what was said before in it.
+  /// The question as [service] takes it: its text alone, or with the pages
+  /// and pictures of [attachments] after it.
+  @visibleForTesting
+  static Object userContent(
+    String prompt,
+    List<AiAttachment> attachments,
+    ApiService service,
+  ) {
+    final images = [for (final a in attachments) ...a.images];
+    if (images.isEmpty) return prompt;
+    return [
+      {'type': 'text', 'text': prompt},
+      for (final i in images)
+        {
+          'type': 'image_url',
+          'image_url': {
+            'url': 'data:${i.mime};base64,${base64Encode(i.bytes)}',
+            // A page of a scan is read at its full size, not a thumbnail.
+            if (service == ApiService.openai) 'detail': 'high',
+          },
+        },
+    ];
+  }
+
   static Future<String> ask(
     String prompt, {
     String? model,
@@ -367,6 +392,7 @@ abstract final class GroqChat {
     Future<void>? cancel,
     AiThread? thread,
     ApiService service = ApiService.groq,
+    List<AiAttachment> attachments = const [],
   }) async {
     final who = service.label;
     final key = await GroqChat.key(service);
@@ -386,6 +412,7 @@ abstract final class GroqChat {
         onEvent: onEvent,
         cancel: cancel,
         thread: thread,
+        attachments: attachments,
       );
     }
     final id = thread?.ids[service.provider];
@@ -395,7 +422,7 @@ abstract final class GroqChat {
         ...kept
       else
         {'role': 'system', 'content': AiPrompts.core},
-      {'role': 'user', 'content': prompt},
+      {'role': 'user', 'content': userContent(prompt, attachments, service)},
     ];
     // Folio's tools: on Linux the same `--mcp` server the programs run;
     // elsewhere, where there is no such server, run here.
@@ -673,8 +700,15 @@ abstract final class GroqChat {
       _shorten(messages);
 
   static void _shorten(List<Map<String, Object?>> messages) {
-    int size() =>
-        messages.fold(0, (n, m) => n + '${m['content'] ?? ''}'.length);
+    // A page sent as a picture is not text to cut: its words are counted,
+    // not its bytes.
+    int length(Object? c) => c is List
+        ? c.fold(0, (n, part) {
+            final text = part is Map ? part['text'] : null;
+            return n + (text is String ? text.length : 0);
+          })
+        : '${c ?? ''}'.length;
+    int size() => messages.fold(0, (n, m) => n + length(m['content']));
     for (final m in messages) {
       if (size() <= mostCharacters) return;
       final c = '${m['content'] ?? ''}';

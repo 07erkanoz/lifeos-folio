@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:evrak_convert/services/ai/ai_assistant.dart';
 import 'package:evrak_convert/services/ai/ai_attachment.dart';
+import 'package:evrak_convert/services/ai/ai_claude_api.dart';
+import 'package:evrak_convert/services/ai/ai_groq.dart';
 import 'package:evrak_convert/services/ai/ai_memory.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,7 +23,7 @@ void main() {
   tearDown(() => dir.delete(recursive: true));
 
   test('a text file as its text, identity numbers hidden; a picture as it '
-      'is to Claude and Codex', () async {
+      'is to every program that sees pictures', () async {
     final note = File('${dir.path}/not.txt')
       ..writeAsStringSync('Müvekkil TC 10000000146, ara karar 05.05.2026.');
     final text = await AiAttachment.prepare(note.path, AiProvider.claude);
@@ -31,11 +33,48 @@ void main() {
 
     final png = File('${dir.path}/tarama.png')
       ..writeAsBytesSync(Uint8List.fromList([137, 80, 78, 71, 1, 2, 3]));
-    for (final provider in [AiProvider.claude, AiProvider.codex]) {
+    // Every program that sees pictures reads the page itself: OCR loses a
+    // table's columns. Groq's models and Antigravity take none.
+    for (final provider in [
+      AiProvider.claude,
+      AiProvider.codex,
+      AiProvider.gemini,
+      AiProvider.openai,
+      AiProvider.anthropic,
+    ]) {
       final picture = await AiAttachment.prepare(png.path, provider);
-      expect(picture.visual, isTrue);
+      expect(picture.visual, isTrue, reason: provider.name);
       expect(picture.images.single.mime, 'image/png');
     }
+    expect(AiProvider.groq.seesPictures, isFalse);
+    expect(AiProvider.antigravity.seesPictures, isFalse);
+    expect(AiProvider.anthropic.readsPdf, isTrue);
+    expect(AiProvider.gemini.readsPdf, isFalse);
+
+    // Over the line: the pages after the question, as data URLs; full
+    // detail for OpenAI; a PDF as a document block to Claude's API.
+    final pic = await AiAttachment.prepare(png.path, AiProvider.openai);
+    final openai = GroqChat.userContent('Soru', [pic], ApiService.openai);
+    expect(openai, isA<List<Object?>>());
+    final parts = openai as List;
+    expect((parts.first as Map)['text'], 'Soru');
+    final url = ((parts[1] as Map)['image_url'] as Map);
+    expect('${url['url']}', startsWith('data:image/png;base64,'));
+    expect(url['detail'], 'high');
+    final gemini = GroqChat.userContent('Soru', [pic], ApiService.gemini);
+    expect(
+      ((gemini as List)[1] as Map)['image_url'],
+      isNot(contains('detail')),
+    );
+    expect(GroqChat.userContent('Soru', [text], ApiService.gemini), 'Soru');
+    final scan = AiAttachment(
+      path: '${dir.path}/tarama.pdf',
+      pdf: Uint8List.fromList(utf8.encode('%PDF-1.4')),
+    );
+    final claude = ClaudeApiChat.userContent('Soru', [scan]);
+    expect(claude.first['type'], 'document');
+    expect((claude.first['source'] as Map)['media_type'], 'application/pdf');
+    expect(claude.last, {'type': 'text', 'text': 'Soru'});
     final block = AiAttachment.block([
       text,
       await AiAttachment.prepare(png.path, AiProvider.claude),

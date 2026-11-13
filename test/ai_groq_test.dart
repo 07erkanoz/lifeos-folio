@@ -47,6 +47,23 @@ void main() {
     GroqChat.shorten(messages);
     expect('${messages[0]['content']}'.length, lessThan(2000));
     expect('${messages[1]['content']}'.length, 200000);
+
+    // A scan's pages as pictures are not counted as text to cut.
+    final withPages = [
+      {'role': 'tool', 'content': 'c' * 5000},
+      {
+        'role': 'user',
+        'content': [
+          {'type': 'text', 'text': 'soru'},
+          {
+            'type': 'image_url',
+            'image_url': {'url': 'data:image/jpeg;base64,${'A' * 900000}'},
+          },
+        ],
+      },
+    ];
+    GroqChat.shorten(withPages);
+    expect('${withPages[0]['content']}'.length, 5000);
   });
 
   test('Groq refusals in Turkish', () {

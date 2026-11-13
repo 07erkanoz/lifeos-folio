@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../legal/bedesten_legislation.dart';
+import '../legal/legislation_annexes.dart';
 import '../legal/board_decisions.dart';
 import '../legal/case_law.dart';
 import '../legal/case_law_search.dart';
@@ -411,7 +412,12 @@ class FolioMcp {
       'title': 'Yönetmelik ya da tebliği oku',
       'description':
           'mevzuat_belge_ara\'nın verdiği kimlikle belgenin tam metnini '
-          'getirir; uzunsa parça parça ("parca"). Bir yönetmeliğe ya da '
+          'getirir; uzunsa parça parça ("parca"). Tarife ya da cetvel ayrı '
+          'bir ek dosyadaysa (ör. Avukatlık Asgari Ücret Tarifesi\'nin '
+          'tutarları) ekin metni de mevzuat.gov.tr\'den okunup "EK BELGE" '
+          'başlığıyla metnin sonuna eklenir; tutarlar sonraki parçalarda '
+          'olabilir. Sonuçta "ek_dizini" görürsen o eki "ek" ile oku '
+          '(ek="8" ya da ek="Genel Şartname"). Bir yönetmeliğe ya da '
           'tebliğe dayanmadan önce oku; dayandığın hükmü metinden alıntıla.',
       'inputSchema': {
         'type': 'object',
@@ -421,6 +427,12 @@ class FolioMcp {
             'description': 'mevzuat_belge_ara kimliği',
           },
           'parca': {'type': 'integer', 'minimum': 1},
+          'ek': {
+            'type': 'string',
+            'description':
+                'Yalnız bu eki oku: ek_dizini\'ndeki numarası ya da adından '
+                'bir parça',
+          },
         },
         'required': ['kimlik'],
       },
@@ -833,7 +845,11 @@ class FolioMcp {
         return _findDocuments(args);
       case 'mevzuat_belge_getir':
         final part = args['parca'];
-        return _document(text('kimlik'), part is num ? part.toInt() : 1);
+        return _document(
+          text('kimlik'),
+          part is num ? part.toInt() : 1,
+          annex: text('ek'),
+        );
       case 'sure_hesapla':
         return deadline(args);
       case 'emsal_ara':
@@ -1118,6 +1134,7 @@ class FolioMcp {
     }
     for (final d in found) {
       _documentNames[d.id] = d.name;
+      _documentRows[d.id] = d;
     }
     return {
       'durum': 'bulundu',
@@ -1129,6 +1146,7 @@ class FolioMcp {
             'tur': BedestenLegislation.documentKinds[d.kind] ?? d.kind,
             if (d.number.isNotEmpty) 'no': d.number,
             if (d.gazette.isNotEmpty) 'resmi_gazete': d.gazette,
+            if (d.annexes.isNotEmpty) 'ayri_ek': d.annexes.length,
           },
       ],
       'not':
@@ -1170,17 +1188,32 @@ class FolioMcp {
   }
 
   /// A document's text, in parts of [partSize] characters.
-  Future<Map<String, Object?>> _document(String id, int part) async {
+  Future<Map<String, Object?>> _document(
+    String id,
+    int part, {
+    String annex = '',
+  }) async {
     final bare = id.replaceFirst('mevzuat-belge:', '').trim();
     if (bare.isEmpty || !RegExp(r'^[\w.-]+$').hasMatch(bare)) {
       return {'durum': 'yok', 'aciklama': 'mevzuat_belge_ara kimliği gerekli'};
     }
+    final row = _documentRows[bare];
+    if (annex.isNotEmpty) return _packageAnnex(bare, row, annex, part);
     final got = await (_documents[bare] ??= _bank.document(bare));
     if (got.text.isEmpty) {
       _documents.remove(bare);
       return {'durum': 'yok', 'aciklama': 'Bu belgenin metni alınamadı.'};
     }
-    final parts = (got.text.length / partSize).ceil();
+    final urls = [...?row?.annexes, ...got.links];
+    final text = await (_documentTexts[bare] ??= _annexes.withAnnexes(
+      got.text,
+      urls,
+    ));
+    // No annex filed with it: a regulation's package, by its directory.
+    final package = urls.isEmpty && row != null
+        ? await _annexes.package(row.number, row.kind)
+        : const <Annex>[];
+    final parts = (text.length / partSize).ceil();
     final at = part.clamp(1, parts);
     return {
       'durum': 'bulundu',
@@ -1188,14 +1221,79 @@ class FolioMcp {
       'tur': BedestenLegislation.documentKinds[got.kind] ?? got.kind,
       'parca': at,
       'toplam_parca': parts,
+      'metin': text.substring(
+        (at - 1) * partSize,
+        (at * partSize).clamp(0, text.length),
+      ),
+      if (at < parts)
+        'not':
+            'Devamı için parca=${at + 1}. Dayandığın hüküm ya da ekteki '
+            'tablo başka parçada olabilir.',
+      if (urls.isNotEmpty) 'ek_sayisi': urls.toSet().length,
+      if (package.isNotEmpty) ...{
+        'ek_dizini': [
+          for (var i = 0; i < package.length; i++)
+            '${i + 1}: ${package[i].name}'
+                '${package[i].text.isEmpty ? ' (metni çıkarılamıyor)' : ''}',
+        ],
+        'ek_notu':
+            'Bu ekler yukarıdaki metne dahil değil (mevzuat.gov.tr resmî ek '
+            'paketi). Birini okumak için mevzuat_belge_getir\'i aynı kimlik '
+            've ek="<numara>" ile çağır.',
+      },
+      'kaynak': urls.isEmpty
+          ? 'UYAP/Bedesten · resmî metin'
+          : 'UYAP/Bedesten · resmî metin; ekler mevzuat.gov.tr',
+    };
+  }
+
+  /// One annex of a regulation's package, in parts.
+  Future<Map<String, Object?>> _packageAnnex(
+    String id,
+    BedestenDocument? row,
+    String asked,
+    int part,
+  ) async {
+    if (row == null || row.number.isEmpty) {
+      return {
+        'durum': 'yok',
+        'aciklama':
+            'Belgenin numarası bilinmiyor; önce mevzuat_belge_ara ile bul, '
+            'sonra eki iste.',
+      };
+    }
+    final package = await _annexes.package(row.number, row.kind);
+    final got = LegislationAnnexes.pick(package, asked);
+    if (got == null) {
+      return {
+        'durum': 'yok',
+        'aciklama': package.isEmpty
+            ? 'Bu belgenin mevzuat.gov.tr\'de ek paketi yok ya da alınamadı.'
+            : '"$asked" eki bulunamadı. Ekler: '
+                  '${[for (final a in package) a.name].join('; ')}',
+      };
+    }
+    if (got.text.isEmpty) {
+      return {
+        'durum': 'yok',
+        'aciklama': '${got.name} indirildi ama metni çıkarılamadı.',
+        'adres': got.url,
+      };
+    }
+    final parts = (got.text.length / partSize).ceil();
+    final at = part.clamp(1, parts);
+    return {
+      'durum': 'bulundu',
+      'ad': '${row.name} — ${got.name}',
+      'parca': at,
+      'toplam_parca': parts,
       'metin': got.text.substring(
         (at - 1) * partSize,
         (at * partSize).clamp(0, got.text.length),
       ),
-      if (at < parts)
-        'not':
-            'Devamı için parca=${at + 1}. Dayandığın hüküm başka parçada olabilir.',
-      'kaynak': 'UYAP/Bedesten · resmî metin',
+      if (at < parts) 'not': 'Devamı için parca=${at + 1}.',
+      'kaynak': 'mevzuat.gov.tr resmî ek paketi',
+      'adres': got.url,
     };
   }
 
@@ -1376,7 +1474,20 @@ class FolioMcp {
 
   /// Documents read in this session, by the bank's id.
   final _documents =
-      <String, Future<({String name, String kind, String text})>>{};
+      <
+        String,
+        Future<({String name, String kind, String text, List<String> links})>
+      >{};
+
+  /// Their text with their annexes, by the bank's id.
+  final _documentTexts = <String, Future<String>>{};
+
+  /// The rows the search gave: their number, kind and annexes.
+  final _documentRows = <String, BedestenDocument>{};
+
+  final _annexes = LegislationAnnexes(
+    textOf: (path) => AiAssistant.documentText(path, ocr: false),
+  );
 
   /// A time's last day, by Folio's own engine: the time and its article
   /// given by the program, the calendar reckoned here.

@@ -22,8 +22,10 @@ class AiImage {
 /// A document the lawyer added to a conversation, made ready for the AI
 /// program it goes to: one with text (UDF, Word, a PDF with a text layer)
 /// as its text; a scan or a picture as it is — a scanned PDF whole to
-/// Claude, its pages as pictures to Codex — and to a program that takes no
-/// pictures (Antigravity) as the text OCR reads in it, said so.
+/// Claude (the program or the API), its pages as pictures to Codex, Gemini
+/// and OpenAI — and to one that takes no pictures (Groq, Antigravity) as
+/// the text OCR reads in it, said so. OCR loses a table's columns and
+/// misreads what is faint; a model reading the page does not.
 ///
 /// The rules are banaozel's web chat's (server/ek_kabul.py), measured on
 /// real documents there: what a document means is in its pictures, so a
@@ -190,14 +192,16 @@ class AiAttachment {
     AiProvider provider,
     String? note,
   ) async {
-    if (provider == AiProvider.claude) {
+    if (provider.readsPdf) {
       if (bytes.length <= maxPdfBytes && pages <= maxPdfPages) {
         return AiAttachment(path: path, pdf: bytes, note: note);
       }
       return null;
     }
     if (pages == 0 || pages > maxPages) return null;
-    final (images, _) = await _pdfPages(path);
+    // To a service over the line, JPEG: the pages go again with every step
+    // of its tools, a PNG of a grey scan three times the size.
+    final (images, _) = await _pdfPages(path, jpeg: provider.viaApi);
     if (images.length < pages) return null;
     return AiAttachment(path: path, images: images, note: note);
   }
@@ -289,7 +293,10 @@ class AiAttachment {
 
   /// A scanned PDF's pages as PNG pictures, [maxPages] at most, and how
   /// many were left out.
-  static Future<(List<AiImage>, int)> _pdfPages(String path) async {
+  static Future<(List<AiImage>, int)> _pdfPages(
+    String path, {
+    bool jpeg = false,
+  }) async {
     final out = <AiImage>[];
     try {
       final source = await PdfPages.open(path);
@@ -300,7 +307,11 @@ class AiAttachment {
           final height = (pageWidth * h / w).round();
           final pixels = await source.render(i, pageWidth, height);
           if (pixels == null) continue;
-          out.add(AiImage('image/png', await compute(_png, pixels)));
+          out.add(
+            jpeg
+                ? AiImage('image/jpeg', await compute(_jpeg, pixels))
+                : AiImage('image/png', await compute(_png, pixels)),
+          );
         }
         return (out, sizes.length > maxPages ? sizes.length - maxPages : 0);
       } finally {
@@ -310,6 +321,18 @@ class AiAttachment {
       return (out, 0);
     }
   }
+
+  static Uint8List _jpeg(PdfPagePixels pixels) => Uint8List.fromList(
+    img.encodeJpg(_image(pixels).convert(numChannels: 3), quality: 88),
+  );
+
+  static img.Image _image(PdfPagePixels pixels) => img.Image.fromBytes(
+    width: pixels.width,
+    height: pixels.height,
+    bytes: pixels.bgra.buffer,
+    numChannels: 4,
+    order: img.ChannelOrder.bgra,
+  );
 
   static Uint8List _png(PdfPagePixels pixels) {
     final image = img.Image.fromBytes(

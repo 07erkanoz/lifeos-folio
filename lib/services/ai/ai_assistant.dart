@@ -77,9 +77,22 @@ enum AiProvider {
       if (p.viaApi || Platform.isLinux) p,
   ];
 
-  /// Whether it is given pages and pictures as they are.
-  bool get seesPictures =>
-      this == AiProvider.claude || this == AiProvider.codex;
+  /// Whether it is given pages and pictures as they are. A scan read by
+  /// OCR loses its tables and stamps; every program that sees pictures
+  /// gets the pages. Groq's models and Antigravity take none.
+  bool get seesPictures => switch (this) {
+    AiProvider.claude ||
+    AiProvider.codex ||
+    AiProvider.gemini ||
+    AiProvider.openai ||
+    AiProvider.anthropic => true,
+    AiProvider.groq || AiProvider.antigravity => false,
+  };
+
+  /// Whether a PDF goes to it whole, as a document (Claude reads its text
+  /// layer and its pages both); the others get its pages as pictures.
+  bool get readsPdf =>
+      this == AiProvider.claude || this == AiProvider.anthropic;
 
   /// The program's name on the PATH.
   final String command;
@@ -723,6 +736,7 @@ abstract final class AiAssistant {
         tier: tier,
         tools: tools,
         caseSession: caseSession,
+        attachments: attachments,
         onEvent: onEvent,
         cancel: cancel,
         thread: thread,
