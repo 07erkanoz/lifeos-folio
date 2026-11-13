@@ -4,6 +4,43 @@ import 'package:evrak_convert/services/ai/folio_mcp.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('ceza_hesapla', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    test('the summary gives the law that favours the accused', () async {
+      final r = await FolioMcp().call('ceza_hesapla', {
+        'suc': 'TCK 86/1',
+        'olay_tarihi': '2025-03-10',
+        'fail_yas_grubu': 'yetiskin',
+      });
+      final sum = '${r['sonuc']}';
+      expect(sum, contains('Kanundaki aralık: 1 yıl – 3 yıl'));
+      expect(sum, contains('olay tarihindeki metin'));
+      expect(sum, contains('HAGB (CMK 231/5, kurulan hüküm ≤ 2 yıl): mümkün'));
+      expect(sum, contains('10.03.2033'));
+    });
+
+    test('a minor\'s sentence after the reduction', () async {
+      final r = await FolioMcp().call('ceza_hesapla', {
+        'suc': 'TCK 142/1-b',
+        'olay_tarihi': '2024-01-05',
+        'fail_yas_grubu': '15-18',
+      });
+      expect('${r['sonuc']}', contains('en az 3 yıl 4 ay, en çok 6 yıl 8 ay'));
+    });
+
+    test('the crime by its name or under another key', () async {
+      for (final args in [
+        {'suc': 'Kasten yaralama', 'olay_tarihi': '2025-03-10'},
+        {'suç': 'TCK 86/1', 'olay_tarihi': '2025-03-10'},
+        {'suc': '86/1', 'olay_tarihi': '2025-03-10'},
+      ]) {
+        final r = await FolioMcp().call('ceza_hesapla', args);
+        expect(r['durum'], 'hesaplandi', reason: '$args');
+        expect('${r['suc']}', endsWith('86/1'));
+      }
+    });
+  });
+
   test('a document search drops the years a model adds', () {
     expect(
       FolioMcp.bareDocumentQuery('Avukatlık Asgari Ücret Tarifesi 2025-2026'),

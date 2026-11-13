@@ -583,8 +583,12 @@ class _AiPanelState extends State<AiPanel> {
           var rounds = 0, read = 0;
           for (var round = 0; round < 2; round++) {
             if (mounted) setState(() => turn.auditing = true);
-            final feedback = await AnswerAudit(_mcp)
-                .feedback(answer, turn.steps.values, said: (_) => read++);
+            final feedback = await AnswerAudit(_mcp).feedback(
+              answer,
+              turn.steps.values,
+              said: (_) => read++,
+              question: task == AiTask.question ? question : null,
+            );
             if (feedback == null || cancel.isCompleted) break;
             if (!await AiAssistant.goesOn(provider, thread)) break;
             if (mounted) setState(() => turn.auditing = false);

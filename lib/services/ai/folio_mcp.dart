@@ -180,7 +180,10 @@ class FolioMcp {
           },
           'fail_yas_grubu': {
             'type': 'string',
-            'enum': ['12-15', '15-18', '65+'],
+            'enum': ['yetiskin', '12-15', '15-18', '65+'],
+            'description':
+                'Failin suç tarihindeki yaşı; bilinmiyorsa ya da 18-65 '
+                'arasıysa yetiskin. Yaşı uydurma.',
           },
           'karar_tarihi': {'type': 'string', 'description': 'GG.AA.YYYY'},
           'ayni_magdura_diger_suclar': {
@@ -196,6 +199,92 @@ class FolioMcp {
         'openWorldHint': false,
       },
     };
+  }
+
+  /// The codes [args] may mean, in the order they are tried.
+  static List<String> crimeCandidates(
+    Map<String, Object?> args,
+    Map<String, String> names,
+  ) {
+    final out = <String>[];
+    String fold(String v) => v
+        .replaceAll('İ', 'i')
+        .replaceAll('I', 'ı')
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    for (final key in const ['suc', 'suç', 'suc_kod', 'suc_kodu', 'madde']) {
+      final v = '${args[key] ?? ''}'.trim();
+      if (v.isEmpty) continue;
+      out.add(v);
+      // "86/1": an article of the Penal Code.
+      if (RegExp(r'^\d').hasMatch(v)) out.add('TCK $v');
+      // "Kasten yaralama": the crime whose name begins so.
+      final f = fold(v);
+      if (f.length >= 4 && !RegExp(r'\d').hasMatch(f)) {
+        for (final e in names.entries) {
+          if (fold(e.value).startsWith(f)) out.add(e.key);
+        }
+      }
+    }
+    return out.toSet().toList();
+  }
+
+  /// The engine's answer in a few lines the model gives as they are: the
+  /// range of the law that favours the accused, and what follows from it.
+  static String crimeSummary(Map<String, Object?> got) {
+    String span(Object? v) => v is List && v.length == 2
+        ? CriminalCalculator.formatDays(
+            Rational((v[0] as num).toInt(), (v[1] as num).toInt()),
+          )
+        : '?';
+    String day(Object? iso) {
+      final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch('${iso ?? ''}');
+      return m == null ? '${iso ?? ''}' : '${m[3]}.${m[2]}.${m[1]}';
+    }
+
+    final lehe = got['lehe'] as Map? ?? const {};
+    final versions = got['surumler'] as List? ?? const [];
+    final version = lehe['surum'] as Map? ?? const {};
+    final limit = got['zamanasimi'] as Map? ?? const {};
+    String may(Object? v) => '${v ?? ''}'.contains('eşiğin altında')
+        ? 'mümkün ($v)'
+        : '${v ?? 'hesaplanmadı'}';
+    final cases = lehe['senaryolar'] as Map? ?? const {};
+    final least = cases['en_az'] as Map? ?? const {};
+    final most = cases['en_cok'] as Map? ?? const {};
+    final atEvent = '${lehe['gun']}' == '${got['olay']}';
+    final which = versions.length < 2
+        ? 'olay tarihinden beri metin değişmedi'
+        : atEvent
+        ? 'olay tarihindeki metin; sonradan değişen metin fail için daha '
+              'lehe değil, olay tarihindeki metin uygulanır (TCK 7/2)'
+        : 'olay tarihinden sonra yürürlüğe giren ${day(lehe['gun'])} '
+              'tarihli metin fail için LEHE olduğundan o uygulanır (TCK 7/2)';
+    return [
+      'SONUÇ (Folio ceza motoru; bu satırları değiştirmeden kullan):',
+      '- Kanundaki aralık: ${span(lehe['alt'])} – ${span(lehe['ust'])} '
+          '($which). Kaynak: ${version['kaynak'] ?? ''}.',
+      '- Verilen bilgilerle verilebilecek ceza: en az ${span(least['deger'])}, '
+          'en çok ${span(most['deger'])} '
+          '(en az: ${(least['adimlar'] as List? ?? const []).join(' → ')}; '
+          'en çok: ${(most['adimlar'] as List? ?? const []).join(' → ')}).',
+      '- HAGB (CMK 231/5, kurulan hüküm ≤ 2 yıl): ${may(got['hagb'])}. HAGB '
+          've erteleme kanundaki üst sınıra göre değil, kurulan cezaya göre '
+          'değerlendirilir.',
+      '- Erteleme (TCK 51, ≤ 2 yıl): ${may(got['erteleme'])}.',
+      '- Seçenek yaptırım (TCK 50, ≤ 1 yıl): ${may(got['kisa_sureli'])}.',
+      '- Dava zamanaşımı (TCK ${limit['madde'] ?? '66'}): ${limit['olagan'] ?? '?'}, '
+          'olay tarihinden; olağan bitiş ${day(limit['olagan_bitis'])}, '
+          'kesilmeyle azami ${limit['uzamis'] ?? '?'} → '
+          '${day(limit['uzamis_bitis'])}.',
+      '- Şikâyete bağlı: ${got['sikayet'] == true ? 'evet' : 'hayır'} · '
+          'Uzlaştırma: ${got['uzlastirma'] == true ? 'kapsamda${got['uzlastirma_notu'] != null ? ' (${got['uzlastirma_notu']})' : ''}' : 'kapsam dışı'} · '
+          'Önödeme: ${got['onodeme'] == true ? 'kapsamda' : 'kapsam dışı'}.',
+      '- Görev: ${got['agir_ceza'] == true ? 'ağır ceza' : 'asliye ceza'} · '
+          'Tutuklama yasağı: ${got['tutuklama_yasagi'] == true ? 'evet' : 'hayır'} · '
+          'Zorunlu müdafi: ${got['zorunlu_mudafi'] == true ? 'evet' : 'hayır'}.',
+    ].join('\n');
   }
 
   /// The legal guide's tool (LegalGuide), its description made from the
@@ -806,14 +895,39 @@ class FolioMcp {
         );
       case crimeTool:
         final calc = await CriminalCalculator.load();
-        final got = calc.compute(args);
+        // An adult is no age group; a model that says so is not wrong.
+        final input = {...args};
+        if (!const [
+          '12-15',
+          '15-18',
+          '65+',
+        ].contains(input['fail_yas_grubu'])) {
+          input.remove('fail_yas_grubu');
+        }
+        var got = calc.compute(input);
+        // The crime written another way: its code under another key, the
+        // article without "TCK", or the crime's name.
+        if (got['hata'] != null) {
+          for (final c in crimeCandidates(args, calc.crimeNames)) {
+            final again = calc.compute({...input, 'suc': c});
+            if (again['hata'] == null) {
+              input['suc'] = c;
+              got = again;
+              break;
+            }
+          }
+        }
         if (got['hata'] != null) {
           return {'durum': 'yok', 'aciklama': got['hata']};
         }
         return {
           'durum': 'hesaplandi',
+          'suc': input['suc'],
+          'sonuc': crimeSummary(got),
           // The engine's text names banaozel's tool; Folio's is this one.
-          'metin': calc.text(args).replaceAll('mevzuat_getir', 'mevzuat_madde'),
+          'metin': calc
+              .text(input)
+              .replaceAll('mevzuat_getir', 'mevzuat_madde'),
         };
       case guideTool:
         return (await LegalGuide.load()).read(
@@ -1027,9 +1141,22 @@ class FolioMcp {
   /// name of the document as the bank writes it.
   static String bareDocumentQuery(String query) {
     const noise = {
-      'yılı', 'yili', 'yıl', 'yil', 'güncel', 'guncel', 'son', 'yeni',
-      'tablosu', 'tablo', 'tutarı', 'tutari', 'tutarları', 'tutarlari',
-      'metni', 've',
+      'yılı',
+      'yili',
+      'yıl',
+      'yil',
+      'güncel',
+      'guncel',
+      'son',
+      'yeni',
+      'tablosu',
+      'tablo',
+      'tutarı',
+      'tutari',
+      'tutarları',
+      'tutarlari',
+      'metni',
+      've',
     };
     return query
         .split(RegExp(r'[\s,;:()–—‑-]+'))

@@ -1,5 +1,6 @@
 import '../legal/citation.dart';
 import 'ai_events.dart';
+import 'ai_guide.dart';
 import 'folio_mcp.dart';
 
 /// Folio's own look at an answer before the lawyer sees it. Every article
@@ -23,8 +24,20 @@ class AnswerAudit {
     String answer,
     Iterable<AiStep> steps, {
     void Function(String note)? said,
+    String? question,
   }) async {
     final problems = <String>[];
+    // A sentence reckoned without Folio's engine.
+    if (question != null &&
+        LegalGuide.asksCrime(question) &&
+        !steps.any((s) => s.tool == FolioMcp.crimeTool)) {
+      problems.add(
+        '- Soru bir cezanın hesabını içeriyor ama ceza_hesapla aracını '
+        'çağırmadın. Ceza aralığını, lehe kanunu, HAGB\'yi, ertelemeyi ve '
+        'zamanaşımını şimdi ceza_hesapla ile hesapla (suç kodu ve olay '
+        'tarihiyle) ve cevabını onun sonucuna göre düzelt.',
+      );
+    }
     final texts = <String>[];
     // Not existing, repealed, unpublished.
     final checked = await mcp.call('atif_dogrula', {'metin': answer});
