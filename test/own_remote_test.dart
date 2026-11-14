@@ -50,11 +50,11 @@ void main() {
     dir.deleteSync(recursive: true);
   });
 
-  Future<void> until(bool Function() done) async {
+  Future<void> until(bool Function() done, [String? what]) async {
     for (var i = 0; i < 1500 && !done(); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
-    expect(done(), isTrue);
+    expect(done(), isTrue, reason: what);
   }
 
   Future<OfficeNetwork> folio(String device) async {
@@ -425,7 +425,7 @@ void main() {
     expect(QrInvite.normalCode(typed), invite.code);
     // A code no device waits for finds no one.
     expect(await office.pairByCode(QrInvite.newCode()), isNull);
-    await until(() => relay.rooms == 1);
+    await until(() => relay.rooms == 1, 'oda');
     final asking = (await office.pairByCode(typed))!;
     await until(() => asking.state == PairingState.done);
     expect(asking.byQr, isTrue);
@@ -485,10 +485,13 @@ void main() {
     final home = await folio('ev');
     // The phone, away from the office, types the home computer's code.
     final invite = (await home.inviteRemote())!;
-    await until(() => relay.rooms == 1);
+    await until(() => relay.rooms == 1, 'oda');
     final asking = (await phone.pairByCode(invite.code!))!;
-    await until(() => asking.state == PairingState.done);
-    await until(() => home.self!.userId == office.self!.userId);
+    await until(() => asking.state == PairingState.done, 'eşleşme');
+    // The key gone over and taken: only then is home the phone's own.
+    await until(() => asking.keyed != null, 'anahtar aktarımı');
+    expect(asking.keyed, isTrue);
+    expect(home.self!.userId, office.self!.userId);
     expect(office.isKnown(home.self!.deviceId), isFalse);
     // The phone and the office keep alike: the office learns of home.
     final person = (await office.ownTag('kota'))!;
@@ -505,7 +508,7 @@ void main() {
     }
 
     await talk();
-    await until(() => office.isKnown(home.self!.deviceId));
+    await until(() => office.isKnown(home.self!.deviceId), 'rehber');
     final learned = office.ownKnown.singleWhere(
       (d) => d.deviceId == home.self!.deviceId,
     );
