@@ -579,5 +579,25 @@ void main() {
     asking2 = false;
     await questions;
     expect(answered, greaterThan(1));
+    // Each case's list of documents is not given over the relay: it waits
+    // for one network. The cases themselves are.
+    office.ownAnswers['uyap-al'] = (asked) async =>
+        (<String, Object?>{'parca': asked['parca']}, null);
+    expect(
+      await home.askOwn(
+        office.self!.deviceId,
+        'uyap-al',
+        body: {'parca': 'kayitlar', 'anahtarlar': <String>[]},
+      ),
+      isNull,
+    );
+    expect(
+      (await home.askOwn(
+        office.self!.deviceId,
+        'uyap-al',
+        body: {'parca': 'davalar', 'anahtarlar': <String>[]},
+      ))?['parca'],
+      'davalar',
+    );
   });
 }

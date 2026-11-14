@@ -277,6 +277,11 @@ class OfficeNetwork extends ChangeNotifier {
     'muvekkil-ek',
   };
 
+  /// The parts of a relay question not answered over the relay: each
+  /// case's list of documents, hundreds of answers at a first keeping
+  /// alike, the day's quota in half an hour. They wait for one network.
+  static const relayHeavy = {'uyap-al|kayitlar'};
+
   /// A channel to [deviceId], one of the person's own devices, over the
   /// relay; null when it is not there or not the person's.
   Future<OfficeChannel?> _ownRelayChannel(String deviceId) async {
@@ -1809,7 +1814,8 @@ class OfficeNetwork extends ChangeNotifier {
         : ownAnswers['${m['tur']}'];
     if (!ch.vouched ||
         answer == null ||
-        (kinds != null && !kinds.contains('${m['tur']}'))) {
+        (kinds != null && !kinds.contains('${m['tur']}')) ||
+        (kinds != null && relayHeavy.contains('${m['tur']}|${m['parca']}'))) {
       await ch.send({'t': 'kendi', 'yok': true});
       await Future<void>.delayed(const Duration(milliseconds: 200));
       await ch.close();
