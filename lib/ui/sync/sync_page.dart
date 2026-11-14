@@ -16,6 +16,7 @@ import '../agenda/agenda_page.dart' show AgendaColors;
 import '../help/help_button.dart';
 import '../office/office_pairing_dialog.dart';
 import '../office/qr_pairing.dart';
+import '../office/remote_pairing.dart';
 import '../widgets/drop_zone.dart';
 import '../portfolio/portfolio_rows.dart' show clockText, dayText;
 
@@ -309,6 +310,7 @@ class _SyncPageState extends State<SyncPage> {
                           icon: const Icon(Icons.qr_code_scanner_rounded),
                           label: const Text('QR okut'),
                         ),
+                        ..._remoteButtons,
                       ]
                     : [
                         FilledButton.tonalIcon(
@@ -324,6 +326,7 @@ class _SyncPageState extends State<SyncPage> {
                           icon: const Icon(Icons.laptop_rounded),
                           label: const Text('Bilgisayarımı ekle'),
                         ),
+                        ..._remoteButtons,
                       ],
               ),
             ],
@@ -332,6 +335,22 @@ class _SyncPageState extends State<SyncPage> {
       ),
     );
   }
+
+  /// A device elsewhere, on no network of this one's: by a code.
+  List<Widget> get _remoteButtons => [
+    OutlinedButton.icon(
+      key: const ValueKey('sync-remote-invite'),
+      onPressed: () => unawaited(RemoteInviteDialog.show(context, _net)),
+      icon: const Icon(Icons.public_rounded),
+      label: const Text('Uzaktaki cihazımı ekle'),
+    ),
+    OutlinedButton.icon(
+      key: const ValueKey('sync-remote-code'),
+      onPressed: () => unawaited(RemoteCodeDialog.show(context, _net)),
+      icon: const Icon(Icons.password_rounded),
+      label: const Text('Kod gir'),
+    ),
+  ];
 
   String _seenText(String deviceId) {
     final online = _net.isOnline(deviceId);

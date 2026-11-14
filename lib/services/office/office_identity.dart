@@ -17,7 +17,13 @@ class OfficeIdentity {
     required this.user,
     required this.userPublic,
     required this.kept,
-  });
+    SecretStore? store,
+  // A private field: no initializing formal for a named parameter.
+  // ignore: prefer_initializing_formals
+  }) : _store = store;
+
+  /// Where its keys were read from, and the person's key is kept to.
+  final SecretStore? _store;
 
   final SimpleKeyPair device, user;
   final SimplePublicKey devicePublic, userPublic;
@@ -120,7 +126,7 @@ class OfficeIdentity {
   /// kept in place of its own.
   Future<OfficeIdentity> adoptUser(List<int> seed, {SecretStore? store}) async {
     final user = await Ed25519().newKeyPairFromSeed(seed);
-    final safe = store ?? SecretStore();
+    final safe = store ?? _store ?? SecretStore();
     final stored = await safe
         .write(_name, {
           'cihaz': base64Encode(await device.extractPrivateKeyBytes()),
@@ -134,6 +140,7 @@ class OfficeIdentity {
       user: user,
       userPublic: await user.extractPublicKey(),
       kept: stored,
+      store: safe,
     );
   }
 
@@ -186,6 +193,7 @@ class OfficeIdentity {
       user: user,
       userPublic: await user.extractPublicKey(),
       kept: stored,
+      store: safe,
     );
   }
 }

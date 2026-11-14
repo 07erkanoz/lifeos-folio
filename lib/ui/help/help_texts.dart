@@ -502,6 +502,19 @@ abstract final class Help {
         'Günde 50 MB, ayda 500 MB uzaktan aktarılabilir. Veri şifrelidir; '
             'aktarma sunucusu içeriği göremez ve saklamaz.',
       ], numbered: false),
+      HelpPart('Uzaktaki cihazımı ekle', [
+        'Cihazlar hiç aynı ağda olmadıysa (ev ve büro bilgisayarı gibi) '
+            'birinde Senkron’da “Uzaktaki cihazımı ekle”ye basın. Çıkan 12 '
+            'harflik kodu not edin.',
+        'Diğer cihazda Senkron’da “Kod gir”e basıp kodu yazın. Kod yalnız '
+            'bir cihaz için ve 24 saat geçerlidir; kodu veren cihazda Folio '
+            'açık olmalı.',
+        'Eşleşince cihazlar birbirini tanır. Telefonunuzu ve tabletinizi '
+            'ayrıca eklemeniz gerekmez; cihazlar tanıdıkları kendi '
+            'cihazlarınızı birbirine bildirir.',
+        'Kodu kimseyle paylaşmayın: kodu yazan cihaz sizin cihazınız olur '
+            've bütün verilerinize erişir.',
+      ], numbered: false),
     ],
     'UYAP Web aynı anda tek işlem kabul eder; iki cihazdan birlikte '
         'kullanılırsa oturum düşebilir. Bir cihazda çalışın, öbüründe '

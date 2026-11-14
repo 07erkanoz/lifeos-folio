@@ -46,6 +46,7 @@ class OfficePairing extends ChangeNotifier {
     required this.onKnown,
     this.invite,
     this.guest,
+    this.keepLink = false,
   }) {
     _timeout = Timer(limit, () => _fail('Süre doldu.'));
     _listen = _link?.messages.listen(_heard, onDone: _ended);
@@ -54,7 +55,7 @@ class OfficePairing extends ChangeNotifier {
   /// How long a pairing may wait for the two users.
   static const limit = Duration(minutes: 3);
 
-  OfficeLink? _link;
+  OfficeWire? _link;
   final OfficeIdentity _identity;
   final OfficePeer _self;
   final Future<void> Function(KnownDevice device) onKnown;
@@ -66,6 +67,23 @@ class OfficePairing extends ChangeNotifier {
 
   /// The QR this pairing came by: read by the starter, shown by the other.
   final QrInvite? invite;
+
+  /// The line left open when it is done, for the person's key to go over
+  /// it next (a code typed, over the relay); shut otherwise.
+  final bool keepLink;
+
+  /// What it went over: the relay's, when [keepLink].
+  OfficeWire? get link => _link;
+
+  /// Over the relay, once done: whether the person's key then went over
+  /// and was kept (true), or did not (false); null until it is told.
+  bool? get keyed => _keyed;
+  bool? _keyed;
+
+  void markKeyed(bool ok) {
+    _keyed = ok;
+    notifyListeners();
+  }
 
   /// A guest's: one who is shown a document live once, not a device known
   /// (lib/services/live/live_share.dart). Never the person's own; its
@@ -100,6 +118,7 @@ class OfficePairing extends ChangeNotifier {
   String? _reason;
 
   late final List<int> _mineNonce = _random(32);
+  List<int>? _mineCommit;
 
   /// "Bu cihaz da benim": the other device is the user's own. Set at first
   /// when both say the same name; the user changes it before confirming.
@@ -181,6 +200,45 @@ class OfficePairing extends ChangeNotifier {
     return pairing;
   }
 
+  /// Starts knowing the device waiting for [invite]'s code at the other
+  /// end of [wire], reached over the relay: who it is is learned from it,
+  /// and both prove they know the code.
+  static OfficePairing startOver({
+    required OfficeWire wire,
+    required OfficeIdentity identity,
+    required OfficePeer self,
+    required Future<void> Function(KnownDevice device) onKnown,
+    required QrInvite invite,
+  }) {
+    final pairing = OfficePairing._(
+      null,
+      identity,
+      self,
+      incoming: false,
+      onKnown: onKnown,
+      invite: invite,
+      keepLink: true,
+    );
+    pairing._begin(wire);
+    return pairing;
+  }
+
+  void _begin(OfficeWire link) {
+    _link = link;
+    _listen = link.messages.listen(_heard, onDone: _ended);
+    final commit = _mineCommit = hash.sha256.convert([
+      ..._myKey,
+      ..._mineNonce,
+    ]).bytes;
+    link.send({
+      't': 'pair',
+      ..._about,
+      'commit': base64Encode(commit),
+      if (invite case final qr?) 'davet': qr.proof(_myKey, commit),
+    });
+    _set(PairingState.waiting);
+  }
+
   Future<void> _connect(OfficePeer peer) async {
     final host = peer.host;
     if (host == null || peer.port == 0) {
@@ -193,16 +251,7 @@ class OfficePairing extends ChangeNotifier {
         await link.close();
         return;
       }
-      _link = link;
-      _listen = link.messages.listen(_heard, onDone: _ended);
-      final commit = hash.sha256.convert([..._myKey, ..._mineNonce]).bytes;
-      link.send({
-        't': 'pair',
-        ..._about,
-        'commit': base64Encode(commit),
-        if (invite case final qr?) 'davet': qr.proof(_myKey, commit),
-      });
-      _set(PairingState.waiting);
+      _begin(link);
     } catch (_) {
       _fail('Cihaza ulaşılamadı.');
     }
@@ -211,12 +260,13 @@ class OfficePairing extends ChangeNotifier {
   /// Answers a device that started knowing this one, with what it said
   /// first.
   static OfficePairing answer({
-    required OfficeLink link,
+    required OfficeWire link,
     required Map<String, Object?> first,
     required OfficeIdentity identity,
     required OfficePeer self,
     required Future<void> Function(KnownDevice device) onKnown,
     QrInvite? invite,
+    bool keepLink = false,
   }) {
     final pairing = OfficePairing._(
       link,
@@ -225,6 +275,7 @@ class OfficePairing extends ChangeNotifier {
       incoming: true,
       onKnown: onKnown,
       invite: invite,
+      keepLink: keepLink,
       guest: first['misafir'] == true ? (name: '', office: '') : null,
     );
     pairing._opened(first);
@@ -264,7 +315,15 @@ class OfficePairing extends ChangeNotifier {
       _byQr = true;
       mine = true;
     }
-    _link?.send({'t': 'pair-ok', ..._about, 'nonce': base64Encode(_mineNonce)});
+    _link?.send({
+      't': 'pair-ok',
+      ..._about,
+      'nonce': base64Encode(_mineNonce),
+      // A code typed: this side proves it knows it too, the other having
+      // no device id to hold it to.
+      if (proof != null && invite!.remote)
+        'davetcevap': invite!.answer(_myKey, commit),
+    });
     _set(PairingState.waiting);
   }
 
@@ -281,7 +340,7 @@ class OfficePairing extends ChangeNotifier {
         for (final e in about.entries)
           if (e.value is String || e.value is int) e.key: '${e.value}',
       },
-      host: _other?.host ?? _link?.remoteHost,
+      host: _other?.host ?? _remoteHost,
       port: _other?.port ?? (about['pt'] is int ? about['pt'] as int : 0),
     );
     if (peer == null) return false;
@@ -294,6 +353,11 @@ class OfficePairing extends ChangeNotifier {
           UyapWebService.fold(peer.name) == UyapWebService.fold(_self.name);
     }
     return true;
+  }
+
+  String? get _remoteHost {
+    final link = _link;
+    return link is OfficeLink ? link.remoteHost : null;
   }
 
   static List<int>? _bytes(Object? value) {
@@ -314,10 +378,20 @@ class OfficePairing extends ChangeNotifier {
           _fail('Karşı cihaz anlaşılamadı.');
           return;
         }
-        if (invite case final qr? when qr.deviceId != _other?.deviceId) {
+        if (invite case final qr?
+            when qr.deviceId.isNotEmpty && qr.deviceId != _other?.deviceId) {
           // Not the device whose QR was read: someone between.
           _fail('QR’daki cihaz bu değil; tanıma durduruldu.');
           return;
+        }
+        if (invite case final qr? when qr.remote) {
+          // Over the relay: only the one that made the code knows it.
+          final commit = _mineCommit;
+          if (commit == null ||
+              m['davetcevap'] != qr.answer(base64Decode(_otherKey!), commit)) {
+            _fail('Kod tutmadı; tanıma durduruldu.');
+            return;
+          }
         }
         if ((m['misafir'] == true) != isGuest) {
           // One side a guest's and the other not: not to be mixed.
@@ -357,6 +431,21 @@ class OfficePairing extends ChangeNotifier {
           answererNonce: _mineNonce,
         );
       case 'confirm' when _code != null:
+        // A code typed: what the other says of itself here is held to the
+        // code, so the relay cannot change which key is kept.
+        if (invite case final qr? when qr.remote) {
+          if (m['cmac'] !=
+              _confirmMac(
+                qr,
+                starter: !incoming,
+                said: m,
+                userId: _other?.userId ?? '',
+                key: base64Decode(_otherKey!),
+              )) {
+            _fail('Kod tutmadı; tanıma durduruldu.');
+            return;
+          }
+        }
         _theirs = true;
         _theirsMine = m['benim'] == true && !isGuest;
         theirOwnCount = m['kendi'] is int ? m['kendi'] as int : 0;
@@ -414,15 +503,53 @@ class OfficePairing extends ChangeNotifier {
   void confirm() {
     if (_code == null || _mine || finished) return;
     _mine = true;
-    _link?.send({
+    final said = <String, Object?>{
       't': 'confirm',
       'benim': mine && !isGuest,
       'kendi': ownCount,
       'uye': member,
-    });
+    };
+    if (invite case final qr? when qr.remote) {
+      said['cmac'] = _confirmMac(
+        qr,
+        starter: incoming,
+        said: said,
+        userId: _self.userId,
+        key: _myKey,
+      );
+    }
+    _link?.send(said);
     _set(PairingState.confirmed);
     unawaited(_maybeDone());
   }
+
+  /// The words of a 'confirm', and who said them, held to the code's
+  /// secret and to this exchange's code. [starter]: whether the one who
+  /// said them started.
+  String _confirmMac(
+    QrInvite qr, {
+    required bool starter,
+    required Map<String, Object?> said,
+    required String userId,
+    required List<int> key,
+  }) => base64Encode(
+    hash.Hmac(hash.sha256, qr.secret)
+        .convert(
+          utf8.encode(
+            [
+              'folio-uzak-onay-1',
+              starter ? 'baslayan' : 'cevaplayan',
+              base64Encode(key),
+              userId,
+              '${said['benim'] == true}',
+              '${said['kendi'] is int ? said['kendi'] : 0}',
+              '${said['uye'] == true}',
+              _code ?? '',
+            ].join('|'),
+          ),
+        )
+        .bytes,
+  );
 
   /// The user did not, or does not want this device known.
   void reject() {
@@ -435,6 +562,12 @@ class OfficePairing extends ChangeNotifier {
     if (!_mine || !_theirs || finished || _completing) return;
     // Both words may come at once: the device is taken in once.
     _completing = true;
+    // Over the relay, what comes after this is for the key's channel:
+    // left on the line for it, not taken here.
+    if (keepLink) {
+      unawaited(_listen?.cancel());
+      _listen = null;
+    }
     final other = _other!;
     await onKnown(
       KnownDevice(
@@ -465,6 +598,8 @@ class OfficePairing extends ChangeNotifier {
     _timeout.cancel();
     _set(state);
     unawaited(_listen?.cancel());
+    // Done over the relay: the line is the caller's now, for the key.
+    if (keepLink && state == PairingState.done) return;
     // The last word is let go before the line is put down.
     unawaited(
       Future<void>.delayed(const Duration(milliseconds: 200))
@@ -494,16 +629,87 @@ class QrInvite {
     required this.port,
     required this.deviceId,
     required this.secret,
+    this.code,
     DateTime? until,
   }) : until = until ?? DateTime.now().add(life);
 
   static const life = Duration(minutes: 5);
 
+  /// How long a code typed on a device elsewhere holds.
+  static const remoteLife = Duration(hours: 24);
+
   final List<String> hosts;
   final int port;
+
+  /// The device that shows it; empty for a code typed, which names none.
   final String deviceId;
   final List<int> secret;
   final DateTime until;
+
+  /// "7K3M-XQ2P-HT4D": what is typed on one's device elsewhere, and the
+  /// QR's way over the relay when the phone is on no network of the
+  /// computer's. The secret is made from it.
+  final String? code;
+
+  /// Reached over the relay, by [code].
+  bool get remote => code != null;
+
+  // Crockford's: no I, L, O, U, nothing read for another.
+  static const _letters = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+  /// Twelve letters, 60 bits: no one guesses the room in a day, nor the
+  /// code from what goes over the relay.
+  static String newCode() {
+    final r = Random.secure();
+    final c = [for (var i = 0; i < 12; i++) _letters[r.nextInt(32)]].join();
+    return '${c.substring(0, 4)}-${c.substring(4, 8)}-${c.substring(8)}';
+  }
+
+  /// [text] as a code, read as people type it: small letters, spaces, O
+  /// for 0, I and L for 1; null when it is not twelve of its letters.
+  static String? normalCode(String text) {
+    final s = text
+        .toUpperCase()
+        .replaceAll(RegExp(r'[\s-]'), '')
+        .replaceAll('O', '0')
+        .replaceAll(RegExp('[IL]'), '1');
+    if (s.length != 12 || s.split('').any((c) => !_letters.contains(c))) {
+      return null;
+    }
+    return '${s.substring(0, 4)}-${s.substring(4, 8)}-${s.substring(8)}';
+  }
+
+  /// The secret a code stands for.
+  static List<int> secretOf(String code) =>
+      hash.sha256.convert(utf8.encode('folio-uzak-davet-1|$code')).bytes;
+
+  /// Where the device that made [code] waits on the relay.
+  static String roomOf(String code) => base64Url
+      .encode(hash.sha256.convert(utf8.encode('folio-uzak-esle-1|$code')).bytes)
+      .replaceAll('=', '');
+
+  /// A code to type on one's device elsewhere, for [remoteLife].
+  static QrInvite remoteCode({String? code}) {
+    final c = code ?? newCode();
+    return QrInvite(
+      hosts: const [],
+      port: 0,
+      deviceId: '',
+      secret: secretOf(c),
+      code: c,
+      until: DateTime.now().add(remoteLife),
+    );
+  }
+
+  /// What the device that made the code says back, bound to its key and
+  /// the starter's commitment.
+  String answer(List<int> answererKey, List<int> commit) => base64Encode(
+    hash.Hmac(hash.sha256, secret).convert([
+      ...utf8.encode('folio-uzak-cevap-1'),
+      ...answererKey,
+      ...commit,
+    ]).bytes,
+  );
 
   bool get valid => DateTime.now().isBefore(until);
 
@@ -511,11 +717,13 @@ class QrInvite {
     required List<String> hosts,
     required int port,
     required String deviceId,
+    String? code,
   }) => QrInvite(
     hosts: hosts,
     port: port,
     deviceId: deviceId,
-    secret: OfficePairing._random(32),
+    secret: code == null ? OfficePairing._random(32) : secretOf(code),
+    code: code,
   );
 
   /// The secret bound to the reader's key and commitment.
@@ -532,6 +740,7 @@ class QrInvite {
     'p': port,
     'd': deviceId,
     's': base64Encode(secret),
+    'r': ?code,
   });
 
   /// A QR's text, if it is one of these.
@@ -543,11 +752,15 @@ class QrInvite {
       final secret = base64Decode('${j['s']}');
       if (hosts is! List || port is! int || id is! String) return null;
       if (secret.length != 32 || hosts.isEmpty) return null;
+      final code = j['r'] is String ? normalCode(j['r'] as String) : null;
+      // The code's secret is the QR's, or the code is not taken.
+      final mates = code != null && listEquals(secretOf(code), secret);
       return QrInvite(
         hosts: [for (final h in hosts) '$h'],
         port: port,
         deviceId: id,
         secret: secret,
+        code: mates ? code : null,
       );
     } catch (_) {
       return null;

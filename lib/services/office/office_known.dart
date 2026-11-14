@@ -113,11 +113,72 @@ class KnownDevices {
     await _save(devices);
   }
 
+  /// [device], told of by another own device's list: taken only if the
+  /// user did not forget it here. Checked and kept with no wait between,
+  /// so that a forgetting cannot fall in between.
+  Future<bool> rememberUnlessForgotten(KnownDevice device) async {
+    final devices = await _load();
+    final gone = await _loadForgotten();
+    if (gone.contains(device.deviceId)) return false;
+    if (devices.containsKey(device.deviceId)) return false;
+    devices[device.deviceId] = device;
+    await _save(devices);
+    return true;
+  }
+
+  /// Known again by a code typed or compared: no longer one forgotten.
+  Future<void> unforget(String deviceId) async {
+    final gone = await _loadForgotten();
+    if (gone.remove(deviceId)) await _saveForgotten(gone);
+  }
+
+  /// The devices the user forgot here.
+  Future<Set<String>> forgottenIds() async => {...await _loadForgotten()};
+
   Future<void> forget(String deviceId) async {
     final devices = await _load();
+    final gone = await _loadForgotten();
+    // Not let back in by another own device's list (the directory).
+    if (gone.add(deviceId)) await _saveForgotten(gone);
     if (devices.remove(deviceId) == null) return;
     await _save(devices);
   }
+
+  /// Whether the user forgot [deviceId] here: another own device's list
+  /// does not bring it back; only a code does.
+  Future<bool> forgot(String deviceId) async =>
+      (await _loadForgotten()).contains(deviceId);
+
+  Set<String>? _forgotten;
+
+  Future<File> _forgottenFile() async {
+    final file = await _file();
+    return File('${file.path}.unutulan');
+  }
+
+  Future<Set<String>> _loadForgotten() async {
+    final held = _forgotten;
+    if (held != null) return held;
+    final gone = <String>{};
+    try {
+      final file = await _forgottenFile();
+      if (await file.exists()) {
+        final json = jsonDecode(await file.readAsString());
+        if (json is List) gone.addAll(json.whereType<String>());
+      }
+    } catch (_) {}
+    return _forgotten = gone;
+  }
+
+  Future<void> _saveForgotten(Set<String> gone) => _saving = _saving
+      .then((_) async {
+        final file = await _forgottenFile();
+        await file.parent.create(recursive: true);
+        final part = File('${file.path}.part');
+        await part.writeAsString(jsonEncode(gone.toList()), flush: true);
+        await part.rename(file.path);
+      })
+      .catchError((Object _) {});
 
   // One write at a time: two at once raced for the same part file.
   Future<void> _saving = Future.value();

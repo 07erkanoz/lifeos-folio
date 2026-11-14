@@ -9,6 +9,7 @@ import 'package:evrak_convert/services/office/office_identity.dart';
 import 'package:evrak_convert/services/office/office_known.dart';
 import 'package:evrak_convert/services/office/office_ledger.dart';
 import 'package:evrak_convert/services/office/office_network.dart';
+import 'package:evrak_convert/services/office/office_pairing.dart';
 import 'package:evrak_convert/services/office/office_peer.dart';
 import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/task_package.dart';
@@ -409,5 +410,111 @@ void main() {
       }),
       isFalse,
     );
+  });
+
+  test('a device on another network is known by a code typed there, and '
+      'takes the person\'s key over the relay, sealed', () async {
+    relay = await RelayServer.start();
+    LiveRelay.server = Uri.parse('ws://127.0.0.1:${relay.port}');
+    final home = await folio('ev'), office = await folio('ofis');
+    expect(home.self!.userId, isNot(office.self!.userId));
+    final invite = (await home.inviteRemote())!;
+    expect(QrInvite.normalCode(invite.code!), invite.code);
+    // Typed as people type: small letters, no dashes, O for 0.
+    final typed = invite.code!.toLowerCase().replaceAll('-', ' ');
+    expect(QrInvite.normalCode(typed), invite.code);
+    // A code no device waits for finds no one.
+    expect(await office.pairByCode(QrInvite.newCode()), isNull);
+    await until(() => relay.rooms == 1);
+    final asking = (await office.pairByCode(typed))!;
+    await until(() => asking.state == PairingState.done);
+    expect(asking.byQr, isTrue);
+    await until(() => home.self!.userId == office.self!.userId);
+    // Told only once the key was kept on the other side.
+    await until(() => asking.keyed != null);
+    expect(asking.keyed, isTrue);
+    expect(home.isKnown(office.self!.deviceId), isTrue);
+    expect(office.isKnown(home.self!.deviceId), isTrue);
+    expect(home.ownKnown.single.deviceId, office.self!.deviceId);
+    await until(() => office.ownKnown.length == 1);
+    // A code is for one device: gone once used.
+    expect(home.remoteInvite.value, isNull);
+    await until(() => relay.rooms == 0);
+  });
+
+  test('a code made elsewhere is not passed for by a device that only '
+      'waits in its room', () async {
+    relay = await RelayServer.start();
+    LiveRelay.server = Uri.parse('ws://127.0.0.1:${relay.port}');
+    final office = await folio('ofis');
+    final code = QrInvite.newCode();
+    // Someone waits in the code's room without knowing the code itself.
+    final fake = await RelayWire.connect(QrInvite.roomOf(code), 'paylasan');
+    unawaited(() async {
+      final came = await fake.next(const Duration(seconds: 5));
+      expect(came?['t'], 'katilan');
+      final pair = await fake.next(const Duration(seconds: 5));
+      final other = OfficeIdentity.load(store: _Store());
+      final id = await other;
+      fake.send({
+        't': 'pair-ok',
+        'v': OfficePeer.protocol,
+        'id': id.deviceId,
+        'dk': base64Encode(id.devicePublic.bytes),
+        'u': id.userId,
+        'n': 'Av. Deniz Yılmaz',
+        'c': 'sahte',
+        'p': 'linux',
+        'nonce': base64Encode(List.filled(32, 1)),
+        'davetcevap': base64Encode(List.filled(32, 2)),
+        'got': pair?['t'],
+      });
+    }());
+    final asking = (await office.pairByCode(code))!;
+    await until(() => asking.finished);
+    expect(asking.state, PairingState.failed);
+    expect(office.ownKnown, isEmpty);
+    await fake.close();
+  });
+
+  test('two own devices that never met learn of each other from a third, '
+      'and one forgotten is not brought back', () async {
+    relay = await RelayServer.start();
+    LiveRelay.server = Uri.parse('ws://127.0.0.1:${relay.port}');
+    final (office, phone) = await ownPair();
+    final home = await folio('ev');
+    // The phone, away from the office, types the home computer's code.
+    final invite = (await home.inviteRemote())!;
+    await until(() => relay.rooms == 1);
+    final asking = (await phone.pairByCode(invite.code!))!;
+    await until(() => asking.state == PairingState.done);
+    await until(() => home.self!.userId == office.self!.userId);
+    expect(office.isKnown(home.self!.deviceId), isFalse);
+    // The phone and the office keep alike: the office learns of home.
+    final person = (await office.ownTag('kota'))!;
+    Future<void> talk() async {
+      final answered = Completer<bool>();
+      final coming = await meet(
+        office,
+        phone,
+        person: person,
+        answered: answered,
+      );
+      expect(await phone.syncOwnOver(coming, office.self!.deviceId), isTrue);
+      expect(await answered.future, isTrue);
+    }
+
+    await talk();
+    await until(() => office.isKnown(home.self!.deviceId));
+    final learned = office.ownKnown.singleWhere(
+      (d) => d.deviceId == home.self!.deviceId,
+    );
+    expect(learned.device, 'ev');
+    expect(learned.userId, office.self!.userId);
+    // Forgotten at the office, the phone's list does not bring it back.
+    await office.forget(home.self!.deviceId);
+    await talk();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(office.isKnown(home.self!.deviceId), isFalse);
   });
 }

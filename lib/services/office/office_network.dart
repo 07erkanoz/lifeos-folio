@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:bonsoir/bonsoir.dart';
 import 'package:crypto/crypto.dart';
@@ -22,6 +23,7 @@ import 'office_peer.dart';
 import 'office_task.dart';
 import 'task_package.dart';
 import 'office_transfer.dart';
+import '../live/live_remote.dart' show RelayWire;
 
 /// The office's network (docs/buro.md): this Folio announced on the local
 /// network, and the other Folios found there, under their people.
@@ -46,7 +48,89 @@ class OfficeNetwork extends ChangeNotifier {
        ledger = ledger ?? OfficeLedger(),
        tasks = tasks ?? OfficeTasks(),
        chats = chats ?? OfficeChats(),
-       packages = packages ?? TaskPackages();
+       packages = packages ?? TaskPackages() {
+    ownParts[devicesPart] = OwnPart(
+      export: _exportOwnDevices,
+      merge: _mergeOwnDevices,
+    );
+  }
+
+  /// The person's own devices each knows, given to the others as they keep
+  /// alike: two that never met on one network (home and office) learn of
+  /// each other by a third (the phone), and reach each other over the
+  /// relay. Only over a channel the person's key vouched for, and only
+  /// devices of that key; one forgotten here is not let back in by it.
+  static const devicesPart = 'cihazlar';
+
+  Future<Object?> _exportOwnDevices() async {
+    final self = _self, identity = _identity;
+    if (self == null || identity == null) return const [];
+    Map<String, Object?> one(
+      String id,
+      String key,
+      String name,
+      String device,
+      OfficePlatform platform,
+    ) => {'id': id, 'dk': key, 'n': name, 'c': device, 'p': platform.name};
+    return [
+      one(
+        identity.deviceId,
+        base64Encode(identity.devicePublic.bytes),
+        self.name,
+        self.device,
+        self.platform,
+      ),
+      for (final d in ownKnown)
+        if (d.publicKey.isNotEmpty)
+          one(d.deviceId, d.publicKey, d.name, d.device, d.platform),
+    ];
+  }
+
+  Future<bool> _mergeOwnDevices(Object? theirs) async {
+    final identity = _identity;
+    if (identity == null || theirs is! List) return false;
+    var added = false;
+    for (final one in theirs.take(64)) {
+      if (one is! Map) continue;
+      final id = one['id'], key = one['dk'];
+      if (id is! String || key is! String) continue;
+      if (id == identity.deviceId || _knownDevices.containsKey(id)) continue;
+      List<int> bytes;
+      try {
+        bytes = base64Decode(key);
+      } catch (_) {
+        continue;
+      }
+      // Its id is its key's: no one puts another's name to a key.
+      if (bytes.length != 32 || OfficeIdentity.idOf(bytes) != id) continue;
+      String text(String k) {
+        final v = '${one[k] ?? ''}'.trim();
+        return v.length > 80 ? v.substring(0, 80) : v;
+      }
+
+      final took = await _known.rememberUnlessForgotten(
+        KnownDevice(
+          deviceId: id,
+          userId: identity.userId,
+          publicKey: key,
+          name: text('n'),
+          device: text('c'),
+          platform: OfficePlatform.values.firstWhere(
+            (p) => p.name == one['p'],
+            orElse: () => OfficePlatform.other,
+          ),
+          knownAt: DateTime.now(),
+          code: '',
+        ),
+      );
+      added = added || took;
+    }
+    if (added) {
+      await _loadKnown();
+      notifyListeners();
+    }
+    return added;
+  }
 
   /// Task cases on their way, and those that came (docs/buro.md, Görev).
   final TaskPackages packages;
@@ -537,11 +621,299 @@ class OfficeNetwork extends ChangeNotifier {
     final hosts = at ?? await _addresses();
     if (hosts.isEmpty) return null;
     qrPairing.value = null;
-    return _invite = QrInvite.create(
+    final invite = _invite = QrInvite.create(
       hosts: hosts,
       port: server.port,
       deviceId: self.deviceId,
+      // Read on a phone on another network, it comes over the relay.
+      code: ownRelay != null ? QrInvite.newCode() : null,
     );
+    if (invite.remote) unawaited(_waitByCode(invite));
+    return invite;
+  }
+
+  /// The code this device shows for one of the person's devices elsewhere
+  /// to type, while it holds (QrInvite.remoteLife); null when none.
+  final remoteInvite = ValueNotifier<QrInvite?>(null);
+
+  /// The pairing a device elsewhere began by typing [remoteInvite]'s code.
+  final remotePairing = ValueNotifier<OfficePairing?>(null);
+
+  /// "Uzaktaki cihazımı ekle": a new code, the last one void at once (its
+  /// room let go of). This device waits for it on the relay while Folio is
+  /// open and it holds.
+  Future<QrInvite?> inviteRemote() async {
+    if (_self == null || _identity == null) return null;
+    cancelRemoteInvite();
+    remotePairing.value = null;
+    final invite = remoteInvite.value = QrInvite.remoteCode();
+    unawaited(_waitByCode(invite));
+    return invite;
+  }
+
+  /// The code shown withdrawn: no one may type it any more.
+  void cancelRemoteInvite() {
+    remoteInvite.value = null;
+    final wire = _codeWire;
+    _codeWire = null;
+    unawaited(wire?.close());
+  }
+
+  RelayWire? _codeWire;
+
+  /// A pairing over the relay going on, from before it reaches the relay
+  /// until the person's key went over: one at a time.
+  bool _remoteBusy = false;
+
+  bool get _pairingBusy =>
+      _remoteBusy || (_pairing != null && !_pairing!.finished);
+
+  /// Whether [invite] is still the one waited for.
+  bool _stillWaited(QrInvite invite) =>
+      invite.valid &&
+      (identical(remoteInvite.value, invite) || identical(_invite, invite));
+
+  void _invalidate(QrInvite invite) {
+    if (identical(remoteInvite.value, invite)) remoteInvite.value = null;
+    if (identical(_invite, invite)) _invite = null;
+  }
+
+  /// Waits on the relay, in the code's room, for the device that types
+  /// [invite]'s code: opened again as the relay lets each go (a room
+  /// waits a quarter of an hour, and is for one who joins), until the code
+  /// is used, withdrawn or old. A room shut soon after it opened is waited
+  /// for again later and later (the relay or the way to it failing).
+  /// Someone in the room without the code is turned away by the pairing;
+  /// five such and the code is void.
+  Future<void> _waitByCode(QrInvite invite) async {
+    final room = QrInvite.roomOf(invite.code!);
+    final random = Random();
+    var pause = const Duration(seconds: 5), wrong = 0;
+    Future<void> rest() async {
+      final jitter = Duration(milliseconds: random.nextInt(2000));
+      await Future<void>.delayed(pause + jitter);
+      pause = pause * 2 > const Duration(minutes: 5)
+          ? const Duration(minutes: 5)
+          : pause * 2;
+    }
+
+    while (_stillWaited(invite)) {
+      final opened = DateTime.now();
+      RelayWire wire;
+      try {
+        wire = await RelayWire.connect(room, 'paylasan');
+      } catch (_) {
+        await rest();
+        continue;
+      }
+      if (!_stillWaited(invite)) {
+        await wire.close();
+        return;
+      }
+      if (identical(remoteInvite.value, invite)) _codeWire = wire;
+      // The relay says when one joins; what it says first comes next.
+      final came = await wire.next(const Duration(minutes: 16));
+      final first = came?['t'] == 'katilan'
+          ? await wire.next(const Duration(seconds: 30))
+          : null;
+      if (!_stillWaited(invite)) {
+        // Withdrawn or renewed while it waited: not answered.
+        await wire.close();
+        return;
+      }
+      if (first == null) {
+        await wire.close();
+        if (DateTime.now().difference(opened) < const Duration(minutes: 1)) {
+          await rest();
+        } else {
+          pause = const Duration(seconds: 5);
+        }
+        continue;
+      }
+      final pairing = _answerByCode(wire, first, invite);
+      if (pairing == null) {
+        await wire.close();
+        if (++wrong >= 5) return _invalidate(invite);
+        await rest();
+        continue;
+      }
+      final done = await _finished(pairing);
+      if (done) {
+        // A code is good for one device.
+        _invalidate(invite);
+        await _unifyOver(wire, pairing);
+        return;
+      }
+      _remoteBusy = false;
+      await wire.close();
+      if (++wrong >= 5) return _invalidate(invite);
+      await rest();
+    }
+  }
+
+  /// The pairing a device in the code's room began, if what it said first
+  /// is one; null when it is not, or another pairing is going on.
+  OfficePairing? _answerByCode(
+    RelayWire wire,
+    Map<String, Object?> first,
+    QrInvite invite,
+  ) {
+    final identity = _identity, self = _self;
+    if (identity == null || self == null) return null;
+    if (first['t'] != 'pair' || first['davet'] == null) return null;
+    if (first['misafir'] == true) return null;
+    if (_pairingBusy) {
+      wire.send({'t': 'busy'});
+      return null;
+    }
+    _remoteBusy = true;
+    final pairing = OfficePairing.answer(
+      link: wire,
+      first: first,
+      identity: identity,
+      self: self,
+      onKnown: _pairedNow,
+      invite: invite,
+      keepLink: true,
+    );
+    _pairing = pairing;
+    _watchPairing(pairing);
+    if (pairing.finished) return pairing;
+    if (identical(_invite, invite)) {
+      qrPairing.value = pairing;
+    } else {
+      remotePairing.value = pairing;
+    }
+    return pairing;
+  }
+
+  /// "Kodu gir": knows the device elsewhere that shows [code], over the
+  /// relay. Null when the code is not one, or no device waits for it.
+  Future<OfficePairing?> pairByCode(String code) async {
+    final normal = QrInvite.normalCode(code);
+    if (normal == null) return null;
+    return _pairOver(QrInvite.remoteCode(code: normal));
+  }
+
+  Future<OfficePairing?> _pairOver(QrInvite invite) async {
+    final identity = _identity, self = _self;
+    if (identity == null || self == null || !invite.remote) return null;
+    if (_pairingBusy) return null;
+    // Taken before the first wait: two at once do not both begin.
+    _remoteBusy = true;
+    RelayWire wire;
+    try {
+      wire = await RelayWire.connect(QrInvite.roomOf(invite.code!), 'katilan');
+    } catch (_) {
+      _remoteBusy = false;
+      return null;
+    }
+    // The relay shuts at once a room no one waits in.
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (wire.closed || wire.closeCode != null) {
+      _remoteBusy = false;
+      await wire.close();
+      return null;
+    }
+    final pairing = _pairing = OfficePairing.startOver(
+      wire: wire,
+      identity: identity,
+      self: self,
+      onKnown: _pairedNow,
+      invite: invite,
+    );
+    _watchPairing(pairing);
+    unawaited(
+      _finished(pairing).then((done) async {
+        if (done) {
+          await _unifyOver(wire, pairing);
+        } else {
+          _remoteBusy = false;
+          await wire.close();
+        }
+      }),
+    );
+    return pairing;
+  }
+
+  /// Whether [pairing] ended known.
+  static Future<bool> _finished(OfficePairing pairing) {
+    if (pairing.finished) {
+      return Future.value(pairing.state == PairingState.done);
+    }
+    final ended = Completer<bool>();
+    void moved() {
+      if (!pairing.finished) return;
+      pairing.removeListener(moved);
+      ended.complete(pairing.state == PairingState.done);
+    }
+
+    pairing.addListener(moved);
+    return ended.future;
+  }
+
+  /// After two of a person's devices knew each other over the relay: the
+  /// person's key given over the same line, sealed, by the one that keeps
+  /// it (as _unify does on the network), and taken by the other, who says
+  /// so once it is kept. Told on the pairing ([OfficePairing.keyed]).
+  Future<void> _unifyOver(RelayWire wire, OfficePairing pairing) async {
+    var ok = false;
+    try {
+      final identity = _identity, other = pairing.other;
+      if (identity == null || other == null || !pairing.bothMine) return;
+      if (other.userId == identity.userId) {
+        ok = true;
+        return;
+      }
+      final keep = pairing.member != pairing.theirMember
+          ? pairing.member
+          : pairing.ownCount != pairing.theirOwnCount
+          ? pairing.ownCount > pairing.theirOwnCount
+          : identity.userId.compareTo(other.userId) < 0;
+      if (keep) {
+        final trusted = await _trusted(other.deviceId);
+        if (trusted == null) return;
+        final ch = await OfficeChannel.openOver(
+          link: wire,
+          identity: identity,
+          peer: trusted,
+        );
+        final said = _next(ch);
+        await ch.send({
+          't': 'kullanici',
+          'tohum': base64Encode(await identity.userSeed()),
+        });
+        final back = await said.within(const Duration(seconds: 20));
+        if (back?['t'] != 'kullanici-tamam') return;
+        // Counted as this person's only once it took the key.
+        await _knownNow(
+          KnownDevice(
+            deviceId: trusted.deviceId,
+            userId: identity.userId,
+            publicKey: trusted.publicKey,
+            name: trusted.name,
+            device: trusted.device,
+            platform: trusted.platform,
+            knownAt: trusted.knownAt,
+            code: trusted.code,
+          ),
+        );
+        ok = true;
+        await ch.close();
+      } else {
+        final hello = await wire.next(const Duration(seconds: 30));
+        if (hello == null || hello['t'] != 'hello') return;
+        await _talk(wire, hello, identity);
+        // _talk shuts the channel once the key is taken.
+        await wire.done.timeout(const Duration(seconds: 25), onTimeout: () {});
+        ok = _identity?.userId == other.userId;
+      }
+    } catch (_) {
+    } finally {
+      _remoteBusy = false;
+      pairing.markKeyed(ok);
+      await wire.close();
+    }
   }
 
   static Future<List<String>> _addresses() async {
@@ -563,7 +935,7 @@ class OfficeNetwork extends ChangeNotifier {
   Future<OfficePairing?> pairByQr(QrInvite invite) async {
     final identity = _identity, self = _self;
     if (identity == null || self == null) return null;
-    if (_pairing != null && !_pairing!.finished) return null;
+    if (_pairingBusy) return null;
     String? host;
     for (final h in invite.hosts) {
       try {
@@ -577,7 +949,10 @@ class OfficeNetwork extends ChangeNotifier {
         break;
       } catch (_) {}
     }
-    if (host == null) return null;
+    // On no network of the computer's: over the relay, by the QR's code.
+    if (host == null) return invite.remote ? _pairOver(invite) : null;
+    // Another begun while the addresses were tried.
+    if (_pairingBusy) return null;
     final pairing = _pairing = OfficePairing.start(
       identity: identity,
       self: self,
@@ -590,7 +965,7 @@ class OfficeNetwork extends ChangeNotifier {
         host: host,
         port: invite.port,
       ),
-      onKnown: _knownNow,
+      onKnown: _pairedNow,
       invite: invite,
     );
     _watchPairing(pairing);
@@ -996,7 +1371,8 @@ class OfficeNetwork extends ChangeNotifier {
       if (p.online &&
           p.host != null &&
           p.userId == _identity?.userId &&
-          p.deviceId != _self?.deviceId)
+          p.deviceId != _self?.deviceId &&
+          !_forgotten.contains(p.deviceId))
         p,
   ];
 
@@ -1230,6 +1606,10 @@ class OfficeNetwork extends ChangeNotifier {
   /// whichever way it was reached (the network, or the relay); [ch] closed
   /// after it. True when every part came and went.
   Future<bool> _syncOwnOver(OfficeChannel ch, String deviceId) async {
+    if (_forgotten.contains(deviceId)) {
+      await ch.close();
+      return false;
+    }
     final peer = (deviceId: deviceId);
     // Two steps (docs/senkron-plan.md R0, R10): what needs nothing of
     // the other goes first, with what this Folio can do; what needs
@@ -1596,12 +1976,12 @@ class OfficeNetwork extends ChangeNotifier {
   OfficePairing? pair(OfficePeer peer) {
     final identity = _identity, self = _self;
     if (identity == null || self == null) return null;
-    if (_pairing != null && !_pairing!.finished) return null;
+    if (_pairingBusy) return null;
     final pairing = _pairing = OfficePairing.start(
       identity: identity,
       self: self,
       peer: peer,
-      onKnown: _knownNow,
+      onKnown: _pairedNow,
     );
     _watchPairing(pairing);
     return pairing;
@@ -1640,6 +2020,11 @@ class OfficeNetwork extends ChangeNotifier {
     );
     if (ch == null) return;
     final id = ch.peer.deviceId;
+    // Forgotten here: not let back in by the person's key alone.
+    if (_forgotten.contains(id) && _knownDevices[id] == null) {
+      await ch.close();
+      return;
+    }
     // Let in as a guest, or not, fixed now: by the grant it came under,
     // not by what it later says of itself.
     final viaGuest = grant != null && !ch.vouched;
@@ -1670,7 +2055,11 @@ class OfficeNetwork extends ChangeNotifier {
         return;
       }
       if (m['t'] == 'kullanici') {
-        await _adopt(ch, m['tohum']);
+        // Said back once kept: the giver counts it as the person's then.
+        if (await _adopt(ch, m['tohum'])) {
+          await ch.send({'t': 'kullanici-tamam'});
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
         await ch.close();
         return;
       }
@@ -2094,8 +2483,7 @@ class OfficeNetwork extends ChangeNotifier {
         : (m['pt'] is int ? m['pt'] as int : 0);
     final now = DateTime.now();
     final last = _invitedAt[id];
-    final busy =
-        liveInvite.value != null || (_pairing != null && !_pairing!.finished);
+    final busy = liveInvite.value != null || (_pairingBusy);
     if (!_invitable ||
         id.isEmpty ||
         id == _self?.deviceId ||
@@ -2149,7 +2537,7 @@ class OfficeNetwork extends ChangeNotifier {
   }) {
     final identity = _identity, self = _self;
     if (identity == null || self == null) return null;
-    if (_pairing != null && !_pairing!.finished) return null;
+    if (_pairingBusy) return null;
     final pairing = _pairing = OfficePairing.start(
       identity: identity,
       self: self,
@@ -2247,6 +2635,8 @@ class OfficeNetwork extends ChangeNotifier {
   /// What a channel to [peer] is opened against: the device as known, or
   /// one of the person's own with its key to be shown and vouched for.
   Future<KnownDevice?> _trustedFor(OfficePeer peer) async {
+    // Forgotten here: no channel to it by the person's key alone.
+    if (_forgotten.contains(peer.deviceId)) return null;
     final known = await _trusted(peer.deviceId);
     if (known != null || !_ownOnNetwork(peer.deviceId)) return known;
     return KnownDevice(
@@ -2276,6 +2666,8 @@ class OfficeNetwork extends ChangeNotifier {
       final other = pairing.other;
       if (other == null) return;
       _ownConsent.add(other.deviceId);
+      // Over the relay the key goes over the pairing's own line.
+      if (pairing.keepLink) return;
       unawaited(
         _unify(
           other,
@@ -2345,13 +2737,16 @@ class OfficeNetwork extends ChangeNotifier {
   }
 
   /// A person's key from their own device that both said is theirs.
-  Future<void> _adopt(OfficeChannel ch, Object? seed) async {
+  Future<bool> _adopt(OfficeChannel ch, Object? seed) async {
     final identity = _identity, self = _self;
-    if (identity == null || self == null || seed is! String) return;
-    if (!_ownConsent.remove(ch.peer.deviceId)) return;
+    if (identity == null || self == null || seed is! String) return false;
+    if (!_ownConsent.remove(ch.peer.deviceId)) return false;
     final bytes = base64Decode(seed);
-    if (bytes.length != 32) return;
+    if (bytes.length != 32) return false;
     final next = await identity.adoptUser(bytes);
+    // Not kept where this device's keys are kept: not taken, the other
+    // told nothing was. With no keyring at all, keys are this run's alike.
+    if (!next.kept && identity.kept) return false;
     _identity = next;
     _self = OfficePeer(
       deviceId: self.deviceId,
@@ -2383,6 +2778,7 @@ class OfficeNetwork extends ChangeNotifier {
       await _announce(_self!);
     }
     notifyListeners();
+    return true;
   }
 
   /// One of the person's own devices, met over a vouched channel: known
@@ -2424,6 +2820,7 @@ class OfficeNetwork extends ChangeNotifier {
   Future<void> _metOwnDevice(KnownDevice p) async {
     if (p.userId != _identity?.userId || p.publicKey.isEmpty) return;
     if (_knownDevices.containsKey(p.deviceId)) return;
+    if (_forgotten.contains(p.deviceId)) return;
     await _knownNow(p);
   }
 
@@ -3246,7 +3643,19 @@ class OfficeNetwork extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A device known by a code (or a QR): let in again though forgotten
+  /// before.
+  Future<void> _pairedNow(KnownDevice device) async {
+    await _known.unforget(device.deviceId);
+    _forgotten.remove(device.deviceId);
+    await _knownNow(device);
+  }
+
+  /// The devices the user forgot here: not met as own again but by a code.
+  Set<String> _forgotten = {};
+
   Future<void> _loadKnown() async {
+    _forgotten = await _known.forgottenIds();
     _knownDevices = {for (final d in await _known.all()) d.deviceId: d};
   }
 
@@ -3370,7 +3779,7 @@ class OfficeNetwork extends ChangeNotifier {
           unawaited(link.close());
           return;
         }
-        if (_pairing != null && !_pairing!.finished) {
+        if (_pairingBusy) {
           link.send({'t': 'busy'});
           unawaited(link.close());
           return;
@@ -3445,7 +3854,7 @@ class OfficeNetwork extends ChangeNotifier {
           first: m,
           identity: identity,
           self: self,
-          onKnown: _knownNow,
+          onKnown: _pairedNow,
           invite: invite,
         );
         _pairing = pairing;
