@@ -520,4 +520,64 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     expect(office.isKnown(home.self!.deviceId), isFalse);
   });
+
+  test('a device known by a code, its rooms waited in from before, sends '
+      'a document to the office over the relay', () async {
+    relay = await RelayServer.start();
+    LiveRelay.server = Uri.parse('ws://127.0.0.1:${relay.port}');
+    final (office, phone) = await ownPair();
+    final home = await folio('ev');
+    final inbox = Directory('${dir.path}/gelen3')..createSync();
+    office.inbox = () async => inbox;
+    for (final net in [office, phone, home]) {
+      net.ownParts['ajanda'] = OwnPart(
+        export: () async => const {},
+        merge: (_) async => false,
+      );
+    }
+    office.lostForTesting(phone.self!.deviceId);
+    phone.lostForTesting(office.self!.deviceId);
+    final oR = OwnRemote(network: office, every: const Duration(seconds: 2));
+    final hR = OwnRemote(network: home, every: const Duration(seconds: 2));
+    addTearDown(oR.stop);
+    addTearDown(hR.stop);
+    oR.start();
+    hR.start();
+    final invite = (await home.inviteRemote())!;
+    await until(
+      () => home.remoteInvite.value != null && relay.rooms >= 1,
+      'oda',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final asking = (await office.pairByCode(invite.code!))!;
+    await until(() => asking.keyed != null, 'anahtar');
+    expect(asking.keyed, isTrue);
+    await Future<void>.delayed(const Duration(seconds: 6));
+    // Questions asked of the office over and over, as at a first keeping
+    // alike of UYAP's records: a document sent meanwhile waits its turn.
+    office.ownAnswers['uyap-is'] = (asked) async {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      return (<String, Object?>{'ok': true}, null);
+    };
+    var asking2 = true;
+    var answered = 0;
+    final questions = () async {
+      while (asking2) {
+        if (await home.askOwn(office.self!.deviceId, 'uyap-is') != null) {
+          answered++;
+        }
+      }
+    }();
+    await until(() => answered >= 1, 'soru');
+    final paper = File('${dir.path}/belge.pdf')..writeAsBytesSync([1, 2, 3, 4]);
+    expect(
+      await home.sendOwnRemote(office.self!.deviceId, [paper.path]),
+      isNull,
+    );
+    final came = File('${inbox.path}/belge.pdf');
+    await until(() => came.existsSync() && came.lengthSync() == 4, 'geldi');
+    asking2 = false;
+    await questions;
+    expect(answered, greaterThan(1));
+  });
 }

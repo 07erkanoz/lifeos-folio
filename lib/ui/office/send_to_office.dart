@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../services/office/office_network.dart';
+import '../../services/office/office_transfer.dart';
 import '../agenda/agenda_page.dart' show AgendaColors;
 import '../widgets/notice.dart';
 
@@ -136,6 +137,12 @@ Future<void> showSendToOffice(
     paths,
     text: [words, text].where((s) => s.isNotEmpty).join('\n'),
   );
+  final remote = error == null && !to.online && !to.member;
+  // Over the relay: told again once it came, or why it did not.
+  final going =
+      remote && net.transfers.isNotEmpty && net.transfers.first.outgoing
+      ? net.transfers.first
+      : null;
   messenger?.showSnackBar(
     SnackBar(
       content: Text(
@@ -148,6 +155,24 @@ Future<void> showSendToOffice(
       ),
     ),
   );
+  if (going == null || going.finished) return;
+  void ended() {
+    if (!going.finished) return;
+    going.removeListener(ended);
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          going.state == TransferState.done
+              ? 'Ulaştı · ${to.detail}'
+              : going.state == TransferState.declined
+              ? 'Diğer cihaz almadı · ${to.detail}'
+              : 'Gönderilemedi · ${going.reason ?? 'bağlantı kesildi'}',
+        ),
+      ),
+    );
+  }
+
+  going.addListener(ended);
 }
 
 class _Targets extends StatelessWidget {

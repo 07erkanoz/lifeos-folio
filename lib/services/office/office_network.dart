@@ -23,6 +23,7 @@ import 'office_peer.dart';
 import 'office_task.dart';
 import 'task_package.dart';
 import 'office_transfer.dart';
+import '../sync/remote_log.dart';
 import '../live/live_remote.dart' show RelayWire;
 
 /// The office's network (docs/buro.md): this Folio announced on the local
@@ -317,9 +318,16 @@ class OfficeNetwork extends ChangeNotifier {
       size += await File(path).length();
     }
     if (size > relayMostBytes) {
+      unawaited(RemoteLog.note('gönder: ${size ~/ 1024} KB, 10 MB’ı aşıyor'));
       return 'Cihazınız başka bir ağda; uzaktan en çok 10 MB gönderilebilir. '
           'Aynı ağdayken yeniden deneyin.';
     }
+    unawaited(
+      RemoteLog.note(
+        'gönder ${RemoteLog.short(deviceId)}: ${paths.length} dosya, '
+        '${size ~/ 1024} KB',
+      ),
+    );
     final t = await OfficeTransfer.send(
       identity: identity,
       peer: known,
@@ -329,6 +337,11 @@ class OfficeNetwork extends ChangeNotifier {
       connect: () async {
         final ch = await _ownRelayChannel(deviceId);
         if (ch == null) {
+          unawaited(
+            RemoteLog.note(
+              'gönder ${RemoteLog.short(deviceId)}: cihaza ulaşılamadı',
+            ),
+          );
           throw const OfficeChannelException(
             'Cihazınıza uzaktan ulaşılamadı; Folio açık olmayabilir.',
           );
@@ -337,6 +350,25 @@ class OfficeNetwork extends ChangeNotifier {
       },
     );
     _added(t);
+    void ended() {
+      if (!t.finished) return;
+      t.removeListener(ended);
+      unawaited(
+        RemoteLog.note(
+          'gönder ${RemoteLog.short(deviceId)}: ${t.state.name}'
+          '${t.reason == null ? '' : ' (${t.reason})'}',
+        ),
+      );
+    }
+
+    t.addListener(ended);
+    // The device reached or not, said now: not "sending" to no one.
+    for (var i = 0; i < 200 && t.state == TransferState.connecting; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    if (t.state == TransferState.failed) {
+      return t.reason ?? 'Cihazınıza uzaktan ulaşılamadı.';
+    }
     return null;
   }
 
@@ -1935,6 +1967,17 @@ class OfficeNetwork extends ChangeNotifier {
       }
       unawaited(_metOwn(ch));
       final m = await ch.messages.first.timeout(const Duration(seconds: 20));
+      // Questions come many at a first keeping alike: not each written.
+      if (m['t'] != 'kendi') {
+        unawaited(
+          RemoteLog.note(
+            'yanıt ${RemoteLog.short(deviceId)}: ${m['t']}'
+            '${m['tur'] == null ? '' : ' ${m['tur']}'}'
+            '${m['tur'] == null ? '' : ' ${m['tur']}'}'
+            '${m['t'] == 'offer' && !lightOffer(m) ? ' (fazla büyük, alınmadı)' : ''}',
+          ),
+        );
+      }
       switch (m['t']) {
         case 'senkron':
           return await _answerOwnSync(ch, m);
@@ -1966,7 +2009,8 @@ class OfficeNetwork extends ChangeNotifier {
           await ch.close();
           return false;
       }
-    } catch (_) {
+    } catch (e) {
+      unawaited(RemoteLog.note('yanıt ${RemoteLog.short(deviceId)}: hata $e'));
       await link.close();
       return false;
     }

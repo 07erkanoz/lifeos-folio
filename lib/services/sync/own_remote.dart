@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../live/live_remote.dart';
 import '../office/office_network.dart';
+import 'remote_log.dart';
 
 /// Senkron between the person's own devices when they are not on one
 /// network (the phone on mobile data, the computer at the office): they
@@ -57,11 +58,15 @@ class OwnRemote extends ChangeNotifier {
 
   bool get running => _timer != null;
 
+  /// Looks again soon taken while Folio was still opening.
+  int _soon = 0;
+
   void start() {
     if (_timer != null) return;
     final run = ++_run;
     // The network reaches an own device elsewhere through its room here.
     _net.ownRelay = (id) => reach(id);
+    unawaited(RemoteLog.note('uzak eşitleme başladı'));
     _timer = Timer.periodic(every, (_) => unawaited(tick(run)));
     unawaited(tick(run));
   }
@@ -101,12 +106,28 @@ class OwnRemote extends ChangeNotifier {
     final current = run ?? _run;
     if (current != _run) return;
     final me = _net.self?.deviceId;
-    if (me == null || _net.ownParts.isEmpty) return;
+    if (me == null || _net.ownParts.isEmpty) {
+      // Folio still opening: looked again soon, not at the next tick.
+      if (_soon < 24) {
+        _soon++;
+        Timer(const Duration(seconds: 5), () => unawaited(tick(current)));
+      }
+      return;
+    }
     final until = stoppedUntil;
-    if (until != null && DateTime.now().isBefore(until)) return;
+    if (until != null && DateTime.now().isBefore(until)) {
+      unawaited(RemoteLog.note('bakış: kota doldu, $until’e kadar durdu'));
+      return;
+    }
     final person = await _net.ownTag('kota');
     if (person == null) return;
     final online = {for (final p in _net.ownOnline) p.deviceId};
+    unawaited(
+      RemoteLog.note(
+        'bakış: ${_net.ownKnown.length} kendi cihaz, '
+        '${online.length} aynı ağda, ${_waiting.length} oda bekleniyor',
+      ),
+    );
     for (final d in _net.ownKnown) {
       if (current != _run) return;
       final id = d.deviceId;
@@ -126,14 +147,53 @@ class OwnRemote extends ChangeNotifier {
       if (last != null && DateTime.now().difference(last) < rest) continue;
       if (me.compareTo(id) > 0) {
         final theirs = await _net.ownTag('oda|$id|$me');
-        if (theirs != null) await _come(current, id, theirs, person);
+        // Not waited for here: it may wait behind a document going there.
+        if (theirs != null) unawaited(_come(current, id, theirs, person));
       }
     }
   }
 
   /// [id]'s room for this device, reached: null when [id] is not waiting
   /// there now (not open, or the quota used).
-  Future<RelayWire?> reach(String id) async {
+  Future<RelayWire?> reach(String id) => _inLane(id, () => _reach(id));
+
+  /// What this device has going to [id]'s room, one after another: a
+  /// document sent while a question is asked there waits for it to end,
+  /// rather than finding the room taken and giving up.
+  final _lanes = <String, Future<void>>{};
+
+  Future<RelayWire?> _inLane(
+    String id,
+    Future<RelayWire?> Function() go,
+  ) async {
+    final before = _lanes[id] ?? Future<void>.value();
+    final mine = Completer<void>();
+    final lane = _lanes[id] = before.then((_) => mine.future);
+    void free() {
+      if (!mine.isCompleted) mine.complete();
+      if (identical(_lanes[id], lane)) _lanes.remove(id);
+    }
+
+    // However long the one before takes, not past ten minutes.
+    await before.timeout(const Duration(minutes: 10), onTimeout: () {});
+    RelayWire? wire;
+    try {
+      wire = await go();
+    } finally {
+      if (wire == null) {
+        free();
+      } else {
+        unawaited(
+          wire.done
+              .timeout(const Duration(minutes: 10), onTimeout: () {})
+              .whenComplete(free),
+        );
+      }
+    }
+    return wire;
+  }
+
+  Future<RelayWire?> _reach(String id) async {
     final run = _run;
     bool live() =>
         run == _run &&
@@ -144,9 +204,9 @@ class OwnRemote extends ChangeNotifier {
     final person = await _net.ownTag('kota');
     final room = await _net.ownTag('oda|$id|$me');
     if (me == null || person == null || room == null) return null;
-    // Twice: a talk that just ended leaves its room a moment (4410), and
-    // the room is waited in again a second after (OwnRemote._wait).
-    for (var attempt = 0; attempt < 2; attempt++) {
+    // More than once: a talk that just ended leaves its room a moment
+    // (4410), and the room is waited in again a second after (_wait).
+    for (var attempt = 0; attempt < 4; attempt++) {
       if (!live()) return null;
       try {
         final wire = await _connect(run, room, 'katilan', person);
@@ -158,9 +218,15 @@ class OwnRemote extends ChangeNotifier {
           return null;
         }
         if (!wire.closed) return wire;
+        unawaited(
+          RemoteLog.note(
+            'ulaş ${RemoteLog.short(id)}: sunucu kapattı (${wire.closeCode})',
+          ),
+        );
         _quota(wire.closeCode);
         if (wire.closeCode == 4429) return null;
       } catch (e) {
+        unawaited(RemoteLog.note('ulaş ${RemoteLog.short(id)}: hata $e'));
         _refused(e);
         return null;
       }
@@ -184,6 +250,7 @@ class OwnRemote extends ChangeNotifier {
       wire = got;
       _waiting[id] = wire;
     } catch (e) {
+      unawaited(RemoteLog.note('oda ${RemoteLog.short(id)}: açılamadı $e'));
       _refused(e);
       return;
     } finally {
@@ -196,6 +263,14 @@ class OwnRemote extends ChangeNotifier {
         // The relay keeps a room 15 minutes: a new one at a later look.
         final came = await wire.next(const Duration(minutes: 15));
         met = came != null && came['t'] == 'katilan';
+        unawaited(
+          RemoteLog.note(
+            met
+                ? 'oda ${RemoteLog.short(id)}: cihaz geldi'
+                : 'oda ${RemoteLog.short(id)}: kimse gelmedi '
+                      '(${wire.closeCode ?? 'süre'})',
+          ),
+        );
         if (came == null || came['t'] != 'katilan' || run != _run) {
           _quota(wire.closeCode);
           await wire.close();
@@ -245,15 +320,26 @@ class OwnRemote extends ChangeNotifier {
     if (!_coming.add(id)) return;
     RelayWire? wire;
     try {
-      wire = await _connect(run, room, 'katilan', person);
+      wire = await _inLane(id, () => _connect(run, room, 'katilan', person));
       if (wire == null) return;
       // No room (4404): not there now. The relay says so at once.
       await Future<void>.delayed(const Duration(milliseconds: 400));
       if (wire.closed || run != _run) {
+        unawaited(
+          RemoteLog.note(
+            'git ${RemoteLog.short(id)}: oda yok (${wire.closeCode})',
+          ),
+        );
         _quota(wire.closeCode);
         return;
       }
-      if (await _net.syncOwnOver(wire, id) && run == _run) {
+      final kept = await _net.syncOwnOver(wire, id);
+      unawaited(
+        RemoteLog.note(
+          'git ${RemoteLog.short(id)}: eşitleme ${kept ? 'tamam' : 'olmadı'}',
+        ),
+      );
+      if (kept && run == _run) {
         metAt[id] = DateTime.now();
         notifyListeners();
       }
@@ -267,6 +353,7 @@ class OwnRemote extends ChangeNotifier {
   }
 
   void _refused(Object e) {
+    unawaited(RemoteLog.note('sunucu reddetti: $e'));
     // 429 at the door: the person's quota used. (503 is the relay being
     // full for a while: tried again at the next look.)
     if ('$e'.contains('429')) _stopForToday();
