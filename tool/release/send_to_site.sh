@@ -38,14 +38,18 @@ send -t -e "$ssh" "$work/READY" folio-release@sbyazilim.info:READY
 rm -f "$work/deploy_key"
 
 for platform in "$@"; do
+  # This release's own manifest, by its package's SHA: a build of the same
+  # version (1.8.6.40 after 1.8.6) has the version of the one before, and
+  # the site's old manifest passed for the new one (15 Kasım 2026).
+  want="$(jq -r .sha256 "$folder/$platform.json")"
   seen=''
   for attempt in $(seq 1 30); do
-    seen="$(curl -fsS -H 'Cache-Control: no-cache' "https://lifeos.com.tr/surum/stable/$platform.json" | jq -r .version || true)"
-    [ "$seen" = "$version" ] && break
+    seen="$(curl -fsS -H 'Cache-Control: no-cache' "https://lifeos.com.tr/surum/stable/$platform.json" | jq -r .sha256 || true)"
+    [ "$seen" = "$want" ] && break
     sleep 10
   done
-  if [ "$seen" != "$version" ]; then
-    echo "::error::lifeos.com.tr $platform için $version göstermiyor (${seen:-yok})."
+  if [ "$seen" != "$want" ]; then
+    echo "::error::lifeos.com.tr $platform için bu sürümün paketini göstermiyor ($version)."
     exit 1
   fi
   manifest="$(curl -fsS -H 'Cache-Control: no-cache' "https://lifeos.com.tr/surum/stable/$platform.json")"
