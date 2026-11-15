@@ -19,6 +19,37 @@ import '../../services/signing/imz_file.dart';
 
 enum _Method { card, mobile }
 
+/// Someone else who signs on this device with their own mobile signature
+/// (another lawyer sharing the computer): their number and operator, kept
+/// here only when asked.
+class _Signer {
+  const _Signer(this.name, this.phone, this.operator);
+  final String name, phone;
+  final MobileOperator operator;
+
+  /// Shown on the chip: the name, else the number's last four digits.
+  String get label =>
+      name.isNotEmpty ? name : '…${phone.substring(phone.length - 4)}';
+
+  Map<String, Object?> toJson() => {
+    'ad': name,
+    'phone': phone,
+    'operator': operator.code,
+  };
+
+  static _Signer? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final phone = MobileUdfSigner.phone('${j['phone'] ?? ''}');
+    if (phone == null) return null;
+    final op = j['operator'];
+    return _Signer(
+      '${j['ad'] ?? ''}'.trim(),
+      phone,
+      MobileOperator.byCode(op is int ? op : null) ?? MobileOperator.turkcell,
+    );
+  }
+}
+
 class SigningDialog extends StatefulWidget {
   final String? filePath;
   final UdfSigningService? service;
@@ -49,6 +80,16 @@ class _SigningDialogState extends State<SigningDialog> {
   final _driver = TextEditingController();
   final _pin = TextEditingController();
   final _phone = TextEditingController();
+  final _signerName = TextEditingController();
+
+  /// Who signs with the mobile signature: null the lawyer whose Folio this
+  /// is; else one of [_others], or a new one ([_others].length).
+  int? _who;
+  List<_Signer> _others = [];
+
+  /// The lawyer's own number and operator, kept while another is chosen.
+  String _ownPhone = '';
+  MobileOperator? _ownOperator;
   late final _service = widget.service ?? UdfSigningService();
   List<SigningCard> _cards = [];
   List<SigningCertificate> _certificates = [];
@@ -152,6 +193,13 @@ class _SigningDialogState extends State<SigningDialog> {
       if (_phone.text.isEmpty) _phone.text = text('phone');
       _operator =
           MobileOperator.byCode(operator is int ? operator : null) ?? _operator;
+      _others = [
+        for (final j
+            in (data['imzacilar'] is List
+                ? data['imzacilar'] as List
+                : const []))
+          ?_Signer.fromJson(j),
+      ];
       // Only where there is a document: the settings dialog is the card's.
       if (data['method'] == 'mobile' &&
           !widget.imz &&
@@ -163,9 +211,63 @@ class _SigningDialogState extends State<SigningDialog> {
     });
   }
 
-  String get _mobileHint => _phone.text.isEmpty
+  String get _mobileHint => _who != null
+      ? 'İmzalayacak kişinin numarasını ve operatörünü seçin. Onay isteği '
+            'onun telefonuna gelir; imza onun adına atılır.'
+      : _phone.text.isEmpty
       ? 'Numaranızı yazıp operatörünüzü seçin.'
       : 'Numaranızı ve operatörünüzü kontrol edip imzalayın.';
+
+  /// [who] chosen to sign (see [_who]): their number put in the field.
+  void _chooseSigner(int? who) {
+    if (_busy || who == _who) return;
+    setState(() {
+      if (_who == null) {
+        _ownPhone = _phone.text;
+        _ownOperator = _operator;
+      }
+      _who = who;
+      if (who == null) {
+        _phone.text = _ownPhone;
+        _operator = _ownOperator ?? _operator;
+        _remember = true;
+      } else if (who < _others.length) {
+        _phone.text = _others[who].phone;
+        _operator = _others[who].operator;
+        _signerName.text = _others[who].name;
+        _remember = true;
+      } else {
+        _phone.clear();
+        _signerName.clear();
+        _remember = true;
+      }
+      _status = _mobileHint;
+    });
+  }
+
+  /// What is kept after a mobile signature: the lawyer's own number, or
+  /// the other signer in the list of others; never one over the other.
+  Map<String, Object?> _mobileKept() {
+    if (_who == null) {
+      return {
+        'method': 'mobile',
+        'phone': _remember ? _phone.text.trim() : null,
+        'operator': _operator.code,
+      };
+    }
+    final phone = MobileUdfSigner.phone(_phone.text)!;
+    final others = [
+      for (final o in _others)
+        if (o.phone != phone) o,
+    ];
+    if (_remember) {
+      others.insert(0, _Signer(_signerName.text.trim(), phone, _operator));
+    }
+    return {
+      'method': 'mobile',
+      'imzacilar': [for (final o in others) o.toJson()],
+    };
+  }
 
   /// Keeps the settings of this dialog on this device; nothing else leaves it.
   Future<void> _write(Map<String, Object?> changes) async {
@@ -211,13 +313,7 @@ class _SigningDialogState extends State<SigningDialog> {
               'kontrol edip onaylayın.';
         });
         final path = await signer.finish(request);
-        unawaited(
-          _keep({
-            'method': 'mobile',
-            'phone': _remember ? _phone.text.trim() : null,
-            'operator': _operator.code,
-          }),
-        );
+        unawaited(_keep(_mobileKept()));
         if (!mounted) return;
         Navigator.pop(context, path);
       } catch (e) {
@@ -354,6 +450,7 @@ class _SigningDialogState extends State<SigningDialog> {
     _pin.dispose();
     _driver.dispose();
     _phone.dispose();
+    _signerName.dispose();
     super.dispose();
   }
 
@@ -374,10 +471,52 @@ class _SigningDialogState extends State<SigningDialog> {
     return [
       Text(
         'Belgenin metni imza için UYAP’ın mobil imza servisine gönderilir; '
-        'onay isteği telefonunuza gelir.',
+        'onay isteği imzalayanın telefonuna gelir.',
         style: TextStyle(fontSize: 12.5, color: colors.onSurfaceVariant),
       ),
       const SizedBox(height: 14),
+      const FolioSectionLabel('İmzalayan'),
+      Wrap(
+        key: const ValueKey('mobile-signer'),
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          ChoiceChip(
+            key: const ValueKey('mobile-signer-me'),
+            label: const Text('Ben'),
+            selected: _who == null,
+            onSelected: _busy ? null : (_) => _chooseSigner(null),
+          ),
+          for (var i = 0; i < _others.length; i++)
+            ChoiceChip(
+              label: Text(_others[i].label),
+              selected: _who == i,
+              onSelected: _busy ? null : (_) => _chooseSigner(i),
+            ),
+          ChoiceChip(
+            key: const ValueKey('mobile-signer-new'),
+            avatar: const Icon(Icons.person_add_alt_1_outlined, size: 16),
+            label: const Text('Başka biri'),
+            selected: _who == _others.length,
+            onSelected: _busy ? null : (_) => _chooseSigner(_others.length),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      if (_who != null) ...[
+        TextField(
+          key: const ValueKey('mobile-signer-name'),
+          controller: _signerName,
+          enabled: !_busy,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Adı (isteğe bağlı)',
+            hintText: 'Av. Ad Soyad',
+            prefixIcon: Icon(Icons.person_outline_rounded, size: 19),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
       TextField(
         key: const ValueKey('mobile-phone'),
         controller: _phone,
@@ -418,9 +557,11 @@ class _SigningDialogState extends State<SigningDialog> {
         onChanged: _busy
             ? null
             : (value) => setState(() => _remember = value ?? true),
-        title: const Text(
-          'Numaram bu cihazda hatırlansın',
-          style: TextStyle(fontSize: 12.5),
+        title: Text(
+          _who == null
+              ? 'Numaram bu cihazda hatırlansın'
+              : 'Bu kişi bu cihazda hatırlansın',
+          style: const TextStyle(fontSize: 12.5),
         ),
       ),
       if (_code != null)

@@ -74,7 +74,12 @@ class _Target {
     this.known = false,
     this.guest,
     this.remote = false,
+    this.away = false,
   });
+
+  /// One of the person's own devices on another network: shown over the
+  /// relay.
+  final bool away;
 
   final String id, name, device;
 
@@ -374,6 +379,20 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
         own.add(_Target(id: p.deviceId, name: _ownName(p.deviceId, p)));
       }
     }
+    // Paired by a code and on another network: over the relay.
+    if (_net.ownRelay != null) {
+      for (final d in _net.ownKnown) {
+        if (!seen.add(d.deviceId)) continue;
+        own.add(
+          _Target(
+            id: d.deviceId,
+            name: _ownName(d.deviceId, null),
+            platform: d.platform,
+            away: true,
+          ),
+        );
+      }
+    }
 
     final office = <_Target>[];
     if (ledger.officeId != null) {
@@ -546,6 +565,7 @@ class _LiveShareDialogState extends State<LiveShareDialog> {
     ];
     final sub = [
       if (t.device.isNotEmpty) t.device,
+      if (t.away) 'ağda değil · uzaktan',
       if (_state(peer).isNotEmpty) _state(peer),
     ].join(' · ');
     final code = peer?.code;

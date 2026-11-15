@@ -224,6 +224,92 @@ void main() {
     await removeTemporaryDirectory(tester, setup.dir);
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
+  testWidgets('another lawyer on the same computer signs with their own '
+      'mobile signature: their number is kept apart, the lawyer\'s own is '
+      'not written over, and they are one choice away next time', (
+    tester,
+  ) async {
+    final setup = await _Setup.start(tester);
+    await _open(
+      tester,
+      setup,
+      'Kart bulunamadı. E-imza kartınızı takıp yenileyin.',
+    );
+    await _askPhone(tester);
+    setup.approve.complete();
+    await helpers.ready(tester, () => setup.closed);
+    await setup.settings(tester);
+
+    // The spouse signs the next one: "Başka biri", a name and a number.
+    setup.closed = false;
+    await _open(
+      tester,
+      setup,
+      'Numaranızı ve operatörünüzü kontrol edip imzalayın.',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('mobile-signer-new')));
+    await tester.tap(find.byKey(const ValueKey('mobile-signer-new')));
+    await tester.pump();
+    expect(find.textContaining('onun telefonuna gelir'), findsOneWidget);
+    expect(find.text('0532 123 45 67'), findsNothing);
+    await tester.enterText(
+      find.byKey(const ValueKey('mobile-signer-name')),
+      'Av. Çiğdem Öz',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('mobile-phone')),
+      '0544 765 43 21',
+    );
+    await tester.tap(find.text('Vodafone'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('sign-mobile')));
+    await tester.pump();
+    await helpers.ready(tester, () => setup.closed);
+    // The dialog gone, not still fading out beside the next one.
+    await tester.pump(const Duration(seconds: 1));
+
+    Map<String, dynamic>? kept;
+    for (var i = 0; i < 100; i++) {
+      kept = await setup.settings(tester);
+      if (kept?['imzacilar'] != null) break;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
+    expect(kept!['phone'], '0532 123 45 67');
+    expect(kept['operator'], MobileOperator.turkcell.code);
+    expect(kept['imzacilar'], [
+      {
+        'ad': 'Av. Çiğdem Öz',
+        'phone': '05447654321',
+        'operator': MobileOperator.vodafone.code,
+      },
+    ]);
+
+    // Next time: the lawyer's own number first, the other one a chip away.
+    setup.closed = false;
+    await _open(
+      tester,
+      setup,
+      'Numaranızı ve operatörünüzü kontrol edip imzalayın.',
+    );
+    expect(find.text('0532 123 45 67'), findsOneWidget);
+    await tester.ensureVisible(
+      find.widgetWithText(ChoiceChip, 'Av. Çiğdem Öz'),
+    );
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Av. Çiğdem Öz'));
+    await tester.pump();
+    expect(find.text('05447654321'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('mobile-signer-me')));
+    await tester.tap(find.byKey(const ValueKey('mobile-signer-me')));
+    await tester.pump();
+    expect(find.text('0532 123 45 67'), findsOneWidget);
+    await tester.tap(find.text('Kapat'));
+    await helpers.ready(tester, () => setup.closed);
+    await tester.pumpAndSettle();
+    await removeTemporaryDirectory(tester, setup.dir);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
   testWidgets('giving up on the phone leaves the document as it was and the '
       'dialog ready to try again', (tester) async {
     final setup = await _Setup.start(tester);

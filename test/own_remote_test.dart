@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:io';
 
 import 'package:evrak_convert/services/live/live_remote.dart';
+import 'package:evrak_convert/services/live/live_share.dart';
 import 'package:evrak_convert/services/office/office_chat.dart';
 import 'package:evrak_convert/services/office/office_identity.dart';
 import 'package:evrak_convert/services/office/office_known.dart';
@@ -15,6 +16,7 @@ import 'package:evrak_convert/services/office/office_task.dart';
 import 'package:evrak_convert/services/office/task_package.dart';
 import 'package:evrak_convert/services/security/secret_store.dart';
 import 'package:evrak_convert/services/sync/own_remote.dart';
+import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../tool/canli_relay/relay.dart';
@@ -599,5 +601,72 @@ void main() {
       ))?['parca'],
       'davalar',
     );
+  });
+
+  test('a document is shown live on one of the person\'s own devices on '
+      'another network, over the relay, change by change', () async {
+    relay = await RelayServer.start();
+    LiveRelay.server = Uri.parse('ws://127.0.0.1:${relay.port}');
+    final (office, phone) = await ownPair();
+    final home = await folio('ev');
+    for (final net in [office, phone, home]) {
+      net.ownParts['ajanda'] = OwnPart(
+        export: () async => const {},
+        merge: (_) async => false,
+      );
+    }
+    office.lostForTesting(phone.self!.deviceId);
+    phone.lostForTesting(office.self!.deviceId);
+    final oR = OwnRemote(network: office, every: const Duration(seconds: 2));
+    final hR = OwnRemote(network: home, every: const Duration(seconds: 2));
+    addTearDown(oR.stop);
+    addTearDown(hR.stop);
+    oR.start();
+    hR.start();
+    final invite = (await home.inviteRemote())!;
+    await until(
+      () => home.remoteInvite.value != null && relay.rooms >= 1,
+      'oda',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final asking = (await office.pairByCode(invite.code!))!;
+    await until(() => asking.keyed != null, 'anahtar');
+    expect(asking.keyed, isTrue);
+    await Future<void>.delayed(const Duration(seconds: 6));
+
+    // Shown from home to the office, not on its network.
+    LiveShare.instance.listen(office);
+    var text = 'Merhaba\n';
+    final host = LiveShareHost(
+      title: 'Acil dilekçe',
+      snapshot: () =>
+          (delta: (Delta()..insert(text)).toJson(), blocks: const []),
+      blockCount: () => 0,
+      network: home,
+    );
+    addTearDown(host.close);
+    expect(await host.invite(office.self!.deviceId, 'ofis'), isTrue);
+    await until(
+      () => LiveShare.instance.incoming.value.isNotEmpty,
+      'davet geldi',
+    );
+    final session = LiveShare.instance.incoming.value.single;
+    expect(session.title, 'Acil dilekçe');
+    session.accept();
+    await until(() => session.ready, 'belge açıldı');
+    await until(
+      () => host.peers.value.single.state == LivePeerState.watching,
+      'izliyor',
+    );
+    var got = 0;
+    session.changes.listen((_) => got++);
+    host.body(
+      Delta()
+        ..retain(7)
+        ..insert(' ofis'),
+    );
+    text = 'Merhaba ofis\n';
+    await until(() => got >= 1, 'değişiklik geldi');
+    expect(session.document!.toPlainText(), 'Merhaba ofis\n');
   });
 }

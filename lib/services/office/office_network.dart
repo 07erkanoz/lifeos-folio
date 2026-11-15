@@ -1201,6 +1201,11 @@ class OfficeNetwork extends ChangeNotifier {
     final identity = _identity, peer = _peers[deviceId];
     final host = peer?.host;
     if (identity == null || peer == null || host == null || !peer.online) {
+      // A live document to one of the person's own devices on another
+      // network: over the relay, its key's proof as on the network.
+      if (kind == 'canli' && !office && !guest && !known) {
+        return _ownRelayStream(deviceId, kind, body);
+      }
       return null;
     }
     // A guest only as a guest: the channel it may have and no other.
@@ -1229,6 +1234,32 @@ class OfficeNetwork extends ChangeNotifier {
       await ch.send({...body, 't': 'akis', 'tur': kind});
       return ch;
     } catch (_) {
+      return null;
+    }
+  }
+
+  /// [openStream] to one of the person's own devices over the relay.
+  Future<OfficeChannel?> _ownRelayStream(
+    String deviceId,
+    String kind,
+    Map<String, Object?> body,
+  ) async {
+    if (ownRelay == null || !ownKnown.any((d) => d.deviceId == deviceId)) {
+      return null;
+    }
+    final ch = await _ownRelayChannel(deviceId);
+    if (ch == null) {
+      unawaited(
+        RemoteLog.note('akış ${RemoteLog.short(deviceId)}: ulaşılamadı'),
+      );
+      return null;
+    }
+    try {
+      await ch.send({...body, 't': 'akis', 'tur': kind});
+      unawaited(RemoteLog.note('akış ${RemoteLog.short(deviceId)}: $kind'));
+      return ch;
+    } catch (_) {
+      await ch.close();
       return null;
     }
   }
@@ -2021,6 +2052,17 @@ class OfficeNetwork extends ChangeNotifier {
         case 'kendi':
           // The light questions only (relayKinds).
           await _answerOwnAsk(ch, m, kinds: relayKinds);
+          return false;
+        case 'akis' when m['tur'] == 'canli':
+          // A live document from another own device: the room is held
+          // while it is shown, the relay's talk the document's till then.
+          final handler = streams['canli'];
+          if (handler == null) {
+            await ch.close();
+            return false;
+          }
+          await handler(ch, m, own: true, member: false, guest: false);
+          await ch.done.timeout(const Duration(hours: 12), onTimeout: () {});
           return false;
         case 'offer' when lightOffer(m):
           // The room held until the files came whole, failed or were
