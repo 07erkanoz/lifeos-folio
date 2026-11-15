@@ -75,8 +75,20 @@ import 'demo_documents.dart';
 import 'demo_uyap.dart';
 
 /// The size pictures are taken at: a 1440 × 900 window on a 2× screen.
-const logical = Size(1440, 900);
-const pixelRatio = 2.0;
+/// --dart-define=GENISLIK=1376 --dart-define=YUKSEKLIK=1032 for an iPad.
+const logical = Size(
+  int.fromEnvironment('GENISLIK', defaultValue: 1440) * 1.0,
+  int.fromEnvironment('YUKSEKLIK', defaultValue: 900) * 1.0,
+);
+
+/// --dart-define=ORAN10=30 for the App Store's sharp pictures (3×).
+const pixelRatio = int.fromEnvironment('ORAN10', defaultValue: 20) / 10;
+
+/// Where pictures go: --dart-define=CIKTI=… for another folder.
+const outDir = String.fromEnvironment(
+  'CIKTI',
+  defaultValue: 'tool/screenshots/out',
+);
 
 final _frame = GlobalKey();
 
@@ -190,7 +202,7 @@ Future<void> _shot(WidgetTester tester, String name) async {
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     return data!.buffer.asUint8List();
   });
-  final out = File('tool/screenshots/out/$name.png');
+  final out = File('$outDir/$name.png');
   out.parent.createSync(recursive: true);
   out.writeAsBytesSync(bytes!);
 }
@@ -1499,7 +1511,7 @@ void main() {
         final data = await image.toByteData(format: ui.ImageByteFormat.png);
         return data!.buffer.asUint8List();
       });
-      File('tool/screenshots/out/$name.png').writeAsBytesSync(bytes!);
+      File('$outDir/$name.png').writeAsBytesSync(bytes!);
     }
 
     debugDisableShadows = false;

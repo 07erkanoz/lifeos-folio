@@ -153,8 +153,8 @@ class _SyncPageState extends State<SyncPage> {
             ),
             const SizedBox(height: 2),
             Text(
-              'Yalnız kendi cihazlarınız arasında; aynı ağda olunca '
-              'kendiliğinden',
+              'Yalnız kendi cihazlarınız eşitlenir. Aynı ağdayken doğrudan, '
+              'farklı ağlardayken aktarma sunucusu üzerinden bağlanırlar.',
               style: TextStyle(fontSize: 12.5, color: AgendaColors.muted),
             ),
           ],
@@ -220,7 +220,8 @@ class _SyncPageState extends State<SyncPage> {
                   Expanded(
                     child: Text(
                       'Folio’nun Windows, macOS ve Linux sürümleri '
-                      'lifeos.com.tr adresinden ücretsiz indirilir.',
+                      'lifeos.com.tr/lifeos-folio adresinden ücretsiz '
+                      'indirilir.',
                       style: TextStyle(
                         fontSize: 12.5,
                         color: AgendaColors.muted,
@@ -231,7 +232,7 @@ class _SyncPageState extends State<SyncPage> {
                     key: const ValueKey('sync-get-folio'),
                     onPressed: () => unawaited(
                       launchUrl(
-                        Uri.parse('https://lifeos.com.tr/#indir'),
+                        Uri.parse('https://lifeos.com.tr/lifeos-folio#indir'),
                         mode: LaunchMode.externalApplication,
                       ).catchError((Object _) => false),
                     ),

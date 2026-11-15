@@ -227,7 +227,8 @@ class FolioAboutDialog extends StatelessWidget {
                       tint: AgendaColors.task,
                       title: context.l.viewDownloadOther,
                       subtitle: _otherDevices,
-                      onTap: () => unawaited(_open(context, '/', 'indir')),
+                      onTap: () =>
+                          unawaited(_open(context, '/lifeos-folio', 'indir')),
                     ),
                   SettingsRow(
                     key: const ValueKey('about-contact'),
@@ -241,9 +242,18 @@ class FolioAboutDialog extends StatelessWidget {
                     icon: Icons.language_rounded,
                     fill: AgendaColors.line,
                     tint: AgendaColors.muted,
-                    title: 'lifeos.com.tr',
+                    // lifeos.com.tr itself is LifeOS Linux's since 13
+                    // Kasım 2026: Folio's and Ofis's pages are their own.
+                    title: AppEdition.isOfis
+                        ? 'lifeos.com.tr/lifeos-ofis'
+                        : 'lifeos.com.tr/lifeos-folio',
                     subtitle: context.l.viewWebsite,
-                    onTap: () => unawaited(_open(context, '/')),
+                    onTap: () => unawaited(
+                      _open(
+                        context,
+                        AppEdition.isOfis ? '/lifeos-ofis' : '/lifeos-folio',
+                      ),
+                    ),
                   ),
                 ],
               ),

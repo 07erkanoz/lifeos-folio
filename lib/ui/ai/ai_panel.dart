@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:file_picker/file_picker.dart';
 
+import '../theme/app_theme.dart';
 import '../../models/evrak_file.dart';
 import '../../services/ai/ai_assistant.dart';
 import '../../services/ai/ai_attachment.dart';
@@ -2468,7 +2469,12 @@ class _AiPanelState extends State<AiPanel> {
     style: TextButton.styleFrom(
       visualDensity: VisualDensity.compact,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+      // Folio's own face: a button's text style is not the theme's.
+      textStyle: const TextStyle(
+        fontFamily: AppTheme.uiFont,
+        fontSize: 12.5,
+        fontWeight: FontWeight.w600,
+      ),
     ),
   );
 

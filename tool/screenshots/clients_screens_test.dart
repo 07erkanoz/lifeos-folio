@@ -32,7 +32,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const pixelRatio = 1.5;
+/// --dart-define=ORAN10=30 for the App Store's sharp pictures (3×).
+const pixelRatio = int.fromEnvironment('ORAN10', defaultValue: 15) / 10;
+
+/// Where pictures go: --dart-define=CIKTI=… for another folder.
+const outDir = String.fromEnvironment(
+  'CIKTI',
+  defaultValue: 'tool/screenshots/out',
+);
 final _frame = GlobalKey();
 
 Future<void> _loadFonts() async {
@@ -98,7 +105,7 @@ Future<void> _shot(WidgetTester tester, String name) async {
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     return data!.buffer.asUint8List();
   });
-  final out = File('tool/screenshots/out/$name.png');
+  final out = File('$outDir/$name.png');
   out.parent.createSync(recursive: true);
   out.writeAsBytesSync(bytes!);
   debugDisableShadows = true;

@@ -39,6 +39,8 @@ import 'package:evrak_convert/services/portal/portal_case.dart';
 import 'package:evrak_convert/services/portal/portal_hearing.dart';
 import 'package:evrak_convert/ui/portfolio/portfolio_rows.dart';
 import 'package:evrak_convert/services/portal/portal_database.dart';
+import 'package:evrak_convert/services/ai/ai_assistant.dart';
+import 'package:evrak_convert/ui/ai/ai_panel.dart';
 import 'package:evrak_convert/services/portal/portal_sync.dart';
 import 'package:evrak_convert/services/portal/uyap_notice.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
@@ -62,8 +64,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const logical = Size(1440, 900);
-const pixelRatio = 1.5;
+/// --dart-define=GENISLIK=1376 --dart-define=YUKSEKLIK=1032 for an iPad.
+const logical = Size(
+  int.fromEnvironment('GENISLIK', defaultValue: 1440) * 1.0,
+  int.fromEnvironment('YUKSEKLIK', defaultValue: 900) * 1.0,
+);
+
+/// --dart-define=ORAN10=30 for the App Store's sharp pictures (3×).
+const pixelRatio = int.fromEnvironment('ORAN10', defaultValue: 15) / 10;
+
+/// Where pictures go: --dart-define=CIKTI=… for another folder.
+const outDir = String.fromEnvironment(
+  'CIKTI',
+  defaultValue: 'tool/screenshots/out',
+);
 final _frame = GlobalKey();
 
 Future<void> _loadFonts() async {
@@ -129,7 +143,7 @@ Future<void> _shot(WidgetTester tester, String name) async {
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     return data!.buffer.asUint8List();
   });
-  final out = File('tool/screenshots/out/$name.png');
+  final out = File('$outDir/$name.png');
   out.parent.createSync(recursive: true);
   out.writeAsBytesSync(bytes!);
   debugDisableShadows = true;
@@ -150,6 +164,104 @@ Widget _app(Widget home) => RepaintBoundary(
 
 void main() {
   setUpAll(_loadFonts);
+
+  testWidgets('yapay zeka telefon', (tester) async {
+    tester.view.physicalSize = const Size(390, 844) * pixelRatio;
+    tester.view.devicePixelRatio = pixelRatio;
+    addTearDown(tester.view.reset);
+    AiAssistant.statusesForTest = const [
+      AiStatus(AiProvider.claude, path: '/bin/claude', signedIn: true),
+    ];
+    addTearDown(() => AiAssistant.statusesForTest = null);
+    final db = PortalDatabase.memory();
+    addTearDown(db.dispose);
+    const answer =
+        'Ara karar size **12.11.2026**\'da tebliğ edildi. Bilirkişi raporuna '
+        'itiraz süresi raporun tebliğinden itibaren **iki haftadır** '
+        '(HMK m. 281/1); son gün **26.11.2026 Perşembe**.\n\n'
+        '**Dosyada öne çıkanlar**\n'
+        '- Rapor, kira bedelinin tespitinde emsal kiraları değil yalnız '
+        'endeksi esas almış; HMK m. 266 uyarınca uzmanlık gerektiren '
+        'değerlendirme eksik.\n'
+        '- Davalı tanığı Ali Kaya\'nın beyanı rapora yansıtılmamış.\n'
+        '- Ek rapor ya da yeni bilirkişi istenebilir (HMK m. 281/2).\n\n'
+        'İtiraz dilekçesi taslağını hazırlamamı ister misiniz?';
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: SafeArea(
+            child: AiPanel(
+              embedded: true,
+              database: () async => db,
+              chat: {
+                'id': 'demo-sohbet',
+                'basladi': '2026-11-15T09:12:00',
+                'turlar': [
+                  {
+                    'soru':
+                        '2024/318 dosyasındaki bilirkişi raporuna ne zamana '
+                        'kadar itiraz etmeliyim, raporda eksik var mı?',
+                    'yazan': 'Gemini · Güçlü',
+                    'cevap': answer,
+                    'sure': 21,
+                    'adimlar': ['evrak_oku', 'mevzuat_madde', 'sure_hesapla'],
+                  },
+                ],
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 40)),
+      );
+      await tester.pump();
+    }
+    await _shot(tester, 'yapay-zeka-telefon');
+    // The same on a wide screen (an iPad's, with GENISLIK/YUKSEKLIK): the
+    // conversation as wide as it is read, its letters as an iPad shows.
+    tester.view.physicalSize = logical * pixelRatio;
+    final panel = (tester.widget(find.byType(AiPanel)) as AiPanel);
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          backgroundColor: const Color(0xFFF3F5F9),
+          body: SafeArea(
+            child: Center(
+              child: Container(
+                width: 900,
+                margin: const EdgeInsets.symmetric(vertical: 24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E6EE)),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: MediaQuery.withClampedTextScaling(
+                  minScaleFactor: 1.3,
+                  maxScaleFactor: 1.3,
+                  child: AiPanel(
+                    embedded: true,
+                    database: panel.database,
+                    chat: panel.chat,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 6; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 40)),
+      );
+      await tester.pump();
+    }
+    await _shot(tester, 'yapay-zeka');
+  });
 
   testWidgets('settings', (tester) async {
     tester.view.physicalSize = logical * pixelRatio;
@@ -614,7 +726,11 @@ void main() {
       complete: true,
     );
     await tester.pumpWidget(
-      _app(Scaffold(body: TasksPage(network: a, database: hearings))),
+      _app(
+        Scaffold(
+          body: TasksPage(network: a, database: hearings),
+        ),
+      ),
     );
     await tester.pump();
     await _shot(tester, 'gorevler');
@@ -1002,15 +1118,19 @@ void main() {
       ('2025/77', 'Antalya 2. İş Mahkemesi', 'İşçi Alacağı'),
       ('2025/9184', 'Antalya 5. İcra Dairesi', 'İlamsız Takip'),
     ];
-    db.mergeCases([
-      for (final (n, c, _) in courts)
-        PortalCase(
-          key: caseKey(n, c),
-          number: n,
-          court: c,
-          status: Observed('Açık', PortalChannel.uyapMobile, at),
-        ),
-    ], portfolio: true, baseline: true);
+    db.mergeCases(
+      [
+        for (final (n, c, _) in courts)
+          PortalCase(
+            key: caseKey(n, c),
+            number: n,
+            court: c,
+            status: Observed('Açık', PortalChannel.uyapMobile, at),
+          ),
+      ],
+      portfolio: true,
+      baseline: true,
+    );
     UyapCaseDocument doc(String key, String type, String day) =>
         UyapCaseDocument(
           key: key,
@@ -1053,16 +1173,20 @@ void main() {
       lawyer: 'Av. Deniz Kaya',
       database: db,
       store: store,
-      archive: (text, limit) async => SearchPage([
-        for (final name in [
-          'Karaca vekaletname.pdf',
-          'Karaca cevap dilekçesi.udf',
-        ])
-          SearchHit(
-            file: EvrakFile.fromPath('${root.path}/$name'),
-            excerpt: '… davacı Ayşe Karaca vekili olarak …',
-          ),
-      ], 2, 0),
+      archive: (text, limit) async => SearchPage(
+        [
+          for (final name in [
+            'Karaca vekaletname.pdf',
+            'Karaca cevap dilekçesi.udf',
+          ])
+            SearchHit(
+              file: EvrakFile.fromPath('${root.path}/$name'),
+              excerpt: '… davacı Ayşe Karaca vekili olarak …',
+            ),
+        ],
+        2,
+        0,
+      ),
     );
     await tester.runAsync(() => search.find('karaca'));
     await tester.pumpWidget(
