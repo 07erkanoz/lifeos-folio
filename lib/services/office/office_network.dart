@@ -204,11 +204,9 @@ class OfficeNetwork extends ChangeNotifier {
             online: _peers[m.deviceId]?.online ?? false,
           ),
     ];
-    final taken = {
-      _self!.deviceId,
-      ...ledger.devicesOf(me),
-      for (final t in out) t.deviceId,
-    };
+    // The person's own devices in the office (their phone joined with
+    // them) are still theirs to send to: only this one is left out.
+    final taken = {_self!.deviceId, for (final t in out) t.deviceId};
     final mine = _identity?.userId;
     final own = <String, String>{
       for (final d in _knownDevices.values)
@@ -1657,9 +1655,15 @@ class OfficeNetwork extends ChangeNotifier {
     // step. Kept alike only when every step came.
     var whole = false;
     var changed = false;
+    // Where a keeping alike stopped, for uzak-senkron.log.
+    void why(String s) =>
+        unawaited(RemoteLog.note('eşitleme ${RemoteLog.short(deviceId)}: $s'));
     try {
       unawaited(_metOwn(ch));
-      if (!ch.vouched) return false;
+      if (!ch.vouched) {
+        why('kimlik doğrulanmadı');
+        return false;
+      }
       final old = actsOldForTesting;
       final plain = await _ownParts(
         peer.deviceId,
@@ -1674,10 +1678,18 @@ class OfficeNetwork extends ChangeNotifier {
         canSplit: false,
       );
       final m = await first.then.within(const Duration(seconds: 20));
-      if (m == null || m['t'] != 'senkron') return false;
+      if (m == null || m['t'] != 'senkron') {
+        why(
+          m == null ? 'yanıt gelmedi (20 sn)' : 'beklenmeyen yanıt ${m['t']}',
+        );
+        return false;
+      }
       final said = _heard(peer.deviceId, m);
       final theirs = await _receivePacked(ch, m, 'parcalar');
-      if (theirs == null) return false;
+      if (theirs == null) {
+        why('karşının parçaları alınamadı');
+        return false;
+      }
       changed = await _ownCame(_unpack(theirs), peer.deviceId, said);
       whole = first.sent;
       if (!old && said.protocol >= SyncCaps.protocol) {
@@ -1697,7 +1709,21 @@ class OfficeNetwork extends ChangeNotifier {
             ack != null &&
             ack['t'] == 'senkron-ek' &&
             ack['tamam'] == true;
+        if (!whole) {
+          why(
+            !second.sent
+                ? 'ikinci adım gönderilemedi (${more.length} parça)'
+                : ack == null
+                ? 'ikinci adıma onay gelmedi (40 sn)'
+                : 'ikinci adım onaylanmadı ${ack['t']} ${ack['tamam']}',
+          );
+        }
+      } else if (!whole) {
+        why('ilk adım sığmadı');
       }
+    } catch (e) {
+      why('hata: $e');
+      rethrow;
     } finally {
       await ch.close();
     }
@@ -1783,6 +1809,9 @@ class OfficeNetwork extends ChangeNotifier {
     }
     final trusted = await _trusted(deviceId);
     if (trusted == null) {
+      unawaited(
+        RemoteLog.note('eşitleme ${RemoteLog.short(deviceId)}: tanınmıyor'),
+      );
       await link.close();
       return false;
     }
@@ -1795,7 +1824,10 @@ class OfficeNetwork extends ChangeNotifier {
         ),
         deviceId,
       );
-    } catch (_) {
+    } catch (e) {
+      unawaited(
+        RemoteLog.note('eşitleme ${RemoteLog.short(deviceId)}: kanal: $e'),
+      );
       return false;
     }
   }
@@ -1978,7 +2010,6 @@ class OfficeNetwork extends ChangeNotifier {
         unawaited(
           RemoteLog.note(
             'yanıt ${RemoteLog.short(deviceId)}: ${m['t']}'
-            '${m['tur'] == null ? '' : ' ${m['tur']}'}'
             '${m['tur'] == null ? '' : ' ${m['tur']}'}'
             '${m['t'] == 'offer' && !lightOffer(m) ? ' (fazla büyük, alınmadı)' : ''}',
           ),

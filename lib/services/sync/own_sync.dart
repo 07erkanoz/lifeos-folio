@@ -33,6 +33,10 @@ import '../../models/json_shape.dart';
 /// Senkron (docs/buro.md): what one person's own devices keep alike when
 /// they are on the same network, each part on or off on this device.
 class OwnSync extends ChangeNotifier {
+  /// Own devices on another network whose UYAP data is being taken in
+  /// after a keeping alike (see the uyap part): one at a time each.
+  final _uyapLater = <String>{};
+
   OwnSync({
     OfficeNetwork? network,
     Future<PortalDatabase> Function()? database,
@@ -427,7 +431,27 @@ class OwnSync extends ChangeNotifier {
       );
       _net.ownParts[uyapData] = OwnPart(
         export: () async => uyap.summary(_net.self?.deviceId ?? ''),
-        merge: uyap.merge,
+        merge: (theirs) {
+          // Taking in asks the other device for each case and list it
+          // differs in. Over the relay each ask is a talk of its own, a
+          // few seconds: done after the keeping alike, one at a time, not
+          // within it (the other side waits only so long).
+          final from = theirs is Map ? theirs['cihaz'] : null;
+          final near = _net.ownOnline.any((p) => p.deviceId == from);
+          if (from is! String || near) return uyap.merge(theirs);
+          if (!_uyapLater.add(from)) return Future.value(false);
+          unawaited(
+            Future<void>(() async {
+              try {
+                await uyap.merge(theirs);
+              } catch (_) {
+              } finally {
+                _uyapLater.remove(from);
+              }
+            }),
+          );
+          return Future.value(false);
+        },
       );
       _net.ownAnswers[UyapOwnSync.kind] = (asked) async =>
           (await uyap.answer(asked), null);
