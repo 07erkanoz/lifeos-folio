@@ -76,6 +76,15 @@ static void my_application_activate(GApplication* application) {
                          G_CALLBACK(own_decorations_cb), nullptr);
 
   gtk_window_set_default_size(window, 1280, 720);
+  // Folio and its editor open maximized, asked before the window is ever
+  // shown: shown first at the default size, then maximized from Dart, it
+  // was seen small and then large (16 Kasım 2026). A preview window keeps
+  // the size it asks for.
+  gboolean preview = FALSE;
+  for (char** arg = self->dart_entrypoint_arguments; arg && *arg; arg++) {
+    if (g_strcmp0(*arg, "--preview") == 0) preview = TRUE;
+  }
+  if (!preview) gtk_window_maximize(window);
   g_autofree gchar* executable = g_file_read_link("/proc/self/exe", nullptr);
   if (executable != nullptr) {
     g_autofree gchar* directory = g_path_get_dirname(executable);

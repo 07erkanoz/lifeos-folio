@@ -12,6 +12,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'editor_app.dart' show EditedDot, FrameButton, opensInEditor;
 import 'models/evrak_file.dart';
+import 'services/desktop/window_session.dart' show showMaximizedOnLinux;
 import 'services/editor/document_history.dart';
 import 'services/editor/editor_drafts.dart';
 import 'services/editor/suggestions/phrase_memory.dart';
@@ -70,9 +71,13 @@ Future<void> runOfisApp(List<String> arguments) async {
       options = WindowOptions(
         titleBarStyle: TitleBarStyle.hidden,
         windowButtonVisibility: Platform.isMacOS,
-        size: await fitToPrimaryScreen(const Size(1280, 840)),
+        // Linux: maximized by GTK before it is shown (linux/runner); a size
+        // or centring here would take that back.
+        size: Platform.isLinux
+            ? null
+            : await fitToPrimaryScreen(const Size(1280, 840)),
         minimumSize: const Size(760, 540),
-        center: true,
+        center: !Platform.isLinux,
         title: ofisTitle(path),
       );
       await windowManager.setPreventClose(true);
@@ -92,7 +97,9 @@ Future<void> runOfisApp(List<String> arguments) async {
     unawaited(PhraseMemory.shared().then((_) {}, onError: (_) {}));
     unawaited(preloadPdfFonts());
   });
-  if (options != null) {
+  if (options != null && Platform.isLinux) {
+    await showMaximizedOnLinux(options);
+  } else if (options != null) {
     await windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.show();
       await windowManager.focus();

@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'services/desktop/window_session.dart' show showMaximizedOnLinux;
 import 'services/platform/app_language.dart';
 
 import 'package:flutter/services.dart';
@@ -61,9 +62,11 @@ Future<void> runEditorApp(List<String> arguments) async {
       options = WindowOptions(
         titleBarStyle: TitleBarStyle.hidden,
         windowButtonVisibility: Platform.isMacOS,
-        size: const Size(1150, 820),
+        // Linux: maximized by GTK before it is shown (linux/runner); a size
+        // or centring here would take that back.
+        size: Platform.isLinux ? null : const Size(1150, 820),
         minimumSize: const Size(720, 520),
-        center: true,
+        center: !Platform.isLinux,
         title: editorTitle(path),
       );
       await windowManager.setPreventClose(true);
@@ -85,16 +88,19 @@ Future<void> runEditorApp(List<String> arguments) async {
     unawaited(preloadPdfFonts());
     Timer(const Duration(milliseconds: 1500), PortalSync.begin);
   });
-  if (options != null) {
+  if (options != null && Platform.isLinux) {
+    await showMaximizedOnLinux(options);
+  } else if (options != null) {
     await windowManager.waitUntilReadyToShow(options, () async {
       // A document is written across the whole screen: the editor always
       // opens maximized, its size above only what un-maximizing returns to.
       if (Platform.isWindows) {
         await showMaximized();
-      } else {
+      } else if (!Platform.isLinux) {
         await windowManager.maximize();
         await windowManager.show();
       }
+      // Linux: maximized by GTK before it was ever shown (linux/runner).
       await windowManager.focus();
     });
   }

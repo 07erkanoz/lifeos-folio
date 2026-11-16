@@ -202,8 +202,10 @@ void main(List<String> arguments) async {
         );
         await windowManager.setTitle(windowOptions.title!);
         await windowManager.setMinimumSize(windowOptions.minimumSize!);
+        // GTK has it maximized already (linux/runner): the size kept is
+        // what un-maximizing returns to, the window not moved meanwhile.
         if (windowSession != null) {
-          await windowSession.restore();
+          await windowSession.restore(maximizedByRunner: true);
         } else {
           await windowManager.setSize(windowOptions.size!);
         }

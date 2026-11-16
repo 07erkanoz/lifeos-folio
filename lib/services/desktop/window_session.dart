@@ -70,13 +70,22 @@ class WindowSession with WindowListener {
   /// Puts the window back as it was left. [showMaximized], when given, shows
   /// a hidden window that was left maximized in one step instead of
   /// maximizing it after it is shown.
-  Future<void> restore({Future<void> Function()? showMaximized}) async {
+  ///
+  /// [maximizedByRunner]: the window was maximized before it was shown
+  /// (Linux); only its normal size is set, for un-maximizing, and it is
+  /// neither moved nor maximized again.
+  Future<void> restore({
+    Future<void> Function()? showMaximized,
+    bool maximizedByRunner = false,
+  }) async {
     suspended = true;
     try {
       await windowManager.setSize(await fitToPrimaryScreen(data.size));
-      await windowManager.center();
-      if (data.maximized) {
-        await (showMaximized ?? windowManager.maximize)();
+      if (!maximizedByRunner) {
+        await windowManager.center();
+        if (data.maximized) {
+          await (showMaximized ?? windowManager.maximize)();
+        }
       }
       if (data.fullscreen) await windowManager.setFullScreen(true);
     } finally {
@@ -139,4 +148,22 @@ class WindowSession with WindowListener {
     if (_listening) windowManager.removeListener(this);
     _listening = false;
   }
+}
+
+/// A window GTK maximized before showing it (linux/runner), given the rest
+/// of [options]. Not window_manager's waitUntilReadyToShow, with or without
+/// options: it unmaximizes a maximized window before anything else, and the window was seen large,
+/// then small (16 Kasım 2026).
+Future<void> showMaximizedOnLinux(WindowOptions options) async {
+  if (options.titleBarStyle != null) {
+    await windowManager.setTitleBarStyle(
+      options.titleBarStyle!,
+      windowButtonVisibility: options.windowButtonVisibility ?? true,
+    );
+  }
+  if (options.minimumSize != null) {
+    await windowManager.setMinimumSize(options.minimumSize!);
+  }
+  if (options.title != null) await windowManager.setTitle(options.title!);
+  await windowManager.focus();
 }
