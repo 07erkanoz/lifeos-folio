@@ -1,0 +1,74 @@
+name: Windows açılış tanısı
+run-name: LifeOS Folio · Windows açılış tanısı · ${{ inputs.setup }}
+# Folio installed from lifeos.com.tr as a lawyer installs it, its first
+# welcome taken as done, then opened: whether it stays up, shows a window,
+# what it writes to stderr and what Windows logged if it went down
+# (16 Kasım 2026: after the welcome Folio showed nothing on a new PC).
+on:
+  workflow_dispatch:
+    inputs:
+      setup:
+        description: Kurulum dosyasının adı (downloads/ altında)
+        default: LifeOS-Folio-1.8.6-Windows-x64-Setup.exe
+permissions:
+  contents: read
+jobs:
+  tani:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - name: Kur ve aç
+        shell: pwsh
+        env:
+          SETUP: ${{ inputs.setup }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $dir = Join-Path $env:RUNNER_TEMP 'folio'
+          $setup = Join-Path $env:RUNNER_TEMP 'setup.exe'
+          Invoke-WebRequest "https://lifeos.com.tr/downloads/$env:SETUP" -OutFile $setup
+          $install = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=`"$dir`""
+          "kurulum çıkış kodu: $($install.ExitCode)"
+          Get-ChildItem $dir -Filter *.exe | ForEach-Object { "{0} {1}" -f $_.Name, $_.VersionInfo.FileVersion }
+          $data = Join-Path $env:APPDATA 'LifeOS\LifeOS Evrakçı'
+          New-Item -ItemType Directory -Force $data | Out-Null
+          '{"licenseVersion":"2026-09-11","acceptedAt":"2026-09-11T10:03:27Z","completed":true}' |
+            Set-Content -Encoding utf8NoBOM (Join-Path $data 'onboarding.json')
+          $env:FOLIO_STARTUP_TRACE = '1'
+          $since = Get-Date
+          $err = Join-Path $env:RUNNER_TEMP 'stderr.txt'
+          $out = Join-Path $env:RUNNER_TEMP 'stdout.txt'
+          $p = Start-Process -FilePath (Join-Path $dir 'lifeos_folio.exe') -PassThru -RedirectStandardError $err -RedirectStandardOutput $out
+          $window = $null
+          for ($i = 0; $i -lt 120; $i++) {
+            Start-Sleep -Milliseconds 250
+            $p.Refresh()
+            if ($p.HasExited) { break }
+            if ($p.MainWindowHandle -ne 0 -and -not $window) { $window = "$($i * 250) ms" }
+          }
+          Start-Sleep -Seconds 15
+          $p.Refresh()
+          "pencere: $window"
+          "çalışıyor mu: $(-not $p.HasExited)"
+          if ($p.HasExited) { "çıkış kodu: $($p.ExitCode)" } else { "pencere başlığı: $($p.MainWindowTitle)" }
+          Get-Process lifeos_folio, lifeos_editor -ErrorAction SilentlyContinue |
+            ForEach-Object { "süreç: {0} pid {1} pencere '{2}'" -f $_.ProcessName, $_.Id, $_.MainWindowTitle }
+          "--- stderr"; Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 80
+          "--- stdout"; Get-Content $out -ErrorAction SilentlyContinue | Select-Object -Last 40
+          "--- Windows olay günlüğü"
+          Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$since} -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -match 'Application Error|Windows Error Reporting|\.NET Runtime|SideBySide' } |
+            ForEach-Object { "[$($_.ProviderName)] $($_.Message)" } | Select-Object -First 10
+          "--- veri klasörü"
+          Get-ChildItem $data -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { "{0} {1}" -f $_.FullName.Substring($data.Length), $_.Length }
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save((Join-Path $env:RUNNER_TEMP 'ekran.png'))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tani
+          path: |
+            ${{ runner.temp }}/ekran.png
+            ${{ runner.temp }}/stderr.txt
