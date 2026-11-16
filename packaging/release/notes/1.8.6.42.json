@@ -1,0 +1,8 @@
+{
+  "tr": "UYAP Web bağlantısı artık tek bir isteğe gelen beklenmedik bir yanıt yüzünden kapanmaz; Folio önce oturumun gerçekten bitip bitmediğini UYAP'a sorar. UYAP Mobil sunucusu cevap vermediğinde Folio bunu açıkça söyler ve girişin her adımı günlüğe yazılır. Folio, editör ve LifeOS Ofis Linux'ta önce küçük açılıp sonra büyümez; doğrudan tam ekran açılır. Markdown, HTML ve veri dosyalarında Düzenle'ye basınca boş sayfa yerine dosyanın kendisi açılır. Senkron sayfası cihazların farklı ağlarda nasıl bağlandığını anlatır ve indirme bağlantıları Folio'nun yeni sayfasına gider.",
+  "en": "The UYAP Web connection no longer closes because of one unexpected answer to a single request; Folio first asks UYAP whether the session has really ended. When the UYAP Mobil server does not answer, Folio says so plainly, and every step of the login is written to the log. On Linux, Folio, the editor and LifeOS Ofis no longer open small and then grow; they open maximized. Edit on a Markdown, HTML or data file opens the file itself instead of a blank page. The Senkron page explains how devices connect on different networks, and the download links lead to Folio's new page.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.8.6.42: Linux'ta pencere doğrudan tam ekran açılır; önce küçük açılıp sonra büyümez.",
+    "en": "LifeOS Ofis 1.8.6.42: on Linux the window opens maximized directly; it no longer opens small and then grows."
+  }
+}
