@@ -36,11 +36,23 @@ abstract final class EditorWindow {
 
   static Future<void> _inFolio(String path) async {
     if (!available) return;
-    await Process.start(Platform.resolvedExecutable, [
+    await Process.start(folioExecutable(Platform.resolvedExecutable), [
       '--edit',
       '--',
       path,
     ], mode: ProcessStartMode.detached);
+  }
+
+  /// Folio's own program beside [running]: LifeOS Editör's program on
+  /// Linux (lifeos_editor) starts as the editor whatever it is given, and
+  /// a document handed "to Folio" from it came back to it, again and again.
+  static String folioExecutable(String running) {
+    final name = p.basename(running);
+    if (!name.startsWith('lifeos_editor')) return running;
+    return p.join(
+      p.dirname(running),
+      name.replaceFirst('lifeos_editor', 'lifeos_folio'),
+    );
   }
 
   static Future<void> _open([String? path]) async {

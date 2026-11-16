@@ -56,7 +56,8 @@ Future<void> runEditorApp(List<String> arguments) async {
   // LifeOS Editör): Folio's own window edits it, not a blank page here.
   if (path == null) {
     final other = launch.paths.where(FileSystemEntity.isFileSync).firstOrNull;
-    if (other != null) {
+    final folio = EditorWindow.folioExecutable(Platform.resolvedExecutable);
+    if (other != null && File(folio).existsSync()) {
       await EditorWindow.inFolio(other);
       exit(0);
     }

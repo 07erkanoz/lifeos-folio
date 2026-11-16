@@ -21,4 +21,16 @@ void main() {
       );
     }
   });
+
+  test('handed to Folio from LifeOS Editör, Folio\'s own program starts, '
+      'not the editor again', () {
+    expect(
+      EditorWindow.folioExecutable('/opt/folio/lifeos_editor'),
+      '/opt/folio/lifeos_folio',
+    );
+    expect(
+      EditorWindow.folioExecutable('/opt/folio/lifeos_folio'),
+      '/opt/folio/lifeos_folio',
+    );
+  });
 }
