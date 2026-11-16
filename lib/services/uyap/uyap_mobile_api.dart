@@ -105,20 +105,59 @@ class UyapMobileApi {
   /// reaches the web portal.
   Future<MobileSession> login(String code) async {
     final generation = ++_generation;
-    final data = await _send('POST', 'auth/edevlet', {
-      'code': code,
-      // The three are required, or UYAP fails with a NullPointerException.
-      'model': 'windows_desktop',
-      'serial': 'LifeOS_Folio',
-      'type': '2',
-    }, authorized: false);
-    final tokens = MobileTokens.fromLogin(data, DateTime.now());
+    final started = DateTime.now();
+    String took() =>
+        '${DateTime.now().difference(started).inMilliseconds / 1000} sn';
+    log?.call('UYAP Mobil girişi: e-Devlet kodu UYAP’a gönderiliyor');
+    final dynamic data;
+    try {
+      data = await _send('POST', 'auth/edevlet', {
+        'code': code,
+        // The three are required, or UYAP fails with a NullPointerException.
+        'model': 'windows_desktop',
+        'serial': 'LifeOS_Folio',
+        'type': '2',
+      }, authorized: false);
+    } on TimeoutException {
+      log?.call('UYAP Mobil girişi: sunucu ${took()} içinde cevap vermedi');
+      throw StateError(silentServer);
+    } on SocketException catch (e) {
+      log?.call('UYAP Mobil girişi: sunucuya ulaşılamadı (${e.message})');
+      throw StateError(silentServer);
+    } catch (e) {
+      log?.call('UYAP Mobil girişi: UYAP geri çevirdi (${took()}): $e');
+      rethrow;
+    }
+    final MobileTokens tokens;
+    try {
+      tokens = MobileTokens.fromLogin(data, DateTime.now());
+    } catch (e) {
+      log?.call('UYAP Mobil girişi: cevap anlaşılmadı: $e');
+      rethrow;
+    }
     if (generation != _generation) {
       throw StateError('Daha yeni bir giriş başladı.');
     }
     _setTokens(tokens);
-    return _identify();
+    try {
+      final s = await _identify();
+      log?.call(
+        'UYAP Mobil girişi tamam (${took()}); oturum '
+        '${tokens.refreshExpires} tarihine kadar geçerli',
+      );
+      return s;
+    } catch (e) {
+      log?.call('UYAP Mobil girişi: kimlik okunamadı: $e');
+      rethrow;
+    }
   }
+
+  /// Told when UYAP Mobil's server does not answer at all: the code went,
+  /// nothing came back (16 Kasım 2026, from every network alike).
+  static const silentServer =
+      'UYAP Mobil sunucusu cevap vermiyor. Bu, UYAP’ın kendi tarafında bir '
+      'kesinti olabilir; biraz sonra yeniden deneyin. Acil bir işiniz varsa '
+      'UYAP Web ile bağlanabilirsiniz.';
 
   /// What the session did, a line each, with no token in it: when it was
   /// taken up again, renewed, refused and why (uyap-senkron.log).

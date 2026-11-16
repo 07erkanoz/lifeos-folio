@@ -299,11 +299,15 @@ class _UyapConnectViewState extends State<UyapConnectView> {
       final String user;
       if (_route == _Route.mobileApi) {
         setState(() => _stage = 'e-Devlet penceresinde girişi tamamlayın');
+        UyapMobileApi.log?.call('UYAP Mobil girişi: e-Devlet penceresi açıldı');
         final code = await uyapMobileCode(
           context,
           messenger: ScaffoldMessenger.maybeOf(context),
         );
         if (code == null) {
+          UyapMobileApi.log?.call(
+            'UYAP Mobil girişi: e-Devlet penceresi kodsuz kapandı',
+          );
           if (mounted) setState(() => _stage = null);
           return;
         }
