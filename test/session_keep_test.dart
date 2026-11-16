@@ -51,6 +51,13 @@ void main() {
         await r.response.close();
         return;
       }
+      if (path == '/yargiBirimleriSorgula_brd.ajx') {
+        // UYAP stumbling on one request: an error page of its own.
+        r.response.headers.contentType = ContentType.html;
+        r.response.write('<html><body>Hata</body></html>');
+        await r.response.close();
+        return;
+      }
       if (path == '/kullanici_bilgileri.uyap') {
         final cookie = r.headers.value('Cookie') ?? '';
         answer = webAlive && cookie.contains('JSESSIONID=good')
@@ -208,6 +215,37 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(secrets.values.containsKey('uyap-web'), isTrue);
     expect(await web.check(), isTrue);
+    s.dispose();
+  });
+
+  test('one request answered by a page does not end a session UYAP still '
+      'holds; one it no longer holds ends', () async {
+    final kept = {
+      'cookies': {'JSESSIONID': 'good'},
+      'tckn': '',
+      'user': 'Deniz',
+      'since': DateTime.now()
+          .subtract(const Duration(minutes: 1))
+          .toUtc()
+          .toIso8601String(),
+      'route': 'tray',
+    };
+    final secrets = _MemorySecrets()..values['uyap-web'] = kept;
+    final web = UyapWebService.forTesting(portal: at('/'));
+    final s = sync(secrets, web: web)..start();
+    await until(() => web.connected);
+    await expectLater(
+      web.courtTypes('1'),
+      throwsA(predicate((e) => '$e'.contains('oturumunuz açık'))),
+    );
+    expect(web.connected, isTrue);
+    // UYAP no longer holds it: then the same answer ends it.
+    webAlive = false;
+    await expectLater(
+      web.courtTypes('1'),
+      throwsA(predicate((e) => '$e'.contains('sona erdi'))),
+    );
+    expect(web.connected, isFalse);
     s.dispose();
   });
 

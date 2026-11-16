@@ -152,6 +152,7 @@ class PortalSync extends ChangeNotifier {
     _started = true;
     // What UYAP Mobil's session does, in the log a lawyer can send.
     UyapMobileApi.log = (line) => unawaited(SyncLog.note(line));
+    UyapWebService.log = (line) => unawaited(SyncLog.note(line));
     _web.session.addListener(_webChanged);
     _mobile.session.addListener(_mobileChanged);
     _uets.session.addListener(_uetsChanged);
@@ -1576,8 +1577,7 @@ class PortalSync extends ChangeNotifier {
         if (id != null && _mobile.connected && asked < 5) {
           asked++;
           try {
-            final type =
-                '${cases[e.key]?.details?.value['dosyaTurKod'] ?? ''}';
+            final type = '${cases[e.key]?.details?.value['dosyaTurKod'] ?? ''}';
             final got = [
               for (final p in await _mobile.parties(id, caseType: type))
                 UyapParty.fromMap(p),

@@ -653,6 +653,61 @@ class UyapWebService {
     return info is Map ? int.tryParse('${info['level'] ?? ''}') ?? 0 : 0;
   }
 
+  /// Told when one request was answered oddly but the session is alive.
+  static const odd =
+      'UYAP bu isteğe beklenmeyen bir yanıt verdi; oturumunuz açık. Biraz '
+      'sonra yeniden deneyin.';
+
+  /// What the web session did, a line each (uyap-senkron.log).
+  static void Function(String line)? log;
+
+  /// A request answered by a redirect, a 401 or a page where JSON was
+  /// awaited: the session over, or UYAP stumbling on this one request
+  /// (busy, or an error page of its own). Asked of UYAP itself before the
+  /// session is let go of: one odd answer used to end it (16 Kasım 2026).
+  /// True when it is over, and then it is let go of.
+  Future<bool> _sessionEnded(String path, int status) async {
+    final what = status == 200 ? 'bir sayfa' : 'HTTP $status';
+    try {
+      final info = await _getJsonNow('/kullanici_bilgileri.uyap', {
+        'edevleturlparams': 'y',
+      });
+      final level = info is Map
+          ? int.tryParse('${info['level'] ?? ''}') ?? 0
+          : 0;
+      if (level >= 1) {
+        log?.call(
+          'UYAP Web: $path isteğine $what geldi; oturum açık, bağlantı '
+          'korunuyor',
+        );
+        return false;
+      }
+    } on SocketException {
+      log?.call(
+        'UYAP Web: $path isteğine $what geldi; UYAP’a ulaşılamadı, '
+        'bağlantı korunuyor',
+      );
+      return false;
+    } on TimeoutException {
+      log?.call(
+        'UYAP Web: $path isteğine $what geldi; UYAP cevap vermedi, '
+        'bağlantı korunuyor',
+      );
+      return false;
+    } on _PortalDown {
+      log?.call(
+        'UYAP Web: $path isteğine $what geldi; UYAP meşgul, '
+        'bağlantı korunuyor',
+      );
+      return false;
+    } catch (_) {
+      // Answered, and not with a session.
+    }
+    log?.call('UYAP Web: $path isteğine $what geldi; oturum kapanmış');
+    disconnect();
+    return true;
+  }
+
   /// A GET the portal answers in JSON (as text/json), in its turn
   /// ([UyapPace]).
   Future<dynamic> _getJson(String path, Map<String, String> query) => UyapPace
@@ -704,8 +759,10 @@ class UyapWebService {
     if (response.statusCode == 302 ||
         response.statusCode == 401 ||
         data.trimLeft().startsWith('<')) {
-      disconnect();
-      throw StateError('UYAP oturumu sona erdi. Yeniden bağlanın.');
+      if (await _sessionEnded(path, response.statusCode)) {
+        throw StateError('UYAP oturumu sona erdi. Yeniden bağlanın.');
+      }
+      throw StateError(odd);
     }
     if (response.statusCode != 200) {
       throw StateError(uyapStatus('UYAP Web', response.statusCode));
@@ -1263,8 +1320,10 @@ class UyapWebService {
     if (response.statusCode == 302 ||
         response.statusCode == 401 ||
         head.startsWith('<')) {
-      disconnect();
-      throw StateError('UYAP oturumu sona erdi. Yeniden bağlanın.');
+      if (await _sessionEnded(path, response.statusCode)) {
+        throw StateError('UYAP oturumu sona erdi. Yeniden bağlanın.');
+      }
+      throw StateError(odd);
     }
     if (head.startsWith('{') || head.startsWith('[')) {
       Object? parsed;
@@ -1418,9 +1477,14 @@ class UyapWebService {
     if (response.statusCode == 302 ||
         response.statusCode == 401 ||
         body.trimLeft().startsWith('<')) {
-      disconnect();
+      if (await _sessionEnded('gönderim', response.statusCode)) {
+        throw StateError(
+          'UYAP oturumu sona erdi; gönderim sonucunu portalda kontrol edin.',
+        );
+      }
       throw StateError(
-        'UYAP oturumu sona erdi; gönderim sonucunu portalda kontrol edin.',
+        'UYAP gönderime beklenmeyen bir yanıt verdi; oturum açık. Gönderim '
+        'sonucunu portalda kontrol edin.',
       );
     }
     if (response.statusCode != 200) {
