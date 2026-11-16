@@ -14,9 +14,28 @@ permissions:
   contents: read
 jobs:
   tani:
-    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            culture: en-US
+          - os: windows-2022
+            culture: tr-TR
+          - os: windows-2025
+            culture: en-US
+          - os: windows-2025
+            culture: tr-TR
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
+      - name: Bölge ayarı
+        shell: pwsh
+        run: |
+          Set-Culture ${{ matrix.culture }}
+          Set-WinHomeLocation -GeoId $(if ('${{ matrix.culture }}' -eq 'tr-TR') { 235 } else { 244 })
+          Set-WinUserLanguageList ${{ matrix.culture }} -Force
+          [System.Environment]::OSVersion.VersionString
       - name: Kur ve aç
         shell: pwsh
         env:
@@ -68,7 +87,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: tani
+          name: tani-${{ matrix.os }}-${{ matrix.culture }}
           path: |
             ${{ runner.temp }}/ekran.png
             ${{ runner.temp }}/stderr.txt
