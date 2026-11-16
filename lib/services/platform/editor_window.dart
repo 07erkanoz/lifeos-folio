@@ -1,5 +1,8 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
+import '../../models/evrak_file.dart';
 import 'app_edition.dart';
 
 /// Where the standalone editor starts: `--editor` on the command line, as
@@ -42,6 +45,16 @@ abstract final class EditorWindow {
 
   static Future<void> _open([String? path]) async {
     if (!available) return;
+    // A plain text, a Markdown file, a workbook: the standalone editor
+    // writes formatted documents only and showed these as a blank page
+    // (16 Kasım 2026). Edited in Folio's own window, in their own editor.
+    if (path != null &&
+        !AppEdition.isOfis &&
+        !opensInStandaloneEditor(
+          EvrakFormat.fromExtension(p.extension(path)),
+        )) {
+      return _inFolio(path);
+    }
     await Process.start(Platform.resolvedExecutable, [
       // LifeOS Ofis's new window is Ofis's, not LifeOS Editör's.
       if (AppEdition.isOfis) ...[ofisFlag, '--edit'] else editorFlag,
@@ -49,6 +62,14 @@ abstract final class EditorWindow {
     ], mode: ProcessStartMode.detached);
   }
 }
+
+/// Whether LifeOS Editör (the standalone editor) opens [format]: the
+/// formatted documents Folio edits in its text editor. Plain text, Markdown,
+/// web pages, data and workbooks are edited in Folio's own window.
+bool opensInStandaloneEditor(EvrakFormat format) =>
+    format.canEdit &&
+    !format.usesPlainTextEditor &&
+    format != EvrakFormat.spreadsheet;
 
 /// A document in a preview window of its own, only to be read.
 abstract final class PreviewWindow {

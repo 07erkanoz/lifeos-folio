@@ -52,6 +52,15 @@ Future<void> runEditorApp(List<String> arguments) async {
         (path) => opensInEditor(EvrakFormat.fromExtension(p.extension(path))),
       )
       .firstOrNull;
+  // Given only a document it does not write (a Markdown file opened with
+  // LifeOS Editör): Folio's own window edits it, not a blank page here.
+  if (path == null) {
+    final other = launch.paths.where(FileSystemEntity.isFileSync).firstOrNull;
+    if (other != null) {
+      await EditorWindow.inFolio(other);
+      exit(0);
+    }
+  }
   var chrome = false;
   WindowOptions? options;
   if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
@@ -108,10 +117,7 @@ Future<void> runEditorApp(List<String> arguments) async {
 
 /// Whether the standalone editor opens [format]: the formats Folio edits in
 /// its text editor.
-bool opensInEditor(EvrakFormat format) =>
-    format.canEdit &&
-    !format.usesPlainTextEditor &&
-    format != EvrakFormat.spreadsheet;
+bool opensInEditor(EvrakFormat format) => opensInStandaloneEditor(format);
 
 /// "dilekce.udf — LifeOS Editör", or the program alone for a new document:
 /// the window's title, which the task bar and Alt+Tab show.
