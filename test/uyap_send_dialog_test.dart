@@ -53,7 +53,14 @@ class _Web extends UyapWebService {
   @override
   Future<List<UyapDocumentType>> documentTypes(UyapCase target) async => const [
     UyapDocumentType('1', 'Beyan Dilekçesi', '1', false, 1, 0, {'udf'}),
+    UyapDocumentType('2', 'İstinaf Başvurusu', '1', false, 1, 5, {'udf'}),
   ];
+
+  /// The kinds UYAP says take a fee on the case.
+  Set<String> paid = const {};
+
+  @override
+  Future<Set<String>> paidDocumentCodes(UyapCase target) async => paid;
 
   @override
   Future<List<UyapParty>> parties(UyapCase target) async => const [
@@ -62,6 +69,22 @@ class _Web extends UyapWebService {
 }
 
 void main() {
+  test('the kinds UYAP takes a fee for are read as the portal reads them: '
+      'a list of codes, a list within it, or records', () {
+    expect(UyapWebService.paidCodesOf(['10', '20']), {'10', '20'});
+    expect(
+      UyapWebService.paidCodesOf([
+        ['10'],
+        {'turKodu': 30},
+        {'tur': '40'},
+        '',
+        null,
+      ]),
+      {'10', '30', '40'},
+    );
+    expect(UyapWebService.paidCodesOf(const []), isEmpty);
+  });
+
   late UyapWebService before;
   setUp(() => before = UyapWebService.instance);
   tearDown(() => UyapWebService.instance = before);
@@ -103,5 +126,48 @@ void main() {
     expect(web.listed, 1);
     expect(find.text('Dosyaları getir'), findsNothing);
     expect(find.textContaining('AYŞE KARACA'), findsWidgets);
+  });
+
+  testWidgets('a kind UYAP takes a fee for is listed with why, and not '
+      'chosen', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final web = _Web()..paid = {'2'};
+    UyapWebService.instance = web;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: UyapSendDialog(
+            documentName: 'Istinaf.udf',
+            documentBytes: Uint8List(0),
+            stillCurrent: () async => true,
+            target: const UyapCaseLink(
+              jurisdiction: '1',
+              courtType: 'HUKUK',
+              courtId: 'h1',
+              court: _court,
+              number: 'eski kayıt',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dosyaları getir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2025/80'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Evrak türü'));
+    await tester.pumpAndSettle();
+    final paid = find.textContaining('İstinaf Başvurusu — harç gerektiriyor');
+    expect(paid, findsWidgets);
+    await tester.tap(paid.last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    // Not taken: no description box opens for a chosen kind.
+    expect(find.text('Evrak açıklaması'), findsNothing);
+    await tester.tap(find.text('Beyan Dilekçesi').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Evrak açıklaması'), findsOneWidget);
   });
 }

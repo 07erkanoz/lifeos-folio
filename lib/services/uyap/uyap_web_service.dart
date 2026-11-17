@@ -1061,6 +1061,48 @@ class UyapWebService {
         ].toList();
       });
 
+  /// The document kinds UYAP takes a fee or stamp for on [target]
+  /// (`odeme_alinacak_evrak_listesi.ajx`): the portal's own client asks it
+  /// beside the kinds and moves to its payment form for these. Folio pays
+  /// nothing, so they are not sent from here (17 Kasım 2026; banaozel
+  /// 5d7f5e0e). Throws when UYAP does not say: no kind can then be taken
+  /// for free.
+  Future<Set<String>> paidDocumentCodes(UyapCase target) =>
+      _serial(() => _paidCodesNow(target));
+
+  Future<Set<String>> _paidCodesNow(UyapCase target) async {
+    final data = await _post('/odeme_alinacak_evrak_listesi.ajx', {
+      'dosyaId': target.id,
+    });
+    if (data is! List) {
+      throw StateError(
+        'UYAP’tan harç gerektiren evrak türleri okunamadı; gönderim '
+        'yapılmadı.',
+      );
+    }
+    return paidCodesOf(data);
+  }
+
+  /// The codes in UYAP's answer: a flat list of codes, as the portal's
+  /// client reads it (`odemeAlinacakEvrakListesi.includes(e.tur)`), a list
+  /// within it, or records with `turKodu` / `tur`.
+  static Set<String> paidCodesOf(Object? data) {
+    final codes = <String>{};
+    final pending = <Object?>[data];
+    while (pending.isNotEmpty) {
+      final item = pending.removeLast();
+      if (item is List) {
+        pending.addAll(item);
+      } else if (item is Map) {
+        final code = '${item['turKodu'] ?? item['tur'] ?? ''}'.trim();
+        if (code.isNotEmpty) codes.add(code);
+      } else if (item != null && '$item'.trim().isNotEmpty) {
+        codes.add('$item'.trim());
+      }
+    }
+    return codes;
+  }
+
   Future<List<UyapParty>> parties(UyapCase target) => _serial(() async {
     final data = await _post('/dosya_taraf_bilgileri_brd.ajx', {
       'dosyaId': target.id,
@@ -1358,6 +1400,18 @@ class UyapWebService {
   }) => _serial(() async {
     if (!connected) throw StateError('UYAP web oturumu açık değil.');
     if (files.isEmpty) throw StateError('Gönderilecek evrak yok.');
+    // A kind UYAP takes a fee for goes through its payment form, which
+    // Folio does not fill: sent from here it would arrive unpaid.
+    final paid = await _paidCodesNow(target);
+    for (final file in files) {
+      final kind = file.documentType ?? type;
+      if (paid.contains(kind.code)) {
+        throw StateError(
+          '“${kind.label}” harç ya da ödeme gerektiriyor; Folio ödeme '
+          'yapmadığı için gönderilmedi. Bu evrakı UYAP portalından gönderin.',
+        );
+      }
+    }
     if (files.length - 1 > type.attachmentMax) {
       throw StateError('Ek evrak sayısı UYAP sınırını aşıyor.');
     }

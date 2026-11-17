@@ -57,6 +57,9 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
   UyapCase? _case;
   List<UyapParty> _parties = [];
   UyapDocumentType? _documentType;
+
+  /// The kinds UYAP takes a fee for on this case: shown, not chosen.
+  Set<String> _paid = const {};
   Uint8List? _previewPdf;
   String? _previewError;
   final _attachments = <UyapUpload>[];
@@ -318,6 +321,9 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
     if (types.isEmpty) {
       throw StateError('UYAP bu dosya için evrak türü döndürmedi.');
     }
+    // Asked as the portal asks it, beside the kinds; not known, nothing is
+    // sent (the kinds with a fee could not be told apart).
+    final paid = await _web.paidDocumentCodes(match.single);
     final parties = await _web.parties(match.single);
     Uint8List? pdf = _previewPdf;
     String? previewError;
@@ -340,6 +346,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
         _previewPdf = pdf;
         _previewError = previewError;
         _documentTypes = types;
+        _paid = paid;
         _documentType = null;
         _attachments.clear();
       });
@@ -381,6 +388,7 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
           (t) =>
               (t.acceptedExtensions.isEmpty ||
                   t.acceptedExtensions.contains(extension)) &&
+              !_paid.contains(t.code) &&
               _typeHasRoom(t),
         )
         .toList();
@@ -1161,10 +1169,21 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                     for (final t in _documentTypes)
                       DropdownMenuItem(
                         value: t,
+                        // A fee is paid on UYAP's own form, which Folio
+                        // does not fill: shown, with why, not chosen.
+                        enabled: !_paid.contains(t.code),
                         child: Text(
-                          t.label,
+                          _paid.contains(t.code)
+                              ? '${t.label} — harç gerektiriyor, UYAP '
+                                    'portalından gönderin'
+                              : t.label,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: _paid.contains(t.code)
+                                ? theme.colorScheme.onSurfaceVariant
+                                : null,
+                          ),
                         ),
                       ),
                   ],
