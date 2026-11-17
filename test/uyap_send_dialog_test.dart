@@ -1,10 +1,17 @@
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
+
 import 'package:evrak_convert/services/uyap/uyap_case_links.dart';
+import 'package:evrak_convert/services/uyap/uyap_case_store.dart';
 import 'package:evrak_convert/services/uyap/uyap_web_service.dart';
 import 'package:evrak_convert/ui/widgets/uyap_send_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_path_provider.dart';
+import 'support/pdfium.dart';
 
 const _court = 'Ankara 3. Asliye Hukuk Mahkemesi';
 
@@ -128,8 +135,10 @@ void main() {
     expect(find.textContaining('AYŞE KARACA'), findsWidgets);
   });
 
-  testWidgets('a kind UYAP takes a fee for is listed with why, and not '
-      'chosen', (tester) async {
+  testWidgets('a kind UYAP takes a fee for is finished on the portal: said '
+      'so in the list, and chosen it offers no sending from here', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -160,14 +169,114 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Evrak türü'));
     await tester.pumpAndSettle();
-    final paid = find.textContaining('İstinaf Başvurusu — harç gerektiriyor');
+    final paid = find.textContaining(
+      'İstinaf Başvurusu — harçlı, portalda tamamlanır',
+    );
     expect(paid, findsWidgets);
-    await tester.tap(paid.last, warnIfMissed: false);
+    await tester.tap(paid.last);
     await tester.pumpAndSettle();
-    // Not taken: no description box opens for a chosen kind.
+    // Finished on the portal: no sending from here, the way there told.
+    expect(find.byKey(const ValueKey('uyap-portal-steps')), findsOneWidget);
+    expect(find.byKey(const ValueKey('uyap-portal-finish')), findsOneWidget);
+    expect(find.text('Gönderimi incele'), findsNothing);
     expect(find.text('Evrak açıklaması'), findsNothing);
+    // Another kind sends from here as before.
+    await tester.tap(find.textContaining('İstinaf Başvurusu').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Beyan Dilekçesi').last);
     await tester.pumpAndSettle();
     expect(find.text('Evrak açıklaması'), findsOneWidget);
+    expect(find.byKey(const ValueKey('uyap-portal-finish')), findsNothing);
+  });
+
+  testWidgets('Portalda tamamla puts the signed document in a folder of its '
+      'own, named after the case', (tester) async {
+    tester.view.physicalSize = const Size(1600, 3200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final home = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('folio-portal-'),
+    ))!;
+    addTearDown(() => home.deleteSync(recursive: true));
+    useFakePathProvider(Directory('${home.path}/paths'));
+    configurePdfiumForTest();
+    final settings = UyapSettings.instance;
+    UyapSettings.instance = UyapSettings(directory: home, home: home.path);
+    addTearDown(() => UyapSettings.instance = settings);
+    final content = File('test/fixtures/signatures/content.xml')
+        .readAsBytesSync();
+    final signature = File('test/fixtures/signatures/rsa-valid.sgn')
+        .readAsBytesSync();
+    final signed = Uint8List.fromList(
+      ZipEncoder().encode(
+        Archive()
+          ..addFile(ArchiveFile('content.xml', content.length, content))
+          ..addFile(ArchiveFile('sign.sgn', signature.length, signature)),
+      ),
+    );
+    final web = _Web()..paid = {'2'};
+    UyapWebService.instance = web;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: UyapSendDialog(
+            documentName: 'Istinaf.udf',
+            documentBytes: signed,
+            stillCurrent: () async => true,
+            target: const UyapCaseLink(
+              jurisdiction: '1',
+              courtType: 'HUKUK',
+              courtId: 'h1',
+              court: _court,
+              number: 'eski kayıt',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dosyaları getir'));
+    await tester.pumpAndSettle();
+    // The real document's preview is drawn on the real clock.
+    Future<void> settle() async {
+      for (var i = 0; i < 30; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 30)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    await tester.tap(find.text('2025/80'));
+    await settle();
+    // Below the document's preview, in the list that builds as it is
+    // scrolled to.
+    await tester.scrollUntilVisible(
+      find.text('Evrak türü'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Evrak türü'));
+    await settle();
+    await tester.tap(find.textContaining('İstinaf Başvurusu').last);
+    await settle();
+    await tester.tap(find.byKey(const ValueKey('uyap-portal-finish')));
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    final saved = File(
+      '${home.path}/Folio/UYAP/Portalda gönderilecek/$_court 2025-80/'
+      'Istinaf.udf',
+    );
+    expect(saved.existsSync(), isTrue);
+    expect(saved.readAsBytesSync(), signed);
+    // Done: the button opens it all again.
+    expect(find.text('Yeniden aç'), findsOneWidget);
+    // The preview's own timers let run out.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
   });
 }

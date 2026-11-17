@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:path/path.dart' as p;
 
+import '../../services/platform/file_actions.dart';
 import '../../services/udf/udf_reader.dart';
+import '../../services/uyap/uyap_case_store.dart';
 import '../../services/uyap/uyap_case_links.dart';
 import '../../services/uyap/uyap_web_service.dart';
 import '../../services/pdf/pdf_service.dart';
@@ -58,8 +61,15 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
   List<UyapParty> _parties = [];
   UyapDocumentType? _documentType;
 
-  /// The kinds UYAP takes a fee for on this case: shown, not chosen.
+  /// The kinds UYAP takes a fee for on this case: finished on the portal,
+  /// where the fee is paid, not sent from here.
   Set<String> _paid = const {};
+
+  /// Where the documents were put for the portal, once they were.
+  String? _handedOver;
+
+  bool get _paidChosen =>
+      _documentType != null && _paid.contains(_documentType!.code);
   Uint8List? _previewPdf;
   String? _previewError;
   final _attachments = <UyapUpload>[];
@@ -457,6 +467,50 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
       );
     }
   }
+
+  /// A kind with a fee, finished on UYAP's portal: the signed document and
+  /// its attachments put in a folder of their own, the case copied, the
+  /// portal opened. Folio pays nothing and sends nothing here; the fee is
+  /// paid on the portal's own form (17 Kasım 2026).
+  Future<void> _finishOnPortal() => _run(() async {
+    final target = _case, type = _documentType;
+    if (target == null || type == null) {
+      throw StateError('Hedef dosya veya evrak türü eksik.');
+    }
+    UyapWebService.validateSignedUdf(widget.documentBytes);
+    await UyapSettings.instance.load();
+    String safe(String name) =>
+        name.replaceAll(RegExp(r'[\\/:*?"<>|\n\r\t]'), '-').trim();
+    final folder = Directory(
+      p.join(
+        UyapSettings.instance.folder,
+        'Portalda gönderilecek',
+        safe('${target.courtName} ${target.number}'),
+      ),
+    );
+    await folder.create(recursive: true);
+    final main = File(p.join(folder.path, safe(widget.documentName)));
+    await main.writeAsBytes(widget.documentBytes, flush: true);
+    for (final attachment in _attachments) {
+      await File(p.join(folder.path, safe(attachment.name)))
+          .writeAsBytes(attachment.bytes, flush: true);
+    }
+    await Clipboard.setData(
+      ClipboardData(text: '${target.courtName} ${target.number}'),
+    );
+    try {
+      await launchUrl(
+        Uri.https('avukat.uyap.gov.tr'),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {}
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      try {
+        await FileActions.invoke('showFolder', main.path);
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _handedOver = folder.path);
+  });
 
   Future<void> _send() => _run(() async {
     final target = _case;
@@ -1170,12 +1224,10 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                       DropdownMenuItem(
                         value: t,
                         // A fee is paid on UYAP's own form, which Folio
-                        // does not fill: shown, with why, not chosen.
-                        enabled: !_paid.contains(t.code),
+                        // does not fill: finished on the portal.
                         child: Text(
                           _paid.contains(t.code)
-                              ? '${t.label} — harç gerektiriyor, UYAP '
-                                    'portalından gönderin'
+                              ? '${t.label} — harçlı, portalda tamamlanır'
                               : t.label,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -1191,10 +1243,47 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
                       ? null
                       : (v) => setState(() {
                           _documentType = v;
+                          _handedOver = null;
                           _attachments.clear();
                         }),
                 ),
-              if (_documentType != null) ...[
+              if (_paidChosen) ...[
+                const SizedBox(height: 12),
+                Container(
+                  key: const ValueKey('uyap-portal-steps'),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer.withValues(
+                      alpha: .5,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _handedOver == null
+                        ? 'Bu evrak türü için UYAP harç ya da ödeme istiyor. '
+                              'Folio ödeme yapmaz; evrakı portalda, harcı '
+                              'portalın kendi ödeme ekranında ödeyerek '
+                              'gönderirsiniz. Ekleri de portalda eklersiniz. '
+                              'Portalda tamamla, imzalı belgeyi bir klasöre '
+                              'kaydeder, dosya '
+                              'bilgisini panoya kopyalar ve UYAP avukat '
+                              'portalını açar.'
+                        : 'İmzalı belge şu klasöre kaydedildi: '
+                              '$_handedOver\n\n'
+                              'Dosya bilgisi panoya kopyalandı ve UYAP avukat '
+                              'portalı tarayıcıda açıldı. Portalda giriş yapın, '
+                              'Dosya Sorgulama’da bu dosyayı açın (dosya '
+                              'bilgisini yapıştırabilirsiniz) ve Evrak '
+                              'Gönderme sekmesine geçin. Evrak türü olarak '
+                              '“${_documentType!.label}” türünü seçip kaydedilen '
+                              'belgeyi ve varsa eklerini ekleyin. Harcı portalın ödeme '
+                              'ekranında ödeyip gönderin.',
+                    style: const TextStyle(fontSize: 13, height: 1.45),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (_documentType != null && !_paidChosen) ...[
                 TextField(
                   controller: _description,
                   maxLength: 350,
@@ -1305,7 +1394,16 @@ class _UyapSendDialogState extends State<UyapSendDialog> {
           onPressed: _busy ? null : () => Navigator.pop(context),
           child: const Text('Kapat'),
         ),
-        if (_case != null && _documentType != null)
+        if (_case != null && _documentType != null && _paidChosen)
+          FilledButton.icon(
+            key: const ValueKey('uyap-portal-finish'),
+            onPressed: _busy ? null : _finishOnPortal,
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: Text(
+              _handedOver == null ? 'Portalda tamamla' : 'Yeniden aç',
+            ),
+          )
+        else if (_case != null && _documentType != null)
           FilledButton(
             onPressed: _busy || _uncertain || _previewPdf == null
                 ? null
