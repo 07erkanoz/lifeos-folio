@@ -1,0 +1,8 @@
+{
+  "tr": "Linux'ta Mesa 26.3.1 güncellemesinden sonra Folio, editör ve Ofis siyah bir pencereyle açılıyordu; artık Wayland'da düzgün açılır. Windows'ta yeni kurulan bir bilgisayarda Folio, ağ duyurusu başarısız olunca kapanıyordu; artık açılır. UYAP'ın harç ya da ödeme istediği evrak türleri Folio'dan gönderilmez: Folio imzalı belgeyi bir klasöre kaydeder, dosya bilgisini panoya kopyalar ve UYAP portalını açar; gönderimi ve harç ödemesini portalda tamamlarsınız.",
+  "en": "On Linux, after the Mesa 26.3.1 update, Folio, the editor and Ofis opened with a black window; they now open properly on Wayland. On a newly installed Windows computer Folio closed when its network announcement failed; it now opens. Document types for which UYAP asks for a fee or payment are no longer sent from Folio: Folio saves the signed document to a folder, copies the case details to the clipboard and opens the UYAP portal, where you complete the sending and the fee payment.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.8.6.43: Linux'ta Mesa 26.3.1 güncellemesinden sonra siyah açılan pencere artık Wayland'da düzgün açılır.",
+    "en": "LifeOS Ofis 1.8.6.43: on Linux, the window that opened black after the Mesa 26.3.1 update now opens properly on Wayland."
+  }
+}
