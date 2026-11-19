@@ -13,6 +13,7 @@ project(runner LANGUAGES CXX)
 function(folio_runner TARGET APP_ID)
   add_executable(${TARGET}
     "main.cc"
+    "egl_config_fix.cc"
     "my_application.cc"
     "file_actions.cc"
     "quick_search.cc"

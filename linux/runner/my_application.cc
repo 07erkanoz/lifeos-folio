@@ -33,6 +33,8 @@ static constexpr const char* kIcon = "lifeos_folio.png";
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  // Opened as a preview: keeps the size it asks for, never maximized.
+  gboolean preview;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -40,6 +42,14 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+}
+
+// Folio, its editor and Ofis are maximized as the window is shown (by the
+// first frame or by Dart, whichever comes first), before it is mapped: it
+// appears maximized, never small first. Asked earlier, before the view was
+// realized, the window stayed black on two LifeOS computers (20 Kasım 2026).
+static void maximize_on_show_cb(GtkWidget* window, MyApplication* self) {
+  if (!self->preview) gtk_window_maximize(GTK_WINDOW(window));
 }
 
 // GTK asks a Wayland compositor to draw an undecorated window's frame
@@ -76,15 +86,10 @@ static void my_application_activate(GApplication* application) {
                          G_CALLBACK(own_decorations_cb), nullptr);
 
   gtk_window_set_default_size(window, 1280, 720);
-  // Folio and its editor open maximized, asked before the window is ever
-  // shown: shown first at the default size, then maximized from Dart, it
-  // was seen small and then large (16 Kasım 2026). A preview window keeps
-  // the size it asks for.
-  gboolean preview = FALSE;
+  self->preview = FALSE;
   for (char** arg = self->dart_entrypoint_arguments; arg && *arg; arg++) {
-    if (g_strcmp0(*arg, "--preview") == 0) preview = TRUE;
+    if (g_strcmp0(*arg, "--preview") == 0) self->preview = TRUE;
   }
-  if (!preview) gtk_window_maximize(window);
   g_autofree gchar* executable = g_file_read_link("/proc/self/exe", nullptr);
   if (executable != nullptr) {
     g_autofree gchar* directory = g_path_get_dirname(executable);
@@ -111,6 +116,11 @@ static void my_application_activate(GApplication* application) {
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
+  // LIFEOS_CIZIM=skia: Flutter's older renderer instead of Impeller, for a
+  // graphics driver Impeller cannot draw on.
+  if (g_strcmp0(g_getenv("LIFEOS_CIZIM"), "skia") == 0) {
+    fl_dart_project_set_enable_impeller(project, FALSE);
+  }
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;
@@ -126,6 +136,7 @@ static void my_application_activate(GApplication* application) {
   g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),
                            self);
   gtk_widget_realize(GTK_WIDGET(view));
+  g_signal_connect(window, "show", G_CALLBACK(maximize_on_show_cb), self);
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
   register_file_actions(view, window);
