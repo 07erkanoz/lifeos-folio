@@ -23,6 +23,7 @@ void main() {
   late Directory folder;
   late FolioExternalTools tools;
   var money = true;
+  String? me = '';
   String? index;
   final now = DateTime(2026, 11, 2, 9);
   const labour = 'Manavgat 3. İş Mahkemesi';
@@ -31,6 +32,7 @@ void main() {
 
   setUp(() async {
     money = true;
+    me = '';
     index = null;
     folder = await Directory.systemTemp.createTemp('folio-dis-');
     db = PortalDatabase.memory();
@@ -67,7 +69,7 @@ void main() {
           home: p.join(folder.path, 'ev'),
         ),
       ),
-      status: () async => (open: true, money: money),
+      status: () async => (open: true, money: money, person: me),
       indexPath: () async => index,
       read: (_) async => '',
       now: () => now,
@@ -237,6 +239,64 @@ void main() {
     );
   });
 
+  test('a case note added under what was there, and read back', () async {
+    expect(
+      (await tools.call('dosya_notu_ekle', {
+        'dosya': labourKey,
+        'metin': 'x',
+      }))['durum'],
+      'kart_yok',
+    );
+    db.saveClient(Client(id: 'k1', name: 'ERKAN YILMAZ', updated: now));
+    var got = await tools.call('dosya_notu_ekle', {
+      'dosya': labourKey,
+      'metin': 'Tanık listesi verildi.',
+    });
+    expect(got['durum'], 'eklendi');
+    got = await tools.call('dosya_notu_ekle', {
+      'dosya': labourKey,
+      'metin': 'Bilirkişi incelemesi istendi.',
+    });
+    expect(
+      db.clientCard('k1')!.caseNotes[labourKey]!.text,
+      '02.11.2026: Tanık listesi verildi.\n'
+      '02.11.2026: Bilirkişi incelemesi istendi.',
+    );
+    expect(
+      folder.listSync().map((e) => p.basename(e.path)),
+      contains(startsWith('degisti-')),
+    );
+    final read = await tools.call('dosya_notlari', {'dosya': labourKey});
+    final note = (read['dosya_notlari'] as List).single as Map;
+    expect(note['muvekkil'], 'ERKAN YILMAZ');
+    expect('${note['metin']}', contains('Bilirkişi incelemesi istendi.'));
+  });
+
+  test('a colleague\'s card is not written', () async {
+    db.saveClient(
+      Client(id: 'k1', name: 'ERKAN YILMAZ', person: 'p2', updated: now),
+    );
+    me = 'p1';
+    var got = await tools.call('dosya_notu_ekle', {
+      'dosya': labourKey,
+      'metin': 'x',
+    });
+    expect(got['durum'], 'yapilamadi');
+    me = null;
+    got = await tools.call('dosya_notu_ekle', {
+      'dosya': labourKey,
+      'metin': 'x',
+    });
+    expect(got['durum'], 'yapilamadi');
+    expect(db.clientCard('k1')!.caseNotes[labourKey], isNull);
+    me = 'p2';
+    got = await tools.call('dosya_notu_ekle', {
+      'dosya': labourKey,
+      'metin': 'Kendi kartı.',
+    });
+    expect(got['durum'], 'eklendi');
+  });
+
   test('the server for programs on this computer: the whole of Folio, not '
       'the panel\'s proposals', () async {
     final session = await AiCaseSession.open(null);
@@ -263,6 +323,8 @@ void main() {
         'evrak_ara',
         'ajanda_ekle',
         'not_ekle',
+        'dosya_notlari',
+        'dosya_notu_ekle',
         'dosya_bilgisi',
         'ajanda',
       ]),

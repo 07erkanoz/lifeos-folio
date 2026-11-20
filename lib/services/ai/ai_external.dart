@@ -82,11 +82,12 @@ abstract final class FolioExternal {
   static const alive = Duration(seconds: 15);
 
   /// The open Folio, as it wrote of itself in [dir]: whether it is open,
-  /// and whether the person may see the clients' money (an office member
-  /// without that right may not). With no open Folio, the money is seen
-  /// only by a lawyer of no office: who may see it is the office's word,
-  /// which the open Folio holds.
-  static Future<({bool open, bool money})> status(
+  /// whether the person may see the clients' money (an office member
+  /// without that right may not), and who the person is in the office
+  /// (empty when in none, null when not known). With no open Folio, the
+  /// money is seen only by a lawyer of no office: who may see it is the
+  /// office's word, which the open Folio holds.
+  static Future<({bool open, bool money, String? person})> status(
     Directory dir, {
     DateTime? now,
   }) async {
@@ -97,11 +98,16 @@ abstract final class FolioExternal {
         final at = DateTime.tryParse('${json['zaman']}');
         final open =
             at != null && (now ?? DateTime.now()).difference(at) < alive;
-        if (open) return (open: true, money: json['para'] != false);
-        return (open: false, money: json['buro'] != true);
+        final person = json['kisi'] is String ? json['kisi'] as String : null;
+        if (open) {
+          return (open: true, money: json['para'] != false, person: person);
+        }
+        final office = json['buro'] == true;
+        return (open: false, money: !office, person: office ? person : '');
       }
     } catch (_) {}
-    return (open: false, money: !await _inOffice());
+    final office = await _inOffice();
+    return (open: false, money: !office, person: office ? null : '');
   }
 
   static Future<bool> _inOffice() async {
@@ -140,6 +146,10 @@ class ExternalHost {
       PortalDatabase.clientMoneyAllowed?.call() ?? true;
   static bool Function() inOffice = () => false;
 
+  /// This person in the office, as a colleague's card names its owner.
+  static String Function() person = () =>
+      PortalDatabase.clientPerson?.call() ?? '';
+
   Timer? _timer;
   bool _busy = false;
   AiCaseSession? _session;
@@ -174,6 +184,7 @@ class ExternalHost {
               'zaman': at.toIso8601String(),
               'para': seesMoney(),
               'buro': inOffice(),
+              'kisi': person(),
             }),
           ),
         );

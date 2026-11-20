@@ -35,7 +35,7 @@ class FolioExternalTools {
     this.folder, {
     Future<PortalDatabase> Function()? database,
     this._store,
-    Future<({bool open, bool money})> Function()? status,
+    Future<({bool open, bool money, String? person})> Function()? status,
     Future<String?> Function()? indexPath,
     Future<String> Function(String path)? read,
     DateTime Function()? now,
@@ -48,7 +48,7 @@ class FolioExternalTools {
   final Directory folder;
   final Future<PortalDatabase> Function() _database;
   final UyapCaseStore? _store;
-  final Future<({bool open, bool money})> Function() _status;
+  final Future<({bool open, bool money, String? person})> Function() _status;
   final Future<String?> Function() _indexPath;
   final Future<String> Function(String path) _read;
   final DateTime Function() _now;
@@ -319,6 +319,44 @@ class FolioExternalTools {
       'annotations': _reads,
     },
     {
+      'name': 'dosya_notlari',
+      'title': 'Dosyanın notları',
+      'description':
+          'Bir dosyaya yazılmış notlar: müvekkil kartlarındaki dosya notu '
+          '(kimin kartı, kim yazdı, ne zaman) ve ajandada o dosyaya bağlı '
+          'notlar. Gizli not boş gelir.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {'dosya': _caseArg},
+        'required': ['dosya'],
+      },
+      'annotations': _reads,
+    },
+    {
+      'name': 'dosya_notu_ekle',
+      'title': 'Dosya notuna ekle',
+      'description':
+          'Dosyanın müvekkil kartındaki dosya notuna, var olanı silmeden, '
+          'tarihli yeni bir satır ekler (Folio\'da müvekkilin kartında, '
+          'dosyanın altında görünür). Dosyanın birden fazla müvekkil kartı '
+          'varsa hangisine yazılacağını "muvekkil" ile ver. Bir meslektaşın '
+          'kartına yazılmaz. Yalnız avukat açıkça istediyse ve metni '
+          'onayladıysa kullan.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'dosya': _caseArg,
+          'metin': {'type': 'string'},
+          'muvekkil': {
+            'type': 'string',
+            'description': 'Müvekkilin anahtarı (birden fazla kart varsa)',
+          },
+        },
+        'required': ['dosya', 'metin'],
+      },
+      'annotations': _adds,
+    },
+    {
       'name': 'ajanda_ekle',
       'title': 'Ajandaya ekle',
       'description':
@@ -427,6 +465,10 @@ class FolioExternalTools {
         return _addAgenda(db, args, text);
       case 'not_ekle':
         return _addNote(db, args, text);
+      case 'dosya_notlari':
+        return _caseNotes(db, text('dosya'));
+      case 'dosya_notu_ekle':
+        return _addCaseNote(db, text('dosya'), text('metin'), text('muvekkil'));
     }
     throw StateError('Bilinmeyen araç: $name');
   }
@@ -1004,6 +1046,137 @@ class FolioExternalTools {
             ],
           },
       ],
+    };
+  }
+
+  // A case's notes.
+
+  /// The client cards [key] is a case of.
+  static List<(ClientEntry, Client)> _cardsOf(PortalDatabase db, String key) =>
+      [
+        for (final e in db.clientEntries())
+          if (e.client case final c?
+              when !c.removed && e.cases.any((x) => x.caseKey == key))
+            (e, c),
+      ];
+
+  Map<String, Object?> _caseNotes(PortalDatabase db, String key) {
+    if (db.caseOf(key) == null) {
+      return {'durum': 'yok', 'aciklama': 'Bu anahtarla dosya yok.'};
+    }
+    final cards = [
+      for (final (e, c) in _cardsOf(db, key))
+        if ((SecretNotes.cardForOffice(db, c)['dosyaNotlari'] as Map?)?[key]
+            case final Map n)
+          {
+            'muvekkil': e.name,
+            'muvekkil_anahtari': e.key,
+            if ('${n['metin'] ?? ''}'.isNotEmpty) 'metin': n['metin'],
+            if (n['gizliNot'] == true) 'gizli': true,
+            if ('${n['yazan'] ?? ''}'.isNotEmpty) 'yazan': n['yazan'],
+            'zaman': ?n['zaman'],
+          },
+    ];
+    final agenda = [
+      for (final i in db.agenda(
+        from: DateTime(2000),
+        to: DateTime(2100),
+        caseKey: key,
+      ))
+        if (i.kind == 'note' && !SecretNotes.rowHidden(db, i))
+          {
+            'baslik': i.title,
+            if (i.body.trim().isNotEmpty && !SecretNotes.bodyHidden(i))
+              'metin': i.body,
+            if (i.at case final at?) 'tarih': _day(at),
+          },
+    ];
+    return {
+      'durum': cards.isEmpty && agenda.isEmpty ? 'yok' : 'bulundu',
+      ..._caseOf(db, key),
+      'dosya_notlari': cards,
+      'ajanda_notlari': agenda,
+    };
+  }
+
+  Future<Map<String, Object?>> _addCaseNote(
+    PortalDatabase db,
+    String key,
+    String words,
+    String clientKey,
+  ) async {
+    if (words.isEmpty) return {'durum': 'yok', 'aciklama': 'Not boş.'};
+    if (db.caseOf(key) == null) {
+      return {'durum': 'yok', 'aciklama': 'Bu anahtarla dosya yok.'};
+    }
+    var cards = _cardsOf(db, key);
+    if (clientKey.isNotEmpty) {
+      cards = [
+        for (final x in cards)
+          if (x.$1.key == clientKey) x,
+      ];
+    }
+    if (cards.isEmpty) {
+      return {
+        'durum': 'kart_yok',
+        'aciklama':
+            'Bu dosyanın Folio\'da müvekkil kartı yok; dosya notu kartta '
+            'tutulur. Not, not_ekle ile ajandaya dosyaya bağlı yazılabilir.',
+      };
+    }
+    if (cards.length > 1) {
+      return {
+        'durum': 'hangisi',
+        'aciklama': 'Dosyanın birden fazla müvekkil kartı var; avukata sor.',
+        'muvekkiller': [
+          for (final (e, _) in cards) {'anahtar': e.key, 'ad': e.name},
+        ],
+      };
+    }
+    final (entry, card) = cards.single;
+    // A colleague's card's notes are theirs (R6): Folio offers them a
+    // change, which a program cannot do here.
+    if (card.person.isNotEmpty) {
+      final me = (await _status()).person;
+      if (me == null || me != card.person) {
+        return {
+          'durum': 'yapilamadi',
+          'aciklama': me == null
+              ? 'Kart bir büro kartı; kimin kartı olduğu Folio açıkken '
+                    'bilinir. Folio açılınca yeniden dene.'
+              : 'Bu bir meslektaşın kartı; notunu ancak kendisi yazar. '
+                    'Avukat Folio\'dan öneri olarak gönderebilir.',
+        };
+      }
+    }
+    final was = card.caseNotes[key];
+    final now = _now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final line = '${two(now.day)}.${two(now.month)}.${now.year}: $words';
+    final old = was?.text.trim() ?? '';
+    var by = '';
+    try {
+      by = (await LawyerProfile.load()).lawyer?.name.trim() ?? '';
+    } catch (_) {}
+    db.saveClient(
+      card.copyWith(
+        caseNotes: {
+          ...card.caseNotes,
+          key: CaseNote(
+            old.isEmpty ? line : '$old\n$line',
+            now,
+            by: by,
+            secret: was?.secret ?? false,
+          ),
+        },
+      ),
+    );
+    await FolioExternal.changed(folder);
+    return {
+      'durum': 'eklendi',
+      'muvekkil': entry.name,
+      ..._caseOf(db, key),
+      'aciklama': 'Dosya notuna eklendi.',
     };
   }
 

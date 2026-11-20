@@ -608,6 +608,7 @@ class OwnSync extends ChangeNotifier {
     // Told to the AI programs on this computer too (FolioExternal).
     ExternalHost.seesMoney = () => _net.seesMoney;
     ExternalHost.inOffice = () => _net.ledger.exists;
+    ExternalHost.person = () => _net.me;
     // The notes' tracking and the tasks' notes are on always: every change
     // is told to both.
     PortalDatabase.changed = () {
