@@ -22,6 +22,11 @@ import 'ai_memory.dart';
 class AiCaseSession {
   AiCaseSession._(this.folder, this.record);
 
+  /// The session of a folder kept for longer than a question: the one the
+  /// programs on this computer share ([FolioExternal]). Its case is what
+  /// they chose last ([bound]).
+  AiCaseSession.at(this.folder);
+
   /// The case [folder] is bound to, as the program chose it (dosya_sec)
   /// or Folio gave it; null while it is of none.
   static Future<({String court, String number})?> boundIn(
@@ -234,6 +239,7 @@ class FolioCaseTools {
     Future<String> Function()? lawyerName,
     this.patience = const Duration(minutes: 2),
     this.every = const Duration(milliseconds: 500),
+    this.anyCase = false,
   }) : _hearings = hearings ?? _portalHearings,
        _read = read ?? AiAssistant.documentText,
        _records = records ?? _portalRecords,
@@ -719,8 +725,17 @@ class FolioCaseTools {
     };
   }
 
+  /// Whether a case of the portfolio may be chosen by its key without
+  /// dosya_ara first: the programs on this computer have the keys from
+  /// dosyalar and muvekkil_dosyalari too ([FolioExternal]).
+  final bool anyCase;
+
   Future<Map<String, Object?>> _choose(String key) async {
-    final entry = _found[key];
+    final entry =
+        _found[key] ??
+        (anyCase
+            ? (await _portfolio()).where((e) => e.key == key).firstOrNull
+            : null);
     if (entry == null) {
       return {
         'durum': 'yok',

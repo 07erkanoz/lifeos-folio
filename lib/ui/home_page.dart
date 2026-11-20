@@ -35,6 +35,7 @@ import '../services/ai/ai_assistant.dart';
 import 'ai/ai_panel.dart';
 import 'ai/ai_page.dart';
 import '../services/ai/ai_relay.dart';
+import '../services/ai/ai_external.dart';
 import '../services/platform/agenda_launch.dart';
 import '../services/platform/lifeos_profile.dart';
 import '../services/platform/document_launch.dart';
@@ -1785,8 +1786,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // What the phone asks is answered here while the features are on.
     if (AiAssistant.shown) {
       AiRelay.instance.start();
+      // The programs on this computer, while the lawyer lets them.
+      if (Platform.isLinux) ExternalHost.instance.start();
     } else {
       AiRelay.instance.stop();
+      ExternalHost.instance.stop();
     }
     if (!mounted) return;
     setState(() {

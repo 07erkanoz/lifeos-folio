@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_external.dart';
 import '../../services/ai/ai_usage.dart';
 import '../../services/ai/ai_groq.dart';
 import '../mobile/settings_parts.dart';
@@ -27,6 +28,9 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
   /// Whether Folio is on Antigravity's own list of tools.
   bool _agyTools = false;
 
+  /// The AI programs on this computer may use Folio ([FolioExternal]).
+  bool _external = false;
+
   /// The models each installed program offers.
   final _offered = <AiProvider, List<String>>{};
 
@@ -46,8 +50,10 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
         if (s.installed) s.provider: await AiAssistant.models(s.provider),
     };
     final used = await AiUsage.of();
+    final external = Platform.isLinux && await FolioExternal.enabled();
     if (!mounted) return;
     setState(() {
+      _external = external;
       _used = used.total;
       _settings = settings;
       _found = found;
@@ -467,6 +473,26 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
         (v) => _save(_settings.copyWith(mask: v)),
       ),
     ),
+    if (Platform.isLinux)
+      SettingsRow(
+        key: const ValueKey('ai-external'),
+        stackOnNarrow: true,
+        icon: Icons.hub_outlined,
+        title: 'Bu bilgisayardaki yapay zekâ programları',
+        subtitle: _external
+            ? 'Açık. Folio Ajan ya da MCP bağlanan başka bir program (Claude '
+                  'Code, Codex…) Folio’da görebildiğiniz her şeyi okuyabilir; '
+                  'yalnız ajandaya kayıt ve not ekleyebilir. Gizli notlar ve '
+                  'yetkiniz olmayan para bilgisi verilmez. Bağlantı komutu: '
+                  '${Platform.resolvedExecutable} --mcp --dis'
+            : 'Kapalı. Açarsanız bu bilgisayardaki yapay zekâ programları '
+                  'Folio’nun bütün verisini okuyabilir ve ajandaya kayıt, not '
+                  'ekleyebilir. Yalnız bu bilgisayarda geçerlidir.',
+        trailing: settingsSwitch(_external, (v) async {
+          await FolioExternal.setEnabled(v);
+          if (mounted) setState(() => _external = v);
+        }),
+      ),
     SettingsRow(
       key: const ValueKey('ai-consent-row'),
       stackOnNarrow: true,

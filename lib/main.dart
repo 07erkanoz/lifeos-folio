@@ -10,6 +10,7 @@ import 'services/desktop/screen_fit.dart';
 import 'services/platform/agenda_launch.dart';
 import 'services/portal/lifeos_agenda.dart';
 import 'services/ai/folio_mcp.dart';
+import 'services/ai/ai_external.dart';
 import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
 import 'services/live/live_links.dart';
@@ -69,7 +70,9 @@ void main(List<String> arguments) async {
   // `--mcp` (the lawyer's AI program, started by Folio): Folio's legal
   // tools on standard input and output, with no window, until it closes.
   if (Platform.isLinux && arguments.contains(FolioMcp.flag)) {
-    exit(await FolioMcp.serve());
+    exit(
+      await FolioMcp.serve(external: arguments.contains(FolioExternal.flag)),
+    );
   }
   // Tüm verileri temizle left what was open then: cleared before anything
   // is read.

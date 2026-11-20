@@ -4,8 +4,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../notes/secret_notes.dart';
 import '../portal/portal_case.dart';
 import '../portal/portal_database.dart';
+import '../uyap/uyap_web_service.dart' show UyapParty;
 import 'ai_case.dart';
 import 'ai_memory.dart';
 
@@ -205,6 +207,7 @@ class FolioOfficeTools {
               if ((n.message.sent ?? _now()).isAfter(since) &&
                   (args['okunmamis'] != true || !n.seen))
                 {
+                  'kimlik': n.message.id,
                   'konu': n.message.subject,
                   'gonderen': n.message.sender,
                   'tarih': n.message.sent?.toIso8601String().substring(0, 16),
@@ -221,6 +224,10 @@ class FolioOfficeTools {
               if (args['okunmamis'] != true || !n.read)
                 {
                   'baslik': n.title,
+                  if (n.body.trim().isNotEmpty)
+                    'metin': n.body.trim().length > 1500
+                        ? '${n.body.trim().substring(0, 1500)}…'
+                        : n.body.trim(),
                   'tarih': n.sentAt?.toIso8601String().substring(0, 16),
                   'okundu': n.read,
                   ...named(n.caseKey),
@@ -266,7 +273,9 @@ class FolioOfficeTools {
     ]..sort((a, b) => '${a['tarih']}'.compareTo('${b['tarih']}'));
     final items = [
       for (final i in db.agenda(from: from, to: to))
-        if (!i.secret)
+        // As Folio hides it: a secret note or task whole, also one made
+        // secret on another device; a deadline's secret body alone.
+        if (!SecretNotes.rowHidden(db, i))
           {
             'tur': switch (i.kind) {
               'task' => 'görev',
@@ -275,7 +284,8 @@ class FolioOfficeTools {
               _ => i.kind,
             },
             'baslik': i.title,
-            if (i.body.trim().isNotEmpty) 'aciklama': i.body,
+            if (i.body.trim().isNotEmpty && !SecretNotes.bodyHidden(i))
+              'aciklama': i.body,
             'tarih': i.at?.toIso8601String().substring(0, i.allDay ? 10 : 16),
             'bitti': i.done,
             ...named(i.caseKey),
@@ -284,7 +294,8 @@ class FolioOfficeTools {
     final deadlines = [
       for (final d in db.deadlines())
         if (d.record.dueDay case final due?
-            when due.compareTo(_iso(from)) >= 0 &&
+            when d.user?.dismissed != true &&
+                due.compareTo(_iso(from)) >= 0 &&
                 due.compareTo(_iso(last)) <= 0)
           {
             'son_gun': due,
@@ -320,12 +331,23 @@ class FolioOfficeTools {
       if (kept == null || h.at.isBefore(kept)) next[h.caseKey] = h.at;
     }
     final words = '${args['ifade'] ?? ''}'.trim();
+    final parties = words.isEmpty
+        ? const <String, List<UyapParty>>{}
+        : db.caseParties();
     final wanted = words.isEmpty
         ? cases.values.toList()
         : [
             for (final e in AiCaseEntry.match(words, [
               for (final c in cases.values)
-                AiCaseEntry(key: c.key, number: c.number, court: c.court),
+                AiCaseEntry(
+                  key: c.key,
+                  number: c.number,
+                  court: c.court,
+                  parties: [
+                    for (final t in parties[c.key] ?? const <UyapParty>[])
+                      t.name,
+                  ],
+                ),
             ]))
               cases[e.key]!,
           ];

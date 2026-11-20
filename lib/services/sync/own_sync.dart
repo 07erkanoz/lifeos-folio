@@ -18,6 +18,7 @@ import '../office/task_package.dart';
 import '../platform/app_directories.dart';
 import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
+import '../ai/ai_external.dart';
 import '../ai/ai_keys_sync.dart';
 import '../ai/ai_relay.dart';
 import '../uets/notice_deadlines.dart';
@@ -604,6 +605,9 @@ class OwnSync extends ChangeNotifier {
     // The money others wrote comes from own devices only while it may.
     PortalDatabase.clientMoneyAllowed = () => _net.seesMoney;
     PortalDatabase.clientPerson = () => _net.me;
+    // Told to the AI programs on this computer too (FolioExternal).
+    ExternalHost.seesMoney = () => _net.seesMoney;
+    ExternalHost.inOffice = () => _net.ledger.exists;
     // The notes' tracking and the tasks' notes are on always: every change
     // is told to both.
     PortalDatabase.changed = () {
