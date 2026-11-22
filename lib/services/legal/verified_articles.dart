@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show FlutterError, visibleForTesting;
-import 'package:flutter/services.dart' show rootBundle;
+
+import '../platform/folio_assets.dart';
 
 /// Articles the Ministry's bank (Bedesten) is known to have behind the
 /// official text, given from the official text itself
@@ -57,7 +58,7 @@ class VerifiedArticles {
 
   static Future<String> _read() async {
     try {
-      return await rootBundle.loadString(asset);
+      return await loadAssetString(asset);
     } on FlutterError {
       return File(asset).readAsString();
     }

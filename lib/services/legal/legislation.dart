@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../platform/app_directories.dart';
@@ -13,6 +12,7 @@ import 'html_text.dart';
 import 'rich_text.dart';
 import 'verified_articles.dart';
 import '../../models/json_shape.dart';
+import '../platform/folio_assets.dart';
 
 /// Where an article's text came from, named so a reader can weigh it.
 enum ArticleSource {
@@ -502,7 +502,7 @@ class Legislation {
     // mevzuat.gov.tr does not send its intermediate certificate, and Dart,
     // unlike a browser, will not go and fetch the missing one. It is carried
     // with the app instead; see assets/mevzuat/README.md.
-    final pem = await rootBundle.load(_asset);
+    final pem = await loadAsset(_asset);
     return SecurityContext(withTrustedRoots: true)
       ..setTrustedCertificatesBytes(pem.buffer.asUint8List());
   }

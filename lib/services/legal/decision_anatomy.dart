@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import 'citation.dart';
 import 'decision.dart';
@@ -9,6 +8,7 @@ import 'decision_sentences.dart';
 import 'legal_terms.dart' show lowerTr;
 import 'relevance.dart';
 import 'turkish_stem.dart';
+import '../platform/folio_assets.dart';
 
 export 'decision_sentences.dart' show Quote;
 
@@ -187,7 +187,7 @@ class DecisionBoilerplate {
     String asset = 'assets/mevzuat/karar_kaliplari.json',
   }) async {
     try {
-      return parse(await rootBundle.loadString(asset));
+      return parse(await loadAssetString(asset));
     } on Object {
       return empty;
     }

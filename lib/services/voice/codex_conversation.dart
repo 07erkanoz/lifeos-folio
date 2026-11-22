@@ -228,8 +228,23 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
   Future<void> start({bool handsFree = false}) =>
       _starting ??= _start().whenComplete(() => _starting = null);
 
+  /// Each step of opening the voice and how long it took, when set: to
+  /// find what kept the lawyer waiting (22 Kasım 2026).
+  static void Function(String step)? trace;
+
+  /// Codex's own startup context for the voice.
+  static bool startupContext = true;
+
+  /// How long OpenAI's answer to the voice's connection is waited for
+  /// before it is asked again, and how many times it is asked.
+  static Duration answerPatience = const Duration(seconds: 6);
+  static int answerTries = 3;
+
   Future<void> _start({bool greeting = false}) async {
     if (_pc != null) return;
+    final clock = Stopwatch()..start();
+    void step(String what) =>
+        trace?.call('${clock.elapsedMilliseconds} ms $what');
     error = null;
     _set(LiveState.connecting);
     try {
@@ -241,26 +256,34 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
           'Folio’da yapay zekâ kapalı. Ayarlar › Yapay zekâ’dan açılabilir.',
         );
       }
+      step('ayarlar');
       final server = _server ??= await _open();
+      step('codex açıldı');
       final tools = greeting ? <Map<String, Object?>>[] : await _declarations();
+      step('araçlar hazır (${tools.length})');
       final work = await Directory.systemTemp.createTemp('folio-codex-ses-');
-      final started = await server.request('thread/start', {
-        'ephemeral': true,
-        'cwd': work.path,
-        if (model.isNotEmpty) 'model': model,
-        'sandbox': 'read-only',
-        'approvalPolicy': 'never',
-        // No environment: no shell, no files; Folio's tools only.
-        'environments': <Object?>[],
-        'developerInstructions': instructions(DateTime.now()),
-        'dynamicTools': tools,
-        // The web, for what is not Folio: news, prices, anything current.
-        'config': {
-          'web_search': 'live',
-          if (effort.isNotEmpty) 'model_reasoning_effort': effort,
-        },
-      });
-      _thread = '${(started['thread'] as Map)['id']}';
+      Future<String> newThread() async {
+        final started = await server.request('thread/start', {
+          'ephemeral': true,
+          'cwd': work.path,
+          if (model.isNotEmpty) 'model': model,
+          'sandbox': 'read-only',
+          'approvalPolicy': 'never',
+          // No environment: no shell, no files; Folio's tools only.
+          'environments': <Object?>[],
+          'developerInstructions': instructions(DateTime.now()),
+          'dynamicTools': tools,
+          // The web, for what is not Folio: news, prices, anything current.
+          'config': {
+            'web_search': 'live',
+            if (effort.isNotEmpty) 'model_reasoning_effort': effort,
+          },
+        });
+        return '${(started['thread'] as Map)['id']}';
+      }
+
+      _thread = await newThread();
+      step('thread/start');
 
       _mic = await navigator.mediaDevices.getUserMedia({
         'audio': {
@@ -270,47 +293,87 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
         },
         'video': false,
       });
-      final pc = _pc = await createPeerConnection({
-        'sdpSemantics': 'unified-plan',
-      });
-      for (final t in _mic!.getAudioTracks()) {
-        await pc.addTrack(t, _mic!);
-      }
-      final events = _events = await pc.createDataChannel(
-        'oai-events',
-        RTCDataChannelInit(),
-      );
-      events.onMessage = _event;
-      pc.onConnectionState = (c) {
-        if (c == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
-          _lastActivity = DateTime.now();
-          _set(LiveState.listening);
-        } else if (c == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-            c == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
-          error = 'Ses bağlantısı koptu.';
-          unawaited(stop());
+      // OpenAI answers the voice's connection in one or two seconds, but
+      // now and then only after half a minute: Folio Ajan stood at
+      // "Bağlanıyor" (22 Kasım 2026). An answer that is late is not waited
+      // for: that one is let go and asked again, on a thread of its own so
+      // that its late events are not taken for the new one's.
+      for (var attempt = 1; ; attempt++) {
+        final pc = _pc = await createPeerConnection({
+          'sdpSemantics': 'unified-plan',
+        });
+        for (final t in _mic!.getAudioTracks()) {
+          await pc.addTrack(t, _mic!);
         }
-      };
-      final offer = await pc.createOffer({'offerToReceiveAudio': true});
-      await pc.setLocalDescription(offer);
-      _answer = Completer<String>();
-      await server.request('thread/realtime/start', {
-        'threadId': _thread,
-        'version': 'v3',
-        'outputModality': 'audio',
-        'transport': {'type': 'webrtc', 'sdp': offer.sdp},
-        if (voice.isNotEmpty) 'voice': voice,
-        'codexResponseHandoffMode': 'bemTags',
-        // Codex's own startup context tells the voice to hand work on.
-        'includeStartupContext': true,
-        'clientManagedHandoffs': false,
-        'initialItems': [
-          {'role': 'developer', 'text': voiceIdentity(DateTime.now())},
-        ],
-      });
-      // The answer can take tens of seconds.
-      final sdp = await _answer!.future.timeout(const Duration(seconds: 75));
-      await pc.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
+        final events = _events = await pc.createDataChannel(
+          'oai-events',
+          RTCDataChannelInit(),
+        );
+        events.onMessage = _event;
+        pc.onConnectionState = (c) {
+          trace?.call('${clock.elapsedMilliseconds} ms bağlantı: ${c.name}');
+          if (c == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+            _lastActivity = DateTime.now();
+            _set(LiveState.listening);
+          } else if (c == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+              c == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+            error = 'Ses bağlantısı koptu.';
+            unawaited(stop());
+          }
+        };
+        step('mikrofon ve WebRTC');
+        final offer = await pc.createOffer({'offerToReceiveAudio': true});
+        await pc.setLocalDescription(offer);
+        step('teklif hazır');
+        _answer = Completer<String>();
+        await server.request('thread/realtime/start', {
+          'threadId': _thread,
+          'version': 'v3',
+          'outputModality': 'audio',
+          'transport': {'type': 'webrtc', 'sdp': offer.sdp},
+          if (voice.isNotEmpty) 'voice': voice,
+          'codexResponseHandoffMode': 'bemTags',
+          // Codex's own startup context tells the voice to hand work on.
+          'includeStartupContext': startupContext,
+          'clientManagedHandoffs': false,
+          'initialItems': [
+            {'role': 'developer', 'text': voiceIdentity(DateTime.now())},
+          ],
+        });
+        // The answer can take tens of seconds.
+        step('realtime/start istendi ($attempt)');
+        final String sdp;
+        try {
+          sdp = await _answer!.future.timeout(
+            attempt < answerTries
+                ? answerPatience
+                : const Duration(seconds: 60),
+          );
+        } on TimeoutException {
+          if (attempt >= answerTries) rethrow;
+          step('Codex geç kaldı; yeniden isteniyor');
+          final late = _thread;
+          pc.onConnectionState = null;
+          _pc = null;
+          _events = null;
+          unawaited(() async {
+            try {
+              await server.request('thread/realtime/stop', {
+                'threadId': late,
+              }, timeout: const Duration(seconds: 5));
+            } catch (_) {}
+            try {
+              await events.close();
+              await pc.close();
+            } catch (_) {}
+          }());
+          _thread = await newThread();
+          continue;
+        }
+        step('Codex cevap verdi (SDP)');
+        await pc.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
+        break;
+      }
       _clock = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     } on _Refused catch (e) {
       error = e.message;
@@ -540,6 +603,18 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
 
   void _notification(Map<String, Object?> n) {
     final p = (n['params'] as Map?)?.cast<String, Object?>() ?? {};
+    // A voice let go of for being late may still answer, or close: it is
+    // not the one going on.
+    const lifecycle = {
+      'thread/realtime/sdp',
+      'thread/realtime/error',
+      'thread/realtime/closed',
+    };
+    if (lifecycle.contains(n['method']) &&
+        p['threadId'] is String &&
+        p['threadId'] != _thread) {
+      return;
+    }
     switch ('${n['method']}') {
       case 'thread/realtime/sdp':
         if (_answer case final a? when !a.isCompleted) {

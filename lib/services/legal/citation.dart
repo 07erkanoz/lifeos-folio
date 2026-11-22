@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import '../../models/json_shape.dart';
+import '../platform/folio_assets.dart';
 
 /// A law the reader may cite, and the short forms they cite it by.
 @immutable
@@ -491,7 +491,7 @@ class CitationScanner {
   static Future<CitationScanner> load({
     String asset = 'assets/mevzuat/laws.json',
   }) async {
-    final raw = await rootBundle.loadString(asset);
+    final raw = await loadAssetString(asset);
     return CitationScanner.parse(raw);
   }
 

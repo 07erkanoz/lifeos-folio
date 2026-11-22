@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../platform/app_directories.dart';
 import '../uyap/uyap_case_store.dart';
 import 'ai_case.dart';
@@ -96,17 +98,18 @@ class FolioToolsApart implements FolioToolHost {
   @override
   Future<List<Map<String, Object?>>> tools() async {
     if (_fallback case final here?) return here.tools();
-    try {
-      final got = await _ask('tools');
-      if (got is String) throw StateError(got);
+    final got = await _ask('tools').catchError((Object e) => '$e');
+    if (got is List) {
       return [
-        for (final t in got as List)
+        for (final t in got)
           if (t is Map) t.cast<String, Object?>(),
       ];
-    } on StateError {
-      if (_dead) return _fallback!.tools();
-      rethrow;
     }
+    // The isolate could not list them: they run here, as before it, and
+    // the voice opens all the same.
+    debugPrint('Folio araçları ayrı çalışamadı: $got');
+    _fallback ??= FolioToolsHere(_session, external: _external);
+    return _fallback!.tools();
   }
 
   @override
@@ -173,8 +176,8 @@ class FolioToolsApart implements FolioToolHost {
             'close' => await here.close().then((_) => null),
             _ => null,
           };
-        } catch (e) {
-          answer = what == 'call' ? '{"hata":"$e"}' : '$e';
+        } catch (e, st) {
+          answer = what == 'call' ? '{"hata":"$e"}' : '$e\n$st';
         }
         out.send((id, answer));
       }());

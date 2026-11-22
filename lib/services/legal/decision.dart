@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import 'citation.dart' show lookupKey, trLoose;
+import '../platform/folio_assets.dart';
 
 /// Where a court's decisions are asked for.
 enum CaseSource {
@@ -325,7 +325,7 @@ class DecisionScanner {
 
   static Future<DecisionScanner> load({
     String asset = 'assets/mevzuat/courts.json',
-  }) async => DecisionScanner.parse(await rootBundle.loadString(asset));
+  }) async => DecisionScanner.parse(await loadAssetString(asset));
 
   @visibleForTesting
   static DecisionScanner parse(String raw) {

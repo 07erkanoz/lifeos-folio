@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show FlutterError;
-import 'package:flutter/services.dart' show rootBundle;
+
+import '../platform/folio_assets.dart';
 
 /// Folio's criminal-sentence calculator: a faithful port of banaozel's
 /// `server/ceza_hesap.py` (its `hesapla` and `metin`). It is deterministic so
@@ -40,7 +41,7 @@ class CriminalCalculator {
   /// Flutter to give it (a test of the tools that starts none).
   static Future<String> _read() async {
     try {
-      return await rootBundle.loadString(asset);
+      return await loadAssetString(asset);
     } on FlutterError {
       return File(asset).readAsString();
     }

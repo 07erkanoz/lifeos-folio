@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+
+import '../platform/folio_assets.dart';
 
 /// A term of art, and what it means.
 @immutable
@@ -112,8 +113,8 @@ class LegalTerms {
     String asset = 'assets/sozluk/terms.json',
     String? statutes = 'assets/mevzuat/terms.json',
   }) async => LegalTerms.parse(
-    await rootBundle.loadString(asset),
-    statutes: statutes == null ? null : await rootBundle.loadString(statutes),
+    await loadAssetString(asset),
+    statutes: statutes == null ? null : await loadAssetString(statutes),
   );
 
   @visibleForTesting

@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show FlutterError;
-import 'package:flutter/services.dart' show rootBundle;
+
+import '../platform/folio_assets.dart';
 
 /// Folio's legal guide (assets/mevzuat/rehber.json): for each kind of case
 /// which laws and articles govern it, its time limits and its traps, and
@@ -32,7 +33,7 @@ class LegalGuide {
   /// Flutter to give it (a test of the tools that starts none).
   static Future<String> _read() async {
     try {
-      return await rootBundle.loadString(asset);
+      return await loadAssetString(asset);
     } on FlutterError {
       return File(asset).readAsString();
     }

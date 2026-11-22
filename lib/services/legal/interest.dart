@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart' show rootBundle;
+import '../platform/folio_assets.dart';
 
 /// What the interest is: by law, a merchant's for default, or one agreed.
 enum InterestKind {
@@ -29,9 +29,8 @@ class InterestRates {
 
   static InterestRates? _loaded;
 
-  static Future<InterestRates> load() async => _loaded ??= parse(
-    await rootBundle.loadString('assets/mevzuat/faiz.json'),
-  );
+  static Future<InterestRates> load() async =>
+      _loaded ??= parse(await loadAssetString('assets/mevzuat/faiz.json'));
 
   static InterestRates parse(String text) {
     final j = jsonDecode(text) as Map<String, Object?>;
