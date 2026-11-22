@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import '../platform/app_directories.dart';
 
 import '../ai/ai_assistant.dart';
 import '../ai/ai_relay.dart';
@@ -94,9 +95,8 @@ class VoiceSettings {
     skin: skin ?? this.skin,
   );
 
-  static Future<File> Function() file = () async => File(
-    p.join((await getApplicationSupportDirectory()).path, 'ajan_ses.json'),
-  );
+  static Future<File> Function() file = () async =>
+      File(p.join((await folioSupportDirectory()).path, 'ajan_ses.json'));
 
   static Future<VoiceSettings> load() async {
     try {

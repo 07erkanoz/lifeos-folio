@@ -25,7 +25,7 @@ root="$stage/$name"
 mkdir -p "$root/kurulum"
 cp -a "$bundle/." "$root/"
 if [ "$product" = ofis ]; then
-  rm -f "$root/lifeos_folio" "$root/lifeos_editor" "$root/folio-edevlet"
+  rm -f "$root/lifeos_folio" "$root/lifeos_editor" "$root/lifeos_ajan" "$root/folio-edevlet"
 fi
 cp packaging/linux/install_local.py packaging/linux/context_menu.py \
   packaging/linux/*.desktop packaging/linux/lifeos-evrakci.xml \

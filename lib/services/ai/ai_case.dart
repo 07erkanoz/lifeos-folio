@@ -134,6 +134,7 @@ class AiCaseSession {
       }
       final id = name.substring(6, name.length - 5);
       if (await File(_answerPath(id)).exists()) continue;
+      if (await _stale(entry)) continue;
       try {
         final json = jsonDecode(await entry.readAsString()) as Map;
         out.add((
@@ -169,6 +170,14 @@ class AiCaseSession {
       }
       final id = name.substring(9, name.length - 5);
       if (_taken.contains(id)) continue;
+      // Answered already, by this Folio or one before it: Folio Ajan's
+      // folder outlives a conversation, and a refresh answered last night
+      // asked for the e-signature PIN again at every start (23 Kasım
+      // 2026).
+      if (await File(p.join(folder.path, 'guncelle-$id.sonuc.json')).exists()) {
+        continue;
+      }
+      if (await _stale(entry)) continue;
       try {
         final json = jsonDecode(await entry.readAsString()) as Map;
         _taken.add(id);
@@ -185,6 +194,37 @@ class AiCaseSession {
   }
 
   final _taken = <String>{};
+
+  /// How long the program waits for an answer, and some: a request older
+  /// than this is no one's any more.
+  static const stale = Duration(minutes: 10);
+
+  /// Whether [request] is older than [stale]: then it is taken away, not
+  /// done (a refresh no one waits for would ask for the PIN).
+  static Future<bool> _stale(File request) async {
+    try {
+      if (DateTime.now().difference((await request.stat()).modified) < stale) {
+        return false;
+      }
+      await request.delete();
+    } catch (_) {}
+    return true;
+  }
+
+  /// What was asked and answered in an earlier conversation, taken away:
+  /// Folio Ajan's folder is kept between its conversations.
+  Future<void> forgetRequests() async {
+    if (!await folder.exists()) return;
+    await for (final entry in folder.list()) {
+      final name = p.basename(entry.path);
+      if (entry is File &&
+          (name.startsWith('guncelle-') || name.startsWith('indir-'))) {
+        try {
+          await entry.delete();
+        } catch (_) {}
+      }
+    }
+  }
 
   Future<void> answerRefresh(String id, Map<String, Object?> answer) =>
       _writeWhole(

@@ -99,32 +99,7 @@ class DesktopInstance {
     } on FileSystemException {
       await lock.close();
       // Owner may still be starting. Retry only transport, never document work.
-      for (var attempt = 0; attempt < 20; attempt++) {
-        try {
-          final data = jsonDecode(await info.readAsString()) as Map;
-          final socket = await Socket.connect(
-            InternetAddress.loopbackIPv4,
-            data['port'] as int,
-            timeout: const Duration(seconds: 1),
-          );
-          try {
-            socket.write(
-              '${jsonEncode({'token': data['token'], 'arguments': arguments})}\n',
-            );
-            await socket.flush();
-            final reply = await socket
-                .cast<List<int>>()
-                .transform(utf8.decoder)
-                .transform(const LineSplitter())
-                .first
-                .timeout(const Duration(seconds: 2));
-            if (reply == 'ok') return null;
-          } finally {
-            socket.destroy();
-          }
-        } catch (_) {}
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
+      if (await send(arguments, directory: dir, tries: 20)) return null;
       throw StateError(
         'LifeOS Folio arka planda çalışıyor ancak yanıt vermiyor.',
       );
@@ -145,6 +120,47 @@ class DesktopInstance {
       await lock.close();
       rethrow;
     }
+  }
+
+  /// [arguments] handed to the program that holds [directory]'s lock,
+  /// without taking it: Folio and Folio Ajan, two programs, tell each
+  /// other this way. False when none answers within [tries] tries.
+  static Future<bool> send(
+    List<String> arguments, {
+    Directory? directory,
+    int tries = 1,
+  }) async {
+    final dir = directory ?? await folioSupportDirectory();
+    final info = File('${dir.path}/desktop-instance.json');
+    for (var attempt = 0; attempt < tries; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      try {
+        final data = jsonDecode(await info.readAsString()) as Map;
+        final socket = await Socket.connect(
+          InternetAddress.loopbackIPv4,
+          data['port'] as int,
+          timeout: const Duration(seconds: 1),
+        );
+        try {
+          socket.write(
+            '${jsonEncode({'token': data['token'], 'arguments': arguments})}\n',
+          );
+          await socket.flush();
+          final reply = await socket
+              .cast<List<int>>()
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())
+              .first
+              .timeout(const Duration(seconds: 2));
+          if (reply == 'ok') return true;
+        } finally {
+          socket.destroy();
+        }
+      } catch (_) {}
+    }
+    return false;
   }
 
   Future<void> close() async {

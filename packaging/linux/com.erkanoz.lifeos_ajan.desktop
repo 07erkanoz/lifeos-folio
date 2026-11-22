@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Folio Ajan
+GenericName=Sesli asistan
+Comment=LifeOS Folio'nun sesli asistanı
+Exec=lifeos_ajan
+Icon=com.erkanoz.lifeos_ajan
+StartupWMClass=com.erkanoz.lifeos_ajan
+Terminal=false
+Categories=Office;
+Keywords=asistan;ses;ajan;Folio;

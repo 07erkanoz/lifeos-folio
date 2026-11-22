@@ -24,11 +24,47 @@ class CodexAppServer {
 
   Stream<Map<String, Object?>> get notifications => _notifications.stream;
 
+  /// What the lawyer's own Codex loads that Folio's voice never uses:
+  /// their MCP servers and plugins, each a program of its own (a node, a
+  /// Python…). Folio gives its tools itself. Turned off for Folio's Codex
+  /// only, their `config.toml` untouched: one Codex took 567 MB, now 192
+  /// (23 Kasım 2026). Only its section names are read.
+  static List<String> leanConfig([String? config]) {
+    final home =
+        Platform.environment['CODEX_HOME'] ??
+        '${Platform.environment['HOME'] ?? ''}/.codex';
+    String text;
+    try {
+      text = config ?? File('$home/config.toml').readAsStringSync();
+    } catch (_) {
+      text = '';
+    }
+    final servers = {
+      for (final m in RegExp(
+        r'^\[mcp_servers\.([A-Za-z0-9_-]+)\]',
+        multiLine: true,
+      ).allMatches(text))
+        m.group(1)!,
+    };
+    final plugins = {
+      for (final m in RegExp(
+        r'^\[plugins\."([^"\]]+)"\]',
+        multiLine: true,
+      ).allMatches(text))
+        m.group(1)!,
+    };
+    return [
+      for (final s in servers) ...['-c', 'mcp_servers.$s.enabled=false'],
+      for (final p in plugins) ...['-c', 'plugins."$p".enabled=false'],
+      ...['-c', 'features.plugins=false', '-c', 'features.code_mode=false'],
+    ];
+  }
+
   /// [log]: where Codex's own log goes (no conversation text in it).
   static Future<CodexAppServer> start({String? cwd, String? log}) async {
     final process = await Process.start(
       'codex',
-      ['app-server'],
+      [...leanConfig(), 'app-server'],
       workingDirectory: cwd,
       environment: {if (log != null) 'RUST_LOG': 'info,codex_core=debug'},
     );

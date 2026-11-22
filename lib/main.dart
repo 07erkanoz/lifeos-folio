@@ -26,9 +26,8 @@ import 'services/security/app_lock.dart';
 import 'services/desktop/desktop_companion.dart';
 import 'services/desktop/native_window.dart';
 import 'services/voice/folio_ajan.dart';
-import 'services/voice/wake_word.dart';
+import 'services/voice/voice_settings.dart';
 import 'ui/desktop/ajan_float.dart';
-import 'ui/desktop/jarvis_view.dart';
 import 'ui/desktop/quick_search_palette.dart';
 
 import 'package:flutter/material.dart';
@@ -44,6 +43,8 @@ import 'package:window_manager/window_manager.dart';
 import 'editor_app.dart';
 import 'preview_app.dart';
 import 'ofis_app.dart';
+import 'ajan_app.dart';
+import 'services/voice/ajan_bridge.dart';
 import 'services/platform/app_edition.dart';
 import 'services/platform/editor_window.dart' show ofisFlag, previewFlag;
 import 'ui/home_page.dart';
@@ -71,6 +72,20 @@ void main(List<String> arguments) async {
   // they are its own, never Folio's.
   final asOfis = arguments.contains(ofisFlag) || AppEdition.packagedAsOfis;
   if (asOfis) AppEdition.current = AppEdition.ofis;
+  // Folio Ajan, the voice assistant, a program of its own (`lifeos_ajan`,
+  // lib/ajan_app.dart): its runner puts `--ajan` first.
+  if (Platform.isLinux &&
+      arguments.isNotEmpty &&
+      arguments.first == AjanBridge.flag) {
+    await runAjanApp(arguments.skip(1).toList());
+    return;
+  }
+  // `--folio-ajan` (the desktop's shortcut, the menu): Folio Ajan's own
+  // program, opened or started; Folio's window is not asked for.
+  if (Platform.isLinux && arguments.contains('--folio-ajan')) {
+    await AjanBridge.openAjan();
+    exit(0);
+  }
   // `--ajanda-yaz` (LifeOS's timer): the agenda file written and LifeOS's
   // requests kept, with no window (none is shown before a first frame),
   // beside an open Folio or without one; and nothing else of a start.
@@ -167,6 +182,8 @@ void main(List<String> arguments) async {
             ? ['--quick-search']
             : arguments.contains('--folio-ajan')
             ? ['--folio-ajan']
+            : arguments.contains(AjanBridge.background)
+            ? const [AjanBridge.background]
             : agenda != null
             ? agenda.arguments
             : documents.arguments,
@@ -382,12 +399,13 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
   late final LibraryController library;
 
   /// A program asked for UYAP or UETS: on Folio Ajan's screen only the
-  /// e-signature PIN, there; elsewhere the connection dialog.
+  /// e-signature PIN, there (its own program, [AjanPinRelay]); elsewhere
+  /// the connection dialog.
   Future<bool> _askConnect(UyapNeed need, String why) async {
-    final c = companion;
-    if (c != null && c.quick && c.jarvis && AjanLinks.instance.shown > 0) {
-      return AjanLinks.instance.request(need, why);
+    if (await AjanPinRelay.instance.ask(need, why) case final answer?) {
+      return answer;
     }
+    final c = companion;
     final quick = c?.quick == true;
     final context = (quick ? _quickNavigator : _navigator).currentContext;
     if (context == null || !context.mounted) return false;
@@ -413,14 +431,11 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
     // Whether the voice is on: the bar's Folio Ajan button shows by it.
     if (widget.desktopChrome) {
       FolioAjan.instance.loadVoiceSettings();
-      // "Ajan açıl": listened for while the voice and it are on in
-      // Settings, set aside while a conversation has the microphone.
-      FolioAjan.beforeVoice = WakeWord.instance.pause;
-      WakeWord.instance.onWake = _woken;
-      FolioAjan.instance.addListener(_followWake);
-      // The AI setting may come after the voice's: the wake follows it too,
-      // or it never began when Folio opened.
-      AiSettings.on.addListener(_followWake);
+      // "Ajan açıl" is Folio Ajan's to listen for, in its own program:
+      // started with no window while the voice and it are on, told when
+      // the settings change.
+      FolioAjan.instance.addListener(_followAjan);
+      AiSettings.on.addListener(_followAjan);
     }
     if (widget.instance != null) {
       companion = DesktopCompanion(
@@ -439,21 +454,20 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
           widget.instance?.close();
         },
       );
-      // Folio Ajan's conversation outlives its full screen: back in the main
-      // window it goes on in the voice window, in the palette there; ended
-      // only when Folio hides (22 Kasım 2026).
-      companion!.onJarvisLeft = (exit) {
-        final ajan = FolioAjan.instance;
-        if (!ajan.voice.active) return;
-        switch (exit) {
-          case JarvisExit.main:
-            ajanFloatOpen.value = true;
-          case JarvisExit.palette:
-            break;
-          case JarvisExit.hidden:
-            unawaited(ajan.voice.stop());
+      // Folio Ajan in Folio's tray: "Ajan açıl" on or off, and ended with
+      // Folio (22 Kasım 2026: it went on listening, seen nowhere).
+      companion!
+        ..onAjanWake = () {
+          final ajan = FolioAjan.instance;
+          unawaited(
+            ajan.saveSettings(
+              ajan.settings.copyWith(wake: !ajan.settings.wake),
+            ),
+          );
         }
-      };
+        ..beforeQuit = () async {
+          await AjanBridge.toAjan(const [AjanBridge.quit]);
+        };
       MacQuit.handle(
         companion!.approveQuit,
         onSettings: () async {
@@ -462,12 +476,16 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
         },
       );
       _launchRequests = widget.instance!.requests.listen((args) {
+        // Folio Ajan's PIN for UYAP or UETS: never a document.
+        if (AjanPinRelay.instance.heardInFolio(args)) return;
+        // Folio Ajan making sure Folio runs: nothing to show.
+        if (args.contains(AjanBridge.background)) return;
         if (args.contains('--quick-search')) {
           _openQuick();
         } else if (args.contains('--folio-ajan')) {
           // A shortcut of the desktop's own (KDE's Özel Kısayollar):
-          // Folio Ajan full screen.
-          unawaited(companion!.showJarvis());
+          // Folio Ajan, its own program.
+          unawaited(AjanBridge.openAjan());
         } else if (AgendaLaunch.parse(args) case final agenda?) {
           // LifeOS's agenda clicked: the window, at that record.
           unawaited(
@@ -487,8 +505,13 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
       });
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await companion!.load();
+        // The tray is up now: its Folio Ajan line as things are.
+        final ajan = FolioAjan.instance;
+        await companion?.refreshAjanWake(
+          ajan.available && ajan.settings.on ? ajan.settings.wake : null,
+        );
         if (widget.startQuick && mounted) await _openQuick();
-        if (widget.startAjan && mounted) await companion!.showJarvis();
+        if (widget.startAjan && mounted) await AjanBridge.openAjan();
       });
     }
   }
@@ -527,8 +550,8 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
 
   @override
   void dispose() {
-    FolioAjan.instance.removeListener(_followWake);
-    AiSettings.on.removeListener(_followWake);
+    FolioAjan.instance.removeListener(_followAjan);
+    AiSettings.on.removeListener(_followAjan);
     _learnArchive?.cancel();
     FocusManager.instance.removeEarlyKeyEventHandler(_escape);
     _launchRequests?.cancel();
@@ -561,39 +584,36 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
     ),
   );
 
-  void _followWake() {
-    final ajan = FolioAjan.instance;
-    final wake = WakeWord.instance;
-    final want = ajan.available && ajan.settings.on && ajan.settings.wake;
-    if (!want) {
-      if (wake.on) unawaited(wake.stop());
-      return;
-    }
-    if (ajan.voiceStarting || ajan.voice.active) return;
-    if (!wake.on || wake.state.value == WakeState.paused) {
-      unawaited(wake.start());
-    }
-  }
+  (VoiceSettings, bool)? _toldAjan;
 
-  /// "Ajan açıl" heard: the small voice window over Folio when its window
-  /// is in front; Folio Ajan full screen when it is in the tray.
-  Future<void> _woken() async {
+  /// Folio Ajan's program, as the voice's settings want it: started with no
+  /// window to listen for "Ajan açıl", and told when they change. The AI
+  /// setting may come after the voice's: it is followed too.
+  void _followAjan() {
     final ajan = FolioAjan.instance;
-    final c = companion;
-    final front =
-        c == null ||
-        (!c.quick &&
-            await windowManager.isVisible() &&
-            !await windowManager.isMinimized());
-    if (!front) {
-      await c.showJarvis();
+    final settings = ajan.settings;
+    final now = (settings, ajan.available);
+    final before = _toldAjan;
+    if (before != null &&
+        identical(before.$1, settings) &&
+        before.$2 == now.$2) {
       return;
     }
-    if (!ajanFloatOpen.value) {
-      await toggleAjanFloat(ajan);
-    } else if (!ajan.voice.active) {
-      await ajan.startVoice(handsFree: true);
-    }
+    _toldAjan = now;
+    final wake = ajan.available && settings.on && settings.wake;
+    unawaited(
+      companion?.showAjanWake(
+        ajan.available && settings.on ? settings.wake : null,
+      ),
+    );
+    unawaited(() async {
+      if (before != null && await AjanBridge.toAjan([AjanBridge.settings])) {
+        return;
+      }
+      if (wake) {
+        await AjanBridge.openAjan(args: const [AjanBridge.background]);
+      }
+    }());
   }
 
   @override
@@ -624,21 +644,13 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                 },
                 // Folio Ajan's voice, when it is on in Settings: a button in
                 // the bar, a small window above the pages.
-                trailing: [AjanVoicePill(ajan: FolioAjan.instance)],
-                floating: ValueListenableBuilder<bool>(
-                  valueListenable: ajanFloatOpen,
-                  builder: (context, open, _) => open
-                      ? AjanFloat(
-                          ajan: FolioAjan.instance,
-                          onFull: companion == null
-                              ? null
-                              : () {
-                                  ajanFloatOpen.value = false;
-                                  companion!.showJarvis();
-                                },
-                        )
-                      : const SizedBox.shrink(),
-                ),
+                // Folio Ajan is a program of its own: the button opens it.
+                trailing: [
+                  AjanVoicePill(
+                    ajan: FolioAjan.instance,
+                    onOpen: () => unawaited(AjanBridge.openAjan()),
+                  ),
+                ],
                 child: AppLockGate(
                   identify: lockIdentity,
                   child: child ?? const SizedBox.shrink(),
@@ -713,19 +725,17 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                       listenable: companion!,
                       builder: (context, _) => companion!.blank
                           ? const SizedBox.shrink()
-                          : companion!.jarvis
-                          ? JarvisView(
-                              ajan: FolioAjan.instance,
-                              onMinimize: companion!.leaveJarvis,
-                              onMain: () => companion!.showMain(),
-                              onClose: companion!.dismiss,
-                            )
                           : FloatingPalette(
                               onOutside: companion!.dismiss,
                               child: QuickSearchPalette(
                                 library: library,
-                                ajan: FolioAjan.instance,
-                                onJarvis: companion!.showJarvis,
+                                // The palette and Folio Ajan are two
+                                // things: it searches, and only opens
+                                // Folio Ajan's page (22 Kasım 2026).
+                                onJarvis: FolioAjan.instance.available
+                                    ? companion!.showJarvis
+                                    : null,
+                                dark: FolioAjan.instance.dark ?? true,
                                 onDismiss: companion!.dismiss,
                                 onMain: () => companion!.showMain(),
                                 onOpen: (file) =>

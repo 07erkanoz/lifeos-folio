@@ -17,6 +17,12 @@ Directory? folioSupportGiven;
 Future<Directory> folioSupportDirectory() async {
   if (folioSupportGiven case final given?) return given;
   final current = await getApplicationSupportDirectory();
+  // Folio Ajan, a program of its own beside Folio (lifeos_ajan): Folio's
+  // folder, not the one its own application id names.
+  if (Platform.isLinux &&
+      p.basename(Platform.resolvedExecutable) == 'lifeos_ajan') {
+    return Directory(p.join(current.parent.path, 'com.erkanoz.evrak_convert'));
+  }
   // LifeOS Ofis keeps a folder of its own on every system: never Folio's,
   // whose records and identity on the network it must not share.
   if (Platform.isMacOS) {

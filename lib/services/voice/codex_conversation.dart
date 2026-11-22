@@ -73,7 +73,7 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
     final voices = await server.request('thread/realtime/listVoices', {
       'threadId': (probe['thread'] as Map)['id'],
     });
-    return _catalog = CodexCatalog(
+    final catalog = _catalog = CodexCatalog(
       [
         for (final m in (models['data'] as List? ?? const []).whereType<Map>())
           CodexModel(
@@ -94,6 +94,14 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
           '$v',
       ],
     );
+    // Asked for the settings alone: Codex is not kept running for it.
+    // Folio's settings left one beside Folio Ajan's for as long as Folio
+    // ran (23 Kasım 2026).
+    if (_pc == null && _starting == null && identical(_server, server)) {
+      _server = null;
+      server.close();
+    }
+    return catalog;
   }
 
   CodexCatalog? _catalog;

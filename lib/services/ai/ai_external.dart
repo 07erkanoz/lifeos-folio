@@ -133,9 +133,18 @@ abstract final class FolioExternal {
 /// open, does the refreshes and downloads they ask for, and hands what they
 /// added to the agenda to Senkron.
 class ExternalHost {
-  ExternalHost({this._store});
+  ExternalHost({
+    this._store,
+    Future<Directory> Function()? folder,
+    Future<bool> Function()? open,
+  }) : _folder = folder ?? FolioExternal.folder,
+       _open = open ?? FolioExternal.enabled;
 
+  /// The programs' folder ([FolioExternal]), while the lawyer allows them.
   static final instance = ExternalHost();
+
+  final Future<Directory> Function() _folder;
+  final Future<bool> Function() _open;
 
   final UyapCaseStore? _store;
   UyapCaseStore get store => _store ?? UyapCaseStore.instance;
@@ -173,8 +182,8 @@ class ExternalHost {
     if (_busy) return;
     _busy = true;
     try {
-      if (!await FolioExternal.enabled()) return;
-      final dir = await FolioExternal.folder();
+      if (!await _open()) return;
+      final dir = await _folder();
       final at = now ?? DateTime.now();
       if (at.difference(_said) >= const Duration(seconds: 5)) {
         _said = at;
@@ -215,7 +224,12 @@ class ExternalHost {
           } catch (_) {}
         }
       }
-      if (added) PortalDatabase.changed?.call();
+      if (added) {
+        PortalDatabase.changed?.call();
+        // A petition Folio Ajan put in a case's folder: the case's page
+        // lists it again.
+        UyapCaseStore.changes.value++;
+      }
     } catch (e) {
       debugPrint('Dış yapay zekâ: $e');
     } finally {

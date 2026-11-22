@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart'
 import 'package:path/path.dart' as p;
 
 import '../pdf/pdf_pages.dart';
+import '../voice/ajan_bridge.dart';
 import '../platform/app_directories.dart';
 import '../platform/app_edition.dart';
 import '../platform/atomic_file.dart';
@@ -632,7 +633,7 @@ abstract final class AiAssistant {
   static String? get folioProgram =>
       Platform.environment.containsKey('FLUTTER_TEST')
       ? null
-      : Platform.resolvedExecutable;
+      : AjanBridge.folioExecutable;
 
   /// [prompt] as [provider] reads it on its standard input.
   @visibleForTesting
@@ -1196,6 +1197,7 @@ class AiSettings {
     this.consentAt,
     this.consentBy,
     this.mask = true,
+    this.lifeosMcp = false,
     this.provider,
     this.models = const {},
     this.monthlyTokens,
@@ -1223,6 +1225,11 @@ class AiSettings {
   /// Identity numbers hidden before a document is sent.
   final bool mask;
 
+  /// Folio Ajan may read this computer through LifeOS Linux's own tools
+  /// (`lifeos mcp sun`): its problems, e-signature, printers, services.
+  /// Off until the lawyer turns it on (22 Kasım 2026).
+  final bool lifeosMcp;
+
   /// The program the lawyer chose; the first usable one when null.
   final AiProvider? provider;
 
@@ -1241,6 +1248,7 @@ class AiSettings {
     DateTime? consentAt,
     String? consentBy,
     bool? mask,
+    bool? lifeosMcp,
     AiProvider? provider,
     Map<String, String>? models,
     int? monthlyTokens,
@@ -1252,6 +1260,7 @@ class AiSettings {
     consentAt: revoke ? null : consentAt ?? this.consentAt,
     consentBy: revoke ? null : consentBy ?? this.consentBy,
     mask: mask ?? this.mask,
+    lifeosMcp: lifeosMcp ?? this.lifeosMcp,
     provider: provider ?? this.provider,
     models: models ?? this.models,
     monthlyTokens: noLimit ? null : monthlyTokens ?? this.monthlyTokens,
@@ -1263,6 +1272,7 @@ class AiSettings {
     if (consentAt != null) 'onayZamani': consentAt!.toIso8601String(),
     if (consentBy != null) 'onaylayan': consentBy,
     'tcGizle': mask,
+    if (lifeosMcp) 'lifeosMcp': true,
     if (provider != null) 'saglayici': provider!.name,
     if (models.isNotEmpty) 'modeller': models,
     if (monthlyTokens != null) 'aylikTokenSiniri': monthlyTokens,
@@ -1277,6 +1287,7 @@ class AiSettings {
       consentAt: DateTime.tryParse('${json['onayZamani'] ?? ''}'),
       consentBy: json['onaylayan'] as String?,
       mask: json['tcGizle'] != false,
+      lifeosMcp: json['lifeosMcp'] == true,
       provider: AiProvider.values.asNameMap()['${json['saglayici']}'],
       monthlyTokens: (json['aylikTokenSiniri'] as num?)?.toInt(),
       models: {

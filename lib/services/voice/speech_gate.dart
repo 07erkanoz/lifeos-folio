@@ -4,7 +4,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import '../platform/app_directories.dart';
+
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 import 'live_audio.dart';
@@ -77,9 +79,7 @@ class SileroDetector implements SpeechDetector {
   /// The model, out of Folio's own files into its folder once: sherpa
   /// reads a path.
   static Future<SileroDetector> open() async {
-    final dir = Directory(
-      p.join((await getApplicationSupportDirectory()).path, 'ses'),
-    );
+    final dir = Directory(p.join((await folioSupportDirectory()).path, 'ses'));
     await dir.create(recursive: true);
     final file = File(p.join(dir.path, 'silero_vad.onnx'));
     if (!await file.exists()) {

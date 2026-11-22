@@ -29,6 +29,7 @@ install_one() {
 install_one com.erkanoz.evrak_convert lifeos_folio lifeos_folio.png
 install_one com.erkanoz.lifeos_editor lifeos_editor lifeos_editor.png
 install_one com.erkanoz.lifeos_ofis lifeos_ofis lifeos_ofis.png
+install_one com.erkanoz.lifeos_ajan lifeos_ajan lifeos_folio.png
 
 command -v update-desktop-database >/dev/null &&
   update-desktop-database "$data/applications" || true

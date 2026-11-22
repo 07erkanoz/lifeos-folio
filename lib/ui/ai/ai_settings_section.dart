@@ -8,7 +8,9 @@ import '../../services/ai/ai_assistant.dart';
 import '../../services/ai/ai_external.dart';
 import '../../services/ai/ai_usage.dart';
 import '../../services/ai/ai_groq.dart';
+import '../../services/voice/ajan_bridge.dart';
 import '../../services/voice/folio_ajan.dart';
+import '../../services/voice/lifeos_tools.dart';
 import '../desktop/quick_search_settings.dart';
 import '../mobile/settings_parts.dart';
 import 'ai_dialogs.dart';
@@ -554,6 +556,26 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
         trailing: settingsSwitch(_external, (v) async {
           await FolioExternal.setEnabled(v);
           if (mounted) setState(() => _external = v);
+        }),
+      ),
+    if (LifeosTools.installed)
+      SettingsRow(
+        key: const ValueKey('ai-lifeos-mcp'),
+        stackOnNarrow: true,
+        icon: Icons.computer_outlined,
+        title: 'LifeOS MCP',
+        subtitle: _settings.lifeosMcp
+            ? 'Açık. Folio Ajan bu bilgisayarın durumunu LifeOS’un kendi '
+                  'araçlarıyla okuyabilir: sorunlar, e-imza, yazıcılar, '
+                  'servisler, uygulamalar. Hiçbir şeyi değiştirmez; bir '
+                  'düzeltme gerekirse size söyler.'
+            : 'Kapalı. Açarsanız Folio Ajan “e-imzam neden çalışmıyor”, '
+                  '“yazıcı neden yazmıyor” gibi sorularda bu bilgisayarı '
+                  'LifeOS’un araçlarıyla okuyabilir; hiçbir şeyi değiştirmez.',
+        trailing: settingsSwitch(_settings.lifeosMcp, (v) async {
+          await _save(_settings.copyWith(lifeosMcp: v));
+          // Folio Ajan, its own program, reads it again.
+          await AjanBridge.toAjan(const [AjanBridge.settings]);
         }),
       ),
     SettingsRow(

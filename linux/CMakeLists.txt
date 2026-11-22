@@ -15,6 +15,10 @@ set(EDITOR_APPLICATION_ID "com.erkanoz.lifeos_editor")
 # runner (lib/ofis_app.dart).
 set(OFIS_BINARY_NAME "lifeos_ofis")
 set(OFIS_APPLICATION_ID "com.erkanoz.lifeos_ofis")
+# Folio Ajan: the voice assistant, a program of its own beside Folio, so
+# that neither holds the other up (lib/ajan_app.dart, 22 Kasım 2026).
+set(AJAN_BINARY_NAME "lifeos_ajan")
+set(AJAN_APPLICATION_ID "com.erkanoz.lifeos_ajan")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -78,12 +82,13 @@ add_subdirectory("runner")
 add_dependencies(${BINARY_NAME} flutter_assemble)
 add_dependencies(${EDITOR_BINARY_NAME} flutter_assemble)
 add_dependencies(${OFIS_BINARY_NAME} flutter_assemble)
+add_dependencies(${AJAN_BINARY_NAME} flutter_assemble)
 
 # Only the install-generated bundle's copy of the executable will launch
 # correctly, since the resources must in the right relative locations. To avoid
 # people trying to run the unbundled copy, put it in a subdirectory instead of
 # the default top-level location.
-set_target_properties(${BINARY_NAME} ${EDITOR_BINARY_NAME} ${OFIS_BINARY_NAME} ${EDEVLET_BINARY_NAME}
+set_target_properties(${BINARY_NAME} ${EDITOR_BINARY_NAME} ${OFIS_BINARY_NAME} ${AJAN_BINARY_NAME} ${EDEVLET_BINARY_NAME}
   PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/intermediates_do_not_run"
 )
@@ -97,11 +102,12 @@ include(flutter/generated_plugins.cmake)
 # the option and stopped on it: unknown options are let pass.
 target_compile_options(flutter_webrtc_plugin PRIVATE
   -Wno-unknown-warning-option -Wno-unused-but-set-global)
-# The generated file links the plugins to Folio alone; LifeOS Editör and
-# LifeOS Ofis register the same plugins and need them too.
+# The generated file links the plugins to Folio alone; LifeOS Editör,
+# LifeOS Ofis and Folio Ajan register the same plugins and need them too.
 foreach(plugin ${FLUTTER_PLUGIN_LIST})
   target_link_libraries(${EDITOR_BINARY_NAME} PRIVATE ${plugin}_plugin)
   target_link_libraries(${OFIS_BINARY_NAME} PRIVATE ${plugin}_plugin)
+  target_link_libraries(${AJAN_BINARY_NAME} PRIVATE ${plugin}_plugin)
 endforeach(plugin)
 
 
@@ -126,6 +132,8 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 install(TARGETS ${EDITOR_BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 install(TARGETS ${OFIS_BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+install(TARGETS ${AJAN_BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 install(TARGETS ${EDEVLET_BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)

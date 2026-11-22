@@ -45,6 +45,23 @@ def install_editor(executable, applications, icons):
     print(entry)
 
 
+AJAN_ID = 'com.erkanoz.lifeos_ajan'
+
+
+def install_ajan(executable, applications, icons):
+    """Folio Ajan, a program of its own in Folio's bundle: its window's
+    icon on Wayland comes from this entry, named as its application id."""
+    icon = executable.parent / 'data/flutter_assets/assets/branding/lifeos_folio.png'
+    if not executable.is_file() or not os.access(executable, os.X_OK) or not icon.is_file():
+        return
+    replace_if_changed(icons / f'{AJAN_ID}.png', icon.read_bytes())
+    template = (Path(__file__).parent / f'{AJAN_ID}.desktop').read_text()
+    desktop = template.replace('Exec=lifeos_ajan', f'Exec={quote_exec(str(executable))}')
+    entry = applications / f'{AJAN_ID}.desktop'
+    replace_if_changed(entry, desktop.encode('utf-8'))
+    print(entry)
+
+
 OFIS_ID = 'com.erkanoz.lifeos_ofis'
 # What Ofis opens by default: documents. A text file or a workbook is only
 # offered to it ("Birlikte aç"); the desktop's own programs keep those.
@@ -156,6 +173,7 @@ def main():
     # Both menus' entries first, then the index of what opens which type:
     # the Editör's types too.
     install_editor(executable.parent / 'lifeos_editor', applications, icons)
+    install_ajan(executable.parent / 'lifeos_ajan', applications, icons)
     # LifeOS Ofis is not put in a Folio user's menu: it is installed on its
     # own (--ofis), for those who use it instead of Folio.
     if shutil.which('update-desktop-database'):

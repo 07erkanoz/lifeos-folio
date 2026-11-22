@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:dbus/dbus.dart';
+import 'package:flutter/painting.dart' show Size;
 import 'package:path/path.dart' as p;
 
 /// On KDE's Wayland the palette asks KWin to put it in the middle of the
@@ -95,4 +98,89 @@ class KwinPaletteRule {
     ]);
     return lines.join('\n');
   }
+
+  /// The palette put in the middle of the screen now, by a script KWin
+  /// runs. The rule places a window as it is mapped; a hidden window's size
+  /// is not changed on Wayland, so the palette was mapped at the main
+  /// window's size, centred for that, then made small from its corner
+  /// (22 Kasım 2026).
+  static Future<void> center(String title, {required Size size}) async {
+    if (!applies) return;
+    final client = DBusClient.session();
+    try {
+      final file = File(
+        p.join(Directory.systemTemp.path, 'lifeos-folio-palet-orta.js'),
+      );
+      final script = centerScript(title, size: size);
+      if (!await file.exists() || await file.readAsString() != script) {
+        await file.writeAsString(script, flush: true);
+      }
+      final kwin = DBusRemoteObject(
+        client,
+        name: 'org.kde.KWin',
+        path: DBusObjectPath('/Scripting'),
+      );
+      const name = 'lifeos-folio-palet-orta';
+      await kwin.callMethod('org.kde.kwin.Scripting', 'unloadScript', [
+        const DBusString(name),
+      ], replySignature: DBusSignature('b'));
+      final loaded = await kwin.callMethod(
+        'org.kde.kwin.Scripting',
+        'loadScript',
+        [DBusString(file.path), const DBusString(name)],
+        replySignature: DBusSignature('i'),
+      );
+      if (loaded.values.first.asInt32() < 0) return;
+      // Started by the scripting itself: the script's own object, named by
+      // its number, can be one unloaded before under the same number, and
+      // running that ran nothing (22 Kasım 2026).
+      await kwin.callMethod(
+        'org.kde.kwin.Scripting',
+        'start',
+        const [],
+        replySignature: DBusSignature(''),
+      );
+    } catch (_) {
+      // Not KWin 6, or no session bus: the palette is only not centred.
+    } finally {
+      await client.close();
+    }
+  }
+
+  /// KWin's script centring Folio's window titled [title] in the screen's
+  /// work area once it is [size]: the size asked for comes a moment after
+  /// the window is shown, and centred before it, the palette was centred
+  /// for the main window's size.
+  static String centerScript(
+    String title, {
+    Size size = const Size(720, 540),
+  }) =>
+      '''
+const title = ${jsonEncode(title)};
+const width = ${size.width.round()}, height = ${size.height.round()};
+function centre(w) {
+  const g = w.frameGeometry;
+  if (Math.abs(g.width - width) > 2 || Math.abs(g.height - height) > 2) return false;
+  const area = workspace.clientArea(KWin.PlacementArea, w);
+  const x = Math.round(area.x + (area.width - g.width) / 2);
+  const y = Math.round(area.y + (area.height - g.height) / 2);
+  if (g.x !== x || g.y !== y) w.frameGeometry = {x: x, y: y, width: g.width, height: g.height};
+  return true;
+}
+function follow(w) {
+  if (w.resourceClass !== "com.erkanoz.evrak_convert") return;
+  // Kept while it is the palette: KWin places a window shown again after
+  // this script has run, and its size comes later still.
+  const keep = function () {
+    if (w.caption === title) centre(w);
+  };
+  keep();
+  w.frameGeometryChanged.connect(keep);
+  w.captionChanged.connect(keep);
+}
+// Shown again on Wayland the palette is a new window: it may come after
+// this script.
+for (const w of workspace.windowList()) follow(w);
+workspace.windowAdded.connect(follow);
+''';
 }

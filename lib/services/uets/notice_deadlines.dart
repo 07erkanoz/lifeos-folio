@@ -222,6 +222,8 @@ List<DeadlineRecord> noticeDeadlines(
   // The court's documents read, with their kinds, for their directives.
   final courtDocuments = <(NoticeDocument, BelgeTuru)>[];
   final finalDecisions = <String>{};
+  DateTime? decisionDay;
+  int? decisionYear;
   final docs = [
     for (final d in documents)
       if (d.state != 'ustveri') d,
@@ -284,6 +286,12 @@ List<DeadlineRecord> noticeDeadlines(
     } else {
       continue;
     }
+    // The day the decision says it was given: which side of a change of
+    // the law (7499) its way against it is on.
+    if (_remedyKinds.contains(tur) && doc != null && doc.hasText) {
+      decisionDay ??= decisionDayIn(doc.text);
+      decisionYear ??= decisionYearIn(doc.text);
+    }
     // A decision final in its own words: no way against it, no time.
     if (_remedyKinds.contains(tur) &&
         doc != null &&
@@ -342,6 +350,52 @@ List<DeadlineRecord> noticeDeadlines(
     } else if (seenKinds.add(BelgeTuru.odemeEmriKambiyo)) {
       kinds.add((tur: BelgeTuru.odemeEmriKambiyo, evidence: k.evidence));
     }
+  }
+
+  // With no day in the decision, its case's year: a case opened in 2025
+  // was not decided before 1 June 2024 (22 Kasım 2026: a 2025 case's
+  // appeal was shown with both the old seven days and the two weeks).
+  final caseYear = int.tryParse(
+    RegExp(r'^(\d{4})/')
+            .firstMatch(
+              (caseFile?.number ?? '').isNotEmpty
+                  ? caseFile!.number
+                  : subject?.number ?? '',
+            )
+            ?.group(1) ??
+        '',
+  );
+  final fromYear = decisionYear ?? caseYear;
+  final decidedFrom =
+      decisionDay ?? (fromYear == null ? null : DateTime(fromYear));
+  // And at the latest the day it was sent, or the last of its own year.
+  final sentDay = DateTime(sent.year, sent.month, sent.day);
+  final yearEnd = decisionYear == null ? null : DateTime(decisionYear + 1);
+  final decidedBefore = yearEnd != null && yearEnd.isBefore(sentDay)
+      ? yearEnd
+      : sentDay.add(const Duration(days: 1));
+
+  /// Whether [rule], bound to the decision's day, may be the one: never
+  /// one whose time had ended before the decision can have been given.
+  bool mayApply(YasalSure rule) {
+    if (decisionDay != null) return rule.gecerliMi(decisionDay);
+    final until = DateTime.tryParse(rule.gecerliBitisIso ?? '');
+    final from = DateTime.tryParse(rule.gecerliBaslangicIso ?? '');
+    if (until != null && decidedFrom != null && !decidedFrom.isBefore(until)) {
+      return false;
+    }
+    // Given before the day the rule began: not this rule.
+    return from == null || from.isBefore(decidedBefore);
+  }
+
+  /// Whether the decision's day settles [rule] as the one.
+  bool settled(YasalSure rule) {
+    if (decisionDay != null) return true;
+    final from = DateTime.tryParse(rule.gecerliBaslangicIso ?? '');
+    final until = DateTime.tryParse(rule.gecerliBitisIso ?? '');
+    return (from == null ||
+            (decidedFrom != null && !decidedFrom.isBefore(from))) &&
+        (until == null || !decidedBefore.isAfter(until));
   }
 
   final inserted = turkeyDay(sent);
@@ -420,7 +474,24 @@ List<DeadlineRecord> noticeDeadlines(
           'Ödeme emrinin genel haciz mi kambiyo mu olduğu belgeden '
               'anlaşılamadı; ikisinin süreleri birlikte gösterildi.',
         ),
-      if (rule.tariheBagli)
+      if (rule.tariheBagli && settled(rule))
+        DeadlineReason(
+          'kararTarihi',
+          decisionDay != null
+              ? 'Karar tarihi kararın metninden: '
+                    '${decisionDay.day.toString().padLeft(2, '0')}.'
+                    '${decisionDay.month.toString().padLeft(2, '0')}.'
+                    '${decisionDay.year}.'
+              : rule.gecerliBitisIso != null
+              ? 'Karar 1 Haziran 2024’ten önce verilmiş (tebligatın gönderim '
+                    'tarihi ya da karar numarası); eski kural (7499 s.K.).'
+              : decisionYear != null
+              ? 'Karar numarası $decisionYear yılının; karar 1 Haziran '
+                    '2024’ten sonra (7499 s.K.).'
+              : 'Dosya $caseYear esaslı; karar 1 Haziran 2024’ten sonra '
+                    'verilmiş olmalı (7499 s.K.).',
+        )
+      else if (rule.tariheBagli)
         DeadlineReason(
           'kararTarihiBilinmiyor',
           rule.gecerliBitisIso != null || rule.gecerliBaslangicIso == k7499
@@ -601,6 +672,7 @@ List<DeadlineRecord> noticeDeadlines(
           !_enforcementOffice('${caseFile?.unitName ?? ''} ${m.subject}')) {
         continue;
       }
+      if (!mayApply(rule)) continue;
       final info = kuralBilgisi(rule);
       final ruleId = info?.id ?? _slug(rule.ad);
       if (made[ruleId] case final at?) {
@@ -949,6 +1021,32 @@ class _DirectiveSource {
 /// the box's 116 documents, 8 October 2026: read, those gave a second,
 /// noisier copy of the catalogue's own deadline).
 /// The decisions a way lies against, unless they say they are final.
+/// The day a decision says it was given ("KARAR TARİHİ : 12/11/2025"),
+/// from its heading; null when it says none that is a day.
+DateTime? decisionDayIn(String text) {
+  final m = RegExp(
+    r'KARAR\s+TAR[İIi]H[İIi]\s*[:：]?\s*(\d{1,2})[./](\d{1,2})[./](\d{4})',
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (m == null) return null;
+  final d = int.parse(m.group(1)!), mo = int.parse(m.group(2)!);
+  final y = int.parse(m.group(3)!);
+  if (y < 1990 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  final day = DateTime(y, mo, d);
+  return day.month == mo ? day : null;
+}
+
+/// The year of a decision's own number ("KARAR NO : 2025/45"): the year
+/// it was given.
+int? decisionYearIn(String text) {
+  final m = RegExp(
+    r'KARAR\s+(?:NO|NUMARASI)\s*[:：]?\s*(\d{4})\s*/\s*\d+',
+    caseSensitive: false,
+  ).firstMatch(text);
+  final y = m == null ? null : int.parse(m.group(1)!);
+  return y != null && y >= 1990 ? y : null;
+}
+
 const _remedyKinds = {
   BelgeTuru.gerekceliKarar,
   BelgeTuru.kararIlami,

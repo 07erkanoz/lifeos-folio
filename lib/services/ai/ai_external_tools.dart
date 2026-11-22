@@ -19,6 +19,7 @@ import '../search/search_models.dart';
 import '../uyap/uyap_case_store.dart';
 import 'ai_assistant.dart';
 import 'ai_external.dart';
+import 'ai_office.dart';
 
 /// The tools only the programs on this computer have ([FolioExternal]),
 /// beside the case and office tools: the clients and their cases, the
@@ -995,7 +996,7 @@ class FolioExternalTools {
       'tarih': n.message.sent?.toIso8601String().substring(0, 16),
       if (n.message.barcode.isNotEmpty) 'barkod': n.message.barcode,
       if (n.caseKey case final k?) ..._caseOf(db, k),
-      'evraklar': [for (final d in db.noticeDocuments(id)) d.name],
+      ...FolioOfficeTools.noticeFacts(db, n)..remove('icerik_indi'),
     };
     final text = buffer.toString().trim();
     if (text.isEmpty) {
@@ -1003,8 +1004,9 @@ class FolioExternalTools {
         'durum': 'metin_yok',
         ...about,
         'aciklama':
-            'Tebligatın içeriği bu bilgisayara henüz indirilmedi ya da '
-            'okunamadı; Folio\'da açılınca iner.',
+            'Tebligatın içeriği bu bilgisayara henüz inmedi ya da '
+            'okunamadı. Son kırk günün paketleri UETS eşitlenince kendiliğinden '
+            'iner: uyap_guncelle kapsam tebligatlar ile tazeleyip yeniden oku.',
       };
     }
     return _parted(about, text, part);

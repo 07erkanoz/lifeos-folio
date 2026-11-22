@@ -3,7 +3,6 @@ import 'window_session.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:dbus/dbus.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../platform/app_directories.dart';
 import '../platform/atomic_file.dart';
+import '../voice/ajan_bridge.dart';
 import 'global_shortcut.dart';
 import 'kwin_palette_rule.dart';
 import 'linux_tray.dart';
@@ -21,9 +21,6 @@ class DesktopCompanion extends ChangeNotifier
   bool enabled = false;
   bool busy = false;
   bool quick = false;
-
-  /// The palette full screen as Folio Ajan's Jarvis mode.
-  bool jarvis = false;
 
   /// The quick window draws nothing: set before it hides, so that the next
   /// time it is shown its last frame is not the palette (it flashed before
@@ -67,24 +64,87 @@ class DesktopCompanion extends ChangeNotifier
 
   /// Linux's tray, Folio's own: a left click opens the quick search.
   late final LinuxTray _linuxTray = LinuxTray(
-    onActivate: () {
-      if (jarvis) {
-        leaveJarvis(toPalette: true);
-      } else {
-        toggleQuick();
-      }
-    },
+    onActivate: toggleQuick,
     onMenu: _menu,
   );
   bool _ownTray = false;
 
-  static const _menuItems = [
-    LinuxTrayItem('search', 'Hızlı arama ve ajan'),
-    LinuxTrayItem('jarvis', 'Folio Ajan'),
-    LinuxTrayItem('open', 'LifeOS Folio’yu aç'),
-    LinuxTrayItem.separator(),
-    LinuxTrayItem('quit', 'Tamamen çık'),
+  /// Folio Ajan's "Ajan açıl" as the tray shows it: whether it listens;
+  /// null while Folio Ajan cannot be used. Folio Ajan has no icon of its
+  /// own: Folio's is the one place it is seen and stopped (22 Kasım 2026).
+  bool? _ajanWake;
+
+  /// "Ajan açıl" turned on or off from the tray.
+  VoidCallback? onAjanWake;
+
+  /// What Folio lets go of before it ends (Folio Ajan told to end).
+  Future<void> Function()? beforeQuit;
+
+  List<LinuxTrayItem> get _menuItems => [
+    const LinuxTrayItem('search', 'Hızlı arama'),
+    const LinuxTrayItem('jarvis', 'Folio Ajan'),
+    if (_ajanWake case final wake?)
+      LinuxTrayItem(
+        'ajan-dinle',
+        wake
+            ? 'Folio Ajan “Ajan açıl”ı dinliyor · kapat'
+            : 'Folio Ajan “Ajan açıl”ı dinlesin',
+      ),
+    const LinuxTrayItem('open', 'LifeOS Folio’yu aç'),
+    const LinuxTrayItem.separator(),
+    const LinuxTrayItem('quit', 'Tamamen çık'),
   ];
+
+  String get _tooltip => _ajanWake == true
+      ? 'Folio Ajan “Ajan açıl”ı dinliyor · sağ tık: menü'
+      : 'Hızlı arama · sağ tık: menü';
+
+  Menu get _trayMenu => Menu(
+    items: [
+      for (final i in _menuItems)
+        i.key == null
+            ? MenuItem.separator()
+            : MenuItem(key: i.key, label: i.label),
+    ],
+  );
+
+  /// The tray's line for "Ajan açıl" made to say [wake].
+  Future<void> showAjanWake(bool? wake) async {
+    if (_ajanWake == wake) return;
+    _ajanWake = wake;
+    await _showAjanWake();
+  }
+
+  /// [wake] said by the tray whether or not it said it already.
+  Future<void> refreshAjanWake(bool? wake) async {
+    _ajanWake = wake;
+    await _showAjanWake();
+  }
+
+  /// The tray made to say [_ajanWake]: Folio's own one as soon as it is
+  /// shown (before [trayReady] is set: the word came between, and the line
+  /// was missing), appindicator's once ready.
+  Future<void> _showAjanWake() async {
+    if (_disposed || _quitting || (!_ownTray && !trayReady)) return;
+    try {
+      if (_ownTray) {
+        await _linuxTray.show(
+          asset: 'assets/branding/lifeos_folio.png',
+          tooltip: _tooltip,
+          items: _menuItems,
+          dot: _ajanWake == true,
+        );
+      } else {
+        await trayManager.setContextMenu(_trayMenu);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _letGo() async {
+    try {
+      await beforeQuit?.call().timeout(const Duration(seconds: 2));
+    } catch (_) {}
+  }
 
   Future<void> _destroyTray() async {
     if (_ownTray) {
@@ -215,8 +275,9 @@ class DesktopCompanion extends ChangeNotifier
         try {
           await _linuxTray.show(
             asset: 'assets/branding/lifeos_folio.png',
-            tooltip: 'Hızlı arama · sağ tık: menü',
+            tooltip: _tooltip,
             items: _menuItems,
+            dot: _ajanWake == true,
           );
           own = _ownTray = true;
         } catch (_) {
@@ -234,17 +295,7 @@ class DesktopCompanion extends ChangeNotifier
         if (!Platform.isLinux) {
           await trayManager.setToolTip('LifeOS Folio · Hızlı arama');
         }
-        await trayManager.setContextMenu(
-          Menu(
-            items: [
-              MenuItem(key: 'search', label: 'Hızlı arama ve ajan'),
-              MenuItem(key: 'jarvis', label: 'Folio Ajan'),
-              MenuItem(key: 'open', label: 'LifeOS Folio’yu aç'),
-              MenuItem.separator(),
-              MenuItem(key: 'quit', label: 'Tamamen çık'),
-            ],
-          ),
-        );
+        await trayManager.setContextMenu(_trayMenu);
       }
       if (value) {
         trayReady = await _trayHostAvailable();
@@ -310,8 +361,9 @@ class DesktopCompanion extends ChangeNotifier
     } catch (_) {}
   }
 
-  /// The palette's window: the card (740 × 580) and room for its shadow.
-  static const paletteWindow = Size(800, 650);
+  /// The palette's window: its card edge to edge. A margin for a shadow
+  /// showed as a band around it (22 Kasım 2026).
+  static const paletteWindow = Size(720, 540);
 
   /// Its title while it is the palette: KWin centres it by this.
   static const paletteTitle = 'Folio hızlı arama';
@@ -319,28 +371,17 @@ class DesktopCompanion extends ChangeNotifier
   Future<void> toggleQuick({String? activationToken}) async {
     if (_switching || _disposed || _quitting) return;
     if (quick && await windowManager.isVisible()) {
-      if (jarvis) {
-        await leaveJarvis(toPalette: true);
-        return;
-      }
       await dismiss();
       return;
     }
     await _openQuick(activationToken);
   }
 
-  /// The quick window from the main window or from hidden: the palette, or
-  /// with [full] Folio Ajan full screen straight away (the palette is not
-  /// shown on the way: it came a moment before Folio Ajan, 21 Kasım 2026).
-  Future<void> _openQuick(String? activationToken, {bool full = false}) async {
+  /// The quick window from the main window or from hidden: the palette.
+  Future<void> _openQuick(String? activationToken) async {
     _switching = true;
     try {
       _returnToMain = !quick && await windowManager.isVisible();
-      if (full && _returnToMain) {
-        await _jarvisInPlace(activationToken);
-        return;
-      }
-      _inPlace = false;
       if (!quick) {
         await windowSession?.save();
         if (windowSession != null) windowSession!.suspended = true;
@@ -369,32 +410,18 @@ class DesktopCompanion extends ChangeNotifier
       if (await windowManager.isMaximized()) await windowManager.unmaximize();
       await windowManager.setMinimumSize(const Size(560, 420));
       await windowManager.setSkipTaskbar(true);
-      if (full) {
-        // The screen's size before it is shown; full screen once it is (a
-        // hidden window's is not changed on Wayland).
-        final display = PlatformDispatcher.instance.displays.first;
-        await windowManager.setBounds(
-          Offset.zero & (display.size / display.devicePixelRatio),
-        );
-        await windowManager.setTitle('Folio Ajan');
-        jarvis = true;
-        _jarvisFromPalette = false;
-      } else {
-        await windowManager.setSize(paletteWindow);
-        await KwinPaletteRule.ensure(paletteTitle);
-        await windowManager.setTitle(paletteTitle);
-        await windowManager.center();
-      }
+      await windowManager.setSize(paletteWindow);
+      await KwinPaletteRule.ensure(paletteTitle);
+      await windowManager.setTitle(paletteTitle);
+      await windowManager.center();
       quick = true;
       blank = false;
       _notify();
       // A hidden GTK window does not produce frames. Present before waiting
       // for any paint; awaiting endOfFrame here would leave the app hidden.
       await _present(activationToken);
-      if (full) {
-        await windowManager.setFullScreen(true);
-        return;
-      }
+      // Centred by KWin as soon as it has the palette's size.
+      unawaited(KwinPaletteRule.center(paletteTitle, size: paletteWindow));
       // Started cold, the runner's maximize (or a full screen left by the
       // last session) lands only once shown: undone here, or the palette
       // fills the screen (21 Kasım 2026).
@@ -409,9 +436,8 @@ class DesktopCompanion extends ChangeNotifier
       await windowManager.setSize(paletteWindow);
       await windowManager.center();
     } catch (e) {
-      error = full ? 'Folio Ajan açılamadı: $e' : 'Hızlı arama açılamadı: $e';
+      error = 'Hızlı arama açılamadı: $e';
       quick = false;
-      jarvis = false;
       if (windowSession != null) windowSession!.suspended = false;
       _notify();
       await windowManager.setSkipTaskbar(false);
@@ -421,59 +447,6 @@ class DesktopCompanion extends ChangeNotifier
     }
   }
 
-  /// Folio Ajan in the main window itself: straight to full screen, no
-  /// hiding, no palette size on the way. Leaving maximized first and
-  /// hiding made the window shrink and grow again (22 Kasım 2026).
-  Future<void> _jarvisInPlace(String? activationToken) async {
-    await windowSession?.save();
-    if (windowSession != null) windowSession!.suspended = true;
-    _wasMaximized = await windowManager.isMaximized();
-    _wasFullscreen = await windowManager.isFullScreen();
-    if (!_wasMaximized && !_wasFullscreen) {
-      mainBounds = await windowManager.getBounds();
-    }
-    _inPlace = true;
-    blank = false;
-    jarvis = true;
-    _jarvisFromPalette = false;
-    quick = true;
-    _notify();
-    await windowManager.setTitle('Folio Ajan');
-    if (!_wasFullscreen) await windowManager.setFullScreen(true);
-    await _present(activationToken);
-  }
-
-  /// Back from [_jarvisInPlace]: out of full screen where it was not, and
-  /// the main window is there again as it was.
-  Future<void> _mainInPlace() async {
-    _inPlace = false;
-    // The main window's pages at once, before full screen ends: between the
-    // two the quick window showed its palette (22 Kasım 2026).
-    jarvis = false;
-    quick = false;
-    _notify();
-    onJarvisLeft?.call(JarvisExit.main);
-    await windowManager.setTitle('LifeOS Folio');
-    if (!_wasFullscreen) {
-      await windowManager.setFullScreen(false);
-      await _settled(() async => !await windowManager.isFullScreen());
-    }
-    if (_wasMaximized && !await windowManager.isMaximized()) {
-      await windowManager.maximize();
-    } else if (!_wasMaximized && !_wasFullscreen) {
-      await windowManager.setBounds(mainBounds);
-    }
-    if (windowSession != null) windowSession!.suspended = false;
-  }
-
-  /// Folio Ajan was opened over the main window itself.
-  bool _inPlace = false;
-
-  /// Folio Ajan's full screen closed, and where to: its conversation goes
-  /// on in the main window's voice window or in the palette, and ends when
-  /// Folio hides (22 Kasım 2026: it was cut on the way back).
-  void Function(JarvisExit exit)? onJarvisLeft;
-
   Future<void> showMain({
     List<String> paths = const [],
     bool showHome = true,
@@ -481,11 +454,7 @@ class DesktopCompanion extends ChangeNotifier
     if (_switching || _disposed || _quitting) return;
     _switching = true;
     try {
-      if (quick && _inPlace) {
-        await _mainInPlace();
-      } else if (quick) {
-        final wasJarvis = jarvis;
-        jarvis = false;
+      if (quick) {
         await windowManager.setTitle('LifeOS Folio');
         // Out of the palette's full screen while still shown: a hidden
         // window's is not changed on Wayland (KWin).
@@ -496,7 +465,6 @@ class DesktopCompanion extends ChangeNotifier
         await windowManager.hide();
         quick = false;
         _notify();
-        if (wasJarvis) onJarvisLeft?.call(JarvisExit.main);
         await windowManager.setResizable(true);
         await windowManager.setMinimumSize(const Size(900, 600));
         await windowManager.setBounds(mainBounds);
@@ -515,78 +483,22 @@ class DesktopCompanion extends ChangeNotifier
     }
   }
 
-  /// Whether Folio Ajan was opened from the palette: going back from it
-  /// returns there; opened from elsewhere, it returns where it came from.
-  bool _jarvisFromPalette = false;
-
-  /// Folio Ajan full screen: from the tray, its shortcut, the voice window,
-  /// "Ajan açıl" or the palette's button. Only from the palette does the
-  /// palette grow into it; from anywhere else it opens by itself.
+  /// Folio Ajan: from the tray, its shortcut or the palette's button. It
+  /// is a program of its own (lifeos_ajan, 22 Kasım 2026); the palette
+  /// goes as it opens.
   Future<void> showJarvis({String? activationToken}) async {
-    if (_switching || _disposed || _quitting || jarvis) return;
-    if (!quick || !await windowManager.isVisible()) {
-      await _openQuick(activationToken, full: true);
-      return;
-    }
-    _switching = true;
-    try {
-      jarvis = true;
-      blank = false;
-      _jarvisFromPalette = true;
-      _notify();
-      await windowManager.setFullScreen(true);
-      await _present(null);
-    } catch (e) {
-      jarvis = false;
-      error = 'Folio Ajan açılamadı: $e';
-      _notify();
-    } finally {
-      _switching = false;
-    }
-  }
-
-  /// Folio Ajan's minimize (and Esc): back to the palette if it came from
-  /// there, otherwise back where it was (the main window, or hidden). With
-  /// [toPalette] (the tray's click) to the palette in any case.
-  Future<void> leaveJarvis({bool toPalette = false}) async {
-    if (_switching || !jarvis) return;
-    if (!toPalette && !_jarvisFromPalette) return dismiss();
-    if (_inPlace) return dismiss();
-    _switching = true;
-    try {
-      jarvis = false;
-      _notify();
-      onJarvisLeft?.call(JarvisExit.palette);
-      await windowManager.setFullScreen(false);
-      await _settled(() async => !await windowManager.isFullScreen());
-      await windowManager.setSize(paletteWindow);
-      await KwinPaletteRule.ensure(paletteTitle);
-      await windowManager.setTitle(paletteTitle);
-      await windowManager.center();
-    } finally {
-      _switching = false;
-    }
+    if (_disposed || _quitting) return;
+    if (quick && await windowManager.isVisible()) await dismiss();
+    await AjanBridge.openAjan(token: activationToken);
   }
 
   Future<void> dismiss() async {
     if (_switching) return;
-    if (_inPlace) {
-      await showMain(showHome: false);
-      return;
-    }
     // Nothing drawn from here on: neither the palette while full screen
     // ends, nor, next time the window is shown, as its last frame.
     blank = true;
-    final wasJarvis = jarvis;
-    jarvis = false;
     _notify();
     await _drawn();
-    if (wasJarvis) {
-      onJarvisLeft?.call(_returnToMain ? JarvisExit.main : JarvisExit.hidden);
-      await windowManager.setFullScreen(false);
-      await _settled(() async => !await windowManager.isFullScreen());
-      await windowManager.setSize(paletteWindow);
-    }
     if (_returnToMain) {
       await showMain(showHome: false);
       return;
@@ -607,6 +519,7 @@ class DesktopCompanion extends ChangeNotifier
       _quitting = true;
       await _global.unregister();
       await _destroyTray();
+      await _letGo();
       onQuit?.call();
       await windowManager.setPreventClose(false);
       await windowManager.destroy();
@@ -634,6 +547,7 @@ class DesktopCompanion extends ChangeNotifier
       _quitting = true;
       await _global.unregister();
       await _destroyTray();
+      await _letGo();
       onQuit?.call();
       return true;
     } finally {
@@ -660,13 +574,11 @@ class DesktopCompanion extends ChangeNotifier
   void _menu(String key) {
     switch (key) {
       case 'search':
-        if (jarvis) {
-          leaveJarvis(toPalette: true);
-        } else {
-          toggleQuick();
-        }
+        toggleQuick();
       case 'jarvis':
         showJarvis();
+      case 'ajan-dinle':
+        onAjanWake?.call();
       case 'open':
         showMain();
       case 'quit':
@@ -694,6 +606,3 @@ class CompanionScope extends InheritedNotifier<DesktopCompanion> {
   static DesktopCompanion? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<CompanionScope>()?.notifier;
 }
-
-/// Where Folio Ajan's full screen went when it closed.
-enum JarvisExit { main, palette, hidden }

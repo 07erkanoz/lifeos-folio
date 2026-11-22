@@ -25,6 +25,11 @@ static constexpr const char* kIcon = "lifeos_editor.png";
 // anyone (lib/ofis_app.dart).
 static constexpr const char* kTitle = "LifeOS Ofis";
 static constexpr const char* kIcon = "lifeos_ofis.png";
+#elif defined(FOLIO_AJAN)
+// Folio Ajan: the voice assistant, a program of its own beside Folio
+// (lib/ajan_app.dart); Folio's mark is its icon.
+static constexpr const char* kTitle = "Folio Ajan";
+static constexpr const char* kIcon = "lifeos_folio.png";
 #else
 static constexpr const char* kTitle = "LifeOS Folio";
 static constexpr const char* kIcon = "lifeos_folio.png";
@@ -35,12 +40,16 @@ struct _MyApplication {
   char** dart_entrypoint_arguments;
   // Opened as a preview: keeps the size it asks for, never maximized.
   gboolean preview;
+  // Folio Ajan: no window until Dart shows it, full screen or small, or
+  // none at all while it only listens (--arka).
+  gboolean hidden;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
+  if (self->hidden) return;
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
@@ -48,7 +57,13 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // first frame or by Dart, whichever comes first), before it is mapped: it
 // appears maximized, never small first. Asked earlier, before the view was
 // realized, the window stayed black on two LifeOS computers (20 Kasım 2026).
+//
+// Once: "show" comes again each time Dart shows the window, and the quick
+// search's palette, shown from hidden, was maximized with it, filling the
+// screen and waiting to be made small again (22 Kasım 2026).
 static void maximize_on_show_cb(GtkWidget* window, MyApplication* self) {
+  g_signal_handlers_disconnect_by_func(
+      window, reinterpret_cast<gpointer>(maximize_on_show_cb), self);
   if (!self->preview) gtk_window_maximize(GTK_WINDOW(window));
 }
 
@@ -99,9 +114,17 @@ static void my_application_activate(GApplication* application) {
     gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);
   }
   self->preview = FALSE;
+  self->hidden = FALSE;
   for (char** arg = self->dart_entrypoint_arguments; arg && *arg; arg++) {
     if (g_strcmp0(*arg, "--preview") == 0) self->preview = TRUE;
+    // Started by Folio Ajan for UYAP or UETS: in the tray, no window.
+    if (g_strcmp0(*arg, "--arka") == 0) self->hidden = TRUE;
   }
+#ifdef FOLIO_AJAN
+  // Its own sizes, set by Dart before it shows the window.
+  self->preview = TRUE;
+  self->hidden = TRUE;
+#endif
   g_autofree gchar* executable = g_file_read_link("/proc/self/exe", nullptr);
   if (executable != nullptr) {
     g_autofree gchar* directory = g_path_get_dirname(executable);
@@ -165,13 +188,15 @@ static gboolean my_application_local_command_line(GApplication* application,
                                                   int* exit_status) {
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
-#if defined(FOLIO_EDITOR) || defined(FOLIO_OFIS)
-  // And put --editor (or --ofis) first, which is all that makes this
+#if defined(FOLIO_EDITOR) || defined(FOLIO_OFIS) || defined(FOLIO_AJAN)
+  // And put --editor (or --ofis, --ajan) first, which is all that makes this
   // program the editor (or Ofis).
   {
     GStrvBuilder* builder = g_strv_builder_new();
-#ifdef FOLIO_OFIS
+#if defined(FOLIO_OFIS)
     g_strv_builder_add(builder, "--ofis");
+#elif defined(FOLIO_AJAN)
+    g_strv_builder_add(builder, "--ajan");
 #else
     g_strv_builder_add(builder, "--editor");
 #endif

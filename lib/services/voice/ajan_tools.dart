@@ -1,15 +1,20 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../ai/ai_assistant.dart' show AiSettings;
 import '../ai/ai_case.dart';
 import '../ai/ai_draft.dart';
+import '../ai/ai_external.dart';
 import '../ai/ai_groq.dart';
 import '../ai/ai_refresh.dart';
 import '../ai/ai_tools_apart.dart';
 import '../portal/portal_database.dart';
 import '../uyap/uyap_case_store.dart';
+import 'ajan_bridge.dart';
 import 'general_tools.dart';
+import 'lifeos_tools.dart';
 
 /// Folio Ajan's tools in a spoken conversation: Folio's own (the case's,
 /// the office's, and those of the programs on this computer: the clients,
@@ -24,29 +29,54 @@ class AjanToolHost implements FolioToolHost {
     UyapCaseStore? store,
     AjanGeneralTools? general,
     FolioToolHost? folio,
+    this._serve = true,
   }) : _store = store ?? UyapCaseStore.instance,
        _general = general ?? AjanGeneralTools(),
        _server = AiSessionServer(session, store: store),
        _folio = folio ?? FolioToolsHere(session, external: true) {
-    _server.start();
+    if (_serve) _server.start();
   }
 
   /// Folio's tools in an isolate of their own ([FolioToolsApart]): run
   /// here they held the window for up to seconds and stopped Folio Ajan's
   /// animation (22 Kasım 2026).
+  ///
+  /// In Folio Ajan's own program ([AjanBridge]) the open Folio does what
+  /// they ask of UYAP, through Folio Ajan's folder; each conversation
+  /// starts with no case chosen, as before.
   static Future<AjanToolHost> open() async {
-    final session = await AiCaseSession.open(null);
+    final apart = AjanBridge.isAjan;
+    final session = apart
+        ? await AjanBridge.session()
+        : await AiCaseSession.open(null);
+    if (apart) {
+      await File(p.join(session.folder.path, 'dosya.json')).writeAsString('{}');
+      // And none of the last conversation's refreshes left for Folio.
+      await session.forgetRequests();
+    }
     return AjanToolHost(
       session,
       folio: await FolioToolsApart.start(session, external: true),
+      serve: !apart,
     );
   }
+
+  /// What is asked of UYAP: done by the open Folio, started for it.
+  static const _uyap = {'uyap_guncelle', 'evrak_indir'};
+
+  final bool _serve;
 
   final AiCaseSession session;
   final UyapCaseStore _store;
   final AiSessionServer _server;
   final FolioToolHost _folio;
   final AjanGeneralTools _general;
+
+  /// LifeOS Linux's tools, while the lawyer has them on.
+  final _lifeos = LifeosTools();
+
+  static Future<bool> _lifeosOn() async =>
+      LifeosTools.installed && (await AiSettings.load()).lifeosMcp;
 
   static const petitionTool = 'dilekce_kaydet';
 
@@ -92,12 +122,26 @@ class AjanToolHost implements FolioToolHost {
     ...await _folio.tools(),
     _petition,
     ...AjanGeneralTools.declarations,
+    if (await _lifeosOn()) ...await _lifeos.declarations(),
   ];
 
   @override
   Future<String> call(String name, Map<String, Object?> args) async {
     if (AjanGeneralTools.names.contains(name)) {
       return jsonEncode(await _general.call(name, args));
+    }
+    if (name.startsWith(LifeosTools.prefix)) {
+      if (!await _lifeosOn()) {
+        return jsonEncode({
+          'durum': 'kapali',
+          'aciklama': 'LifeOS araçları Ayarlar › Yapay zekâ’da kapalı.',
+        });
+      }
+      return _lifeos.call(name, args);
+    }
+    if (!_serve && _uyap.contains(name) && !await AjanBridge.folioOpen()) {
+      // The request waits in the folder; Folio does it once it is open.
+      await AjanBridge.wakeFolio();
     }
     if (name != petitionTool) return _folio.call(name, args);
     return jsonEncode(
@@ -118,7 +162,12 @@ class AjanToolHost implements FolioToolHost {
       title.isEmpty ? 'Dilekçe' : title,
       text,
     );
-    PortalDatabase.changed?.call();
+    if (_serve) {
+      PortalDatabase.changed?.call();
+    } else {
+      // The open Folio hands it to Senkron and lists it.
+      await FolioExternal.changed(session.folder);
+    }
     return {
       'durum': 'kaydedildi',
       'ad': p.basename(path),
@@ -133,6 +182,7 @@ class AjanToolHost implements FolioToolHost {
   @override
   Future<void> close() async {
     _server.stop();
+    _lifeos.close();
     await _folio.close();
   }
 }

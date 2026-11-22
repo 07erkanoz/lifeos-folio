@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:dbus/dbus.dart';
@@ -26,18 +27,23 @@ class LinuxTray {
 
   DBusClient? _bus;
   _Menu? _menu;
+  _Item? _item;
 
   bool get shown => _bus != null;
 
-  /// Shows the icon ([asset], a PNG) with [tooltip] and [items].
+  /// Shows the icon ([asset], a PNG) with [tooltip] and [items]; with
+  /// [dot], a small red dot on it: Folio Ajan is listening for "Ajan
+  /// açıl" (22 Kasım 2026), as the desktop's own microphone sign.
   Future<void> show({
     required String asset,
     required String tooltip,
     required List<LinuxTrayItem> items,
+    bool dot = false,
   }) async {
     if (_bus != null) {
       _menu!.items = items;
       await _menu!.changed();
+      await _item!.change(dot: dot, tooltip: tooltip);
       return;
     }
     final pixmaps = await _pixmaps(asset);
@@ -47,9 +53,10 @@ class LinuxTray {
       final menu = _Menu(items, onMenu);
       final item = _Item(
         tooltip: tooltip,
-        pixmaps: pixmaps,
+        plain: pixmaps,
+        dotted: [for (final (w, h, argb) in pixmaps) (w, h, _withDot(w, argb))],
         onActivate: onActivate,
-      );
+      )..dot = dot;
       await bus.registerObject(menu);
       await bus.registerObject(item);
       await bus.requestName(name);
@@ -65,6 +72,7 @@ class LinuxTray {
       );
       _bus = bus;
       _menu = menu;
+      _item = item;
     } catch (_) {
       await bus.close();
       rethrow;
@@ -75,6 +83,7 @@ class LinuxTray {
     final bus = _bus;
     _bus = null;
     _menu = null;
+    _item = null;
     await bus?.close();
   }
 
@@ -108,19 +117,69 @@ class LinuxTray {
   }
 }
 
+/// [argb] (a square [size] wide, ARGB32) with a red dot at its lower
+/// right, ringed in white so that it shows on a dark panel and a light one.
+Uint8List _withDot(int size, Uint8List argb) {
+  final out = Uint8List.fromList(argb);
+  final r = size * 0.19;
+  final c = size - r - 1.5;
+  void over(int i, double a, int red, int green, int blue) {
+    if (a <= 0) return;
+    final da = out[i] / 255;
+    final oa = a + da * (1 - a);
+    int mix(int src, int dst) =>
+        ((src * a + dst * da * (1 - a)) / oa).round().clamp(0, 255);
+    out[i + 1] = mix(red, out[i + 1]);
+    out[i + 2] = mix(green, out[i + 2]);
+    out[i + 3] = mix(blue, out[i + 3]);
+    out[i] = (oa * 255).round().clamp(0, 255);
+  }
+
+  for (var y = 0; y < size; y++) {
+    for (var x = 0; x < size; x++) {
+      final d = math.sqrt(
+        (x + 0.5 - c) * (x + 0.5 - c) + (y + 0.5 - c) * (y + 0.5 - c),
+      );
+      final ring = (r + 1.5 - d).clamp(0.0, 1.0);
+      final fill = (r + 0.5 - d).clamp(0.0, 1.0);
+      final i = (y * size + x) * 4;
+      over(i, ring, 255, 255, 255);
+      over(i, fill, 0xE5, 0x39, 0x35);
+    }
+  }
+  return out;
+}
+
 const _sni = 'org.kde.StatusNotifierItem';
 const _dbusmenu = 'com.canonical.dbusmenu';
 
 class _Item extends DBusObject {
   _Item({
     required this.tooltip,
-    required this.pixmaps,
+    required this.plain,
+    required this.dotted,
     required this.onActivate,
   }) : super(DBusObjectPath('/StatusNotifierItem'));
 
-  final String tooltip;
-  final List<(int, int, Uint8List)> pixmaps;
+  String tooltip;
+  final List<(int, int, Uint8List)> plain, dotted;
+  bool dot = false;
   final void Function() onActivate;
+
+  List<(int, int, Uint8List)> get pixmaps => dot ? dotted : plain;
+
+  /// The dot put on or taken off, the tooltip changed: the panel told to
+  /// read them again.
+  Future<void> change({required bool dot, required String tooltip}) async {
+    if (dot != this.dot) {
+      this.dot = dot;
+      await emitSignal(_sni, 'NewIcon');
+    }
+    if (tooltip != this.tooltip) {
+      this.tooltip = tooltip;
+      await emitSignal(_sni, 'NewToolTip');
+    }
+  }
 
   DBusValue get _pixmapValue => DBusArray(DBusSignature('(iiay)'), [
     for (final (w, h, data) in pixmaps)

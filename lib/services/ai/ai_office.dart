@@ -71,8 +71,12 @@ class FolioOfficeTools {
       'name': 'tebligatlar',
       'title': 'Elektronik tebligatlar',
       'description':
-          'UETS\'ten gelen elektronik tebligatlar: konu, gönderen, tarih, '
-          'okunup okunmadığı ve bağlı olduğu dosya.',
+          'UETS\'ten gelen, Folio\'nun aldığı elektronik tebligatlar: konu, '
+          'gönderen, gönderim ve tebliğ tarihi, Folio\'nun hesapladığı '
+          'süreler ve son günleri, gelen evrakların adları, okunup '
+          'okunmadığı ve bağlı olduğu dosya. "Yeni tebligat gelmiş, nedir", '
+          '"son tebligat ne" gibi sorularda önce buna bak; içeriği için '
+          'tebligat_oku.',
       'inputSchema': {
         'type': 'object',
         'properties': {
@@ -214,8 +218,14 @@ class FolioOfficeTools {
                   'tarih': n.message.sent?.toIso8601String().substring(0, 16),
                   'okundu': n.seen,
                   ...named(n.caseKey),
+                  ...noticeFacts(db, n),
                 },
           ],
+          'not':
+              'Tebliğ tarihi elektronik tebligatta gönderimden sonraki '
+              'beşinci gündür. Süreler Folio\'nun hesapladığıdır; '
+              'onaylanmamış olanı avukat denetlemedi. Belgelerin metni '
+              'tebligat_oku ile okunur.',
         };
       case 'uyap_bildirimleri':
         final since = _now().subtract(Duration(days: days(args['gun'], 14)));
@@ -251,6 +261,35 @@ class FolioOfficeTools {
   }
 
   static String _iso(DateTime d) => d.toIso8601String().substring(0, 10);
+
+  /// What the lawyer asks of a notice beside its subject: the day it
+  /// counts as served (TK m.7/a, five days on), the deadlines Folio made
+  /// from it with the day each ends, and the papers it brought.
+  static Map<String, Object?> noticeFacts(PortalDatabase db, KeptNotice n) {
+    final id = n.message.id;
+    final papers = db.noticeDocuments(id);
+    return {
+      if (n.message.served case final s?) 'teblig_tarihi': _iso(s),
+      'sureler': [
+        for (final d in db.deadlines(noticeId: id))
+          // Not one the lawyer took off, nor one no longer made (unless
+          // the lawyer followed it).
+          if (d.user?.dismissed != true &&
+              (d.record.state != 'eski' || d.onAgenda))
+            {
+              'baslik': d.record.title,
+              'son_gun': ?d.day,
+              if (d.record.law.isNotEmpty) 'dayanak': d.record.law,
+              'onaylandi': d.confirmed,
+              if (d.user?.done == true) 'yapildi': true,
+            },
+      ],
+      'evraklar': [for (final d in papers) d.name],
+      'icerik_indi':
+          (db.envelope(id)?.envelopeText ?? '').trim().isNotEmpty ||
+          papers.any((d) => d.text.trim().isNotEmpty),
+    };
+  }
 
   Map<String, Object?> _agenda(
     PortalDatabase db,

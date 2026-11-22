@@ -36,6 +36,7 @@ import 'ai/ai_panel.dart';
 import 'ai/ai_page.dart';
 import '../services/ai/ai_relay.dart';
 import '../services/ai/ai_external.dart';
+import '../services/voice/ajan_bridge.dart';
 import '../services/platform/agenda_launch.dart';
 import '../services/platform/lifeos_profile.dart';
 import '../services/platform/document_launch.dart';
@@ -1788,9 +1789,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       AiRelay.instance.start();
       // The programs on this computer, while the lawyer lets them.
       if (Platform.isLinux) ExternalHost.instance.start();
+      // Folio Ajan, its own program, asks through its folder.
+      if (Platform.isLinux) AjanBridge.host.start();
     } else {
       AiRelay.instance.stop();
       ExternalHost.instance.stop();
+      AjanBridge.host.stop();
     }
     if (!mounted) return;
     setState(() {

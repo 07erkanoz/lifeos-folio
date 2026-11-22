@@ -26,7 +26,12 @@ class QuickSearchPalette extends StatefulWidget {
 
   /// Folio Ajan; none, the palette is the search alone.
   final FolioAjan? ajan;
+
+  /// Opens Folio Ajan's own page; the palette shows nothing of it.
   final VoidCallback? onJarvis;
+
+  /// The card dark, unless the lawyer chose light.
+  final bool dark;
   const QuickSearchPalette({
     super.key,
     required this.library,
@@ -35,6 +40,7 @@ class QuickSearchPalette extends StatefulWidget {
     required this.onMain,
     this.ajan,
     this.onJarvis,
+    this.dark = true,
   });
   @override
   State<QuickSearchPalette> createState() => _QuickSearchPaletteState();
@@ -168,7 +174,7 @@ class _QuickSearchPaletteState extends State<QuickSearchPalette> {
   Widget build(BuildContext context) {
     final ajan = _ajan;
     // The palette is the approved dark card, unless the lawyer chose light.
-    final c = AjanColors.of(context, ajan?.dark ?? true);
+    final c = AjanColors.of(context, ajan?.dark ?? widget.dark);
     final theme = Theme.of(context);
     return CallbackShortcuts(
       bindings: {
@@ -178,7 +184,7 @@ class _QuickSearchPaletteState extends State<QuickSearchPalette> {
         const SingleActivator(LogicalKeyboardKey.enter): _open,
         if (ajan != null)
           const SingleActivator(LogicalKeyboardKey.tab): _askAgent,
-        if (widget.onJarvis != null && ajan != null)
+        if (widget.onJarvis != null)
           const SingleActivator(LogicalKeyboardKey.keyJ, control: true):
               widget.onJarvis!,
       },
@@ -1429,7 +1435,7 @@ class _QuickSearchPaletteState extends State<QuickSearchPalette> {
               ),
             ),
           ),
-          if (ajan != null && widget.onJarvis != null) ...[
+          if (widget.onJarvis != null) ...[
             const SizedBox(width: 8),
             Material(
               color: AjanColors.blue,
@@ -1489,8 +1495,11 @@ class _QuickSearchPaletteState extends State<QuickSearchPalette> {
   }
 }
 
-/// The palette as the mock-up has it: a 720 × 540 card in the middle of
-/// the screen. A click beside it closes it.
+/// The palette: a 720 × 540 card, its window just as large. The window
+/// was larger for the card's own shadow, and on KDE that margin showed as
+/// a pale band round the card, the shadow cut off at its edge (22 Kasım
+/// 2026): the compositor draws the window's shadow now. A click beside it
+/// (the window losing focus) closes it.
 class FloatingPalette extends StatelessWidget {
   const FloatingPalette({
     super.key,
@@ -1504,45 +1513,15 @@ class FloatingPalette extends StatelessWidget {
   static const size = Size(720, 540);
 
   @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      Positioned.fill(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onOutside,
-        ),
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(18),
+    child: DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF263044)),
       ),
-      Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints.loose(size),
-          child: SizedBox.fromSize(
-            size: size,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x8C000000),
-                    blurRadius: 60,
-                    offset: Offset(0, 24),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: DecoratedBox(
-                  position: DecorationPosition.foreground,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFF263044)),
-                  ),
-                  child: child,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ],
+      child: child,
+    ),
   );
 }

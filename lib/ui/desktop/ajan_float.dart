@@ -33,8 +33,12 @@ Future<void> toggleAjanFloat(FolioAjan ajan) async {
 /// that move while it talks or listens. Shown only when the voice is on in
 /// Settings.
 class AjanVoicePill extends StatelessWidget {
-  const AjanVoicePill({super.key, required this.ajan});
+  const AjanVoicePill({super.key, required this.ajan, this.onOpen});
   final FolioAjan ajan;
+
+  /// Folio Ajan opened elsewhere (its own program) rather than the small
+  /// window here.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -42,11 +46,15 @@ class AjanVoicePill extends StatelessWidget {
     builder: (context, _) {
       if (!ajan.available || !ajan.settings.on) return const SizedBox.shrink();
       final c = AjanColors.of(context, null);
-      final on = ajanFloatOpen.value;
+      final on = onOpen == null && ajanFloatOpen.value;
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Tooltip(
-          message: on ? 'Konuşmayı bitir' : 'Folio Ajan ile sesli konuş',
+          message: on
+              ? 'Konuşmayı bitir'
+              : onOpen != null
+              ? 'Folio Ajan’ı aç'
+              : 'Folio Ajan ile sesli konuş',
           child: Material(
             color: on ? c.accentFill : c.surface,
             shape: StadiumBorder(
@@ -54,7 +62,7 @@ class AjanVoicePill extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: () => toggleAjanFloat(ajan),
+              onTap: onOpen ?? () => toggleAjanFloat(ajan),
               child: Container(
                 height: 28,
                 padding: const EdgeInsets.fromLTRB(4, 0, 10, 0),
@@ -90,8 +98,17 @@ class AjanVoicePill extends StatelessWidget {
 /// The small window: Folio Ajan's last words and a line of sound, in
 /// Folio's own colours, at the top right of the window.
 class AjanFloat extends StatefulWidget {
-  const AjanFloat({super.key, required this.ajan, this.onFull});
+  const AjanFloat({
+    super.key,
+    required this.ajan,
+    this.onFull,
+    this.inWindow = false,
+  });
   final FolioAjan ajan;
+
+  /// The whole of a window of its own (Folio Ajan's program): no shadow,
+  /// which the window's edge would cut into a band.
+  final bool inWindow;
 
   /// To Folio Ajan's full screen, the conversation going on.
   final VoidCallback? onFull;
@@ -187,13 +204,15 @@ class _AjanFloatState extends State<AjanFloat> {
             color: c.dark ? const Color(0xFF15181E) : Colors.white,
             border: Border.all(color: c.border),
             borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x24111827),
-                blurRadius: 48,
-                offset: Offset(0, 18),
-              ),
-            ],
+            boxShadow: widget.inWindow
+                ? null
+                : const [
+                    BoxShadow(
+                      color: Color(0x24111827),
+                      blurRadius: 48,
+                      offset: Offset(0, 18),
+                    ),
+                  ],
           ),
           child: Material(
             type: MaterialType.transparency,

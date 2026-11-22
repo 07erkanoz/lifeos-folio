@@ -217,9 +217,11 @@ void main() {
         contains('yeniden okunmaz'),
       );
 
-      // Read last week (or more than three hours ago): read again.
+      // Read last week and more than three hours ago: read again. Four
+      // hours before the week began, so that it holds at any hour (one
+      // hour failed early on a Monday, 23 Kasım 2026).
       final before = PortalSync.weekStart(DateTime.now())
-          .subtract(const Duration(hours: 1));
+          .subtract(const Duration(hours: 4));
       db.setMeta('portfolio_at', before.toIso8601String());
       asked.clear();
       await sync.syncMobile();

@@ -8,7 +8,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_recorder/flutter_recorder.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
-import 'package:path_provider/path_provider.dart';
+
+import '../platform/app_directories.dart';
 
 import 'live_audio.dart';
 import 'vosk.dart';
@@ -74,7 +75,7 @@ class WakeWord {
 
   Future<Directory> _dir() async {
     final d = Directory(
-      '${(await getApplicationSupportDirectory()).path}'
+      '${(await folioSupportDirectory()).path}'
       '${Platform.pathSeparator}vosk',
     );
     await d.create(recursive: true);
