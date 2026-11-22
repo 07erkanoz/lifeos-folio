@@ -159,8 +159,8 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(SearchControls), findsOneWidget);
-      expect(find.text('2 SONUÇ'), findsOneWidget);
+      expect(find.byType(SearchOptionsButton), findsOneWidget);
+      expect(find.text('EVRAK · 2'), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       expect(opened, library.hits[1].file.path);

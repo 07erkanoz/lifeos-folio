@@ -18,8 +18,8 @@ class OfficeIdentity {
     required this.userPublic,
     required this.kept,
     SecretStore? store,
-  // A private field: no initializing formal for a named parameter.
-  // ignore: prefer_initializing_formals
+    // A private field: no initializing formal for a named parameter.
+    // ignore: prefer_initializing_formals
   }) : _store = store;
 
   /// Where its keys were read from, and the person's key is kept to.

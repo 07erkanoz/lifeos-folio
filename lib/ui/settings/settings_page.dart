@@ -1279,7 +1279,8 @@ class _SettingsPageState extends State<SettingsPage> {
       if (AiAssistant.configurable)
         const _Section('ai', 'Yapay zekâ', Icons.auto_awesome_outlined, [
           _Entry(
-            'yapay zeka claude codex chatgpt antigravity gemini özet kvkk onay',
+            'yapay zeka claude codex chatgpt antigravity gemini özet kvkk onay '
+            'ses sesli konuşma folio ajan açıl',
             AiSettingsSection(),
           ),
         ]),

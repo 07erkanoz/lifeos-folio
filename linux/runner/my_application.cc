@@ -86,6 +86,18 @@ static void my_application_activate(GApplication* application) {
                          G_CALLBACK(own_decorations_cb), nullptr);
 
   gtk_window_set_default_size(window, 1280, 720);
+  // A window that can be see-through: the quick search palette is a card
+  // floating over the desktop, in a full-screen window with nothing else
+  // drawn (Wayland lets no app place its window; centred this way it is).
+  // Without a compositor there is no see-through, and the view stays black.
+  GdkScreen* screen = gtk_window_get_screen(window);
+  GdkVisual* rgba = gdk_screen_get_rgba_visual(screen);
+  const gboolean see_through =
+      rgba != nullptr && gdk_screen_is_composited(screen);
+  if (see_through) {
+    gtk_widget_set_visual(GTK_WIDGET(window), rgba);
+    gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);
+  }
   self->preview = FALSE;
   for (char** arg = self->dart_entrypoint_arguments; arg && *arg; arg++) {
     if (g_strcmp0(*arg, "--preview") == 0) self->preview = TRUE;
@@ -126,7 +138,7 @@ static void my_application_activate(GApplication* application) {
   GdkRGBA background_color;
   // Background defaults to black, override it here if necessary, e.g. #00000000
   // for transparent.
-  gdk_rgba_parse(&background_color, "#000000");
+  gdk_rgba_parse(&background_color, see_through ? "#00000000" : "#000000");
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));

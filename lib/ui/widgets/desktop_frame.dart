@@ -33,6 +33,14 @@ class DesktopFrame extends StatefulWidget {
   /// and its unsaved-changes dot.
   final IconData? titleIcon;
   final Widget? titleTrailing;
+
+  /// Before the bar's own buttons: Folio Ajan's voice button.
+  final List<Widget> trailing;
+
+  /// Above the pages, under the bar, at the right: Folio Ajan's small
+  /// voice window. Outside the Navigator, so moving between pages leaves
+  /// it be.
+  final Widget? floating;
   const DesktopFrame({
     super.key,
     required this.child,
@@ -44,6 +52,8 @@ class DesktopFrame extends StatefulWidget {
     this.iconTooltip,
     this.titleIcon,
     this.titleTrailing,
+    this.trailing = const [],
+    this.floating,
   });
   @override
   State<DesktopFrame> createState() => _DesktopFrameState();
@@ -345,6 +355,7 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                                   ),
                                 ),
                               ),
+                              ...widget.trailing,
                               _control(
                                 context.l.viewAbout,
                                 Icons.info_outline_rounded,
@@ -396,6 +407,12 @@ class _DesktopFrameState extends State<DesktopFrame> with WindowListener {
                   Expanded(child: widget.child),
                 ],
               ),
+              if (widget.floating != null)
+                Positioned(
+                  top: (!_fullScreen || _mac) ? 46 : 8,
+                  right: 16,
+                  child: widget.floating!,
+                ),
               // Only these narrow edge rectangles participate in hit testing.
               // No full-window overlay sits above the caption or document.
               if (!_mac && !_maximized && !_fullScreen) ...[

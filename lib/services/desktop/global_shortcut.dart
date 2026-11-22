@@ -60,6 +60,11 @@ class GlobalShortcut {
   StreamSubscription? _activated;
   StreamSubscription? _changed;
   void Function(String label)? onDescription;
+
+  /// Folio Ajan's own shortcut, beside the search's in the same portal
+  /// session (Wayland only): its press, and the keys the desktop gave it.
+  void Function(String? token)? onAjan;
+  void Function(String label)? onAjanDescription;
   bool get canConfigure => wayland && _session != null && _version >= 2;
 
   Future<String> _parentWindow() async {
@@ -144,16 +149,20 @@ class GlobalShortcut {
     if (shortcuts == null) return;
     for (final shortcut in shortcuts.asArray()) {
       final fields = shortcut.asStruct();
-      if (fields[0].asString() == 'search') {
-        final label = fields[1]
-            .asStringVariantDict()['trigger_description']
-            ?.asString();
-        if (label != null) onDescription?.call(label);
+      final label = fields[1]
+          .asStringVariantDict()['trigger_description']
+          ?.asString();
+      if (label == null) continue;
+      switch (fields[0].asString()) {
+        case 'search':
+          onDescription?.call(label);
+        case 'ajan':
+          onAjanDescription?.call(label);
       }
     }
   }
 
-  Future<String> register(FolioShortcut shortcut) async {
+  Future<String> register(FolioShortcut shortcut, {FolioShortcut? ajan}) async {
     await unregister();
     if (!wayland) {
       await channel.invokeMethod('register', shortcut.toMap());
@@ -199,15 +208,16 @@ class GlobalShortcut {
             interface: _interface,
             name: 'Activated',
           ).listen((event) {
-            if (event.values[0].asObjectPath() != _session ||
-                event.values[1].asString() != 'search') {
-              return;
+            if (event.values[0].asObjectPath() != _session) return;
+            final token = event.values[3]
+                .asStringVariantDict()['activation_token']
+                ?.asString();
+            switch (event.values[1].asString()) {
+              case 'search':
+                onActivate(token);
+              case 'ajan':
+                onAjan?.call(token);
             }
-            onActivate(
-              event.values[3]
-                  .asStringVariantDict()['activation_token']
-                  ?.asString(),
-            );
           });
       _changed =
           DBusRemoteObjectSignalStream(
@@ -229,6 +239,14 @@ class GlobalShortcut {
               'preferred_trigger': DBusString(shortcut.trigger),
             }),
           ]),
+          if (ajan != null && onAjan != null)
+            DBusStruct([
+              const DBusString('ajan'),
+              DBusDict.stringVariant({
+                'description': const DBusString('LifeOS Folio · Folio Ajan'),
+                'preferred_trigger': DBusString(ajan.trigger),
+              }),
+            ]),
         ]),
         DBusString(await _parentWindow()),
       ]);
@@ -239,10 +257,12 @@ class GlobalShortcut {
       String? label;
       for (final value in bound.asArray()) {
         final fields = value.asStruct();
-        if (fields[0].asString() == 'search') {
-          label = fields[1]
-              .asStringVariantDict()['trigger_description']
-              ?.asString();
+        final given = fields[1]
+            .asStringVariantDict()['trigger_description']
+            ?.asString();
+        if (fields[0].asString() == 'search') label = given;
+        if (fields[0].asString() == 'ajan' && given != null) {
+          onAjanDescription?.call(given);
         }
       }
       if (label == null || label.trim().isEmpty) {

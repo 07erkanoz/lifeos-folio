@@ -316,10 +316,7 @@ class LegalGuide {
 
   /// Whether [text] asks for a sentence's reckoning.
   static bool asksCrime(String text) {
-    final t = text
-        .replaceAll('İ', 'i')
-        .replaceAll('I', 'ı')
-        .toLowerCase();
+    final t = text.replaceAll('İ', 'i').replaceAll('I', 'ı').toLowerCase();
     return RegExp(
       r'hagb|hükmün açıklanmasının geri|hukmun aciklanmasinin geri|'
       r'cezanın ertelen|cezanin ertelen|erteleme|seçenek yaptırım|'

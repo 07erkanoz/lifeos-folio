@@ -30,7 +30,7 @@ class AiRelay {
     Future<AiProvider?> Function(AiSettings settings)? provider,
   }) : _database = database ?? PortalDatabase.shared,
        _ask = ask ?? _askProgram,
-       _provider = provider ?? _usable;
+       _provider = provider ?? usable;
 
   static final instance = AiRelay();
 
@@ -46,7 +46,7 @@ class AiRelay {
   final Future<AiProvider?> Function(AiSettings settings) _provider;
 
   /// The program the lawyer chose, or the first one signed in.
-  static Future<AiProvider?> _usable(AiSettings settings) async {
+  static Future<AiProvider?> usable(AiSettings settings) async {
     final statuses = await AiAssistant.statuses();
     return settings.provider != null &&
             statuses.any((s) => s.provider == settings.provider && s.usable)

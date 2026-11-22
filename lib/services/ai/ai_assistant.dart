@@ -328,17 +328,23 @@ abstract final class AiAssistant {
             account: json['email'] as String?,
           );
         case AiProvider.codex:
-          final r = await Process.run(path, [
-            'login',
-            'status',
-          ], environment: environment()).timeout(const Duration(seconds: 20));
-          final said = '${r.stdout}\n${r.stderr}'.toLowerCase();
-          return AiStatus(
-            provider,
-            path: path,
-            signedIn:
-                said.contains('logged in') && !said.contains('not logged'),
-          );
+          Future<bool> asked() async {
+            final r = await Process.run(path, [
+              'login',
+              'status',
+            ], environment: environment()).timeout(const Duration(seconds: 20));
+            final said = '${r.stdout}\n${r.stderr}'.toLowerCase();
+            return said.contains('logged in') && !said.contains('not logged');
+          }
+          // Asked again a moment later before saying "not signed in": once,
+          // as Folio started, it said so of a Codex signed in all along
+          // (21 Kasım 2026).
+          var signedIn = await asked();
+          if (!signedIn) {
+            await Future<void>.delayed(const Duration(milliseconds: 1500));
+            signedIn = await asked();
+          }
+          return AiStatus(provider, path: path, signedIn: signedIn);
         case AiProvider.antigravity:
         case AiProvider.groq:
         case AiProvider.gemini:

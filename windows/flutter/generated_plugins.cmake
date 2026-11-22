@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   file_selector_windows
   flutter_secure_storage_windows
+  flutter_webrtc
   printing
   screen_retriever_windows
   sqlite3_flutter_libs

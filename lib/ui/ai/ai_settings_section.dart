@@ -8,6 +8,8 @@ import '../../services/ai/ai_assistant.dart';
 import '../../services/ai/ai_external.dart';
 import '../../services/ai/ai_usage.dart';
 import '../../services/ai/ai_groq.dart';
+import '../../services/voice/folio_ajan.dart';
+import '../desktop/quick_search_settings.dart';
 import '../mobile/settings_parts.dart';
 import 'ai_dialogs.dart';
 
@@ -433,6 +435,46 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     ),
   );
 
+  /// A provider's row, Antigravity's tools, and its models once usable.
+  List<Widget> _provider(AiStatus s) => [
+    _program(s),
+    if (s.provider == AiProvider.antigravity && s.installed)
+      _antigravityTools(),
+    if (s.installed)
+      for (final tier in AiTier.values) _model(s.provider, tier),
+  ];
+
+  /// A part of the list's title, written in capitals (Dart's toUpperCase
+  /// makes Turkish "i" an "I").
+  Widget _heading(String title, String? note) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: scheme.surfaceContainerLow,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .8,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          if (note != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              note,
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   List<Widget> _features(List<AiStatus>? found) => [
     Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
@@ -449,18 +491,39 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
         padding: EdgeInsets.all(12),
         child: Center(child: CircularProgressIndicator()),
       )
-    else
-      for (final s in found) ...[
-        _program(s),
-        if (s.provider == AiProvider.antigravity && s.installed)
-          _antigravityTools(),
+    else ...[
+      // The programs and the keys apart: one list of both was hard to read
+      // (21 Kasım 2026). Each one's models under it.
+      if (found.any((s) => !s.provider.viaApi)) ...[
+        _heading(
+          'BİLGİSAYARDAKİ PROGRAMLAR',
+          'Kendi aboneliğinizle; kurulu programın oturumu kullanılır.',
+        ),
+        for (final s in found)
+          if (!s.provider.viaApi) ..._provider(s),
       ],
-    if (found != null)
-      for (final s in found)
-        if (s.installed)
-          for (final tier in AiTier.values) _model(s.provider, tier),
-    if (found != null && found.any((s) => s.provider.viaApi && s.installed))
-      _usage(),
+      if (found.any((s) => s.provider.viaApi)) ...[
+        _heading(
+          'API ANAHTARLARI',
+          'Sağlayıcıdan aldığınız anahtarla; kullandıkça ödenir.',
+        ),
+        for (final s in found)
+          if (s.provider.viaApi) ..._provider(s),
+        if (found.any((s) => s.provider.viaApi && s.installed)) _usage(),
+      ],
+    ],
+    // Folio Ajan's voice: Linux's desktop alone has it.
+    if (Platform.isLinux && FolioAjan.instance.available) ...[
+      _heading(
+        'FOLIO AJAN · SESLİ KONUŞMA',
+        'Sesli konuşma, “Ajan açıl” ve ses hizmeti seçimi.',
+      ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: AjanVoiceSettings(),
+      ),
+    ],
+    _heading('GİZLİLİK VE İZİNLER', null),
     SettingsRow(
       key: const ValueKey('ai-mask'),
       icon: Icons.shield_outlined,

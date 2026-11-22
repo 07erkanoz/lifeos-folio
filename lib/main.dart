@@ -19,6 +19,10 @@ import 'services/library/file_library.dart';
 import 'services/security/app_lock.dart';
 import 'services/desktop/desktop_companion.dart';
 import 'services/desktop/native_window.dart';
+import 'services/voice/folio_ajan.dart';
+import 'services/voice/wake_word.dart';
+import 'ui/desktop/ajan_float.dart';
+import 'ui/desktop/jarvis_view.dart';
 import 'ui/desktop/quick_search_palette.dart';
 
 import 'package:flutter/material.dart';
@@ -155,6 +159,8 @@ void main(List<String> arguments) async {
       instance = await DesktopInstance.acquire(
         arguments.contains('--quick-search')
             ? ['--quick-search']
+            : arguments.contains('--folio-ajan')
+            ? ['--folio-ajan']
             : agenda != null
             ? agenda.arguments
             : documents.arguments,
@@ -231,6 +237,7 @@ void main(List<String> arguments) async {
       desktopChrome: desktopChrome,
       instance: instance,
       startQuick: arguments.contains('--quick-search'),
+      startAjan: arguments.contains('--folio-ajan'),
       onboarding: true,
       initialPaths: documents.paths,
       initialEdit: documents.edit,
@@ -267,6 +274,9 @@ class EvrakConvertApp extends StatefulWidget {
   final WindowSession? windowSession;
   final DesktopInstance? instance;
   final bool startQuick;
+
+  /// Started with `--folio-ajan`: Folio Ajan full screen.
+  final bool startAjan;
   final bool onboarding;
   final bool desktopChrome;
   final List<String> initialPaths;
@@ -282,6 +292,7 @@ class EvrakConvertApp extends StatefulWidget {
     this.windowSession,
     this.instance,
     this.startQuick = false,
+    this.startAjan = false,
     this.onboarding = false,
     this.initialPaths = const [],
     this.initialEdit = false,
@@ -371,6 +382,15 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
     appearance = widget.appearance ?? ThemeController();
     appearance.load();
     _startSuggestions();
+    // Whether the voice is on: the bar's Folio Ajan button shows by it.
+    if (widget.desktopChrome) {
+      FolioAjan.instance.loadVoiceSettings();
+      // "Ajan açıl": listened for while the voice and it are on in
+      // Settings, set aside while a conversation has the microphone.
+      FolioAjan.beforeVoice = WakeWord.instance.pause;
+      WakeWord.instance.onWake = _woken;
+      FolioAjan.instance.addListener(_followWake);
+    }
     if (widget.instance != null) {
       companion = DesktopCompanion(
         windowSession: widget.windowSession,
@@ -398,6 +418,10 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
       _launchRequests = widget.instance!.requests.listen((args) {
         if (args.contains('--quick-search')) {
           _openQuick();
+        } else if (args.contains('--folio-ajan')) {
+          // A shortcut of the desktop's own (KDE's Özel Kısayollar):
+          // Folio Ajan full screen.
+          unawaited(companion!.showJarvis());
         } else if (AgendaLaunch.parse(args) case final agenda?) {
           // LifeOS's agenda clicked: the window, at that record.
           unawaited(
@@ -418,6 +442,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await companion!.load();
         if (widget.startQuick && mounted) await _openQuick();
+        if (widget.startAjan && mounted) await companion!.showJarvis();
       });
     }
   }
@@ -456,6 +481,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
 
   @override
   void dispose() {
+    FolioAjan.instance.removeListener(_followWake);
     _learnArchive?.cancel();
     FocusManager.instance.removeEarlyKeyEventHandler(_escape);
     _launchRequests?.cancel();
@@ -488,6 +514,41 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
     ),
   );
 
+  void _followWake() {
+    final ajan = FolioAjan.instance;
+    final wake = WakeWord.instance;
+    final want = ajan.available && ajan.settings.on && ajan.settings.wake;
+    if (!want) {
+      if (wake.on) unawaited(wake.stop());
+      return;
+    }
+    if (ajan.voiceStarting || ajan.voice.active) return;
+    if (!wake.on || wake.state.value == WakeState.paused) {
+      unawaited(wake.start());
+    }
+  }
+
+  /// "Ajan açıl" heard: the small voice window over Folio when its window
+  /// is in front; Folio Ajan full screen when it is in the tray.
+  Future<void> _woken() async {
+    final ajan = FolioAjan.instance;
+    final c = companion;
+    final front =
+        c == null ||
+        (!c.quick &&
+            await windowManager.isVisible() &&
+            !await windowManager.isMinimized());
+    if (!front) {
+      await c.showJarvis();
+      return;
+    }
+    if (!ajanFloatOpen.value) {
+      await toggleAjanFloat(ajan);
+    } else if (!ajan.voice.active) {
+      await ajan.startVoice(handsFree: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([appearance, ?companion]),
@@ -514,6 +575,23 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                   final context = _navigator.currentState?.overlay?.context;
                   if (context != null) showFolioAbout(context);
                 },
+                // Folio Ajan's voice, when it is on in Settings: a button in
+                // the bar, a small window above the pages.
+                trailing: [AjanVoicePill(ajan: FolioAjan.instance)],
+                floating: ValueListenableBuilder<bool>(
+                  valueListenable: ajanFloatOpen,
+                  builder: (context, open, _) => open
+                      ? AjanFloat(
+                          ajan: FolioAjan.instance,
+                          onFull: companion == null
+                              ? null
+                              : () {
+                                  ajanFloatOpen.value = false;
+                                  companion!.showJarvis();
+                                },
+                        )
+                      : const SizedBox.shrink(),
+                ),
                 child: AppLockGate(
                   identify: lockIdentity,
                   child: child ?? const SizedBox.shrink(),
@@ -584,11 +662,27 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                 child: Navigator(
                   key: _quickNavigator,
                   onGenerateRoute: (_) => MaterialPageRoute<void>(
-                    builder: (_) => QuickSearchPalette(
-                      library: library,
-                      onDismiss: companion!.dismiss,
-                      onMain: () => companion!.showMain(),
-                      onOpen: (file) => companion!.showMain(paths: [file.path]),
+                    builder: (_) => ListenableBuilder(
+                      listenable: companion!,
+                      builder: (context, _) => companion!.jarvis
+                          ? JarvisView(
+                              ajan: FolioAjan.instance,
+                              onMinimize: companion!.leaveJarvis,
+                              onMain: () => companion!.showMain(),
+                              onClose: companion!.dismiss,
+                            )
+                          : FloatingPalette(
+                              onOutside: companion!.dismiss,
+                              child: QuickSearchPalette(
+                                library: library,
+                                ajan: FolioAjan.instance,
+                                onJarvis: companion!.showJarvis,
+                                onDismiss: companion!.dismiss,
+                                onMain: () => companion!.showMain(),
+                                onOpen: (file) =>
+                                    companion!.showMain(paths: [file.path]),
+                              ),
+                            ),
                     ),
                   ),
                 ),
