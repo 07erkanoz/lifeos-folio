@@ -154,6 +154,7 @@ class ExternalHost {
   bool _busy = false;
   AiCaseSession? _session;
   DateTime _said = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _tie;
 
   void start() {
     _timer ??= Timer.periodic(
@@ -191,9 +192,18 @@ class ExternalHost {
       }
       final session = _session ??= AiCaseSession.at(dir);
       final bound = await session.bound();
-      session.record = bound == null
+      // Read again only when the tie or the kept case changed: a case's
+      // record is megabytes of JSON, and reading it every second held
+      // Folio's window each time (22 Kasım 2026).
+      final tie = bound == null
           ? null
-          : await store.load(bound.court, bound.number);
+          : '${bound.court}|${bound.number}|${UyapCaseStore.changes.value}';
+      if (tie != _tie) {
+        _tie = tie;
+        session.record = bound == null
+            ? null
+            : await store.load(bound.court, bound.number);
+      }
       await AiRefresh.serve(session);
       await AiRefresh.serveDownloads(session);
       var added = false;

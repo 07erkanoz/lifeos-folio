@@ -24,6 +24,23 @@ class DesktopCompanion extends ChangeNotifier
 
   /// The palette full screen as Folio Ajan's Jarvis mode.
   bool jarvis = false;
+
+  /// The quick window draws nothing: set before it hides, so that the next
+  /// time it is shown its last frame is not the palette (it flashed before
+  /// Folio Ajan, 22 Kasım 2026).
+  bool blank = false;
+
+  /// A frame drawn before the window changes, at most a tenth of a second.
+  Future<void> _drawn() async {
+    // Tests draw no frames unless pumped: there it would wait for ever.
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+    try {
+      await WidgetsBinding.instance.endOfFrame.timeout(
+        const Duration(milliseconds: 100),
+      );
+    } catch (_) {}
+  }
+
   bool shortcutReady = false;
   bool trayReady = false;
   bool _disposed = false;
@@ -319,6 +336,11 @@ class DesktopCompanion extends ChangeNotifier
     _switching = true;
     try {
       _returnToMain = !quick && await windowManager.isVisible();
+      if (full && _returnToMain) {
+        await _jarvisInPlace(activationToken);
+        return;
+      }
+      _inPlace = false;
       if (!quick) {
         await windowSession?.save();
         if (windowSession != null) windowSession!.suspended = true;
@@ -364,6 +386,7 @@ class DesktopCompanion extends ChangeNotifier
         await windowManager.center();
       }
       quick = true;
+      blank = false;
       _notify();
       // A hidden GTK window does not produce frames. Present before waiting
       // for any paint; awaiting endOfFrame here would leave the app hidden.
@@ -398,6 +421,59 @@ class DesktopCompanion extends ChangeNotifier
     }
   }
 
+  /// Folio Ajan in the main window itself: straight to full screen, no
+  /// hiding, no palette size on the way. Leaving maximized first and
+  /// hiding made the window shrink and grow again (22 Kasım 2026).
+  Future<void> _jarvisInPlace(String? activationToken) async {
+    await windowSession?.save();
+    if (windowSession != null) windowSession!.suspended = true;
+    _wasMaximized = await windowManager.isMaximized();
+    _wasFullscreen = await windowManager.isFullScreen();
+    if (!_wasMaximized && !_wasFullscreen) {
+      mainBounds = await windowManager.getBounds();
+    }
+    _inPlace = true;
+    blank = false;
+    jarvis = true;
+    _jarvisFromPalette = false;
+    quick = true;
+    _notify();
+    await windowManager.setTitle('Folio Ajan');
+    if (!_wasFullscreen) await windowManager.setFullScreen(true);
+    await _present(activationToken);
+  }
+
+  /// Back from [_jarvisInPlace]: out of full screen where it was not, and
+  /// the main window is there again as it was.
+  Future<void> _mainInPlace() async {
+    _inPlace = false;
+    // The main window's pages at once, before full screen ends: between the
+    // two the quick window showed its palette (22 Kasım 2026).
+    jarvis = false;
+    quick = false;
+    _notify();
+    onJarvisLeft?.call(JarvisExit.main);
+    await windowManager.setTitle('LifeOS Folio');
+    if (!_wasFullscreen) {
+      await windowManager.setFullScreen(false);
+      await _settled(() async => !await windowManager.isFullScreen());
+    }
+    if (_wasMaximized && !await windowManager.isMaximized()) {
+      await windowManager.maximize();
+    } else if (!_wasMaximized && !_wasFullscreen) {
+      await windowManager.setBounds(mainBounds);
+    }
+    if (windowSession != null) windowSession!.suspended = false;
+  }
+
+  /// Folio Ajan was opened over the main window itself.
+  bool _inPlace = false;
+
+  /// Folio Ajan's full screen closed, and where to: its conversation goes
+  /// on in the main window's voice window or in the palette, and ends when
+  /// Folio hides (22 Kasım 2026: it was cut on the way back).
+  void Function(JarvisExit exit)? onJarvisLeft;
+
   Future<void> showMain({
     List<String> paths = const [],
     bool showHome = true,
@@ -405,7 +481,10 @@ class DesktopCompanion extends ChangeNotifier
     if (_switching || _disposed || _quitting) return;
     _switching = true;
     try {
-      if (quick) {
+      if (quick && _inPlace) {
+        await _mainInPlace();
+      } else if (quick) {
+        final wasJarvis = jarvis;
         jarvis = false;
         await windowManager.setTitle('LifeOS Folio');
         // Out of the palette's full screen while still shown: a hidden
@@ -417,6 +496,7 @@ class DesktopCompanion extends ChangeNotifier
         await windowManager.hide();
         quick = false;
         _notify();
+        if (wasJarvis) onJarvisLeft?.call(JarvisExit.main);
         await windowManager.setResizable(true);
         await windowManager.setMinimumSize(const Size(900, 600));
         await windowManager.setBounds(mainBounds);
@@ -451,6 +531,7 @@ class DesktopCompanion extends ChangeNotifier
     _switching = true;
     try {
       jarvis = true;
+      blank = false;
       _jarvisFromPalette = true;
       _notify();
       await windowManager.setFullScreen(true);
@@ -470,10 +551,12 @@ class DesktopCompanion extends ChangeNotifier
   Future<void> leaveJarvis({bool toPalette = false}) async {
     if (_switching || !jarvis) return;
     if (!toPalette && !_jarvisFromPalette) return dismiss();
+    if (_inPlace) return dismiss();
     _switching = true;
     try {
       jarvis = false;
       _notify();
+      onJarvisLeft?.call(JarvisExit.palette);
       await windowManager.setFullScreen(false);
       await _settled(() async => !await windowManager.isFullScreen());
       await windowManager.setSize(paletteWindow);
@@ -487,9 +570,19 @@ class DesktopCompanion extends ChangeNotifier
 
   Future<void> dismiss() async {
     if (_switching) return;
-    if (jarvis) {
-      jarvis = false;
-      _notify();
+    if (_inPlace) {
+      await showMain(showHome: false);
+      return;
+    }
+    // Nothing drawn from here on: neither the palette while full screen
+    // ends, nor, next time the window is shown, as its last frame.
+    blank = true;
+    final wasJarvis = jarvis;
+    jarvis = false;
+    _notify();
+    await _drawn();
+    if (wasJarvis) {
+      onJarvisLeft?.call(_returnToMain ? JarvisExit.main : JarvisExit.hidden);
       await windowManager.setFullScreen(false);
       await _settled(() async => !await windowManager.isFullScreen());
       await windowManager.setSize(paletteWindow);
@@ -601,3 +694,6 @@ class CompanionScope extends InheritedNotifier<DesktopCompanion> {
   static DesktopCompanion? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<CompanionScope>()?.notifier;
 }
+
+/// Where Folio Ajan's full screen went when it closed.
+enum JarvisExit { main, palette, hidden }

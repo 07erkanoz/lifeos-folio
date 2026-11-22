@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'uyap_enforcement.dart';
 
 import 'dart:convert';
@@ -476,6 +478,24 @@ class UyapCaseStore {
   /// are saved where Folio searches; the last fetched first. A case is
   /// listed once it has been fetched, a document or none.
   Future<List<(UyapCaseRecord, int)>> cases({bool counted = true}) async {
+    // One read at a time: a second one at once read every changed case
+    // again beside the first (Folio Ajan's tools, warmed as they start).
+    for (var reading = _reading; reading != null; reading = _reading) {
+      await reading;
+    }
+    final done = Completer<void>();
+    _reading = done.future;
+    try {
+      return await _cases(counted);
+    } finally {
+      _reading = null;
+      done.complete();
+    }
+  }
+
+  static Future<void>? _reading;
+
+  Future<List<(UyapCaseRecord, int)>> _cases(bool counted) async {
     await settings.load();
     final folder = Directory(p.join((await _root()).path, 'dosyalar'));
     if (!await folder.exists()) return const [];

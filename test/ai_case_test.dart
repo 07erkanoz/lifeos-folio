@@ -146,6 +146,22 @@ void main() {
     expect((docs.first as Map)['tarih'], '2026-09-12');
   });
 
+  test('documents newest first, found by words, in pages', () async {
+    final (_, tools) = await open();
+    final all = await tools.call('dosya_evraklari', {});
+    expect(all['toplam'], 2);
+    expect(all['sira'], 'en yeniden eskiye');
+    final found = await tools.call('dosya_evraklari', {'ara': 'dilekce'});
+    expect(found['eslesen'], 1);
+    expect(((found['evraklar'] as List).single as Map)['anahtar'], 'k-dilekce');
+    final page = await tools.call('dosya_evraklari', {'adet': 1});
+    expect((page['evraklar'] as List).length, 1);
+    expect(page['kalan'], 1);
+    final next = await tools.call('dosya_evraklari', {'adet': 1, 'atla': 1});
+    expect(((next['evraklar'] as List).single as Map)['anahtar'], 'k-dilekce');
+    expect(next.containsKey('kalan'), isFalse);
+  });
+
   test('a downloaded document read, identity numbers hidden, in parts; '
       'one not here is said so', () async {
     final long = 'a' * (FolioCaseTools.partSize + 10);

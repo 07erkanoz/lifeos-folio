@@ -391,11 +391,31 @@ class FolioCaseTools {
       'name': 'dosya_evraklari',
       'title': 'Dosyanın evrakı',
       'description':
-          'Dosyanın evrak listesi: her evrakın anahtarı, türü, tarihi, '
-          'gönderen birimi ve bu bilgisayara indirilip indirilmediği. '
+          'Dosyanın evrak listesi, en yeniden eskiye: her evrakın anahtarı, '
+          'türü, tarihi, gönderen birimi ve bu bilgisayara indirilip '
+          'indirilmediği. Büyük dosyada hepsi gelmez: "ara" ile süz (ör. '
+          '"tutanak", "bilirkişi", "karar"), devamı için "atla" ile sonraki '
+          'sayfayı iste. "Son duruşma" gibi sorularda önce ara="tutanak". '
           'İndirilmiş olanı evrak_oku ile oku; gerekli bir evrak inmemişse '
-          'evrak_indir ile avukattan iste.',
-      'inputSchema': {'type': 'object', 'properties': <String, Object?>{}},
+          'evrak_indir ile indir.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'ara': {
+            'type': 'string',
+            'description':
+                'Evrak adında, türünde ya da gönderende geçen sözcükler',
+          },
+          'adet': {
+            'type': 'integer',
+            'description': 'En çok kaç evrak; varsayılan 40, en çok 100',
+          },
+          'atla': {
+            'type': 'integer',
+            'description': 'Baştan kaç evrak atlanacak (sonraki sayfa)',
+          },
+        },
+      },
       'annotations': _reads,
     },
     {
@@ -580,7 +600,7 @@ class FolioCaseTools {
       case 'dosya_bilgisi':
         return _about(record);
       case 'dosya_evraklari':
-        return _documents(record);
+        return _documents(record, args);
       case 'evrak_oku':
         final part = args['parca'];
         return _readDocument(record, key, part is num ? part.toInt() : 1);
@@ -645,17 +665,80 @@ class FolioCaseTools {
     'indirildi': store.fileOf(record, d.key) != null,
   };
 
-  Map<String, Object?> _documents(UyapCaseRecord record) => {
-    'durum': 'bulundu',
-    'evraklar': [
-      for (final d in record.documents)
-        {
-          ..._entry(record, d),
-          if (d.attachments.isNotEmpty)
-            'ekler': [for (final a in d.attachments) _entry(record, a)],
-        },
-    ],
-  };
+  /// The case's documents, newest first, a page at a time: all of a large
+  /// case at once was cut short in a spoken conversation, and its last
+  /// hearing, at the end, was never seen (22 Kasım 2026).
+  Map<String, Object?> _documents(
+    UyapCaseRecord record, [
+    Map<String, Object?> args = const {},
+  ]) {
+    int number(Object? v, int fallback) =>
+        v is num ? v.toInt() : int.tryParse('$v') ?? fallback;
+    final most = number(args['adet'], 40).clamp(1, 100);
+    final skip = max(0, number(args['atla'], 0));
+    final words = _fold('${args['ara'] ?? ''}')
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    bool matches(UyapCaseDocument d) {
+      if (words.isEmpty) return true;
+      final text = _fold(
+        [
+          d.title,
+          d.type,
+          d.sender,
+          d.description,
+          for (final a in d.attachments) a.title,
+        ].join(' '),
+      );
+      return words.every(text.contains);
+    }
+
+    final ordered = [for (final (i, d) in record.documents.indexed) (i, d)]
+      ..sort((a, b) {
+        final x = a.$2.date, y = b.$2.date;
+        if (x == null && y == null) return b.$1.compareTo(a.$1);
+        if (x == null) return 1;
+        if (y == null) return -1;
+        final c = y.compareTo(x);
+        return c != 0 ? c : b.$1.compareTo(a.$1);
+      });
+    final found = [
+      for (final (_, d) in ordered)
+        if (matches(d)) d,
+    ];
+    final page = found.skip(skip).take(most).toList();
+    final rest = found.length - skip - page.length;
+    return {
+      'durum': found.isEmpty ? 'yok' : 'bulundu',
+      'toplam': record.documents.length,
+      if (words.isNotEmpty) 'eslesen': found.length,
+      'sira': 'en yeniden eskiye',
+      'evraklar': [
+        for (final d in page)
+          {
+            ..._entry(record, d),
+            if (d.attachments.isNotEmpty)
+              'ekler': [for (final a in d.attachments) _entry(record, a)],
+          },
+      ],
+      if (rest > 0) ...{
+        'kalan': rest,
+        'devami': 'Sonraki sayfa için atla=${skip + page.length}',
+      },
+    };
+  }
+
+  static String _fold(String v) => v
+      .toLowerCase()
+      .replaceAll('İ'.toLowerCase(), 'i')
+      .replaceAll('ı', 'i')
+      .replaceAll('ş', 's')
+      .replaceAll('ğ', 'g')
+      .replaceAll('ü', 'u')
+      .replaceAll('ö', 'o')
+      .replaceAll('ç', 'c')
+      .replaceAll('i̇', 'i');
 
   static UyapCaseDocument? _documentOf(UyapCaseRecord record, String key) => [
     for (final d in record.documents) ...[d, ...d.attachments],

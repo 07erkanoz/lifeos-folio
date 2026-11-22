@@ -22,10 +22,36 @@ abstract final class AiRefresh {
   static final _done = <String, DateTime>{};
 
   /// What [scope] (and [key] for one case) came to, as the tool says it.
+  /// Asks the lawyer to connect where [UyapNeed] says, the PIN of the
+  /// e-signature card on Folio Ajan's screen or the connection dialog
+  /// elsewhere; true once connected. Set by the window: a program that
+  /// needed UYAP or UETS only said it was not connected (22 Kasım 2026).
+  static Future<bool> Function(UyapNeed need, String why)? askConnect;
+  static DateTime? _declined;
+  static Future<bool>? _asking;
+
+  /// [askConnect], once at a time, and not again for two minutes after
+  /// the lawyer closed it.
+  static Future<bool> connect(UyapNeed need, String why) async {
+    final ask = askConnect;
+    if (ask == null) return false;
+    final declined = _declined;
+    if (declined != null &&
+        DateTime.now().difference(declined) < const Duration(minutes: 2)) {
+      return false;
+    }
+    final ok = await (_asking ??= ask(
+      need,
+      why,
+    ).whenComplete(() => _asking = null));
+    if (!ok) _declined = DateTime.now();
+    return ok;
+  }
+
   static Future<Map<String, Object?>> run(String scope, String key) async {
-    final web = UyapWebService.instance.connected;
-    final mobile = UyapMobileApi.instance.connected;
-    final uets = UetsApi.instance.connected;
+    var web = UyapWebService.instance.connected;
+    var mobile = UyapMobileApi.instance.connected;
+    var uets = UetsApi.instance.connected;
     if (scope == 'baglantilar') {
       return {
         'durum': 'bulundu',
@@ -43,7 +69,20 @@ abstract final class AiRefresh {
     if (sync == null) {
       return {'durum': 'yapilamadi', 'aciklama': 'Folio henüz hazır değil.'};
     }
-    final needs = scope == 'tebligatlar' ? uets : web || mobile;
+    var needs = scope == 'tebligatlar' ? uets : web || mobile;
+    if (!needs &&
+        await connect(
+          scope == 'tebligatlar' ? UyapNeed.uets : UyapNeed.web,
+          scope == 'tebligatlar'
+              ? 'Tebligatlara bakmak için UETS’e e-imzanızla bağlanın.'
+              : 'Bilgiyi UYAP’tan güncellemek için Avukat Portalı’na '
+                    'e-imzanızla bağlanın.',
+        )) {
+      web = UyapWebService.instance.connected;
+      mobile = UyapMobileApi.instance.connected;
+      uets = UetsApi.instance.connected;
+      needs = scope == 'tebligatlar' ? uets : web || mobile;
+    }
     if (!needs) {
       return {
         'durum': 'bagli_degil',
@@ -140,34 +179,69 @@ abstract final class AiRefresh {
     }
   }
 
+  /// The case a download was last for, kept a while: a new panel for
+  /// every document found the case in UYAP and fetched its whole list
+  /// again before each one, and three documents took minutes
+  /// (22 Kasım 2026).
+  static UyapCasePanelController? _panel;
+  static String? _panelFor;
+  static Timer? _panelEnds;
+
+  static UyapCasePanelController _panelOf(UyapCaseRecord record) {
+    _panelEnds?.cancel();
+    _panelEnds = Timer(const Duration(minutes: 10), () {
+      _panel?.dispose();
+      _panel = null;
+      _panelFor = null;
+    });
+    if (_panel case final panel? when _panelFor == record.key) return panel;
+    _panel?.dispose();
+    _panelFor = record.key;
+    return _panel = UyapCasePanelController(store: UyapCaseStore.instance);
+  }
+
   static Future<(String, String)> _download(
     UyapCaseRecord record,
     String key,
   ) async {
     final store = UyapCaseStore.instance;
-    final panel = UyapCasePanelController(store: store);
     try {
       // Already here: read, not asked of UYAP again.
       if (await store.load(record.court, record.number) case final now?
           when store.fileOf(now, key) != null) {
         return ('indirildi', 'Zaten inmiş; evrak_oku ile oku.');
       }
-      if (!panel.connected) {
+      final fresh = _panelFor != record.key;
+      final panel = _panelOf(record);
+      if (!panel.connected &&
+          !await connect(
+            UyapNeed.web,
+            'Evrakı UYAP’tan indirmek için Avukat Portalı’na e-imzanızla '
+            'bağlanın.',
+          )) {
         return (
           'uyap_bagli_degil',
           'Folio UYAP\'a bağlı değil; avukat bağlanınca indirilebilir.',
         );
       }
-      await panel.show(record);
+      // Shown once: showing again forgets the list UYAP gave.
+      if (fresh || panel.record == null) await panel.show(record);
       await panel.download([key]);
       final now = await store.load(record.court, record.number);
-      return now != null && store.fileOf(now, key) != null
-          ? ('indirildi', 'İndirildi; evrak_oku ile oku.')
-          : ('indirilemedi', 'UYAP evrakı vermedi.');
+      if (now != null && store.fileOf(now, key) != null) {
+        return ('indirildi', 'İndirildi; evrak_oku ile oku.');
+      }
+      final why = panel.error;
+      // A panel that went wrong is not kept for the next one.
+      _panel?.dispose();
+      _panel = null;
+      _panelFor = null;
+      return ('indirilemedi', why ?? 'UYAP evrakı vermedi.');
     } catch (e) {
+      _panel?.dispose();
+      _panel = null;
+      _panelFor = null;
       return ('indirilemedi', '$e');
-    } finally {
-      panel.dispose();
     }
   }
 
@@ -244,3 +318,7 @@ class AiSessionServer {
     }
   }
 }
+
+/// Where a program's request needs a session: the UYAP lawyer portal or
+/// UETS, each with the e-signature card.
+enum UyapNeed { web, uets }

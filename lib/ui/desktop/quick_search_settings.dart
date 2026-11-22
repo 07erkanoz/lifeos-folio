@@ -7,6 +7,7 @@ import '../../services/voice/codex_conversation.dart';
 import '../../services/voice/folio_ajan.dart';
 import '../../services/voice/voice_settings.dart';
 import '../../services/voice/wake_word.dart';
+import 'ajan_skins.dart';
 
 class QuickSearchSettings extends StatelessWidget {
   const QuickSearchSettings({super.key});
@@ -258,6 +259,28 @@ class _AjanVoiceSettingsState extends State<AjanVoiceSettings> {
               if (s.wake) const _WakeStatus(),
               const SizedBox(height: 8),
             ],
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 12),
+              child: DropdownButtonFormField<String>(
+                key: ValueKey(s.skin),
+                initialValue: AjanSkin.of(s.skin).name,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Folio Ajan tam ekran görünümü',
+                  helperText:
+                      'Tam ekranda üstteki “Görünüm” düğmesiyle de değişir.',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: [
+                  for (final k in AjanSkin.values)
+                    DropdownMenuItem(value: k.name, child: Text(k.label)),
+                ],
+                onChanged: (v) {
+                  if (v != null) _ajan.setSkin(v);
+                },
+              ),
+            ),
             if (s.on && codex) ...[
               const Text(
                 'Kulaklık gerekmez: yankı engelleme açık, konuşurken sözünü '

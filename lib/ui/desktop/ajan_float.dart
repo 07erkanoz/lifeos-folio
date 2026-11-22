@@ -23,7 +23,7 @@ Future<void> toggleAjanFloat(FolioAjan ajan) async {
     return;
   }
   ajanFloatOpen.value = true;
-  await ajan.loadSettings();
+  await ajan.loadSettings(quick: true);
   if (ajan.settings.on && !ajan.voice.active) {
     await ajan.startVoice(handsFree: true);
   }

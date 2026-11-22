@@ -6,6 +6,7 @@ import '../ai/ai_case.dart';
 import '../ai/ai_draft.dart';
 import '../ai/ai_groq.dart';
 import '../ai/ai_refresh.dart';
+import '../ai/ai_tools_apart.dart';
 import '../portal/portal_database.dart';
 import '../uyap/uyap_case_store.dart';
 import 'general_tools.dart';
@@ -18,21 +19,33 @@ import 'general_tools.dart';
 /// the rates, the weather, the news, music). A voice that could only read was of little use
 /// to the lawyer (22 Kasım 2026).
 class AjanToolHost implements FolioToolHost {
-  AjanToolHost(this.session, {UyapCaseStore? store, AjanGeneralTools? general})
-    : _store = store ?? UyapCaseStore.instance,
-      _general = general ?? AjanGeneralTools(),
-      _server = AiSessionServer(session, store: store),
-      _folio = FolioToolsHere(session, external: true) {
+  AjanToolHost(
+    this.session, {
+    UyapCaseStore? store,
+    AjanGeneralTools? general,
+    FolioToolHost? folio,
+  }) : _store = store ?? UyapCaseStore.instance,
+       _general = general ?? AjanGeneralTools(),
+       _server = AiSessionServer(session, store: store),
+       _folio = folio ?? FolioToolsHere(session, external: true) {
     _server.start();
   }
 
-  static Future<AjanToolHost> open() async =>
-      AjanToolHost(await AiCaseSession.open(null));
+  /// Folio's tools in an isolate of their own ([FolioToolsApart]): run
+  /// here they held the window for up to seconds and stopped Folio Ajan's
+  /// animation (22 Kasım 2026).
+  static Future<AjanToolHost> open() async {
+    final session = await AiCaseSession.open(null);
+    return AjanToolHost(
+      session,
+      folio: await FolioToolsApart.start(session, external: true),
+    );
+  }
 
   final AiCaseSession session;
   final UyapCaseStore _store;
   final AiSessionServer _server;
-  final FolioToolsHere _folio;
+  final FolioToolHost _folio;
   final AjanGeneralTools _general;
 
   static const petitionTool = 'dilekce_kaydet';

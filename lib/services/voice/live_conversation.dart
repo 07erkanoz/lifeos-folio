@@ -79,7 +79,16 @@ String ajanWrites() =>
     'konusunu ve istemini bir iki cümleyle söyle. UYAP’tan güncel bilgi '
     '(uyap_guncelle) alabilir, inmemiş evrakı indirebilir (evrak_indir) ve '
     'e-tebligatın metnini okuyabilirsin (tebligat_oku); bunlar biraz '
-    'sürer, beklerken “UYAP’tan alıyorum” de. Hiçbir şeyi silme, '
+    'sürer, beklerken “UYAP’tan alıyorum” de. Elektronik tebligatlar '
+    'UYAP’tan değil UETS’ten gelir: tebligat sorulunca “UETS’e bakıyorum” '
+    'de ve uyap_guncelle’yi kapsam tebligatlar ile çağır. “Yeni tebligat var mı”, '
+    '“yeni bildirim”, “güncel duruşmalar” gibi yeniyi soran sorularda önce '
+    'uyap_guncelle ile tazele (tebligatlar, bildirimler, durusmalar), sonra '
+    'oku. Folio UYAP’a ya da UETS’e bağlı değilse ekranda e-imza PIN kutusu '
+    'açılır: avukata “ekrandaki kutuya e-imza PIN’inizi yazın” de ve '
+    'aracın cevabını bekle; PIN’i sesli isteme, söylerse yazma. Evrak '
+    'listesi sayfalıdır ve en yeniden eskiye gelir: aradığını “ara” ile '
+    'bul, kalan varsa “atla” ile devam et. Hiçbir şeyi silme, '
     'değiştirme ya da dışarı gönderme.';
 
 /// What is not Folio: the lawyer wanted an assistant, not only a case

@@ -128,11 +128,11 @@ static void my_application_activate(GApplication* application) {
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
-  // LIFEOS_CIZIM=skia: Flutter's older renderer instead of Impeller, for a
-  // graphics driver Impeller cannot draw on.
-  if (g_strcmp0(g_getenv("LIFEOS_CIZIM"), "skia") == 0) {
-    fl_dart_project_set_enable_impeller(project, FALSE);
-  }
+  // Skia draws Folio on Linux: Impeller was markedly slower here, Folio
+  // Ajan's animations stuttered under it (22 Kasım 2026).
+  // LIFEOS_CIZIM=impeller chooses Impeller, to compare.
+  fl_dart_project_set_enable_impeller(
+      project, g_strcmp0(g_getenv("LIFEOS_CIZIM"), "impeller") == 0);
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;

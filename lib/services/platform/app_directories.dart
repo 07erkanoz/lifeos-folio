@@ -8,9 +8,14 @@ import 'package:path_provider/path_provider.dart';
 import 'app_edition.dart';
 import 'store_package.dart';
 
+/// Folio's folder where path_provider cannot be asked: an isolate of its
+/// own (Folio Ajan's tools) is given the window's.
+Directory? folioSupportGiven;
+
 /// Windows path_provider uses ProductName. Keep the established data location
 /// when the visible brand changes, including the index, theme and signing setup.
 Future<Directory> folioSupportDirectory() async {
+  if (folioSupportGiven case final given?) return given;
   final current = await getApplicationSupportDirectory();
   // LifeOS Ofis keeps a folder of its own on every system: never Folio's,
   // whose records and identity on the network it must not share.

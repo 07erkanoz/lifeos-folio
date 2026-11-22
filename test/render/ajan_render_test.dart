@@ -1,3 +1,4 @@
+import 'dart:async';
 // Renders Folio Ajan's screens with made-up data into PNGs, to set them
 // beside the approved mock-ups. Not a check: run on purpose, with
 // FOLIO_RENDER=<folder>.
@@ -8,6 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:evrak_convert/services/ai/ai_refresh.dart';
+import 'package:evrak_convert/services/voice/ajan_link.dart';
+import 'package:evrak_convert/ui/desktop/ajan_skins.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
 import 'package:evrak_convert/services/voice/folio_ajan.dart';
 import 'package:evrak_convert/services/voice/live_conversation.dart';
@@ -21,7 +25,7 @@ class _Ajan extends FolioAjan {
   @override
   bool get available => true;
   @override
-  Future<void> loadSettings() async {}
+  Future<void> loadSettings({bool quick = false}) async {}
   @override
   Future<void> loadBrief() async {}
   void poke() => notifyListeners();
@@ -255,6 +259,29 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
     await _shot(tester, key, 'ajan-konusma');
+    for (final skin in AjanSkin.values) {
+      ajan
+        ..settings = ajan.settings.copyWith(skin: skin.name)
+        ..poke();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await _shot(tester, key, 'ajan-${skin.name}');
+    }
+    unawaited(
+      AjanLinks.instance.request(
+        UyapNeed.uets,
+        'Tebligatlara bakmak için UETS’e e-imzanızla bağlanın.',
+      ),
+    );
+    for (final skin in [AjanSkin.kure, AjanSkin.hologram, AjanSkin.kehribar]) {
+      ajan
+        ..settings = ajan.settings.copyWith(skin: skin.name)
+        ..poke();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await _shot(tester, key, 'ajan-pin-${skin.name}');
+    }
+    AjanLinks.instance.cancel();
     await tester.pumpWidget(const SizedBox.shrink());
   }, skip: out == null);
 
@@ -319,4 +346,3 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   }, skip: out == null);
 }
-

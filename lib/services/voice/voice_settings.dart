@@ -20,7 +20,12 @@ class VoiceSettings {
     this.codexEffort = 'low',
     this.handOn = true,
     this.wake = false,
+    this.skin = 'kure',
   });
+
+  /// How Folio Ajan's full screen looks: kure, reaktor, hologram, aura,
+  /// kehribar (22 Kasım 2026: the lawyer wanted to choose).
+  final String skin;
 
   /// "Ajan açıl" opens Folio Ajan: listened for on this computer (Vosk),
   /// nothing leaves it.
@@ -51,6 +56,7 @@ class VoiceSettings {
           codexEffort: '${json['codex_dusunme'] ?? 'low'}',
           handOn: json['agir_isler_programa'] != false,
           wake: json['sesle_ac'] == true,
+          skin: '${json['gorunum'] ?? 'kure'}',
         )
       : const VoiceSettings();
 
@@ -63,6 +69,7 @@ class VoiceSettings {
     'codex_dusunme': codexEffort,
     'agir_isler_programa': handOn,
     'sesle_ac': wake,
+    'gorunum': skin,
   };
 
   VoiceSettings copyWith({
@@ -74,6 +81,7 @@ class VoiceSettings {
     String? codexEffort,
     bool? handOn,
     bool? wake,
+    String? skin,
   }) => VoiceSettings(
     on: on ?? this.on,
     headphones: headphones ?? this.headphones,
@@ -83,6 +91,7 @@ class VoiceSettings {
     codexEffort: codexEffort ?? this.codexEffort,
     handOn: handOn ?? this.handOn,
     wake: wake ?? this.wake,
+    skin: skin ?? this.skin,
   );
 
   static Future<File> Function() file = () async => File(

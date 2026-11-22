@@ -12,6 +12,11 @@ import 'services/platform/agenda_launch.dart';
 import 'services/portal/lifeos_agenda.dart';
 import 'services/ai/folio_mcp.dart';
 import 'services/ai/ai_external.dart';
+import 'services/ai/ai_refresh.dart';
+import 'services/portal/portal_channel.dart';
+import 'services/voice/ajan_link.dart';
+import 'ui/agenda/uets_connect.dart';
+import 'ui/widgets/uyap_connect_view.dart';
 import 'services/platform/data_reset.dart';
 import 'services/platform/document_launch.dart';
 import 'services/live/live_links.dart';
@@ -375,6 +380,27 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
   final _drafts = EditorDrafts();
   late final ThemeController appearance;
   late final LibraryController library;
+
+  /// A program asked for UYAP or UETS: on Folio Ajan's screen only the
+  /// e-signature PIN, there; elsewhere the connection dialog.
+  Future<bool> _askConnect(UyapNeed need, String why) async {
+    final c = companion;
+    if (c != null && c.quick && c.jarvis && AjanLinks.instance.shown > 0) {
+      return AjanLinks.instance.request(need, why);
+    }
+    final quick = c?.quick == true;
+    final context = (quick ? _quickNavigator : _navigator).currentContext;
+    if (context == null || !context.mounted) return false;
+    return switch (need) {
+      UyapNeed.web => connectUyap(
+        context,
+        channels: const {PortalChannel.uyapWeb},
+        why: why,
+      ),
+      UyapNeed.uets => connectUets(context),
+    };
+  }
+
   @override
   void initState() {
     super.initState();
@@ -383,6 +409,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
     appearance = widget.appearance ?? ThemeController();
     appearance.load();
     _startSuggestions();
+    AiRefresh.askConnect = _askConnect;
     // Whether the voice is on: the bar's Folio Ajan button shows by it.
     if (widget.desktopChrome) {
       FolioAjan.instance.loadVoiceSettings();
@@ -412,6 +439,21 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
           widget.instance?.close();
         },
       );
+      // Folio Ajan's conversation outlives its full screen: back in the main
+      // window it goes on in the voice window, in the palette there; ended
+      // only when Folio hides (22 Kasım 2026).
+      companion!.onJarvisLeft = (exit) {
+        final ajan = FolioAjan.instance;
+        if (!ajan.voice.active) return;
+        switch (exit) {
+          case JarvisExit.main:
+            ajanFloatOpen.value = true;
+          case JarvisExit.palette:
+            break;
+          case JarvisExit.hidden:
+            unawaited(ajan.voice.stop());
+        }
+      };
       MacQuit.handle(
         companion!.approveQuit,
         onSettings: () async {
@@ -669,7 +711,9 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
                   onGenerateRoute: (_) => MaterialPageRoute<void>(
                     builder: (_) => ListenableBuilder(
                       listenable: companion!,
-                      builder: (context, _) => companion!.jarvis
+                      builder: (context, _) => companion!.blank
+                          ? const SizedBox.shrink()
+                          : companion!.jarvis
                           ? JarvisView(
                               ajan: FolioAjan.instance,
                               onMinimize: companion!.leaveJarvis,

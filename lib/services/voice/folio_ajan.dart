@@ -255,18 +255,48 @@ class FolioAjan extends ChangeNotifier {
   /// wake word's library nor a tried voice (21 Kasım 2026).
   bool get available => Platform.isLinux && AiAssistant.shown;
 
-  Future<void> loadSettings() async {
+  /// The voice's settings, and which programs are signed in. Asking the
+  /// programs (Codex, Claude…) takes a second or more; once they are known
+  /// a [quick] load uses what was found and asks again behind, so that
+  /// Folio Ajan starts listening at once (22 Kasım 2026: it was slow).
+  Future<void> loadSettings({bool quick = false}) async {
     settings = await VoiceSettings.load();
-    codexReady = await CodexConversation.ready();
-    claude = await usableClaude();
-    try {
-      brainLabel = (await AiRelay.usable(await AiSettings.load()))?.label ?? '';
-    } catch (_) {
-      brainLabel = '';
+    if (quick && _programsKnown) {
+      _apply(settings);
+      notifyListeners();
+      unawaited(_programs());
+      return;
     }
-    _apply(settings);
-    notifyListeners();
+    await _programs();
   }
+
+  bool _programsKnown = false;
+  Future<void>? _asking;
+
+  Future<void> _programs() => _asking ??= () async {
+    try {
+      final (ready, found, label) = await (
+        CodexConversation.ready(),
+        usableClaude(),
+        () async {
+          try {
+            return (await AiRelay.usable(await AiSettings.load()))?.label ?? '';
+          } catch (_) {
+            return '';
+          }
+        }(),
+      ).wait;
+      // Not under a conversation going on: [voice] would change beneath it.
+      if (!codex.active && !gemini.active) codexReady = ready;
+      claude = found;
+      brainLabel = label;
+      _programsKnown = true;
+      _apply(settings);
+      notifyListeners();
+    } finally {
+      _asking = null;
+    }
+  }();
 
   /// Called before a conversation takes the microphone: the wake word's
   /// listening lets go of it.
@@ -294,6 +324,8 @@ class FolioAjan extends ChangeNotifier {
       settings = await VoiceSettings.load();
       _apply(settings);
       notifyListeners();
+      // Asked once behind, so that the first conversation need not wait.
+      if (settings.on && !_programsKnown) unawaited(_programs());
     } catch (_) {}
   }
 
@@ -325,6 +357,10 @@ class FolioAjan extends ChangeNotifier {
   Future<void> toggleHandOn() =>
       saveSettings(settings.copyWith(handOn: !settings.handOn));
 
+  /// The full screen's look, kept ([VoiceSettings.skin]).
+  Future<void> setSkin(String skin) =>
+      saveSettings(settings.copyWith(skin: skin));
+
   void _apply(VoiceSettings s) {
     gemini
       ..headphones = s.headphones
@@ -344,12 +380,28 @@ class FolioAjan extends ChangeNotifier {
     notifyListeners();
   }
 
+  DateTime? _briefAt;
+
+  /// The briefing when Folio Ajan opens: kept for a minute, and read once
+  /// the screen has come (reading it during the change made it stutter).
+  Future<void> _openBrief() async {
+    final at = _briefAt;
+    if (brief != null &&
+        at != null &&
+        DateTime.now().difference(at) < const Duration(minutes: 1)) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    await loadBrief();
+  }
+
   Future<void> loadBrief() async {
     briefLoading = true;
     briefError = null;
     notifyListeners();
     try {
       brief = await AjanBrief.load();
+      _briefAt = DateTime.now();
     } catch (e) {
       briefError = 'Brifing okunamadı: $e';
     } finally {
@@ -361,15 +413,18 @@ class FolioAjan extends ChangeNotifier {
   /// Jarvis mode opened: the briefing, and hands-free listening when the
   /// lawyer turned the voice on.
   Future<void> enterJarvis() async {
-    await loadSettings();
-    unawaited(loadBrief());
+    // A conversation already going on (from the voice window) goes on here;
+    // asking again which voice is ready could change it under it.
+    if (codex.active || gemini.active) {
+      await loadVoiceSettings();
+      unawaited(_openBrief());
+      return;
+    }
+    await loadSettings(quick: true);
+    unawaited(_openBrief());
     if (settings.on && available && !voice.active) {
       await startVoice(handsFree: true);
     }
-  }
-
-  Future<void> leaveJarvis() async {
-    if (voice.active) await voice.stop();
   }
 
   /// The briefing read aloud by Live.
@@ -384,7 +439,7 @@ class FolioAjan extends ChangeNotifier {
     if (voice.active) {
       await voice.stop();
     } else {
-      await loadSettings();
+      await loadSettings(quick: true);
       await startVoice();
     }
   }

@@ -146,8 +146,9 @@ class FolioOfficeTools {
           '(tek dosyanın bilgileri ve evrak listesi; UYAP Web bağlıysa icra '
           'hesabı, dosya borcu ve tahsilat da; anahtar gerekir). '
           'Yalnız bilgi eski görünüyorsa ya da avukat güncelini istiyorsa '
-          'kullan; aynı şeyi tekrar tekrar isteme. Folio UYAP\'a bağlı '
-          'değilse durum bunu söyler.',
+          'kullan; aynı şeyi tekrar tekrar isteme. Folio UYAP\'a ya da '
+          'UETS\'e bağlı değilse avukattan ekranda e-imza PIN\'i istenir, '
+          'bağlanınca güncellenir; bağlanmazsa durum bunu söyler.',
       'inputSchema': {
         'type': 'object',
         'properties': {

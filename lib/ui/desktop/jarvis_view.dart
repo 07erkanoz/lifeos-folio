@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/ai/ai_refresh.dart';
+import '../../services/voice/ajan_link.dart';
 import '../../services/voice/folio_ajan.dart';
 import '../../services/voice/live_conversation.dart';
+import 'ajan_skins.dart';
 import 'ajan_theme.dart';
 import 'folio_mark.dart';
 
@@ -38,24 +41,27 @@ const _months = [
   'Aralık',
 ];
 
-/// The approved mock-up's colours for this screen (always dark).
+/// The chosen look's colours for this screen (always dark).
 class _K {
-  static const text = Color(0xFFE8ECF4);
-  static const bright = Color(0xFFF2F5FA);
-  static const muted = Color(0xFF9AA5B8);
-  static const faint = Color(0xFF8B95A8);
-  static const soft = Color(0xFFC9D0DC);
-  static const line = Color(0xFF243047);
-  static const frame = Color(0xFF263044);
-  static const label = Color(0xFF8FB0FF);
-  static const red = Color(0xFFFF9C9C);
-  static const amber = Color(0xFFF5C46B);
-  static const green = Color(0xFF3DD68C);
-  static const sky = Color(0xFF9DB7FF);
+  static AjanSkinStyle s = AjanSkinStyle.kure;
+  static Color get text => s.text;
+  static Color get bright => s.bright;
+  static Color get muted => s.muted;
+  static Color get faint => s.faint;
+  static Color get soft => s.soft;
+  static Color get line => s.line;
+  static Color get frame => s.frame;
+  static Color get label => s.label;
+  static Color get red => s.red;
+  static Color get amber => s.amber;
+  static Color get green => s.green;
+  static Color get sky => s.sky;
+
+  /// The approved look, whose own colours stay as they were.
+  static bool get kure => identical(s, AjanSkinStyle.kure);
 }
 
-/// What the screen shows: nothing yet, or one of the voice's moments.
-enum _Mood { idle, listening, speaking, working }
+typedef _Mood = AjanMood;
 
 /// Folio Ajan's full screen, as the approved mock-up draws it: the light
 /// sphere in the middle (large while nothing is said, settling up when the
@@ -81,7 +87,7 @@ class _JarvisViewState extends State<JarvisView>
     with SingleTickerProviderStateMixin {
   /// Seconds since shown; the sphere runs on it.
   final _clock = ValueNotifier<double>(0);
-  final _motion = _Motion();
+  final _motion = AjanMotion();
   late final Ticker _ticker = createTicker(_tick);
   late final Timer _minute;
   final _text = TextEditingController();
@@ -90,10 +96,15 @@ class _JarvisViewState extends State<JarvisView>
 
   FolioAjan get ajan => widget.ajan;
 
+  AjanSkin get _skin => AjanSkin.of(ajan.settings.skin);
+
   @override
   void initState() {
     super.initState();
     ajan.addListener(_changed);
+    AjanLinks.instance
+      ..shown += 1
+      ..addListener(_linkChanged);
     ajan.enterJarvis();
     _minute = Timer.periodic(const Duration(seconds: 20), (_) => _changed());
   }
@@ -118,10 +129,39 @@ class _JarvisViewState extends State<JarvisView>
     if (mounted) setState(() {});
   }
 
+  final _pin = TextEditingController();
+  final _pinFocus = FocusNode();
+  AjanLinkAsk? _asked;
+
+  /// A new connection asked for: the PIN field takes the keyboard.
+  void _linkChanged() {
+    final ask = AjanLinks.instance.asking;
+    if (!identical(ask, _asked)) {
+      _asked = ask;
+      _pin.clear();
+      if (ask != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _pinFocus.requestFocus();
+        });
+      }
+    }
+    _changed();
+  }
+
+  void _connect() {
+    final pin = _pin.text;
+    _pin.clear();
+    unawaited(AjanLinks.instance.connect(pin));
+  }
+
   @override
   void dispose() {
     ajan.removeListener(_changed);
-    ajan.leaveJarvis();
+    AjanLinks.instance
+      ..shown -= 1
+      ..removeListener(_linkChanged);
+    _pin.dispose();
+    _pinFocus.dispose();
     _minute.cancel();
     _ticker.dispose();
     _clock.dispose();
@@ -195,6 +235,9 @@ class _JarvisViewState extends State<JarvisView>
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final wide = size.width >= 1100;
+    final skin = _skin;
+    _K.s = skin.style;
+    final backdrop = skin.backdrop(_clock);
     final side = wide ? 360.0 : 24.0;
     return CallbackShortcuts(
       bindings: {
@@ -211,9 +254,9 @@ class _JarvisViewState extends State<JarvisView>
           ),
         ),
         child: Material(
-          color: const Color(0xFF07090F),
+          color: _K.s.ground.last,
           child: DefaultTextStyle(
-            style: const TextStyle(
+            style: TextStyle(
               color: _K.text,
               fontSize: 13,
               height: 1.4,
@@ -221,22 +264,37 @@ class _JarvisViewState extends State<JarvisView>
             ),
             child: Stack(
               children: [
-                const Positioned.fill(
+                Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
-                        center: Alignment(0, -.2),
+                        center: const Alignment(0, -.2),
                         radius: .62,
-                        colors: [
-                          Color(0xFF12203D),
-                          Color(0xFF0B111C),
-                          Color(0xFF07090F),
-                        ],
-                        stops: [0, .55, 1],
+                        colors: _K.s.ground,
+                        stops: const [0, .55, 1],
                       ),
                     ),
                   ),
                 ),
+                if (backdrop != null)
+                  Positioned.fill(
+                    child: RepaintBoundary(
+                      child: CustomPaint(painter: backdrop),
+                    ),
+                  ),
+                if (_K.s.scan != null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          painter: ScanLines(
+                            _K.s.scan!,
+                            every: _K.s.mono ? 4 : 3,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(left: 0, right: 0, top: 0, child: _header()),
                 if (wide) ...[
                   Positioned(
@@ -283,10 +341,7 @@ class _JarvisViewState extends State<JarvisView>
   Widget _button(String label, VoidCallback? onTap, {String? tip}) {
     final button = Material(
       color: const Color(0x08FFFFFF),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(9),
-        side: const BorderSide(color: _K.line),
-      ),
+      shape: _K.s.shape(r: math.min(9, _K.s.radius), side: _K.line),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -296,7 +351,7 @@ class _JarvisViewState extends State<JarvisView>
           alignment: Alignment.center,
           child: Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: _K.soft,
@@ -312,7 +367,7 @@ class _JarvisViewState extends State<JarvisView>
     message: tip,
     child: Material(
       color: const Color(0x0DFFFFFF),
-      borderRadius: BorderRadius.circular(9),
+      shape: _K.s.shape(r: math.min(9, _K.s.radius)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -337,15 +392,19 @@ class _JarvisViewState extends State<JarvisView>
         'Ses kapalı',
       ),
       _Mood.speaking => (
-        const Color.fromRGBO(61, 214, 140, .12),
-        const Color(0xFF7EE2B0),
+        _K.kure
+            ? const Color.fromRGBO(61, 214, 140, .12)
+            : _K.green.withValues(alpha: .12),
+        _K.kure ? const Color(0xFF7EE2B0) : _K.green,
         _K.green,
         'Konuşuyor',
       ),
       _Mood.listening => (
-        const Color.fromRGBO(37, 99, 235, .16),
+        _K.kure
+            ? const Color.fromRGBO(37, 99, 235, .16)
+            : _K.sky.withValues(alpha: .16),
         _K.sky,
-        const Color(0xFF4F86FF),
+        _K.kure ? const Color(0xFF4F86FF) : _K.sky,
         'Dinliyor',
       ),
       _Mood.working => (
@@ -366,19 +425,24 @@ class _JarvisViewState extends State<JarvisView>
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 28),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0x0DFFFFFF))),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: _K.s.headCaps ? _K.line : const Color(0x0DFFFFFF),
+          ),
+        ),
       ),
       child: Row(
         children: [
           FolioMark(size: 26, live: _mood == _Mood.speaking),
           const SizedBox(width: 14),
-          const Text(
-            'Folio Ajan',
+          Text(
+            _K.s.headCaps ? 'FOLIO AJAN' : 'Folio Ajan',
             style: TextStyle(
-              fontSize: 15,
+              fontFamily: _K.s.mono ? ajanMono : null,
+              fontSize: _K.s.headCaps ? 14 : 15,
               fontWeight: FontWeight.w600,
-              letterSpacing: -.1,
+              letterSpacing: _K.s.headCaps ? _K.s.headTrack : -.1,
             ),
           ),
           const SizedBox(width: 14),
@@ -443,6 +507,16 @@ class _JarvisViewState extends State<JarvisView>
               ),
             ],
           ],
+          const SizedBox(width: 14),
+          _button(
+            'Görünüm: ${_skin.label}',
+            () => ajan.setSkin(
+              AjanSkin.values[(_skin.index + 1) % AjanSkin.values.length].name,
+            ),
+            tip:
+                'Tam ekranın görünümü: Küre, Reaktör, Hologram, Aura, '
+                'Kehribar. Kaydedilir; Ayarlar › Yapay zekâ’dan da seçilir.',
+          ),
           Container(
             width: 1,
             height: 22,
@@ -452,7 +526,7 @@ class _JarvisViewState extends State<JarvisView>
           Text(
             '${_short[now.weekday - 1]} ${two(now.day)}.${two(now.month)}.'
             '${now.year} · ${two(now.hour)}:${two(now.minute)}',
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: ajanMono,
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -480,35 +554,51 @@ class _JarvisViewState extends State<JarvisView>
       children: [
         Text(
           text,
-          style: const TextStyle(
+          style: TextStyle(
+            fontFamily: _K.s.mono ? ajanMono : null,
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            letterSpacing: 1.2,
-            color: _K.faint,
+            letterSpacing: _K.s.headTrack,
+            color: _K.s.headCaps ? _K.label.withValues(alpha: .8) : _K.faint,
           ),
         ),
         const Spacer(),
-        Text(note, style: const TextStyle(fontSize: 12, color: _K.faint)),
+        Text(note, style: TextStyle(fontSize: 12, color: _K.faint)),
       ],
     ),
   );
 
-  Widget _box(List<Widget> rows) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(6),
-    decoration: BoxDecoration(
-      color: const Color(0x09FFFFFF),
-      border: Border.all(color: const Color(0x0FFFFFFF)),
-      borderRadius: BorderRadius.circular(14),
-    ),
-    child: Column(children: rows),
-  );
+  Widget _box(List<Widget> rows) {
+    final st = _K.s;
+    Widget box = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(6),
+      decoration: ShapeDecoration(
+        color: st.panel,
+        shape: st.shape(side: st.panelLine),
+      ),
+      child: Column(children: rows),
+    );
+    if (st.blur > 0) {
+      box = ClipPath(
+        clipper: ShapeBorderClipper(shape: st.shape()),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: st.blur, sigmaY: st.blur),
+          child: box,
+        ),
+      );
+    }
+    if (st.corners) {
+      box = CustomPaint(foregroundPainter: CornerMarks(st.label), child: box);
+    }
+    return box;
+  }
 
   Widget _quiet(String text) => Padding(
     padding: const EdgeInsets.all(10),
     child: Align(
       alignment: Alignment.centerLeft,
-      child: Text(text, style: const TextStyle(color: _K.muted)),
+      child: Text(text, style: TextStyle(color: _K.muted)),
     ),
   );
 
@@ -516,7 +606,7 @@ class _JarvisViewState extends State<JarvisView>
     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
     decoration: BoxDecoration(
       color: fill,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(math.min(6, _K.s.radius)),
     ),
     child: Text(
       text,
@@ -550,10 +640,8 @@ class _JarvisViewState extends State<JarvisView>
   }) => Opacity(
     opacity: past ? .6 : 1,
     child: Material(
-      color: hot
-          ? const Color.fromRGBO(255, 107, 107, .08)
-          : Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      color: hot ? _K.s.hot : Colors.transparent,
+      borderRadius: BorderRadius.circular(math.max(0, _K.s.radius - 4)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: ask == null ? null : () => _ask(ask),
@@ -592,7 +680,7 @@ class _JarvisViewState extends State<JarvisView>
                         sub,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, color: _K.muted),
+                        style: TextStyle(fontSize: 12, color: _K.muted),
                       ),
                     ],
                   ],
@@ -735,7 +823,9 @@ class _JarvisViewState extends State<JarvisView>
                         n.title.startsWith('Tebligat')
                             ? icon(
                                 Icons.mail_outline_rounded,
-                                const Color.fromRGBO(76, 125, 255, .14),
+                                _K.kure
+                                    ? const Color.fromRGBO(76, 125, 255, .14)
+                                    : _K.sky.withValues(alpha: .14),
                                 _K.sky,
                               )
                             : icon(
@@ -842,7 +932,7 @@ class _JarvisViewState extends State<JarvisView>
                     onTap: ajan.settings.on ? ajan.toggleTalk : null,
                     child: RepaintBoundary(
                       child: CustomPaint(
-                        painter: _Sphere(_clock, _motion),
+                        painter: _skin.figure(_clock, _motion),
                         size: Size.infinite,
                       ),
                     ),
@@ -852,12 +942,15 @@ class _JarvisViewState extends State<JarvisView>
             ),
             Text(
               _moodLabel,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: ajanMono,
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                letterSpacing: 1,
+                letterSpacing: _K.s.headCaps ? 3 : 1,
                 color: _K.label,
+                shadows: _K.s.answerGlow
+                    ? [Shadow(color: _K.label, blurRadius: 10)]
+                    : null,
               ),
             ),
             if (shown.isNotEmpty) ...[
@@ -883,7 +976,7 @@ class _JarvisViewState extends State<JarvisView>
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, color: _K.muted),
+                  style: TextStyle(fontSize: 13, color: _K.muted),
                 ),
                 350,
               ),
@@ -897,11 +990,19 @@ class _JarvisViewState extends State<JarvisView>
                       error ?? (answer.isEmpty && _working ? '…' : answer),
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 19,
+                        fontSize: _K.s.answerSize,
                         height: 1.5,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: _K.s.answerWeight,
                         letterSpacing: -.2,
                         color: error != null ? _K.red : _K.bright,
+                        shadows: _K.s.answerGlow && error == null
+                            ? [
+                                Shadow(
+                                  color: _K.label.withValues(alpha: .35),
+                                  blurRadius: 16,
+                                ),
+                              ]
+                            : null,
                       ),
                     ),
                   ),
@@ -918,10 +1019,11 @@ class _JarvisViewState extends State<JarvisView>
   Widget _chip(String name, {required bool done}) => Container(
     height: 26,
     padding: const EdgeInsets.symmetric(horizontal: 10),
-    decoration: BoxDecoration(
+    decoration: ShapeDecoration(
       color: const Color(0x0DFFFFFF),
-      border: Border.all(color: const Color(0x0FFFFFFF)),
-      borderRadius: BorderRadius.circular(999),
+      shape: _K.s.radius >= 14
+          ? StadiumBorder(side: BorderSide(color: _K.line))
+          : _K.s.shape(r: _K.s.radius, side: _K.line),
     ),
 
     child: Align(
@@ -936,7 +1038,7 @@ class _JarvisViewState extends State<JarvisView>
             TextSpan(text: name),
           ],
         ),
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: ajanMono,
           fontSize: 11,
           fontWeight: FontWeight.w500,
@@ -947,8 +1049,10 @@ class _JarvisViewState extends State<JarvisView>
   );
 
   Widget _suggestion(String label, VoidCallback onTap) => Material(
-    color: const Color(0x08FFFFFF),
-    shape: const StadiumBorder(side: BorderSide(color: _K.line)),
+    color: _K.s.radius >= 14 ? const Color(0x08FFFFFF) : _K.s.panel,
+    shape: _K.s.radius >= 14
+        ? StadiumBorder(side: BorderSide(color: _K.line))
+        : _K.s.shape(r: _K.s.radius, side: _K.s.panelLine),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: onTap,
@@ -960,7 +1064,7 @@ class _JarvisViewState extends State<JarvisView>
           widthFactor: 1,
           child: Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w500,
               color: _K.soft,
@@ -971,51 +1075,183 @@ class _JarvisViewState extends State<JarvisView>
     ),
   );
 
+  /// The PIN of the e-signature card, for what [link] needs, in the
+  /// chosen look.
+  Widget _link(AjanLinkAsk link) {
+    final st = _K.s;
+    final note = link.error ?? link.stage ?? link.why;
+    return _box([
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  link.need == UyapNeed.uets
+                      ? Icons.mark_email_unread_outlined
+                      : Icons.account_balance_outlined,
+                  size: 18,
+                  color: _K.label,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    st.headCaps ? link.title.toUpperCase() : link.title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: st.headCaps ? st.headTrack : 0,
+                      color: _K.bright,
+                    ),
+                  ),
+                ),
+                _iconButton(
+                  Icons.close_rounded,
+                  'Vazgeç',
+                  AjanLinks.instance.cancel,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              note,
+              style: TextStyle(
+                fontSize: 12,
+                color: link.error != null ? _K.red : _K.muted,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 42,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: ShapeDecoration(
+                      color: const Color(0x0DFFFFFF),
+                      shape: st.shape(
+                        r: math.min(10, st.radius),
+                        side: _K.frame,
+                      ),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: TextField(
+                      controller: _pin,
+                      focusNode: _pinFocus,
+                      enabled: !link.busy,
+                      obscureText: true,
+                      keyboardType: TextInputType.number,
+                      onSubmitted: (_) => _connect(),
+                      style: TextStyle(fontSize: 15, color: _K.bright),
+                      cursorColor: _K.label,
+                      decoration: const InputDecoration(
+                        hintText: 'E-imza PIN',
+                        hintStyle: TextStyle(color: Color(0xFF7D879A)),
+                        filled: false,
+                        isDense: true,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Material(
+                  color: st.accent,
+                  shape: st.shape(r: math.min(10, st.radius)),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: link.busy ? null : _connect,
+                    child: Container(
+                      height: 42,
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      alignment: Alignment.center,
+                      child: link.busy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Bağlan',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ]);
+  }
+
   Widget _bottom() {
     final voiceOn = ajan.settings.on;
     final talking = ajan.voice.active;
+    final link = AjanLinks.instance.asking;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (voiceOn && ajan.brief != null)
-              _suggestion('Brifingi sesli oku', ajan.speakBrief)
-            else
+        if (link != null)
+          _link(link)
+        else
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (voiceOn && ajan.brief != null)
+                _suggestion('Brifingi sesli oku', ajan.speakBrief)
+              else
+                _suggestion(
+                  'Bugün neler var?',
+                  () => _ask('Bugün neler var, önce acil olanı söyle.'),
+                ),
               _suggestion(
-                'Bugün neler var?',
-                () => _ask('Bugün neler var, önce acil olanı söyle.'),
+                'Bu haftanın süreleri',
+                () => _ask('Bu hafta dolan sürelerim neler?'),
               ),
-            _suggestion(
-              'Bu haftanın süreleri',
-              () => _ask('Bu hafta dolan sürelerim neler?'),
-            ),
-            _suggestion(
-              'Yeni tebligatlar',
-              () => _ask(
-                'Okunmamış tebligatlarımı ve UYAP bildirimlerimi kısaca özetle.',
+              _suggestion(
+                'Yeni tebligatlar',
+                () => _ask(
+                  'Okunmamış tebligatlarımı ve UYAP bildirimlerimi kısaca özetle.',
+                ),
               ),
-            ),
-            _suggestion('Brifingi yenile', ajan.loadBrief),
-          ],
-        ),
+              _suggestion('Brifingi yenile', ajan.loadBrief),
+            ],
+          ),
         const SizedBox(height: 12),
         Container(
           height: 56,
           padding: const EdgeInsets.fromLTRB(20, 0, 8, 0),
-          decoration: BoxDecoration(
-            color: const Color(0x0DFFFFFF),
-            border: Border.all(color: _K.frame),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
+          decoration: ShapeDecoration(
+            color: _K.s.headCaps ? _K.s.panel : const Color(0x0DFFFFFF),
+            shape: _K.s.shape(r: _K.s.radius + 2, side: _K.frame),
+            shadows: [
+              const BoxShadow(
                 color: Color(0x59000000),
                 blurRadius: 60,
                 offset: Offset(0, 20),
               ),
+              if (_K.s.answerGlow)
+                BoxShadow(
+                  color: _K.label.withValues(alpha: .08),
+                  blurRadius: 30,
+                ),
             ],
           ),
           child: Row(
@@ -1025,8 +1261,8 @@ class _JarvisViewState extends State<JarvisView>
                   controller: _text,
                   focusNode: _focus,
                   onSubmitted: (_) => _send(),
-                  style: const TextStyle(fontSize: 16, color: _K.bright),
-                  cursorColor: AjanColors.blue,
+                  style: TextStyle(fontSize: 16, color: _K.bright),
+                  cursorColor: _K.label,
                   decoration: const InputDecoration(
                     hintText: 'Yazın ya da konuşun…',
                     hintStyle: TextStyle(color: Color(0xFF7D879A)),
@@ -1046,7 +1282,7 @@ class _JarvisViewState extends State<JarvisView>
                     : talking
                     ? '“kapan” deyin ya da Esc'
                     : 'Mikrofona dokunun ya da Esc',
-                style: const TextStyle(fontSize: 12, color: _K.faint),
+                style: TextStyle(fontSize: 12, color: _K.faint),
               ),
               const SizedBox(width: 12),
               Tooltip(
@@ -1056,8 +1292,14 @@ class _JarvisViewState extends State<JarvisView>
                     ? 'Konuşmayı bitir'
                     : 'Konuşmayı başlat',
                 child: Material(
-                  color: voiceOn ? AjanColors.blue : const Color(0x14FFFFFF),
-                  borderRadius: BorderRadius.circular(12),
+                  color: voiceOn ? _K.s.accent : const Color(0x14FFFFFF),
+                  shape: _K.kure
+                      ? RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        )
+                      : _K.s.radius >= 14
+                      ? const CircleBorder()
+                      : _K.s.shape(r: math.min(12, _K.s.radius + 4)),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
                     onTap: voiceOn ? ajan.toggleTalk : null,
@@ -1094,156 +1336,9 @@ class _Passed extends StatelessWidget {
       border: Border.all(color: const Color(0xFF2A3446)),
       borderRadius: BorderRadius.circular(5),
     ),
-    child: const Text(
+    child: Text(
       'geçti',
       style: TextStyle(fontSize: 11, color: _K.muted, height: 1.3),
     ),
   );
-}
-
-/// The sphere's state between frames: how loud, how far it has turned.
-class _Motion {
-  double level = 0, spin = 0, t = 0;
-  _Mood mood = _Mood.idle;
-
-  void step(double t, double frames, _Mood mood, double sound) {
-    this.t = t;
-    this.mood = mood;
-    final s = sound.clamp(0.0, 1.0);
-    final target = switch (mood) {
-      _Mood.idle => .05 + .03 * math.sin(t * .9),
-      _Mood.listening => .08 + .05 * math.sin(t * 1.3) + s * .5,
-      _Mood.speaking => .25 + s * 1.1,
-      _Mood.working => .3,
-    };
-    level += (target - level) * (1 - math.pow(1 - .18, frames));
-    spin +=
-        (mood == _Mood.working ? .035 : .006 + level * .01) * frames.toDouble();
-  }
-}
-
-/// The approved sphere: 720 points on a sphere, turning, swelling with the
-/// voice; three glowing ribbons through it.
-class _Sphere extends CustomPainter {
-  _Sphere(this.clock, this.m) : super(repaint: clock);
-  final ValueListenable<double> clock;
-  final _Motion m;
-
-  static final List<List<double>> _points = () {
-    const n = 720;
-    final g = math.pi * (3 - math.sqrt(5));
-    return [
-      for (var i = 0; i < n; i++)
-        () {
-          final y = 1 - (i / (n - 1)) * 2;
-          final r = math.sqrt(1 - y * y);
-          final th = g * i;
-          return [math.cos(th) * r, y, math.sin(th) * r];
-        }(),
-    ];
-  }();
-
-  static const _ribbons = [
-    (Color(0xFF4F86FF), .021, 2.4, 0.0, 1.0),
-    (Color(0xFF5FE1FF), .017, -1.8, 2.0, .8),
-    (Color(0xFF9B8CFF), .026, 3.1, 4.0, .6),
-  ];
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final t = m.t, l = m.level, mood = m.mood;
-    final k = size.width / 380;
-    final cx = size.width / 2, cy = size.height / 2;
-    final r = (104 + l * 10) * k;
-    final center = Offset(cx, cy);
-
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
-        ..shader = RadialGradient(
-          colors: [
-            Color.fromRGBO(70, 120, 255, (.30 + l * .35).clamp(0, 1)),
-            Color.fromRGBO(40, 80, 200, (.10 + l * .12).clamp(0, 1)),
-            const Color.fromRGBO(10, 20, 60, 0),
-          ],
-          stops: const [0, .45, 1],
-        ).createShader(Rect.fromCircle(center: center, radius: 190 * k)),
-    );
-
-    final ay = m.spin, ax = .42 + math.sin(t * .3) * .12;
-    final sa = math.sin(ay), ca = math.cos(ay);
-    final sb = math.sin(ax), cb = math.cos(ax);
-    final dot = Paint()..blendMode = BlendMode.plus;
-    for (final p in _points) {
-      var d =
-          1 +
-          l *
-              .22 *
-              math.sin(3.1 * p[0] + t * 2.3) *
-              math.cos(2.4 * p[1] - t * 1.9) +
-          l * .08 * math.sin(6 * p[2] + t * 4.1);
-      if (mood == _Mood.working) d += .05 * math.sin(p[1] * 9 + t * 6);
-      final px = p[0] * d, py = p[1] * d, pz = p[2] * d;
-      final x1 = px * ca + pz * sa, z1 = -px * sa + pz * ca;
-      final y2 = py * cb - z1 * sb, z2 = py * sb + z1 * cb;
-      final f = 2.8 / (2.8 + z2);
-      final depth = (1 - z2) / 2;
-      final hue = mood == _Mood.working
-          ? 205 + depth * 30
-          : 215 + (1 - depth) * 25 - l * 25;
-      dot.color = HSLColor.fromAHSL(
-        (.12 + depth * .75).clamp(0.0, 1.0),
-        hue.clamp(0.0, 360.0),
-        .95,
-        ((62 + depth * 20) / 100).clamp(0.0, 1.0),
-      ).toColor();
-      canvas.drawCircle(
-        Offset(cx + x1 * r * f, cy + y2 * r * f),
-        (.6 + depth * 1.5) * f * k,
-        dot,
-      );
-    }
-
-    for (final (color, freq, speed, phase, amp) in _ribbons) {
-      final path = Path();
-      for (var i = -150; i <= 150; i += 3) {
-        final env = math.pow(1 - (i / 150) * (i / 150), 2);
-        final y =
-            cy +
-            math.sin(i * freq + t * speed + phase) *
-                (8 + l * 70) *
-                k *
-                amp *
-                env;
-        if (i == -150) {
-          path.moveTo(cx + i * k, y);
-        } else {
-          path.lineTo(cx + i * k, y);
-        }
-      }
-      final width = (2 + l * 2.5) * k;
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = width
-          ..blendMode = BlendMode.plus
-          ..color = color.withValues(alpha: .9)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 7 * k),
-      );
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = width
-          ..strokeCap = StrokeCap.round
-          ..blendMode = BlendMode.plus
-          ..color = color.withValues(alpha: (.25 + l * .6).clamp(0, 1)),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_Sphere old) => false;
 }
