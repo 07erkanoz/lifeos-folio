@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -128,11 +129,7 @@ class _ConsentDialogState extends State<_ConsentDialog> {
 /// lawyer is signed in.
 Future<bool> showAiLogin(BuildContext context, AiProvider provider) async {
   final login = AiLogin(provider);
-  unawaited(
-    login.start(
-      (address) => launchUrl(address, mode: LaunchMode.externalApplication),
-    ),
-  );
+  unawaited(login.start(openSignInPage));
   final ok = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
@@ -227,6 +224,15 @@ class _LoginDialogState extends State<_LoginDialog> {
                   ),
                 ),
               ],
+              const SizedBox(height: 12),
+              // The address itself: when no browser opened, it is copied
+              // or typed from here.
+              SelectableText(
+                login.address!,
+                key: const ValueKey('ai-login-address'),
+                style: TextStyle(fontSize: 11.5, color: scheme.primary),
+                maxLines: 2,
+              ),
               const SizedBox(height: 14),
               Row(
                 children: [
@@ -253,12 +259,7 @@ class _LoginDialogState extends State<_LoginDialog> {
           TextButton(
             onPressed: () {
               unawaited(Clipboard.setData(ClipboardData(text: login.address!)));
-              unawaited(
-                launchUrl(
-                  Uri.parse(login.address!),
-                  mode: LaunchMode.externalApplication,
-                ),
-              );
+              unawaited(openSignInPage(Uri.parse(login.address!)));
             },
             child: const Text('Sayfayı yeniden aç'),
           ),
@@ -314,4 +315,22 @@ Future<bool> askAntigravityTools(BuildContext context) async {
     ),
   );
   return given == true;
+}
+
+/// A sign-in page in the lawyer's browser. On Linux the desktop's own
+/// opener first: from Settings the sign-in pages of Codex and Claude did
+/// not open (22 Kasım 2026); url_launcher if it is not there.
+Future<void> openSignInPage(Uri address) async {
+  if (Platform.isLinux) {
+    for (final opener in ['xdg-open', 'kde-open', 'gio']) {
+      try {
+        final args = opener == 'gio' ? ['open', '$address'] : ['$address'];
+        await Process.start(opener, args, mode: ProcessStartMode.detached);
+        return;
+      } catch (_) {
+        // Not on this desktop: the next.
+      }
+    }
+  }
+  await launchUrl(address, mode: LaunchMode.externalApplication);
 }

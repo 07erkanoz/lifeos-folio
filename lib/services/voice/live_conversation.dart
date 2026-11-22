@@ -66,6 +66,22 @@ String ajanToday(DateTime now) {
       '${days[now.weekday - 1]}, saat $hm';
 }
 
+/// What the voice may do beyond reading, and how: only when asked, and
+/// only once the lawyer said yes to what it read back (22 Kasım 2026).
+String ajanWrites() =>
+    'Avukat isterse ajandaya görev ya da süre (ajanda_ekle), not (not_ekle) '
+    've dosya notu (dosya_notu_ekle) ekleyebilir, dilekçe hazırlayıp '
+    'dosyanın Dilekçelerim bölümüne UDF olarak kaydedebilirsin '
+    '(dosya_sec, sonra dilekce_kaydet). Yazmadan önce ne yazacağını '
+    'tarihiyle kısaca oku ve “kaydedeyim mi?” diye sor; avukat açıkça evet '
+    'demeden yazma, kendiliğinden hiçbir şey ekleme. Dilekçeyi dosyanın '
+    'bilgisine ve evrakına bakarak eksiksiz yaz, sesli olarak tamamını okuma: '
+    'konusunu ve istemini bir iki cümleyle söyle. UYAP’tan güncel bilgi '
+    '(uyap_guncelle) alabilir, inmemiş evrakı indirebilir (evrak_indir) ve '
+    'e-tebligatın metnini okuyabilirsin (tebligat_oku); bunlar biraz '
+    'sürer, beklerken “UYAP’tan alıyorum” de. Hiçbir şeyi silme, '
+    'değiştirme ya da dışarı gönderme.';
+
 /// Today, and how the voice reads "this week": on a Saturday the calendar
 /// week was all past, and Folio Ajan answered "bu hafta duruşmalarım" with
 /// two hearings that had gone, not the next week's (21 Kasım 2026).
@@ -279,7 +295,7 @@ class LiveConversation extends ChangeNotifier implements AjanVoice {
     await s.connect(
       key: key,
       instruction:
-          '$instruction ${ajanDates(DateTime.now())}'
+          '$instruction ${ajanDates(DateTime.now())} ${ajanWrites()}'
           '${context(lines)}${tools.remembered}',
       tools: await tools.declarations(),
       voice: voice,

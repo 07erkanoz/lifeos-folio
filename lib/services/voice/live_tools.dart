@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import '../ai/ai_case.dart';
 import '../ai/ai_groq.dart';
 import '../ai/ai_usage.dart';
+import 'ajan_tools.dart';
 
 /// What Live may call, and what answers it.
 abstract class LiveToolBox {
@@ -49,8 +49,7 @@ class FolioLiveTools implements LiveToolBox {
   }) : _host = host ?? _here,
        _flashOverride = flash;
 
-  static Future<FolioToolHost> _here() async =>
-      FolioToolsHere(await AiCaseSession.open(null));
+  static Future<FolioToolHost> _here() async => AjanToolHost.open();
 
   final Future<String> Function(String question) brain;
   final Future<FolioToolHost> Function() _host;
@@ -75,6 +74,10 @@ class FolioLiveTools implements LiveToolBox {
     'mevzuat_madde',
     'karar_ara',
     'sure_hesapla',
+    'tebligat_oku',
+    'ajanda_ekle',
+    'not_ekle',
+    AjanToolHost.petitionTool,
   };
 
   /// Put before the lawyer in the AI panel: there is no panel here.

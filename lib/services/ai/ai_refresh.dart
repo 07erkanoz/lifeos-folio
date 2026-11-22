@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
+import '../portal/portal_database.dart';
 import '../portal/portal_sync.dart';
 import '../uets/uets_api.dart';
 import '../uyap/uyap_mobile_api.dart';
@@ -175,4 +179,68 @@ abstract final class AiRefresh {
     'dosya' => 'Dosya UYAP’tan güncelleniyor',
     _ => 'UYAP bağlantıları okunuyor',
   };
+}
+
+/// A conversation with no panel of its own (Folio Ajan's voice) served:
+/// what its program asks of UYAP (uyap_guncelle) and the documents it asks
+/// for (evrak_indir) are done while it runs. Without it the voice saw only
+/// what had come down already, and could not refresh (22 Kasım 2026).
+class AiSessionServer {
+  AiSessionServer(this.session, {UyapCaseStore? store})
+    : _store = store ?? UyapCaseStore.instance;
+
+  final AiCaseSession session;
+  final UyapCaseStore _store;
+  Timer? _timer;
+  bool _busy = false;
+
+  void start() => _timer ??= Timer.periodic(
+    const Duration(seconds: 1),
+    (_) => unawaited(tick()),
+  );
+
+  void stop() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  /// The case the program chose (dosya_sec), as it is now.
+  Future<UyapCaseRecord?> record() async {
+    final bound = await session.bound();
+    final record = session.record;
+    if (bound == null) {
+      session.record = null;
+    } else if (record == null ||
+        record.court != bound.court ||
+        record.number != bound.number) {
+      session.record = await _store.load(bound.court, bound.number);
+    }
+    return session.record;
+  }
+
+  /// One look: the case the program chose, then its asks.
+  Future<void> tick() async {
+    if (_busy) return;
+    _busy = true;
+    try {
+      await record();
+      await AiRefresh.serve(session);
+      await AiRefresh.serveDownloads(session);
+      // An agenda entry or a note added: Folio's screens read again.
+      var added = false;
+      await for (final entry in session.folder.list()) {
+        if (entry is File && p.basename(entry.path).startsWith('degisti-')) {
+          added = true;
+          try {
+            await entry.delete();
+          } catch (_) {}
+        }
+      }
+      if (added) PortalDatabase.changed?.call();
+    } catch (_) {
+      // Looked at again in a second.
+    } finally {
+      _busy = false;
+    }
+  }
 }

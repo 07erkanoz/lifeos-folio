@@ -61,10 +61,29 @@ void main() {
       host: () async => _Host(),
     );
     var names = [for (final t in await c.declarationsForTest()) t['name']];
-    expect(names, ['ajanda', 'mevzuat_madde', CodexConversation.brainTool]);
+    expect(names, [
+      'ajanda',
+      'mevzuat_madde',
+      'ajanda_ekle',
+      'not_ekle',
+      'dosya_notu_ekle',
+      'tebligat_oku',
+      'evrak_indir',
+      'uyap_guncelle',
+      CodexConversation.brainTool,
+    ]);
     c.handOn = false;
     names = [for (final t in await c.declarationsForTest()) t['name']];
-    expect(names, ['ajanda', 'mevzuat_madde']);
+    expect(names, [
+      'ajanda',
+      'mevzuat_madde',
+      'ajanda_ekle',
+      'not_ekle',
+      'dosya_notu_ekle',
+      'tebligat_oku',
+      'evrak_indir',
+      'uyap_guncelle',
+    ]);
   });
 
   test('the instructions carry today, and say what has passed', () {

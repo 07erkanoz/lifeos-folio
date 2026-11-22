@@ -13,6 +13,8 @@ import '../security/secret_store.dart';
 import 'ai_assistant.dart';
 import 'ai_attachment.dart';
 import 'ai_case.dart';
+import 'ai_external.dart';
+import 'ai_external_tools.dart';
 import 'ai_office.dart';
 import 'ai_usage.dart';
 import 'ai_claude_api.dart';
@@ -756,8 +758,21 @@ abstract class FolioToolHost {
 /// started for them (Windows, macOS). The case's and the office's tools
 /// are those of [caseSession], as the server would have them.
 class FolioToolsHere implements FolioToolHost {
-  FolioToolsHere(AiCaseSession? caseSession)
+  /// With [external] the tools of the programs on this computer too (the
+  /// clients, the cash, the e-notices, adding to the agenda and notes), as
+  /// this Folio, with this person's rights.
+  FolioToolsHere(AiCaseSession? caseSession, {bool external = false})
     : _mcp = FolioMcp(
+        externalTools: external && caseSession != null
+            ? FolioExternalTools(
+                caseSession.folder,
+                status: () async => (
+                  open: true,
+                  money: ExternalHost.seesMoney(),
+                  person: ExternalHost.person(),
+                ),
+              )
+            : null,
         caseTools: caseSession == null
             ? null
             : FolioCaseTools.fromEnvironment({
