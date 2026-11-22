@@ -92,8 +92,11 @@ set_target_properties(${BINARY_NAME} ${EDITOR_BINARY_NAME} ${OFIS_BINARY_NAME} $
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
-# flutter_webrtc trips a newer clang warning, built as an error (21 Kasım 2026).
-target_compile_options(flutter_webrtc_plugin PRIVATE -Wno-unused-but-set-global)
+# flutter_webrtc trips a newer clang warning, built as an error (21 Kasım 2026);
+# an older clang (Ubuntu 24.04's, the CI's and the release's) does not know
+# the option and stopped on it: unknown options are let pass.
+target_compile_options(flutter_webrtc_plugin PRIVATE
+  -Wno-unknown-warning-option -Wno-unused-but-set-global)
 # The generated file links the plugins to Folio alone; LifeOS Editör and
 # LifeOS Ofis register the same plugins and need them too.
 foreach(plugin ${FLUTTER_PLUGIN_LIST})
