@@ -112,9 +112,10 @@ class VoskRecognizer {
   VoskRecognizer._(this._v, this._r);
 
   /// A piece of PCM in → (what was heard, whether the utterance ended,
-  /// each word's confidence 0–1; only for an ended one).
-  (String, bool, List<(String, double)>) feed(Uint8List pcm) {
-    if (_closed) return ('', false, const []);
+  /// each word's confidence 0–1, and how long its words took in seconds;
+  /// the last two only for an ended one).
+  (String, bool, List<(String, double)>, double) feed(Uint8List pcm) {
+    if (_closed) return ('', false, const [], 0);
     if (pcm.length > _size) {
       malloc.free(_buffer);
       _size = pcm.length;
@@ -125,13 +126,20 @@ class VoskRecognizer {
     final json = (ended ? _v._result(_r) : _v._partial(_r)).toDartString();
     try {
       final m = decode(json);
+      final words = (m['result'] as List? ?? []).whereType<Map>().toList();
       final confidence = [
-        for (final k in (m['result'] as List? ?? []).whereType<Map>())
+        for (final k in words)
           ('${k['word']}', (k['conf'] as num?)?.toDouble() ?? 0),
       ];
-      return ('${m['text'] ?? m['partial'] ?? ''}', ended, confidence);
+      // From the first word's start to the last one's end: the room's hum
+      // around them is not counted (it held every wake back as "too long").
+      final span = words.isEmpty
+          ? 0.0
+          : ((words.last['end'] as num?)?.toDouble() ?? 0) -
+                ((words.first['start'] as num?)?.toDouble() ?? 0);
+      return ('${m['text'] ?? m['partial'] ?? ''}', ended, confidence, span);
     } catch (_) {
-      return ('', ended, const <(String, double)>[]);
+      return ('', ended, const <(String, double)>[], 0.0);
     }
   }
 
@@ -188,8 +196,8 @@ const voskDecoys = [
 const voskThresholds = {'dusuk': .92, 'orta': .82, 'yuksek': .68};
 
 /// The trigger: the utterance ended, what was heard is exactly the phrase
-/// (no word before or after), every word passes [threshold], and it was
-/// short (≤ 2.5 s voiced). A sentence on TV with the word in it does not.
+/// (no word before or after), every word passes [threshold], and its words
+/// took ≤ 2.5 s. A sentence on TV with the word in it does not.
 bool isWakePhrase(
   String heard,
   bool ended,

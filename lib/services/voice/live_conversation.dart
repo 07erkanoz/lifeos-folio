@@ -82,6 +82,19 @@ String ajanWrites() =>
     'sürer, beklerken “UYAP’tan alıyorum” de. Hiçbir şeyi silme, '
     'değiştirme ya da dışarı gönderme.';
 
+/// What is not Folio: the lawyer wanted an assistant, not only a case
+/// reader (22 Kasım 2026).
+String ajanWorld() =>
+    'Yalnız Folio’nun değil, avukatın genel yardımcısısın da. Döviz kuru '
+    '(doviz_kuru), hava durumu (hava_durumu) ve haberler (haberler) için '
+    'araçlarını kullan; haberleri en önemli üç beş başlıkla, kısa cümlelerle '
+    'özetle. “Müzik aç”, “şunu çal” denince muzik_ac ile YouTube Music’te '
+    'hemen aç, onay sorma; durdur, geç, sesini aç ya da kıs denince medya '
+    'aracını kullan. Bunların dışında güncel ya da genel bir şey sorulursa '
+    '(altın, borsa, maç sonucu, bir kurum, bir adres, bir bilgi) internette '
+    'ara ve kaynağını söyleyerek kısaca cevap ver. Folio dışı bir soruda '
+    'avukatın dosya bilgisini internete yazma.';
+
 /// Today, and how the voice reads "this week": on a Saturday the calendar
 /// week was all past, and Folio Ajan answered "bu hafta duruşmalarım" with
 /// two hearings that had gone, not the next week's (21 Kasım 2026).
@@ -295,10 +308,12 @@ class LiveConversation extends ChangeNotifier implements AjanVoice {
     await s.connect(
       key: key,
       instruction:
-          '$instruction ${ajanDates(DateTime.now())} ${ajanWrites()}'
+          '$instruction ${ajanDates(DateTime.now())} ${ajanWrites()} '
+          '${ajanWorld()}'
           '${context(lines)}${tools.remembered}',
       tools: await tools.declarations(),
       voice: voice,
+      webSearch: true,
     );
     return s;
   }

@@ -5,6 +5,7 @@ import 'dart:io';
 import '../ai/ai_groq.dart';
 import '../ai/ai_usage.dart';
 import 'ajan_tools.dart';
+import 'general_tools.dart';
 
 /// What Live may call, and what answers it.
 abstract class LiveToolBox {
@@ -78,6 +79,7 @@ class FolioLiveTools implements LiveToolBox {
     'ajanda_ekle',
     'not_ekle',
     AjanToolHost.petitionTool,
+    ...AjanGeneralTools.names,
   };
 
   /// Put before the lawyer in the AI panel: there is no panel here.

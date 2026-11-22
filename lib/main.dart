@@ -1,3 +1,4 @@
+import 'services/ai/ai_assistant.dart';
 import 'services/desktop/window_session.dart';
 import 'services/editor/editor_drafts.dart';
 
@@ -390,6 +391,9 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
       FolioAjan.beforeVoice = WakeWord.instance.pause;
       WakeWord.instance.onWake = _woken;
       FolioAjan.instance.addListener(_followWake);
+      // The AI setting may come after the voice's: the wake follows it too,
+      // or it never began when Folio opened.
+      AiSettings.on.addListener(_followWake);
     }
     if (widget.instance != null) {
       companion = DesktopCompanion(
@@ -482,6 +486,7 @@ class _EvrakConvertAppState extends State<EvrakConvertApp> {
   @override
   void dispose() {
     FolioAjan.instance.removeListener(_followWake);
+    AiSettings.on.removeListener(_followWake);
     _learnArchive?.cancel();
     FocusManager.instance.removeEarlyKeyEventHandler(_escape);
     _launchRequests?.cancel();

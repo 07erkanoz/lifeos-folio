@@ -49,8 +49,26 @@ class WakeWord {
   StreamSubscription<AudioDataContainer>? _in;
   DateTime _lastWake = DateTime.fromMillisecondsSinceEpoch(0);
   bool _wanted = false;
-  double _voiced = 0;
   AudioSource? _chime;
+
+  /// Pieces of sound come in: none for a while after listening began means
+  /// the microphone gives nothing (said in the log and in Settings).
+  int _pieces = 0;
+
+  /// What it heard and did, on this computer alone (vosk/duyulan.log, its
+  /// last lines): why a wake did not come is read there.
+  Future<void> _log(String line) async {
+    try {
+      final f = File(
+        '${(await _dir()).path}${Platform.pathSeparator}duyulan.log',
+      );
+      final now = DateTime.now().toIso8601String().substring(0, 19);
+      var lines = await f.exists() ? await f.readAsLines() : <String>[];
+      lines = [...lines, '$now $line'];
+      if (lines.length > 200) lines = lines.sublist(lines.length - 200);
+      await f.writeAsString('${lines.join('\n')}\n');
+    } catch (_) {}
+  }
 
   bool get on => _wanted;
 
@@ -135,6 +153,7 @@ class WakeWord {
     } catch (e) {
       state.value = WakeState.failed;
       message.value = '$e';
+      unawaited(_log('başlamadı: $e'));
     }
   }
 
@@ -159,7 +178,7 @@ class WakeWord {
   Future<void> resume() async {
     if (!_wanted || _recognizer == null || _in != null) return;
     _recognizer!.reset();
-    _voiced = 0;
+    _pieces = 0;
     try {
       final recorder = Recorder.instance;
       await recorder.init(
@@ -173,9 +192,18 @@ class WakeWord {
       );
       recorder.startStreamingData();
       state.value = WakeState.listening;
+      unawaited(_log('dinliyor (eşik $threshold)'));
+      // Nothing from the microphone after a few seconds: said, not silent.
+      Timer(const Duration(seconds: 4), () {
+        if (state.value == WakeState.listening && _pieces == 0) {
+          message.value = 'Mikrofondan ses gelmiyor.';
+          unawaited(_log('mikrofondan ses gelmiyor'));
+        }
+      });
     } catch (e) {
       state.value = WakeState.failed;
       message.value = 'Mikrofon açılamadı: $e';
+      unawaited(_log('mikrofon açılamadı: $e'));
     }
   }
 
@@ -195,14 +223,14 @@ class WakeWord {
   void _piece(Uint8List pcm) {
     final r = _recognizer;
     if (r == null) return;
-    if (pcmLevel(pcm) > .04) _voiced += pcm.length / (_rate * 2);
-    final (heard, ended, confidence) = r.feed(pcm);
+    _pieces++;
+    final (heard, ended, confidence, span) = r.feed(pcm);
     final wake = phrases.any(
       (f) => isWakePhrase(
         heard,
         ended,
         f,
-        voiced: _voiced,
+        voiced: span,
         confidence: confidence,
         threshold: threshold,
       ),
@@ -212,10 +240,10 @@ class WakeWord {
           .map((k) => '${k.$1} ${k.$2.toStringAsFixed(2)}')
           .join(', ');
       lastHeard.value =
-          '"${heard.trim()}" · $c · ${_voiced.toStringAsFixed(1)} sn'
+          '"${heard.trim()}" · $c · ${span.toStringAsFixed(1)} sn'
           '${wake ? ' → AÇILDI' : ''}';
+      if (heard.trim() != '[unk]') _log('duydu ${lastHeard.value}');
     }
-    if (ended) _voiced = 0;
     if (!wake) return;
     r.reset();
     final now = DateTime.now();
@@ -225,6 +253,7 @@ class WakeWord {
   }
 
   Future<void> _woken() async {
+    unawaited(_log('AÇILDI'));
     await pause();
     await chime();
     onWake?.call();

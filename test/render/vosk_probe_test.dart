@@ -31,10 +31,10 @@ void main() {
           pcm.sublist(i, (i + 3200).clamp(0, pcm.length)),
         for (var i = 0; i < 6; i++) silence,
       ]) {
-        final (text, ended, conf) = r.feed(Uint8List.fromList(piece));
+        final (text, ended, conf, span) = r.feed(Uint8List.fromList(piece));
         if (text.isNotEmpty) heard.add("${ended ? "SON" : "ara"}:$text");
         if (phrases.any(
-          (f) => isWakePhrase(text, ended, f, voiced: 1.2, confidence: conf),
+          (f) => isWakePhrase(text, ended, f, voiced: span, confidence: conf),
         )) {
           woke = true;
         }
