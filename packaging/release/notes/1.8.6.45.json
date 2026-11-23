@@ -1,0 +1,8 @@
+{
+  "tr": "Ayarlar › Yapay zekâ'da LifeOS MCP açıkken Folio Ajan artık LifeOS'un bütün araçlarını kullanabilir. Bilgisayardaki sorunların yanında ~/.ssh/config dosyasında kayıtlı sunucularınızı, onların durumunu, yedeklerini ve sitelerini de okur. Değişiklik yapan her işten önce, örneğin sunucuda bir komut çalıştırmadan önce, Folio Ajan ekranında ne yapılacağını gösterir ve siz Onayla'ya basmadan hiçbir şey yapmaz.",
+  "en": "With LifeOS MCP on in Settings › AI, Folio Ajan can now use all of LifeOS's tools. Besides the computer's problems, it reads the servers saved in ~/.ssh/config, their status, backups and sites. Before anything that changes something, such as running a command on a server, it shows on Folio Ajan's screen what will be done and does nothing until you press Approve.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.8.6.45: hata düzeltmeleri ve iyileştirmeler.",
+    "en": "LifeOS Ofis 1.8.6.45: fixes and improvements."
+  }
+}
