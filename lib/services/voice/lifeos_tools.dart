@@ -4,31 +4,37 @@ import 'dart:io';
 
 /// LifeOS Linux's own tools (`lifeos mcp sun`) for Folio Ajan, when the
 /// lawyer turned them on (Ayarlar › Yapay zekâ, 22 Kasım 2026): "e-imzam
-/// neden çalışmıyor", "yazıcı neden yazmıyor", "bilgisayarda sorun var mı".
+/// neden çalışmıyor", "yazıcı neden yazmıyor", "sunucularım ayakta mı".
 ///
-/// Only what reads this computer is given: no tool that changes anything,
-/// none of the support team's, none that reaches a server.
+/// Every tool is given (23 Kasım 2026: reading only, the servers in
+/// ~/.ssh/config were out of reach). One that changes anything runs only
+/// after the lawyer's yes ([approve]).
 class LifeosTools {
-  LifeosTools({this.executable = 'lifeos'});
+  LifeosTools({this.executable = 'lifeos', this.approve});
 
   final String executable;
+
+  /// The lawyer's yes to [title] with [detail]; null when it cannot be
+  /// asked. Without it nothing that changes anything runs.
+  final Future<bool?> Function(String title, String detail)? approve;
 
   /// What Folio Ajan sees them as, apart from Folio's own.
   static const prefix = 'lifeos_';
 
-  /// The tools given, by LifeOS's names.
-  static const allowed = {
-    'doctor',
-    'processes',
-    'services',
-    'service_logs',
-    'printers',
-    'esign',
-    'store_check',
-    'settings',
-    'lifeos_versions',
-    'first_boot',
-  };
+  /// Whether [tool] (as LifeOS lists it) can change anything: not marked
+  /// read-only, or marked destructive, or one that runs any command it is
+  /// given (`server_exec`, `support_exec`: LifeOS marks them read-only).
+  static bool changes(Map tool) {
+    final a = tool['annotations'];
+    final name = '${tool['name']}';
+    if (name.endsWith('_exec')) return true;
+    if (a is! Map) return true;
+    return a['readOnlyHint'] != true || a['destructiveHint'] == true;
+  }
+
+  /// LifeOS's tools that change anything, as listed.
+  final _changing = <String>{};
+  final _titles = <String, String>{};
 
   /// Whether this is LifeOS Linux: its `lifeos` program is here.
   static bool get installed {
@@ -122,28 +128,37 @@ class LifeosTools {
         timeout: const Duration(seconds: 15),
       );
       final listed = (r['result'] as Map?)?['tools'];
-      return _tools = [
-        if (listed is List)
-          for (final t in listed)
-            if (t is Map &&
-                allowed.contains(t['name']) &&
-                (t['annotations'] as Map?)?['readOnlyHint'] == true)
-              {
-                'name': '$prefix${t['name']}',
-                'title': t['title'] ?? t['name'],
-                'description':
-                    'LifeOS Linux: ${t['description'] ?? ''} Yalnız okur; '
-                    'bir düzeltme önerirse avukata söyle, kendin yapma.',
-                'inputSchema':
-                    t['inputSchema'] ?? {'type': 'object', 'properties': {}},
-                'annotations': const {
-                  'readOnlyHint': true,
-                  'destructiveHint': false,
-                  'idempotentHint': true,
-                  'openWorldHint': false,
-                },
-              },
-      ];
+      _changing.clear();
+      _titles.clear();
+      final tools = <Map<String, Object?>>[];
+      for (final t in listed is List ? listed : const []) {
+        if (t is! Map || t['name'] is! String) continue;
+        final name = t['name'] as String;
+        final changing = changes(t);
+        if (changing) _changing.add(name);
+        _titles[name] = '${t['title'] ?? name}';
+        tools.add({
+          'name': '$prefix$name',
+          'title': t['title'] ?? name,
+          'description': changing
+              ? 'LifeOS Linux: ${t['description'] ?? ''} Değişiklik yapar: '
+                    'önce avukata ne yapacağını söyle; çalışmadan önce Folio '
+                    'Ajan ekranında avukatın onayı istenir. Onaylanmazsa '
+                    'yeniden deneme.'
+              : 'LifeOS Linux: ${t['description'] ?? ''} Yalnız okur.',
+          'inputSchema':
+              t['inputSchema'] ?? {'type': 'object', 'properties': {}},
+          'annotations': {
+            'readOnlyHint': !changing,
+            'destructiveHint':
+                (t['annotations'] as Map?)?['destructiveHint'] == true,
+            'idempotentHint': !changing,
+            'openWorldHint':
+                name.startsWith('server_') || name.startsWith('support_'),
+          },
+        });
+      }
+      return _tools = tools;
     } catch (_) {
       return const [];
     }
@@ -152,11 +167,30 @@ class LifeosTools {
   /// [name] (with [prefix]) asked of LifeOS with [args]: its answer's text.
   Future<String> call(String name, Map<String, Object?> args) async {
     final bare = name.startsWith(prefix) ? name.substring(prefix.length) : name;
-    if (!allowed.contains(bare)) {
+    if (_tools == null) await declarations();
+    if (!_titles.containsKey(bare)) {
       return jsonEncode({
-        'durum': 'izin_yok',
-        'aciklama': 'Bu araç verilmedi.',
+        'durum': 'yok',
+        'aciklama': 'LifeOS’ta bu adla bir araç yok.',
       });
+    }
+    if (_changing.contains(bare)) {
+      final yes = await approve?.call(_titles[bare]!, detail(args));
+      if (yes == null) {
+        return jsonEncode({
+          'durum': 'onay_sorulamadi',
+          'aciklama':
+              'Bu araç değişiklik yapar ve avukatın onayı Folio Ajan '
+              'ekranında istenir; ekran açık değil. Avukattan Folio Ajan’ı '
+              'tam ekran açmasını iste.',
+        });
+      }
+      if (!yes) {
+        return jsonEncode({
+          'durum': 'onaylanmadi',
+          'aciklama': 'Avukat onaylamadı; hiçbir şey yapılmadı.',
+        });
+      }
     }
     try {
       final r = await _rpc('tools/call', {'name': bare, 'arguments': args});
@@ -177,6 +211,16 @@ class LifeosTools {
         'aciklama': 'LifeOS araçları yanıt vermedi.',
       });
     }
+  }
+
+  /// [args] as the lawyer reads them: one "key: value" a line.
+  static String detail(Map<String, Object?> args) {
+    final lines = [
+      for (final MapEntry(:key, :value) in args.entries)
+        if (value != null && '$value'.isNotEmpty)
+          '$key: ${value is String ? value : jsonEncode(value)}',
+    ];
+    return lines.isEmpty ? 'Ek bilgi yok.' : lines.join('\n');
   }
 
   void close() {

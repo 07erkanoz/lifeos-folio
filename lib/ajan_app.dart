@@ -11,6 +11,7 @@ import 'services/ai/ai_external.dart';
 import 'services/desktop/desktop_instance.dart';
 import 'services/desktop/global_shortcut.dart';
 import 'services/voice/ajan_bridge.dart';
+import 'services/voice/ajan_approval.dart';
 import 'services/voice/ajan_link.dart';
 import 'services/voice/folio_ajan.dart';
 import 'services/voice/wake_word.dart';
@@ -266,6 +267,7 @@ class _AjanAppState extends State<AjanApp> with WindowListener {
     setState(() => _mode = _Mode.hidden);
     ajanFloatOpen.value = false;
     AjanLinks.instance.cancel();
+    AjanApprovals.instance.cancel();
     await AjanBridge.setShown(false);
     if (ajan.voice.active) await ajan.voice.stop();
     await windowManager.setAlwaysOnTop(false);

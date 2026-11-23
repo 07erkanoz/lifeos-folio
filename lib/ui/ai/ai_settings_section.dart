@@ -565,13 +565,14 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
         icon: Icons.computer_outlined,
         title: 'LifeOS MCP',
         subtitle: _settings.lifeosMcp
-            ? 'Açık. Folio Ajan bu bilgisayarın durumunu LifeOS’un kendi '
-                  'araçlarıyla okuyabilir: sorunlar, e-imza, yazıcılar, '
-                  'servisler, uygulamalar. Hiçbir şeyi değiştirmez; bir '
-                  'düzeltme gerekirse size söyler.'
+            ? 'Açık. Folio Ajan LifeOS’un bütün araçlarını kullanır: bu '
+                  'bilgisayarın sorunları, e-imza, yazıcılar, servisler ve '
+                  'kayıtlı SSH sunucularınız. Değişiklik yapan her işten '
+                  'önce Folio Ajan ekranında onayınızı ister.'
             : 'Kapalı. Açarsanız Folio Ajan “e-imzam neden çalışmıyor”, '
-                  '“yazıcı neden yazmıyor” gibi sorularda bu bilgisayarı '
-                  'LifeOS’un araçlarıyla okuyabilir; hiçbir şeyi değiştirmez.',
+                  '“sunucularım ayakta mı” gibi sorularda LifeOS’un '
+                  'araçlarını kullanır. Değişiklik yapan her işten önce '
+                  'onayınızı ister.',
         trailing: settingsSwitch(_settings.lifeosMcp, (v) async {
           await _save(_settings.copyWith(lifeosMcp: v));
           // Folio Ajan, its own program, reads it again.

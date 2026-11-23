@@ -12,6 +12,7 @@ import '../ai/ai_refresh.dart';
 import '../ai/ai_tools_apart.dart';
 import '../portal/portal_database.dart';
 import '../uyap/uyap_case_store.dart';
+import 'ajan_approval.dart';
 import 'ajan_bridge.dart';
 import 'general_tools.dart';
 import 'lifeos_tools.dart';
@@ -72,8 +73,9 @@ class AjanToolHost implements FolioToolHost {
   final FolioToolHost _folio;
   final AjanGeneralTools _general;
 
-  /// LifeOS Linux's tools, while the lawyer has them on.
-  final _lifeos = LifeosTools();
+  /// LifeOS Linux's tools, while the lawyer has them on; those that change
+  /// anything after the lawyer's yes on Folio Ajan's screen.
+  final _lifeos = LifeosTools(approve: AjanApprovals.instance.request);
 
   static Future<bool> _lifeosOn() async =>
       LifeosTools.installed && (await AiSettings.load()).lifeosMcp;

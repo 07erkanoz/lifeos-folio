@@ -10,6 +10,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:evrak_convert/services/ai/ai_refresh.dart';
+import 'package:evrak_convert/services/voice/ajan_approval.dart';
 import 'package:evrak_convert/services/voice/ajan_link.dart';
 import 'package:evrak_convert/ui/desktop/ajan_skins.dart';
 import 'package:evrak_convert/services/search/library_controller.dart';
@@ -282,6 +283,21 @@ void main() {
       await _shot(tester, key, 'ajan-pin-${skin.name}');
     }
     AjanLinks.instance.cancel();
+    unawaited(
+      AjanApprovals.instance.request(
+        'Sunucuda komut çalıştır',
+        'name: sunucu2\ncommand: systemctl restart nginx',
+      ),
+    );
+    for (final skin in [AjanSkin.kure, AjanSkin.hologram]) {
+      ajan
+        ..settings = ajan.settings.copyWith(skin: skin.name)
+        ..poke();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await _shot(tester, key, 'ajan-onay-${skin.name}');
+    }
+    AjanApprovals.instance.cancel();
     await tester.pumpWidget(const SizedBox.shrink());
   }, skip: out == null);
 

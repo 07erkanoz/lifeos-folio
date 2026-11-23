@@ -7,6 +7,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/ai/ai_refresh.dart';
+import '../../services/voice/ajan_approval.dart';
 import '../../services/voice/ajan_link.dart';
 import '../../services/voice/folio_ajan.dart';
 import '../../services/voice/live_conversation.dart';
@@ -105,6 +106,9 @@ class _JarvisViewState extends State<JarvisView>
     AjanLinks.instance
       ..shown += 1
       ..addListener(_linkChanged);
+    AjanApprovals.instance
+      ..shown += 1
+      ..addListener(_changed);
     ajan.enterJarvis();
     _minute = Timer.periodic(const Duration(seconds: 20), (_) => _changed());
   }
@@ -160,6 +164,9 @@ class _JarvisViewState extends State<JarvisView>
     AjanLinks.instance
       ..shown -= 1
       ..removeListener(_linkChanged);
+    AjanApprovals.instance
+      ..shown -= 1
+      ..removeListener(_changed);
     _pin.dispose();
     _pinFocus.dispose();
     _minute.cancel();
@@ -1199,14 +1206,103 @@ class _JarvisViewState extends State<JarvisView>
     ]);
   }
 
+  /// A change put before the lawyer: what is done, Vazgeç and Onayla.
+  Widget _approval(AjanApprovalAsk ask) {
+    final st = _K.s;
+    Widget button(String label, VoidCallback onTap, {required bool main}) =>
+        Material(
+          color: main ? st.accent : const Color(0x0DFFFFFF),
+          shape: st.shape(
+            r: math.min(10, st.radius),
+            side: main ? null : _K.frame,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: main ? Colors.white : _K.bright,
+                ),
+              ),
+            ),
+          ),
+        );
+    final title = 'Onay: ${ask.title}';
+    return _box([
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.gpp_maybe_outlined, size: 18, color: _K.label),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    st.headCaps ? title.toUpperCase() : title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: st.headCaps ? st.headTrack : 0,
+                      color: _K.bright,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Folio Ajan bunu LifeOS ile yapmak istiyor:',
+              style: TextStyle(fontSize: 12, color: _K.muted),
+            ),
+            const SizedBox(height: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 140),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  ask.detail,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontFamily: ajanMono,
+                    color: _K.bright,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                button('Vazgeç', AjanApprovals.instance.cancel, main: false),
+                const SizedBox(width: 10),
+                button('Onayla', AjanApprovals.instance.approve, main: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ]);
+  }
+
   Widget _bottom() {
     final voiceOn = ajan.settings.on;
     final talking = ajan.voice.active;
     final link = AjanLinks.instance.asking;
+    final approval = AjanApprovals.instance.asking;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (link != null)
+        if (approval != null)
+          _approval(approval)
+        else if (link != null)
           _link(link)
         else
           Wrap(

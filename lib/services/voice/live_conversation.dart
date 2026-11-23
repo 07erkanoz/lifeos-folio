@@ -94,9 +94,12 @@ String ajanWrites() =>
     'aracın cevabını bekle; PIN’i sesli isteme, söylerse yazma. Evrak '
     'listesi sayfalıdır ve en yeniden eskiye gelir: aradığını “ara” ile '
     'bul, kalan varsa “atla” ile devam et. lifeos_ ile başlayan araçlar '
-    'varsa bilgisayarın kendisini okur (sorunlar, e-imza kartı ve '
-    'okuyucusu, yazıcı, servisler): bilgisayarla ilgili sorularda onlara '
-    'bak, düzeltme önerirse avukata söyle, kendin yapmaya kalkma. '
+    'varsa LifeOS’undur: bilgisayarın kendisi (sorunlar, e-imza kartı ve '
+    'okuyucusu, yazıcı, servisler) ve ~/.ssh/config’teki sunucular '
+    '(lifeos_server_list, durumları, yedekleri, siteleri); bilgisayar ve '
+    'sunucu sorularında onlara bak. Değişiklik yapanlar ekranda avukatın '
+    'onayını ister: önce ne yapacağını söyle, aracı çağır, avukatın '
+    'ekrandaki Onayla düğmesine basmasını bekle; onaylanmazsa ısrar etme. '
     'Hiçbir şeyi silme, '
     'değiştirme ya da dışarı gönderme.';
 
