@@ -74,7 +74,7 @@ void main(List<String> arguments) async {
   if (asOfis) AppEdition.current = AppEdition.ofis;
   // Folio Ajan, the voice assistant, a program of its own (`lifeos_ajan`,
   // lib/ajan_app.dart): its runner puts `--ajan` first.
-  if (Platform.isLinux &&
+  if ((Platform.isLinux || Platform.isWindows) &&
       arguments.isNotEmpty &&
       arguments.first == AjanBridge.flag) {
     await runAjanApp(arguments.skip(1).toList());
@@ -82,7 +82,8 @@ void main(List<String> arguments) async {
   }
   // `--folio-ajan` (the desktop's shortcut, the menu): Folio Ajan's own
   // program, opened or started; Folio's window is not asked for.
-  if (Platform.isLinux && arguments.contains('--folio-ajan')) {
+  if ((Platform.isLinux || Platform.isWindows) &&
+      arguments.contains('--folio-ajan')) {
     await AjanBridge.openAjan();
     exit(0);
   }
@@ -94,7 +95,8 @@ void main(List<String> arguments) async {
   }
   // `--mcp` (the lawyer's AI program, started by Folio): Folio's legal
   // tools on standard input and output, with no window, until it closes.
-  if (Platform.isLinux && arguments.contains(FolioMcp.flag)) {
+  if ((Platform.isLinux || Platform.isWindows) &&
+      arguments.contains(FolioMcp.flag)) {
     exit(
       await FolioMcp.serve(external: arguments.contains(FolioExternal.flag)),
     );

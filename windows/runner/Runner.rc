@@ -100,6 +100,8 @@ BEGIN
             VALUE "FileDescription", "LifeOS Edit\xf6r" "\0"
 #elif defined(FOLIO_OFIS)
             VALUE "FileDescription", "LifeOS Ofis" "\0"
+#elif defined(FOLIO_AJAN)
+            VALUE "FileDescription", "Folio Ajan" "\0"
 #else
             VALUE "FileDescription", "LifeOS Folio" "\0"
 #endif
@@ -108,6 +110,8 @@ BEGIN
             VALUE "InternalName", "lifeos_editor" "\0"
 #elif defined(FOLIO_OFIS)
             VALUE "InternalName", "lifeos_ofis" "\0"
+#elif defined(FOLIO_AJAN)
+            VALUE "InternalName", "lifeos_ajan" "\0"
 #else
             VALUE "InternalName", "lifeos_folio" "\0"
 #endif
@@ -116,6 +120,8 @@ BEGIN
             VALUE "OriginalFilename", "lifeos_editor.exe" "\0"
 #elif defined(FOLIO_OFIS)
             VALUE "OriginalFilename", "lifeos_ofis.exe" "\0"
+#elif defined(FOLIO_AJAN)
+            VALUE "OriginalFilename", "lifeos_ajan.exe" "\0"
 #else
             VALUE "OriginalFilename", "lifeos_folio.exe" "\0"
 #endif

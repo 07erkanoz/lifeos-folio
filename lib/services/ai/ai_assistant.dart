@@ -80,7 +80,7 @@ enum AiProvider {
     for (final p in values)
       if (AiAssistant.phone
           ? p.viaApi && p != AiProvider.groq
-          : p.viaApi || Platform.isLinux)
+          : p.viaApi || Platform.isLinux || Platform.isWindows)
         p,
   ];
 
@@ -257,32 +257,131 @@ abstract final class AiAssistant {
   /// Where the programs are looked for: the PATH Folio was started with
   /// (a desktop's is often short) and where their installers put them.
   @visibleForTesting
-  static List<String> searchPath(Map<String, String> env) {
+  static List<String> searchPath(Map<String, String> env, {bool? windows}) {
+    if (windows ?? Platform.isWindows) return _windowsSearchPath(env);
     final home = env['HOME'] ?? '';
     return {
       ...(env['PATH'] ?? '').split(':').where((d) => d.isNotEmpty),
       if (home.isNotEmpty) ...[
-        p.join(home, '.local', 'bin'),
-        p.join(home, '.npm-global', 'bin'),
-        p.join(home, '.bun', 'bin'),
-        p.join(home, '.volta', 'bin'),
+        p.posix.join(home, '.local', 'bin'),
+        p.posix.join(home, '.npm-global', 'bin'),
+        p.posix.join(home, '.bun', 'bin'),
+        p.posix.join(home, '.volta', 'bin'),
       ],
       '/usr/local/bin',
       '/usr/bin',
     }.toList();
   }
 
+  /// On Windows: the PATH (`;` between its folders; Windows' own names for
+  /// the variables differ in case) and where the installers put them:
+  /// Claude's own (`.local\bin`), npm's, WinGet's, Bun's, Volta's.
+  static List<String> _windowsSearchPath(Map<String, String> env) {
+    String? get(String name) {
+      for (final e in env.entries) {
+        if (e.key.toUpperCase() == name) return e.value;
+      }
+      return null;
+    }
+
+    final home = get('USERPROFILE') ?? '';
+    final local = get('LOCALAPPDATA') ?? '';
+    final roaming = get('APPDATA') ?? '';
+    return {
+      ...(get('PATH') ?? '').split(';').where((d) => d.isNotEmpty),
+      if (home.isNotEmpty) ...[
+        p.windows.join(home, '.local', 'bin'),
+        p.windows.join(home, '.bun', 'bin'),
+      ],
+      if (roaming.isNotEmpty) p.windows.join(roaming, 'npm'),
+      if (local.isNotEmpty) ...[
+        p.windows.join(local, 'Microsoft', 'WinGet', 'Links'),
+        p.windows.join(local, 'Volta', 'bin'),
+        p.windows.join(local, 'Programs', 'Antigravity', 'bin'),
+        // OpenAI's own Windows setup.
+        p.windows.join(local, 'Programs', 'OpenAI', 'Codex', 'bin'),
+      ],
+    }.toList();
+  }
+
   static String? find(String command, [Map<String, String>? environment]) {
-    for (final dir in searchPath(environment ?? Platform.environment)) {
-      final file = File(p.join(dir, command));
-      if (file.existsSync()) return file.path;
+    final dirs = searchPath(environment ?? Platform.environment);
+    if (!Platform.isWindows) {
+      for (final dir in dirs) {
+        final file = File(p.join(dir, command));
+        if (file.existsSync()) return file.path;
+      }
+      return null;
+    }
+    // The program itself first: a `.cmd` runs through cmd.exe, whose
+    // command line is cut at 8191 characters (Folio's rules alone are
+    // longer) and which reads quotes and `%` its own way.
+    for (final dir in dirs) {
+      final exe = File(p.join(dir, '$command.exe'));
+      if (exe.existsSync()) return exe.path;
+    }
+    for (final dir in dirs) {
+      final cmd = File(p.join(dir, '$command.cmd'));
+      if (!cmd.existsSync()) continue;
+      return npmProgram(cmd, command) ?? cmd.path;
     }
     return null;
+  }
+
+  /// The program an npm shortcut (`codex.cmd`) stands for, when its package
+  /// carries one for Windows (`codex.exe`, Codex's own; it needs no Node).
+  @visibleForTesting
+  static String? npmProgram(File shortcut, String command) {
+    try {
+      final text = shortcut.readAsStringSync();
+      final m = RegExp(r'node_modules\\((?:@[^\\"]+\\)?[^\\"]+)')
+          .firstMatch(text);
+      if (m == null) return null;
+      final package = Directory(
+        p.join(shortcut.parent.path, 'node_modules', m[1]!),
+      );
+      if (!package.existsSync()) return null;
+      final name = '$command.exe'.toLowerCase();
+      for (final f in package.listSync(recursive: true, followLinks: false)) {
+        if (f is File && p.basename(f.path).toLowerCase() == name) {
+          return f.path;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// [process] stopped, and on Windows the programs it started with it
+  /// (`kill` there ends the first alone: Folio's tools, a shell would
+  /// stay).
+  static void stop(Process process) {
+    if (Platform.isWindows) {
+      unawaited(
+        Process.run('taskkill', [
+          '/T',
+          '/F',
+          '/PID',
+          '${process.pid}',
+        ]).then<void>((_) {}, onError: (Object _) => process.kill()),
+      );
+    } else {
+      process.kill();
+    }
   }
 
   /// The program's environment: the PATH it is found under made whole.
   static Map<String, String> environment() {
     final env = Map<String, String>.of(Platform.environment);
+    if (Platform.isWindows) {
+      // One PATH, under the name Windows gave it.
+      final key = env.keys.firstWhere(
+        (k) => k.toUpperCase() == 'PATH',
+        orElse: () => 'Path',
+      );
+      env[key] = searchPath(env).join(';');
+      env['NO_COLOR'] = '1';
+      return env;
+    }
     env['PATH'] = searchPath(env).join(':');
     // No colours or progress for a reader that is not a terminal.
     env['NO_COLOR'] = '1';
@@ -463,9 +562,11 @@ abstract final class AiAssistant {
       'include_environment_context=false',
       '-c',
       'include_permissions_instructions=false',
-      // Folio's rules in place of the coding agent's instructions.
+      // Folio's rules in place of the coding agent's instructions. A TOML
+      // string, quoted as JSON is: a Windows path's `\` would otherwise
+      // be read as an escape.
       '-c',
-      'model_instructions_file="${p.join(folder, 'talimat.md')}"',
+      'model_instructions_file=${jsonEncode(p.join(folder, 'talimat.md'))}',
       if (model != null && model.isNotEmpty) ...['-m', model],
       if (tier != null) ...['-c', 'model_reasoning_effort="${tier.effort}"'],
       // Folio's own tools. Codex gives a tool's program none of its own
@@ -541,7 +642,24 @@ abstract final class AiAssistant {
     'XDG_DATA_HOME',
     'XDG_CONFIG_HOME',
     'XDG_CACHE_HOME',
+    // Windows: Folio's folders, a temporary one, and the system's own
+    // (without SystemRoot neither sockets nor fonts are found).
+    'APPDATA',
+    'LOCALAPPDATA',
+    'USERPROFILE',
+    'HOMEDRIVE',
+    'HOMEPATH',
+    'USERNAME',
+    'TEMP',
+    'TMP',
+    'SystemRoot',
+    'windir',
+    'ProgramData',
   ];
+
+  /// The lawyer's home folder: HOME, on Windows USERPROFILE.
+  static String _home(Map<String, String> env) =>
+      env['HOME'] ?? env['USERPROFILE'] ?? '';
 
   /// Whether [provider] is given Folio's tools with each question. Antigravity
   /// is not: it keeps its MCP servers in a settings file of its own, for all
@@ -554,7 +672,7 @@ abstract final class AiAssistant {
   @visibleForTesting
   static File antigravityServers([Map<String, String>? environment]) => File(
     p.join(
-      (environment ?? Platform.environment)['HOME'] ?? '',
+      _home(environment ?? Platform.environment),
       '.gemini',
       'config',
       'mcp_config.json',
@@ -908,7 +1026,7 @@ abstract final class AiAssistant {
       unawaited(
         cancel?.then((_) {
           stopped = true;
-          process.kill();
+          stop(process);
         }),
       );
       // Stopped only when it has gone quiet, or taken far too long.
@@ -935,7 +1053,7 @@ abstract final class AiAssistant {
           quiet.future,
         ]);
         if (ended is String) {
-          process.kill();
+          stop(process);
           throw AiFailure(ended, timedOut: true);
         }
         code = ended as int;
@@ -1119,7 +1237,7 @@ abstract final class AiAssistant {
         case AiProvider.codex:
           final home =
               Platform.environment['CODEX_HOME'] ??
-              p.join(Platform.environment['HOME'] ?? '', '.codex');
+              p.join(_home(Platform.environment), '.codex');
           final cache = File(p.join(home, 'models_cache.json'));
           if (!await cache.exists()) return const [];
           final json = jsonDecode(await cache.readAsString());

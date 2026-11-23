@@ -251,9 +251,11 @@ class FolioAjan extends ChangeNotifier {
   Completer<void>? _cancel;
 
   /// Whether the AI features may be shown at all.
-  /// Linux's desktop alone for now: Windows and macOS have neither the
-  /// wake word's library nor a tried voice (21 Kasım 2026).
-  bool get available => Platform.isLinux && AiAssistant.shown;
+  /// Linux's desktop and Windows (its own `lifeos_ajan.exe`, Vosk's DLL
+  /// beside it); macOS has neither the wake word's library nor a tried
+  /// voice (21 Kasım 2026).
+  bool get available =>
+      (Platform.isLinux || Platform.isWindows) && AiAssistant.shown;
 
   /// The voice's settings, and which programs are signed in. Asking the
   /// programs (Codex, Claude…) takes a second or more; once they are known

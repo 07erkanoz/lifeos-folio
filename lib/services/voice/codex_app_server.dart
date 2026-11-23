@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../ai/ai_assistant.dart';
+
 /// `codex app-server` over stdio: JSON-RPC, one message per line.
 ///
 /// The official binary, the user's own `codex login`; no token is read,
@@ -30,9 +32,10 @@ class CodexAppServer {
   /// only, their `config.toml` untouched: one Codex took 567 MB, now 192
   /// (23 Kasım 2026). Only its section names are read.
   static List<String> leanConfig([String? config]) {
+    final env = Platform.environment;
     final home =
-        Platform.environment['CODEX_HOME'] ??
-        '${Platform.environment['HOME'] ?? ''}/.codex';
+        env['CODEX_HOME'] ??
+        '${env['HOME'] ?? env['USERPROFILE'] ?? ''}/.codex';
     String text;
     try {
       text = config ?? File('$home/config.toml').readAsStringSync();
@@ -62,11 +65,16 @@ class CodexAppServer {
 
   /// [log]: where Codex's own log goes (no conversation text in it).
   static Future<CodexAppServer> start({String? cwd, String? log}) async {
+    // Found as Folio's questions find it: on Windows `codex.exe` itself,
+    // not npm's `codex.cmd` (cmd.exe in between, and stopped apart).
     final process = await Process.start(
-      'codex',
+      AiAssistant.find('codex') ?? 'codex',
       [...leanConfig(), 'app-server'],
       workingDirectory: cwd,
-      environment: {if (log != null) 'RUST_LOG': 'info,codex_core=debug'},
+      environment: {
+        ...AiAssistant.environment(),
+        if (log != null) 'RUST_LOG': 'info,codex_core=debug',
+      },
     );
     final server = CodexAppServer._(process);
     process.stdout
@@ -143,7 +151,7 @@ class CodexAppServer {
   }
 
   Future<void> close() async {
-    _process.kill();
+    AiAssistant.stop(_process);
     await _notifications.close();
   }
 }

@@ -2791,7 +2791,7 @@ class _AiPanelState extends State<AiPanel> {
                   child: Padding(
                     padding: const EdgeInsets.all(18),
                     child: Text(
-                      Platform.isLinux
+                      Platform.isLinux || Platform.isWindows
                           ? 'Bu bilgisayarda oturumu açık bir yapay zekâ '
                                 'programı ya da girilmiş bir API anahtarı '
                                 'bulunamadı. Ayarlar › Yapay zekâ’dan Claude, '

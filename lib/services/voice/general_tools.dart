@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:dbus/dbus.dart';
@@ -565,6 +566,7 @@ class AjanGeneralTools {
   // ---- Medya (MPRIS) -------------------------------------------------------
 
   static Future<String> _mpris(String command) async {
+    if (Platform.isWindows) return _windowsMedia(command);
     final bus = DBusClient.session();
     try {
       final names = (await bus.listNames())
@@ -623,6 +625,34 @@ class AjanGeneralTools {
 
   static const _player = 'org.mpris.MediaPlayer2.Player';
 
+  /// On Windows: the media keys, as the keyboard's own would press them;
+  /// the player playing (Spotify, a browser) takes them. Windows says not
+  /// whether something plays: "durdur" and "devam" are the one key.
+  static Future<String> _windowsMedia(String command) async {
+    final (key, times, said) = switch (command) {
+      'durdur' => (0xB3, 1, 'Durduruldu.'),
+      'devam' => (0xB3, 1, 'Sürüyor.'),
+      'sonraki' => (0xB0, 1, 'Sonrakine geçildi.'),
+      'onceki' => (0xB1, 1, 'Öncekine geçildi.'),
+      // A press is 2 %: five make Linux's 10 %.
+      'ses_ac' => (0xAF, 5, 'Ses açıldı.'),
+      'ses_kis' => (0xAE, 5, 'Ses kısıldı.'),
+      _ => (0, 0, 'Bilinmeyen komut: $command'),
+    };
+    if (key == 0) return said;
+    final press = DynamicLibrary.open('user32.dll')
+        .lookupFunction<
+          Void Function(Uint8, Uint8, Uint32, IntPtr),
+          void Function(int, int, int, int)
+        >('keybd_event');
+    const extended = 0x1, up = 0x2;
+    for (var i = 0; i < times; i++) {
+      press(key, 0, extended, 0);
+      press(key, 0, extended | up, 0);
+    }
+    return said;
+  }
+
   // ---- Ağ ve açıcı ---------------------------------------------------------
 
   static Future<String> _get(Uri address) async {
@@ -649,6 +679,15 @@ class AjanGeneralTools {
   }
 
   static Future<void> _openHere(Uri address) async {
+    if (Platform.isWindows) {
+      // The address to Windows' own handler, as a link clicked is: no
+      // shell in between to read its `&`.
+      await Process.start('rundll32', [
+        'url.dll,FileProtocolHandler',
+        '$address',
+      ], mode: ProcessStartMode.detached);
+      return;
+    }
     for (final opener in ['xdg-open', 'kde-open', 'gio']) {
       try {
         final args = opener == 'gio' ? ['open', '$address'] : ['$address'];

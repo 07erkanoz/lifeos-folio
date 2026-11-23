@@ -56,3 +56,8 @@ target_compile_definitions(lifeos_editor PRIVATE "FOLIO_EDITOR")
 # by a setup of its own and keeping a data folder of its own.
 folio_runner(lifeos_ofis)
 target_compile_definitions(lifeos_ofis PRIVATE "FOLIO_OFIS")
+# Folio Ajan: the voice assistant, a program of its own beside Folio
+# (lib/ajan_app.dart), sharing its data folder (its product name is
+# Folio's).
+folio_runner(lifeos_ajan)
+target_compile_definitions(lifeos_ajan PRIVATE "FOLIO_AJAN")

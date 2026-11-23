@@ -130,7 +130,8 @@ void main() {
           args,
           containsAllInOrder([
             '-c',
-            'model_instructions_file="/tmp/x/talimat.md"',
+            'model_instructions_file='
+                '${jsonEncode('/tmp/x${Platform.pathSeparator}talimat.md')}',
           ]),
         );
         expect(
@@ -163,10 +164,40 @@ void main() {
       final path = AiAssistant.searchPath({
         'HOME': '/home/a',
         'PATH': '/usr/bin',
-      });
+      }, windows: false);
       expect(path.first, '/usr/bin');
       expect(path, contains('/home/a/.local/bin'));
       expect(path.where((d) => d == '/usr/bin'), hasLength(1));
+    });
+
+    test('on Windows: `;` between folders, and where its installers put them',
+        () {
+      final path = AiAssistant.searchPath({
+        'Path': r'C:\Windows;C:\Tools',
+        'USERPROFILE': r'C:\Users\a',
+        'APPDATA': r'C:\Users\a\AppData\Roaming',
+      }, windows: true);
+      expect(path.take(2), [r'C:\Windows', r'C:\Tools']);
+      expect(path, contains(r'C:\Users\a\.local\bin'));
+      expect(path, contains(r'C:\Users\a\AppData\Roaming\npm'));
+    });
+
+    test('an npm shortcut stands for the program its package carries', () {
+      final dir = Directory.systemTemp.createTempSync('folio-npm-');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final shortcut = File('${dir.path}/codex.cmd')
+        ..writeAsStringSync(
+          '@ECHO off\r\n"%_prog%" "%dp0%\\node_modules\\@openai\\codex\\bin\\'
+          'codex.js" %*\r\n',
+        );
+      final exe = File(
+        '${dir.path}/node_modules/@openai/codex/vendor/x64/codex/codex.exe',
+      )..createSync(recursive: true);
+      if (!Platform.isWindows) return;
+      expect(
+        File(AiAssistant.npmProgram(shortcut, 'codex')!).absolute.uri,
+        exe.absolute.uri,
+      );
     });
   });
 

@@ -514,8 +514,8 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
         if (found.any((s) => s.provider.viaApi && s.installed)) _usage(),
       ],
     ],
-    // Folio Ajan's voice: Linux's desktop alone has it.
-    if (Platform.isLinux && FolioAjan.instance.available) ...[
+    // Folio Ajan's voice: Linux's desktop and Windows have it.
+    if (FolioAjan.instance.available) ...[
       _heading(
         'FOLIO AJAN · SESLİ KONUŞMA',
         'Sesli konuşma, “Ajan açıl” ve ses hizmeti seçimi.',
@@ -625,7 +625,7 @@ String aiIntroText({bool programs = false}) => AiAssistant.phone
             'açıldığında cevaplar.',
       ].join(' ')
     : [
-        if (programs || Platform.isLinux)
+        if (programs || Platform.isLinux || Platform.isWindows)
           'Bilgisayarınızda kurulu Claude, Codex ya da Antigravity ile kendi '
               'aboneliğinizle, ya da kendi API anahtarınızla Gemini, ChatGPT, '
               'Claude ya da Groq’la soru sorarsınız.'
@@ -636,6 +636,6 @@ String aiIntroText({bool programs = false}) => AiAssistant.phone
             'dosyaların Yapay zekâ sekmesinden ve UETS tebligatlarından süre ile '
             'yapılacak iş çıkarırken kullanılır. İstekler bu bilgisayardan '
             'doğrudan sağlayıcıya gider; Folio araya sunucu koymaz.',
-        if (programs || Platform.isLinux)
+        if (programs || Platform.isLinux || Platform.isWindows)
           'Telefonunuzdan sorduğunuz soruları da bu bilgisayar cevaplar.',
       ].join(' ');

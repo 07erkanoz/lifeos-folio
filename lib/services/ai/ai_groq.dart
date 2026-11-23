@@ -151,7 +151,8 @@ abstract final class GroqChat {
 
   /// Whether the tools are started as a server rather than run here.
   static bool get toolsAsServer =>
-      toolsProgram != null && (Platform.isLinux || folioForTest != null);
+      toolsProgram != null &&
+      (Platform.isLinux || Platform.isWindows || folioForTest != null);
 
   /// A test's own server in place of Groq's.
   @visibleForTesting

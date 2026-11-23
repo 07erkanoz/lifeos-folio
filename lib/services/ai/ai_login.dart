@@ -79,18 +79,23 @@ class AiLogin extends ChangeNotifier {
     final folder = await Directory.systemTemp.createTemp('folio-giris-');
     final given = File(p.join(folder.path, 'adres'));
     final browser = File(p.join(folder.path, 'tarayici'));
-    await browser.writeAsString(
-      '#!/bin/sh\nprintf \'%s\' "\$1" > "${given.path}.part" && '
-      'mv "${given.path}.part" "${given.path}"\n',
-    );
-    await Process.run('chmod', ['700', browser.path]);
-    final viaBrowser = provider == AiProvider.claude;
+    // On Windows there is no such script to give it: Claude opens the
+    // lawyer's own browser itself, and Folio waits for it to come back.
+    final windows = Platform.isWindows;
+    if (!windows) {
+      await browser.writeAsString(
+        '#!/bin/sh\nprintf \'%s\' "\$1" > "${given.path}.part" && '
+        'mv "${given.path}.part" "${given.path}"\n',
+      );
+      await Process.run('chmod', ['700', browser.path]);
+    }
+    final viaBrowser = provider == AiProvider.claude && !windows;
     final process = _process = await Process.start(
       path,
       arguments(provider),
       environment: {
         ...AiAssistant.environment(),
-        'BROWSER': viaBrowser ? browser.path : 'true',
+        if (!windows) 'BROWSER': viaBrowser ? browser.path : 'true',
       },
     );
     // Nothing is ever typed to it.
@@ -107,6 +112,9 @@ class AiLogin extends ChangeNotifier {
     void each(String line) {
       if (viaBrowser) return;
       read(line);
+      // Claude on Windows opened the browser itself: the address it prints
+      // is its fallback, shown, not opened a second time.
+      if (windows && provider == AiProvider.claude) return;
       if (address case final at?) show(at);
     }
 
@@ -142,7 +150,7 @@ class AiLogin extends ChangeNotifier {
   }
 
   void cancel() {
-    _process?.kill();
+    if (_process case final process?) AiAssistant.stop(process);
     _process = null;
   }
 

@@ -50,6 +50,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   command_line_arguments.insert(command_line_arguments.begin(), "--ofis");
   ::SetCurrentProcessExplicitAppUserModelID(L"com.erkanoz.lifeos.ofis");
   const wchar_t* title = L"LifeOS Ofis";
+#elif defined(FOLIO_AJAN)
+  // Folio Ajan: the voice assistant, a program of its own beside Folio
+  // (lib/ajan_app.dart). Dart shows its window, full screen or small, or
+  // none while it only listens.
+  command_line_arguments.insert(command_line_arguments.begin(), "--ajan");
+  ::SetCurrentProcessExplicitAppUserModelID(L"com.erkanoz.lifeos.ajan");
+  const wchar_t* title = L"Folio Ajan";
 #else
   const wchar_t* title = L"LifeOS Folio";
 #endif

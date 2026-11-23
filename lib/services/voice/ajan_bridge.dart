@@ -60,11 +60,15 @@ abstract final class AjanBridge {
   static const binary = 'lifeos_ajan';
   static const folioBinary = 'lifeos_folio';
 
-  /// Whether this program is Folio Ajan (its executable's name).
-  static bool get isAjan => p.basename(Platform.resolvedExecutable) == binary;
+  /// Whether this program is Folio Ajan (its executable's name, without
+  /// Windows' `.exe`).
+  static bool get isAjan =>
+      p.basenameWithoutExtension(Platform.resolvedExecutable) == binary;
 
-  static String _beside(String name) =>
-      p.join(p.dirname(Platform.resolvedExecutable), name);
+  static String _beside(String name) => p.join(
+    p.dirname(Platform.resolvedExecutable),
+    Platform.isWindows ? '$name.exe' : name,
+  );
 
   /// Folio's program, where Folio's tools (`--mcp`) are run from too.
   static String get folioExecutable =>
@@ -122,10 +126,29 @@ abstract final class AjanBridge {
       final json = jsonDecode(await (await _state()).readAsString());
       if (json is! Map || json['gorunur'] != true) return false;
       final owner = json['pid'];
-      return owner is int &&
-          (!Platform.isLinux || Directory('/proc/$owner').existsSync());
+      if (owner is! int) return false;
+      if (Platform.isLinux) return Directory('/proc/$owner').existsSync();
+      if (Platform.isWindows) return await _runningOnWindows(owner);
+      return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Whether the program [pid] still runs on Windows, and is Folio Ajan
+  /// (a number Windows gave again is not it).
+  static Future<bool> _runningOnWindows(int pid) async {
+    try {
+      final r = await Process.run('tasklist', [
+        '/FI',
+        'PID eq $pid',
+        '/FO',
+        'CSV',
+        '/NH',
+      ]).timeout(const Duration(seconds: 5));
+      return '${r.stdout}'.toLowerCase().contains('"$binary.exe"');
+    } catch (_) {
+      return true;
     }
   }
 

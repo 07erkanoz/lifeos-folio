@@ -61,6 +61,7 @@ include(flutter/generated_plugins.cmake)
 foreach(plugin ${FLUTTER_PLUGIN_LIST})
   target_link_libraries(lifeos_editor PRIVATE ${plugin}_plugin)
   target_link_libraries(lifeos_ofis PRIVATE ${plugin}_plugin)
+  target_link_libraries(lifeos_ajan PRIVATE ${plugin}_plugin)
 endforeach(plugin)
 
 
@@ -88,6 +89,12 @@ install(TARGETS lifeos_editor RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 # LifeOS Ofis, beside them; its own setup leaves Folio's programs out.
 install(TARGETS lifeos_ofis RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
+
+# Folio Ajan, the voice assistant, a program of its own beside Folio
+# (lib/ajan_app.dart), and Vosk for its wake word.
+install(TARGETS lifeos_ajan RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+include(vosk.cmake)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)

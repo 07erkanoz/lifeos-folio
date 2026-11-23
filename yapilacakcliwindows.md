@@ -1,5 +1,28 @@
 # Windows'ta yapay zekâ: CLI ayarları, kurulum ve giriş
 
+## Denendi (23 Kasım 2026, Windows 11, Flutter 3.47.2)
+
+- `lifeos_folio.exe --mcp` pencereli program olduğu hâlde borularla
+  konuşuyor: `initialize` ve `tools/list` ~200 ms. Ayrı `folio-mcp.exe`
+  gerekmedi. (Debug derlemesi stdout'a VM satırı yazar; release yazmaz.)
+- Claude Code 2.1 (`%USERPROFILE%\.local\bin\claude.exe`): Folio'nun
+  araçlarıyla TBK 49, 9 sn. 14.341 karakterlik komut satırı sorunsuz
+  (`.exe` doğrudan, `cmd.exe` yok). Folio içinden soru da çalıştı.
+- Codex 0.171 (OpenAI'nin kurucusu:
+  `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`): salt-okunur
+  kumlama ve `talimat.md` ile TBK 49, 14,5 sn; Folio içinden de çalıştı.
+  `-c` değerleri TOML: Windows yolu `jsonEncode` ile verilir (`\` kaçış).
+- Program arama: PATH (`;`), `.local\bin`, `%APPDATA%\npm` (`.cmd` yerine
+  paketteki `.exe`), WinGet, Bun, Volta, Antigravity, OpenAI Codex.
+- Durdur: `taskkill /T /F` (`AiAssistant.stop`).
+- Claude girişi: Windows'ta tarayıcıyı Claude kendisi açar.
+- Folio Ajan: `lifeos_ajan.exe` derleniyor ve açılıyor; Vosk 0.3.45
+  Windows paketi derlemede SHA-256 ile iniyor (`windows/vosk.cmake`).
+  Medya: Windows medya tuşları. Eksik: Ajan'ın genel kısayolu (Windows
+  yalnız hızlı aramayı kaydediyor).
+- Henüz denenmedi: Antigravity, otomatik kurulum (bölüm 2), Codex girişi
+  Folio'dan, telefondan sorulan sorunun Windows'ta cevaplanması.
+
 Durum (2 Kasım 2026): Yapay zekâ özellikleri yalnız Linux'ta açık
 (`AiAssistant.available`, `lib/services/ai/ai_assistant.dart`). Bu not,
 Windows sürümüne getirmek için yapılacakları ve Windows'ta denenecekleri

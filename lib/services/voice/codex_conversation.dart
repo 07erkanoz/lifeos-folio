@@ -222,10 +222,11 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
   /// Codex is on this computer and the lawyer signed in to it.
   static Future<bool> ready() async {
     try {
-      final r = await Process.run('codex', [
-        'login',
-        'status',
-      ]).timeout(const Duration(seconds: 10));
+      final r = await Process.run(
+        AiAssistant.find('codex') ?? 'codex',
+        ['login', 'status'],
+        environment: AiAssistant.environment(),
+      ).timeout(const Duration(seconds: 10));
       return r.exitCode == 0;
     } catch (_) {
       return false;
