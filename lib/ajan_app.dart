@@ -211,6 +211,8 @@ class _AjanAppState extends State<AjanApp> with WindowListener {
           Offset.zero & (display.size / display.devicePixelRatio),
         );
       }
+      // Put behind ([_background]): back from the taskbar.
+      if (await windowManager.isMinimized()) await windowManager.restore();
       await windowManager.show();
       await windowManager.setFullScreen(true);
       try {
@@ -223,10 +225,23 @@ class _AjanAppState extends State<AjanApp> with WindowListener {
     }
   }
 
-  /// The small voice window, while the conversation goes on; hidden when
-  /// none does.
+  /// Out of the way, still at hand (23 Kasım 2026: closed, Folio Ajan
+  /// could not be found again): while a conversation goes on the small
+  /// voice window; otherwise the window goes to the taskbar, where a click
+  /// brings it back as it was.
+  Future<void> _background() async {
+    if (ajan.voice.active) return _compact();
+    if (_switching || _mode != _Mode.full) return;
+    await windowManager.minimize();
+  }
+
+  /// The small voice window, while the conversation goes on; behind, in
+  /// the taskbar, when none does.
   Future<void> _compact() async {
-    if (!ajan.voice.active) return _hide();
+    if (!ajan.voice.active) {
+      if (_mode == _Mode.compact) return _hide();
+      return _background();
+    }
     if (_switching) return;
     _switching = true;
     try {
@@ -324,7 +339,7 @@ class _AjanAppState extends State<AjanApp> with WindowListener {
         _Mode.hidden => const SizedBox.shrink(),
         _Mode.full => JarvisView(
           ajan: ajan,
-          onMinimize: () => unawaited(_compact()),
+          onMinimize: () => unawaited(_background()),
           // Folio's window, the conversation going on in the small one.
           onMain: () {
             unawaited(AjanBridge.openFolio());

@@ -543,7 +543,7 @@ class _JarvisViewState extends State<JarvisView>
           const SizedBox(width: 14),
           _iconButton(
             Icons.close_fullscreen_rounded,
-            'Küçült, hızlı panele dön (Esc)',
+            'Arkaya al (Esc)',
             widget.onMinimize,
           ),
           const SizedBox(width: 14),
@@ -1374,7 +1374,7 @@ class _JarvisViewState extends State<JarvisView>
               const SizedBox(width: 12),
               Text(
                 !voiceOn
-                    ? 'Ses kapalı · Esc küçültür'
+                    ? 'Ses kapalı · Esc arkaya alır'
                     : talking
                     ? '“kapan” deyin ya da Esc'
                     : 'Mikrofona dokunun ya da Esc',
