@@ -1,0 +1,8 @@
+{
+  "tr": "Folio Ajan artık arkaya alınabilir: Esc ya da Arkaya al düğmesi ajanı kapatmaz, görev çubuğuna indirir; oradan tıklayınca kaldığı yerden açılır. Konuşma sürerken küçük ses penceresi eskisi gibi ekranda kalır. Yapay zekâ ile uzun sohbetler artık kotayı hızla bitirmez: sohbet 400 bin tokeni aşınca bir sonraki soruda Folio'nun kendi kaydıyla yeniden başlar; sorular ve cevaplar, eklediğiniz belgeler, seçili dosya ve okunan kanun maddeleri, kararlar ve evraklar korunur. Eşiği Ayarlar › Yapay zekâ'da değiştirebilir ya da kapatabilirsiniz. Folio Ajan'ın Codex sesi ağır işleri Claude'a sizin sözlerinizle aynen iletir.",
+  "en": "Folio Ajan can now be put behind: Esc or the Put behind button no longer closes it but sends it to the taskbar, and a click there brings it back as it was. During a conversation the small voice window stays on screen as before. Long AI conversations no longer use up the quota quickly: once a conversation passes 400 thousand tokens, the next question starts again from Folio's own record, keeping the questions and answers, the documents you added, the chosen case and the articles, decisions and documents read. You can change the threshold or turn it off in Settings › AI. Folio Ajan's Codex voice passes heavy work to Claude in your own words.",
+  "ofis": {
+    "tr": "LifeOS Ofis 1.8.6.46: hata düzeltmeleri ve iyileştirmeler.",
+    "en": "LifeOS Ofis 1.8.6.46: fixes and improvements."
+  }
+}
