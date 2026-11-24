@@ -14,6 +14,7 @@ import '../platform/app_edition.dart';
 import '../platform/atomic_file.dart';
 import '../search/text_extractor.dart';
 import '../editor/lawyer_profile.dart';
+import 'ai_context.dart';
 import 'ai_attachment.dart';
 import 'ai_events.dart';
 import 'ai_case.dart';
@@ -1067,7 +1068,15 @@ abstract final class AiAssistant {
           ? await last.readAsString()
           : null;
       try {
-        return answer(provider, '$out', lastMessage);
+        final text = answer(provider, '$out', lastMessage);
+        if (thread != null && provider == AiProvider.claude) {
+          if (AiContext.fromClaudeOutput('$out') case final n?) {
+            thread.size[provider] = n;
+          } else {
+            thread.size.remove(provider);
+          }
+        }
+        return text;
       } on AiFailure {
         if (code != 0 && err.isNotEmpty) {
           throw AiFailure(_said(_lastLine('$err'), provider.label));
@@ -1319,7 +1328,12 @@ class AiSettings {
     this.provider,
     this.models = const {},
     this.monthlyTokens,
+    this.contextCeiling = AiContext.defaultCeiling,
   });
+
+  /// A conversation larger than this at the end of an answer goes on in a
+  /// new session from Folio's own record of it ([AiContext]); 0 is off.
+  final int contextCeiling;
 
   /// The most tokens the services' API keys may use a month, on every own
   /// device together; none when null.
@@ -1370,6 +1384,7 @@ class AiSettings {
     AiProvider? provider,
     Map<String, String>? models,
     int? monthlyTokens,
+    int? contextCeiling,
     bool noLimit = false,
     bool revoke = false,
   }) => AiSettings(
@@ -1382,6 +1397,7 @@ class AiSettings {
     provider: provider ?? this.provider,
     models: models ?? this.models,
     monthlyTokens: noLimit ? null : monthlyTokens ?? this.monthlyTokens,
+    contextCeiling: contextCeiling ?? this.contextCeiling,
   );
 
   Map<String, Object?> toJson() => {
@@ -1394,6 +1410,8 @@ class AiSettings {
     if (provider != null) 'saglayici': provider!.name,
     if (models.isNotEmpty) 'modeller': models,
     if (monthlyTokens != null) 'aylikTokenSiniri': monthlyTokens,
+    if (contextCeiling != AiContext.defaultCeiling)
+      'baglamTavani': contextCeiling,
   };
 
   static AiSettings fromJson(Object? json) {
@@ -1408,6 +1426,11 @@ class AiSettings {
       lifeosMcp: json['lifeosMcp'] == true,
       provider: AiProvider.values.asNameMap()['${json['saglayici']}'],
       monthlyTokens: (json['aylikTokenSiniri'] as num?)?.toInt(),
+      contextCeiling: switch (json['baglamTavani']) {
+        final num n when n == 0 || AiContext.choices.contains(n.toInt()) =>
+          n.toInt(),
+        _ => AiContext.defaultCeiling,
+      },
       models: {
         if (json['modeller'] case final Map m)
           for (final e in m.entries)
@@ -1488,6 +1511,15 @@ class AiThread {
 
   final String place;
   final Map<AiProvider, String> ids;
+
+  /// How large each program's conversation was at the end of its last
+  /// answer, where it says ([AiContext.endOfTurn]).
+  final size = <AiProvider, int>{};
+
+  /// The programs whose next question starts a new session from Folio's
+  /// record ([AiContext]), and the answers since the last such start.
+  final restart = <AiProvider>{};
+  int? sinceRestart;
 
   /// As kept with the chat: {"claude": "…", "codex": "…"}.
   Map<String, String> toJson() => {

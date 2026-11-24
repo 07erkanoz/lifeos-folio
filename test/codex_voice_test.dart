@@ -4,6 +4,7 @@ import 'package:evrak_convert/services/ai/ai_groq.dart';
 import 'package:evrak_convert/services/voice/ajan_voice.dart';
 import 'package:evrak_convert/services/voice/codex_conversation.dart';
 import 'package:evrak_convert/services/voice/live_conversation.dart';
+import 'package:evrak_convert/services/voice/folio_ajan.dart';
 import 'package:evrak_convert/services/voice/voice_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -57,7 +58,7 @@ void main() {
   test('Codex is given read-only tools, and the AI program only when '
       'allowed', () async {
     final c = CodexConversation(
-      brain: (q) async => q,
+      brain: (q, _) async => q,
       host: () async => _Host(),
     );
     var names = [for (final t in await c.declarationsForTest()) t['name']];
@@ -125,5 +126,82 @@ void main() {
     ]) {
       expect(isStopCommand(said), isFalse, reason: said);
     }
+  });
+
+  test('the program is asked the lawyer\'s own words, and its answer is '
+      'read by the voice as it is', () async {
+    final asked = <(String, String)>[];
+    final spoken = <String>[];
+    final c = CodexConversation(
+      brain: (q, conversation) async {
+        asked.add((q, conversation));
+        return 'Salı değil, 27 Kasım Cuma saat 10.10.';
+      },
+      host: () async => _Host(),
+    )..conversationForTest = 'th-1';
+    c.speakForTest = (t) async => spoken.add(t);
+    await c.declarationsForTest();
+    c.heardForTest('Manavgat duruşması salı mı çarşamba mı?');
+    c.heardForTest('En son ne olmuş?');
+    final out = await c.toolCallForTest(CodexConversation.brainTool, {
+      'soru': 'Bu hafta Manavgat duruşması var mı',
+    });
+    expect(asked.single.$2, 'th-1');
+    expect(
+      asked.single.$1,
+      startsWith(
+        'Avukat (sesli, aynen): «Manavgat duruşması salı mı çarşamba mı? / '
+        'En son ne olmuş?»',
+      ),
+    );
+    expect(asked.single.$1, contains('avukatın sözü esastır'));
+    expect(spoken, ['Salı değil, 27 Kasım Cuma saat 10.10.']);
+    // The agent is told only that it was read: nothing of its own to add.
+    final text = ((out['contentItems'] as List).single as Map)['text'];
+    expect(text, CodexConversation.spokenMark);
+    expect(c.lines.last.text, startsWith('Claude cevapladı ('));
+
+    // The words go once: the next hand-on has only what was said after.
+    c.heardForTest('İlkinin mahkemesi neresiydi?');
+    await c.toolCallForTest(CodexConversation.brainTool, {'soru': 'mahkeme'});
+    expect(asked.last.$1, contains('«İlkinin mahkemesi neresiydi?»'));
+    expect(asked.last.$1, isNot(contains('Manavgat')));
+  });
+
+  test(
+    'a voice that cannot be handed the answer reads it from the tool',
+    () async {
+      final c = CodexConversation(
+        brain: (q, _) async => 'Cevap budur.',
+        host: () async => _Host(),
+      );
+      c.speakForTest = (_) async => throw Exception('appendSpeech yok');
+      await c.declarationsForTest();
+      final out = await c.toolCallForTest(CodexConversation.brainTool, {
+        'soru': 'Soru',
+      });
+      final text = ((out['contentItems'] as List).single as Map)['text'];
+      expect(text, startsWith('AVUKATA AYNEN OKU'));
+      expect(text, endsWith('Cevap budur.'));
+      // Nothing was heard: the agent's request is all there is.
+      expect(CodexConversation.handOnQuestion(const [], ' Soru '), 'Soru');
+    },
+  );
+
+  test('the handed-on question names two weeks from today', () {
+    final p = spokenPrompt('Bu hafta duruşmam var mı?', DateTime(2026, 11, 24));
+    expect(p, contains('24 Kasım 2026 Salı'));
+    expect(p, contains('2026-11-24 – 2026-12-07'));
+    expect(p, contains('Salı değil, 27 Kasım Cuma'));
+    expect(p, endsWith('Bu hafta duruşmam var mı?'));
+  });
+
+  test('one Claude conversation for each voice session', () {
+    final a = FolioAjan();
+    final first = a.voiceThread('th-1');
+    expect(a.voiceThread('th-1'), same(first));
+    final second = a.voiceThread('th-2');
+    expect(second, isNot(same(first)));
+    expect(second.place, 'ses-th-2');
   });
 }

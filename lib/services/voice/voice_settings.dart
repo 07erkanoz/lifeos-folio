@@ -7,6 +7,7 @@ import '../platform/app_directories.dart';
 
 import '../ai/ai_assistant.dart';
 import '../ai/ai_relay.dart';
+import 'live_conversation.dart';
 
 /// Folio Ajan's voice, as this computer's lawyer set it: off until they
 /// turn it on. Kept on this computer only (a microphone and a loudspeaker
@@ -120,6 +121,7 @@ Future<String> askFolio(
   String question, {
   void Function(AiEvent event)? onEvent,
   AiProvider? only,
+  AiThread? thread,
 }) async {
   final settings = await AiSettings.load();
   if (!settings.enabled || !settings.consented) {
@@ -129,11 +131,28 @@ Future<String> askFolio(
   if (provider == null) return 'Kullanılabilir bir yapay zekâ programı yok.';
   return AiAssistant.ask(
     provider,
-    'Bu soru sesli soruldu; cevap sesli özetlenecek. Türkçe, kısa ve '
-    'net cevap ver, gereksiz biçimlendirme kullanma.\n\n$question',
+    spokenPrompt(question, DateTime.now()),
     tier: AiTier.normal,
     onEvent: onEvent,
+    thread: thread,
   );
+}
+
+/// The question the voice hands on, as the program is asked it: today and
+/// the two weeks ahead named, for "bu hafta" and "önümüzdeki günler" to be
+/// read from the agenda and not guessed; the lawyer's own words above the
+/// voice's retelling of them; an answer to be read aloud as it is.
+String spokenPrompt(String question, DateTime now) {
+  final day = DateTime(now.year, now.month, now.day);
+  String iso(DateTime d) => d.toIso8601String().substring(0, 10);
+  final until = day.add(const Duration(days: 13));
+  return 'Bu soru sesli soruldu; cevabın avukata olduğu gibi sesli '
+      'okunacak. Türkçe, kısa ve net cevap ver, “siz” diye hitap et; '
+      'biçimlendirme, tablo ya da madde işareti kullanma. Bugün '
+      '${ajanToday(now)}. Ajandaya bakarken bugünden ${iso(until)} gününe '
+      'kadar iki haftayı oku (${iso(day)} – ${iso(until)}). Avukatın kendi '
+      'sözü esastır: içinde yanlış bir varsayım varsa (gün, tarih, mahkeme) '
+      'açıkça düzelt, örneğin “Salı değil, 27 Kasım Cuma”.\n\n$question';
 }
 
 /// Claude on this computer, for Folio Ajan's heavy work: Claude Code if it

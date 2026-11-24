@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import '../theme/app_theme.dart';
 import '../../models/evrak_file.dart';
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_context.dart';
 import '../../services/ai/ai_attachment.dart';
 import '../../services/ai/ai_audit.dart';
 import '../../services/ai/ai_case.dart';
@@ -499,6 +500,11 @@ class _AiPanelState extends State<AiPanel> {
       // the earlier answers and the documents it was given are not sent
       // again.
       final thread = _thread ??= AiThread(_chatId ?? AiMemory.id());
+      // A conversation grown past the ceiling at the end of the last answer
+      // starts a new session now, between two questions: from Folio's own
+      // record, with what was read listed (AiContext).
+      final grown = thread.size[provider];
+      final restarting = AiContext.beforeQuestion(thread, provider);
       final who = await AiAssistant.who();
       // What is selected in the document, and the documents to be read.
       var picked = _withSelection ? widget.selection?.call()?.trim() : null;
@@ -539,6 +545,27 @@ class _AiPanelState extends State<AiPanel> {
               'her birini evrak_oku ile oku:\n'
               '${[for (final d in must) '- ${d.title} (anahtar: ${d.key})'].join('\n')}',
       ].nonNulls.toList();
+      if (restarting) {
+        notes.add(AiContext.note);
+        final index = AiContext.index(
+          [
+            for (final t in _turns)
+              if (t != turn) ...t.steps.values,
+          ],
+          attached: {
+            for (final t in _turns) ...t.attached,
+            for (final a in attachments) a.name,
+          },
+          cases: [if (record != null) '${record.court} ${record.number}'],
+        );
+        if (index.isNotEmpty) notes.add(index);
+        turn.notes.add(
+          'Sohbet uzadığı için'
+          '${grown == null ? '' : ' (${AiContext.shown(grown)} token)'} '
+          'Folio onu kendi kaydından yeniden başlattı: önceki sorular ve '
+          'cevaplar, eklediğiniz belgeler ve okunanların dizini verildi.',
+        );
+      }
       turn.usedSelection = picked != null && picked.isNotEmpty;
       // The guide's topic the question names, added by Folio: the model
       // finds the governing articles there rather than guessing them.
@@ -658,6 +685,12 @@ class _AiPanelState extends State<AiPanel> {
         }
         turn.answer = answer;
         turn.seconds = DateTime.now().difference(turn.started).inSeconds;
+        AiContext.afterAnswer(
+          thread,
+          provider,
+          settings.contextCeiling,
+          restarted: restarting,
+        );
         if (withCase) _must.clear();
         unawaited(_read(turn));
         unawaited(_check(turn, answer));

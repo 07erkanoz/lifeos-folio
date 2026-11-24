@@ -219,13 +219,29 @@ class FolioAjan extends ChangeNotifier {
 
   /// Codex (the lawyer's ChatGPT subscription); the main voice.
   late final CodexConversation codex = CodexConversation(
-    brain: (q) async {
+    brain: (q, conversation) async {
       final claude = this.claude;
-      return claude == null
-          ? 'Claude bağlı değil; bu işi kendin yap.'
-          : askFolio(q, only: claude);
+      if (claude == null) return 'Claude bağlı değil; bu işi kendin yap.';
+      return askFolio(q, only: claude, thread: voiceThread(conversation));
     },
   )..addListener(notifyListeners);
+
+  /// Claude's conversation for a voice session: a second question ("İlkinin
+  /// mahkemesi neresiydi?") goes on from the first; a new session starts
+  /// afresh.
+  AiThread voiceThread(String conversation) {
+    if (_voiceThread case final t? when _voiceConversation == conversation) {
+      return t;
+    }
+    _voiceConversation = conversation;
+    final place = conversation.replaceAll(RegExp(r'[^A-Za-z0-9-]'), '');
+    return _voiceThread = AiThread(
+      'ses-${place.isEmpty ? DateTime.now().millisecondsSinceEpoch : place}',
+    );
+  }
+
+  AiThread? _voiceThread;
+  String? _voiceConversation;
 
   /// Claude, where it is signed in (Claude Code) or has a key (its API):
   /// a Codex conversation may hand it the heavy work.

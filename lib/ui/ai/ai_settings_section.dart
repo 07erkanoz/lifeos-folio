@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/ai/ai_assistant.dart';
+import '../../services/ai/ai_context.dart';
 import '../../services/ai/ai_external.dart';
 import '../../services/ai/ai_usage.dart';
 import '../../services/ai/ai_groq.dart';
@@ -437,6 +438,41 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
     ),
   );
 
+  /// How long a Claude Code conversation grows before its next question
+  /// starts a new session from Folio's record of it (AiContext).
+  Widget _ceiling() => SettingsRow(
+    key: const ValueKey('ai-context-ceiling'),
+    icon: Icons.compress_rounded,
+    title: 'Uzun sohbeti yeniden başlat',
+    subtitle: _settings.contextCeiling == 0
+        ? 'Kapalı. Uzun sohbetin bütün geçmişi her soruda yeniden gönderilir; '
+              'aboneliğinizin kotası daha çabuk dolar.'
+        : 'Sohbet ${AiContext.shown(_settings.contextCeiling)} tokeni '
+              'geçince bir sonraki soruda Claude yeni oturumla başlar. Önceki '
+              'sorular ve cevaplar aynen, eklediğiniz belgeler ve okunan '
+              'evrak, karar, kanun maddelerinin listesi yeniden verilir. '
+              'Cevap yazılırken hiçbir şey kesilmez.',
+    stackOnNarrow: true,
+    trailing: DropdownButton<int>(
+      key: const ValueKey('ai-context-ceiling-value'),
+      value: _settings.contextCeiling,
+      underline: const SizedBox.shrink(),
+      items: [
+        const DropdownMenuItem(value: 0, child: Text('Kapalı')),
+        for (final c in AiContext.choices)
+          DropdownMenuItem(
+            value: c,
+            child: Text('${AiContext.shown(c)} token'),
+          ),
+      ],
+      onChanged: (v) => unawaited(
+        _save(
+          _settings.copyWith(contextCeiling: v ?? AiContext.defaultCeiling),
+        ),
+      ),
+    ),
+  );
+
   /// A provider's row, Antigravity's tools, and its models once usable.
   List<Widget> _provider(AiStatus s) => [
     _program(s),
@@ -503,6 +539,8 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
         ),
         for (final s in found)
           if (!s.provider.viaApi) ..._provider(s),
+        if (found.any((s) => s.provider == AiProvider.claude && s.installed))
+          _ceiling(),
       ],
       if (found.any((s) => s.provider.viaApi)) ...[
         _heading(

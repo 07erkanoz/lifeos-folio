@@ -38,7 +38,9 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
   /// Heavy work handed on to the lawyer's AI program (Claude Code, Codex,
   /// Antigravity or an API, as Folio's AI settings say): the voice's Codex
   /// agent asks it with [brainTool].
-  final Future<String> Function(String question) brain;
+  /// [conversation] names the voice session the question is part of: the
+  /// program goes on with what it was told in it.
+  final Future<String> Function(String question, String conversation) brain;
   static const brainTool = 'folio_ajan_sor';
 
   /// Whether [brainTool] is given: off, Codex does everything itself.
@@ -202,6 +204,13 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
   String? _thread;
   Completer<String>? _answer;
   LiveLine? _heard, _said;
+
+  /// The lawyer's last words, as heard, since the program was last asked.
+  List<String> _spoken = [];
+
+  /// The voice session the program's answers belong to: one for each
+  /// conversation, kept after a late connection is asked again.
+  String _conversation = '';
   int _working = 0;
   bool _agentBusy = false;
   DateTime _lastActivity = DateTime.now();
@@ -292,6 +301,7 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
       }
 
       _thread = await newThread();
+      _conversation = _thread!;
       step('thread/start');
 
       _mic = await navigator.mediaDevices.getUserMedia({
@@ -443,7 +453,11 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
             'okuyup değerlendirme, uzun hukuki inceleme, emsal karar '
             'araştırması için kullan. Avukat “Claude’a sor” derse de kullan. '
             'Kısa sorular için önce kendi araçlarını kullan; bu bir iki dakika '
-            'sürebilir, beklerken avukata kısaca söyle.',
+            'sürebilir, beklerken avukata kısaca söyle. Araç yalnız '
+            '“$spokenMark” dönerse cevap avukata zaten okunmuştur: hiçbir şey '
+            'söyleme; özür, hata ya da “tekrar sorar mısınız” cümlesi kurma. '
+            'Başka bir metin dönerse onu değiştirmeden, kısaltmadan oku; '
+            'program söylemediyse “bulunamadı” deme.',
         'inputSchema': {
           'type': 'object',
           'properties': {
@@ -515,6 +529,7 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
       await pc?.close();
     } catch (_) {}
     _heard = _said = null;
+    _spoken = [];
     _working = 0;
     _agentBusy = false;
     _set(LiveState.off);
@@ -583,7 +598,7 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
         throw CodexError('Bu araç sesli konuşmada verilmedi: $name');
       }
       var out = name == brainTool
-          ? await brain('${args['soru'] ?? ''}')
+          ? await _handOn('${args['soru'] ?? ''}')
           : await _tools!.call(name, args);
       if (out.length > _most) {
         out =
@@ -607,6 +622,80 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
       _working--;
       _lastActivity = DateTime.now();
       notifyListeners();
+    }
+  }
+
+  /// What the voice's agent gets back when the program's answer was given
+  /// to the voice to read itself.
+  static const spokenMark = 'OKUNDU';
+
+  /// The question for the program: the lawyer's own words as they were
+  /// heard, the agent's request only beside them. An agent's retelling
+  /// lost what was asked: "Manavgat duruşması salı mı çarşamba mı" went on
+  /// as a week with no hearing, while the hearing was on Friday (banaozel,
+  /// 22 Kasım 2026).
+  static String handOnQuestion(List<String> heard, String asked) {
+    final words = heard.map((w) => w.trim()).where((w) => w.isNotEmpty);
+    asked = asked.trim();
+    if (words.isEmpty) return asked;
+    return [
+      'Avukat (sesli, aynen): «${words.join(' / ')}»',
+      if (asked.isNotEmpty)
+        'Sesli yardımcının anladığı (yalnız ek bilgi; avukatın sözüyle '
+            'çelişirse avukatın sözü esastır): $asked',
+    ].join('\n');
+  }
+
+  /// The words the voice is given to read as they are, when it cannot be
+  /// handed them directly.
+  static String readAsItIs(String answer) =>
+      'AVUKATA AYNEN OKU — kelimesi kelimesine; özetleme, yorumlama, ekleme '
+      'yapma, “siz” diye hitap et:\n${answer.trim()}';
+
+  @visibleForTesting
+  Future<void> Function(String text)? speakForTest;
+
+  @visibleForTesting
+  void heardForTest(String text) => _done('user', text);
+
+  @visibleForTesting
+  Future<Map<String, Object?>> toolCallForTest(
+    String name,
+    Map<String, Object?> args,
+  ) => _request('item/tool/call', {'tool': name, 'arguments': args});
+
+  @visibleForTesting
+  set conversationForTest(String id) => _conversation = id;
+
+  /// The heavy work handed on: the program's answer goes to the voice to be
+  /// read as it is (`thread/realtime/appendSpeech`); the agent is told only
+  /// that it was read. An agent given the answer to read retold it, or
+  /// added a sentence of its own ("Şu an bakamadım, tekrar sorar mısınız?")
+  /// after the right answer (banaozel, 22 Kasım 2026).
+  Future<String> _handOn(String asked) async {
+    final question = handOnQuestion(_spoken, asked);
+    _spoken = [];
+    final clock = Stopwatch()..start();
+    final answer = (await brain(question, _conversation)).trim();
+    final seconds = (clock.elapsedMilliseconds / 1000).toStringAsFixed(1);
+    lines.add(LiveLine('bilgi', 'Claude cevapladı ($seconds sn)'));
+    notifyListeners();
+    if (answer.isEmpty) return answer;
+    try {
+      final speak = speakForTest;
+      if (speak != null) {
+        await speak(answer);
+      } else {
+        final thread = _thread, server = _server;
+        if (thread == null || server == null) throw CodexError('kapalı');
+        await server.request('thread/realtime/appendSpeech', {
+          'threadId': thread,
+          'text': answer,
+        }, timeout: const Duration(seconds: 10));
+      }
+      return spokenMark;
+    } catch (_) {
+      return readAsItIs(answer);
     }
   }
 
@@ -671,6 +760,10 @@ class CodexConversation extends ChangeNotifier implements AjanVoice {
     if (role == 'user') {
       if (text.isNotEmpty) (_heard ?? _line('avukat')).text = text.trim();
       _heard = null;
+      if (text.trim().isNotEmpty) {
+        _spoken = [..._spoken, text.trim()];
+        if (_spoken.length > 4) _spoken = _spoken.sublist(_spoken.length - 4);
+      }
       if (isStopCommand(text)) {
         lines.add(LiveLine('bilgi', 'Konuşma kapatıldı.'));
         unawaited(stop());
